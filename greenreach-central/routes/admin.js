@@ -1200,6 +1200,51 @@ router.post('/grants/program-alerts/:id/acknowledge', requireAdminRole('admin', 
 });
 
 /**
+ * Helper: Load farm data from flat-file farm.json when DB is unavailable
+ */
+async function loadFarmJsonFallback() {
+    const farmJsonPath = path.join(__dirname, '../public/data/farm.json');
+    try {
+        const raw = await fs.readFile(farmJsonPath, 'utf8');
+        return JSON.parse(raw);
+    } catch (e) {
+        console.warn('[Admin API] farm.json fallback failed:', e.message);
+        return null;
+    }
+}
+
+function farmJsonToFarmObject(fj) {
+    const roomsList = Array.isArray(fj.rooms) ? fj.rooms : [];
+    return {
+        farmId: fj.farmId || 'unknown',
+        name: fj.name || fj.farmName || 'Unknown Farm',
+        status: fj.status || 'online',
+        lastHeartbeat: fj.registered || null,
+        createdAt: fj.created || fj.registered || null,
+        updatedAt: fj.registered || null,
+        email: fj.email || fj.contact?.email || null,
+        contactName: fj.contactName || fj.contact?.name || null,
+        phone: fj.phone || fj.contact?.phone || null,
+        website: fj.website || fj.contact?.website || null,
+        address: fj.address || null,
+        city: fj.city || null,
+        state: fj.state || null,
+        postalCode: fj.postalCode || null,
+        location: fj.location || null,
+        coordinates: fj.coordinates || null,
+        apiUrl: fj.url || null,
+        rooms: roomsList.length,
+        zones: roomsList.reduce((n, r) => n + (Array.isArray(r.zones) ? r.zones.length : 0), 0),
+        groups: 0,
+        roomsData: roomsList,
+        groupsData: [],
+        environmental: { zones: [], summary: null },
+        metadata: { ...fj, contact: fj.contact || {} },
+        owner: fj.contact?.owner || null
+    };
+}
+
+/**
  * GET /api/admin/farms
  * Get list of all farms in the network
  */
@@ -1207,6 +1252,21 @@ router.get('/farms', async (req, res) => {
     try {
         const { page = 1, limit = 50, status, region, search } = req.query;
         
+        // Check DB availability first
+        const dbReady = await isDatabaseAvailable();
+        if (!dbReady) {
+            console.warn('[Admin API] Database unavailable for /farms, using farm.json fallback');
+            const fj = await loadFarmJsonFallback();
+            if (!fj) return res.status(503).json({ success: false, error: 'Database not available and no fallback data' });
+            const farm = farmJsonToFarmObject(fj);
+            return res.json({
+                success: true,
+                farms: [{ id: 1, farmId: farm.farmId, name: farm.name, status: farm.status, lastUpdate: farm.lastHeartbeat, metadata: farm.metadata, createdAt: farm.createdAt, updatedAt: farm.updatedAt }],
+                pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+                source: 'fallback'
+            });
+        }
+
         // Query actual farms from database
         let sqlQuery = 'SELECT * FROM farms WHERE 1=1';
         const params = [];
@@ -1294,6 +1354,27 @@ router.get('/farms/:farmId', async (req, res) => {
         const { farmId } = req.params;
         console.log(`[Admin API] Fetching farm details for: ${farmId}`);
         
+        // Check DB availability — fall back to farm.json
+        const dbReady = await isDatabaseAvailable();
+        if (!dbReady) {
+            console.warn('[Admin API] Database unavailable for /farms/:farmId, using farm.json fallback');
+            const fj = await loadFarmJsonFallback();
+            if (!fj || (fj.farmId !== farmId && farmId !== 'current')) {
+                return res.status(404).json({ success: false, error: 'Farm not found', message: `No farm found with ID: ${farmId}` });
+            }
+            // Load groups from flat file for counts
+            let groupsList = [];
+            try {
+                const groupsRaw = await fs.readFile(path.join(__dirname, '../public/data/groups.json'), 'utf8');
+                const groupsData = JSON.parse(groupsRaw);
+                groupsList = Array.isArray(groupsData) ? groupsData : (groupsData?.groups || []);
+            } catch (e) { /* no groups file */ }
+            const farm = farmJsonToFarmObject(fj);
+            farm.groups = groupsList.length;
+            farm.groupsData = groupsList;
+            return res.json({ success: true, farm, source: 'fallback' });
+        }
+
         // Query farm from database by farm_id
         const result = await query(
             'SELECT * FROM farms WHERE farm_id = $1',
@@ -2265,6 +2346,42 @@ router.get('/farms/:farmId/config', async (req, res) => {
         const { farmId } = req.params;
         console.log(`[Admin API] Fetching config for farm: ${farmId}`);
         
+        // Check DB availability — fall back to farm.json
+        const dbReady = await isDatabaseAvailable();
+        if (!dbReady) {
+            console.warn('[Admin API] Database unavailable for /farms/:farmId/config, using farm.json fallback');
+            const fj = await loadFarmJsonFallback();
+            if (!fj || (fj.farmId !== farmId && farmId !== 'current')) {
+                return res.status(404).json({ success: false, error: 'Farm not found' });
+            }
+            const contact = fj.contact || {};
+            const config = {
+                farmId: fj.farmId,
+                farmName: fj.name || fj.farmName,
+                contactEmail: fj.email || contact.email || null,
+                contactName: fj.contactName || contact.name || null,
+                phone: fj.phone || contact.phone || null,
+                website: fj.website || contact.website || null,
+                address: fj.address || null,
+                city: fj.city || null,
+                state: fj.state || null,
+                postalCode: fj.postalCode || null,
+                location: fj.location || null,
+                coordinates: fj.coordinates || null,
+                apiUrl: fj.url || null,
+                network: {},
+                apiKeys: { count: 0, hasActive: false },
+                devices: { count: 0, types: [] },
+                integrations: { square: false, wholesale: false, notifications: {} },
+                notifications: { email: true, sms: false, slack: false, alerts: { system: true, environmental: true, inventory: false } },
+                settings: {},
+                metadata: { ...fj, contact },
+                createdAt: fj.created || fj.registered || null,
+                updatedAt: fj.registered || null
+            };
+            return res.json({ success: true, config, source: 'fallback' });
+        }
+
         // Query farm configuration
         const farmResult = await query(
             'SELECT farm_id, name, email, api_url, metadata, settings, created_at, updated_at FROM farms WHERE farm_id = $1',
