@@ -53,11 +53,13 @@ router.post('/login', async (req, res) => {
     }
 
     // Fallback credentials for non-database mode
+    // Matches server-foxtrot.js edge auth: farm_id + password, email optional
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
     const FALLBACK_FARM = {
-      farm_id: farm_id || 'FARM-TEST-WIZARD-001',
-      email: email || 'shelbygilbert@rogers.com',
-      password: 'Grow123',
-      name: 'Peter Gilbert',
+      farm_id: farm_id || process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039',
+      email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,
+      password: adminPassword,
+      name: process.env.ADMIN_NAME || 'Farm Admin',
       role: FARM_ROLES.ADMIN
     };
 
@@ -170,24 +172,16 @@ router.post('/login', async (req, res) => {
       }
 
     } else {
-      // Fallback mode — ONLY allowed in development
-      if (process.env.NODE_ENV === 'production') {
-        console.error('[Auth] Database unavailable in production — refusing fallback credentials');
-        return res.status(503).json({
-          success: false,
-          error: 'Service unavailable',
-          message: 'Authentication service temporarily unavailable'
-        });
-      }
+      // Fallback mode — farm_id + password authentication (no database)
+      // Matches server-foxtrot.js edge auth pattern: email is optional
+      console.log(`[Auth] No database available, using fallback credentials (farm_id + password)`);
 
-      // Dev-only fallback credentials
-      const emailStr = normalizedEmail;
-      const fallbackEmail = FALLBACK_FARM.email.toLowerCase();
-      if ((emailStr && emailStr !== fallbackEmail) || password !== FALLBACK_FARM.password) {
+      // Only password must match; email is optional
+      if (password !== FALLBACK_FARM.password) {
         return res.status(401).json({
           success: false,
           error: 'Authentication failed',
-          message: 'Invalid email or password'
+          message: 'Invalid farm ID or password'
         });
       }
 
