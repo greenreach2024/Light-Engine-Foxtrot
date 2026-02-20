@@ -39,12 +39,12 @@
   "rooms": [
     {
       "id": "room-3xxjln",
-      "name": "Your Grow Room",
-      "zones": []
+      "name": "Main Grow Room",
+      "zones": ["Zone 1", "Zone 2"]
     }
   ],
   "locations": [
-    "Your Grow Room"
+    "Main Grow Room"
   ],
   "registered": "2026-02-04T13:42:02.654Z",
   "contactName": "",

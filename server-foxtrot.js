@@ -6603,6 +6603,24 @@ app.get('/api/hardware/scan', asyncHandler(async (req, res) => {
   }
 }));
 
+// Save rooms endpoint (matches greenreach-central route for cross-mode compatibility)
+app.post('/api/setup/save-rooms', asyncHandler(async (req, res) => {
+  try {
+    const rooms = req.body?.rooms;
+    if (!Array.isArray(rooms)) {
+      return res.status(400).json({ success: false, message: 'rooms array required' });
+    }
+    const fullPath = path.join(DATA_DIR, 'rooms.json');
+    const payload = JSON.stringify({ rooms }, null, 2);
+    await writeJsonQueued(fullPath, payload);
+    console.log(`[setup/save-rooms] Saved ${rooms.length} room(s) to rooms.json`);
+    res.json({ success: true, saved: rooms.length });
+  } catch (err) {
+    console.error('[setup/save-rooms] Error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}));
+
 // Setup completion endpoint
 app.post('/api/setup/complete', asyncHandler(async (req, res) => {
   const { 
@@ -18764,23 +18782,39 @@ app.get('/api/config/app', async (req, res) => {
 // Edge Mode API Routes (defined BEFORE proxy to avoid being intercepted)
 // ============================================================================
 
-// Get list of groups for assignment
+// Get list of groups for assignment — returns full canonical records
+// so all pages (Overview, Groups V1, Groups V2, Plans, Rooms) see identical data
 app.get('/api/groups', asyncHandler(async (req, res) => {
   const groupsData = await readJSON('groups.json', { groups: [] });
   const groups = groupsData?.groups || [];
-  
-  const formatted = groups.map(g => ({
-    id: g.id || g.name,
-    name: g.name,
-    zone: g.zone,
-    crop: g.crop,
-    plan: g.plan,
-    trays: g.trays || 0,
-    plants: g.plants || 0,
-    devices: g.devices?.length || 0
-  }));
 
-  res.json(formatted);
+  // Return full records with canonical field normalization
+  // Keep: lights[], room, zone, status, schedule, plan, planConfig
+  // Drop deprecated: crop, recipe, roomId, zoneId (per DATA_FORMAT_STANDARDS)
+  const canonical = groups.map(g => {
+    const record = {
+      id: g.id || g.name,
+      name: g.name,
+      room: g.room || '',
+      zone: g.zone || '',
+      plan: g.plan || '',
+      schedule: g.schedule || '',
+      status: g.status || 'draft',
+      trays: g.trays || 0,
+      plants: g.plants || 0,
+      lights: Array.isArray(g.lights) ? g.lights : [],
+      active: g.active !== false,
+      health: g.health || 'unknown',
+      planConfig: g.planConfig || null,
+      lastModified: g.lastModified || null
+    };
+    // Include controller/iotDevice if present (Groups V2)
+    if (g.controller) record.controller = g.controller;
+    if (g.iotDevice) record.iotDevice = g.iotDevice;
+    return record;
+  });
+
+  res.json(canonical);
 }));
 
 // Get list of rooms for edge mode
