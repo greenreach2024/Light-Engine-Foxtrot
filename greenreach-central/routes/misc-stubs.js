@@ -25,12 +25,7 @@
  *   PUT  /api/admin/users/:userId/status - User status update
  */
 import { Router } from 'express';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { farmStore } from '../lib/farm-data-store.js';
 
 const router = Router();
 
@@ -70,12 +65,8 @@ router.post('/api/room-mapper/save', (req, res) => {
 router.get('/api/harvest/predictions', async (req, res) => {
   // Read groups to compute basic predictions
   try {
-    const groupsPath = path.join(__dirname, '..', 'public', 'data', 'groups.json');
-    let groups = [];
-    if (fs.existsSync(groupsPath)) {
-      const raw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-      groups = Array.isArray(raw) ? raw : (raw.groups || []);
-    }
+    const fid = farmStore.farmIdFromReq(req);
+    const groups = await farmStore.get(fid, 'groups') || [];
 
     const predictions = groups
       .filter(g => g.currentDay > 0 && g.growthCycleDays > 0)
@@ -112,26 +103,21 @@ router.post('/api/harvest', (req, res) => {
 });
 
 // ═══════════ Dedicated Crops ═══════════
-router.get('/api/dedicated-crops', (req, res) => {
+router.get('/api/dedicated-crops', async (req, res) => {
   try {
-    const dcPath = path.join(__dirname, '..', 'public', 'data', 'dedicated-crops.json');
-    if (fs.existsSync(dcPath)) {
-      const data = JSON.parse(fs.readFileSync(dcPath, 'utf8'));
-      return res.json({ ok: true, crops: data.crops || data || [] });
-    }
-    res.json({ ok: true, crops: [] });
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'dedicated_crops') || [];
+    return res.json({ ok: true, crops: Array.isArray(data) ? data : (data.crops || []) });
   } catch {
     res.json({ ok: true, crops: [] });
   }
 });
 
-router.post('/api/dedicated-crops', (req, res) => {
+router.post('/api/dedicated-crops', async (req, res) => {
   try {
-    const dcPath = path.join(__dirname, '..', 'public', 'data', 'dedicated-crops.json');
-    const dir = path.dirname(dcPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const fid = farmStore.farmIdFromReq(req);
     const crops = req.body.crops || req.body;
-    fs.writeFileSync(dcPath, JSON.stringify({ crops, updatedAt: new Date().toISOString() }, null, 2));
+    await farmStore.set(fid, 'dedicated_crops', { crops, updatedAt: new Date().toISOString() });
     res.json({ ok: true, saved: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });

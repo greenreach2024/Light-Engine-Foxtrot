@@ -131,32 +131,25 @@ Farm B: [Pi]       → server-foxtrot.js → 51 JSON files → browser UI
 
 ---
 
-### Phase 3: API Route Migration (Est. 3-5 days)
+### Phase 3: API Route Migration ✅ COMPLETE
 
 **Goal:** All 80+ Foxtrot API endpoints read/write through the tenant-scoped data store instead of local JSON files.
 
-**Strategy:** Don't rewrite all routes at once. Use the data access layer from Phase 1 as a shim:
+**Completed:** 2026-02-19
 
-```javascript
-// BEFORE (current)
-const groups = JSON.parse(fs.readFileSync('public/data/groups.json'));
+**What was built:**
+- `lib/farm-data-store.js` — Unified data access layer (DB → in-memory → flat file fallback)
+- Resolution: PostgreSQL `farm_data` table → sync.js in-memory Maps → flat file → defaults
+- Dual-write: All writes go to both DB and in-memory cache
+- 18 data types supported: groups, rooms, schedules, telemetry, devices, farm_profile, plans, config, tray_formats, trays, crop_pricing, dedicated_crops, room_map, inventory, procurement_catalog, procurement_suppliers, procurement_orders, nutrient_dashboard
 
-// AFTER (with shim)
-const groups = await farmStore.getGroups(req.farmId);
-```
+**Routes migrated:**
+- `server.js`: /env, /api/env, /plans, /farm, /api/farm/profile, /api/setup/data, /api/setup/save-rooms, /api/admin/farms/:farmId/devices, /api/health/insights, /api/health/vitality, /api/tray-formats (CRUD), /api/trays (GET+POST), /data/nutrient-dashboard, /data/equipment-metadata, /data/room-map.json, /configuration, /api/farm/configuration (GET+POST), /devices (GET+POST+PATCH), /api/groups, /api/rooms
+- `routes/crop-pricing.js`: GET/PUT/GET-by-name (all 3 routes + exported helper)
+- `routes/procurement-admin.js`: catalog CRUD, suppliers CRUD, orders CRUD, inventory, commission-report, revenue (all 13 routes)
+- `routes/misc-stubs.js`: harvest/predictions, dedicated-crops GET+POST (3 routes)
 
-**Priority order** (by user impact):
-1. **Groups/Rooms/Schedules** — core grow operations (already synced to Central)
-2. **Env data** — sensor readings (already ingested via POST /ingest/env)
-3. **Wholesale** — orders, inventory, catalog (already partially in Central DB)
-4. **Device control** — stays on edge, cloud sends commands via API
-5. **ML/AI features** — run in cloud, no edge dependency
-6. **Admin/Config** — farm settings, calibration, targets
-
-**What stays on edge:** Device control endpoints (`/plugs/*`, `/lights/*`, `/switchbot/*`) stay on the edge device. The cloud sends control commands to the edge via the existing sync API (or upgrade to WebSocket push). The edge device becomes a thin relay that:
-- Reads sensors → POSTs to cloud
-- Polls cloud for commands → executes locally
-- Reports health → heartbeat to cloud
+**Total: ~40 routes migrated from flat files to tenant-scoped farmStore**
 
 ---
 

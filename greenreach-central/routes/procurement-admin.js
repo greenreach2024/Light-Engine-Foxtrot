@@ -1,37 +1,13 @@
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { farmStore } from '../lib/farm-data-store.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 /**
  * GreenReach Central Procurement Admin Routes
  * Manages the master catalog, suppliers, and procurement revenue
- * Data syncs to farm instances via the wholesale network
+ * Phase 3: All data read/write through farmStore (tenant-scoped)
  */
-
-// Data files live in the Foxtrot public/data directory (shared data layer)
-const DATA_DIR = path.join(__dirname, '..', '..', 'public', 'data');
-
-function readJSON(filePath) {
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-function writeJSON(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
-
-const CATALOG_FILE = path.join(DATA_DIR, 'procurement-catalog.json');
-const SUPPLIERS_FILE = path.join(DATA_DIR, 'procurement-suppliers.json');
-const ORDERS_FILE = path.join(DATA_DIR, 'procurement-orders.json');
 
 // ═══════════════════════════════════════════════════════
 // CATALOG MANAGEMENT
@@ -41,10 +17,11 @@ const ORDERS_FILE = path.join(DATA_DIR, 'procurement-orders.json');
  * GET /catalog
  * Get the full product catalog with stats
  */
-router.get('/catalog', (req, res) => {
+router.get('/catalog', async (req, res) => {
   try {
-    const data = readJSON(CATALOG_FILE);
-    if (!data) return res.json({ ok: true, products: [], categories: [] });
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'procurement_catalog');
+    if (!data || !data.products) return res.json({ ok: true, products: [], categories: [] });
 
     const products = data.products || [];
     const categories = [...new Set(products.map(p => p.category))].sort();
@@ -67,14 +44,16 @@ router.get('/catalog', (req, res) => {
  * PUT /catalog/product
  * Add or update a product in the catalog
  */
-router.put('/catalog/product', (req, res) => {
+router.put('/catalog/product', async (req, res) => {
   try {
     const { product } = req.body;
     if (!product || !product.sku) {
       return res.status(400).json({ ok: false, error: 'product_with_sku_required' });
     }
 
-    const data = readJSON(CATALOG_FILE) || { version: '1.0', products: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'procurement_catalog') || { version: '1.0', products: [] };
+    if (!data.products) data.products = [];
     const idx = data.products.findIndex(p => p.sku === product.sku);
 
     if (idx >= 0) {
@@ -84,7 +63,7 @@ router.put('/catalog/product', (req, res) => {
     }
 
     data.lastUpdated = new Date().toISOString();
-    writeJSON(CATALOG_FILE, data);
+    await farmStore.set(fid, 'procurement_catalog', data);
 
     res.json({ ok: true, action: idx >= 0 ? 'updated' : 'created', product: data.products[idx >= 0 ? idx : data.products.length - 1] });
   } catch (error) {
@@ -96,20 +75,21 @@ router.put('/catalog/product', (req, res) => {
  * DELETE /catalog/product/:sku
  * Remove a product from the catalog
  */
-router.delete('/catalog/product/:sku', (req, res) => {
+router.delete('/catalog/product/:sku', async (req, res) => {
   try {
-    const data = readJSON(CATALOG_FILE);
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'procurement_catalog');
     if (!data) return res.status(404).json({ ok: false, error: 'catalog_not_found' });
 
-    const initialLen = data.products.length;
-    data.products = data.products.filter(p => p.sku !== req.params.sku);
+    const initialLen = (data.products || []).length;
+    data.products = (data.products || []).filter(p => p.sku !== req.params.sku);
 
     if (data.products.length === initialLen) {
       return res.status(404).json({ ok: false, error: 'product_not_found' });
     }
 
     data.lastUpdated = new Date().toISOString();
-    writeJSON(CATALOG_FILE, data);
+    await farmStore.set(fid, 'procurement_catalog', data);
 
     res.json({ ok: true, deleted: req.params.sku });
   } catch (error) {
@@ -125,10 +105,11 @@ router.delete('/catalog/product/:sku', (req, res) => {
  * GET /suppliers
  * Get all suppliers with product counts
  */
-router.get('/suppliers', (req, res) => {
+router.get('/suppliers', async (req, res) => {
   try {
-    const suppData = readJSON(SUPPLIERS_FILE);
-    const catData = readJSON(CATALOG_FILE);
+    const fid = farmStore.farmIdFromReq(req);
+    const suppData = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
+    const catData = await farmStore.get(fid, 'procurement_catalog') || { products: [] };
 
     const suppliers = (suppData?.suppliers || []).map(s => {
       const productCount = (catData?.products || []).filter(p => p.supplierId === s.id).length;
@@ -145,10 +126,11 @@ router.get('/suppliers', (req, res) => {
  * PUT /suppliers/:supplierId
  * Update a supplier
  */
-router.put('/suppliers/:supplierId', (req, res) => {
+router.put('/suppliers/:supplierId', async (req, res) => {
   try {
-    const data = readJSON(SUPPLIERS_FILE);
-    if (!data) return res.status(500).json({ ok: false, error: 'suppliers_unavailable' });
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
+    if (!data.suppliers) return res.status(500).json({ ok: false, error: 'suppliers_unavailable' });
 
     const idx = (data.suppliers || []).findIndex(s => s.id === req.params.supplierId);
     if (idx === -1) return res.status(404).json({ ok: false, error: 'supplier_not_found' });
@@ -157,7 +139,7 @@ router.put('/suppliers/:supplierId', (req, res) => {
     delete updates.id;
     data.suppliers[idx] = { ...data.suppliers[idx], ...updates, updatedAt: new Date().toISOString() };
     data.lastUpdated = new Date().toISOString();
-    writeJSON(SUPPLIERS_FILE, data);
+    await farmStore.set(fid, 'procurement_suppliers', data);
 
     res.json({ ok: true, supplier: data.suppliers[idx] });
   } catch (error) {
@@ -169,9 +151,11 @@ router.put('/suppliers/:supplierId', (req, res) => {
  * POST /suppliers
  * Add a new supplier
  */
-router.post('/suppliers', (req, res) => {
+router.post('/suppliers', async (req, res) => {
   try {
-    const data = readJSON(SUPPLIERS_FILE) || { version: '1.0', suppliers: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'procurement_suppliers') || { version: '1.0', suppliers: [] };
+    if (!data.suppliers) data.suppliers = [];
     const supplier = {
       id: `SUP-${Date.now()}`,
       ...req.body,
@@ -181,7 +165,7 @@ router.post('/suppliers', (req, res) => {
 
     data.suppliers.push(supplier);
     data.lastUpdated = new Date().toISOString();
-    writeJSON(SUPPLIERS_FILE, data);
+    await farmStore.set(fid, 'procurement_suppliers', data);
 
     res.json({ ok: true, supplier });
   } catch (error) {
@@ -196,9 +180,10 @@ router.post('/suppliers', (req, res) => {
 /**
  * GET /orders — List procurement orders
  */
-router.get('/orders', (req, res) => {
+router.get('/orders', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     let orders = ordersData.orders || [];
     const { status, farm_id } = req.query;
     if (status) orders = orders.filter(o => o.status === status);
@@ -212,9 +197,10 @@ router.get('/orders', (req, res) => {
 /**
  * GET /orders/:orderId — Get single order
  */
-router.get('/orders/:orderId', (req, res) => {
+router.get('/orders/:orderId', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const order = (ordersData.orders || []).find(o => o.id === req.params.orderId);
     if (!order) return res.status(404).json({ ok: false, error: 'order_not_found' });
     res.json({ ok: true, order });
@@ -226,14 +212,15 @@ router.get('/orders/:orderId', (req, res) => {
 /**
  * POST /orders — Create a new procurement order
  */
-router.post('/orders', (req, res) => {
+router.post('/orders', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const { items, supplierId, notes, farmId } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ ok: false, error: 'items required' });
     }
-    const catalog = readJSON(CATALOG_FILE) || { products: [] };
+    const catalog = await farmStore.get(fid, 'procurement_catalog') || { products: [] };
     const products = catalog.products || [];
 
     // Build supplier orders
@@ -276,7 +263,7 @@ router.post('/orders', (req, res) => {
 
     ordersData.orders = ordersData.orders || [];
     ordersData.orders.push(order);
-    writeJSON(ORDERS_FILE, ordersData);
+    await farmStore.set(fid, 'procurement_orders', ordersData);
 
     res.json({ ok: true, order });
   } catch (error) {
@@ -287,16 +274,17 @@ router.post('/orders', (req, res) => {
 /**
  * POST /orders/:orderId/receive — Mark order as received
  */
-router.post('/orders/:orderId/receive', (req, res) => {
+router.post('/orders/:orderId/receive', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const idx = (ordersData.orders || []).findIndex(o => o.id === req.params.orderId);
     if (idx === -1) return res.status(404).json({ ok: false, error: 'order_not_found' });
 
     ordersData.orders[idx].status = 'received';
     ordersData.orders[idx].receivedAt = new Date().toISOString();
     ordersData.orders[idx].updatedAt = new Date().toISOString();
-    writeJSON(ORDERS_FILE, ordersData);
+    await farmStore.set(fid, 'procurement_orders', ordersData);
 
     res.json({ ok: true, order: ordersData.orders[idx] });
   } catch (error) {
@@ -307,9 +295,10 @@ router.post('/orders/:orderId/receive', (req, res) => {
 /**
  * GET /inventory — Procurement supply inventory (aggregated from received orders)
  */
-router.get('/inventory', (req, res) => {
+router.get('/inventory', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const received = (ordersData.orders || []).filter(o => o.status === 'received');
 
     // Aggregate received items as current inventory
@@ -333,9 +322,10 @@ router.get('/inventory', (req, res) => {
 /**
  * GET /commission-report — Commission summary for reporting dashboard
  */
-router.get('/commission-report', (req, res) => {
+router.get('/commission-report', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const orders = ordersData.orders || [];
 
     let totalCommission = 0;
@@ -367,9 +357,10 @@ router.get('/commission-report', (req, res) => {
  * GET /revenue
  * Get procurement revenue summary (commissions from all farm orders)
  */
-router.get('/revenue', (req, res) => {
+router.get('/revenue', async (req, res) => {
   try {
-    const ordersData = readJSON(ORDERS_FILE) || { orders: [] };
+    const fid = farmStore.farmIdFromReq(req);
+    const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
     const { from, to } = req.query;
 
     let orders = ordersData.orders || [];

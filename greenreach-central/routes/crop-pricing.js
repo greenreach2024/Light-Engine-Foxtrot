@@ -9,14 +9,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { farmStore } from '../lib/farm-data-store.js';
 
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PRICING_FILE = path.resolve(__dirname, '../public/data/crop-pricing.json');
 const RECIPES_FILE = path.resolve(__dirname, '../public/data/lighting-recipes.json');
-const GROUPS_FILE = path.resolve(__dirname, '../public/data/groups.json');
 
 // Crop utilities — Phase 2a unified crop registry
 const _require = createRequire(import.meta.url);
@@ -35,15 +34,14 @@ function planIdToCropName(planId) {
 /**
  * GET /api/crop-pricing
  * Returns current crop pricing configuration merged with all crops from lighting recipes.
- * Each crop includes an `isGrowing` flag based on current groups.json.
+ * Each crop includes an `isGrowing` flag based on current groups data.
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    // Load existing pricing data
-    let pricingData = { crops: [] };
-    try {
-      pricingData = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
-    } catch (e) { /* no pricing file yet */ }
+    const fid = farmStore.farmIdFromReq(req);
+
+    // Load existing pricing data (farm-scoped)
+    const pricingData = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
     
     // Build a map of existing prices by crop name
     const priceMap = {};
@@ -51,7 +49,7 @@ router.get('/', (req, res) => {
       priceMap[c.crop] = c;
     });
     
-    // Load all crops from lighting-recipes.json
+    // Load all crops from lighting-recipes.json (global reference data)
     let allCropNames = [];
     try {
       const recipesData = JSON.parse(fs.readFileSync(RECIPES_FILE, 'utf8'));
@@ -62,15 +60,13 @@ router.get('/', (req, res) => {
       console.warn('[crop-pricing] Could not load lighting-recipes.json:', e.message);
     }
 
-    // Determine which crops are currently growing from groups.json
+    // Determine which crops are currently growing from farm-scoped groups
     const growingCrops = new Set();
-    try {
-      const groupsData = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
-      (groupsData.groups || []).forEach(g => {
-        const cropName = g.crop || planIdToCropName(g.plan);
-        if (cropName) growingCrops.add(cropName);
-      });
-    } catch (e) { /* no groups file */ }
+    const groups = await farmStore.get(fid, 'groups') || [];
+    (Array.isArray(groups) ? groups : []).forEach(g => {
+      const cropName = g.crop || planIdToCropName(g.plan);
+      if (cropName) growingCrops.add(cropName);
+    });
     
     // Merge: all recipe crops + any extra crops in pricing that aren't in recipes
     const allCropSet = new Set([...allCropNames, ...Object.keys(priceMap)]);
@@ -101,7 +97,7 @@ router.get('/', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[crop-pricing] Failed to read pricing file:', error);
+    console.error('[crop-pricing] Failed to read pricing:', error);
     res.status(500).json({
       ok: false,
       error: 'failed_to_load_pricing'
@@ -114,7 +110,7 @@ router.get('/', (req, res) => {
  * Update crop pricing configuration
  * Body: { crops: [...] }
  */
-router.put('/', (req, res) => {
+router.put('/', async (req, res) => {
   try {
     const { crops } = req.body;
     
@@ -125,17 +121,19 @@ router.put('/', (req, res) => {
       });
     }
     
+    const fid = farmStore.farmIdFromReq(req);
+
     // Load existing data
-    const data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+    const data = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
     
     // Update crops
     data.crops = crops;
     data.lastUpdated = new Date().toISOString();
     
-    // Save to file
-    fs.writeFileSync(PRICING_FILE, JSON.stringify(data, null, 2), 'utf8');
+    // Save to farm-scoped store
+    await farmStore.set(fid, 'crop_pricing', data);
     
-    console.log(`[crop-pricing] Updated ${crops.length} crop prices`);
+    console.log(`[crop-pricing] Updated ${crops.length} crop prices for farm ${fid || 'default'}`);
     
     res.json({
       ok: true,
@@ -155,11 +153,12 @@ router.put('/', (req, res) => {
  * GET /api/crop-pricing/:cropName
  * Get pricing for a specific crop
  */
-router.get('/:cropName', (req, res) => {
+router.get('/:cropName', async (req, res) => {
   try {
     const cropName = decodeURIComponent(req.params.cropName);
-    const data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
-    const cropPricing = data.crops.find(c => c.crop === cropName);
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
+    const cropPricing = (data.crops || []).find(c => c.crop === cropName);
     
     if (!cropPricing) {
       return res.status(404).json({
@@ -185,9 +184,9 @@ router.get('/:cropName', (req, res) => {
 /**
  * Export pricing data for internal use by other routes
  */
-export async function getCropPricing() {
+export async function getCropPricing(farmId) {
   try {
-    const data = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+    const data = await farmStore.get(farmId, 'crop_pricing') || { crops: [] };
     return data.crops || [];
   } catch (e) {
     console.warn('[crop-pricing] Could not load pricing:', e.message);

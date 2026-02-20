@@ -61,6 +61,9 @@ import { requestLogger } from './middleware/logger.js';
 import { authMiddleware } from './middleware/auth.js';
 import { farmDataMiddleware, farmDataWriteMiddleware } from './middleware/farm-data.js';
 
+// Phase 3 — Unified tenant-scoped data access layer
+import { farmStore, initFarmStore } from './lib/farm-data-store.js';
+
 // Import services
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService } from './services/healthCheck.js';
@@ -139,8 +142,12 @@ app.use(helmet({
 // Must be mounted BEFORE static file serving so DB data takes precedence.
 // =====================================================
 const _inMemoryStore = getInMemoryStore();
+initFarmStore(_inMemoryStore);                     // Phase 3 — init data store
 app.use(farmDataWriteMiddleware(_inMemoryStore)); // PUT /data/*.json → DB
 app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
+
+// Inject farmStore into every request for route files
+app.use((req, _res, next) => { req.farmStore = farmStore; next(); });
 
 // Static UI (Wholesale portal + Central Admin UI)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -343,35 +350,19 @@ function splitForecastBuckets(trays) {
  */
 async function getInventoryTraysForCompat(farmId) {
   // 1. Try farm-scoped groups from DB
-  if (farmId && isDatabaseAvailable()) {
-    try {
-      const result = await query(
-        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
-        [farmId]
-      );
-      if (result.rows.length > 0 && result.rows[0].data) {
-        const raw = result.rows[0].data;
-        const groups = Array.isArray(raw) ? raw : (raw.groups || []);
-        if (groups.length > 0) {
-          const syntheticTrays = buildSyntheticTraysFromGroups(groups);
-          return normalizeInventoryTrays(syntheticTrays);
-        }
-      }
-    } catch (_) { /* fall through to file */ }
+  const groups = await farmStore.get(farmId, 'groups') || [];
+  if (groups.length > 0) {
+    const syntheticTrays = buildSyntheticTraysFromGroups(groups);
+    return normalizeInventoryTrays(syntheticTrays);
   }
 
-  // 2. Fall back to flat files
-  const traysDoc = await readDataJsonWithFallback('trays.json', []);
-  const traysRaw = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
-
+  // 2. Try trays data type
+  const traysRaw = await farmStore.get(farmId, 'trays') || [];
   if (Array.isArray(traysRaw) && traysRaw.length > 0) {
     return normalizeInventoryTrays(traysRaw);
   }
 
-  const groupsDoc = await readDataJsonWithFallback('groups.json', { groups: [] });
-  const groups = Array.isArray(groupsDoc) ? groupsDoc : (groupsDoc?.groups || []);
-  const syntheticTrays = buildSyntheticTraysFromGroups(groups);
-  return normalizeInventoryTrays(syntheticTrays);
+  return normalizeInventoryTrays([]);
 }
 
 function resolveEdgeUrl() {
@@ -825,30 +816,20 @@ app.post('/api/debug/track', express.json(), (req, res) => {
 });
 
 // Legacy compatibility routes used by existing farm/admin pages
-app.get('/env', async (_req, res) => {
+app.get('/env', async (req, res) => {
   try {
-    const envPath = path.join(FARM_DATA_DIR, 'env.json');
-    if (!fs.existsSync(envPath)) {
-      return res.status(200).json({ zones: [] });
-    }
-    const raw = await fs.promises.readFile(envPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    return res.status(200).json(parsed);
+    const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
+    return res.status(200).json(data || { zones: [] });
   } catch (error) {
     logger.warn('[Compat] /env fallback failed:', error.message);
     return res.status(200).json({ zones: [] });
   }
 });
 
-app.get('/api/env', async (_req, res) => {
+app.get('/api/env', async (req, res) => {
   try {
-    const envPath = path.join(FARM_DATA_DIR, 'env.json');
-    if (!fs.existsSync(envPath)) {
-      return res.status(200).json({ zones: [] });
-    }
-    const raw = await fs.promises.readFile(envPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    return res.status(200).json(parsed);
+    const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
+    return res.status(200).json(data || { zones: [] });
   } catch (error) {
     logger.warn('[Compat] /api/env fallback failed:', error.message);
     return res.status(200).json({ zones: [] });
@@ -924,37 +905,28 @@ function mergeCompatibilityPlans(plans) {
   return merged;
 }
 
-app.get('/plans', async (_req, res) => {
+app.get('/plans', async (req, res) => {
   try {
-    const plansPath = path.join(FARM_DATA_DIR, 'plans.json');
-    if (fs.existsSync(plansPath)) {
-      const raw = await fs.promises.readFile(plansPath, 'utf8');
-      const parsed = JSON.parse(raw);
-      const plans = Array.isArray(parsed) ? parsed : (parsed?.plans || []);
-      return res.json({ plans: mergeCompatibilityPlans(plans) });
+    const fid = farmStore.farmIdFromReq(req);
+    let plans = await farmStore.get(fid, 'plans');
+    if (!plans || (Array.isArray(plans) && plans.length === 0)) {
+      // Fallback: try schedules data type
+      const schedData = await farmStore.get(fid, 'schedules');
+      plans = schedData?.plans || schedData?.schedules || schedData || [];
     }
-
-    const schedulesPath = path.join(FARM_DATA_DIR, 'schedules.json');
-    if (fs.existsSync(schedulesPath)) {
-      const raw = await fs.promises.readFile(schedulesPath, 'utf8');
-      const parsed = JSON.parse(raw);
-      const plans = parsed?.plans || parsed?.schedules || [];
-      return res.json({ plans: mergeCompatibilityPlans(Array.isArray(plans) ? plans : []) });
-    }
-
-    return res.json({ plans: [...COMPAT_DEFAULT_PLANS] });
+    plans = Array.isArray(plans) ? plans : [];
+    return res.json({ plans: mergeCompatibilityPlans(plans) });
   } catch (error) {
     logger.warn('[Compat] /plans fallback failed:', error.message);
     return res.json({ plans: [...COMPAT_DEFAULT_PLANS] });
   }
 });
 
-app.get('/api/farm/profile', async (_req, res) => {
+app.get('/api/farm/profile', async (req, res) => {
   try {
-    const farmPath = path.join(FARM_DATA_DIR, 'farm.json');
-    const raw = await fs.promises.readFile(farmPath, 'utf8');
-    const farm = JSON.parse(raw);
-    const farmId = farm.farmId || farm.farm_id || 'FARM-TEST-WIZARD-001';
+    const fid = farmStore.farmIdFromReq(req);
+    const farm = await farmStore.get(fid, 'farm_profile') || {};
+    const farmId = farm.farmId || farm.farm_id || fid || 'FARM-TEST-WIZARD-001';
 
     return res.json({
       status: 'success',
@@ -973,11 +945,17 @@ app.get('/api/farm/profile', async (_req, res) => {
   }
 });
 
-app.get('/farm', async (_req, res) => {
+app.get('/farm', async (req, res) => {
   try {
-    const farmPath = path.join(FARM_DATA_DIR, 'farm.json');
-    const raw = await fs.promises.readFile(farmPath, 'utf8');
-    return res.json(JSON.parse(raw));
+    const fid = farmStore.farmIdFromReq(req);
+    const farm = await farmStore.get(fid, 'farm_profile');
+    return res.json(farm || {
+      farmId: fid || 'LOCAL-FARM',
+      farmName: 'Local Farm',
+      ownerName: '',
+      contactEmail: '',
+      contactPhone: ''
+    });
   } catch (_error) {
     return res.json({
       farmId: 'LOCAL-FARM',
@@ -991,8 +969,9 @@ app.get('/farm', async (_req, res) => {
 
 app.post('/farm', async (req, res) => {
   try {
+    const fid = farmStore.farmIdFromReq(req);
     const payload = req.body && typeof req.body === 'object' ? req.body : {};
-    await writeFarmDataJson('farm.json', payload);
+    await farmStore.set(fid, 'farm_profile', payload);
     return res.json({ success: true, farm: payload });
   } catch (error) {
     logger.warn('[Compat] POST /farm failed:', error.message);
@@ -1000,11 +979,11 @@ app.post('/farm', async (req, res) => {
   }
 });
 
-app.get('/api/setup/data', async (_req, res) => {
+app.get('/api/setup/data', async (req, res) => {
   try {
-    const farmDoc = await readDataJsonWithFallback('farm.json', {});
-    const roomsDoc = await readDataJsonWithFallback('rooms.json', { rooms: [] });
-    const rooms = Array.isArray(roomsDoc) ? roomsDoc : (roomsDoc?.rooms || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const farmDoc = await farmStore.get(fid, 'farm_profile') || {};
+    const rooms = await farmStore.get(fid, 'rooms') || [];
 
     return res.json({
       success: true,
@@ -1024,10 +1003,11 @@ app.get('/api/setup/data', async (_req, res) => {
 
 app.post('/api/setup/save-rooms', async (req, res) => {
   try {
+    const fid = farmStore.farmIdFromReq(req);
     const payload = req.body || {};
     const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
-    await writeFarmDataJson('rooms.json', { rooms });
-    return res.json({ success: true, rooms, source: 'compat-file' });
+    await farmStore.set(fid, 'rooms', rooms);
+    return res.json({ success: true, rooms, source: 'farm-store' });
   } catch (error) {
     logger.warn('[Compat] /api/setup/save-rooms failed:', error.message);
     return res.status(500).json({ success: false, message: 'Failed to save rooms' });
@@ -1070,28 +1050,20 @@ app.get('/forwarder/network/scan', (_req, res) => {
   });
 });
 
-app.get('/api/admin/farms/:farmId/devices', async (_req, res) => {
+app.get('/api/admin/farms/:farmId/devices', async (req, res) => {
   try {
-    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
-    if (!fs.existsSync(devicesPath)) {
-      return res.json({ success: true, farmId: _req.params.farmId, count: 0, devices: [] });
-    }
-
-    const raw = await fs.promises.readFile(devicesPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const devices = Array.isArray(parsed)
-      ? parsed
-      : (Array.isArray(parsed?.devices) ? parsed.devices : []);
+    const fid = req.params.farmId || farmStore.farmIdFromReq(req);
+    const devices = await farmStore.get(fid, 'devices') || [];
 
     return res.json({
       success: true,
-      farmId: _req.params.farmId,
+      farmId: req.params.farmId,
       count: devices.length,
       devices
     });
   } catch (error) {
     logger.warn('[Compat] /api/admin/farms/:farmId/devices failed:', error.message);
-    return res.json({ success: true, farmId: _req.params.farmId, count: 0, devices: [] });
+    return res.json({ success: true, farmId: req.params.farmId, count: 0, devices: [] });
   }
 });
 
@@ -1294,14 +1266,10 @@ app.get('/api/ml/insights/forecast/:zone', (_req, res) => {
   return res.json({ ok: true, predictions });
 });
 
-app.get('/api/health/insights', async (_req, res) => {
+app.get('/api/health/insights', async (req, res) => {
   try {
-    const envPath = path.join(FARM_DATA_DIR, 'env.json');
-    if (!fs.existsSync(envPath)) {
-      return res.json({ ok: true, zones: [] });
-    }
-    const raw = await fs.promises.readFile(envPath, 'utf8');
-    const envData = JSON.parse(raw);
+    const fid = farmStore.farmIdFromReq(req);
+    const envData = await farmStore.get(fid, 'telemetry') || { zones: [] };
     const zones = Array.isArray(envData?.zones) ? envData.zones : [];
     const zoneScores = zones.map((zone) => ({
       zone_id: zone.id,
@@ -1365,12 +1333,8 @@ app.get('/api/health/vitality', async (req, res) => {
 
     let envZones = [];
     try {
-      const envPath = path.join(FARM_DATA_DIR, 'env.json');
-      if (fs.existsSync(envPath)) {
-        const raw = await fs.promises.readFile(envPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        envZones = Array.isArray(parsed?.zones) ? parsed.zones : [];
-      }
+      const envData = await farmStore.get(farmStore.farmIdFromReq(req) || req.farmId, 'telemetry');
+      envZones = Array.isArray(envData?.zones) ? envData.zones : [];
     } catch (_error) {
       envZones = [];
     }
@@ -1485,12 +1449,10 @@ app.get('/api/inventory/forecast', async (req, res) => {
   }
 });
 
-app.get('/api/tray-formats', async (_req, res) => {
+app.get('/api/tray-formats', async (req, res) => {
   try {
-    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
-    const formats = Array.isArray(formatsDoc)
-      ? formatsDoc
-      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const formats = await farmStore.get(fid, 'tray_formats') || [];
     return res.json(Array.isArray(formats) ? formats : []);
   } catch (error) {
     logger.warn('[Compat] /api/tray-formats GET failed:', error.message);
@@ -1500,10 +1462,8 @@ app.get('/api/tray-formats', async (_req, res) => {
 
 app.post('/api/tray-formats', async (req, res) => {
   try {
-    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
-    const formats = Array.isArray(formatsDoc)
-      ? formatsDoc
-      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const formats = await farmStore.get(fid, 'tray_formats') || [];
 
     const payload = req.body || {};
     const trayFormatId = payload.trayFormatId || `fmt-${Date.now()}`;
@@ -1521,7 +1481,7 @@ app.post('/api/tray-formats', async (req, res) => {
     };
 
     formats.push(format);
-    await writeFarmDataJson('tray-formats.json', formats);
+    await farmStore.set(fid, 'tray_formats', formats);
     return res.status(201).json(format);
   } catch (error) {
     logger.warn('[Compat] /api/tray-formats POST failed:', error.message);
@@ -1532,10 +1492,8 @@ app.post('/api/tray-formats', async (req, res) => {
 app.put('/api/tray-formats/:formatId', async (req, res) => {
   try {
     const { formatId } = req.params;
-    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
-    const formats = Array.isArray(formatsDoc)
-      ? formatsDoc
-      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const formats = await farmStore.get(fid, 'tray_formats') || [];
 
     const index = formats.findIndex((item) => String(item.trayFormatId) === String(formatId));
     if (index < 0) {
@@ -1548,7 +1506,7 @@ app.put('/api/tray-formats/:formatId', async (req, res) => {
       trayFormatId: formats[index].trayFormatId
     };
 
-    await writeFarmDataJson('tray-formats.json', formats);
+    await farmStore.set(fid, 'tray_formats', formats);
     return res.json(formats[index]);
   } catch (error) {
     logger.warn('[Compat] /api/tray-formats PUT failed:', error.message);
@@ -1559,13 +1517,11 @@ app.put('/api/tray-formats/:formatId', async (req, res) => {
 app.delete('/api/tray-formats/:formatId', async (req, res) => {
   try {
     const { formatId } = req.params;
-    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
-    const formats = Array.isArray(formatsDoc)
-      ? formatsDoc
-      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const formats = await farmStore.get(fid, 'tray_formats') || [];
 
     const nextFormats = formats.filter((item) => String(item.trayFormatId) !== String(formatId));
-    await writeFarmDataJson('tray-formats.json', nextFormats);
+    await farmStore.set(fid, 'tray_formats', nextFormats);
     return res.json({ success: true });
   } catch (error) {
     logger.warn('[Compat] /api/tray-formats DELETE failed:', error.message);
@@ -1573,10 +1529,10 @@ app.delete('/api/tray-formats/:formatId', async (req, res) => {
   }
 });
 
-app.get('/api/trays', async (_req, res) => {
+app.get('/api/trays', async (req, res) => {
   try {
-    const traysDoc = await readDataJsonWithFallback('trays.json', []);
-    const trays = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const trays = await farmStore.get(fid, 'trays') || [];
     return res.json(Array.isArray(trays) ? trays : []);
   } catch (error) {
     logger.warn('[Compat] /api/trays GET failed:', error.message);
@@ -1586,12 +1542,9 @@ app.get('/api/trays', async (_req, res) => {
 
 app.post('/api/trays/register', async (req, res) => {
   try {
-    const traysDoc = await readDataJsonWithFallback('trays.json', []);
-    const trays = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
-    const formatsDoc = await readDataJsonWithFallback('tray-formats.json', []);
-    const formats = Array.isArray(formatsDoc)
-      ? formatsDoc
-      : (formatsDoc?.formats || formatsDoc?.trayFormats || []);
+    const fid = farmStore.farmIdFromReq(req);
+    const trays = await farmStore.get(fid, 'trays') || [];
+    const formats = await farmStore.get(fid, 'tray_formats') || [];
 
     const payload = req.body || {};
     const selectedFormat = formats.find((format) => String(format.trayFormatId) === String(payload.trayFormatId));
@@ -1609,7 +1562,7 @@ app.post('/api/trays/register', async (req, res) => {
     };
 
     trays.push(tray);
-    await writeFarmDataJson('trays.json', trays);
+    await farmStore.set(fid, 'trays', trays);
     return res.status(201).json({ success: true, tray });
   } catch (error) {
     logger.warn('[Compat] /api/trays/register POST failed:', error.message);
@@ -1617,30 +1570,34 @@ app.post('/api/trays/register', async (req, res) => {
   }
 });
 
-app.get('/data/nutrient-dashboard', async (_req, res) => {
-  const payload = await readDataJsonWithFallback('nutrient-dashboard.json', {});
+app.get('/data/nutrient-dashboard', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  const payload = await farmStore.get(fid, 'nutrient_dashboard') || {};
   return res.json(payload);
 });
 
-app.get('/data/equipment-metadata', async (_req, res) => {
-  const payload = await readDataJsonWithFallback('equipment-metadata.json', {});
+app.get('/data/equipment-metadata', async (req, res) => {
+  const payload = await farmStore.getGlobal('equipment-metadata.json') || {};
   return res.json(payload);
 });
 
-app.get('/data/room-map.json', async (_req, res) => {
-  const payload = await readDataJsonWithFallback('room-map.json', { zones: [], devices: [] });
+app.get('/data/room-map.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  const payload = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
   return res.json(payload);
 });
 
 app.get('/data/room-map-:roomId.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
   const roomId = String(req.params.roomId || '').trim();
+  // Try room-specific map first (stored as room_map with room ID embedded)
   const roomSpecificName = roomId ? `room-map-${roomId}.json` : 'room-map.json';
-  const roomSpecific = await readDataJsonWithFallback(roomSpecificName, null);
+  const roomSpecific = await farmStore.getGlobal(roomSpecificName);
   if (roomSpecific) {
     return res.json(roomSpecific);
   }
 
-  const generic = await readDataJsonWithFallback('room-map.json', { zones: [], devices: [] });
+  const generic = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
   return res.json(generic);
 });
 
@@ -1662,36 +1619,30 @@ app.get('/api/weather', (req, res) => {
   });
 });
 
-app.get('/configuration', async (_req, res) => {
+app.get('/configuration', async (req, res) => {
   try {
-    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
-    if (!fs.existsSync(configPath)) {
-      return res.json({
-        network: { httpPort: '8080', wsPort: '8081' },
-        integrations: {},
-        notifications: {}
-      });
-    }
-    const raw = await fs.promises.readFile(configPath, 'utf8');
-    return res.json(JSON.parse(raw));
+    const fid = farmStore.farmIdFromReq(req);
+    const config = await farmStore.get(fid, 'config');
+    return res.json(config || {
+      network: { httpPort: '8080', wsPort: '8081' },
+      integrations: {},
+      notifications: {}
+    });
   } catch (error) {
     logger.warn('[Compat] /configuration read failed:', error.message);
     return res.json({ network: {}, integrations: {}, notifications: {} });
   }
 });
 
-app.get('/api/farm/configuration', async (_req, res) => {
+app.get('/api/farm/configuration', async (req, res) => {
   try {
-    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
-    if (!fs.existsSync(configPath)) {
-      return res.json({
-        network: { httpPort: '8080', wsPort: '8081' },
-        integrations: {},
-        notifications: {}
-      });
-    }
-    const raw = await fs.promises.readFile(configPath, 'utf8');
-    return res.json(JSON.parse(raw));
+    const fid = farmStore.farmIdFromReq(req);
+    const config = await farmStore.get(fid, 'config');
+    return res.json(config || {
+      network: { httpPort: '8080', wsPort: '8081' },
+      integrations: {},
+      notifications: {}
+    });
   } catch (error) {
     logger.warn('[Compat] /api/farm/configuration read failed:', error.message);
     return res.json({ network: {}, integrations: {}, notifications: {} });
@@ -1700,8 +1651,8 @@ app.get('/api/farm/configuration', async (_req, res) => {
 
 app.post('/api/farm/configuration', async (req, res) => {
   try {
-    const configPath = path.join(FARM_DATA_DIR, 'configuration.json');
-    await fs.promises.writeFile(configPath, JSON.stringify(req.body || {}, null, 2), 'utf8');
+    const fid = farmStore.farmIdFromReq(req);
+    await farmStore.set(fid, 'config', req.body || {});
     return res.json({ success: true });
   } catch (error) {
     logger.warn('[Compat] /api/farm/configuration write failed:', error.message);
@@ -1709,16 +1660,10 @@ app.post('/api/farm/configuration', async (req, res) => {
   }
 });
 
-app.get('/devices', async (_req, res) => {
+app.get('/devices', async (req, res) => {
   try {
-    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
-    if (!fs.existsSync(devicesPath)) {
-      return res.json({ devices: [] });
-    }
-
-    const raw = await fs.promises.readFile(devicesPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const devices = parsed?.devices || parsed?.iot_devices || parsed || [];
+    const fid = farmStore.farmIdFromReq(req);
+    const devices = await farmStore.get(fid, 'devices') || [];
     return res.json({ devices: Array.isArray(devices) ? devices : [] });
   } catch (error) {
     logger.warn('[Compat] /devices fallback failed:', error.message);
@@ -1728,22 +1673,16 @@ app.get('/devices', async (_req, res) => {
 
 app.post('/devices', async (req, res) => {
   try {
-    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
-    let current = { devices: [] };
-    if (fs.existsSync(devicesPath)) {
-      const raw = await fs.promises.readFile(devicesPath, 'utf8');
-      const parsed = JSON.parse(raw);
-      current = Array.isArray(parsed) ? { devices: parsed } : (parsed || { devices: [] });
-      if (!Array.isArray(current.devices)) current.devices = [];
-    }
+    const fid = farmStore.farmIdFromReq(req);
+    const devices = await farmStore.get(fid, 'devices') || [];
 
     const payload = req.body || {};
     const nextDevice = {
       ...payload,
       id: payload.id || payload.deviceId || payload.device_id || `device-${Date.now()}`
     };
-    current.devices.push(nextDevice);
-    await fs.promises.writeFile(devicesPath, JSON.stringify(current, null, 2), 'utf8');
+    devices.push(nextDevice);
+    await farmStore.set(fid, 'devices', devices);
     return res.status(201).json({ success: true, device: nextDevice });
   } catch (error) {
     logger.warn('[Compat] POST /devices failed:', error.message);
@@ -1754,15 +1693,8 @@ app.post('/devices', async (req, res) => {
 app.patch('/devices/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
-    const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
-    if (!fs.existsSync(devicesPath)) {
-      return res.status(404).json({ error: 'Device not found' });
-    }
-
-    const raw = await fs.promises.readFile(devicesPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const payload = Array.isArray(parsed) ? { devices: parsed } : (parsed || { devices: [] });
-    const devices = Array.isArray(payload.devices) ? payload.devices : [];
+    const fid = farmStore.farmIdFromReq(req);
+    const devices = await farmStore.get(fid, 'devices') || [];
 
     const index = devices.findIndex((item) => String(item.id || item.deviceId || item.device_id) === String(deviceId));
     if (index < 0) {
@@ -1770,8 +1702,7 @@ app.patch('/devices/:deviceId', async (req, res) => {
     }
 
     devices[index] = { ...devices[index], ...(req.body || {}) };
-    payload.devices = devices;
-    await fs.promises.writeFile(devicesPath, JSON.stringify(payload, null, 2), 'utf8');
+    await farmStore.set(fid, 'devices', devices);
     return res.json({ success: true, device: devices[index] });
   } catch (error) {
     logger.warn('[Compat] PATCH /devices/:deviceId failed:', error.message);
@@ -1782,31 +1713,8 @@ app.patch('/devices/:deviceId', async (req, res) => {
 // Compatibility endpoints expected by legacy farm/admin pages
 app.get('/api/groups', async (req, res) => {
   try {
-    let groups = [];
-
-    // 1. Try farm-scoped DB data
-    if (req.farmId && isDatabaseAvailable()) {
-      try {
-        const result = await query(
-          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
-          [req.farmId]
-        );
-        if (result.rows.length > 0 && result.rows[0].data) {
-          const raw = result.rows[0].data;
-          groups = Array.isArray(raw) ? raw : (raw.groups || []);
-        }
-      } catch (_) { /* fall through to file */ }
-    }
-
-    // 2. Fall back to flat file
-    if (groups.length === 0) {
-      const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
-      if (fs.existsSync(groupsPath)) {
-        const raw = await fs.promises.readFile(groupsPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
-      }
-    }
+    const fid = farmStore.farmIdFromReq(req);
+    const groups = await farmStore.get(fid, 'groups') || [];
 
     const formatted = groups.map((group) => ({
       id: group.id || group.name,
@@ -1828,23 +1736,11 @@ app.get('/api/groups', async (req, res) => {
 
 app.get('/api/rooms', async (req, res) => {
   try {
-    // 1. Try farm-scoped DB data
-    if (req.farmId && isDatabaseAvailable()) {
-      try {
-        const result = await query(
-          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'rooms'`,
-          [req.farmId]
-        );
-        if (result.rows.length > 0 && result.rows[0].data) {
-          const raw = result.rows[0].data;
-          const rooms = Array.isArray(raw) ? raw : (raw.rooms || []);
-          if (rooms.length > 0) return res.json(rooms);
-        }
-      } catch (_) { /* fall through */ }
-    }
+    const fid = farmStore.farmIdFromReq(req);
+    const rooms = await farmStore.get(fid, 'rooms') || [];
 
-    // 2. Legacy DB table
-    if (req.db) {
+    // Also try legacy DB table if empty
+    if (rooms.length === 0 && req.db) {
       try {
         const result = await req.db.query(
           `SELECT room_id, farm_id, name, type, capacity, description, created_at
@@ -1853,17 +1749,10 @@ app.get('/api/rooms', async (req, res) => {
         );
         if (result.rows.length > 0) return res.json(result.rows);
       } catch (dbError) {
-        logger.debug('[Compat] /api/rooms DB query failed, using file fallback', { error: dbError.message });
+        logger.debug('[Compat] /api/rooms DB query failed', { error: dbError.message });
       }
     }
 
-    // 3. Fall back to flat file
-    const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
-    if (!fs.existsSync(roomsPath)) return res.json([]);
-
-    const raw = await fs.promises.readFile(roomsPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const rooms = Array.isArray(parsed) ? parsed : (parsed?.rooms || [parsed]);
     return res.json(Array.isArray(rooms) ? rooms : []);
   } catch (error) {
     logger.warn('[Compat] /api/rooms fallback failed:', error.message);
