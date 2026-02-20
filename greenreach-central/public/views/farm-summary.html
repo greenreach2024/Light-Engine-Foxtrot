@@ -3109,9 +3109,41 @@
           
           // Build group cards with harvest countdown
           let groupsHtml = '';
-          console.log(`[Zone ${zone.name}] Found ${zoneGroups.length} group(s)`);
-          if (zoneGroups.length > 0) {
-            for (const group of zoneGroups) {
+          // Separate groups into planted (has plan reference) vs unplanted (draft)
+          const plantedGroups = [];
+          const unplantedGroups = [];
+          for (const g of zoneGroups) {
+            const hasRef = g.planId || g.plan || g.planKey || g.planConfig?.planId || g.planConfig?.preview?.planId;
+            if (hasRef) plantedGroups.push(g);
+            else unplantedGroups.push(g);
+          }
+          console.log(`[Zone ${zone.name}] ${zoneGroups.length} group(s): ${plantedGroups.length} planted, ${unplantedGroups.length} unplanted/draft`);
+
+          // Show summary card for unplanted/draft groups
+          if (unplantedGroups.length > 0) {
+            const totalTrays = unplantedGroups.reduce((sum, g) => sum + (g.trays || 0), 0);
+            const totalPlants = unplantedGroups.reduce((sum, g) => sum + (g.plants || 0), 0);
+            groupsHtml += `
+              <div class="group-harvest-info">
+                <div class="harvest-countdown" style="border-left-color: #94a3b8;">
+                  <div class="harvest-details">
+                    <div class="harvest-label" style="color: #64748b;">
+                      📋 ${unplantedGroups.length} Unplanted Group${unplantedGroups.length !== 1 ? 's' : ''}
+                    </div>
+                    <div class="harvest-status" style="color: #94a3b8;">
+                      ${totalTrays} trays • ${totalPlants} plant sites available
+                    </div>
+                    <div style="margin-top: 4px; font-size: 0.8rem; color: #94a3b8;">
+                      Assign a crop plan to start tracking
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+
+          if (plantedGroups.length > 0) {
+            for (const group of plantedGroups) {
               console.log(`[Zone ${zone.name}] Processing group:`, group.id || group.name, {
                 planId: group.planId,
                 plan: group.plan,
