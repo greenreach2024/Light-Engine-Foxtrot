@@ -4206,8 +4206,7 @@
         return;
       }
 
-      const weight = prompt(`Enter harvest weight (kg) for ALL ${batchHarvestTrays.length} trays:`, '1.5');
-      if (!weight) return;
+      const weight = prompt(`Enter approximate harvest weight (oz) per tray (${batchHarvestTrays.length} trays):`, '');
 
       // Show loading
       const scanResult = document.getElementById('scanResult');
@@ -4224,13 +4223,14 @@
       let successful = 0;
       let failed = 0;
       const results = [];
+      let weighInTray = null; // Track which tray gets flagged for weigh-in
 
       for (const trayId of batchHarvestTrays) {
         try {
           const harvestData = {
             trayRunId: trayId,
             harvestedAt: new Date().toISOString(),
-            actualWeight: weight,
+            actualWeight: weight || null,
             note: `Batch harvest via Activity Hub (${batchHarvestTrays.length} trays)`
           };
 
@@ -4248,6 +4248,10 @@
               const data = await response.json();
               results.push({ trayId, lotCode: data.lotCode, batchId: data.batchId });
               successful++;
+              // Capture first tray flagged for weigh-in
+              if (data.shouldWeigh && !weighInTray) {
+                weighInTray = { trayRunId: trayId, ...data };
+              }
             } else {
               failed++;
             }
@@ -4260,7 +4264,41 @@
 
       // Show results
       if (isOnline) {
-        scanResult.innerHTML = `
+        // If a tray was flagged for weigh-in, show that prompt instead
+        if (weighInTray) {
+          scanResult.innerHTML = `
+            <div style="text-align: center; padding: 1.5rem;">
+              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">✓</div>
+              <div style="font-size: 1.3rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
+                ${successful} trays harvested${failed > 0 ? `, ${failed} failed` : ''}
+              </div>
+              <div style="
+                background: rgba(245, 158, 11, 0.15);
+                border: 2px solid rgba(245, 158, 11, 0.4);
+                border-radius: 12px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+              ">
+                <div style="font-size: 1.1rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
+                  ⚖️ Weigh-In Selected
+                </div>
+                <div style="font-size: 0.95rem; color: #cbd5e1;">
+                  Tray <strong>${weighInTray.trayRunId}</strong> (Lot: ${weighInTray.lotCode}) has been selected for a full weigh-in.
+                </div>
+              </div>
+              <button
+                onclick="showWeighInPrompt('${weighInTray.trayRunId}', ${JSON.stringify(weighInTray).replace(/"/g, '&quot;')})"
+                style="
+                  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                  border: none; border-radius: 12px; padding: 0.75rem 2rem;
+                  font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
+                "
+              >⚖️ Record Weight</button>
+              <button onclick="closeScanModal()" class="button" style="margin-top: 0.75rem;">Skip & Done</button>
+            </div>
+          `;
+        } else {
+          scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
@@ -4279,6 +4317,7 @@
             <button onclick="closeScanModal()" class="button button-primary">Done</button>
           </div>
         `;
+        } // end else (no weighInTray)
       } else {
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
@@ -4639,7 +4678,7 @@
       // Route to appropriate flow based on mode
       switch (currentScanMode) {
         case 'seed':
-          window.location.href = `/views/tray-setup.html?tray=${scannedData}`;
+          showSeedForm(scannedData);
           break;
         case 'harvest':
           performHarvest(scannedData);
@@ -4647,6 +4686,103 @@
         case 'move':
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
+      }
+    }
+
+    // Show inline seed form with seed_source for traceability
+    function showSeedForm(trayId) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="padding: 1.5rem;">
+          <div style="text-align: center; margin-bottom: 1.5rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌱</div>
+            <div style="font-size: 1.3rem; font-weight: 700; color: #10b981;">Seed Tray</div>
+            <div style="color: #94a3b8; margin-top: 0.25rem;">Tray: ${trayId}</div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Crop / Recipe *</label>
+            <input type="text" id="seedCrop" placeholder="e.g., Butterhead Lettuce" required
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Variety</label>
+            <input type="text" id="seedVariety" placeholder="e.g., Rex, Salanova"
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">
+              Seed Source <span style="color: #94a3b8; font-weight: 400;">(supplier & lot# for traceability)</span>
+            </label>
+            <input type="text" id="seedSource" placeholder="e.g., Johnny's Seeds / Lot 2026-A-42"
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">
+              CanadaGAP / SFCR requires tracking seed supplier for recall readiness
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+            <div>
+              <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Plant Count</label>
+              <input type="number" id="seedPlantCount" placeholder="# sites"
+                style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            </div>
+            <div>
+              <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Seed Date</label>
+              <input type="date" id="seedDate" value="${new Date().toISOString().slice(0, 10)}"
+                style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            </div>
+          </div>
+
+          <button onclick="submitSeed('${trayId}')" style="
+            width: 100%; padding: 14px; border: none; border-radius: 12px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; font-size: 1.2rem; font-weight: 700; cursor: pointer;">
+            🌱 Record Seeding
+          </button>
+        </div>
+      `;
+      scanResult.style.display = 'block';
+    }
+
+    async function submitSeed(trayId) {
+      const crop = document.getElementById('seedCrop').value.trim();
+      if (!crop) { alert('Crop is required'); return; }
+
+      try {
+        const res = await fetch(\`\${currentAPI}/api/trays/\${trayId}/seed\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipe:      crop,
+            variety:     document.getElementById('seedVariety').value.trim() || null,
+            seed_source: document.getElementById('seedSource').value.trim() || null,
+            seedDate:    document.getElementById('seedDate').value,
+            plantCount:  document.getElementById('seedPlantCount').value || null
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Seeding failed');
+
+        const scanResult = document.getElementById('scanResult');
+        scanResult.innerHTML = \`
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #10b981;">✓</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin: 0.5rem 0;">Seeding Recorded</div>
+            <div style="color: #cbd5e1;">\${crop}\${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
+            <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.5rem;">
+              Traceability will auto-track from here through harvest and delivery.
+            </div>
+            <button onclick="closeScanModal()" style="
+              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
+              background: #334155; color: white; font-size: 1.1rem; cursor: pointer;"
+            >Done</button>
+          </div>
+        \`;
+      } catch (err) {
+        alert('Seeding error: ' + err.message);
       }
     }
 
@@ -4658,10 +4794,13 @@
         scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Recording harvest...</div>';
         scanResult.style.display = 'block';
         
+        // Quick weight input (optional — detailed weigh-in may follow)
+        const quickWeight = prompt('Enter approximate harvest weight (oz):', '');
+
         const harvestData = {
           trayRunId: trayRunId,
           harvestedAt: new Date().toISOString(),
-          actualWeight: prompt('Enter harvest weight (kg):', '1.5') || '1.5',
+          actualWeight: quickWeight || null,
           note: 'Harvested via Activity Hub scan'
         };
         
@@ -4710,41 +4849,14 @@
         
         const data = await response.json();
         
-        // Success! Show result with print option
-        scanResult.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
-              Harvest Recorded
-            </div>
-            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
-              Lot: ${data.lotCode}<br>
-              Batch: ${data.batchId}
-            </div>
-            <button 
-              onclick="printHarvestLabel('${data.lotCode}', '${trayRunId}')"
-              style="
-                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                border: none;
-                border-radius: 12px;
-                padding: 1rem 2rem;
-                font-size: 1.3rem;
-                font-weight: 700;
-                color: white;
-                cursor: pointer;
-                margin-top: 1rem;
-              "
-            >
-              🖨️ Print Harvest Label
-            </button>
-            <div style="margin-top: 1rem;">
-              <button onclick="closeScanModal()" class="button">Done</button>
-            </div>
-          </div>
-        `;
+        // Check if this tray was flagged for a full weigh-in
+        if (data.shouldWeigh) {
+          showWeighInPrompt(trayRunId, data);
+          return;
+        }
         
-        // Refresh harvest list
-        loadDashboardData();
+        // Standard success — no weigh-in required
+        showHarvestSuccess(trayRunId, data);
         
       } catch (error) {
         console.error('Error recording harvest:', error);
@@ -4762,6 +4874,307 @@
           </div>
         `;
       }
+    }
+
+    // Show standard harvest success result
+    function showHarvestSuccess(trayRunId, data) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+          <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+            Harvest Recorded
+          </div>
+          <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+            Lot: ${data.lotCode}<br>
+            Batch: ${data.batchId}
+          </div>
+          <button 
+            onclick="printHarvestLabel('${data.lotCode}', '${trayRunId}')"
+            style="
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              border: none;
+              border-radius: 12px;
+              padding: 1rem 2rem;
+              font-size: 1.3rem;
+              font-weight: 700;
+              color: white;
+              cursor: pointer;
+              margin-top: 1rem;
+            "
+          >
+            🖨️ Print Harvest Label
+          </button>
+          <div style="margin-top: 1rem;">
+            <button onclick="closeScanModal()" class="button">Done</button>
+          </div>
+        </div>
+      `;
+      loadDashboardData();
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // WEIGH-IN PROMPT — shown when a tray is randomly selected
+    // for full-tray weight reconciliation during harvest
+    // ────────────────────────────────────────────────────────────
+    function showWeighInPrompt(trayRunId, harvestData) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">⚖️</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
+            Weigh-In Required
+          </div>
+          <div style="font-size: 1rem; color: #94a3b8; margin-bottom: 1.5rem; line-height: 1.5;">
+            This tray has been randomly selected for a <strong style="color: #e2e8f0;">full weigh-in</strong>.<br>
+            Please weigh the <strong style="color: #e2e8f0;">entire cut crop</strong> from this tray<br>
+            and enter the total weight below.
+          </div>
+
+          <div style="
+            background: rgba(245, 158, 11, 0.1);
+            border: 2px solid rgba(245, 158, 11, 0.3);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+          ">
+            <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.5rem;">
+              Lot: ${harvestData.lotCode} &nbsp;|&nbsp; Plants: ${harvestData.harvestedCount || '—'}
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 1rem;">
+              <input
+                type="number"
+                id="weighInTotalWeight"
+                placeholder="0.0"
+                step="0.1"
+                min="0"
+                style="
+                  width: 120px;
+                  font-size: 2rem;
+                  font-weight: 700;
+                  text-align: center;
+                  padding: 0.75rem;
+                  border: 2px solid rgba(245, 158, 11, 0.5);
+                  border-radius: 12px;
+                  background: rgba(15, 23, 42, 0.6);
+                  color: #f59e0b;
+                  outline: none;
+                "
+                autofocus
+              />
+              <select
+                id="weighInUnit"
+                style="
+                  font-size: 1.2rem;
+                  padding: 0.75rem;
+                  border: 2px solid rgba(245, 158, 11, 0.3);
+                  border-radius: 12px;
+                  background: rgba(15, 23, 42, 0.6);
+                  color: #e2e8f0;
+                  outline: none;
+                "
+              >
+                <option value="oz" selected>oz</option>
+                <option value="g">grams</option>
+                <option value="kg">kg</option>
+                <option value="lb">lbs</option>
+              </select>
+            </div>
+
+            <div style="color: #64748b; font-size: 0.85rem;">
+              Tip: Weigh the full tray cut crop together for best accuracy
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+            <button
+              onclick="submitWeighIn('${trayRunId}', '${harvestData.lotCode}')"
+              style="
+                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                border: none;
+                border-radius: 12px;
+                padding: 1rem 2rem;
+                font-size: 1.2rem;
+                font-weight: 700;
+                color: white;
+                cursor: pointer;
+                min-width: 160px;
+              "
+            >
+              ⚖️ Record Weight
+            </button>
+            <button
+              onclick="skipWeighIn('${trayRunId}', ${JSON.stringify(harvestData).replace(/'/g, "\\'")})"
+              style="
+                background: rgba(100, 116, 139, 0.3);
+                border: 1px solid rgba(100, 116, 139, 0.5);
+                border-radius: 12px;
+                padding: 1rem 1.5rem;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: #94a3b8;
+                cursor: pointer;
+              "
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Auto-focus the weight input
+      setTimeout(() => {
+        const input = document.getElementById('weighInTotalWeight');
+        if (input) input.focus();
+      }, 100);
+    }
+
+    // Submit a full weigh-in record
+    async function submitWeighIn(trayRunId, lotCode) {
+      const weightInput = document.getElementById('weighInTotalWeight');
+      const unitSelect = document.getElementById('weighInUnit');
+      const totalWeight = parseFloat(weightInput?.value);
+      const unit = unitSelect?.value || 'oz';
+
+      if (!totalWeight || totalWeight <= 0) {
+        weightInput.style.borderColor = '#ef4444';
+        weightInput.focus();
+        return;
+      }
+
+      // Convert to oz for consistency
+      let totalOz = totalWeight;
+      if (unit === 'g') totalOz = totalWeight * 0.03527396;
+      else if (unit === 'kg') totalOz = totalWeight * 35.27396;
+      else if (unit === 'lb') totalOz = totalWeight * 16;
+
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #f59e0b;">Recording weigh-in data...</div>';
+
+      try {
+        // Fetch tray details for context
+        let trayDetails = {};
+        try {
+          const detailRes = await fetch(`${currentAPI}/api/trays`);
+          if (detailRes.ok) {
+            const allTrays = await detailRes.json();
+            const match = allTrays.find(t => t.currentRunId === trayRunId);
+            if (match) {
+              trayDetails = {
+                tray_id: match.trayId,
+                tray_format_id: match.formatId,
+                tray_format_name: match.formatName,
+                planted_site_count: match.plantedSiteCount || match.plantSiteCount,
+                recipe_id: match.currentRecipe,
+                system_type: match.systemType || '',
+                grow_days: match.daysSinceSeeding
+              };
+            }
+          }
+        } catch (_) {}
+
+        // Submit weigh-in to crop-weights API
+        const weighRes = await fetch(`${currentAPI}/api/crop-weights/record`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tray_run_id: trayRunId,
+            tray_id: trayDetails.tray_id || null,
+            recipe_id: trayDetails.recipe_id || null,
+            crop_name: trayDetails.recipe_id || null,
+            tray_format_id: trayDetails.tray_format_id || null,
+            tray_format_name: trayDetails.tray_format_name || null,
+            system_type: trayDetails.system_type || null,
+            planted_site_count: trayDetails.planted_site_count || 1,
+            total_weight_oz: +totalOz.toFixed(2),
+            weight_unit: 'oz',
+            grow_days: trayDetails.grow_days || null,
+            zone: null,
+            room: null,
+            notes: `Full tray weigh-in during harvest. Input: ${totalWeight} ${unit}`
+          })
+        });
+
+        if (!weighRes.ok) throw new Error('Failed to record weigh-in');
+        const weighData = await weighRes.json();
+
+        // Show weigh-in success with comparison data
+        const plantCount = trayDetails.planted_site_count || '?';
+        const perPlant = weighData.weight_per_plant_oz;
+        const varianceMsg = weighData.variance_pct !== null
+          ? `<div style="margin-top: 0.5rem; font-size: 1rem; color: ${Math.abs(weighData.variance_pct) <= 10 ? '#10b981' : '#f59e0b'};">
+               ${weighData.variance_pct >= 0 ? '↑' : '↓'} ${Math.abs(weighData.variance_pct)}% ${weighData.variance_pct >= 0 ? 'above' : 'below'} average
+               ${weighData.benchmark ? `(avg: ${weighData.benchmark.avg_weight_per_plant_oz} oz/plant from ${weighData.benchmark.sample_count} samples)` : ''}
+             </div>`
+          : `<div style="margin-top: 0.5rem; font-size: 0.95rem; color: #10b981;">✓ Baseline established for this crop</div>`;
+
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem;">
+            <div style="font-size: 2.5rem; color: #10b981; margin-bottom: 0.5rem;">⚖️ ✓</div>
+            <div style="font-size: 1.4rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+              Weigh-In Recorded
+            </div>
+
+            <div style="
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 0.75rem;
+              margin: 1rem 0;
+              text-align: center;
+            ">
+              <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.8rem; color: #64748b;">Total Weight</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">
+                  ${totalOz.toFixed(1)} oz
+                </div>
+              </div>
+              <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.8rem; color: #64748b;">Per Plant</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">
+                  ${perPlant} oz
+                </div>
+                <div style="font-size: 0.75rem; color: #64748b;">${plantCount} plants</div>
+              </div>
+            </div>
+
+            ${varianceMsg}
+
+            <div style="font-size: 0.85rem; color: #475569; margin-top: 0.75rem;">
+              Lot: ${lotCode}
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1.25rem;">
+              <button
+                onclick="printHarvestLabel('${lotCode}', '${trayRunId}')"
+                style="
+                  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                  border: none; border-radius: 12px; padding: 0.75rem 1.5rem;
+                  font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
+                "
+              >🖨️ Print Label</button>
+              <button onclick="closeScanModal()" class="button">Done</button>
+            </div>
+          </div>
+        `;
+
+        loadDashboardData();
+      } catch (error) {
+        console.error('Weigh-in error:', error);
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: #ef4444;">
+            <div style="font-size: 2rem;">✗</div>
+            <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0;">Weigh-In Failed</div>
+            <div style="font-size: 1rem;">${error.message}</div>
+            <button onclick="closeScanModal()" class="button" style="margin-top: 1rem;">Close</button>
+          </div>
+        `;
+      }
+    }
+
+    // Skip weigh-in and show standard harvest success
+    function skipWeighIn(trayRunId, harvestData) {
+      showHarvestSuccess(trayRunId, harvestData);
     }
 
     // Print Harvest Label

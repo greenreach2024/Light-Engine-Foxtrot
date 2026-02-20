@@ -3542,6 +3542,9 @@ async function loadPaymentMethods() {
         // Load receipts
         await loadReceipts();
         
+        // Load Stripe status
+        await loadStripeStatus();
+        
     } catch (error) {
         console.error(' Error loading payment methods:', error);
         showToast('Failed to load payment methods', 'error');
@@ -3612,6 +3615,137 @@ async function connectSquare() {
  */
 function reconnectSquare() {
     connectSquare();
+}
+
+/**
+ * Load Stripe connection status
+ */
+async function loadStripeStatus() {
+    const container = document.getElementById('stripe-status-container');
+    if (!container) return;
+    
+    try {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const response = await fetch('/api/farm/stripe/status', {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM'
+            }
+        });
+        const data = await response.json();
+        
+        if (data.connected) {
+            container.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 18px; font-weight: bold; color: #635bff; margin-bottom: 8px;">
+                                ✓ Stripe Connected
+                            </div>
+                            <div style="color: var(--text-secondary);">
+                                <div>Business: ${data.data?.businessName || 'N/A'}</div>
+                                <div>Account: ${data.data?.accountId || 'N/A'}</div>
+                                <div>Charges: ${data.data?.chargesEnabled ? '✓ Enabled' : '✗ Pending'}</div>
+                                <div>Payouts: ${data.data?.payoutsEnabled ? '✓ Enabled' : '✗ Pending'}</div>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="disconnectStripe()" style="background: #ef4444;">
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
+                        Stripe Payment Processing Not Connected
+                    </div>
+                    <button class="btn" onclick="connectStripeFromAdmin()" style="background: #635bff;">
+                        Connect Stripe Account
+                    </button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Stripe status check error:', error);
+        container.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
+                    Stripe Payment Processing Not Connected
+                </div>
+                <button class="btn" onclick="connectStripeFromAdmin()" style="background: #635bff;">
+                    Connect Stripe Account
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Connect Stripe account from admin page
+ */
+async function connectStripeFromAdmin() {
+    try {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const response = await fetch('/api/farm/stripe/authorize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ farmName: currentSession?.farmName || 'My Farm' })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.ok || !data.data?.authorizationUrl) {
+            showToast('Failed to initialize Stripe connection', 'error');
+            return;
+        }
+        
+        const popup = window.open(data.data.authorizationUrl, 'stripeConnect', 'width=600,height=700,scrollbars=yes');
+        
+        window.addEventListener('message', function handleStripeCallback(event) {
+            if (event.data && event.data.type === 'stripe-connected') {
+                window.removeEventListener('message', handleStripeCallback);
+                showToast('Stripe account connected successfully!', 'success');
+                loadStripeStatus();
+            }
+        });
+    } catch (error) {
+        console.error('Stripe connection error:', error);
+        showToast('Failed to connect Stripe account', 'error');
+    }
+}
+
+/**
+ * Disconnect Stripe account
+ */
+async function disconnectStripe() {
+    if (!confirm('Are you sure you want to disconnect your Stripe account?')) return;
+    
+    try {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const response = await fetch('/api/farm/stripe/disconnect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        if (data.ok) {
+            showToast('Stripe account disconnected', 'success');
+            loadStripeStatus();
+        } else {
+            showToast('Failed to disconnect Stripe', 'error');
+        }
+    } catch (error) {
+        console.error('Stripe disconnect error:', error);
+        showToast('Failed to disconnect Stripe', 'error');
+    }
 }
 
 /**

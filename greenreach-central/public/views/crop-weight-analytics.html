@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crop Weight Analytics — GreenReach Central</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --bg-secondary: #334155;
+      --border: #475569;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --accent: #f59e0b;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --purple: #8b5cf6;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    header h1 span { font-size: 1.75rem; }
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 0.6rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: all 0.15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+    .btn-primary:hover { background: #d97706; }
+    .btn-export { background: var(--green); color: #fff; border-color: var(--green); }
+
+    .page-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ─── Filter Bar ───────────────────────────── */
+    .filter-bar {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding: 1.25rem;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .filter-bar label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .filter-bar select,
+    .filter-bar input {
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      min-width: 140px;
+    }
+
+    /* ─── Stats Row ────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-card .value {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .stat-card .sub {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    /* ─── Cards / Sections ─────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .card-body { padding: 1.5rem; }
+
+    /* ─── Comparison Table ─────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+      font-size: 0.875rem;
+    }
+
+    th {
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+    }
+
+    tr:hover td { background: rgba(51, 65, 85, 0.4); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-green { background: rgba(16, 185, 129, 0.15); color: var(--green); }
+    .badge-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+    .badge-red { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+
+    .variance-up { color: var(--green); }
+    .variance-down { color: var(--red); }
+    .variance-flat { color: var(--text-secondary); }
+
+    /* ─── Chart Placeholder ────────────────────── */
+    .chart-area {
+      min-height: 250px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 200px;
+      padding: 0 1rem;
+      width: 100%;
+    }
+
+    .bar-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 40px;
+      max-width: 80px;
+    }
+
+    .bar {
+      width: 100%;
+      border-radius: 4px 4px 0 0;
+      background: linear-gradient(180deg, var(--accent), #b45309);
+      transition: height 0.4s ease;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .bar:hover { opacity: 0.85; }
+
+    .bar-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 80px;
+    }
+
+    .bar-value {
+      font-size: 0.7rem;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ─── Detail Panel ─────────────────────────── */
+    .detail-panel {
+      display: none;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .detail-panel.active { display: block; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .detail-item {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .detail-item .label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .detail-item .value {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-top: 0.15rem;
+    }
+
+    /* ─── Trend Sparklines ─────────────────────── */
+    .sparkline {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 24px;
+      vertical-align: middle;
+    }
+
+    .sparkline .dot {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--accent);
+      min-height: 3px;
+    }
+
+    /* ─── AI Training Banner ───────────────────── */
+    .ai-banner {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .ai-banner .icon { font-size: 2rem; }
+
+    .ai-banner .text h3 {
+      font-size: 1rem;
+      color: var(--purple);
+      margin-bottom: 0.25rem;
+    }
+
+    .ai-banner .text p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+
+    .loading { text-align: center; padding: 2rem; color: var(--text-secondary); }
+
+    @media (max-width: 768px) {
+      .page-content { padding: 1rem; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .filter-bar { flex-direction: column; }
+      header { flex-direction: column; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span>⚖️</span> Crop Weight Analytics</h1>
+  <div class="header-actions">
+    <button class="btn" onclick="refreshData()">↻ Refresh</button>
+    <button class="btn btn-export" onclick="exportCSV()">📥 Export CSV</button>
+    <button class="btn btn-primary" onclick="exportAITraining()">🤖 AI Training Export</button>
+  </div>
+</header>
+
+<div class="page-content">
+
+  <!-- AI Training Data Banner -->
+  <div class="ai-banner">
+    <div class="icon">🧠</div>
+    <div class="text">
+      <h3>AI Training Dataset</h3>
+      <p>
+        This page collects real-world crop weight data correlated with environment, grow time, tray type, and growing methods.
+        This data is used to train yield prediction models and can be exported for machine learning pipelines.
+        The more farms that participate, the more accurate predictions become across growing conditions.
+      </p>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <label>
+      Group By
+      <select id="filterGroupBy" onchange="refreshData()">
+        <option value="crop" selected>Crop / Recipe</option>
+        <option value="system_type">System Type</option>
+        <option value="tray_format">Tray Format</option>
+        <option value="zone">Zone / Room</option>
+        <option value="grow_days_bucket">Grow Duration</option>
+      </select>
+    </label>
+    <label>
+      Farm
+      <select id="filterFarm" onchange="refreshData()">
+        <option value="all">All Farms</option>
+      </select>
+    </label>
+    <label>
+      Time Range
+      <select id="filterDays" onchange="refreshData()">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+        <option value="0">All time</option>
+      </select>
+    </label>
+    <label>
+      Crop Filter
+      <input type="text" id="filterCrop" placeholder="e.g. Butterhead" oninput="refreshData()" />
+    </label>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card">
+      <div class="label">Total Weigh-Ins</div>
+      <div class="value" id="statTotal">—</div>
+      <div class="sub">across all farms</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Crops Tracked</div>
+      <div class="value" id="statCrops">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg oz / Plant</div>
+      <div class="value" id="statAvgPlant">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg oz / Tray</div>
+      <div class="value" id="statAvgTray">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Farms Contributing</div>
+      <div class="value" id="statFarms">—</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Weight Comparison</h2>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn" onclick="setChartMode('per_plant')" id="chartBtnPlant">Per Plant</button>
+        <button class="btn" onclick="setChartMode('per_tray')" id="chartBtnTray">Per Tray</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="chart-area">
+        <div class="bar-chart" id="weightChart">
+          <div class="loading">Loading chart data...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Detailed Comparison</h2>
+      <span style="color: var(--text-secondary); font-size: 0.85rem;" id="tableCount">—</span>
+    </div>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Crop / Group</th>
+            <th>Samples</th>
+            <th>Avg oz/Plant</th>
+            <th>Avg oz/Tray</th>
+            <th>Min</th>
+            <th>Max</th>
+            <th>Std Dev</th>
+            <th>Trend</th>
+            <th>Environment</th>
+          </tr>
+        </thead>
+        <tbody id="comparisonTable">
+          <tr><td colspan="9" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Weigh-Ins Log -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Recent Weigh-Ins</h2>
+    </div>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Farm</th>
+            <th>Crop</th>
+            <th>Tray Format</th>
+            <th>Plants</th>
+            <th>Total (oz)</th>
+            <th>Per Plant (oz)</th>
+            <th>Grow Days</th>
+            <th>Variance</th>
+          </tr>
+        </thead>
+        <tbody id="recentTable">
+          <tr><td colspan="9" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Detail Panel (shown when clicking a crop row) -->
+  <div class="detail-panel" id="detailPanel">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 id="detailTitle">Crop Detail</h3>
+      <button class="btn" onclick="closeDetail()">✕ Close</button>
+    </div>
+    <div class="detail-grid" id="detailGrid"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────
+let analyticsData = null;
+let recentRecords = [];
+let chartMode = 'per_plant';
+const API_BASE = window.location.origin;
+
+// Detect if embedded in LE-farm-admin or standalone GR-admin
+const isEmbedded = window.parent !== window;
+const isCentral = window.location.pathname.includes('/views/');
+
+// ─── Bootstrap ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadFarms();
+  refreshData();
+});
+
+// ─── API Calls ──────────────────────────────────────────────
+
+async function loadFarms() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wholesale/network/farms`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const farmSelect = document.getElementById('filterFarm');
+    const farms = data.farms || data || [];
+    farms.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.farm_id || f.id;
+      opt.textContent = f.name || f.farm_id;
+      farmSelect.appendChild(opt);
+    });
+  } catch (_) {}
+}
+
+async function refreshData() {
+  const groupBy = document.getElementById('filterGroupBy').value;
+  const farm = document.getElementById('filterFarm').value;
+  const days = document.getElementById('filterDays').value;
+  const cropFilter = document.getElementById('filterCrop').value;
+
+  try {
+    // Fetch analytics (grouped)
+    let analyticsUrl = `${API_BASE}/api/crop-weights/analytics?group_by=${groupBy}`;
+    if (farm !== 'all') analyticsUrl += `&farm_id=${farm}`;
+
+    const [analyticsRes, recordsRes] = await Promise.all([
+      fetch(analyticsUrl),
+      fetch(`${API_BASE}/api/crop-weights/records?days=${days || ''}&limit=50${cropFilter ? '&crop_name=' + cropFilter : ''}`)
+    ]);
+
+    if (analyticsRes.ok) {
+      analyticsData = await analyticsRes.json();
+    }
+
+    if (recordsRes.ok) {
+      const rData = await recordsRes.json();
+      recentRecords = rData.records || [];
+    }
+
+    // Render everything
+    renderStats();
+    renderChart();
+    renderComparisonTable();
+    renderRecentTable();
+
+  } catch (error) {
+    console.error('Failed to load analytics:', error);
+  }
+}
+
+// ─── Render Stats ───────────────────────────────────────────
+
+function renderStats() {
+  if (!analyticsData) return;
+
+  const groups = analyticsData.groups || [];
+  const totalSamples = groups.reduce((s, g) => s + g.sample_count, 0);
+  const allPerPlant = groups.filter(g => g.avg_weight_per_plant_oz > 0);
+  const avgPerPlant = allPerPlant.length > 0
+    ? (allPerPlant.reduce((s, g) => s + g.avg_weight_per_plant_oz * g.sample_count, 0) / totalSamples).toFixed(2)
+    : '—';
+  const avgPerTray = allPerPlant.length > 0
+    ? (allPerPlant.reduce((s, g) => s + g.avg_weight_per_tray_oz * g.sample_count, 0) / totalSamples).toFixed(1)
+    : '—';
+
+  // Count unique farms from recent records
+  const farmSet = new Set(recentRecords.map(r => r.farm_id).filter(Boolean));
+
+  document.getElementById('statTotal').textContent = totalSamples;
+  document.getElementById('statCrops').textContent = groups.length;
+  document.getElementById('statAvgPlant').textContent = avgPerPlant;
+  document.getElementById('statAvgTray').textContent = avgPerTray;
+  document.getElementById('statFarms').textContent = farmSet.size || 1;
+}
+
+// ─── Render Chart ───────────────────────────────────────────
+
+function setChartMode(mode) {
+  chartMode = mode;
+  document.getElementById('chartBtnPlant').style.background = mode === 'per_plant' ? 'var(--accent)' : '';
+  document.getElementById('chartBtnPlant').style.color = mode === 'per_plant' ? '#000' : '';
+  document.getElementById('chartBtnTray').style.background = mode === 'per_tray' ? 'var(--accent)' : '';
+  document.getElementById('chartBtnTray').style.color = mode === 'per_tray' ? '#000' : '';
+  renderChart();
+}
+
+function renderChart() {
+  const container = document.getElementById('weightChart');
+  if (!analyticsData || !analyticsData.groups.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">⚖️</div>
+        <div>No weigh-in data yet</div>
+        <div style="font-size: 0.85rem; margin-top: 0.5rem;">
+          Data will appear here as trays are weighed during harvest in the Activity Hub
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const groups = analyticsData.groups.slice(0, 20); // Top 20
+  const getValue = g => chartMode === 'per_plant' ? g.avg_weight_per_plant_oz : g.avg_weight_per_tray_oz;
+  const maxVal = Math.max(...groups.map(getValue)) || 1;
+  const unit = chartMode === 'per_plant' ? 'oz/plant' : 'oz/tray';
+
+  container.innerHTML = groups.map(g => {
+    const val = getValue(g);
+    const heightPct = (val / maxVal) * 100;
+    return `
+      <div class="bar-group" onclick="showDetail('${g.key.replace(/'/g, "\\'")}')">
+        <div class="bar-value">${val.toFixed(chartMode === 'per_plant' ? 2 : 1)}</div>
+        <div class="bar" style="height: ${Math.max(heightPct, 3)}%;" title="${g.key}: ${val.toFixed(3)} ${unit} (${g.sample_count} samples)"></div>
+        <div class="bar-label">${g.key}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Set chart mode button styling
+  setChartMode(chartMode);
+}
+
+// ─── Render Comparison Table ────────────────────────────────
+
+function renderComparisonTable() {
+  const tbody = document.getElementById('comparisonTable');
+
+  if (!analyticsData || !analyticsData.groups.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No data — weigh-ins will appear here once recorded</td></tr>`;
+    document.getElementById('tableCount').textContent = '0 groups';
+    return;
+  }
+
+  const groups = analyticsData.groups;
+  document.getElementById('tableCount').textContent = `${groups.length} groups, ${analyticsData.total_records} records`;
+
+  tbody.innerHTML = groups.map(g => {
+    // Build sparkline from trend data
+    let sparkline = '';
+    if (g.recent_trend && g.recent_trend.length >= 2) {
+      const maxT = Math.max(...g.recent_trend) || 1;
+      sparkline = `<span class="sparkline">${g.recent_trend.map(v =>
+        `<span class="dot" style="height: ${Math.max((v / maxT) * 24, 3)}px;"></span>`
+      ).join('')}</span>`;
+    } else {
+      sparkline = '<span style="color: var(--text-secondary);">—</span>';
+    }
+
+    // Environment summary
+    let envStr = '—';
+    if (g.avg_environment) {
+      envStr = `${g.avg_environment.temp}°F / ${g.avg_environment.humidity}% RH`;
+    }
+
+    return `
+      <tr onclick="showDetail('${g.key.replace(/'/g, "\\'")}')" style="cursor: pointer;">
+        <td><strong>${g.key}</strong></td>
+        <td>${g.sample_count}</td>
+        <td><strong>${g.avg_weight_per_plant_oz}</strong> oz</td>
+        <td>${g.avg_weight_per_tray_oz} oz</td>
+        <td>${g.min_per_plant_oz} oz</td>
+        <td>${g.max_per_plant_oz} oz</td>
+        <td>${g.std_dev_per_plant_oz}</td>
+        <td>${sparkline}</td>
+        <td>${envStr}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Render Recent Table ────────────────────────────────────
+
+function renderRecentTable() {
+  const tbody = document.getElementById('recentTable');
+
+  if (!recentRecords.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No recent weigh-ins</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = recentRecords.map(r => {
+    const date = new Date(r.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const varianceClass = r.variance_pct === null ? 'variance-flat' :
+      r.variance_pct >= 0 ? 'variance-up' : 'variance-down';
+    const varianceText = r.variance_pct !== null ? `${r.variance_pct >= 0 ? '+' : ''}${r.variance_pct}%` : '—';
+
+    return `
+      <tr>
+        <td>${date}</td>
+        <td>${r.farm_id || '—'}</td>
+        <td>${r.crop_name || r.recipe_id || '—'}</td>
+        <td>${r.tray_format_name || '—'}</td>
+        <td>${r.planted_site_count}</td>
+        <td>${r.total_weight_oz}</td>
+        <td><strong>${r.weight_per_plant_oz}</strong></td>
+        <td>${r.grow_days || '—'}</td>
+        <td class="${varianceClass}">${varianceText}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ─── Detail Panel ───────────────────────────────────────────
+
+function showDetail(key) {
+  if (!analyticsData) return;
+  const group = analyticsData.groups.find(g => g.key === key);
+  if (!group) return;
+
+  document.getElementById('detailTitle').textContent = `${key} — Weight Analysis`;
+
+  const grid = document.getElementById('detailGrid');
+  grid.innerHTML = `
+    <div class="detail-item">
+      <div class="label">Avg Weight / Plant</div>
+      <div class="value">${group.avg_weight_per_plant_oz} oz</div>
+    </div>
+    <div class="detail-item">
+      <div class="label">Avg Weight / Tray</div>
+      <div class="value">${group.avg_weight_per_tray_oz} oz</div>
+    </div>
+    <div class="detail-item">
+      <div class="label">Range (per plant)</div>
+      <div class="value">${group.min_per_plant_oz} — ${group.max_per_plant_oz} oz</div>
+    </div>
+    <div class="detail-item">
+      <div class="label">Standard Deviation</div>
+      <div class="value">${group.std_dev_per_plant_oz} oz</div>
+    </div>
+    <div class="detail-item">
+      <div class="label">Sample Count</div>
+      <div class="value">${group.sample_count}</div>
+    </div>
+    ${group.avg_environment ? `
+    <div class="detail-item">
+      <div class="label">Avg Temperature</div>
+      <div class="value">${group.avg_environment.temp}°F</div>
+    </div>
+    <div class="detail-item">
+      <div class="label">Avg Humidity</div>
+      <div class="value">${group.avg_environment.humidity}%</div>
+    </div>
+    ` : ''}
+    ${group.recent_trend ? `
+    <div class="detail-item">
+      <div class="label">Last 3 Readings</div>
+      <div class="value">${group.recent_trend.map(v => v.toFixed(2)).join(' → ')} oz</div>
+    </div>
+    ` : ''}
+  `;
+
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('active');
+  panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('active');
+}
+
+// ─── Export Functions ───────────────────────────────────────
+
+async function exportCSV() {
+  try {
+    const res = await fetch(`${API_BASE}/api/crop-weights/ai-training-export?format=csv`);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crop-weight-data-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export failed: ' + e.message);
+  }
+}
+
+async function exportAITraining() {
+  try {
+    const res = await fetch(`${API_BASE}/api/crop-weights/ai-training-export?format=json`);
+    if (!res.ok) throw new Error('Export failed');
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crop-weight-ai-training-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export failed: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>

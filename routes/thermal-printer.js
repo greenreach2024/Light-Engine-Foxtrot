@@ -12,6 +12,20 @@ import net from 'net';
 
 const router = express.Router();
 
+// Load farm identity for SFCR-compliant labels
+let _farmIdentity = { name: '', address: '' };
+try {
+  const farmPath = path.join(process.cwd(), 'public', 'data', 'farm.json');
+  const raw = await fs.readFile(farmPath, 'utf8');
+  const farm = JSON.parse(raw);
+  _farmIdentity = {
+    name: farm.farmName || farm.name || '',
+    address: [farm.address, farm.city, farm.state].filter(Boolean).join(', ')
+  };
+} catch (e) {
+  console.warn('[thermal-printer] Could not load farm.json for label identity:', e.message);
+}
+
 // Print queue
 const printQueue = [];
 let queueProcessor = null;
@@ -30,25 +44,28 @@ const ZPL_TEMPLATES = {
 ^XZ
 `,
 
-  // 2" x 1" Harvest Label with Lot Code
-  harvestLabel: (lotCode, cropName, weight, unit = 'kg') => `
+  // 2" x 1" Harvest Label with Lot Code — SFCR compliant (producer name + address)
+  harvestLabel: (lotCode, cropName, weight, unit = 'kg', producerName = '', producerAddr = '') => `
 ^XA
 ^FO30,20^BQN,2,4^FDQA,LOT:${lotCode}^FS
 ^FO180,20^A0N,35,35^FD${cropName}^FS
-^FO180,70^A0N,25,25^FDLot: ${lotCode}^FS
-^FO180,105^A0N,25,25^FD${weight} ${unit}^FS
-^FO180,140^A0N,20,20^FD${new Date().toLocaleDateString()}^FS
+^FO180,60^A0N,22,22^FDLot: ${lotCode}^FS
+^FO180,88^A0N,22,22^FD${weight} ${unit}^FS
+^FO180,116^A0N,18,18^FD${producerName}^FS
+^FO180,138^A0N,16,16^FD${producerAddr}^FS
+^FO180,160^A0N,16,16^FD${new Date().toLocaleDateString()}^FS
 ^XZ
 `,
 
-  // 4" x 6" Packing Label
-  packingLabel: (orderId, buyer, items, qrData) => `
+  // 4" x 6" Packing Label — SFCR: includes producer identity
+  packingLabel: (orderId, buyer, items, qrData, producerName = '', producerAddr = '') => `
 ^XA
 ^FO50,50^A0N,50,50^FDOrder: ${orderId}^FS
 ^FO50,120^A0N,35,35^FD${buyer}^FS
-^FO50,170^GB700,2,2^FS
-^FO50,190^A0N,30,30^FDItems:^FS
-${items.map((item, idx) => `^FO70,${230 + idx * 40}^A0N,25,25^FD${item}^FS`).join('\n')}
+^FO50,165^A0N,20,20^FD${producerName} - ${producerAddr}^FS
+^FO50,195^GB700,2,2^FS
+^FO50,210^A0N,30,30^FDItems:^FS
+${items.map((item, idx) => `^FO70,${250 + idx * 40}^A0N,25,25^FD${item}^FS`).join('\n')}
 ^FO550,350^BQN,2,8^FDQA,${qrData}^FS
 ^FO50,560^A0N,20,20^FDScan for traceability^FS
 ^XZ
@@ -68,12 +85,14 @@ B150,20,0,1,2,2,80,B,"${code}"
 P1
 `,
 
-  harvestLabel: (lotCode, cropName, weight, unit = 'kg') => `
+  harvestLabel: (lotCode, cropName, weight, unit = 'kg', producerName = '', producerAddr = '') => `
 N
 Q203,24
 A30,20,0,3,1,1,N,"${cropName}"
-A30,60,0,2,1,1,N,"Lot: ${lotCode}"
-A30,90,0,2,1,1,N,"${weight} ${unit}"
+A30,55,0,2,1,1,N,"Lot: ${lotCode}"
+A30,80,0,2,1,1,N,"${weight} ${unit}"
+A30,105,0,1,1,1,N,"${producerName}"
+A30,120,0,1,1,1,N,"${producerAddr}"
 B150,20,0,1,2,2,60,B,"${lotCode}"
 P1
 `,
@@ -281,8 +300,8 @@ router.post('/print-harvest', async (req, res) => {
     }
 
     const labelData = format === 'zpl'
-      ? ZPL_TEMPLATES.harvestLabel(lotCode, cropName, weight || 'N/A', unit)
-      : EPL_TEMPLATES.harvestLabel(lotCode, cropName, weight || 'N/A', unit);
+      ? ZPL_TEMPLATES.harvestLabel(lotCode, cropName, weight || 'N/A', unit, _farmIdentity.name, _farmIdentity.address)
+      : EPL_TEMPLATES.harvestLabel(lotCode, cropName, weight || 'N/A', unit, _farmIdentity.name, _farmIdentity.address);
 
     const job = {
       id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -334,7 +353,7 @@ router.post('/print-packing', async (req, res) => {
       return res.status(400).json({ error: 'orderId and buyer are required' });
     }
 
-    const labelData = ZPL_TEMPLATES.packingLabel(orderId, buyer, items, qrData || orderId);
+    const labelData = ZPL_TEMPLATES.packingLabel(orderId, buyer, items, qrData || orderId, _farmIdentity.name, _farmIdentity.address);
 
     const job = {
       id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

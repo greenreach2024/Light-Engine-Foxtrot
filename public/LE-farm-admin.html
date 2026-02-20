@@ -1235,6 +1235,10 @@
                         <span class="nav-item-icon">🌡</span>
                         Heat Map
                     </a>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/crop-weight-analytics.html" data-help-title="Crop Weight Analytics" data-help="Track and compare harvest weights per plant and tray. View benchmarks by crop, environment, grow time, and tray type. Export data for AI training.">
+                        <span class="nav-item-icon">⚖️</span>
+                        Crop Weight Analytics
+                    </a>
                     <a href="/farm-vitality.html" class="nav-item" data-help-title="Farm Vitality" data-help="Full-screen dashboard with ring visualizations showing farm efficiency, balance, and output metrics. Opens in its own page.">
                         <span class="nav-item-icon">💚</span>
                         Farm Vitality ↗
@@ -2093,134 +2097,88 @@
                 </div>
             </div>
 
-            <!-- Traceability Section -->
+            <!-- Traceability Section (Auto-populated from Activity Hub) -->
             <div id="section-traceability" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Seed-to-Sale Traceability</h1>
                     <div class="header-actions">
-                        <input type="text" id="traceabilitySearch" placeholder="Search batches..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); min-width: 250px;">
-                        <button onclick="createNewBatch()" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">+ New Batch</button>
+                        <input type="text" id="traceabilitySearch" placeholder="Search by lot, crop, variety..." oninput="filterTraceRecords()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); min-width: 250px;">
+                        <select id="traceStatusFilter" onchange="filterTraceRecords()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="harvested">Harvested</option>
+                            <option value="packed">Packed</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="delivered">Delivered</option>
+                        </select>
+                        <button onclick="exportSFCR('csv')" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">SFCR Export</button>
+                    </div>
+                </div>
+
+                <!-- CanadaGAP Compliance Banner -->
+                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 22px;">&#x2705;</span>
+                    <div>
+                        <strong style="color: var(--text-primary);">CanadaGAP / SFCR Compliant</strong>
+                        <div style="font-size: 13px; color: var(--text-secondary);">Records are created automatically at harvest. One-step-back (seed source) and one-step-forward (customer) data is captured in the normal workflow — no duplicate entry needed.</div>
                     </div>
                 </div>
 
                 <!-- Stats Cards -->
-                <div class="stats-grid" id="traceabilityStats" style="margin-bottom: 24px;">
+                <div class="stats-grid" style="margin-bottom: 24px;">
                     <div class="stat-card">
-                        <div class="stat-value" id="totalBatches">-</div>
-                        <div class="stat-label">Total Batches</div>
+                        <div class="stat-value" id="totalTraceRecords">-</div>
+                        <div class="stat-label">Total Records</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="activeBatches">-</div>
-                        <div class="stat-label">Active Batches</div>
+                        <div class="stat-value" id="activeTraceRecords">-</div>
+                        <div class="stat-label">Active</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="totalEvents">-</div>
-                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value" id="traceCrops">-</div>
+                        <div class="stat-label">Crops Tracked</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="totalRevenue">-</div>
-                        <div class="stat-label">Total Revenue</div>
+                        <div class="stat-value" id="traceEvents">-</div>
+                        <div class="stat-label">Lifecycle Events</div>
                     </div>
                 </div>
 
-                <!-- Batch List -->
+                <!-- Trace Records Table -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>Batches</h2>
-                        <div style="display: flex; gap: 8px;">
-                            <select id="statusFilter" onchange="loadBatches()" style="padding: 6px 10px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
-                                <option value="">All Status</option>
-                                <option value="seeded">Seeded</option>
-                                <option value="germinating">Germinating</option>
-                                <option value="transplanted">Transplanted</option>
-                                <option value="growing">Growing</option>
-                                <option value="ready_harvest">Ready to Harvest</option>
-                                <option value="harvested">Harvested</option>
-                                <option value="sold">Sold</option>
-                            </select>
-                        </div>
+                        <h2>Trace Ledger</h2>
                     </div>
                     <div class="table-container">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Batch ID</th>
+                                    <th>Lot Code</th>
                                     <th>Crop</th>
                                     <th>Variety</th>
-                                    <th>Quantity</th>
+                                    <th>Harvest Date</th>
+                                    <th>Weight</th>
+                                    <th>Seed Source</th>
                                     <th>Status</th>
-                                    <th>Created</th>
-                                    <th>Events</th>
+                                    <th>Customers</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="batchesList">
-                                <tr>
-                                    <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading batches...</td>
-                                </tr>
+                            <tbody id="traceRecordsList">
+                                <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading trace records...</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Batch Detail Modal -->
-                <div id="batchDetailModal" class="modal" style="display: none;">
+                <!-- Trace Detail Modal -->
+                <div id="traceDetailModal" class="modal" style="display: none;">
                     <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
                         <div class="modal-header">
-                            <h2 id="batchDetailTitle">Batch Details</h2>
-                            <button onclick="closeBatchDetail()" class="modal-close">&times;</button>
+                            <h2>Trace Detail</h2>
+                            <button onclick="document.getElementById('traceDetailModal').style.display='none'" class="modal-close">&times;</button>
                         </div>
-                        <div class="modal-body" id="batchDetailContent">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- New Batch Modal -->
-                <div id="newBatchModal" class="modal" style="display: none;">
-                    <div class="modal-content" style="max-width: 600px;">
-                        <div class="modal-header">
-                            <h2>Create New Batch</h2>
-                            <button onclick="closeNewBatch()" class="modal-close">&times;</button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="newBatchForm" onsubmit="submitNewBatch(event)">
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Crop Name *</label>
-                                    <input type="text" id="newBatchCrop" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                </div>
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Variety</label>
-                                    <input type="text" id="newBatchVariety" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                </div>
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Seed Source *</label>
-                                    <input type="text" id="newBatchSource" required placeholder="Supplier and lot number" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                                    <div>
-                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity *</label>
-                                        <input type="number" id="newBatchQuantity" required min="1" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Expected Harvest</label>
-                                        <input type="date" id="newBatchHarvestDate" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
-                                </div>
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Location *</label>
-                                    <input type="text" id="newBatchLocation" required placeholder="Zone, Shelf, Tray" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                                </div>
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; margin-bottom: 4px; font-weight: 500;">Notes</label>
-                                    <textarea id="newBatchNotes" rows="3" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"></textarea>
-                                </div>
-                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                                    <button type="button" onclick="closeNewBatch()" style="padding: 8px 16px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
-                                    <button type="submit" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Create Batch</button>
-                                </div>
-                            </form>
-                        </div>
+                        <div class="modal-body" id="traceDetailContent"></div>
                     </div>
                 </div>
             </div>
@@ -4115,31 +4073,10 @@
                 }
 
                 // Step 2: Automatically create batch from the same recommendation
-                const batchData = {
-                    crop_name: crop,
-                    variety: '',
-                    seed_source: 'Standard',
-                    quantity: quantity,
-                    location: 'To be assigned',
-                    expected_harvest_date: seedDate,
-                    notes: `Auto-created from AI recommendation (Plan: ${planData_result.plan_id})`
-                };
-
-                const batchResponse = await fetch(`${BACKEND_URL}/api/traceability/batches/create`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(batchData)
-                });
-                const batchResult = await batchResponse.json();
-                
-                if (batchResult.ok) {
-                    alert(`✅ Created plan AND batch ${batchResult.batch_id} for ${crop}\n\nReady to seed ${quantity} units!`);
-                    await loadProductionPlans();
-                    await loadPlanningStats();
-                    await loadBatches(); // Refresh batch list
-                } else {
-                    alert(`⚠️ Plan created but batch creation failed.\nPlease create batch manually.`);
-                }
+                // Traceability records are now auto-created at harvest — no manual batch needed
+                alert(`✅ Production plan created for ${crop}\n\nReady to seed ${quantity} units! Traceability will auto-track from seeding through harvest.`);
+                await loadProductionPlans();
+                await loadPlanningStats();
             } catch (error) {
                 console.error('Error applying recommendation:', error);
                 alert('Error applying recommendation');
@@ -4187,284 +4124,149 @@
         });
     </script>
 
-    <!-- Traceability System JavaScript -->
+    <!-- Traceability System JavaScript (Auto-populated from Activity Hub) -->
     <script>
-        // Traceability API calls
-        const BACKEND_URL = window.location.origin;
+        // Unified Traceability – auto-populated at harvest, SFCR / CanadaGAP compliant
+        const TRACE_API = window.location.origin;
+        let _traceRecordsCache = [];
 
-        async function loadTraceabilityStats() {
+        async function loadTraceRecords() {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/traceability/stats`);
-                const data = await response.json();
-                
-                if (data.ok) {
-                    document.getElementById('totalBatches').textContent = data.stats.total_batches;
-                    document.getElementById('activeBatches').textContent = data.stats.total_batches - (data.stats.batches_by_status?.sold || 0);
-                    document.getElementById('totalEvents').textContent = data.stats.total_events;
-                    document.getElementById('totalRevenue').textContent = '$' + data.stats.total_revenue.toFixed(2);
+                const [listRes, statsRes] = await Promise.all([
+                    fetch(`${TRACE_API}/api/traceability`),
+                    fetch(`${TRACE_API}/api/traceability/stats`)
+                ]);
+                const listData = await listRes.json();
+                const statsData = await statsRes.json();
+
+                if (statsData.ok) {
+                    document.getElementById('totalTraceRecords').textContent = statsData.stats.total_records ?? 0;
+                    document.getElementById('activeTraceRecords').textContent = statsData.stats.active_records ?? 0;
+                    document.getElementById('traceCrops').textContent = statsData.stats.crops_tracked ?? 0;
+                    document.getElementById('traceEvents').textContent = statsData.stats.total_events ?? 0;
                 }
-            } catch (error) {
-                console.error('Failed to load traceability stats:', error);
+
+                if (listData.ok) {
+                    _traceRecordsCache = listData.records || [];
+                    renderTraceRecords(_traceRecordsCache);
+                }
+            } catch (err) {
+                console.error('Failed to load trace records:', err);
+                document.getElementById('traceRecordsList').innerHTML =
+                    '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">Error loading records</td></tr>';
             }
         }
 
-        async function loadBatches() {
-            const status = document.getElementById('statusFilter')?.value || '';
-            const search = document.getElementById('traceabilitySearch')?.value || '';
-            
-            try {
-                let url = `${BACKEND_URL}/api/traceability/batches/list`;
-                const params = new URLSearchParams();
-                if (status) params.append('status', status);
-                if (search) {
-                    // Use search endpoint
-                    url = `${BACKEND_URL}/api/traceability/search?query=${encodeURIComponent(search)}`;
-                } else if (status) {
-                    url += '?' + params.toString();
-                }
-                
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.ok) {
-                    const batches = data.batches || data.results || [];
-                    renderBatches(batches);
-                }
-            } catch (error) {
-                console.error('Failed to load batches:', error);
-                document.getElementById('batchesList').innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">Error loading batches</td></tr>';
-            }
+        function filterTraceRecords() {
+            const search = (document.getElementById('traceabilitySearch')?.value || '').toLowerCase();
+            const status = document.getElementById('traceStatusFilter')?.value || '';
+            let filtered = _traceRecordsCache;
+            if (status) filtered = filtered.filter(r => r.status === status);
+            if (search) filtered = filtered.filter(r =>
+                (r.lot_code || '').toLowerCase().includes(search) ||
+                (r.common_name || '').toLowerCase().includes(search) ||
+                (r.variety || '').toLowerCase().includes(search) ||
+                (r.seed_source || '').toLowerCase().includes(search)
+            );
+            renderTraceRecords(filtered);
         }
 
-        function renderBatches(batches) {
-            const tbody = document.getElementById('batchesList');
-            
-            if (batches.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No batches found</td></tr>';
+        function renderTraceRecords(records) {
+            const tbody = document.getElementById('traceRecordsList');
+            if (!records || records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">No trace records yet — records are created automatically when you harvest a tray.</td></tr>';
                 return;
             }
-            
-            tbody.innerHTML = batches.map(batch => {
-                const statusColor = {
-                    'seeded': '#3b82f6',
-                    'germinating': '#8b5cf6',
-                    'transplanted': '#10b981',
-                    'growing': '#059669',
-                    'ready_harvest': '#f59e0b',
-                    'harvested': '#eab308',
-                    'sold': '#6b7280'
-                }[batch.status] || '#6b7280';
-                
-                const createdDate = new Date(batch.created_date).toLocaleDateString();
-                
+            tbody.innerHTML = records.map(r => {
+                const statusColors = {
+                    active: '#10b981', harvested: '#eab308', packed: '#3b82f6',
+                    shipped: '#8b5cf6', delivered: '#059669', recalled: '#ef4444'
+                };
+                const color = statusColors[r.status] || '#6b7280';
+                const harvestDate = r.harvest_date ? new Date(r.harvest_date).toLocaleDateString() : '-';
+                const weight = r.harvest_weight_g ? (r.harvest_weight_g >= 1000 ? (r.harvest_weight_g / 1000).toFixed(2) + ' kg' : r.harvest_weight_g + ' g') : '-';
+                const customers = (r.customers || []).map(c => c.name).join(', ') || '-';
                 return `
-                    <tr style="cursor: pointer;" onclick="viewBatchDetail('${batch.batch_id}')">
-                        <td><strong>${batch.batch_id}</strong></td>
-                        <td>${batch.crop_name}</td>
-                        <td>${batch.variety || '-'}</td>
-                        <td>${batch.quantity}</td>
-                        <td><span style="padding: 4px 8px; border-radius: 4px; background: ${statusColor}; color: white; font-size: 12px;">${batch.status.toUpperCase()}</span></td>
-                        <td>${createdDate}</td>
-                        <td>${batch.event_count || 0}</td>
+                    <tr style="cursor:pointer;" onclick="viewTraceDetail('${r.lot_code}')">
+                        <td><strong style="font-family:monospace;">${r.lot_code}</strong></td>
+                        <td>${r.common_name || '-'}</td>
+                        <td>${r.variety || '-'}</td>
+                        <td>${harvestDate}</td>
+                        <td>${weight}</td>
+                        <td>${r.seed_source || '-'}</td>
+                        <td><span style="padding:3px 8px;border-radius:4px;background:${color};color:white;font-size:12px;">${(r.status||'active').toUpperCase()}</span></td>
+                        <td style="font-size:12px;">${customers}</td>
                         <td>
-                            <button onclick="event.stopPropagation(); viewBatchDetail('${batch.batch_id}')" style="padding: 4px 8px; background: var(--accent-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">View</button>
+                            <button onclick="event.stopPropagation();viewTraceDetail('${r.lot_code}')" style="padding:4px 8px;background:var(--accent-primary);color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Detail</button>
                         </td>
-                    </tr>
-                `;
+                    </tr>`;
             }).join('');
         }
 
-        async function viewBatchDetail(batchId) {
+        async function viewTraceDetail(lotCode) {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/traceability/batches/${batchId}`);
-                const data = await response.json();
-                
-                if (data.ok) {
-                    renderBatchDetail(data);
-                    document.getElementById('batchDetailModal').style.display = 'flex';
-                }
-            } catch (error) {
-                console.error('Failed to load batch detail:', error);
-                alert('Failed to load batch details');
+                const res = await fetch(`${TRACE_API}/api/traceability/lot/${lotCode}`);
+                const data = await res.json();
+                if (!data.ok) { alert('Record not found'); return; }
+                const r = data.record;
+                const events = data.events || [];
+
+                const weight = r.harvest_weight_g ? (r.harvest_weight_g >= 1000 ? (r.harvest_weight_g / 1000).toFixed(2) + ' kg' : r.harvest_weight_g + ' g') : '-';
+                const customers = (r.customers || []).map(c => `
+                    <div style="padding:8px;background:var(--bg-card);border-left:3px solid #10b981;margin-bottom:6px;border-radius:4px;">
+                        <strong>${c.name}</strong> — ${c.quantity || ''} — Order ${c.order_id || ''}
+                        <div style="font-size:12px;color:var(--text-secondary);">${c.date ? new Date(c.date).toLocaleDateString() : ''}</div>
+                    </div>`).join('') || '<div style="color:var(--text-secondary);font-size:13px;">No customers linked yet</div>';
+
+                const timeline = events.map(e => `
+                    <div style="padding:10px;background:var(--bg-card);border-left:3px solid var(--accent-primary);margin-bottom:6px;border-radius:4px;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <strong>${(e.event_type||'').toUpperCase()}</strong>
+                            <span style="font-size:12px;color:var(--text-secondary);">${new Date(e.timestamp).toLocaleString()}</span>
+                        </div>
+                        ${e.operator ? `<div style="font-size:12px;color:var(--text-secondary);">Operator: ${e.operator}</div>` : ''}
+                        ${e.detail ? `<div style="font-size:13px;margin-top:4px;">${e.detail}</div>` : ''}
+                    </div>`).join('') || '<div style="color:var(--text-secondary);">No lifecycle events</div>';
+
+                document.getElementById('traceDetailContent').innerHTML = `
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px;">
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Lot Code</div><div style="font-weight:600;font-family:monospace;">${r.lot_code}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Status</div><div style="font-weight:600;">${(r.status||'').toUpperCase()}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Crop</div><div>${r.common_name || '-'} ${r.variety ? '(' + r.variety + ')' : ''}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Harvest Weight</div><div>${weight}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Seed Source</div><div>${r.seed_source || '-'}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Seed Date</div><div>${r.seed_date ? new Date(r.seed_date).toLocaleDateString() : '-'}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Zone / Room</div><div>${r.zone || '-'} / ${r.room || '-'}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Grow Days</div><div>${r.grow_days ?? '-'}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Producer</div><div>${r.producer_name || '-'}</div></div>
+                        <div><div style="font-size:12px;color:var(--text-secondary);">Retention Until</div><div>${r.retention_until ? new Date(r.retention_until).toLocaleDateString() : '-'}</div></div>
+                    </div>
+                    <h4 style="margin-bottom:8px;">Lifecycle Timeline (${events.length})</h4>
+                    ${timeline}
+                    <h4 style="margin:16px 0 8px;">Customers (One Step Forward)</h4>
+                    ${customers}
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+                        <button onclick="exportSFCR('json')" style="padding:8px 14px;background:var(--accent-primary);color:white;border:none;border-radius:6px;cursor:pointer;">SFCR JSON</button>
+                        <button onclick="exportSFCR('csv')" style="padding:8px 14px;background:linear-gradient(135deg,#4CAF50,#45a049);color:white;border:none;border-radius:6px;cursor:pointer;">SFCR CSV</button>
+                    </div>`;
+                document.getElementById('traceDetailModal').style.display = 'flex';
+            } catch (err) {
+                console.error('Failed to load trace detail:', err);
+                alert('Failed to load trace details');
             }
         }
 
-        function renderBatchDetail(data) {
-            const batch = data.batch;
-            const events = data.events || [];
-            const sales = data.sales || [];
-            const summary = data.summary || {};
-            
-            const content = `
-                <div style="margin-bottom: 24px;">
-                    <h3>Batch Information</h3>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 12px;">
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Batch ID</div>
-                            <div style="font-weight: 500;">${batch.batch_id}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Crop</div>
-                            <div style="font-weight: 500;">${batch.crop_name} ${batch.variety ? `(${batch.variety})` : ''}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Seed Source</div>
-                            <div style="font-weight: 500;">${batch.seed_source}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Quantity</div>
-                            <div style="font-weight: 500;">${batch.quantity} (Remaining: ${summary.quantity_remaining || batch.quantity})</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Location</div>
-                            <div style="font-weight: 500;">${batch.location}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Status</div>
-                            <div style="font-weight: 500;">${batch.status.toUpperCase()}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 24px;">
-                    <h3>Lifecycle Timeline (${events.length} events)</h3>
-                    <div style="margin-top: 12px;">
-                        ${events.map(event => {
-                            const eventDate = new Date(event.timestamp).toLocaleString();
-                            return `
-                                <div style="padding: 12px; background: var(--bg-card); border-left: 3px solid var(--accent-primary); margin-bottom: 8px; border-radius: 4px;">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                        <strong>${event.event_type.toUpperCase()}</strong>
-                                        <span style="font-size: 12px; color: var(--text-secondary);">${eventDate}</span>
-                                    </div>
-                                    ${event.location ? `<div style="font-size: 12px; color: var(--text-secondary);">Location: ${event.location}</div>` : ''}
-                                    ${event.operator ? `<div style="font-size: 12px; color: var(--text-secondary);">Operator: ${event.operator}</div>` : ''}
-                                    ${event.quantity ? `<div style="font-size: 12px; color: var(--text-secondary);">Quantity: ${event.quantity}</div>` : ''}
-                                    ${event.notes ? `<div style="margin-top: 4px;">${event.notes}</div>` : ''}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-
-                ${sales.length > 0 ? `
-                    <div style="margin-bottom: 24px;">
-                        <h3>Sales (${sales.length})</h3>
-                        <div style="margin-top: 12px;">
-                            ${sales.map(sale => `
-                                <div style="padding: 12px; background: var(--bg-card); border-left: 3px solid #10b981; margin-bottom: 8px; border-radius: 4px;">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                        <strong>${sale.buyer_name}</strong>
-                                        <span style="font-weight: 500;">$${sale.total_amount.toFixed(2)}</span>
-                                    </div>
-                                    <div style="font-size: 12px; color: var(--text-secondary);">
-                                        ${sale.quantity_sold} ${sale.unit} @ $${sale.price_per_unit.toFixed(2)}/${sale.unit}
-                                    </div>
-                                    <div style="font-size: 12px; color: var(--text-secondary);">Order: ${sale.order_id}</div>
-                                    <div style="font-size: 12px; color: var(--text-secondary);">Date: ${new Date(sale.sale_date).toLocaleDateString()}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
-                    <button onclick="generateReport('${batch.batch_id}')" style="padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Generate Report</button>
-                    <button onclick="recordEvent('${batch.batch_id}')" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Record Event</button>
-                </div>
-            `;
-            
-            document.getElementById('batchDetailTitle').textContent = `Batch ${batch.batch_id}`;
-            document.getElementById('batchDetailContent').innerHTML = content;
+        function exportSFCR(format) {
+            const url = `${TRACE_API}/api/traceability/sfcr-export?format=${format}`;
+            window.open(url, '_blank');
         }
 
-        function closeBatchDetail() {
-            document.getElementById('batchDetailModal').style.display = 'none';
-        }
-
-        function createNewBatch() {
-            document.getElementById('newBatchModal').style.display = 'flex';
-        }
-
-        function closeNewBatch() {
-            document.getElementById('newBatchModal').style.display = 'none';
-            document.getElementById('newBatchForm').reset();
-        }
-
-        async function submitNewBatch(event) {
-            event.preventDefault();
-            
-            const batchData = {
-                crop_name: document.getElementById('newBatchCrop').value,
-                variety: document.getElementById('newBatchVariety').value || null,
-                seed_source: document.getElementById('newBatchSource').value,
-                quantity: parseInt(document.getElementById('newBatchQuantity').value),
-                location: document.getElementById('newBatchLocation').value,
-                expected_harvest_date: document.getElementById('newBatchHarvestDate').value || null,
-                notes: document.getElementById('newBatchNotes').value || null
-            };
-            
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/traceability/batches/create`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(batchData)
-                });
-                
-                const data = await response.json();
-                
-                if (data.ok) {
-                    alert(`Batch created successfully: ${data.batch_id}`);
-                    closeNewBatch();
-                    loadBatches();
-                    loadTraceabilityStats();
-                } else {
-                    alert('Failed to create batch: ' + (data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Failed to create batch:', error);
-                alert('Failed to create batch. Please try again.');
-            }
-        }
-
-        async function generateReport(batchId) {
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/traceability/batches/${batchId}/report`);
-                const data = await response.json();
-                
-                if (data.ok) {
-                    // Download as JSON for now (could be PDF in production)
-                    const blob = new Blob([JSON.stringify(data.report, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${batchId}_traceability_report.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                } else {
-                    alert('Failed to generate report');
-                }
-            } catch (error) {
-                console.error('Failed to generate report:', error);
-                alert('Failed to generate report');
-            }
-        }
-
-        function recordEvent(batchId) {
-            alert('Event recording UI coming soon. This will allow you to record:\n- Germination\n- Transplant\n- Growth checks\n- Harvest\n- Packing\n- Sales\n\nWith photos and notes at each stage.');
-        }
-
-        // Initialize traceability section when it becomes active
+        // Initialize traceability + other sections when they become active
         document.addEventListener('DOMContentLoaded', () => {
-            // Listen for section changes
             document.querySelectorAll('[data-section="traceability"]').forEach(link => {
-                link.addEventListener('click', () => {
-                    loadTraceabilityStats();
-                    loadBatches();
-                });
+                link.addEventListener('click', () => { loadTraceRecords(); });
             });
-            
-            // Listen for inventory management section
+
             document.querySelectorAll('[data-section="inventory-mgmt"]').forEach(link => {
                 link.addEventListener('click', () => {
                     loadInventoryDashboard();
@@ -4472,21 +4274,14 @@
                 });
             });
 
-            // Listen for sustainability section
             document.querySelectorAll('[data-section="sustainability"]').forEach(link => {
-                link.addEventListener('click', () => {
-                    loadSustainabilityDashboard();
-                });
+                link.addEventListener('click', () => { loadSustainabilityDashboard(); });
             });
-            
-            // Search functionality
+
             const searchInput = document.getElementById('traceabilitySearch');
             if (searchInput) {
-                let searchTimeout;
-                searchInput.addEventListener('input', () => {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = setTimeout(loadBatches, 300);
-                });
+                let t;
+                searchInput.addEventListener('input', () => { clearTimeout(t); t = setTimeout(filterTraceRecords, 300); });
             }
         });
 

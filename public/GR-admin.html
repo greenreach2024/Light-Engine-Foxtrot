@@ -647,6 +647,7 @@
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
     <button class="nav-tab" data-view="compliance">Compliance Export</button>
+    <button class="nav-tab" data-view="crop-analytics">⚖️ Crop Analytics</button>
   </nav>
 
   <main>
@@ -1267,6 +1268,10 @@
         <p style="color: var(--text-secondary);">No exports generated yet</p>
       </div>
     </div>
+  </div>
+
+  <div id="crop-analytics-view" class="view">
+    <iframe src="/views/crop-weight-analytics.html" style="width:100%;height:calc(100vh - 80px);border:none;"></iframe>
   </div>
 
   <script src="/js/wholesale-admin.js" defer></script>

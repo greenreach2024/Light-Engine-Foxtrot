@@ -21,6 +21,7 @@ import syncRoutes from './routes/sync.js';
 import { hydrateFromDatabase, getInMemoryStore } from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
+import farmStripeSetupRoutes from '../routes/farm-stripe-setup.js';
 import adminRoutes from './routes/admin.js';
 import adminRecipesRoutes from './routes/admin-recipes.js';
 import reportsRoutes from './routes/reports.js';
@@ -138,11 +139,11 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"],  // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:", "wss:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://code.responsivevoice.org"],
+      connectSrc: ["'self'", "https:", "wss:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://connect.stripe.com", "https://api.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://code.responsivevoice.org"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'self'", "https://web.squarecdn.com"],  // Allow Square payment iframes
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://connect.stripe.com"],  // Allow Square + Stripe iframes
       upgradeInsecureRequests: null
     },
   },
@@ -1284,29 +1285,56 @@ app.get('/api/inventory/supplies/list', (_req, res) => {
   return res.json({ ok: true, supplies: [] });
 });
 
-app.get('/api/traceability/stats', (_req, res) => {
-  return res.json({ ok: true, stats: { total_batches: 0, active_batches: 0, completed_batches: 0 } });
+// ─── Traceability API proxy (routes requests to the farm's unified traceability API) ─────
+import { listNetworkFarms as listTraceFarms } from './services/networkFarmsStore.js';
+
+async function getFirstActiveFarmUrl() {
+  try {
+    const farms = await listTraceFarms();
+    const active = farms.find(f => f.status === 'active' && f.api_url);
+    return active ? active.api_url : null;
+  } catch { return null; }
+}
+
+app.get('/api/traceability', async (req, res) => {
+  const farmUrl = await getFirstActiveFarmUrl();
+  if (!farmUrl) return res.json({ ok: true, records: [] });
+  try {
+    const r = await fetch(`${farmUrl}/api/traceability?${new URLSearchParams(req.query)}`, { signal: AbortSignal.timeout(5000) });
+    return res.json(await r.json());
+  } catch { return res.json({ ok: true, records: [] }); }
 });
 
-app.get('/api/traceability/batches/list', (_req, res) => {
-  return res.json({ ok: true, batches: [] });
+app.get('/api/traceability/stats', async (req, res) => {
+  const farmUrl = await getFirstActiveFarmUrl();
+  if (!farmUrl) return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } });
+  try {
+    const r = await fetch(`${farmUrl}/api/traceability/stats`, { signal: AbortSignal.timeout(5000) });
+    return res.json(await r.json());
+  } catch { return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } }); }
 });
 
-app.get('/api/traceability/search', (_req, res) => {
-  return res.json({ ok: true, batches: [] });
+app.get('/api/traceability/lot/:lotCode', async (req, res) => {
+  const farmUrl = await getFirstActiveFarmUrl();
+  if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
+  try {
+    const r = await fetch(`${farmUrl}/api/traceability/lot/${req.params.lotCode}`, { signal: AbortSignal.timeout(5000) });
+    return res.json(await r.json());
+  } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
 
-app.get('/api/traceability/batches/:batchId', (req, res) => {
-  return res.json({ ok: true, batch: { batch_id: req.params.batchId, status: 'pending', events: [] } });
-});
-
-app.post('/api/traceability/batches/create', (req, res) => {
-  const payload = req.body || {};
-  return res.json({ ok: true, batch_id: payload.batch_id || `batch-${Date.now()}` });
-});
-
-app.get('/api/traceability/batches/:batchId/report', (req, res) => {
-  return res.json({ ok: true, report: { batch_id: req.params.batchId, generated_at: new Date().toISOString() } });
+app.get('/api/traceability/sfcr-export', async (req, res) => {
+  const farmUrl = await getFirstActiveFarmUrl();
+  if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
+  try {
+    const r = await fetch(`${farmUrl}/api/traceability/sfcr-export?${new URLSearchParams(req.query)}`, { signal: AbortSignal.timeout(10000) });
+    const ct = r.headers.get('content-type');
+    if (ct) res.set('content-type', ct);
+    const cd = r.headers.get('content-disposition');
+    if (cd) res.set('content-disposition', cd);
+    const body = await r.text();
+    return res.send(body);
+  } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
 
 app.get('/api/planning/recommendations', (_req, res) => {
@@ -1971,6 +1999,7 @@ app.use('/api/farm-settings', farmSettingsRoutes); // Cloud-to-edge settings syn
 app.use('/api/recipes', recipesRoutes); // Public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
+app.use('/api/farm/stripe', farmStripeSetupRoutes); // Stripe Connect payment setup for farms
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
@@ -1984,6 +2013,103 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
+
+// ─── Crop Weight Analytics (cross-farm aggregation) ────────────────────
+import { listNetworkFarms as listWeightNetworkFarms } from './services/networkFarmsStore.js';
+
+app.get('/api/crop-weights/network-analytics', async (req, res) => {
+  try {
+    const allFarms = await listWeightNetworkFarms();
+    const farms = allFarms.filter(f => f.status === 'active' && f.api_url);
+    const allRecords = [];
+    
+    await Promise.allSettled(farms.map(async (farm) => {
+      try {
+        const url = `${farm.api_url}/api/crop-weights/records?days=${req.query.days || 90}&limit=500`;
+        const farmRes = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (farmRes.ok) {
+          const data = await farmRes.json();
+          (data.records || []).forEach(r => {
+            r.farm_id = r.farm_id || farm.farm_id;
+            r.farm_name = farm.name;
+            allRecords.push(r);
+          });
+        }
+      } catch (_) {}
+    }));
+
+    // Group by requested dimension
+    const groupBy = req.query.group_by || 'crop';
+    const groups = {};
+    for (const r of allRecords) {
+      let key;
+      switch (groupBy) {
+        case 'farm': key = r.farm_name || r.farm_id || 'unknown'; break;
+        case 'system_type': key = r.system_type || 'unknown'; break;
+        case 'tray_format': key = r.tray_format_name || 'unknown'; break;
+        case 'crop': default: key = r.crop_name || r.recipe_id || 'unknown';
+      }
+      if (!groups[key]) groups[key] = { key, records: [], sample_count: 0 };
+      groups[key].records.push(r);
+      groups[key].sample_count++;
+    }
+
+    const result = Object.values(groups).map(g => {
+      const totalPP = g.records.reduce((s, r) => s + (r.weight_per_plant_oz || 0), 0);
+      const totalPT = g.records.reduce((s, r) => s + (r.total_weight_oz || 0), 0);
+      return {
+        key: g.key,
+        sample_count: g.sample_count,
+        avg_weight_per_plant_oz: +(totalPP / g.sample_count).toFixed(3),
+        avg_weight_per_tray_oz: +(totalPT / g.sample_count).toFixed(2),
+        farms: [...new Set(g.records.map(r => r.farm_name || r.farm_id))],
+        min_per_plant_oz: +Math.min(...g.records.map(r => r.weight_per_plant_oz || 0)).toFixed(3),
+        max_per_plant_oz: +Math.max(...g.records.map(r => r.weight_per_plant_oz || 0)).toFixed(3),
+      };
+    });
+
+    result.sort((a, b) => b.sample_count - a.sample_count);
+
+    res.json({
+      group_by: groupBy,
+      groups: result,
+      total_records: allRecords.length,
+      farms_queried: farms.length,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[crop-weights] Network analytics error:', error);
+    res.status(500).json({ error: 'Failed to aggregate crop weight data' });
+  }
+});
+
+// Proxy single-farm crop weight endpoints through Central
+app.use('/api/crop-weights', async (req, res, next) => {
+  // If farm_id specified, proxy to that farm
+  const farmId = req.query.farm_id || req.headers['x-farm-id'];
+  if (farmId) {
+    const allFarms = await listWeightNetworkFarms();
+    const farm = allFarms.find(f => f.farm_id === farmId);
+    if (farm?.api_url) {
+      const targetUrl = `${farm.api_url}/api/crop-weights${req.path}?${new URLSearchParams(req.query).toString()}`;
+      return fetch(targetUrl, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: ['POST', 'PUT'].includes(req.method) ? JSON.stringify(req.body) : undefined,
+      }).then(async r => {
+        const data = await r.json();
+        res.status(r.status).json(data);
+      }).catch(err => {
+        res.status(502).json({ error: 'Farm unreachable', details: err.message });
+      });
+    }
+  }
+  // No farm_id — return empty (Central doesn't have its own weight data)
+  if (req.path === '/records') return res.json({ total: 0, records: [] });
+  if (req.path === '/benchmarks') return res.json({ benchmarks: [] });
+  if (req.path === '/analytics') return res.json({ group_by: req.query.group_by || 'crop', groups: [], total_records: 0 });
+  next();
+});
 
 // Phase 2 — Cloud SaaS API gap routes
 app.use('/api/users', authMiddleware, farmUsersRouter);     // Farm-scoped user CRUD

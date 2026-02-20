@@ -213,6 +213,8 @@ import emailRouter from './server/routes/email-routes.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
 import qualityControlRouter from './routes/quality-control.js';
 import aiVisionRouter from './routes/ai-vision.js';
+import cropWeightReconciliationRouter from './routes/crop-weight-reconciliation.js';
+import traceabilityRouter, { createTraceRecord, linkCustomerToTrace, updateTraceStatus } from './routes/traceability.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import procurementRouter from './routes/procurement.js';
@@ -10357,6 +10359,26 @@ app.use('/api/wholesale/orders', wholesaleOrdersRouter);
 app.use('/api/activity-hub/orders', activityHubOrdersRouter);
 
 /**
+ * Crop Weight Reconciliation Routes
+ * Full-tray weigh-ins during harvest for yield tracking & AI training data
+ * - GET  /api/crop-weights/should-weigh: Check if tray is flagged for weigh-in
+ * - POST /api/crop-weights/record: Record a weigh-in
+ * - GET  /api/crop-weights/records: List weigh-in history
+ * - GET  /api/crop-weights/benchmarks: Per-crop weight benchmarks
+ * - GET  /api/crop-weights/analytics: Grouped analytics for Central dashboard
+ * - GET  /api/crop-weights/ai-training-export: Export for ML training
+ */
+app.use('/api/crop-weights', cropWeightReconciliationRouter);
+
+/**
+ * Unified Traceability (SFCR / CanadaGAP)
+ * Auto-populated from harvest — no manual batch creation.
+ * Endpoints: GET /records, GET /stats, GET /lot/:code, GET /recall/:code,
+ *            GET /sfcr-export, POST /event, GET /label-data/:code
+ */
+app.use('/api/traceability', traceabilityRouter);
+
+/**
  * Quality Control & AI Vision Routes
  * Quality assurance checkpoints with photo documentation and AI analysis
  * - POST /api/quality/checkpoints/record: Create QA checkpoint
@@ -18228,6 +18250,145 @@ app.get('/api/tray-runs/recent-harvests', async (req, res) => {
 });
 
 /**
+ * POST /api/tray-runs/:id/harvest
+ * Record harvest for a tray run — creates lot code, updates status, captures weight.
+ * Called by Activity Hub during harvest scan.
+ */
+app.post('/api/tray-runs/:id/harvest', async (req, res) => {
+  const trayRunId = req.params.id;
+  const { actualWeight, note, harvestedAt } = req.body;
+
+  try {
+    // Look up tray run from NeDB
+    const trayRun = await new Promise((resolve, reject) => {
+      trayRunsDB.findOne({ tray_run_id: trayRunId }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc);
+      });
+    });
+
+    if (!trayRun) {
+      return res.status(404).json({ error: 'Tray run not found', tray_run_id: trayRunId });
+    }
+
+    // Generate lot code: ZONE-CROP-YYMMDD-BATCH
+    const now = new Date(harvestedAt || Date.now());
+    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
+    const cropName = (trayRun.recipe_id || trayRun.crop || 'CROP').toUpperCase().slice(0, 8).replace(/[^A-Z0-9]/g, '');
+    const batchSuffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const lotCode = `A1-${cropName}-${dateStr}-${batchSuffix}`;
+    const batchId = `B-${dateStr}-${batchSuffix}`;
+
+    // Parse weight
+    const weight = parseFloat(actualWeight) || null;
+    const harvestedCount = trayRun.planted_site_count || trayRun.plantCount || null;
+
+    // Update tray run record
+    await new Promise((resolve, reject) => {
+      trayRunsDB.update(
+        { tray_run_id: trayRunId },
+        {
+          $set: {
+            status: 'HARVESTED',
+            harvested_at: now.toISOString(),
+            lot_code: lotCode,
+            actual_weight: weight,
+            weight_unit: 'oz',
+            harvested_count: harvestedCount,
+            harvest_note: note || '',
+            updated_at: now.toISOString()
+          }
+        },
+        {},
+        (err) => { if (err) reject(err); else resolve(); }
+      );
+    });
+
+    // Check if this tray should be flagged for weigh-in
+    let shouldWeigh = false;
+    try {
+      const weighRatio = parseFloat(process.env.WEIGH_IN_RATIO) || 0.33;
+      shouldWeigh = Math.random() < weighRatio;
+    } catch (_) {}
+
+    console.log(`[tray-runs] Harvest recorded: ${trayRunId} → lot ${lotCode}, weight: ${weight || 'N/A'}${shouldWeigh ? ' [WEIGH-IN FLAGGED]' : ''}`);
+
+    // ── Auto-create SFCR traceability record ──────────────────────────
+    // Enrich with tray + format + placement data (best-effort, non-blocking)
+    let traceRecord = null;
+    try {
+      // Look up tray for this run
+      const tray = await new Promise((resolve, reject) => {
+        traysDB.findOne({ tray_id: trayRun.tray_id }, (err, doc) => { if (err) reject(err); else resolve(doc); });
+      }).catch(() => null);
+
+      // Look up format
+      let trayFormat = null;
+      const formatId = tray?.format_id || tray?.trayFormatId || trayRun.tray_format_id;
+      if (formatId) {
+        trayFormat = await new Promise((resolve, reject) => {
+          trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }, (err, doc) => { if (err) reject(err); else resolve(doc); });
+        }).catch(() => null);
+      }
+
+      // Look up placement (latest)
+      const placement = await new Promise((resolve, reject) => {
+        trayPlacementsDB.find({ tray_id: trayRun.tray_id }).sort({ placed_at: -1 }).limit(1).exec((err, docs) => {
+          if (err) reject(err); else resolve(docs?.[0] || null);
+        });
+      }).catch(() => null);
+
+      // Calculate grow days
+      const seedDate = trayRun.seeded_at || trayRun.created_at;
+      const growDays = seedDate ? Math.floor((now - new Date(seedDate)) / 86400000) : null;
+
+      traceRecord = createTraceRecord({
+        lot_code:           lotCode,
+        batch_id:           batchId,
+        tray_run_id:        trayRunId,
+        crop_name:          trayRun.recipe_id || trayRun.crop || 'Unknown',
+        variety:            trayRun.variety || null,
+        recipe_id:          trayRun.recipe_id || null,
+        zone:               placement?.location_qr || placement?.zone || trayRun.zone || '',
+        room:               placement?.room || trayRun.room || '',
+        tray_format_name:   trayFormat?.name || '',
+        system_type:        trayFormat?.systemType || '',
+        planted_site_count: harvestedCount,
+        harvested_count:    harvestedCount,
+        actual_weight:      weight,
+        weight_unit:        'oz',
+        harvest_date:       now.toISOString(),
+        harvested_by:       req.headers['x-operator'] || req.body.operator || 'operator',
+        seed_date:          seedDate || null,
+        seed_source:        trayRun.seed_source || null,
+        grow_days:          growDays,
+      });
+      console.log(`[tray-runs] Auto-trace record created: ${traceRecord.trace_id} for lot ${lotCode}`);
+    } catch (traceErr) {
+      console.warn(`[tray-runs] Trace record creation failed (non-fatal):`, traceErr.message);
+    }
+
+    res.json({
+      success: true,
+      trayRunId,
+      lotCode,
+      batchId,
+      actualWeight: weight,
+      harvestedCount,
+      harvestedAt: now.toISOString(),
+      shouldWeigh,
+      weighInReason: shouldWeigh
+        ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
+        : null,
+      trace_id: traceRecord?.trace_id || null
+    });
+  } catch (error) {
+    console.error('[tray-runs] Error recording harvest:', error);
+    res.status(500).json({ error: 'Failed to record harvest', details: error.message });
+  }
+});
+
+/**
  * POST /api/trays/register
  * Register a new tray in the system
  */
@@ -18250,19 +18411,46 @@ app.post('/api/trays/register', (req, res) => {
 
 /**
  * POST /api/trays/:trayId/seed
- * Record seeding operation for a tray
+ * Record seeding operation for a tray — creates a tray run with traceability context.
+ * seed_source (supplier + lot#) is the ONLY manual traceability input needed.
  */
-app.post('/api/trays/:trayId/seed', (req, res) => {
+app.post('/api/trays/:trayId/seed', async (req, res) => {
   const { trayId } = req.params;
-  const { recipe, seedDate, plantCount } = req.body;
-  
-  if (isDemoMode()) {
-    console.log('[inventory] Demo mode: Tray seeded:', { trayId, recipe, seedDate, plantCount });
-    return res.json({ success: true, message: 'Seeding recorded (demo mode)' });
+  const { recipe, seedDate, plantCount, seed_source, variety } = req.body;
+
+  if (!recipe) {
+    return res.status(400).json({ error: 'recipe (crop) is required' });
   }
-  
-  // TODO: Implement production seeding logic
-  res.json({ success: true });
+
+  try {
+    const now = new Date(seedDate || Date.now());
+    const trayRunId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+    const trayRun = {
+      tray_run_id:        trayRunId,
+      tray_id:            trayId,
+      recipe_id:          recipe,
+      crop:               recipe,
+      variety:            variety || null,
+      seeded_at:          now.toISOString(),
+      planted_site_count: parseInt(plantCount) || null,
+      plantCount:         parseInt(plantCount) || null,
+      seed_source:        seed_source || null,   // "Johnny's Seeds / Lot 2026-A-42"
+      status:             'GROWING',
+      created_at:         now.toISOString(),
+      updated_at:         now.toISOString()
+    };
+
+    await new Promise((resolve, reject) => {
+      trayRunsDB.insert(trayRun, (err) => { if (err) reject(err); else resolve(); });
+    });
+
+    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe}${seed_source ? ` source=${seed_source}` : ''}`);
+    res.json({ success: true, tray_run_id: trayRunId, message: 'Seeding recorded' });
+  } catch (error) {
+    console.error('[tray-runs] Seed error:', error);
+    res.status(500).json({ error: 'Failed to record seeding' });
+  }
 });
 
 /**

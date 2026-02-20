@@ -644,6 +644,7 @@
     <button class="nav-tab" data-view="orders">Orders</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
     <button class="nav-tab" data-view="compliance">Compliance Export</button>
+    <button class="nav-tab" data-view="crop-analytics">⚖️ Crop Analytics</button>
   </nav>
 
   <main>
@@ -871,11 +872,11 @@
     <div id="payment-setup-view" class="view">
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">Square Payment Integration</h2>
+          <h2 class="card-title">Payment Integration</h2>
         </div>
         <div style="padding: 1.5rem;">
           <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
-            Connect farms' Square accounts to enable automated payment processing with commission splits.
+            Connect farms' Square or Stripe accounts to enable automated payment processing with commission splits.
             Each farm must authorize GreenReach to process payments on their behalf.
           </p>
 
@@ -900,14 +901,14 @@
                 <th>Farm ID</th>
                 <th>Farm Name</th>
                 <th>Square Status</th>
+                <th>Stripe Status</th>
                 <th>Merchant ID</th>
-                <th>Location</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="square-status-table">
               <tr>
-                <td colspan="6" class="loading">Loading farm payment status...</td>
+                <td colspan="7" class="loading">Loading farm payment status...</td>
               </tr>
             </tbody>
           </table>
@@ -924,10 +925,10 @@
               <strong>Add Farm to Network:</strong> Use the "Farm Management" tab to add the farm to the network registry if not already added.
             </li>
             <li style="margin-bottom: 0.75rem;">
-              <strong>Initiate OAuth:</strong> Click "Connect Square" button for the farm.
+              <strong>Initiate OAuth:</strong> Click "Connect Square" or "Connect Stripe" for the farm.
             </li>
             <li style="margin-bottom: 0.75rem;">
-              <strong>Farm Authorization:</strong> Farm admin must click the generated OAuth link and authorize GreenReach in their Square account.
+              <strong>Farm Authorization:</strong> Farm admin must click the generated OAuth link and authorize GreenReach in their payment provider account.
             </li>
             <li style="margin-bottom: 0.75rem;">
               <strong>Verify Connection:</strong> After authorization, the farm's status will update to "Connected".
@@ -938,11 +939,10 @@
           </ol>
 
           <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 6px;">
-            <strong style="display: block; margin-bottom: 0.5rem;">Required Square OAuth Scopes:</strong>
+            <strong style="display: block; margin-bottom: 0.5rem;">Supported Payment Providers:</strong>
             <ul style="padding-left: 1.5rem;">
-              <li><code>PAYMENTS_WRITE</code> - Process payments</li>
-              <li><code>PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS</code> - Enable commission splits</li>
-              <li><code>MERCHANT_PROFILE_READ</code> - Access merchant details</li>
+              <li><strong>Square</strong> — PAYMENTS_WRITE, PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS, MERCHANT_PROFILE_READ scopes</li>
+              <li><strong>Stripe</strong> — Connect Standard accounts with read_write scope via Stripe Connect</li>
             </ul>
           </div>
         </div>
@@ -1355,6 +1355,10 @@
         <p style="color: var(--text-secondary);">No exports generated yet</p>
       </div>
     </div>
+  </div>
+
+  <div id="crop-analytics-view" class="view">
+    <iframe src="/views/crop-weight-analytics.html" style="width:100%;height:calc(100vh - 80px);border:none;"></iframe>
   </div>
 
   <script src="/js/wholesale-admin.js" defer></script>

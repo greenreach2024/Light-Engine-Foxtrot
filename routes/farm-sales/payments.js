@@ -1,11 +1,19 @@
 /**
  * Farm Sales - Payment Processing
  * Multi-method payment processing for all sales channels (MULTI-TENANT)
+ * Supports Square and Stripe via PaymentProviderFactory
  */
 
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
+import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
+import '../../lib/payment-providers/square.js';
+import '../../lib/payment-providers/stripe.js';
+
+// In-memory farm payment config cache (populated from setup routes)
+// Keys: farm_id → { provider: 'square'|'stripe', config: {...} }
+import { getFarmPaymentConfig } from '../../lib/farm-payment-config.js';
 
 const router = express.Router();
 

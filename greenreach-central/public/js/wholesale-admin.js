@@ -1092,7 +1092,7 @@
     },
 
     // ========================================================================
-    // PAYMENT SETUP - Square OAuth Integration
+    // PAYMENT SETUP - Square & Stripe OAuth Integration
     // ========================================================================
 
     async loadPaymentSetup() {
@@ -1102,36 +1102,48 @@
         const farmsData = await farmsResponse.json();
         const farms = farmsData.data?.farms || [];
         
-        // Check Square status for each farm
+        // Check Square and Stripe status for each farm
         const statusPromises = farms.map(async (farm) => {
+          let squareStatus = { connected: false };
+          let stripeStatus = { connected: false };
+          
+          // Check Square
           try {
             const statusResponse = await fetch(`/api/square-proxy/status/${farm.farm_id}`);
             const statusData = await statusResponse.json();
-            return {
-              farm_id: farm.farm_id,
-              farm_name: farm.farm_name,
+            squareStatus = {
               connected: statusData.status === 'ok',
               merchant_id: statusData.data?.merchant_id || null,
-              location_name: statusData.data?.location_name || null,
-              status: statusData.status
+              location_name: statusData.data?.location_name || null
             };
-          } catch (error) {
-            return {
-              farm_id: farm.farm_id,
-              farm_name: farm.farm_name,
-              connected: false,
-              merchant_id: null,
-              location_name: null,
-              status: 'error'
+          } catch (error) { /* Square not available */ }
+          
+          // Check Stripe
+          try {
+            const stripeResponse = await fetch(`/api/farm/stripe/status`, {
+              headers: { 'X-Farm-ID': farm.farm_id }
+            });
+            const stripeData = await stripeResponse.json();
+            stripeStatus = {
+              connected: stripeData.connected === true,
+              accountId: stripeData.data?.accountId || null,
+              businessName: stripeData.data?.businessName || null
             };
-          }
+          } catch (error) { /* Stripe not available */ }
+          
+          return {
+            farm_id: farm.farm_id,
+            farm_name: farm.farm_name,
+            square: squareStatus,
+            stripe: stripeStatus
+          };
         });
         
         const statuses = await Promise.all(statusPromises);
         
-        // Update summary stats
-        const connectedCount = statuses.filter(s => s.connected).length;
-        const pendingCount = statuses.filter(s => !s.connected).length;
+        // Update summary stats (count farms with either provider connected)
+        const connectedCount = statuses.filter(s => s.square.connected || s.stripe.connected).length;
+        const pendingCount = statuses.filter(s => !s.square.connected && !s.stripe.connected).length;
         const commissionRate = process.env.WHOLESALE_COMMISSION_RATE || '10%';
         
         document.getElementById('square-connected-count').textContent = connectedCount;
@@ -1141,27 +1153,41 @@
         // Render table
         const table = document.getElementById('square-status-table');
         if (statuses.length === 0) {
-          table.innerHTML = '<tr><td colspan="6" class="empty-state">No farms in network. Add farms in Farm Management tab.</td></tr>';
+          table.innerHTML = '<tr><td colspan="7" class="empty-state">No farms in network. Add farms in Farm Management tab.</td></tr>';
           return;
         }
         
         table.innerHTML = statuses.map(farm => {
-          const statusBadge = farm.connected
+          const squareBadge = farm.square.connected
             ? '<span class="badge badge-success">Connected</span>'
             : '<span class="badge badge-warning">Not Connected</span>';
           
-          const actionButton = farm.connected
-            ? `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectSquare('${farm.farm_id}')">Disconnect</button>`
-            : `<button class="btn btn-sm btn-primary" onclick="admin.connectSquare('${farm.farm_id}', '${farm.farm_name}')">Connect Square</button>`;
+          const stripeBadge = farm.stripe.connected
+            ? '<span class="badge badge-success">Connected</span>'
+            : '<span class="badge badge-warning">Not Connected</span>';
+          
+          const merchantId = farm.square.merchant_id || farm.stripe.accountId || '—';
+          
+          let actions = '';
+          if (!farm.square.connected) {
+            actions += `<button class="btn btn-sm btn-primary" onclick="admin.connectSquare('${farm.farm_id}', '${farm.farm_name}')" style="margin-right: 4px;">Connect Square</button>`;
+          } else {
+            actions += `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectSquare('${farm.farm_id}')" style="margin-right: 4px;">Disconnect Square</button>`;
+          }
+          if (!farm.stripe.connected) {
+            actions += `<button class="btn btn-sm" onclick="admin.connectStripe('${farm.farm_id}', '${farm.farm_name}')" style="background: #635bff; color: #fff;">Connect Stripe</button>`;
+          } else {
+            actions += `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectStripe('${farm.farm_id}')">Disconnect Stripe</button>`;
+          }
           
           return `
             <tr>
               <td>${farm.farm_id}</td>
               <td>${farm.farm_name}</td>
-              <td>${statusBadge}</td>
-              <td>${farm.merchant_id || '—'}</td>
-              <td>${farm.location_name || '—'}</td>
-              <td>${actionButton}</td>
+              <td>${squareBadge}</td>
+              <td>${stripeBadge}</td>
+              <td>${merchantId}</td>
+              <td>${actions}</td>
             </tr>
           `;
         }).join('');
@@ -1169,7 +1195,7 @@
       } catch (error) {
         console.error('Load payment setup error:', error);
         document.getElementById('square-status-table').innerHTML = 
-          '<tr><td colspan="6" class="error">Failed to load payment setup. Check console for details.</td></tr>';
+          '<tr><td colspan="7" class="error">Failed to load payment setup. Check console for details.</td></tr>';
       }
     },
 
@@ -1249,6 +1275,86 @@
       } catch (error) {
         console.error('Disconnect Square error:', error);
         this.showToast('Failed to disconnect Square', 'error');
+      }
+    },
+
+    async connectStripe(farmId, farmName) {
+      try {
+        const response = await fetch('/api/farm/stripe/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ farm_id: farmId, farmName: farmName })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok || !result.data?.authorizationUrl) {
+          this.showToast(result.message || 'Failed to generate Stripe OAuth URL', 'error');
+          return;
+        }
+        
+        const popup = window.open(
+          result.data.authorizationUrl,
+          'StripeOAuth',
+          'width=600,height=700,scrollbars=yes'
+        );
+        
+        if (!popup) {
+          this.showToast('Please allow popups to complete Stripe authorization', 'warning');
+          return;
+        }
+        
+        // Listen for Stripe connect completion message
+        const self = this;
+        window.addEventListener('message', function handleStripeCallback(event) {
+          if (event.data && event.data.type === 'stripe-connected') {
+            window.removeEventListener('message', handleStripeCallback);
+            self.showToast('Stripe account connected successfully!', 'success');
+            self.loadPaymentSetup();
+          }
+        });
+        
+        // Also poll for popup close
+        const pollInterval = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(pollInterval);
+            setTimeout(() => this.loadPaymentSetup(), 1000);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error('Connect Stripe error:', error);
+        this.showToast('Failed to initiate Stripe OAuth', 'error');
+      }
+    },
+
+    async disconnectStripe(farmId) {
+      if (!confirm(`Disconnect Stripe for farm ${farmId}? This will disable Stripe payments.`)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/farm/stripe/disconnect', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok) {
+          this.showToast(result.message || 'Failed to disconnect Stripe', 'error');
+          return;
+        }
+        
+        this.showToast('Stripe disconnected successfully', 'success');
+        await this.loadPaymentSetup();
+        
+      } catch (error) {
+        console.error('Disconnect Stripe error:', error);
+        this.showToast('Failed to disconnect Stripe', 'error');
       }
     },
 

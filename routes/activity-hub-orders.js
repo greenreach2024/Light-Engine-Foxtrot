@@ -7,6 +7,7 @@ import express from 'express';
 import pool from '../config/database.js';
 import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
+import { linkCustomerToTrace, updateTraceStatus } from './traceability.js';
 
 const router = express.Router();
 
@@ -567,6 +568,27 @@ router.post('/:orderId/pack', async (req, res) => {
     
     // Get parent order for label generation
     const mainOrder = orders.get(subOrder.wholesale_order_id);
+    
+    // Auto-link traceability: one-step-forward customer data (SFCR compliant)
+    try {
+      const buyerName = mainOrder?.buyer_name || 'Unknown Buyer';
+      const buyerAddr = mainOrder?.delivery_address || '';
+      for (const item of subOrder.items) {
+        if (item.lot_code) {
+          await linkCustomerToTrace(item.lot_code, {
+            name: buyerName,
+            address: buyerAddr,
+            order_id: subOrder.wholesale_order_id || orderId,
+            quantity: item.quantity,
+            unit: item.unit,
+            date: new Date().toISOString()
+          });
+          await updateTraceStatus(item.lot_code, 'packed', subOrder.packed_by, `Packed for order ${orderId}`);
+        }
+      }
+    } catch (traceErr) {
+      console.warn('[Activity Hub] Non-blocking trace linkage error:', traceErr.message);
+    }
     
     // Generate packing label URL
     const labelUrl = `/api/labels/packing?` + new URLSearchParams({
