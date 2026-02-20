@@ -9704,6 +9704,9 @@ class RoomWizard {
           });
         }
       }
+      // Category sub-navigation (must be inside _navWired guard to prevent double-registration)
+      $('#catPrevType')?.addEventListener('click', () => this.stepCategory(-1));
+      $('#catNextType')?.addEventListener('click', () => this.stepCategory(1));
       this._navWired = true;
     }
     this.form?.addEventListener('submit', (e)=> this.saveRoom(e));
@@ -9964,8 +9967,7 @@ class RoomWizard {
       toggleSetupFormsForModel(md);
     });
 
-    $('#catPrevType')?.addEventListener('click', () => this.stepCategory(-1));
-    $('#catNextType')?.addEventListener('click', () => this.stepCategory(1));
+    // NOTE: catPrevType / catNextType listeners moved inside _navWired guard to prevent stacking
 
     // Control method chips (buttons wired dynamically when showing control step)
     // Hardware categories (new step)
@@ -12043,6 +12045,7 @@ class RoomWizard {
   }
 
   stepCategory(direction) {
+    if (this._isAdvancing) return; // Prevent race with onNextClick
     if (!this.categoryQueue.length) return;
     const next = this.categoryIndex + direction;
     if (next < 0 || next >= this.categoryQueue.length) return;
@@ -21461,7 +21464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       window.roomWizard = new RoomWizard();
       // Ensure the New Grow Room button is always wired after any DOM changes
-      setTimeout(() => { if (window.roomWizard && typeof window.roomWizard.init === 'function') window.roomWizard.init(); }, 1000);
+      // Removed duplicate init() call — constructor already calls init() once; double-init stacked event listeners causing equipment skip bug
     } catch (e) {
       console.warn('[Bootstrap] RoomWizard init failed', e);
     }

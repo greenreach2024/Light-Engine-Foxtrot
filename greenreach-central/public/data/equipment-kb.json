@@ -1,12 +1,287 @@
 {
-  "equipment": [],
+  "equipment": [
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "Dual 155",
+      "capacity": "155 PPD",
+      "control": "On/Off",
+      "tags": ["quest", "commercial", "ducted"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "Dual 205",
+      "capacity": "205 PPD",
+      "control": "On/Off",
+      "tags": ["quest", "commercial", "ducted"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "Dual 225",
+      "capacity": "225 PPD",
+      "control": "On/Off",
+      "tags": ["quest", "commercial", "ducted"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "335",
+      "capacity": "335 PPD",
+      "control": "On/Off",
+      "tags": ["quest", "commercial", "overhead"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "506",
+      "capacity": "506 PPD",
+      "control": "BACnet",
+      "tags": ["quest", "commercial", "overhead", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "876",
+      "capacity": "876 PPD",
+      "control": "BACnet",
+      "tags": ["quest", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Quest",
+      "model": "IQ Unitary",
+      "capacity": "Variable",
+      "control": "Modbus",
+      "tags": ["quest", "commercial", "vrf", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A130V",
+      "capacity": "130 PPD",
+      "control": "On/Off",
+      "tags": ["anden", "commercial", "hanging"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A210V3",
+      "capacity": "210 PPD",
+      "control": "On/Off",
+      "tags": ["anden", "commercial", "hanging"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A320V3",
+      "capacity": "320 PPD",
+      "control": "On/Off",
+      "tags": ["anden", "commercial", "floor"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Anden",
+      "model": "A710V3",
+      "capacity": "710 PPD",
+      "control": "BACnet",
+      "tags": ["anden", "commercial", "industrial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Surna",
+      "model": "Sentinel 300",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": ["surna", "commercial"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Surna",
+      "model": "Sentinel 600",
+      "capacity": "600 PPD",
+      "control": "Modbus",
+      "tags": ["surna", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Desert Aire",
+      "model": "GrowAire DG25",
+      "capacity": "250 PPD",
+      "control": "BACnet",
+      "tags": ["desert aire", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Desert Aire",
+      "model": "GrowAire DG50",
+      "capacity": "500 PPD",
+      "control": "BACnet",
+      "tags": ["desert aire", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "DryGair",
+      "model": "DG-12",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": ["drygair", "commercial", "heat-recovery"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "DryGair",
+      "model": "DG-X",
+      "capacity": "500 PPD",
+      "control": "Modbus",
+      "tags": ["drygair", "commercial", "heat-recovery", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Carrier",
+      "model": "OptiClean OCA252",
+      "capacity": "250 PPD",
+      "control": "BACnet",
+      "tags": ["carrier", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Trane",
+      "model": "CDQ DH",
+      "capacity": "Variable",
+      "control": "BACnet",
+      "tags": ["trane", "commercial", "smart"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Santa Fe",
+      "model": "Advance2",
+      "capacity": "90 PPD",
+      "control": "On/Off",
+      "tags": ["santa fe", "residential", "crawl-space"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "Santa Fe",
+      "model": "Ultra120",
+      "capacity": "120 PPD",
+      "control": "On/Off",
+      "tags": ["santa fe", "commercial"]
+    },
+    {
+      "category": "dehumidifier",
+      "vendor": "GrowGeneration",
+      "model": "Active Air 300",
+      "capacity": "300 PPD",
+      "control": "On/Off",
+      "tags": ["growgeneration", "commercial"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH09NA",
+      "capacity": "9,000 BTU",
+      "control": "IR Remote",
+      "tags": ["mitsubishi", "wall-mount", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH12NA",
+      "capacity": "12,000 BTU",
+      "control": "IR Remote",
+      "tags": ["mitsubishi", "wall-mount", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MSZ-FH18NA",
+      "capacity": "18,000 BTU",
+      "control": "IR Remote",
+      "tags": ["mitsubishi", "wall-mount", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Mitsubishi",
+      "model": "MXZ-3C30NAHZ2",
+      "capacity": "30,000 BTU",
+      "control": "Kumo Cloud",
+      "tags": ["mitsubishi", "multi-zone", "hyper-heat", "smart"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Fujitsu",
+      "model": "ASU12RLS3",
+      "capacity": "12,000 BTU",
+      "control": "IR Remote",
+      "tags": ["fujitsu", "wall-mount", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Fujitsu",
+      "model": "AOU36RLXFZH",
+      "capacity": "36,000 BTU",
+      "control": "IR Remote",
+      "tags": ["fujitsu", "ducted", "multi-zone"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "LG",
+      "model": "LMU360HHV",
+      "capacity": "36,000 BTU",
+      "control": "Wi-Fi",
+      "tags": ["lg", "multi-zone", "smart", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Samsung",
+      "model": "AR09TXHZAWKNEU",
+      "capacity": "9,000 BTU",
+      "control": "SmartThings",
+      "tags": ["samsung", "wall-mount", "smart", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Daikin",
+      "model": "FTXS09LVJU",
+      "capacity": "9,000 BTU",
+      "control": "IR Remote",
+      "tags": ["daikin", "wall-mount", "inverter"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Daikin",
+      "model": "RMXS48LVJU",
+      "capacity": "48,000 BTU",
+      "control": "BACnet",
+      "tags": ["daikin", "multi-zone", "smart", "commercial"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "MrCool",
+      "model": "DIY-12-HP-WM-230C",
+      "capacity": "12,000 BTU",
+      "control": "Wi-Fi",
+      "tags": ["mrcool", "diy", "wall-mount", "smart"]
+    },
+    {
+      "category": "mini-split",
+      "vendor": "Senville",
+      "model": "SENL-18CD",
+      "capacity": "18,000 BTU",
+      "control": "IR Remote",
+      "tags": ["senville", "wall-mount"]
+    }
+  ],
   "categories": [
     "Lighting",
     "HVAC",
+    "Dehumidifier",
+    "Mini-Split",
     "Irrigation",
     "Sensors",
     "Controllers"
   ],
-  "lastUpdated": null,
-  "version": "1.0.0"
+  "lastUpdated": "2026-02-20",
+  "version": "1.1.0"
 }
