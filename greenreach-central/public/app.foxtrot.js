@@ -5155,11 +5155,18 @@ async function loadRoomsFromBackend() {
       return;
     }
 
+    // If loadFarmData() already loaded rooms, keep them
+    if (Array.isArray(STATE.rooms) && STATE.rooms.length > 0) {
+      console.log('[loadRoomsFromBackend] Rooms already loaded from farm profile:', STATE.rooms.length);
+      localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+      return;
+    }
+
     // Prefer dedicated rooms endpoint
     const roomsResp = await fetch('/api/setup/rooms', { headers: authHeaders });
     if (roomsResp.ok) {
       const roomsData = await roomsResp.json();
-      if (roomsData.success && Array.isArray(roomsData.rooms)) {
+      if (roomsData.success && Array.isArray(roomsData.rooms) && roomsData.rooms.length > 0) {
         STATE.rooms = roomsData.rooms;
         localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
         console.log('[loadRoomsFromBackend] Loaded rooms from', roomsData.source || 'api', ':', STATE.rooms.length);
@@ -5180,8 +5187,10 @@ async function loadRoomsFromBackend() {
         STATE.farm.contactPhone = data.config.contactPhone;
 
         // Load user's actual rooms
-        STATE.rooms = data.config.rooms || [];
-        localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+        if (Array.isArray(data.config.rooms) && data.config.rooms.length > 0) {
+          STATE.rooms = data.config.rooms;
+          localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+        }
 
         console.log('[loadRoomsFromBackend] Loaded real user data:',
                     STATE.rooms.length, 'rooms from', data.config.farmName);
@@ -6722,9 +6731,28 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Load farm data first to check if we're in demo mode
   console.log('[INIT] Loading farm data...');
   await loadFarmData();
-  // Load rooms data
+  console.log('[INIT] Farm loaded. STATE.farm:', STATE.farm?.name, 'rooms:', STATE.rooms?.length);
+  // Load rooms data (will skip if already loaded from farm profile)
   console.log('[INIT] Loading rooms...');
   await loadRoomsFromBackend();
+  console.log('[INIT] Rooms:', STATE.rooms?.length);
+  // Load groups early so Groups V2 dropdown can populate
+  try {
+    const groupsResp = await fetch('/api/groups', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` },
+      cache: 'no-store'
+    });
+    if (groupsResp.ok) {
+      const groupsData = await groupsResp.json();
+      const groupsArr = Array.isArray(groupsData) ? groupsData : (groupsData?.groups || []);
+      if (groupsArr.length > 0) {
+        STATE.groups = groupsArr;
+        console.log('[INIT] Pre-loaded groups:', STATE.groups.length);
+      }
+    }
+  } catch (e) {
+    console.warn('[INIT] Pre-load groups failed:', e.message);
+  }
   // Load persisted light setups
   console.log('[INIT] Loading light setups...');
   await loadLightSetups();
@@ -7983,7 +8011,7 @@ class FarmWizard {
     }
     // Build summary with contact info only
     const contact = STATE.farm?.contact || {};
-    const summary = `${STATE.farm.farmName || 'Farm'}\nContact: ${contact.name || '—'}\nPhone: ${contact.phone || '—'}\nEmail: ${contact.email || '—'}`;
+    const summary = `${STATE.farm.name || STATE.farm.farmName || 'Farm'}\nContact: ${contact.name || '—'}\nPhone: ${contact.phone || '—'}\nEmail: ${contact.email || '—'}`;
     if (badge) {
       show(badge);
       badge.textContent = summary;
@@ -12845,6 +12873,10 @@ async function loadAllData() {
     try { if (STATE.farm && Object.keys(STATE.farm).length) localStorage.setItem('gr.farm', JSON.stringify(STATE.farm)); } catch {}
     if (typeof updateFarmNameInHeader === 'function') {
       updateFarmNameInHeader(STATE.farm?.name || STATE.farm?.farmName || STATE.farm?.farmId);
+    }
+    // Refresh Farm Registration card with loaded data
+    if (window.farmWizard && typeof window.farmWizard.updateFarmDisplay === 'function') {
+      window.farmWizard.updateFarmDisplay();
     }
     const backendRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
     const fileRooms = rooms?.rooms || [];

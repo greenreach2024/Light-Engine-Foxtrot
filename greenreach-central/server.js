@@ -1230,14 +1230,16 @@ app.get('/api/setup/data', async (req, res) => {
     const fid = farmStore.farmIdFromReq(req);
     const farmDoc = await farmStore.get(fid, 'farm_profile') || {};
     const rooms = await farmStore.get(fid, 'rooms') || [];
+    const contact = farmDoc?.contact || {};
 
     return res.json({
       success: true,
       config: {
         farmName: farmDoc?.farmName || farmDoc?.name || 'This is Your Farm',
-        ownerName: farmDoc?.ownerName || farmDoc?.owner || '',
-        contactEmail: farmDoc?.contactEmail || farmDoc?.email || '',
-        contactPhone: farmDoc?.contactPhone || farmDoc?.phone || '',
+        ownerName: farmDoc?.ownerName || farmDoc?.owner || contact.name || '',
+        contactEmail: farmDoc?.contactEmail || farmDoc?.email || contact.email || '',
+        contactPhone: farmDoc?.contactPhone || farmDoc?.phone || contact.phone || '',
+        contact: contact,
         rooms: Array.isArray(rooms) ? rooms : []
       }
     });
