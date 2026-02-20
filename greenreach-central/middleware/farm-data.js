@@ -29,6 +29,7 @@ const FILE_TO_DATA_TYPE = {
   'iot-devices.json': 'devices',
   'farm.json': 'farm_profile',
   'plans.json': 'plans',
+  'light-setups.json': 'light_setups',
 };
 
 // Default empty responses for each data type (prevent frontend errors)
@@ -42,6 +43,7 @@ const EMPTY_DEFAULTS = {
   'iot-devices.json': { devices: [] },
   'farm.json': { farmId: 'pending', name: 'New Farm', status: 'setup' },
   'plans.json': { plans: [] },
+  'light-setups.json': { lightSetups: [] },
 };
 
 /**

@@ -159,6 +159,11 @@ app.use(helmet({
 // =====================================================
 const _inMemoryStore = getInMemoryStore();
 initFarmStore(_inMemoryStore);                     // Phase 3 — init data store
+// Body parser MUST run before farmDataWriteMiddleware so req.body is available
+// for POST/PUT /data/*.json. Without this, req.body is undefined and the
+// middleware crashes on payload.groups → TypeError (causes 502).
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(farmDataWriteMiddleware(_inMemoryStore)); // PUT /data/*.json → DB
 app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
 
@@ -791,9 +796,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware — already mounted earlier (before farmDataWriteMiddleware)\n// so req.body is available for POST/PUT /data/*.json writes.
 
 // Request logging
 app.use(requestLogger);
