@@ -168,8 +168,15 @@ export function farmDataMiddleware(inMemoryStore) {
     }
 
     // 3. Farm context is present but no data found in DB or memory.
-    //    Return empty defaults instead of falling through to static files,
-    //    which contain a different farm's data (cross-tenant leak).
+    //    In single-tenant mode (no DB), try flat file before returning empty defaults.
+    //    In multi-tenant mode (DB available), skip file to prevent cross-tenant leaks.
+    if (!isDatabaseAvailable()) {
+      // Single-tenant / no-DB mode: fall through to static file serving
+      logger.debug(`[FarmData] No DB, falling through to file for ${farmId}/${dataType}`);
+      return next();
+    }
+
+    // Multi-tenant mode: return empty defaults to prevent cross-tenant data leaks
     const emptyDefault = EMPTY_DEFAULTS[fileName];
     if (emptyDefault != null) {
       logger.debug(`[FarmData] No data for ${farmId}/${dataType}, returning empty default`);
@@ -205,19 +212,18 @@ export function farmDataWriteMiddleware(inMemoryStore) {
 
     const payload = req.body;
 
-    // Write to database
+    // Normalize data before storing
+    let dataToStore = payload;
+    if (fileName === 'groups.json') {
+      dataToStore = Array.isArray(payload) ? payload : (payload.groups || payload);
+    }
+    if (fileName === 'rooms.json') {
+      dataToStore = Array.isArray(payload) ? payload : (payload.rooms || payload);
+    }
+
+    // Write to database if available
     if (isDatabaseAvailable()) {
       try {
-        let dataToStore = payload;
-
-        // Normalize: groups.json body might be { groups: [...] } or flat array
-        if (fileName === 'groups.json') {
-          dataToStore = Array.isArray(payload) ? payload : (payload.groups || payload);
-        }
-        if (fileName === 'rooms.json') {
-          dataToStore = Array.isArray(payload) ? payload : (payload.rooms || payload);
-        }
-
         await query(
           `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
            VALUES ($1, $2, $3, NOW())
@@ -227,7 +233,8 @@ export function farmDataWriteMiddleware(inMemoryStore) {
         );
 
         // Also update in-memory cache
-        if (inMemoryStore && inMemoryStore[dataType]?.set) {
+        if (inMemoryStore) {
+          if (!inMemoryStore[dataType]) inMemoryStore[dataType] = new Map();
           inMemoryStore[dataType].set(farmId, dataToStore);
         }
 
@@ -235,12 +242,32 @@ export function farmDataWriteMiddleware(inMemoryStore) {
         return res.json({ success: true, source: 'database', farmId });
       } catch (err) {
         logger.error(`[FarmData] DB write failed for ${farmId}/${dataType}:`, err.message);
-        // Fall through to file write
+        // Fall through to in-memory + file write
       }
     }
 
-    // Fall through to legacy file write handler
-    next();
+    // No DB available — store in-memory (keyed by farmId) so GET reads it back
+    if (inMemoryStore) {
+      if (!inMemoryStore[dataType]) inMemoryStore[dataType] = new Map();
+      inMemoryStore[dataType].set(farmId, dataToStore);
+    }
+
+    // Also write to flat file as a durable fallback
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.default.dirname(__filename);
+      const filePath = path.default.join(__dirname, '..', 'public', 'data', fileName);
+      await fs.promises.mkdir(path.default.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, JSON.stringify(dataToStore, null, 2), 'utf8');
+      logger.info(`[FarmData] Saved ${fileName} for farm ${farmId} to memory + file (no DB)`);
+    } catch (fileErr) {
+      logger.warn(`[FarmData] File write failed for ${fileName}:`, fileErr.message);
+    }
+
+    return res.json({ success: true, source: 'memory', farmId });
   };
 }
 
