@@ -294,6 +294,12 @@ function buildSyntheticTraysFromGroups(groups) {
     const groupId = group?.id || group?.groupId;
     if (!groupId) return;
 
+    // Skip draft groups with no plan or crop assigned (not actively growing)
+    const groupStatus = (group?.status || '').toLowerCase();
+    const hasPlan = !!(group?.plan || group?.planId);
+    const hasCrop = !!(group?.recipe || group?.crop);
+    if (groupStatus === 'draft' && !hasPlan && !hasCrop) return;
+
     const trayCount = Math.max(0, Number(group?.trays || 0));
     if (!trayCount) return;
 

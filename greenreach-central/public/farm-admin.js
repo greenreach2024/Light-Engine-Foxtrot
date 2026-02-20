@@ -416,10 +416,10 @@ async function loadDashboardData() {
             document.getElementById('kpi-trays-change').textContent = 'Live grow data';
             document.getElementById('kpi-plants-change').textContent = 'Live grow data';
         } else {
-            document.getElementById('kpi-trays').textContent = '--';
-            document.getElementById('kpi-plants').textContent = '--';
-            document.getElementById('kpi-trays-change').textContent = 'Start your first grow to see live data';
-            document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
+            document.getElementById('kpi-trays').textContent = '0';
+            document.getElementById('kpi-plants').textContent = '0';
+            document.getElementById('kpi-trays-change').textContent = 'Assign a crop plan to start growing';
+            document.getElementById('kpi-plants-change').textContent = 'No active grows';
         }
 
         // Calculate next harvest from byFarm trays data
@@ -441,7 +441,7 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = nextHarvest.cropName;
         } else {
             document.getElementById('kpi-harvest').textContent = '--';
-            document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
+            document.getElementById('kpi-harvest-change').textContent = 'No active grows';
         }
 
         // Fetch device count from API

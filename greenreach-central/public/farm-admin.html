@@ -3572,8 +3572,17 @@
                 let offlineDevices = 0;
                 
                 groups.forEach(group => {
-                    totalTrays += group.trays || 0;
-                    totalPlants += group.plants || 0;
+                    // Only count groups that are actively growing (not draft with no plan)
+                    const status = (group.status || '').toLowerCase();
+                    const hasPlan = !!(group.plan || group.planId);
+                    const hasCrop = !!(group.recipe || group.crop);
+                    const isActive = status !== 'draft' || hasPlan || hasCrop;
+                    
+                    if (isActive) {
+                        totalTrays += group.trays || 0;
+                        totalPlants += group.plants || 0;
+                    }
+                    
                     const lights = group.lights || [];
                     totalDevices += lights.length;
                     
@@ -3589,8 +3598,8 @@
                 const kpiDevices = document.getElementById('kpi-devices');
                 const kpiHarvest = document.getElementById('kpi-harvest');
                 
-                if (kpiTrays) kpiTrays.textContent = totalTrays || groups.length;
-                if (kpiPlants) kpiPlants.textContent = totalPlants || '--';
+                if (kpiTrays) kpiTrays.textContent = totalTrays > 0 ? totalTrays : '0';
+                if (kpiPlants) kpiPlants.textContent = totalPlants > 0 ? totalPlants.toLocaleString() : '0';
                 if (kpiDevices) kpiDevices.textContent = totalDevices;
                 
                 // Update change indicators with real status
