@@ -29,6 +29,82 @@ export function getInMemoryGroups() {
 }
 
 /**
+ * Hydrate in-memory Maps from the farm_data DB table on startup.
+ * This ensures data survives server restarts when PostgreSQL is available.
+ */
+export async function hydrateFromDatabase() {
+  if (!isDatabaseAvailable()) {
+    logger.info('[Sync] Database unavailable — skipping hydration');
+    return { hydrated: false, reason: 'no_database' };
+  }
+
+  try {
+    const result = await query(
+      `SELECT farm_id, data_type, data FROM farm_data ORDER BY farm_id`
+    );
+
+    let count = 0;
+    for (const row of result.rows) {
+      const { farm_id, data_type, data } = row;
+      if (!data) continue;
+
+      switch (data_type) {
+        case 'rooms':
+          inMemoryStore.rooms.set(farm_id, Array.isArray(data) ? data : (data.rooms || []));
+          count++;
+          break;
+        case 'groups':
+          inMemoryStore.groups.set(farm_id, Array.isArray(data) ? data : (data.groups || []));
+          count++;
+          break;
+        case 'schedules':
+          inMemoryStore.schedules.set(farm_id, Array.isArray(data) ? data : (data.schedules || []));
+          count++;
+          break;
+        case 'inventory':
+          inMemoryStore.inventory.set(farm_id, Array.isArray(data) ? data : []);
+          count++;
+          break;
+        case 'telemetry':
+          if (!inMemoryStore.telemetry) inMemoryStore.telemetry = new Map();
+          inMemoryStore.telemetry.set(farm_id, data);
+          count++;
+          break;
+        case 'devices':
+          if (!inMemoryStore.devices) inMemoryStore.devices = new Map();
+          inMemoryStore.devices.set(farm_id, Array.isArray(data) ? data : (data.devices || []));
+          count++;
+          break;
+        case 'config':
+          if (!inMemoryStore.config) inMemoryStore.config = new Map();
+          inMemoryStore.config.set(farm_id, data);
+          count++;
+          break;
+        default:
+          // Unknown data type — store generically
+          if (!inMemoryStore[data_type]) inMemoryStore[data_type] = new Map();
+          inMemoryStore[data_type].set(farm_id, data);
+          count++;
+      }
+    }
+
+    const farmIds = [...new Set(result.rows.map(r => r.farm_id))];
+    logger.info(`[Sync] Hydrated ${count} data sets for ${farmIds.length} farm(s) from database`);
+    return { hydrated: true, datasets: count, farms: farmIds.length, farmIds };
+  } catch (err) {
+    logger.error('[Sync] Hydration failed:', err.message);
+    return { hydrated: false, reason: err.message };
+  }
+}
+
+/**
+ * Get the in-memory store reference (used by farm-data middleware).
+ */
+export function getInMemoryStore() {
+  return inMemoryStore;
+}
+
+/**
  * Middleware: Authenticate farm device via API key
  */
 function authenticateFarm(req, res, next) {
@@ -87,20 +163,21 @@ router.post('/rooms', authenticateFarm, async (req, res) => {
     
     logger.info(`[Sync] Syncing ${rooms.length} rooms for farm ${farmId}`);
     
+    // Always update in-memory cache
+    inMemoryStore.rooms.set(farmId, rooms);
+    
     if (await isDatabaseAvailable()) {
-      // Store in farm_backups table for Edge recovery (Phase 2)
+      // Write-through to farm_data table (canonical multi-tenant store)
       await query(
-        `INSERT INTO farm_backups (farm_id, rooms, last_synced)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (farm_id) 
-         DO UPDATE SET rooms = $2, last_synced = NOW()`,
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'rooms', $2, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2, updated_at = NOW()`,
         [farmId, JSON.stringify(rooms)]
       );
       
-      logger.info(`[Sync] Saved ${rooms.length} rooms to farm_backups for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${rooms.length} rooms to farm_data + memory for farm ${farmId}`);
     } else {
-      // Store in-memory
-      inMemoryStore.rooms.set(farmId, rooms);
       logger.info(`[Sync] Saved ${rooms.length} rooms to memory for farm ${farmId}`);
     }
     
@@ -140,20 +217,21 @@ router.post('/groups', authenticateFarm, async (req, res) => {
     
     logger.info(`[Sync] Syncing ${groups.length} groups for farm ${farmId}`);
     
+    // Always update in-memory cache
+    inMemoryStore.groups.set(farmId, groups);
+    
     if (await isDatabaseAvailable()) {
-      // Store in farm_backups table for Edge recovery (Phase 2)
+      // Write-through to farm_data table (canonical multi-tenant store)
       await query(
-        `INSERT INTO farm_backups (farm_id, groups, last_synced)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (farm_id) 
-         DO UPDATE SET groups = $2, last_synced = NOW()`,
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'groups', $2, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2, updated_at = NOW()`,
         [farmId, JSON.stringify(groups)]
       );
       
-      logger.info(`[Sync] Saved ${groups.length} groups to farm_backups for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${groups.length} groups to farm_data + memory for farm ${farmId}`);
     } else {
-      // Store in-memory
-      inMemoryStore.groups.set(farmId, groups);
       logger.info(`[Sync] Saved ${groups.length} groups to memory for farm ${farmId}`);
     }
     
@@ -193,20 +271,21 @@ router.post('/schedules', authenticateFarm, async (req, res) => {
     
     logger.info(`[Sync] Syncing ${schedules.length} schedules for farm ${farmId}`);
     
+    // Always update in-memory cache
+    inMemoryStore.schedules.set(farmId, schedules);
+    
     if (await isDatabaseAvailable()) {
-      // Store in farm_backups table for Edge recovery (Phase 2)
+      // Write-through to farm_data table (canonical multi-tenant store)
       await query(
-        `INSERT INTO farm_backups (farm_id, schedules, last_synced)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (farm_id) 
-         DO UPDATE SET schedules = $2, last_synced = NOW()`,
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'schedules', $2, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2, updated_at = NOW()`,
         [farmId, JSON.stringify(schedules)]
       );
       
-      logger.info(`[Sync] Saved ${schedules.length} schedules to farm_backups for farm ${farmId}`);
+      logger.info(`[Sync] Saved ${schedules.length} schedules to farm_data + memory for farm ${farmId}`);
     } else {
-      // Store in-memory
-      inMemoryStore.schedules.set(farmId, schedules);
       logger.info(`[Sync] Saved ${schedules.length} schedules to memory for farm ${farmId}`);
     }
     
@@ -246,19 +325,20 @@ router.post('/config', authenticateFarm, async (req, res) => {
     
     logger.info(`[Sync] Syncing config for farm ${farmId}`);
     
+    // Always update in-memory cache
+    if (!inMemoryStore.config) inMemoryStore.config = new Map();
+    inMemoryStore.config.set(farmId, config);
+    
     if (await isDatabaseAvailable()) {
       await query(
-        `INSERT INTO farm_backups (farm_id, config, last_synced)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (farm_id) 
-         DO UPDATE SET config = $2, last_synced = NOW()`,
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'config', $2, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2, updated_at = NOW()`,
         [farmId, JSON.stringify(config)]
       );
-      
-      logger.info(`[Sync] Saved config to farm_backups for farm ${farmId}`);
+      logger.info(`[Sync] Saved config to farm_data + memory for farm ${farmId}`);
     } else {
-      if (!inMemoryStore.config) inMemoryStore.config = new Map();
-      inMemoryStore.config.set(farmId, config);
       logger.info(`[Sync] Saved config to memory for farm ${farmId}`);
     }
     
@@ -297,8 +377,11 @@ router.post('/inventory', authenticateFarm, async (req, res) => {
     
     logger.info(`[Sync] Syncing ${products.length} products for farm ${farmId}`);
     
+    // Always update in-memory cache
+    inMemoryStore.inventory.set(farmId, products);
+    
     if (await isDatabaseAvailable()) {
-      // Upsert each product into products table
+      // Upsert each product into products table (legacy per-row store)
       for (const product of products) {
         const { sku_id, product_name, quantity_available, unit, price_per_unit, organic, certifications } = product;
         
@@ -318,10 +401,17 @@ router.post('/inventory', authenticateFarm, async (req, res) => {
         );
       }
       
-      logger.info(`[Sync] Saved ${products.length} products to database for farm ${farmId}`);
+      // Also write to farm_data for unified multi-tenant access
+      await query(
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'inventory', $2, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2, updated_at = NOW()`,
+        [farmId, JSON.stringify(products)]
+      );
+      
+      logger.info(`[Sync] Saved ${products.length} products to DB + memory for farm ${farmId}`);
     } else {
-      // Store in-memory
-      inMemoryStore.inventory.set(farmId, products);
       logger.info(`[Sync] Saved ${products.length} products to memory for farm ${farmId}`);
     }
     

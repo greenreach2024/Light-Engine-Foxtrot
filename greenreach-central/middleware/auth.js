@@ -1,18 +1,60 @@
 /**
  * Auth Middleware
+ * Extracts farm context from JWT tokens, API keys, or headers.
+ * Supports multi-tenant SaaS: every request is scoped to a farmId.
  */
 
+import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 
+const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+
 /**
- * Basic auth middleware (passthrough for now, ready for JWT/session)
+ * Basic auth middleware — extracts farmId from JWT token, API key header,
+ * or falls back to local farm.
+ *
+ * Sets req.user = { farmId, role, email, name, userId }
  */
 export function authMiddleware(req, res, next) {
-  // TODO: Implement JWT/session validation
-  // For now, extract farmId from headers or default to local farm
+  // 1. Try JWT token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const payload = jwt.verify(token, JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+      req.user = {
+        farmId: payload.farm_id,
+        userId: payload.user_id || 'jwt-user',
+        role: payload.role || 'admin',
+        email: payload.email,
+        name: payload.name,
+        authMethod: 'jwt'
+      };
+      return next();
+    } catch (err) {
+      // Token invalid/expired — try other methods
+      logger.debug('[Auth] JWT validation failed:', err.message);
+    }
+  }
+
+  // 2. API key auth (edge devices)
+  if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
+    req.user = {
+      farmId: req.headers['x-farm-id'],
+      role: 'admin',
+      authMethod: 'api-key'
+    };
+    return next();
+  }
+
+  // 3. Fallback to headers or env (single-farm / local dev mode)
   req.user = {
     farmId: req.headers['x-farm-id'] || process.env.FARM_ID || 'FARM-LOCAL',
-    role: 'admin' // TODO: Extract from token
+    role: 'admin',
+    authMethod: 'fallback'
   };
   next();
 }

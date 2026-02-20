@@ -18,6 +18,7 @@ import inventoryRoutes from './routes/inventory.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
 import syncRoutes from './routes/sync.js';
+import { hydrateFromDatabase, getInMemoryStore } from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 import adminRoutes from './routes/admin.js';
@@ -51,9 +52,10 @@ if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { authMiddleware } from './middleware/auth.js';
+import { farmDataMiddleware, farmDataWriteMiddleware } from './middleware/farm-data.js';
 
 // Import services
-import { initDatabase, getDatabase } from './config/database.js';
+import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
@@ -122,6 +124,16 @@ app.use(helmet({
     },
   },
 }));
+
+// =====================================================
+// MULTI-TENANT FARM DATA MIDDLEWARE
+// Intercepts /data/*.json requests and serves farm-scoped data from
+// the farm_data PostgreSQL table when a farm context (JWT/API key) exists.
+// Must be mounted BEFORE static file serving so DB data takes precedence.
+// =====================================================
+const _inMemoryStore = getInMemoryStore();
+app.use(farmDataWriteMiddleware(_inMemoryStore)); // PUT /data/*.json → DB
+app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
 
 // Static UI (Wholesale portal + Central Admin UI)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -317,7 +329,31 @@ function splitForecastBuckets(trays) {
   return buckets;
 }
 
-async function getInventoryTraysForCompat() {
+/**
+ * Get inventory trays for compatibility routes.
+ * Priority: farm-scoped DB data → flat trays.json → synthetic from groups.
+ * @param {string} [farmId] - Farm ID for scoped data lookup
+ */
+async function getInventoryTraysForCompat(farmId) {
+  // 1. Try farm-scoped groups from DB
+  if (farmId && isDatabaseAvailable()) {
+    try {
+      const result = await query(
+        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
+        [farmId]
+      );
+      if (result.rows.length > 0 && result.rows[0].data) {
+        const raw = result.rows[0].data;
+        const groups = Array.isArray(raw) ? raw : (raw.groups || []);
+        if (groups.length > 0) {
+          const syntheticTrays = buildSyntheticTraysFromGroups(groups);
+          return normalizeInventoryTrays(syntheticTrays);
+        }
+      }
+    } catch (_) { /* fall through to file */ }
+  }
+
+  // 2. Fall back to flat files
   const traysDoc = await readDataJsonWithFallback('trays.json', []);
   const traysRaw = Array.isArray(traysDoc) ? traysDoc : (traysDoc?.trays || []);
 
@@ -649,6 +685,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Farm context extractor — lightweight middleware that attaches farmId
+// to every request from JWT token, API key header, or env default.
+// This enables all compatibility routes to use req.farmId for scoped queries.
+import _jwtLib from 'jsonwebtoken';
+const _JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+
+app.use((req, res, next) => {
+  // 1. JWT token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const payload = _jwtLib.verify(authHeader.substring(7), _JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+      req.farmId = payload.farm_id;
+      req.farmAuth = { method: 'jwt', role: payload.role, email: payload.email };
+      return next();
+    } catch (_) { /* fall through */ }
+  }
+
+  // 2. API key header
+  if (req.headers['x-farm-id']) {
+    req.farmId = req.headers['x-farm-id'];
+    req.farmAuth = { method: 'api-key' };
+    return next();
+  }
+
+  // 3. Env default (single-farm mode)
+  req.farmId = process.env.FARM_ID || null;
+  req.farmAuth = { method: 'default' };
+  next();
+});
+
 // Rate limiting - increased limits for dashboard usage
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
@@ -681,6 +751,40 @@ app.get('/api/version', (req, res) => {
     buildTime: BUILD_TIME,
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// SaaS status endpoint — returns multi-tenant state and farm context info
+app.get('/api/saas/status', async (req, res) => {
+  const store = getInMemoryStore();
+  const farmCount = new Set([
+    ...store.rooms.keys(),
+    ...store.groups.keys(),
+    ...store.schedules.keys(),
+    ...store.inventory.keys(),
+    ...(store.telemetry?.keys?.() || []),
+  ]).size;
+
+  const farmIds = [...new Set([
+    ...store.rooms.keys(),
+    ...store.groups.keys(),
+  ])];
+
+  res.json({
+    mode: 'multi-tenant',
+    databaseReady: Boolean(req.app.locals.databaseReady),
+    requestFarmId: req.farmId || null,
+    requestAuthMethod: req.farmAuth?.method || null,
+    inMemoryFarmCount: farmCount,
+    activeFarms: farmIds,
+    storeStats: {
+      rooms: store.rooms.size,
+      groups: store.groups.size,
+      schedules: store.schedules.size,
+      inventory: store.inventory.size,
+      telemetry: store.telemetry?.size || 0,
+    },
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -1233,7 +1337,7 @@ app.get('/api/health/insights', async (_req, res) => {
   }
 });
 
-app.get('/api/health/vitality', async (_req, res) => {
+app.get('/api/health/vitality', async (req, res) => {
   const scoreToStatus = (score) => {
     if (score >= 85) return 'excellent';
     if (score >= 70) return 'good';
@@ -1249,7 +1353,7 @@ app.get('/api/health/vitality', async (_req, res) => {
   });
 
   try {
-    const trays = await getInventoryTraysForCompat();
+    const trays = await getInventoryTraysForCompat(req.farmId);
     const activeTrays = trays.filter((tray) => (tray.status || '').toLowerCase() !== 'harvested');
 
     let envZones = [];
@@ -1326,9 +1430,9 @@ app.get('/api/ai/status', (_req, res) => {
   });
 });
 
-app.get('/api/inventory/current', async (_req, res) => {
+app.get('/api/inventory/current', async (req, res) => {
   try {
-    const trays = await getInventoryTraysForCompat();
+    const trays = await getInventoryTraysForCompat(req.farmId);
     const activeTrays = trays.filter((tray) => (tray.status || '').toLowerCase() !== 'harvested');
     const totalPlants = activeTrays.reduce((sum, tray) => sum + (Number(tray.plantCount) || 0), 0);
     const farmCount = new Set(activeTrays.map((tray) => String(tray.location || '').split(' - ')[0]).filter(Boolean)).size || 1;
@@ -1350,9 +1454,9 @@ app.get('/api/inventory/current', async (_req, res) => {
   }
 });
 
-app.get('/api/inventory/forecast', async (_req, res) => {
+app.get('/api/inventory/forecast', async (req, res) => {
   try {
-    const trays = await getInventoryTraysForCompat();
+    const trays = await getInventoryTraysForCompat(req.farmId);
     const buckets = splitForecastBuckets(trays);
 
     return res.json({
@@ -1669,14 +1773,33 @@ app.patch('/devices/:deviceId', async (req, res) => {
 });
 
 // Compatibility endpoints expected by legacy farm/admin pages
-app.get('/api/groups', async (_req, res) => {
+app.get('/api/groups', async (req, res) => {
   try {
-    const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
-    if (!fs.existsSync(groupsPath)) return res.json([]);
+    let groups = [];
 
-    const raw = await fs.promises.readFile(groupsPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
+    // 1. Try farm-scoped DB data
+    if (req.farmId && isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
+          [req.farmId]
+        );
+        if (result.rows.length > 0 && result.rows[0].data) {
+          const raw = result.rows[0].data;
+          groups = Array.isArray(raw) ? raw : (raw.groups || []);
+        }
+      } catch (_) { /* fall through to file */ }
+    }
+
+    // 2. Fall back to flat file
+    if (groups.length === 0) {
+      const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
+      if (fs.existsSync(groupsPath)) {
+        const raw = await fs.promises.readFile(groupsPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        groups = Array.isArray(parsed) ? parsed : (parsed?.groups || []);
+      }
+    }
 
     const formatted = groups.map((group) => ({
       id: group.id || group.name,
@@ -1698,6 +1821,22 @@ app.get('/api/groups', async (_req, res) => {
 
 app.get('/api/rooms', async (req, res) => {
   try {
+    // 1. Try farm-scoped DB data
+    if (req.farmId && isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'rooms'`,
+          [req.farmId]
+        );
+        if (result.rows.length > 0 && result.rows[0].data) {
+          const raw = result.rows[0].data;
+          const rooms = Array.isArray(raw) ? raw : (raw.rooms || []);
+          if (rooms.length > 0) return res.json(rooms);
+        }
+      } catch (_) { /* fall through */ }
+    }
+
+    // 2. Legacy DB table
     if (req.db) {
       try {
         const result = await req.db.query(
@@ -1705,12 +1844,13 @@ app.get('/api/rooms', async (req, res) => {
            FROM rooms
            ORDER BY created_at ASC`
         );
-        return res.json(result.rows);
+        if (result.rows.length > 0) return res.json(result.rows);
       } catch (dbError) {
         logger.debug('[Compat] /api/rooms DB query failed, using file fallback', { error: dbError.message });
       }
     }
 
+    // 3. Fall back to flat file
     const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
     if (!fs.existsSync(roomsPath)) return res.json([]);
 
@@ -1871,6 +2011,12 @@ async function startServer() {
       await initDatabase();
       app.locals.databaseReady = true;
       logger.info('Database connected successfully');
+      
+      // Hydrate in-memory Maps from farm_data table (multi-tenant SaaS)
+      const hydrationResult = await hydrateFromDatabase();
+      if (hydrationResult.hydrated) {
+        logger.info(`[SaaS] Hydrated ${hydrationResult.datasets} datasets for ${hydrationResult.farms} farm(s)`);
+      }
       
       // Seed demo farm data in development
       if (process.env.NODE_ENV !== 'production') {

@@ -64,13 +64,17 @@ router.post('/login', async (req, res) => {
     let user = null;
     let useDatabase = false;
 
-    // Check if database mode is enabled AND tables exist
+    // Check if database mode is enabled AND tables exist with data
     if (req.db) {
       try {
-        // Try to query farm_users table
-        const testQuery = `SELECT 1 FROM farm_users LIMIT 1`;
-        await req.db.query(testQuery);
-        useDatabase = true;
+        // Try to query farm_users table — only use DB mode if there are actual users
+        const testQuery = `SELECT COUNT(*) as cnt FROM farm_users`;
+        const testResult = await req.db.query(testQuery);
+        const userCount = parseInt(testResult.rows[0]?.cnt || '0', 10);
+        useDatabase = userCount > 0;
+        if (!useDatabase) {
+          console.log(`[Auth] farm_users table has ${userCount} rows, using fallback mode`);
+        }
       } catch (error) {
         // Table doesn't exist, use fallback mode
         console.log('[Auth] Database not ready, using fallback mode');
@@ -94,16 +98,16 @@ router.post('/login', async (req, res) => {
           fu.farm_id,
           fu.email,
           fu.password_hash,
-          fu.name,
+          COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
           fu.role,
-          fu.active,
+          CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
           f.name as farm_name,
           f.status as farm_status
         FROM farm_users fu
         JOIN farms f ON fu.farm_id = f.farm_id
         WHERE fu.email = $1
         ${farm_id ? 'AND fu.farm_id = $2' : ''}
-        AND fu.active = true
+        AND fu.status = 'active'
       `;
 
       const params = farm_id ? [normalizedEmail, farm_id] : [normalizedEmail];
