@@ -252,15 +252,6 @@
         <h1>Welcome Back</h1>
         <p class="subtitle">Sign in to access your farm dashboard</p>
         
-        <!-- Demo credentials -->
-        <div style="background: linear-gradient(135deg, #065f46, #047857); border: 1px solid #10b981; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; text-align: left;">
-            <div style="font-size: 13px; font-weight: 600; color: #6ee7b7; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Demo Login Credentials</div>
-            <div style="font-size: 14px; color: #e5e7eb; line-height: 1.8;">
-                <div><strong>Farm ID:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">FARM-TEST-WIZARD-001</code></div>
-                <div><strong>Password:</strong> <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px; font-family: monospace;">Grow123</code></div>
-            </div>
-        </div>
-        
         <!-- New account notice (shown if redirected from purchase) -->
         <div id="newAccountNotice" class="new-account-notice" style="display: none;">
             <strong>🎉 Account Created!</strong>
@@ -286,7 +277,7 @@
             <div class="form-group">
                 <label for="password">Password</label>
                 <input 
-                    type="text" 
+                    type="password" 
                     id="password" 
                     name="password" 
                     placeholder="Enter your password" 
@@ -310,7 +301,9 @@
     <script>
         // Check if already logged in
         if (localStorage.getItem('token')) {
-            window.location.href = '/farm-admin.html';
+            // Cloud users go to farm-admin, edge users go to LE-dashboard
+            const planType = localStorage.getItem('planType') || 'cloud';
+            window.location.href = planType === 'cloud' ? '/LE-dashboard.html' : '/LE-dashboard.html';
         }
         
         // Check if redirected from successful purchase
@@ -319,17 +312,12 @@
             document.getElementById('newAccountNotice').style.display = 'block';
         }
         
-        // Auto-fill demo credentials
-        document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
-        document.getElementById('password').value = 'Grow123';
-        
         async function handleLogin(event) {
             event.preventDefault();
             
             const button = document.getElementById('loginButton');
             const alertDiv = document.getElementById('alertMessage');
             const farmId = document.getElementById('farmId').value.trim();
-            const email = 'shelbygilbert@rogers.com'; // Unified platform — email sent automatically
             const password = document.getElementById('password').value;
             
             // Disable button
@@ -338,13 +326,13 @@
             alertDiv.style.display = 'none';
             
             try {
-                // Call backend authentication API
-                const response = await fetch('/api/auth/login', {
+                // Call backend authentication API (farm login endpoint — matches local Light Engine)
+                const response = await fetch('/api/farm/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ farm_id: farmId, email, password })
+                    body: JSON.stringify({ farmId: farmId, password })
                 });
                 
                 const data = await response.json();
@@ -368,8 +356,8 @@
                 // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('farm_id', data.farm_id || data.farmId); // Use farm_id consistently
-                localStorage.setItem('farm_name', data.farmName || '');
-                localStorage.setItem('email', email);
+                localStorage.setItem('farm_name', data.farmName || data.farm_name || '');
+                localStorage.setItem('email', data.email || '');
                 localStorage.setItem('role', data.role || 'admin');
                 localStorage.setItem('planType', data.planType || 'cloud'); // Store plan type for wizard
                 // Clean up legacy keys
@@ -384,7 +372,7 @@
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    window.location.href = '/farm-admin.html';
+                    window.location.href = '/LE-dashboard.html';
                 }, 1000);
                 
             } catch (error) {

@@ -1911,10 +1911,10 @@ app.post('/api/farm/auth/login', (req, res, next) => {
         status: 'success',
         token: data.token,
         farmId: data.farm_id,
-        farmName: data.name || data.farm_id,
+        farmName: data.farm_name || data.name || data.farm_id,
         email: data.email,
         role: data.role,
-        subscription: data.planType || 'cloud'
+        planType: data.planType || 'cloud'
       });
     }
     return origJson({

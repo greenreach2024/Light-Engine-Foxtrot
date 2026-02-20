@@ -83,34 +83,60 @@ router.post('/login', async (req, res) => {
     }
 
     if (useDatabase) {
-      if (!normalizedEmail) {
+      // Database mode: Query farm_users table
+      // Support login by email OR by farm_id alone (find first admin)
+      let userQuery, params;
+
+      if (normalizedEmail) {
+        // Email provided — look up by email (optionally scoped to farm)
+        userQuery = `
+          SELECT 
+            fu.id,
+            fu.farm_id,
+            fu.email,
+            fu.password_hash,
+            COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
+            fu.role,
+            CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
+            f.name as farm_name,
+            f.status as farm_status
+          FROM farm_users fu
+          JOIN farms f ON fu.farm_id = f.farm_id
+          WHERE fu.email = $1
+          ${farm_id ? 'AND fu.farm_id = $2' : ''}
+          AND fu.status = 'active'
+        `;
+        params = farm_id ? [normalizedEmail, farm_id] : [normalizedEmail];
+      } else if (farm_id) {
+        // No email — find first admin user for this farm (matches local Foxtrot behavior)
+        userQuery = `
+          SELECT 
+            fu.id,
+            fu.farm_id,
+            fu.email,
+            fu.password_hash,
+            COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
+            fu.role,
+            CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
+            f.name as farm_name,
+            f.status as farm_status
+          FROM farm_users fu
+          JOIN farms f ON fu.farm_id = f.farm_id
+          WHERE fu.farm_id = $1
+          AND fu.role = 'admin'
+          AND fu.status = 'active'
+          ORDER BY fu.created_at ASC
+          LIMIT 1
+        `;
+        params = [farm_id];
+      } else {
         return res.status(400).json({
           success: false,
           error: 'Missing credentials',
-          message: 'Email and password are required when database authentication is enabled'
+          message: 'Farm ID and password are required'
         });
       }
 
-      // Database mode: Query farm_users table
-      const userQuery = `
-        SELECT 
-          fu.id,
-          fu.farm_id,
-          fu.email,
-          fu.password_hash,
-          COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
-          fu.role,
-          CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
-          f.name as farm_name,
-          f.status as farm_status
-        FROM farm_users fu
-        JOIN farms f ON fu.farm_id = f.farm_id
-        WHERE fu.email = $1
-        ${farm_id ? 'AND fu.farm_id = $2' : ''}
-        AND fu.status = 'active'
-      `;
-
-      const params = farm_id ? [normalizedEmail, farm_id] : [normalizedEmail];
       const { rows } = await req.db.query(userQuery, params);
 
       if (rows.length === 0) {
@@ -183,6 +209,7 @@ router.post('/login', async (req, res) => {
       success: true,
       token,
       farm_id: user.farm_id,
+      farm_name: user.farm_name || user.farm_id,
       email: user.email,
       name: user.name,
       role: user.role || FARM_ROLES.ADMIN,
