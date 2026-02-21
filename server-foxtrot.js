@@ -17668,12 +17668,7 @@ app.post('/api/ai/record-decision', asyncHandler(async (req, res) => {
 app.get('/api/tray-formats', async (req, res) => {
   try {
     // Query all formats from NeDB
-    const formats = await new Promise((resolve, reject) => {
-      trayFormatsDB.find({}).sort({ isCustom: 1, name: 1 }).exec((err, docs) => {
-        if (err) reject(err);
-        else resolve(docs);
-      });
-    });
+    const formats = await trayFormatsDB.find({}).sort({ isCustom: 1, name: 1 });
     
     // If no formats exist, return default formats
     if (formats.length === 0) {
@@ -17780,12 +17775,7 @@ app.get('/api/tray-formats', async (req, res) => {
       
       // Insert defaults into NeDB for persistence
       for (const format of defaults) {
-        await new Promise((resolve, reject) => {
-          trayFormatsDB.insert(format, (err, doc) => {
-            if (err) reject(err);
-            else resolve(doc);
-          });
-        });
+        await trayFormatsDB.insert(format);
       }
       
       console.log('[tray-formats] Initialized with default formats');
@@ -17844,12 +17834,7 @@ app.post('/api/tray-formats', async (req, res) => {
     }
     
     // Check for duplicate name
-    const existing = await new Promise((resolve, reject) => {
-      trayFormatsDB.findOne({ name }, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const existing = await trayFormatsDB.findOne({ name });
     
     if (existing) {
       return res.status(409).json({ 
@@ -17880,12 +17865,7 @@ app.post('/api/tray-formats', async (req, res) => {
     };
     
     // Insert into NeDB
-    const inserted = await new Promise((resolve, reject) => {
-      trayFormatsDB.insert(format, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const inserted = await trayFormatsDB.insert(format);
     
     console.log(`[tray-formats] Created: ${inserted.trayFormatId}`);
     res.status(201).json(inserted);
@@ -17910,12 +17890,7 @@ app.put('/api/tray-formats/:id', async (req, res) => {
             isWeightBased, targetWeightPerSite, weightUnit } = req.body;
     
     // Find existing format
-    const existing = await new Promise((resolve, reject) => {
-      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const existing = await trayFormatsDB.findOne({ trayFormatId: id });
     
     if (!existing) {
       return res.status(404).json({ error: 'Format not found' });
@@ -17936,14 +17911,9 @@ app.put('/api/tray-formats/:id', async (req, res) => {
     
     if (name !== undefined) {
       // Check for duplicate name (excluding current format)
-      const duplicate = await new Promise((resolve, reject) => {
-        trayFormatsDB.findOne({ 
-          name, 
-          trayFormatId: { $ne: id } 
-        }, (err, doc) => {
-          if (err) reject(err);
-          else resolve(doc);
-        });
+      const duplicate = await trayFormatsDB.findOne({ 
+        name, 
+        trayFormatId: { $ne: id } 
       });
       
       if (duplicate) {
@@ -17977,29 +17947,17 @@ app.put('/api/tray-formats/:id', async (req, res) => {
     }
     
     // Update in NeDB
-    const numUpdated = await new Promise((resolve, reject) => {
-      trayFormatsDB.update(
-        { trayFormatId: id },
-        { $set: updates },
-        {},
-        (err, n) => {
-          if (err) reject(err);
-          else resolve(n);
-        }
-      );
-    });
+    const numUpdated = await trayFormatsDB.update(
+      { trayFormatId: id },
+      { $set: updates }
+    );
     
     if (numUpdated === 0) {
       return res.status(500).json({ error: 'Update operation failed' });
     }
     
     // Fetch updated document
-    const updated = await new Promise((resolve, reject) => {
-      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const updated = await trayFormatsDB.findOne({ trayFormatId: id });
     
     console.log(`[tray-formats] Updated: ${id}`);
     res.json(updated);
@@ -18022,12 +17980,7 @@ app.delete('/api/tray-formats/:id', async (req, res) => {
     const { id } = req.params;
     
     // Find existing format
-    const existing = await new Promise((resolve, reject) => {
-      trayFormatsDB.findOne({ trayFormatId: id }, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const existing = await trayFormatsDB.findOne({ trayFormatId: id });
     
     if (!existing) {
       return res.status(404).json({ error: 'Format not found' });
@@ -18041,12 +17994,7 @@ app.delete('/api/tray-formats/:id', async (req, res) => {
     }
     
     // Check if format is in use by any trays
-    const traysUsingFormat = await new Promise((resolve, reject) => {
-      traysDB.count({ trayFormatId: id }, (err, count) => {
-        if (err) reject(err);
-        else resolve(count);
-      });
-    });
+    const traysUsingFormat = await traysDB.count({ trayFormatId: id });
     
     if (traysUsingFormat > 0) {
       return res.status(409).json({ 
@@ -18057,16 +18005,7 @@ app.delete('/api/tray-formats/:id', async (req, res) => {
     }
     
     // Delete from NeDB
-    const numRemoved = await new Promise((resolve, reject) => {
-      trayFormatsDB.remove(
-        { trayFormatId: id }, 
-        {},
-        (err, n) => {
-          if (err) reject(err);
-          else resolve(n);
-        }
-      );
-    });
+    const numRemoved = await trayFormatsDB.remove({ trayFormatId: id });
     
     if (numRemoved === 0) {
       return res.status(500).json({ error: 'Delete operation failed' });
@@ -18278,12 +18217,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
 
   try {
     // Look up tray run from NeDB
-    const trayRun = await new Promise((resolve, reject) => {
-      trayRunsDB.findOne({ tray_run_id: trayRunId }, (err, doc) => {
-        if (err) reject(err);
-        else resolve(doc);
-      });
-    });
+    const trayRun = await trayRunsDB.findOne({ tray_run_id: trayRunId });
 
     if (!trayRun) {
       return res.status(404).json({ error: 'Tray run not found', tray_run_id: trayRunId });
@@ -18302,25 +18236,21 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     const harvestedCount = trayRun.planted_site_count || trayRun.plantCount || null;
 
     // Update tray run record
-    await new Promise((resolve, reject) => {
-      trayRunsDB.update(
-        { tray_run_id: trayRunId },
-        {
-          $set: {
-            status: 'HARVESTED',
-            harvested_at: now.toISOString(),
-            lot_code: lotCode,
-            actual_weight: weight,
-            weight_unit: 'oz',
-            harvested_count: harvestedCount,
-            harvest_note: note || '',
-            updated_at: now.toISOString()
-          }
-        },
-        {},
-        (err) => { if (err) reject(err); else resolve(); }
-      );
-    });
+    await trayRunsDB.update(
+      { tray_run_id: trayRunId },
+      {
+        $set: {
+          status: 'HARVESTED',
+          harvested_at: now.toISOString(),
+          lot_code: lotCode,
+          actual_weight: weight,
+          weight_unit: 'oz',
+          harvested_count: harvestedCount,
+          harvest_note: note || '',
+          updated_at: now.toISOString()
+        }
+      }
+    );
 
     // Check if this tray should be flagged for weigh-in
     let shouldWeigh = false;
@@ -18336,25 +18266,18 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     let traceRecord = null;
     try {
       // Look up tray for this run
-      const tray = await new Promise((resolve, reject) => {
-        traysDB.findOne({ tray_id: trayRun.tray_id }, (err, doc) => { if (err) reject(err); else resolve(doc); });
-      }).catch(() => null);
+      const tray = await traysDB.findOne({ tray_id: trayRun.tray_id }).catch(() => null);
 
       // Look up format
       let trayFormat = null;
       const formatId = tray?.format_id || tray?.trayFormatId || trayRun.tray_format_id;
       if (formatId) {
-        trayFormat = await new Promise((resolve, reject) => {
-          trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }, (err, doc) => { if (err) reject(err); else resolve(doc); });
-        }).catch(() => null);
+        trayFormat = await trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }).catch(() => null);
       }
 
       // Look up placement (latest)
-      const placement = await new Promise((resolve, reject) => {
-        trayPlacementsDB.find({ tray_id: trayRun.tray_id }).sort({ placed_at: -1 }).limit(1).exec((err, docs) => {
-          if (err) reject(err); else resolve(docs?.[0] || null);
-        });
-      }).catch(() => null);
+      const placements = await trayPlacementsDB.find({ tray_id: trayRun.tray_id }).sort({ placed_at: -1 }).limit(1).catch(() => []);
+      const placement = placements?.[0] || null;
 
       // Calculate grow days
       const seedDate = trayRun.seeded_at || trayRun.created_at;
@@ -18431,10 +18354,11 @@ app.post('/api/trays/register', (req, res) => {
  * POST /api/trays/:trayId/seed
  * Record seeding operation for a tray — creates a tray run with traceability context.
  * seed_source (supplier + lot#) is the ONLY manual traceability input needed.
+ * position (optional) — location QR code for initial placement (e.g. "FARM-RoomA-L5").
  */
 app.post('/api/trays/:trayId/seed', async (req, res) => {
   const { trayId } = req.params;
-  const { recipe, seedDate, plantCount, seed_source, variety } = req.body;
+  const { recipe, seedDate, plantCount, seed_source, variety, position } = req.body;
 
   if (!recipe) {
     return res.status(400).json({ error: 'recipe (crop) is required' });
@@ -18459,12 +18383,26 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       updated_at:         now.toISOString()
     };
 
-    await new Promise((resolve, reject) => {
-      trayRunsDB.insert(trayRun, (err) => { if (err) reject(err); else resolve(); });
-    });
+    await trayRunsDB.insert(trayRun);
+
+    // Create initial placement record if position was provided
+    let placementId = null;
+    if (position) {
+      const placement = {
+        tray_run_id:    trayRunId,
+        tray_id:        trayId,
+        location_qr:    position,
+        placed_at:      now.toISOString(),
+        removed_at:     null,
+        removal_reason: null
+      };
+      const inserted = await trayPlacementsDB.insert(placement);
+      placementId = inserted._id;
+      console.log(`[tray-runs] Placed: ${trayRunId} at ${position}`);
+    }
 
     console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe}${seed_source ? ` source=${seed_source}` : ''}`);
-    res.json({ success: true, tray_run_id: trayRunId, message: 'Seeding recorded' });
+    res.json({ success: true, tray_run_id: trayRunId, placement_id: placementId, message: 'Seeding recorded' });
   } catch (error) {
     console.error('[tray-runs] Seed error:', error);
     res.status(500).json({ error: 'Failed to record seeding' });
@@ -18649,6 +18587,85 @@ app.get('/api/tray-runs/:id/loss-events', async (req, res) => {
   } catch (error) {
     console.error('[inventory] Error fetching loss events:', error);
     res.status(500).json({ error: 'Failed to fetch loss events' });
+  }
+});
+
+/**
+ * POST /api/tray-runs/:id/move
+ * Move a tray to a new position — close current placement, create new one.
+ * Body: { newPosition: "FARM-RoomB-L3", timestamp? }
+ * Called by Activity Hub Quick Move (two-step scan: tray QR → position QR).
+ */
+app.post('/api/tray-runs/:id/move', async (req, res) => {
+  const trayRunId = req.params.id;
+  const { newPosition, timestamp } = req.body;
+
+  if (!newPosition) {
+    return res.status(400).json({ error: 'newPosition is required' });
+  }
+
+  try {
+    // Resolve tray run — could be tray_run_id or tray_id (QR code value)
+    let trayRun = await trayRunsDB.findOne({ tray_run_id: trayRunId });
+    if (!trayRun) {
+      // Try by tray_id (user scanned the tray QR, not the run ID)
+      const runs = await trayRunsDB.find({ tray_id: trayRunId, status: 'GROWING' });
+      if (runs.length > 0) {
+        // Pick the most recent active run
+        runs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        trayRun = runs[0];
+      }
+    }
+
+    if (!trayRun) {
+      return res.status(404).json({ error: 'Tray run not found', tray_run_id: trayRunId });
+    }
+
+    const now = new Date(timestamp || Date.now()).toISOString();
+    const actualRunId = trayRun.tray_run_id;
+    const trayId = trayRun.tray_id;
+
+    // Close any active placement(s) for this tray run
+    const closedCount = await trayPlacementsDB.update(
+      { tray_run_id: actualRunId, removed_at: null },
+      { $set: { removed_at: now, removal_reason: 'MOVED' } },
+      { multi: true }
+    );
+
+    // Also close active placements by tray_id (belt-and-suspenders)
+    if (closedCount === 0 && trayId) {
+      await trayPlacementsDB.update(
+        { tray_id: trayId, removed_at: null },
+        { $set: { removed_at: now, removal_reason: 'MOVED' } },
+        { multi: true }
+      );
+    }
+
+    // Create new placement at the target position
+    const newPlacement = {
+      tray_run_id:    actualRunId,
+      tray_id:        trayId,
+      location_qr:    newPosition,
+      placed_at:      now,
+      removed_at:     null,
+      removal_reason: null
+    };
+    const inserted = await trayPlacementsDB.insert(newPlacement);
+
+    console.log(`[tray-runs] Moved: ${actualRunId} (tray=${trayId}) → ${newPosition} (closed ${closedCount} prior placement(s))`);
+
+    res.json({
+      success: true,
+      tray_run_id: actualRunId,
+      tray_id: trayId,
+      new_position: newPosition,
+      placement_id: inserted._id,
+      prior_placements_closed: closedCount,
+      message: `Tray moved to ${newPosition}`
+    });
+  } catch (error) {
+    console.error('[tray-runs] Move error:', error);
+    res.status(500).json({ error: 'Failed to move tray', details: error.message });
   }
 });
 
