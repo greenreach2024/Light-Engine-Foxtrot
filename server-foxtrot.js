@@ -17448,6 +17448,50 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
     cropsToConsider = [...primaryCrops, ...explorationCrops];
   }
 
+  // --- Build demandData from wholesale order history ---
+  let demandData = null;
+  try {
+    const wholesale = await getWholesaleIntegration();
+    const allOrders = [];
+    const completedStatuses = ['completed', 'picked_up', 'payment_captured'];
+    for (const orderId of wholesale.state.allOrders || []) {
+      const order = await wholesale.getOrder(orderId);
+      if (order && completedStatuses.includes(order.status)) {
+        allOrders.push(order);
+      }
+    }
+    // Last 60 days
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 60);
+    const recent = allOrders.filter(o => new Date(o.created_at || o.order_date) >= cutoff);
+
+    if (recent.length > 0) {
+      demandData = {};
+      for (const order of recent) {
+        for (const item of order.items || []) {
+          const name = (item.product_name || item.crop_name || '').toLowerCase();
+          if (!name) continue;
+          if (!demandData[name]) demandData[name] = { totalQty: 0, orderCount: 0, trend: 'stable' };
+          demandData[name].totalQty += item.quantity || 0;
+          demandData[name].orderCount += 1;
+        }
+        if (order.sub_orders) {
+          for (const sub of order.sub_orders) {
+            for (const item of sub.items || []) {
+              const name = (item.product_name || item.crop_name || '').toLowerCase();
+              if (!name) continue;
+              if (!demandData[name]) demandData[name] = { totalQty: 0, orderCount: 0, trend: 'stable' };
+              demandData[name].totalQty += item.quantity || 0;
+              demandData[name].orderCount += 1;
+            }
+          }
+        }
+      }
+    }
+  } catch (demandErr) {
+    console.warn('[planting] Could not load wholesale demand data:', demandErr.message);
+  }
+
   // Generate recommendations
   const recommendations = await generateCropRecommendations({
     groupId,
@@ -17455,7 +17499,8 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
     availableCrops: cropsToConsider,
     targetSeedDate: targetSeedDate ? new Date(targetSeedDate) : new Date(),
     currentInventory,
-    zoneConditions
+    zoneConditions,
+    demandData
   });
 
   // Tag exploration crops in the results
@@ -18991,28 +19036,9 @@ app.get('/api/farm/info', (req, res) => {
   });
 });
 
-// Production planning routes (proxy to FastAPI backend)
-const PLANNING_BACKEND_URL = process.env.PLANNING_BACKEND_URL
-  || process.env.PY_BACKEND_URL
-  || 'http://127.0.0.1:8000';
-
-app.use('/api/planning', proxyCorsMiddleware, createProxyMiddleware({
-  target: PLANNING_BACKEND_URL,
-  changeOrigin: true,
-  xfwd: true,
-  logLevel: 'debug',
-  timeout: 5000,
-  proxyTimeout: 5000,
-  pathRewrite: (path) => `/api/planning${path}`,
-  onProxyReq(proxyReq, req) {
-    console.log(`[→] ${req.method} ${req.originalUrl} -> ${PLANNING_BACKEND_URL}/api/planning${req.url}`);
-  },
-  onError(err, req, res) {
-    console.warn('[proxy:/api/planning] error:', err?.message || err);
-    res.statusCode = 502;
-    res.end(JSON.stringify({ error: 'proxy_error', target: 'planning-backend', detail: String(err) }));
-  }
-}));
+// Production planning FastAPI proxy REMOVED — Production Planning consolidated into Planting Scheduler.
+// Market intelligence routes (/api/planning/demand-forecast, /capacity, /recommendations) live in
+// greenreach-central/routes/planning.js and are served by Central, not Foxtrot.
 
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {

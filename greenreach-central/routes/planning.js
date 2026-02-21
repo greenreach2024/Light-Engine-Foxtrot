@@ -133,7 +133,6 @@ router.get('/recommendations', async (req, res) => {
       } catch (dbError) {
         logger.warn('[Planning] Database query failed, using empty assignments:', dbError.message);
       }
-      currentAssignments = result.rows || [];
     }
     
     // Generate recommendations based on market opportunities + farm diversity
@@ -185,49 +184,7 @@ router.get('/recommendations', async (req, res) => {
   }
 });
 
-// Get list of production plans
-router.get('/plans/list', async (req, res) => {
-  const status = req.query.status; // 'active', 'completed', etc.
-  res.json({
-    success: true,
-    data: {
-      plans: [],
-      status: status || 'all'
-    }
-  });
-});
-
-// Create a new production plan
-router.post('/plans', async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      planId: `PLAN-${Date.now()}`,
-      message: 'Production plan created (stub)'
-    }
-  });
-});
-
-// Update a production plan
-router.put('/plans/:id', async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      planId: req.params.id,
-      message: 'Production plan updated (stub)'
-    }
-  });
-});
-
-// Delete a production plan
-router.delete('/plans/:id', async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      planId: req.params.id,
-      message: 'Production plan deleted (stub)'
-    }
-  });
-});
+// Production plan CRUD stubs removed — Production Planning UI consolidated into Planting Scheduler.
+// Useful routes kept: /capacity, /demand-forecast, /recommendations
 
 export default router;

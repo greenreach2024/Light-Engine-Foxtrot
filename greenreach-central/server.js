@@ -1413,10 +1413,6 @@ app.get('/api/traceability/sfcr-export', async (req, res) => {
   } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
 
-app.get('/api/planning/recommendations', (_req, res) => {
-  return res.json({ ok: true, recommendations: [] });
-});
-
 app.get('/api/sustainability/esg-report', (_req, res) => {
   return res.json({
     ok: true,

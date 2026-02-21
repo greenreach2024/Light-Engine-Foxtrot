@@ -1240,6 +1240,13 @@
         <div class="value" id="lightAdjustmentsCount">0</div>
         <div class="subvalue">For new seedlings</div>
       </div>
+
+      <div class="summary-card" style="border-left: 3px solid #10b981;">
+        <div class="icon"></div>
+        <div class="label">Market Demand</div>
+        <div class="value" id="demandForecastTotal">--</div>
+        <div class="subvalue" id="demandForecastTrend">Loading forecast...</div>
+      </div>
     </div>
 
     <!-- Upcoming Seeding Timeline -->
@@ -2054,6 +2061,7 @@
 
         // Render UI
         renderSummaryCards();
+        loadDemandKPI(); // Fetch market demand forecast for summary card
         renderSeedingTimeline();
         renderTrayForecast();
         renderLightAdjustments();
@@ -2321,8 +2329,8 @@
      * - Caching: 1-hour TTL, regenerate on inventory changes
      * 
      * TODO: Assign to Architecture Agent for ML system design
-     * TODO: Integrate with wholesale demand forecasting
-     * TODO: Create recommendation scoring algorithm
+     * DONE: Integrate with wholesale demand forecasting (demand KPI card + scoreDemandVelocity)
+     * DONE: Create recommendation scoring algorithm (lib/crop-recommendation-engine.js)
      * 
      * For now: Simple fallback - recommend same crop (continuity planning)
      */
@@ -2667,6 +2675,45 @@
       
       document.getElementById('lightAdjustmentsCount').textContent = 
         state.lightAdjustments.length;
+    }
+
+    /**
+     * Load market demand forecast from /api/planning/demand-forecast
+     * and populate the Market Demand summary card.
+     */
+    async function loadDemandKPI() {
+      try {
+        const res = await fetch('/api/planning/demand-forecast?horizon=MONTHLY');
+        if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+        const data = await res.json();
+
+        const el = document.getElementById('demandForecastTotal');
+        const sub = document.getElementById('demandForecastTrend');
+        if (!el || !sub) return;
+
+        if (data.success && data.data && data.data.forecast && data.data.forecast.length > 0) {
+          const totalDemand = data.data.totalDemand || 
+            data.data.forecast.reduce((s, f) => s + (f.projectedDemand || 0), 0);
+          el.textContent = totalDemand + ' units';
+
+          // Count trends
+          const inc = data.data.forecast.filter(f => f.trend === 'increasing').length;
+          const dec = data.data.forecast.filter(f => f.trend === 'decreasing').length;
+          const parts = [];
+          if (inc) parts.push(inc + ' rising');
+          if (dec) parts.push(dec + ' falling');
+          sub.textContent = parts.length ? parts.join(', ') : 'Stable demand';
+        } else {
+          el.textContent = '--';
+          sub.textContent = 'No forecast data';
+        }
+      } catch (err) {
+        console.warn('[Scheduler] Demand KPI unavailable:', err.message);
+        const el = document.getElementById('demandForecastTotal');
+        const sub = document.getElementById('demandForecastTrend');
+        if (el) el.textContent = '--';
+        if (sub) sub.textContent = 'Unavailable';
+      }
     }
 
     function renderSeedingTimeline() {
