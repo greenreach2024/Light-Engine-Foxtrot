@@ -10,7 +10,7 @@
   const PUBLIC_PAGES = [
     '/',
     '/index.html',
-    '/index.charlie.html',
+    '/LE-farm-admin.html',
     '/farm-sales-shop.html',  // Customer-facing online store
     '/health',                // System health check
     '/healthz'                // Simple health check

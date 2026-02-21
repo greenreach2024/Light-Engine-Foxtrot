@@ -455,9 +455,7 @@ const APP_VERSION = (process.env.APP_VERSION
   || process.env.VERSION
   || `build-${BUILD_TIME}`)
   .toString();
-const INDEX_CHARLIE_PATH = path.join(PUBLIC_DIR, 'index.charlie.html');
-let INDEX_CHARLIE_HTML = null;
-let indexCharlieLoadErrorLogged = false;
+// index.charlie.html REMOVED — consolidated into LE-farm-admin.html
 
 // Demo data helper so /data/*.json can fall back even if demo middleware is skipped
 function loadDemoFarmSnapshot() {
@@ -647,26 +645,7 @@ let __envDirty = false;
 let __zoneBindingsSnapshot = { bindings: [], meta: { source: 'init', bindings: 0, updatedAt: null } };
 let __zoneBindingsTimer = null;
 
-function loadIndexCharlieHtml() {
-  // Always reload in production to ensure latest version is served after deployments
-  const shouldCache = process.env.NODE_ENV === 'development' && INDEX_CHARLIE_HTML;
-  if (shouldCache) return INDEX_CHARLIE_HTML;
-  
-  try {
-    const template = fs.readFileSync(INDEX_CHARLIE_PATH, 'utf8');
-    const html = template.replace(/\{\{BUILD_TIME\}\}/g, BUILD_TIME);
-    if (process.env.NODE_ENV === 'development') {
-      INDEX_CHARLIE_HTML = html; // Only cache in development
-    }
-    return html;
-  } catch (error) {
-    if (!indexCharlieLoadErrorLogged) {
-      indexCharlieLoadErrorLogged = true;
-      console.error('[charlie] Failed to load index.charlie.html:', error?.message || error);
-    }
-    return null;
-  }
-}
+// loadIndexCharlieHtml REMOVED — page consolidated into LE-farm-admin.html
 
 // --- CORS Security: Whitelist-based origin validation ---
 // This middleware runs on ALL requests and enforces CORS policy
@@ -19232,50 +19211,29 @@ if (!isControllerDisabled) {
 }
 
 // Dev-only live asset snapshots for cache validation
+// Legacy Charlie home page removed — redirect to admin for backwards compat
 app.get('/tmp/live.index.html', (req, res) => {
-  const html = loadIndexCharlieHtml();
-  if (html) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.type('html').send(html);
-    return;
-  }
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.type('html').sendFile(path.join(__dirname, 'public', 'index.charlie.html'));
+  res.redirect(302, '/LE-farm-admin.html');
 });
 
 app.get('/tmp/live.app.charlie.js', (req, res) => {
   res.type('text').sendFile(path.join(__dirname, 'public', 'app.charlie.js'));
 });
 
-// Static files - serve NEW dashboard as homepage
+// Homepage — redirect to admin page (the single hub for all features)
 app.get('/', (req, res) => {
   const queryIndex = req.originalUrl.indexOf('?');
   const queryString = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
-  res.redirect(302, `/LE-dashboard.html${queryString}`);
+  res.redirect(302, `/LE-farm-admin.html${queryString}`);
 });
 
-// Keep old Charlie menu accessible but not as default
-app.get('/index.charlie.html', (req, res, next) => {
-  const html = loadIndexCharlieHtml();
-  if (!html) return next();
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.type('html').send(html);
+// Legacy routes — redirect to admin for bookmarks/links that still reference old pages
+app.get('/index.charlie.html', (req, res) => {
+  res.redirect(302, '/LE-farm-admin.html');
 });
 
-// Route legacy /index.html to the live Charlie dashboard to prevent UI divergence
-app.get('/index.html', (req, res, next) => {
-  const html = loadIndexCharlieHtml();
-  if (!html) return next();
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.type('html').send(html);
+app.get('/index.html', (req, res) => {
+  res.redirect(302, '/LE-farm-admin.html');
 });
 
 // Explicit demo data routes to avoid 404s if static middleware wins

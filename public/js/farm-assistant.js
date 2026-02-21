@@ -105,7 +105,7 @@ class FarmAssistant {
 
         if (!button.__leHomeBound) {
           button.addEventListener('click', () => {
-            window.location.href = '/index.charlie.html';
+            window.location.href = '/LE-farm-admin.html';
           });
           button.__leHomeBound = true;
         }
