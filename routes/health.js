@@ -274,7 +274,7 @@ router.post('/ai-recommendations', async (req, res) => {
       });
     }
     
-    const { recommendations, farm_id, generated_at } = req.body;
+    const { recommendations, farm_id, generated_at, network_intelligence } = req.body;
     
     if (!recommendations || !Array.isArray(recommendations)) {
       return res.status(400).json({
@@ -283,7 +283,7 @@ router.post('/ai-recommendations', async (req, res) => {
       });
     }
     
-    // Store recommendations
+    // Store recommendations + network intelligence (Phase 1 Task 1.9)
     const data = {
       farm_id,
       generated_at: generated_at || new Date().toISOString(),
@@ -291,12 +291,15 @@ router.post('/ai-recommendations', async (req, res) => {
       recommendations: recommendations.map(rec => ({
         ...rec,
         timestamp: rec.timestamp || new Date().toISOString()
-      }))
+      })),
+      // Network intelligence: crop benchmarks, demand signals, risk alerts
+      network_intelligence: network_intelligence || null
     };
     
     await fs.writeFile(AI_RECOMMENDATIONS_PATH, JSON.stringify(data, null, 2));
     
-    console.log('[Health API] ✓ Received', recommendations.length, 'AI recommendations from Central');
+    const niKeys = network_intelligence ? Object.keys(network_intelligence.crop_benchmarks || {}).length : 0;
+    console.log(`[Health API] ✓ Received ${recommendations.length} AI recommendations + ${niKeys} crop benchmarks from Central`);
     
     res.json({
       ok: true,

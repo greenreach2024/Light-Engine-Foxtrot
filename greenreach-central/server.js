@@ -43,6 +43,7 @@ import cropPricingRoutes from './routes/crop-pricing.js';
 import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
 import farmSalesRouter from './routes/farm-sales.js';
 import networkGrowersRouter from './routes/network-growers.js';
+import experimentRecordsRouter, { startBenchmarkScheduler } from './routes/experiment-records.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
@@ -2202,6 +2203,7 @@ app.use('/api/user', authMiddleware, userRouter);            // /api/user/change
 app.use('/api/auth', deviceTokenRouter);                     // /api/auth/generate-device-token
 app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
 app.use('/api', networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
+app.use('/api', experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
 app.use('/api/wholesale', wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
 app.use('/api/wholesale/exports', wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
@@ -2372,6 +2374,7 @@ async function startServer() {
       startHealthCheckService(app);
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
+      startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
 
       // Grant wizard (enabled by default)
       if (seedGrantPrograms) {

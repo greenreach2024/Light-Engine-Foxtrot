@@ -248,6 +248,51 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_planting_status ON planting_assignments(status);
   `);
 
+  // ─── AI Vision Phase 1: Experiment Records & Crop Benchmarks ───────
+  // Stores per-harvest experiment records from all farms (Rule 3.1, Task 1.7)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS experiment_records (
+      id SERIAL PRIMARY KEY,
+      farm_id VARCHAR(255) NOT NULL,
+      crop VARCHAR(255) NOT NULL,
+      recipe_id VARCHAR(255),
+      grow_days INTEGER,
+      planned_grow_days INTEGER,
+      recipe_params_avg JSONB,
+      environment_achieved_avg JSONB,
+      outcomes JSONB NOT NULL,
+      farm_context JSONB,
+      recorded_at TIMESTAMP NOT NULL,
+      ingested_at TIMESTAMP DEFAULT NOW(),
+      FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_experiment_farm_id ON experiment_records(farm_id);
+    CREATE INDEX IF NOT EXISTS idx_experiment_crop ON experiment_records(crop);
+    CREATE INDEX IF NOT EXISTS idx_experiment_recorded_at ON experiment_records(recorded_at);
+  `);
+
+  // Nightly crop benchmark aggregations (Task 1.8)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS crop_benchmarks (
+      id SERIAL PRIMARY KEY,
+      crop VARCHAR(255) NOT NULL UNIQUE,
+      farm_count INTEGER DEFAULT 0,
+      harvest_count INTEGER DEFAULT 0,
+      avg_weight_per_plant_oz DECIMAL(8,3),
+      min_weight_per_plant_oz DECIMAL(8,3),
+      max_weight_per_plant_oz DECIMAL(8,3),
+      avg_grow_days DECIMAL(5,1),
+      avg_loss_rate DECIMAL(5,3),
+      avg_temp_c DECIMAL(5,1),
+      avg_humidity_pct DECIMAL(5,1),
+      avg_ppfd DECIMAL(6,1),
+      computed_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_benchmark_crop ON crop_benchmarks(crop);
+  `);
+
   // Create products table for inventory sync
   await client.query(`
     CREATE TABLE IF NOT EXISTS products (

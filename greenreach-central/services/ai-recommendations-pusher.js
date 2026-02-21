@@ -7,6 +7,7 @@
 import OpenAI from 'openai';
 import { query } from '../config/database.js';
 import fetch from 'node-fetch';
+import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
 
 let openai = null;
 try {
@@ -128,7 +129,7 @@ async function analyzeFarm(farm) {
 /**
  * Push recommendations to farm server
  */
-async function pushToFarm(farm, recommendations) {
+async function pushToFarm(farm, recommendations, networkIntelligence) {
   if (!farm.url) {
     console.log(`[AI Pusher] No URL for farm ${farm.farm_id}`);
     return false;
@@ -137,7 +138,9 @@ async function pushToFarm(farm, recommendations) {
   const payload = {
     farm_id: farm.farm_id,
     generated_at: new Date().toISOString(),
-    recommendations: recommendations
+    recommendations: recommendations,
+    // Phase 1 Task 1.9 — Central-first intelligence channel (Rule 7.2)
+    network_intelligence: networkIntelligence || null
   };
 
   try {
@@ -193,6 +196,23 @@ export async function analyzeAndPushToAllFarms() {
     let analyzed = 0;
     let pushed = 0;
 
+    // Build network intelligence payload (Task 1.9 — Rule 7.2)
+    let networkIntelligence = null;
+    try {
+      const cropBenchmarks = await getCropBenchmarksForPush();
+      if (Object.keys(cropBenchmarks).length > 0) {
+        networkIntelligence = {
+          crop_benchmarks: cropBenchmarks,
+          demand_signals: {},       // Phase 2 placeholder
+          risk_alerts: [],          // Phase 2 placeholder
+          generated_at: new Date().toISOString()
+        };
+        console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);
+      }
+    } catch (benchErr) {
+      console.warn('[AI Pusher] Failed to load crop benchmarks:', benchErr.message);
+    }
+
     for (const farm of farms) {
       console.log(`[AI Pusher] Analyzing ${farm.name} (${farm.farm_id})...`);
       
@@ -200,7 +220,7 @@ export async function analyzeAndPushToAllFarms() {
       
       if (recommendations && recommendations.length > 0) {
         analyzed++;
-        const success = await pushToFarm(farm, recommendations);
+        const success = await pushToFarm(farm, recommendations, networkIntelligence);
         if (success) pushed++;
         
         // Small delay between farms

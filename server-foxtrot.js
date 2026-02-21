@@ -4771,6 +4771,50 @@ async function runDailyPlanResolver(trigger = 'manual') {
     envState.planResolver = { lastRunAt: startedAt.toISOString(), trigger, groups: results };
     envState.updatedAt = startedAt.toISOString();
     writeEnv(envState);
+
+    // ─── AI Vision Phase 1 (Task 1.1): Persist applied recipe params per group.
+    // Each daily run logs the recipe + environment targets so future ML models
+    // can correlate inputs → outcomes across grow cycles. (Rule 1.2, Rule 9.1 P0)
+    const resolvedDate = startedAt.toISOString().slice(0, 10);
+    for (const r of results) {
+      if (!r.groupId) continue;
+      try {
+        // Upsert: one record per group per day
+        const existing = await appliedRecipesDB.findOne({
+          groupId: r.groupId, date: resolvedDate
+        });
+        const doc = {
+          groupId: r.groupId,
+          groupName: r.groupName || null,
+          room: r.room || null,
+          date: resolvedDate,
+          planKey: r.planKey || null,
+          planName: r.planName || null,
+          day: r.day,
+          stage: r.stage || null,
+          targetPpfd: r.targetPpfd ?? null,
+          photoperiodHours: r.photoperiodHours ?? null,
+          dli: r.dli ?? null,
+          env: r.env || {},
+          nutrients: r.nutrients || null,
+          devices: (r.devices || []).map(d => ({
+            deviceId: d.deviceId,
+            mix: d.mix || null,
+          })),
+        };
+        if (existing) {
+          await appliedRecipesDB.update({ _id: existing._id }, { $set: doc });
+        } else {
+          await appliedRecipesDB.insert(doc);
+        }
+      } catch (recErr) {
+        console.warn(`[daily] Failed to persist recipe for ${r.groupId}:`, recErr?.message);
+      }
+    }
+    if (results.length) {
+      console.log(`[daily] Persisted applied recipes for ${results.length} group(s) on ${resolvedDate}`);
+    }
+
     console.log(`[daily] resolved ${results.length} group(s) in ${Date.now() - startedMs}ms (trigger: ${trigger})`);
     return results;
   } catch (error) {
@@ -9897,11 +9941,355 @@ app.get('/api/harvest', (req, res) => {
   }
 });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// AI Vision Phase 1 — Experiment Record System (Tasks 1.2, 1.3, 1.4)
+// Every harvest generates one experiment record per Rule 3.1.
+// Records are stored locally in harvestOutcomesDB and POSTed to Central.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 /**
- * Harvest Prediction Endpoints (Stub)
- * Returns empty predictions until AI backend service is available at port 8000
- * TODO: Remove these stubs once AI service is deployed
+ * Helper: Build experiment record from harvest context.
+ * Aggregates applied recipe params over the grow cycle from appliedRecipesDB.
  */
+async function buildExperimentRecord(opts) {
+  const {
+    groupId, crop, recipe_id, grow_days, planned_grow_days,
+    weight_per_plant_oz, quality_score, loss_rate, loss_count,
+    tray_format, system_type, zone, room, planted_site_count,
+    total_weight_oz, energy_kwh_per_kg
+  } = opts;
+
+  // Load farm context from farm.json
+  let farmContext = {};
+  try {
+    const farmData = JSON.parse(fs.readFileSync(FARM_PATH, 'utf-8'));
+    const now = new Date();
+    const month = now.getMonth(); // 0-11
+    const season = month <= 1 || month === 11 ? 'winter' :
+                   month <= 4 ? 'spring' :
+                   month <= 7 ? 'summer' : 'fall';
+    farmContext = {
+      farm_id: farmData.farmId || process.env.FARM_ID || 'unknown',
+      region: farmData.region || farmData.state || '',
+      altitude_m: farmData.coordinates?.altitude_m || null,
+      season,
+      system_type: system_type || 'nft',
+      tray_format: tray_format || '',
+      fixture_hours: null // TODO: track cumulative LED hours per fixture
+    };
+  } catch (e) {
+    farmContext = { farm_id: process.env.FARM_ID || 'unknown', region: '', season: '', system_type: system_type || '' };
+  }
+
+  // Aggregate applied recipe params over grow cycle for this group
+  let recipe_params_avg = { ppfd: null, blue_pct: null, red_pct: null, green_pct: null, far_red_pct: null, temp_c: null, humidity_pct: null, ec: null, ph: null };
+  try {
+    const appliedRecords = await appliedRecipesDB.find({ groupId });
+    if (appliedRecords.length > 0) {
+      const sums = { ppfd: 0, temp: 0, rh: 0, n: 0 };
+      for (const rec of appliedRecords) {
+        if (rec.targetPpfd != null) sums.ppfd += rec.targetPpfd;
+        if (rec.env?.tempC != null) sums.temp += rec.env.tempC;
+        if (rec.env?.rh != null) sums.rh += rec.env.rh;
+        sums.n++;
+      }
+      if (sums.n > 0) {
+        recipe_params_avg.ppfd = +(sums.ppfd / sums.n).toFixed(1);
+        recipe_params_avg.temp_c = +(sums.temp / sums.n).toFixed(1);
+        recipe_params_avg.humidity_pct = +(sums.rh / sums.n).toFixed(1);
+      }
+      // Try to get spectrum from most recent device mix
+      const lastWithDevices = appliedRecords.reverse().find(r => r.devices?.length > 0 && r.devices[0].mix);
+      if (lastWithDevices?.devices?.[0]?.mix) {
+        const mix = lastWithDevices.devices[0].mix;
+        const total = (mix.bl || 0) + (mix.rd || 0) + (mix.cw || 0) + (mix.ww || 0);
+        if (total > 0) {
+          recipe_params_avg.blue_pct = +((mix.bl || 0) / total * 100).toFixed(1);
+          recipe_params_avg.red_pct = +((mix.rd || 0) / total * 100).toFixed(1);
+        }
+      }
+    }
+  } catch (e) {
+    // If no applied recipes found, leave as nulls — still a valid record
+  }
+
+  // Get current environment snapshot
+  let environment_achieved_avg = { temp_c: null, humidity_pct: null, co2_ppm: null, vpd_kpa: null, ppfd_actual: null };
+  try {
+    const envState = readEnv();
+    if (envState.zones && room) {
+      const zoneData = Object.values(envState.zones || {}).find(z =>
+        z.room === room || z.zone_name === zone || z.name === zone
+      );
+      if (zoneData?.sensors?.[0]?.readings) {
+        const r = zoneData.sensors[0].readings;
+        environment_achieved_avg.temp_c = r.temperature_c ?? null;
+        environment_achieved_avg.humidity_pct = r.humidity ?? null;
+        environment_achieved_avg.co2_ppm = r.co2 ?? null;
+      }
+    }
+  } catch (e) { /* env snapshot is best-effort */ }
+
+  return {
+    farm_id: farmContext.farm_id,
+    crop: (crop || '').toLowerCase().replace(/\s+/g, '-'),
+    recipe_id: recipe_id || null,
+    grow_days: grow_days != null ? parseInt(grow_days) : null,
+    planned_grow_days: planned_grow_days != null ? parseInt(planned_grow_days) : null,
+    recipe_params_avg,
+    environment_achieved_avg,
+    outcomes: {
+      weight_per_plant_oz: weight_per_plant_oz != null ? +parseFloat(weight_per_plant_oz).toFixed(3) : null,
+      quality_score: quality_score != null ? parseInt(quality_score) : null,
+      loss_rate: loss_rate != null ? +parseFloat(loss_rate).toFixed(3) : null,
+      energy_kwh_per_kg: energy_kwh_per_kg != null ? +parseFloat(energy_kwh_per_kg).toFixed(1) : null,
+    },
+    farm_context: farmContext,
+    recorded_at: new Date().toISOString()
+  };
+}
+
+/**
+ * POST /api/harvest/experiment-record
+ * Record a harvest experiment outcome. Stores locally + POSTs to Central.
+ * Body: { groupId, crop, recipe_id, grow_days, planned_grow_days,
+ *         weight_per_plant_oz, quality_score, loss_rate, loss_count,
+ *         tray_format, system_type, zone, room, planted_site_count,
+ *         total_weight_oz, energy_kwh_per_kg }
+ */
+app.post('/api/harvest/experiment-record', async (req, res) => {
+  try {
+    const record = await buildExperimentRecord(req.body);
+
+    // Persist locally (Rule 9.2: persist, don't discard)
+    const inserted = await harvestOutcomesDB.insert(record);
+    console.log(`[experiment] ✓ Recorded experiment for ${record.crop} (${record.farm_id}) — ${record.outcomes.weight_per_plant_oz} oz/plant`);
+
+    // POST to Central (Task 1.3: sync experiment records up)
+    syncExperimentToCenter(record).catch(e =>
+      console.warn('[experiment] Central sync deferred:', e?.message)
+    );
+
+    res.json({
+      ok: true,
+      experiment_id: inserted._id,
+      record
+    });
+  } catch (error) {
+    console.error('[experiment] Error recording experiment:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/harvest/experiment-records
+ * Query experiment records for analytics/training.
+ * ?crop=genovese-basil  ?since=2025-01-01  ?limit=100
+ */
+app.get('/api/harvest/experiment-records', async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.crop) filter.crop = req.query.crop;
+    if (req.query.since) filter.recorded_at = { $gte: req.query.since };
+
+    const limit = parseInt(req.query.limit) || 500;
+    const records = await harvestOutcomesDB.find(filter).sort({ recorded_at: -1 }).limit(limit);
+
+    res.json({
+      ok: true,
+      total: records.length,
+      records
+    });
+  } catch (error) {
+    console.error('[experiment] Error querying records:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST experiment record to GreenReach Central (Task 1.3)
+ * Uses existing Central URL from farm.json or env var.
+ */
+async function syncExperimentToCenter(record) {
+  const centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL;
+  if (!centralUrl) return; // No Central configured — farm-only mode
+
+  try {
+    const farmData = JSON.parse(fs.readFileSync(FARM_PATH, 'utf-8'));
+    const apiKey = process.env.CENTRAL_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+    const response = await axios.post(`${centralUrl}/api/sync/experiment-records`, {
+      farm_id: record.farm_id,
+      records: [record]
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+        'X-Farm-ID': record.farm_id
+      },
+      timeout: 10000
+    });
+
+    if (response.status === 200 || response.status === 201) {
+      console.log(`[experiment] ✓ Synced experiment to Central for ${record.crop}`);
+    }
+  } catch (err) {
+    console.warn(`[experiment] Central sync failed (will retry on next harvest):`, err?.message);
+  }
+}
+
+/**
+ * GET /api/harvest/experiment-stats
+ * Per-crop experiment statistics for dashboard display (Task 1.6)
+ */
+app.get('/api/harvest/experiment-stats', async (req, res) => {
+  try {
+    const records = await harvestOutcomesDB.find({});
+    const byCrop = {};
+
+    for (const r of records) {
+      if (!r.crop) continue;
+      if (!byCrop[r.crop]) {
+        byCrop[r.crop] = { crop: r.crop, count: 0, totalWeight: 0, totalGrowDays: 0, totalLoss: 0, weights: [] };
+      }
+      const b = byCrop[r.crop];
+      b.count++;
+      if (r.outcomes?.weight_per_plant_oz != null) {
+        b.totalWeight += r.outcomes.weight_per_plant_oz;
+        b.weights.push(r.outcomes.weight_per_plant_oz);
+      }
+      if (r.grow_days != null) b.totalGrowDays += r.grow_days;
+      if (r.outcomes?.loss_rate != null) b.totalLoss += r.outcomes.loss_rate;
+    }
+
+    const stats = Object.values(byCrop).map(b => ({
+      crop: b.crop,
+      harvest_count: b.count,
+      avg_weight_per_plant_oz: b.count > 0 ? +(b.totalWeight / b.count).toFixed(3) : null,
+      avg_grow_days: b.count > 0 ? +(b.totalGrowDays / b.count).toFixed(1) : null,
+      avg_loss_rate: b.count > 0 ? +(b.totalLoss / b.count).toFixed(3) : null,
+      min_weight: b.weights.length > 0 ? +Math.min(...b.weights).toFixed(3) : null,
+      max_weight: b.weights.length > 0 ? +Math.max(...b.weights).toFixed(3) : null,
+    }));
+
+    res.json({ ok: true, crops: stats, total_experiments: records.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/ai/training-data
+ * Comprehensive training data export API (Rule 9.3, Task 1.10)
+ * ?type=harvest_outcomes|recipe_applications|loss_events|environment_series
+ * ?format=json|csv  ?since=2025-01-01  ?crop=genovese-basil
+ */
+app.get('/api/ai/training-data', async (req, res) => {
+  try {
+    const type = req.query.type || 'harvest_outcomes';
+    const since = req.query.since;
+    const crop = req.query.crop;
+    const format = req.query.format || 'json';
+    const limit = parseInt(req.query.limit) || 5000;
+
+    let data = [];
+    let columns = [];
+
+    if (type === 'harvest_outcomes') {
+      const filter = {};
+      if (crop) filter.crop = crop;
+      if (since) filter.recorded_at = { $gte: since };
+      data = await harvestOutcomesDB.find(filter).sort({ recorded_at: -1 }).limit(limit);
+      columns = ['farm_id', 'crop', 'recipe_id', 'grow_days', 'planned_grow_days',
+        'ppfd_avg', 'blue_pct', 'red_pct', 'temp_c_target', 'humidity_pct_target',
+        'temp_c_actual', 'humidity_pct_actual', 'co2_ppm',
+        'weight_per_plant_oz', 'quality_score', 'loss_rate', 'energy_kwh_per_kg',
+        'season', 'system_type', 'recorded_at'];
+
+      if (format === 'csv') {
+        const rows = data.map(r => [
+          r.farm_id, r.crop, r.recipe_id, r.grow_days, r.planned_grow_days,
+          r.recipe_params_avg?.ppfd, r.recipe_params_avg?.blue_pct, r.recipe_params_avg?.red_pct,
+          r.recipe_params_avg?.temp_c, r.recipe_params_avg?.humidity_pct,
+          r.environment_achieved_avg?.temp_c, r.environment_achieved_avg?.humidity_pct,
+          r.environment_achieved_avg?.co2_ppm,
+          r.outcomes?.weight_per_plant_oz, r.outcomes?.quality_score, r.outcomes?.loss_rate,
+          r.outcomes?.energy_kwh_per_kg, r.farm_context?.season, r.farm_context?.system_type,
+          r.recorded_at
+        ].join(','));
+        res.setHeader('Content-Type', 'text/csv');
+        return res.send([columns.join(','), ...rows].join('\n'));
+      }
+
+    } else if (type === 'recipe_applications') {
+      const filter = {};
+      if (since) filter.date = { $gte: since };
+      data = await appliedRecipesDB.find(filter).sort({ date: -1 }).limit(limit);
+      columns = ['groupId', 'date', 'planKey', 'day', 'stage', 'targetPpfd', 'photoperiodHours', 'dli', 'tempC', 'rh'];
+
+    } else if (type === 'loss_events') {
+      const filter = {};
+      if (since) filter.created_at = { $gte: since };
+      data = await trayLossEventsDB.find(filter).sort({ created_at: -1 }).limit(limit);
+      columns = ['tray_run_id', 'crop_name', 'loss_reason', 'lost_quantity', 'created_at',
+        'env_temp_c', 'env_humidity_pct', 'env_co2_ppm'];
+    }
+
+    res.json({
+      ok: true,
+      schema_version: '2.0',
+      export_type: type,
+      export_date: new Date().toISOString(),
+      total_records: data.length,
+      columns,
+      data
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/ai/learning-correlations
+ * Surface existing correlation data from the in-memory cache (Task 1.6).
+ * Stops hiding correlations in JSONL log files — makes them API-accessible.
+ */
+app.get('/api/ai/learning-correlations', (req, res) => {
+  const correlations = {};
+  for (const [roomId, entry] of learningCorrelationCache.entries()) {
+    correlations[roomId] = entry;
+  }
+  res.json({
+    ok: true,
+    rooms: correlations,
+    count: learningCorrelationCache.size,
+    description: 'Active learning correlations: ppfdBlue (PPFD↔Blue), tempRh (Temp↔RH), dutyEnergy (Duty↔Energy). Coefficient near ±1 = strong correlation.'
+  });
+});
+
+/**
+ * GET /api/ai/network-intelligence
+ * Return latest network intelligence received from Central (if any).
+ * Farms consume Central's pushed benchmarks + demand signals here.
+ */
+app.get('/api/ai/network-intelligence', (req, res) => {
+  try {
+    const recsPath = path.join(process.cwd(), 'data', 'ai-recommendations.json');
+    if (fs.existsSync(recsPath)) {
+      const data = JSON.parse(fs.readFileSync(recsPath, 'utf-8'));
+      return res.json({
+        ok: true,
+        network_intelligence: data.network_intelligence || null,
+        recommendations: data.recommendations || [],
+        received_at: data.received_at || null
+      });
+    }
+    res.json({ ok: true, network_intelligence: null, recommendations: [], received_at: null });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/harvest/predict/:groupId', (req, res) => {
   console.log(`[Harvest Predictions] Stub endpoint called for group: ${req.params.groupId}`);
   res.json({ 
@@ -18617,6 +19005,55 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
       notes: notes || '',
       created_at: new Date().toISOString()
     };
+
+    // ─── AI Vision Phase 1 (Task 1.4): Capture environment snapshot ───
+    // Correlate loss with environment 24h prior (Rule 1.2: outcomes → inputs)
+    try {
+      const envState = readEnv();
+      const trayPlacement = await trayPlacementsDB.findOne({
+        tray_run_id: trayRunId, removed_at: null
+      });
+      const lossRoom = trayPlacement?.room || trayRun.room || null;
+      const lossZone = trayPlacement?.zone || trayRun.zone || null;
+
+      // Get current environment from env.json zones
+      if (envState.zones && (lossRoom || lossZone)) {
+        const zoneData = Object.values(envState.zones || {}).find(z =>
+          z.room === lossRoom || z.zone_name === lossZone || z.name === lossZone
+        );
+        if (zoneData?.sensors?.[0]?.readings) {
+          const r = zoneData.sensors[0].readings;
+          lossEvent.environment_snapshot = {
+            temp_c: r.temperature_c ?? null,
+            humidity_pct: r.humidity ?? null,
+            co2_ppm: r.co2 ?? null,
+            pressure_hpa: r.pressure_hpa ?? null,
+            room: lossRoom,
+            zone: lossZone,
+            snapshot_at: new Date().toISOString()
+          };
+        }
+      }
+
+      // Also capture plan resolver targets for the group (what SHOULD conditions be)
+      if (envState.planResolver?.groups) {
+        const groupForTray = envState.planResolver.groups.find(g =>
+          g.room === lossRoom || g.groupName === lossRoom
+        );
+        if (groupForTray) {
+          lossEvent.expected_conditions = {
+            tempC: groupForTray.env?.tempC ?? null,
+            rh: groupForTray.env?.rh ?? null,
+            ppfd: groupForTray.targetPpfd ?? null,
+            planDay: groupForTray.day ?? null,
+            stage: groupForTray.stage ?? null
+          };
+        }
+      }
+    } catch (envErr) {
+      // Environment snapshot is best-effort — don't fail the loss record
+      console.warn('[inventory] Environment snapshot for loss failed:', envErr?.message);
+    }
     
     const insertedEvent = await trayLossEventsDB.insert(lossEvent);
     
@@ -23340,6 +23777,21 @@ const trayFormatsDB = Datastore.create({
 
 const trayPlacementsDB = Datastore.create({
   filename: './data/tray-placements.db',
+  autoload: true,
+  timestampData: true
+});
+
+// ─── AI Vision Phase 1: Experiment Data Stores ─────────────────────────
+// P0: Recipe parameters applied per group per day (Rule 9.1, Task 1.1)
+const appliedRecipesDB = Datastore.create({
+  filename: './data/applied-recipes.db',
+  autoload: true,
+  timestampData: true
+});
+
+// P0: Complete harvest outcome "experiment record" (Rule 3.1, Task 1.2)
+const harvestOutcomesDB = Datastore.create({
+  filename: './data/harvest-outcomes.db',
   autoload: true,
   timestampData: true
 });

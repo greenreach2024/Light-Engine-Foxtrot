@@ -17,6 +17,20 @@ This framework defines:
 3. **Workflow-Centric UI** - Design by task, not entity
 4. **Multi-Agent Review** - Propose → Validate → Strategic Review before implementing
 5. **Zero Data Format Violations** - Use adapters, never modify source formats
+6. **Central-First Intelligence** - GreenReach Central is the mother ship, active from Phase 1
+
+## 🧠 AI Vision Rules & Skills (REQUIRED for AI/ML work)
+
+**ALL agents working on AI/ML features, feedback loops, network intelligence, or workflow automation MUST read `.github/AI_VISION_RULES_AND_SKILLS.md` before any work.**
+
+This document codifies the `AI_VISION_REPORT.md` into enforceable rules:
+- Central-First Architecture (dual-track Farm + Central implementation)
+- Experiment Record Standard (canonical schema for harvest outcomes)
+- 5 Feedback Loops (Recipe→Yield, Environment→Loss, Spectrum→Quality, Timing→Efficiency, Demand→Production)
+- Recipe Modifier bounds and revert-on-regression safety
+- Phase Gate rules (Phase 1 before Phase 2, etc.)
+- 52 prioritized AI opportunities across 5 phases
+- Automatic rejection criteria for non-compliant AI proposals
 
 **Before ANY code change:**
 - [ ] Read relevant framework sections
