@@ -213,7 +213,7 @@ import emailRouter from './server/routes/email-routes.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
 import qualityControlRouter from './routes/quality-control.js';
 import aiVisionRouter from './routes/ai-vision.js';
-import cropWeightReconciliationRouter from './routes/crop-weight-reconciliation.js';
+import cropWeightReconciliationRouter, { getCropBenchmark, hasCropBenchmark } from './routes/crop-weight-reconciliation.js';
 import traceabilityRouter, { createTraceRecord, linkCustomerToTrace, updateTraceStatus } from './routes/traceability.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
 import farmStoreSetupRouter from './routes/farm-store-setup.js';
@@ -18131,12 +18131,21 @@ app.get('/api/trays', async (req, res) => {
         daysSinceSeeding = Math.floor((now - seededDate) / (1000 * 60 * 60 * 24));
       }
       
-      // Calculate forecasted yield
+      // Calculate forecasted yield — progressive weight refinement:
+      // Priority 1: Tray run's target_weight_oz (crop-specific from benchmark or format)
+      // Priority 2: Format-level targetWeightPerSite (generic fallback)
+      // Priority 3: Count-based estimate (non-weight-based trays)
       let forecastedYield = null;
       if (format?.plant_site_count) {
-        if (format.is_weight_based && format.target_weight_per_site) {
+        const plantSites = currentRun?.planted_site_count || format.plant_site_count;
+        if (currentRun?.target_weight_oz) {
+          // Use the target weight assigned at seeding (benchmark or format-level)
+          const totalWeight = plantSites * currentRun.target_weight_oz;
+          const source = currentRun.target_weight_source === 'benchmark' ? '✓' : '~';
+          forecastedYield = `${totalWeight.toFixed(1)} ${format.weight_unit || 'oz'} ${source}`;
+        } else if (format.is_weight_based && format.target_weight_per_site) {
           const totalWeight = format.plant_site_count * format.target_weight_per_site;
-          forecastedYield = `${totalWeight.toFixed(1)} ${format.weight_unit || 'oz'}`;
+          forecastedYield = `${totalWeight.toFixed(1)} ${format.weight_unit || 'oz'} ~`;
         } else {
           const successRate = 0.9; // 90% success rate
           forecastedYield = `${Math.floor(format.plant_site_count * successRate)} heads`;
@@ -18255,9 +18264,16 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
     const lotCode = `A1-${cropName}-${dateStr}-${batchSuffix}`;
     const batchId = `B-${dateStr}-${batchSuffix}`;
 
-    // Parse weight
-    const weight = parseFloat(actualWeight) || null;
-    const harvestedCount = trayRun.planted_site_count || trayRun.plantCount || null;
+    // Parse weight — use explicit value if given, otherwise use target weight from seeding
+    const explicitWeight = parseFloat(actualWeight) || null;
+    const plantSites = trayRun.planted_site_count || trayRun.plantCount || null;
+    let weight = explicitWeight;
+    let weightSource = explicitWeight ? 'manual' : null;
+    if (!weight && trayRun.target_weight_oz && plantSites) {
+      weight = +(trayRun.target_weight_oz * plantSites).toFixed(2);
+      weightSource = trayRun.target_weight_source || 'target';
+    }
+    const harvestedCount = plantSites;
 
     // Update tray run record
     await trayRunsDB.update(
@@ -18276,10 +18292,16 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       }
     );
 
-    // Check if this tray should be flagged for weigh-in
+    // ── Crop-driven reconciliation: prioritize unverified crops ──────────
+    // Crops without verified benchmark data get higher weigh-in chance (80%)
+    // Crops with verified data get standard sampling rate (20%)
     let shouldWeigh = false;
     try {
-      const weighRatio = parseFloat(process.env.WEIGH_IN_RATIO) || 0.33;
+      const cropKey = trayRun.recipe_id || trayRun.crop;
+      const hasVerifiedWeight = hasCropBenchmark(cropKey);
+      const weighRatio = hasVerifiedWeight
+        ? (parseFloat(process.env.WEIGH_IN_RATIO_VERIFIED) || 0.20)   // verified: 1-in-5
+        : (parseFloat(process.env.WEIGH_IN_RATIO_UNVERIFIED) || 0.80); // unverified: 4-in-5
       shouldWeigh = Math.random() < weighRatio;
     } catch (_) {}
 
@@ -18392,6 +18414,31 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     const now = new Date(seedDate || Date.now());
     const trayRunId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+    // ── Determine target weight (progressive refinement) ──────────────────
+    // Priority 1: Verified crop benchmark from reconciliation weigh-ins
+    // Priority 2: Format-level targetWeightPerSite (generic fallback)
+    let targetWeightOz = null;
+    let targetWeightSource = null;
+
+    const cropBenchmark = getCropBenchmark(recipe);
+    if (cropBenchmark && cropBenchmark.verified) {
+      targetWeightOz = cropBenchmark.avg_weight_per_plant_oz;
+      targetWeightSource = 'benchmark';
+    } else {
+      // Fall back to tray format weight
+      const tray = await traysDB.findOne({ tray_id: trayId }).catch(() => null);
+      if (tray) {
+        const formatId = tray.format_id || tray.trayFormatId || tray.tray_format_id;
+        if (formatId) {
+          const format = await trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }).catch(() => null);
+          if (format && format.is_weight_based && format.target_weight_per_site) {
+            targetWeightOz = format.target_weight_per_site;
+            targetWeightSource = 'format';
+          }
+        }
+      }
+    }
+
     const trayRun = {
       tray_run_id:        trayRunId,
       tray_id:            trayId,
@@ -18402,6 +18449,8 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       planted_site_count: parseInt(plantCount) || null,
       plantCount:         parseInt(plantCount) || null,
       seed_source:        seed_source || null,   // "Johnny's Seeds / Lot 2026-A-42"
+      target_weight_oz:   targetWeightOz,        // per-plant target (benchmark or format fallback)
+      target_weight_source: targetWeightSource,   // 'benchmark' | 'format' | null
       status:             'GROWING',
       created_at:         now.toISOString(),
       updated_at:         now.toISOString()
@@ -18425,8 +18474,15 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       console.log(`[tray-runs] Placed: ${trayRunId} at ${position}`);
     }
 
-    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe}${seed_source ? ` source=${seed_source}` : ''}`);
-    res.json({ success: true, tray_run_id: trayRunId, placement_id: placementId, message: 'Seeding recorded' });
+    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}`);
+    res.json({
+      success: true,
+      tray_run_id: trayRunId,
+      placement_id: placementId,
+      target_weight_oz: targetWeightOz,
+      target_weight_source: targetWeightSource,
+      message: 'Seeding recorded'
+    });
   } catch (error) {
     console.error('[tray-runs] Seed error:', error);
     res.status(500).json({ error: 'Failed to record seeding' });

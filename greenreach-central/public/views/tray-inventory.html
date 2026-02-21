@@ -1429,7 +1429,7 @@
             <input type="checkbox" id="batchModeCheckbox" onchange="toggleBatchMode()" style="width: 24px; height: 24px; margin-right: 1rem; cursor: pointer;">
             <div>
               <div style="font-weight: 700; font-size: 1.2rem; color: #60a5fa; margin-bottom: 0.25rem;">Batch Harvest Mode</div>
-              <div style="font-size: 0.95rem; color: #94a3b8;">Scan multiple trays of the same crop, then set weight for all at once</div>
+              <div style="font-size: 0.95rem; color: #94a3b8;">Scan multiple trays, then harvest all at once</div>
             </div>
           </label>
         </div>
@@ -1453,7 +1453,7 @@
         <!-- Batch Harvest Actions -->
         <div id="batchActions" style="display: none; margin-top: 1rem; gap: 1rem; display: none;">
           <button class="button button-secondary" onclick="scanAnotherTray()">Scan Another Tray</button>
-          <button class="button button-primary" onclick="processBatchHarvest()">Set Weight & Harvest All</button>
+          <button class="button button-primary" onclick="processBatchHarvest()">Harvest All</button>
         </div>
       </div>
     </div>
@@ -4206,8 +4206,8 @@
         return;
       }
 
-      const weight = prompt(`Enter harvest weight (kg) for ALL ${batchHarvestTrays.length} trays:`, '1.5');
-      if (!weight) return;
+      // No weight prompt — target weight was assigned at seeding
+      const weight = null;
 
       // Show loading
       const scanResult = document.getElementById('scanResult');
@@ -4661,7 +4661,6 @@
         const harvestData = {
           trayRunId: trayRunId,
           harvestedAt: new Date().toISOString(),
-          actualWeight: prompt('Enter harvest weight (kg):', '1.5') || '1.5',
           note: 'Harvested via Activity Hub scan'
         };
         

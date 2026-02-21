@@ -31,11 +31,15 @@ function generateWeighInId() {
 
 /**
  * Decide if a tray should be flagged for weigh-in during harvest.
- * Default: 1-in-3 trays (configurable via WEIGH_IN_RATIO env var).
- * Returns true if this tray should be weighed.
+ * Crops without verified benchmarks: 80% chance (configurable).
+ * Crops with verified benchmarks: 20% chance (maintenance sampling).
+ * @param {string} cropKey - recipe_id or crop name
  */
-function shouldWeighTray() {
-  const ratio = parseFloat(process.env.WEIGH_IN_RATIO) || 0.33;
+function shouldWeighTray(cropKey) {
+  const hasVerified = hasCropBenchmark(cropKey);
+  const ratio = hasVerified
+    ? (parseFloat(process.env.WEIGH_IN_RATIO_VERIFIED) || 0.20)
+    : (parseFloat(process.env.WEIGH_IN_RATIO_UNVERIFIED) || 0.80);
   return Math.random() < ratio;
 }
 
@@ -89,13 +93,18 @@ function updateBenchmark(record) {
  * Returns: { shouldWeigh: bool, reason: string }
  */
 router.get('/should-weigh', (req, res) => {
-  const { tray_run_id } = req.query;
-  const weigh = shouldWeighTray();
+  const { tray_run_id, crop_name, recipe_id } = req.query;
+  const cropKey = recipe_id || crop_name || null;
+  const weigh = shouldWeighTray(cropKey);
+  const hasVerified = cropKey ? hasCropBenchmark(cropKey) : false;
   res.json({
     shouldWeigh: weigh,
     tray_run_id,
+    has_verified_weight: hasVerified,
     reason: weigh
-      ? 'This tray has been randomly selected for a full weigh-in to help build accurate yield data.'
+      ? (hasVerified
+          ? 'Routine sampling to keep weight data accurate for this crop.'
+          : 'This crop needs verified weight data — please weigh the full harvest.')
       : 'No weigh-in required for this tray.'
   });
 });
@@ -447,3 +456,41 @@ try {
 }
 
 export default router;
+
+/**
+ * Look up the verified benchmark weight for a crop/recipe.
+ * Returns { avg_weight_per_plant_oz, avg_weight_per_tray_oz, sample_count } or null.
+ */
+export function getCropBenchmark(cropKey) {
+  if (!cropKey) return null;
+  const key = cropKey.toLowerCase().trim();
+  // Try exact match first, then case-insensitive scan
+  const bm = cropWeightBenchmarks[cropKey] || cropWeightBenchmarks[key]
+    || Object.values(cropWeightBenchmarks).find(b =>
+      (b.recipe_id || '').toLowerCase() === key ||
+      (b.crop_name || '').toLowerCase() === key
+    );
+  if (!bm || bm.samples.length === 0) return null;
+  return {
+    avg_weight_per_plant_oz: bm.avg_weight_per_plant_oz,
+    avg_weight_per_tray_oz: bm.avg_weight_per_tray_oz,
+    sample_count: bm.samples.length,
+    verified: bm.samples.length >= 1
+  };
+}
+
+/**
+ * Check whether a crop has verified weight data from reconciliation.
+ */
+export function hasCropBenchmark(cropKey) {
+  return getCropBenchmark(cropKey) !== null;
+}
+
+/**
+ * Get all crop keys that have verified benchmarks.
+ */
+export function getVerifiedCrops() {
+  return Object.keys(cropWeightBenchmarks).filter(k =>
+    cropWeightBenchmarks[k].samples.length > 0
+  );
+}

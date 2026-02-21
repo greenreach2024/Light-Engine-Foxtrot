@@ -1429,7 +1429,7 @@
             <input type="checkbox" id="batchModeCheckbox" onchange="toggleBatchMode()" style="width: 24px; height: 24px; margin-right: 1rem; cursor: pointer;">
             <div>
               <div style="font-weight: 700; font-size: 1.2rem; color: #60a5fa; margin-bottom: 0.25rem;">Batch Harvest Mode</div>
-              <div style="font-size: 0.95rem; color: #94a3b8;">Scan multiple trays of the same crop, then set weight for all at once</div>
+              <div style="font-size: 0.95rem; color: #94a3b8;">Scan multiple trays, then harvest all at once</div>
             </div>
           </label>
         </div>
@@ -1453,7 +1453,7 @@
         <!-- Batch Harvest Actions -->
         <div id="batchActions" style="display: none; margin-top: 1rem; gap: 1rem; display: none;">
           <button class="button button-secondary" onclick="scanAnotherTray()">Scan Another Tray</button>
-          <button class="button button-primary" onclick="processBatchHarvest()">Set Weight & Harvest All</button>
+          <button class="button button-primary" onclick="processBatchHarvest()">Harvest All</button>
         </div>
       </div>
     </div>
@@ -4206,7 +4206,8 @@
         return;
       }
 
-      const weight = prompt(`Enter approximate harvest weight (oz) per tray (${batchHarvestTrays.length} trays):`, '');
+      // No weight prompt — target weight was assigned at seeding
+      const weight = null;
 
       // Show loading
       const scanResult = document.getElementById('scanResult');
@@ -4766,12 +4767,21 @@
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Seeding failed');
 
+        // Show target weight info if assigned
+        const weightInfo = data.target_weight_oz
+          ? `<div style="color: #60a5fa; font-size: 0.9rem; margin-top: 0.5rem;">
+               ⚖️ Target: ${data.target_weight_oz} oz/plant
+               (${data.target_weight_source === 'benchmark' ? 'verified from weigh-ins' : 'from tray format'})
+             </div>`
+          : '';
+
         const scanResult = document.getElementById('scanResult');
         scanResult.innerHTML = \`
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981;">✓</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin: 0.5rem 0;">Seeding Recorded</div>
             <div style="color: #cbd5e1;">\${crop}\${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
+            ${weightInfo}
             <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.5rem;">
               Traceability will auto-track from here through harvest and delivery.
             </div>
@@ -4794,13 +4804,11 @@
         scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Recording harvest...</div>';
         scanResult.style.display = 'block';
         
-        // Quick weight input (optional — detailed weigh-in may follow)
-        const quickWeight = prompt('Enter approximate harvest weight (oz):', '');
-
+        // No manual weight prompt — target weight was assigned at seeding
+        // and will be used server-side if no explicit weight is provided
         const harvestData = {
           trayRunId: trayRunId,
           harvestedAt: new Date().toISOString(),
-          actualWeight: quickWeight || null,
           note: 'Harvested via Activity Hub scan'
         };
         
@@ -4926,7 +4934,7 @@
             Weigh-In Required
           </div>
           <div style="font-size: 1rem; color: #94a3b8; margin-bottom: 1.5rem; line-height: 1.5;">
-            This tray has been randomly selected for a <strong style="color: #e2e8f0;">full weigh-in</strong>.<br>
+            This crop needs verified weight data to improve future forecasts.<br>
             Please weigh the <strong style="color: #e2e8f0;">entire cut crop</strong> from this tray<br>
             and enter the total weight below.
           </div>
