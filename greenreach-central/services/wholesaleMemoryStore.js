@@ -756,3 +756,70 @@ function safeJsonParse(value) {
     return null;
   }
 }
+
+/**
+ * Phase 2 Task 2.8: Analyze wholesale demand patterns by crop.
+ * Returns a map of crop name → { network_total_qty, network_order_count, network_trend }
+ * Compares last 30 days to prior 30 days for trend computation.
+ * Used by AI pusher to populate demand_signals in network intelligence.
+ */
+export async function analyzeDemandPatterns() {
+  const allOrders = await listAllOrders();
+  const now = new Date();
+  const cutoff60 = new Date(now); cutoff60.setDate(cutoff60.getDate() - 60);
+  const cutoff30 = new Date(now); cutoff30.setDate(cutoff30.getDate() - 30);
+
+  const completedStatuses = new Set(['completed', 'picked_up', 'payment_captured', 'confirmed', 'delivered']);
+  const recent = allOrders.filter(o => {
+    const s = (o.status || '').toLowerCase();
+    const d = new Date(o.created_at || o.order_date || 0);
+    return completedStatuses.has(s) && d >= cutoff60;
+  });
+
+  const demand = {};
+
+  const processItem = (item, orderDate) => {
+    const name = (item.product_name || item.crop_name || item.name || '').toLowerCase().trim();
+    if (!name) return;
+    if (!demand[name]) demand[name] = { network_total_qty: 0, network_order_count: 0, recent30: 0, prior30: 0, network_trend: 'stable' };
+    const qty = item.quantity || item.qty || 1;
+    demand[name].network_total_qty += qty;
+    demand[name].network_order_count += 1;
+    if (orderDate >= cutoff30) {
+      demand[name].recent30 += qty;
+    } else {
+      demand[name].prior30 += qty;
+    }
+  };
+
+  for (const order of recent) {
+    const orderDate = new Date(order.created_at || order.order_date || 0);
+    for (const item of order.items || []) {
+      processItem(item, orderDate);
+    }
+    if (order.sub_orders || order.farm_sub_orders) {
+      for (const sub of (order.sub_orders || order.farm_sub_orders || [])) {
+        for (const item of sub.items || []) {
+          processItem(item, orderDate);
+        }
+      }
+    }
+  }
+
+  // Compute trend from 30-day comparison
+  for (const [, data] of Object.entries(demand)) {
+    if (data.prior30 === 0 && data.recent30 > 0) data.network_trend = 'increasing';
+    else if (data.prior30 > 0 && data.recent30 === 0) data.network_trend = 'decreasing';
+    else if (data.prior30 > 0) {
+      const ratio = data.recent30 / data.prior30;
+      if (ratio >= 1.25) data.network_trend = 'increasing';
+      else if (ratio <= 0.75) data.network_trend = 'decreasing';
+      else data.network_trend = 'stable';
+    }
+    // Clean up internal fields
+    delete data.recent30;
+    delete data.prior30;
+  }
+
+  return demand;
+}

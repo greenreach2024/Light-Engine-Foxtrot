@@ -1439,8 +1439,20 @@ function derivePlanRuntime(plan) {
   const spectrum = firstDay?.mix ? { ...firstDay.mix } : (plan.spectrum && typeof plan.spectrum === 'object' ? { ...plan.spectrum } : null);
   const ppfd = toNumberOrNull(firstNonEmpty(plan?.ppfd, firstDay?.ppfd));
   const photoperiodRaw = firstNonEmpty(plan?.photoperiod, firstDay?.photoperiod, plan?.defaults?.photoperiod);
-  const photoperiodHours = readPhotoperiodHours(photoperiodRaw);
+  let photoperiodHours = readPhotoperiodHours(photoperiodRaw);
+  let photoperiodSource = photoperiodHours != null ? 'recipe' : null;
   const dliProvided = toNumberOrNull(plan?.dli);
+
+  // -- Phase 2 Task 2.5: Auto-derive photoperiod from DLI + PPFD ----------
+  // When recipe specifies DLI target and PPFD but omits photoperiod,
+  // compute: hours = DLI * 1e6 / (PPFD * 3600), clamped to [4, 24].
+  if (photoperiodHours == null && dliProvided != null && ppfd != null && ppfd > 0) {
+    const derived = (dliProvided * 1e6) / (ppfd * 3600);
+    photoperiodHours = Math.min(24, Math.max(4, +derived.toFixed(1)));
+    photoperiodSource = 'auto_dli';
+    console.log(`[plan-runtime] Auto-derived photoperiod ${photoperiodHours}h from DLI=${dliProvided}, PPFD=${ppfd}`);
+  }
+
   const dli = dliProvided != null
     ? dliProvided
     : (ppfd != null && photoperiodHours != null ? (ppfd * 3600 * photoperiodHours) / 1e6 : null);
@@ -1466,6 +1478,7 @@ function derivePlanRuntime(plan) {
     ppfd,
     photoperiod: photoperiodRaw,
     photoperiodHours,
+    photoperiodSource,
     dli,
     notes,
     appliesTo,
@@ -10290,6 +10303,121 @@ app.get('/api/ai/network-intelligence', (req, res) => {
   }
 });
 
+/**
+ * GET /api/ai/suggested-crop
+ * Phase 2 Task 2.2: AI pre-fill crop recommendation for seeding dialog.
+ * Called by Activity Hub when grower opens the seeding screen.
+ * Query params: groupId (optional), zoneId (optional)
+ *
+ * Returns the top-scored crop + confidence so the UI can pre-fill the crop dropdown.
+ * Grower can always override — this just saves time on the most common choice.
+ */
+app.get('/api/ai/suggested-crop', asyncHandler(async (req, res) => {
+  const { groupId, zoneId } = req.query;
+
+  try {
+    // 1. Build zone conditions from group or zone
+    let zoneConditions = {};
+    let currentCrop = null;
+    const groupsPath = path.join(PUBLIC_DIR, 'data', 'groups.json');
+    let groups = [];
+
+    if (fs.existsSync(groupsPath)) {
+      const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+      groups = groupsData.groups || (Array.isArray(groupsData) ? groupsData : []);
+    }
+
+    if (groupId) {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        currentCrop = group.plan || group.crop || null;
+        zoneConditions = {
+          ec: group.planConfig?.ec || 1.5,
+          ph: group.planConfig?.ph || 5.8,
+          vpd: group.planConfig?.vpd || 1.0,
+          dli_capacity: group.planConfig?.dli || 22
+        };
+      }
+    }
+
+    // 2. Get all available crops from lighting recipes
+    const recipesPath = path.join(PUBLIC_DIR, 'data', 'lighting-recipes.json');
+    let availableCrops = [];
+    if (fs.existsSync(recipesPath)) {
+      const recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+      availableCrops = Object.keys(recipes.crops || {})
+        .map(name => `crop-${name.toLowerCase().replace(/\\s+/g, '-')}`);
+    }
+
+    if (availableCrops.length === 0) {
+      return res.json({ ok: true, suggestion: null, reason: 'No crops configured' });
+    }
+
+    // 3. Build current inventory
+    const now = new Date();
+    const currentInventory = groups.map(g => {
+      const seedDate = g.planConfig?.anchor?.seedDate ? new Date(g.planConfig.anchor.seedDate) : now;
+      const harvestDate = new Date(seedDate); harvestDate.setDate(harvestDate.getDate() + 35);
+      return { groupId: g.id, crop: g.plan || g.crop, expectedHarvest: harvestDate.toISOString() };
+    });
+
+    // 4. Build demand data (lightweight — from stored wholesale + network)
+    let demandData = null;
+    try {
+      const aiRecsPath = path.join(PUBLIC_DIR, 'data', 'ai-recommendations.json');
+      if (fs.existsSync(aiRecsPath)) {
+        const aiRecs = JSON.parse(fs.readFileSync(aiRecsPath, 'utf8'));
+        const nd = aiRecs?.network_intelligence?.demand_signals;
+        if (nd && Object.keys(nd).length > 0) {
+          demandData = {};
+          for (const [crop, sig] of Object.entries(nd)) {
+            demandData[crop.toLowerCase()] = {
+              totalQty: sig.network_total_qty || 0,
+              orderCount: sig.network_order_count || 0,
+              trend: sig.network_trend || 'stable'
+            };
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 5. Generate recommendation
+    const recommendations = await generateCropRecommendations({
+      groupId: groupId || 'default',
+      currentCrop,
+      availableCrops,
+      targetSeedDate: now,
+      currentInventory,
+      zoneConditions,
+      demandData
+    });
+
+    const top = recommendations.topRecommendation;
+    res.json({
+      ok: true,
+      suggestion: top ? {
+        cropId: top.cropId,
+        cropName: top.cropName,
+        confidence: top.confidence,
+        scores: top.scores,
+        expectedHarvestDate: top.expectedHarvestDate,
+        durationDays: top.durationDays
+      } : null,
+      alternatives: (recommendations.alternatives || []).slice(0, 2).map(a => ({
+        cropId: a.cropId,
+        cropName: a.cropName,
+        confidence: a.confidence
+      })),
+      reason: top
+        ? `Best match for zone conditions (${Math.round(top.confidence * 100)}% confidence)`
+        : 'No scored crops available'
+    });
+  } catch (error) {
+    console.error('[ai] Suggested crop error:', error);
+    res.json({ ok: true, suggestion: null, reason: error.message });
+  }
+}));
+
 app.get('/api/harvest/predict/:groupId', (req, res) => {
   console.log(`[Harvest Predictions] Stub endpoint called for group: ${req.params.groupId}`);
   res.json({ 
@@ -17816,6 +17944,7 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
   }
 
   // --- Build demandData from wholesale order history ---
+  // Phase 2 Task 2.2: Real trend computation (compare last 30d vs prior 30d)
   let demandData = null;
   try {
     const wholesale = await getWholesaleIntegration();
@@ -17827,33 +17956,82 @@ app.post('/api/planting/recommendations', asyncHandler(async (req, res) => {
         allOrders.push(order);
       }
     }
-    // Last 60 days
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 60);
-    const recent = allOrders.filter(o => new Date(o.created_at || o.order_date) >= cutoff);
+    // Last 60 days split into two 30-day windows for trend
+    const now60 = new Date();
+    const cutoff60 = new Date(now60); cutoff60.setDate(cutoff60.getDate() - 60);
+    const cutoff30 = new Date(now60); cutoff30.setDate(cutoff30.getDate() - 30);
+    const recent = allOrders.filter(o => new Date(o.created_at || o.order_date) >= cutoff60);
 
     if (recent.length > 0) {
       demandData = {};
-      for (const order of recent) {
-        for (const item of order.items || []) {
+      const extractItems = (items) => {
+        for (const item of items || []) {
           const name = (item.product_name || item.crop_name || '').toLowerCase();
           if (!name) continue;
-          if (!demandData[name]) demandData[name] = { totalQty: 0, orderCount: 0, trend: 'stable' };
+          if (!demandData[name]) demandData[name] = { totalQty: 0, orderCount: 0, trend: 'stable', recent30: 0, prior30: 0 };
           demandData[name].totalQty += item.quantity || 0;
           demandData[name].orderCount += 1;
+          const orderDate = new Date(item.order_date || item.created_at || now60);
+          if (orderDate >= cutoff30) {
+            demandData[name].recent30 += item.quantity || 0;
+          } else {
+            demandData[name].prior30 += item.quantity || 0;
+          }
         }
+      };
+
+      for (const order of recent) {
+        extractItems(order.items);
         if (order.sub_orders) {
           for (const sub of order.sub_orders) {
-            for (const item of sub.items || []) {
-              const name = (item.product_name || item.crop_name || '').toLowerCase();
-              if (!name) continue;
-              if (!demandData[name]) demandData[name] = { totalQty: 0, orderCount: 0, trend: 'stable' };
-              demandData[name].totalQty += item.quantity || 0;
-              demandData[name].orderCount += 1;
+            extractItems(sub.items?.map(i => ({ ...i, order_date: order.created_at || order.order_date })));
+          }
+        }
+      }
+      // Compute real trend from 30-day comparison
+      for (const [, data] of Object.entries(demandData)) {
+        if (data.prior30 === 0 && data.recent30 > 0) data.trend = 'increasing';
+        else if (data.prior30 > 0 && data.recent30 === 0) data.trend = 'decreasing';
+        else if (data.prior30 > 0) {
+          const ratio = data.recent30 / data.prior30;
+          if (ratio >= 1.25) data.trend = 'increasing';
+          else if (ratio <= 0.75) data.trend = 'decreasing';
+          else data.trend = 'stable';
+        }
+      }
+    }
+
+    // Phase 2 Task 2.2: Merge network demand signals from Central
+    try {
+      const aiRecsPath = path.join(PUBLIC_DIR, 'data', 'ai-recommendations.json');
+      if (fs.existsSync(aiRecsPath)) {
+        const aiRecs = JSON.parse(fs.readFileSync(aiRecsPath, 'utf8'));
+        const networkDemand = aiRecs?.network_intelligence?.demand_signals;
+        if (networkDemand && typeof networkDemand === 'object') {
+          if (!demandData) demandData = {};
+          for (const [crop, signal] of Object.entries(networkDemand)) {
+            const key = crop.toLowerCase();
+            if (!demandData[key]) {
+              demandData[key] = {
+                totalQty: signal.network_total_qty || 0,
+                orderCount: signal.network_order_count || 0,
+                trend: signal.network_trend || 'stable',
+                recent30: 0, prior30: 0,
+                source: 'network'
+              };
+            } else {
+              // Blend network signal as 30% weight on top of local
+              demandData[key].totalQty += Math.round((signal.network_total_qty || 0) * 0.3);
+              demandData[key].orderCount += Math.round((signal.network_order_count || 0) * 0.3);
+              if (signal.network_trend === 'increasing' && demandData[key].trend !== 'increasing') {
+                demandData[key].trend = 'increasing'; // Network demand boost
+              }
             }
           }
         }
       }
+    } catch (niErr) {
+      // Non-fatal — network demand is a bonus layer
     }
   } catch (demandErr) {
     console.warn('[planting] Could not load wholesale demand data:', demandErr.message);
@@ -18744,6 +18922,18 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn(`[tray-runs] Trace record creation failed (non-fatal):`, traceErr.message);
     }
 
+    // -- Phase 2 Task 2.4: Auto-trigger harvest label print ----------------
+    // Include ready-to-print label data so the Activity Hub can fire the print
+    // automatically without a separate manual step.
+    const labelPrintData = {
+      lotCode,
+      cropName: (trayRun.recipe_id || trayRun.crop || 'Unknown'),
+      weight: weight || 'N/A',
+      unit: 'oz',
+      auto_print: true,     // signals client to auto-submit to /api/printer/print-harvest
+      endpoint: '/api/printer/print-harvest'
+    };
+
     res.json({
       success: true,
       trayRunId,
@@ -18756,7 +18946,8 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       weighInReason: shouldWeigh
         ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
         : null,
-      trace_id: traceRecord?.trace_id || null
+      trace_id: traceRecord?.trace_id || null,
+      label_print: labelPrintData
     });
   } catch (error) {
     console.error('[tray-runs] Error recording harvest:', error);
@@ -18798,7 +18989,7 @@ app.post('/api/trays/register', (req, res) => {
  */
 app.post('/api/trays/:trayId/seed', async (req, res) => {
   const { trayId } = req.params;
-  const { recipe, seedDate, plantCount, seed_source, variety, position } = req.body;
+  const { recipe, seedDate, plantCount, seed_source, variety, position, groupId } = req.body;
 
   if (!recipe) {
     return res.status(400).json({ error: 'recipe (crop) is required' });
@@ -18811,6 +19002,29 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     // ── Determine target weight (progressive refinement) ──────────────────
     // Priority 1: Verified crop benchmark from reconciliation weigh-ins
     // Priority 2: Format-level targetWeightPerSite (generic fallback)
+    // -- Phase 2 Task 2.1: Auto-derive plant count from tray format ----------
+    // If plantCount not explicitly provided, look up from tray's format definition
+    let resolvedPlantCount = parseInt(plantCount) || null;
+    let plantCountSource = resolvedPlantCount ? 'manual' : null;
+    let trayFormat = null;
+
+    const tray = await traysDB.findOne({ tray_id: trayId }).catch(() => null);
+    if (tray) {
+      const formatId = tray.format_id || tray.trayFormatId || tray.tray_format_id;
+      if (formatId) {
+        trayFormat = await trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }).catch(() => null);
+      }
+    }
+
+    if (!resolvedPlantCount && trayFormat) {
+      const formatCount = trayFormat.plantSiteCount || trayFormat.plant_site_count;
+      if (formatCount) {
+        resolvedPlantCount = parseInt(formatCount);
+        plantCountSource = 'tray_format';
+        console.log(`[tray-runs] Auto-derived plant count ${resolvedPlantCount} from format ${trayFormat.name || trayFormat.trayFormatId}`);
+      }
+    }
+
     let targetWeightOz = null;
     let targetWeightSource = null;
 
@@ -18818,19 +19032,9 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     if (cropBenchmark && cropBenchmark.verified) {
       targetWeightOz = cropBenchmark.avg_weight_per_plant_oz;
       targetWeightSource = 'benchmark';
-    } else {
-      // Fall back to tray format weight
-      const tray = await traysDB.findOne({ tray_id: trayId }).catch(() => null);
-      if (tray) {
-        const formatId = tray.format_id || tray.trayFormatId || tray.tray_format_id;
-        if (formatId) {
-          const format = await trayFormatsDB.findOne({ $or: [{ trayFormatId: formatId }, { _id: formatId }] }).catch(() => null);
-          if (format && format.is_weight_based && format.target_weight_per_site) {
-            targetWeightOz = format.target_weight_per_site;
-            targetWeightSource = 'format';
-          }
-        }
-      }
+    } else if (trayFormat && trayFormat.is_weight_based && trayFormat.target_weight_per_site) {
+      targetWeightOz = trayFormat.target_weight_per_site;
+      targetWeightSource = 'format';
     }
 
     const trayRun = {
@@ -18840,11 +19044,13 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
       crop:               recipe,
       variety:            variety || null,
       seeded_at:          now.toISOString(),
-      planted_site_count: parseInt(plantCount) || null,
-      plantCount:         parseInt(plantCount) || null,
-      seed_source:        seed_source || null,   // "Johnny's Seeds / Lot 2026-A-42"
-      target_weight_oz:   targetWeightOz,        // per-plant target (benchmark or format fallback)
-      target_weight_source: targetWeightSource,   // 'benchmark' | 'format' | null
+      planted_site_count: resolvedPlantCount,
+      plantCount:         resolvedPlantCount,
+      plant_count_source: plantCountSource,
+      seed_source:        seed_source || null,
+      target_weight_oz:   targetWeightOz,
+      target_weight_source: targetWeightSource,
+      group_id:           groupId || null,
       status:             'GROWING',
       created_at:         now.toISOString(),
       updated_at:         now.toISOString()
@@ -18852,30 +19058,58 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
 
     await trayRunsDB.insert(trayRun);
 
-    // Create initial placement record if position was provided
+    // -- Phase 2 Task 2.3: Combined seed + group assignment ---------------
     let placementId = null;
-    if (position) {
+    const effectivePosition = groupId || position;
+    if (effectivePosition) {
       const placement = {
         tray_run_id:    trayRunId,
         tray_id:        trayId,
-        location_qr:    position,
+        location_qr:    effectivePosition,
         placed_at:      now.toISOString(),
         removed_at:     null,
-        removal_reason: null
+        removal_reason: null,
+        group_id:       groupId || null
       };
       const inserted = await trayPlacementsDB.insert(placement);
       placementId = inserted._id;
-      console.log(`[tray-runs] Placed: ${trayRunId} at ${position}`);
+      console.log(`[tray-runs] Placed: ${trayRunId} at ${effectivePosition}${groupId ? ` (group: ${groupId})` : ''}`);
     }
 
-    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}`);
+    // -- Phase 2 Task 2.6: Sync seed date to group -----------------------
+    if (groupId) {
+      try {
+        const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
+        const groupsRaw = fs.readFileSync(groupsPath, 'utf8');
+        const groupsData = JSON.parse(groupsRaw);
+        const groupsArray = Array.isArray(groupsData) ? groupsData
+          : Array.isArray(groupsData.groups) ? groupsData.groups : [];
+        const targetGroup = groupsArray.find(g => g.id === groupId);
+        if (targetGroup) {
+          if (!targetGroup.planConfig) targetGroup.planConfig = {};
+          if (!targetGroup.planConfig.anchor) targetGroup.planConfig.anchor = {};
+          const seedDateStr = now.toISOString().slice(0, 10);
+          targetGroup.planConfig.anchor.seedDate = seedDateStr;
+          if (!targetGroup.crop) targetGroup.crop = recipe;
+          fs.writeFileSync(groupsPath, JSON.stringify(groupsData, null, 2));
+          console.log(`[tray-runs] Synced seed date ${seedDateStr} + crop ${recipe} to group ${groupId}`);
+        }
+      } catch (syncErr) {
+        console.warn(`[tray-runs] Seed date sync to group failed (non-fatal):`, syncErr.message);
+      }
+    }
+
+    console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
     res.json({
       success: true,
       tray_run_id: trayRunId,
       placement_id: placementId,
+      planted_site_count: resolvedPlantCount,
+      plant_count_source: plantCountSource,
       target_weight_oz: targetWeightOz,
       target_weight_source: targetWeightSource,
-      message: 'Seeding recorded'
+      group_id: groupId || null,
+      message: groupId ? `Seeding recorded + assigned to group ${groupId}` : 'Seeding recorded'
     });
   } catch (error) {
     console.error('[tray-runs] Seed error:', error);

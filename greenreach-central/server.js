@@ -2206,6 +2206,26 @@ app.use('/api', networkGrowersRouter);                       // /api/network/*, 
 app.use('/api', experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
 app.use('/api/wholesale', wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
 app.use('/api/wholesale/exports', wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
+
+// Phase 2 Task 2.8: Demand analysis endpoint
+app.get('/api/wholesale/demand-analysis', async (req, res) => {
+  try {
+    const { analyzeDemandPatterns } = await import('./services/wholesaleMemoryStore.js');
+    const patterns = await analyzeDemandPatterns();
+    const sorted = Object.entries(patterns)
+      .sort(([, a], [, b]) => b.network_total_qty - a.network_total_qty);
+    res.json({
+      ok: true,
+      crop_count: sorted.length,
+      generated_at: new Date().toISOString(),
+      demand_signals: Object.fromEntries(sorted)
+    });
+  } catch (error) {
+    console.error('[demand-analysis] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 
 // --- Crop Registry API (Phase 2a — single source of truth) ---

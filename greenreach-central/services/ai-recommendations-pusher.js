@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 import { query } from '../config/database.js';
 import fetch from 'node-fetch';
 import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
+import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 
 let openai = null;
 try {
@@ -200,11 +201,23 @@ export async function analyzeAndPushToAllFarms() {
     let networkIntelligence = null;
     try {
       const cropBenchmarks = await getCropBenchmarksForPush();
-      if (Object.keys(cropBenchmarks).length > 0) {
+
+      // Phase 2 Task 2.8: Real demand signals from wholesale orders
+      let demandSignals = {};
+      try {
+        demandSignals = await analyzeDemandPatterns();
+        if (Object.keys(demandSignals).length > 0) {
+          console.log(`[AI Pusher] Loaded demand signals for ${Object.keys(demandSignals).length} crop(s)`);
+        }
+      } catch (demandErr) {
+        console.warn('[AI Pusher] Demand analysis failed (non-fatal):', demandErr.message);
+      }
+
+      if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
-          demand_signals: {},       // Phase 2 placeholder
-          risk_alerts: [],          // Phase 2 placeholder
+          demand_signals: demandSignals,
+          risk_alerts: [],          // Phase 3 placeholder
           generated_at: new Date().toISOString()
         };
         console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);

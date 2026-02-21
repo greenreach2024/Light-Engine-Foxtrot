@@ -290,10 +290,29 @@ router.post('/register', async (req, res, next) => {
 
     logger.info(`Farm registered: ${resolvedFarmId}`);
 
+    // Phase 2 Task 2.9: Push network benchmarks to new farms on registration
+    let networkBenchmarks = null;
+    try {
+      const { getCropBenchmarksForPush } = await import('../routes/experiment-records.js');
+      const benchmarks = await getCropBenchmarksForPush();
+      if (Object.keys(benchmarks).length > 0) {
+        networkBenchmarks = {
+          crop_benchmarks: benchmarks,
+          benchmark_count: Object.keys(benchmarks).length,
+          generated_at: now,
+          message: 'Network-wide crop benchmarks from all participating farms'
+        };
+        logger.info(`Included ${Object.keys(benchmarks).length} crop benchmarks for new farm ${resolvedFarmId}`);
+      }
+    } catch (benchErr) {
+      logger.warn(`Could not load benchmarks for new farm ${resolvedFarmId}: ${benchErr.message}`);
+    }
+
     res.status(201).json({
       success: true,
       farmId: resolvedFarmId,
-      message: 'Farm registered successfully'
+      message: 'Farm registered successfully',
+      network_benchmarks: networkBenchmarks
     });
   } catch (error) {
     logger.error('Error registering farm:', error);
