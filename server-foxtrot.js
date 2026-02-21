@@ -18163,6 +18163,7 @@ app.get('/api/trays', async (req, res) => {
         currentRunId: currentRun?.tray_run_id,
         currentRecipe: currentRun?.recipe_id,
         currentLocation: currentPlacement?.location_qr,
+        groupId: currentRun?.group_id || null,
         seededAt: currentRun?.seeded_at,
         plantedSiteCount: currentRun?.planted_site_count,
         daysSinceSeeding,
@@ -18401,6 +18402,11 @@ app.post('/api/trays/register', (req, res) => {
  * Record seeding operation for a tray — creates a tray run with traceability context.
  * seed_source (supplier + lot#) is the ONLY manual traceability input needed.
  * position (optional) — location QR code for initial placement (e.g. "FARM-RoomA-L5").
+ *
+ * NOTE: group_id is intentionally NOT set at seeding time.
+ * The tray is assigned to a group later when the grower scans the tray QR
+ * followed by the group QR using the Activity Hub Quick Move feature.
+ * See POST /api/tray-runs/:id/move for group assignment logic.
  */
 app.post('/api/trays/:trayId/seed', async (req, res) => {
   const { trayId } = req.params;
@@ -18673,8 +18679,12 @@ app.get('/api/tray-runs/:id/loss-events', async (req, res) => {
 /**
  * POST /api/tray-runs/:id/move
  * Move a tray to a new position — close current placement, create new one.
- * Body: { newPosition: "FARM-RoomB-L3", timestamp? }
+ * Body: { newPosition: "FARM-RoomB-L3" or "GRP:Room:Zone:Group", timestamp? }
  * Called by Activity Hub Quick Move (two-step scan: tray QR → position QR).
+ *
+ * Group detection: If newPosition starts with "GRP:" or matches a known group ID
+ * from groups.json, the tray run's group_id is set. This links the tray to the
+ * group for the planting scheduler and inventory queries.
  */
 app.post('/api/tray-runs/:id/move', async (req, res) => {
   const trayRunId = req.params.id;
@@ -18705,6 +18715,33 @@ app.post('/api/tray-runs/:id/move', async (req, res) => {
     const actualRunId = trayRun.tray_run_id;
     const trayId = trayRun.tray_id;
 
+    // --- Group detection ---
+    // If the scanned QR starts with "GRP:" it's a group label QR.
+    // Otherwise, check if the raw value matches a known group ID in groups.json.
+    let groupId = null;
+    let locationQr = newPosition;
+
+    if (newPosition.startsWith('GRP:')) {
+      groupId = newPosition.slice(4);
+      locationQr = groupId; // store clean group ID as location
+    } else {
+      // Fallback: check if newPosition matches a group ID in groups.json
+      try {
+        const groupsPath = path.join(__dirname, 'public', 'data', 'groups.json');
+        const groupsData = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+        // groups.json stores { groups: [ { id, name, ... }, ... ] }
+        const groupsArray = Array.isArray(groupsData) ? groupsData
+          : Array.isArray(groupsData.groups) ? groupsData.groups : [];
+        const match = groupsArray.find(g => g.id === newPosition);
+        if (match) {
+          groupId = newPosition;
+        }
+      } catch (groupErr) {
+        // groups.json missing or unreadable — not fatal, just skip group detection
+        console.warn('[tray-runs] Could not read groups.json for group detection:', groupErr.message);
+      }
+    }
+
     // Close any active placement(s) for this tray run
     const closedCount = await trayPlacementsDB.update(
       { tray_run_id: actualRunId, removed_at: null },
@@ -18725,23 +18762,36 @@ app.post('/api/tray-runs/:id/move', async (req, res) => {
     const newPlacement = {
       tray_run_id:    actualRunId,
       tray_id:        trayId,
-      location_qr:    newPosition,
+      location_qr:    locationQr,
       placed_at:      now,
       removed_at:     null,
-      removal_reason: null
+      removal_reason: null,
+      group_id:       groupId   // null if not a group move
     };
     const inserted = await trayPlacementsDB.insert(newPlacement);
 
-    console.log(`[tray-runs] Moved: ${actualRunId} (tray=${trayId}) → ${newPosition} (closed ${closedCount} prior placement(s))`);
+    // If this is a group move, also persist group_id on the tray run itself
+    if (groupId) {
+      await trayRunsDB.update(
+        { tray_run_id: actualRunId },
+        { $set: { group_id: groupId } }
+      );
+      console.log(`[tray-runs] Linked tray run ${actualRunId} to group: ${groupId}`);
+    }
+
+    console.log(`[tray-runs] Moved: ${actualRunId} (tray=${trayId}) → ${locationQr}${groupId ? ` (group: ${groupId})` : ''} (closed ${closedCount} prior placement(s))`);
 
     res.json({
       success: true,
       tray_run_id: actualRunId,
       tray_id: trayId,
-      new_position: newPosition,
+      new_position: locationQr,
+      group_id: groupId,
       placement_id: inserted._id,
       prior_placements_closed: closedCount,
-      message: `Tray moved to ${newPosition}`
+      message: groupId
+        ? `Tray moved to group ${groupId}`
+        : `Tray moved to ${locationQr}`
     });
   } catch (error) {
     console.error('[tray-runs] Move error:', error);

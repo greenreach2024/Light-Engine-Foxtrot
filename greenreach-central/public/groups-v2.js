@@ -2666,6 +2666,55 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// Handle Print Labels button — downloads batch PDF of all group labels
+document.addEventListener('DOMContentLoaded', () => {
+  const printBtn = document.getElementById('groupsV2PrintLabels');
+  if (printBtn) {
+    printBtn.addEventListener('click', async () => {
+      try {
+        printBtn.disabled = true;
+        printBtn.textContent = '⏳ Generating…';
+
+        const resp = await fetch('/api/qr-generator/generate-groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})  // all groups
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: resp.statusText }));
+          throw new Error(err.error || 'Failed to generate group labels');
+        }
+
+        // Download the PDF
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `group-labels-${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        if (typeof showToast === 'function') {
+          showToast({ title: 'Labels Ready', msg: 'Group label PDF downloaded', kind: 'success', icon: '🏷️' }, 2000);
+        }
+      } catch (error) {
+        console.error('[Groups V2] Print labels error:', error);
+        if (typeof showToast === 'function') {
+          showToast({ title: 'Print Failed', msg: error.message, kind: 'error', icon: '' });
+        } else {
+          alert('Failed to generate group labels: ' + error.message);
+        }
+      } finally {
+        printBtn.disabled = false;
+        printBtn.textContent = '🏷️ Print Labels';
+      }
+    });
+  }
+});
+
 // DEPRECATED: Old Save Group button - kept for backwards compatibility
 // Use Save Draft or Save & Deploy instead
 document.addEventListener('DOMContentLoaded', () => {

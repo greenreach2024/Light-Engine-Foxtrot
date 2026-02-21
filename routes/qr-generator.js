@@ -6,6 +6,12 @@
 import express from 'express';
 import QRCode from 'qrcode';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const router = express.Router();
 
@@ -239,6 +245,146 @@ router.post('/validate', async (req, res) => {
 
   } catch (error) {
     console.error('Validation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Generate batch group label PDF
+ * POST /api/qr-generator/generate-groups
+ * Body: { groupIds?: string[] }  — optional filter; omit for all groups
+ *
+ * Each label shows: QR code encoding "GRP:{groupId}" + group name below.
+ * Layout: 3x4 grid (12 per page) for larger 2"x3" labels.
+ */
+router.post('/generate-groups', async (req, res) => {
+  try {
+    const { groupIds } = req.body || {};
+
+    // Load groups from groups.json
+    const groupsPath = join(__dirname, '..', 'public', 'data', 'groups.json');
+    let groupsData;
+    try {
+      groupsData = JSON.parse(readFileSync(groupsPath, 'utf8'));
+    } catch (readErr) {
+      return res.status(500).json({ error: 'Could not read groups.json', details: readErr.message });
+    }
+
+    // Build list of groups to print
+    // groups.json stores { groups: [ { id, name, ... }, ... ] }
+    const groupsArray = Array.isArray(groupsData) ? groupsData
+      : Array.isArray(groupsData.groups) ? groupsData.groups : [];
+
+    let filtered = groupsArray;
+    if (Array.isArray(groupIds) && groupIds.length > 0) {
+      filtered = groupsArray.filter(g => groupIds.includes(g.id));
+    }
+
+    if (filtered.length === 0) {
+      return res.status(400).json({ error: 'No matching groups found' });
+    }
+
+    // Generate QR data URLs for each group
+    const labels = [];
+    for (const groupObj of filtered) {
+      const groupId = groupObj.id;
+      const groupName = groupObj.name || groupId.split(':').pop() || groupId;
+      const qrValue = `GRP:${groupId}`;
+      const qrDataUrl = await QRCode.toDataURL(qrValue, {
+        width: 250,
+        margin: 1,
+        errorCorrectionLevel: 'H'
+      });
+      labels.push({ groupId, groupName, qrDataUrl });
+    }
+
+    // Build PDF — 3 columns x 4 rows = 12 per page (larger labels for groups)
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pageWidth = 612;   // 8.5"
+    const pageHeight = 792;  // 11"
+    const cols = 3;
+    const rows = 4;
+    const perPage = cols * rows;
+    const cellWidth = pageWidth / cols;
+    const cellHeight = pageHeight / rows;
+    const qrSize = 120;
+
+    let currentPage = null;
+    let pageIdx = 0;
+
+    for (let i = 0; i < labels.length; i++) {
+      if (i % perPage === 0) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        pageIdx = 0;
+      }
+
+      const { groupId, groupName, qrDataUrl } = labels[i];
+      const col = pageIdx % cols;
+      const row = Math.floor(pageIdx / cols);
+
+      const cellX = col * cellWidth;
+      const cellY = pageHeight - (row + 1) * cellHeight;
+
+      // Center QR in cell
+      const qrX = cellX + (cellWidth - qrSize) / 2;
+      const qrY = cellY + cellHeight - qrSize - 15;
+
+      // Embed QR image
+      const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+      const qrImage = await pdfDoc.embedPng(qrImageBytes);
+      currentPage.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+
+      // Group name below QR — truncate if too long
+      const displayName = groupName.length > 28 ? groupName.slice(0, 26) + '…' : groupName;
+      const nameSize = 11;
+      const nameWidth = boldFont.widthOfTextAtSize(displayName, nameSize);
+      currentPage.drawText(displayName, {
+        x: cellX + (cellWidth - nameWidth) / 2,
+        y: qrY - 14,
+        size: nameSize,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+
+      // Group ID in smaller font (useful for debugging)
+      const idDisplay = groupId.length > 34 ? groupId.slice(0, 32) + '…' : groupId;
+      const idSize = 7;
+      const idWidth = font.widthOfTextAtSize(idDisplay, idSize);
+      currentPage.drawText(idDisplay, {
+        x: cellX + (cellWidth - idWidth) / 2,
+        y: qrY - 26,
+        size: idSize,
+        font,
+        color: rgb(0.4, 0.4, 0.4)
+      });
+
+      pageIdx++;
+    }
+
+    // Footer on each page
+    const pages = pdfDoc.getPages();
+    pages.forEach((page, idx) => {
+      const footerText = `Group Labels | Generated: ${new Date().toLocaleDateString()} | Page ${idx + 1}/${pages.length}`;
+      const footerWidth = font.widthOfTextAtSize(footerText, 8);
+      page.drawText(footerText, {
+        x: (pageWidth - footerWidth) / 2,
+        y: 15,
+        size: 8,
+        font,
+        color: rgb(0.5, 0.5, 0.5)
+      });
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="group-labels-${Date.now()}.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+
+  } catch (error) {
+    console.error('[qr-generator] Group label generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });

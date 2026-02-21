@@ -57,6 +57,14 @@ const ZPL_TEMPLATES = {
 ^XZ
 `,
 
+  // 2" x 3" Group Label — permanent location label (name + QR only)
+  groupLabel: (groupId, groupName) => `
+^XA
+^FO50,30^BQN,2,8^FDQA,GRP:${groupId}^FS
+^FO50,250^A0N,35,35^FD${groupName}^FS
+^XZ
+`,
+
   // 4" x 6" Packing Label — SFCR: includes producer identity
   packingLabel: (orderId, buyer, items, qrData, producerName = '', producerAddr = '') => `
 ^XA
@@ -94,6 +102,14 @@ A30,80,0,2,1,1,N,"${weight} ${unit}"
 A30,105,0,1,1,1,N,"${producerName}"
 A30,120,0,1,1,1,N,"${producerAddr}"
 B150,20,0,1,2,2,60,B,"${lotCode}"
+P1
+`,
+
+  groupLabel: (groupId, groupName) => `
+N
+Q203,24
+A50,50,0,3,1,1,N,"${groupName}"
+B50,90,0,1,2,2,80,B,"GRP:${groupId}"
 P1
 `,
 };
@@ -379,6 +395,105 @@ router.post('/print-packing', async (req, res) => {
 
   } catch (error) {
     console.error('Print packing error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Print group label
+ * POST /api/printer/print-group
+ * Body: { groupId, groupName, connection, printerName?, host?, port?, format? }
+ */
+router.post('/print-group', async (req, res) => {
+  try {
+    const {
+      groupId,
+      groupName,
+      connection = 'usb',
+      printerName,
+      host,
+      port = 9100,
+      format = 'zpl'
+    } = req.body;
+
+    if (!groupId || !groupName) {
+      return res.status(400).json({ error: 'groupId and groupName are required' });
+    }
+
+    const labelData = format === 'zpl'
+      ? ZPL_TEMPLATES.groupLabel(groupId, groupName)
+      : EPL_TEMPLATES.groupLabel(groupId, groupName);
+
+    const job = {
+      id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: connection,
+      data: labelData,
+      printerName,
+      host,
+      port,
+      status: 'pending',
+      createdAt: new Date(),
+      metadata: { groupId, groupName, labelType: 'group' }
+    };
+
+    printQueue.push(job);
+    startQueueProcessor();
+
+    res.json({
+      success: true,
+      jobId: job.id,
+      message: 'Group label print job queued',
+      queuePosition: printQueue.length
+    });
+  } catch (error) {
+    console.error('Print group error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Browser-based group label (HTML with QR code)
+ * GET /api/printer/label-group?group_id=...&group_name=...
+ * Returns printable HTML page with QR code + group name only
+ */
+router.get('/label-group', async (req, res) => {
+  try {
+    const { group_id, group_name } = req.query;
+    if (!group_id || !group_name) {
+      return res.status(400).json({ error: 'group_id and group_name are required' });
+    }
+
+    // Dynamic import — qrcode package already in dependencies
+    const QRCode = (await import('qrcode')).default;
+    const qrDataUrl = await QRCode.toDataURL(`GRP:${group_id}`, {
+      width: 200, margin: 1, errorCorrectionLevel: 'H'
+    });
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Group Label - ${group_name}</title>
+<style>
+  @media print { body { margin: 0; } .no-print { display: none; } }
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  .label { width: 3in; background: white; border: 2px solid #000; padding: 15px;
+    margin: 0 auto; text-align: center; }
+  .group-name { font-size: 20px; font-weight: bold; margin-top: 10px; }
+  .qr-code { width: 160px; height: 160px; margin: 10px auto; }
+  .print-btn { background: #2E7D32; color: white; border: none; padding: 12px 24px;
+    font-size: 16px; border-radius: 4px; cursor: pointer; display: block;
+    margin: 20px auto; }
+  .print-btn:hover { background: #1B5E20; }
+</style></head><body>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Print Label</button>
+  <div class="label">
+    <img src="${qrDataUrl}" alt="QR" class="qr-code">
+    <div class="group-name">${group_name}</div>
+  </div>
+</body></html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Group label HTML error:', error);
     res.status(500).json({ error: error.message });
   }
 });
