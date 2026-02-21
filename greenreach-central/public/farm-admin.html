@@ -2617,23 +2617,7 @@
                     <div class="card">
                         <h2 style="margin-bottom: 20px;">System Configuration</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Data & Backups</h3>
-                                <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="auto-backup">
-                                        <span>Enable automatic backups</span>
-                                    </label>
-                                    <div style="margin-left: 24px;">
-                                        <label style="display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-secondary);">Backup Frequency</label>
-                                        <select id="backup-frequency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px;">
-                                            <option value="daily">Daily</option>
-                                            <option value="weekly">Weekly</option>
-                                            <option value="monthly">Monthly</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Data & Backups section removed — backups are automatic -->
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Security</h3>
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -4285,14 +4269,6 @@
           primary: document.getElementById('primary-api-key').value,
           readonly: document.getElementById('readonly-api-key').value
         },
-        integrations: {
-          square: document.getElementById('enable-square').checked,
-          squareLocationId: document.getElementById('square-location-id').value,
-          email: document.getElementById('enable-email').checked,
-          senderEmail: document.getElementById('sender-email').value,
-          greenreach: document.getElementById('enable-greenreach').checked,
-          webhooks: document.getElementById('enable-webhooks').checked
-        },
         notifications: {
           orders: document.getElementById('notify-order').checked,
           harvest: document.getElementById('notify-harvest').checked,
@@ -4333,15 +4309,6 @@
           document.getElementById('local-server-ip').value = config.network.serverIp || '';
           document.getElementById('http-port').value = config.network.httpPort || '8080';
           document.getElementById('ws-port').value = config.network.wsPort || '8081';
-        }
-        
-        if (config.integrations) {
-          document.getElementById('enable-square').checked = config.integrations.square !== false;
-          document.getElementById('square-location-id').value = config.integrations.squareLocationId || '';
-          document.getElementById('enable-email').checked = config.integrations.email !== false;
-          document.getElementById('sender-email').value = config.integrations.senderEmail || '';
-          document.getElementById('enable-greenreach').checked = config.integrations.greenreach || false;
-          document.getElementById('enable-webhooks').checked = config.integrations.webhooks || false;
         }
         
         if (config.notifications) {

@@ -539,7 +539,9 @@ function seedGroupRoomZoneDropdowns() {
   const normaliseRooms = () => (collectRoomsFromState() || []).map(room => ({
     id: room?.id || '',
     name: room?.name || '',
-    zones: Array.isArray(room?.zones) ? room.zones : []
+    zones: Array.isArray(room?.zones)
+      ? room.zones.map(z => typeof z === 'string' ? z : (z.zone || z.name || z.id || String(z)))
+      : []
   }));
 
   const previousRoom = roomSel.value;
@@ -12889,7 +12891,7 @@ async function loadAllData() {
         return [];
       }
     })();
-    const hasBackendData = backendRooms.some(r => r && (r._categoryProgress || r.categoryProgress || r.category || r.equipment));
+    const hasBackendData = backendRooms.some(r => r && (r._categoryProgress || r.categoryProgress || r.category || r.equipment || (Array.isArray(r.zones) && r.zones.length > 0)));
     if (hasBackendData) {
       STATE.rooms = backendRooms;
       console.log(' [loadAllData] Retained backend-loaded rooms:', STATE.rooms.length);

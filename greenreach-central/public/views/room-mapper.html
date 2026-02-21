@@ -636,7 +636,7 @@
     // Debug viewport
     const vpSpan = document.getElementById("vp");
     if (vpSpan) vpSpan.textContent = `${window.innerWidth}×${window.innerHeight}px`;
-    console.log("[Room Mapper] Viewport:", window.innerWidth, "x", window.innerHeight);
+    console.debug("[Room Mapper] Viewport:", window.innerWidth, "x", window.innerHeight);
     // Global state
     const STATE = {
       canvas: null,
@@ -692,9 +692,9 @@
       console.log("[Room Mapper] DOMContentLoaded - Starting initialization");
       STATE.canvas = document.getElementById('mapCanvas');
       STATE.ctx = STATE.canvas.getContext('2d');
-      console.log("[Room Mapper] Canvas element:", STATE.canvas);
+      console.debug("[Room Mapper] Canvas element:", STATE.canvas);
       
-      console.log("[Room Mapper] Canvas context:", STATE.ctx);
+      console.debug("[Room Mapper] Canvas context:", STATE.ctx);
       setupCanvas();
       await loadRooms();
       await loadIoTDevices();
@@ -896,7 +896,7 @@
         return;
       }
       
-      console.log("[Room Mapper] Changing room from", STATE.currentRoomId, "to", newRoomId);
+      console.debug("[Room Mapper] Changing room from", STATE.currentRoomId, "to", newRoomId);
       
       // Ask to save current room if there are unsaved changes
       if (STATE.placedDevices.length > 0 || STATE.zones.length > 0) {
@@ -941,7 +941,7 @@
         const sensorResponse = await fetch('/data/iot-devices.json');
         const allDevices = await sensorResponse.json();
         
-        console.log(`[Room Mapper] Fetched ${allDevices.length} total devices from iot-devices.json`);
+        console.debug(`[Room Mapper] Fetched ${allDevices.length} total devices from iot-devices.json`);
         
         // Filter for sensors only - devices with type containing 'sensor' or category 'sensor'
         const sensors = allDevices.filter(d => {
@@ -950,8 +950,8 @@
           return type.includes('sensor') || category === 'sensor';
         });
         
-        console.log(`[Room Mapper] Filtered to ${sensors.length} sensors`);
-        console.log('[Room Mapper] Sample sensors:', sensors.slice(0, 3).map(s => ({ 
+        console.debug(`[Room Mapper] Filtered to ${sensors.length} sensors`);
+        console.debug('[Room Mapper] Sample sensors:', sensors.slice(0, 3).map(s => ({ 
           id: s.id, 
           name: s.name, 
           type: s.type, 
@@ -978,10 +978,10 @@
         if (res.ok) {
           metadata = await res.json();
         } else {
-          console.log('[Room Mapper] No equipment metadata found (optional)');
+          console.debug('[Room Mapper] No equipment metadata found (optional)');
         }
       } catch (error) {
-        console.log('[Room Mapper] Failed to load equipment metadata:', error);
+        console.debug('[Room Mapper] Failed to load equipment metadata:', error);
       }
       return metadata || {};
     }
@@ -1093,15 +1093,15 @@
         }
         const rooms = STATE.rooms;
 
-        console.log(`[Room Mapper] Using ${rooms.length} rooms for equipment list`);
+        console.debug(`[Room Mapper] Using ${rooms.length} rooms for equipment list`);
 
         const metadata = await fetchEquipmentMetadata();
-        console.log(`[Room Mapper] Loaded ${Object.keys(metadata).length} equipment metadata entries`);
+        console.debug(`[Room Mapper] Loaded ${Object.keys(metadata).length} equipment metadata entries`);
         
         const equipment = aggregateEquipmentFromRooms(rooms, metadata);
 
-        console.log(`[Room Mapper] Aggregated ${equipment.length} equipment items`);
-        console.log('[Room Mapper] Sample equipment:', equipment.slice(0, 3).map(e => ({ 
+        console.debug(`[Room Mapper] Aggregated ${equipment.length} equipment items`);
+        console.debug('[Room Mapper] Sample equipment:', equipment.slice(0, 3).map(e => ({ 
           id: e.id, 
           name: e.name, 
           category: e.category, 
@@ -1123,7 +1123,7 @@
 
     function renderDeviceList() {
       const list = document.getElementById('deviceList');
-      console.log("[Room Mapper] renderDeviceList - Sensor count:", STATE.iotDevices.length, "List element:", list);
+      console.debug("[Room Mapper] renderDeviceList - Sensor count:", STATE.iotDevices.length, "List element:", list);
       if (!STATE.iotDevices.length) {
         list.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">No sensors found</div>';
         return;
@@ -1158,7 +1158,7 @@
 
     function renderEquipmentList() {
       const list = document.getElementById('equipmentList');
-      console.log("[Room Mapper] renderEquipmentList - Equipment count:", STATE.equipment.length, "List element:", list);
+      console.debug("[Room Mapper] renderEquipmentList - Equipment count:", STATE.equipment.length, "List element:", list);
       const currentRoom = STATE.rooms.find(r => (r.id || r.name) === STATE.currentRoomId);
       const currentRoomName = currentRoom?.name || currentRoom?.location || '';
       const filtered = STATE.currentRoomId
@@ -1281,7 +1281,7 @@
       
       // Place in center if not already placed
       const isPlaced = STATE.placedDevices.some(p => p.deviceId === equipment.id);
-      console.log('[Room Mapper] placeEquipmentFromList - Equipment:', equipment.id, 'Already placed:', isPlaced, 'Total placed:', STATE.placedDevices.length);
+      console.debug('[Room Mapper] placeEquipmentFromList - Equipment:', equipment.id, 'Already placed:', isPlaced, 'Total placed:', STATE.placedDevices.length);
       
       if (!isPlaced) {
         const centerX = Math.floor(STATE.gridSize / 2);
@@ -1298,13 +1298,13 @@
           isEquipment: true // Flag to distinguish from sensors
         });
         
-        console.log('[Room Mapper] Equipment placed successfully at center:', centerX, centerY);
+        console.debug('[Room Mapper] Equipment placed successfully at center:', centerX, centerY);
         renderEquipmentList();
         draw();
         updateStats();
         showDetails(STATE.placedDevices[STATE.placedDevices.length - 1]);
       } else {
-        console.log('[Room Mapper] Equipment already placed, finding existing device...');
+        console.debug('[Room Mapper] Equipment already placed, finding existing device...');
         const existingDevice = STATE.placedDevices.find(p => p.deviceId === equipment.id);
         if (existingDevice) {
           showDetails(existingDevice);
@@ -1314,7 +1314,7 @@
 
     window.selectTool = function(tool) {
       STATE.currentTool = tool;
-      console.log("[Room Mapper] Tool selected:", tool, "Current tool now:", STATE.currentTool);
+      console.debug("[Room Mapper] Tool selected:", tool, "Current tool now:", STATE.currentTool);
       document.querySelectorAll('.tool-item').forEach(item => {
         item.classList.remove('active');
       });
@@ -1329,7 +1329,7 @@
     if (typeof e.preventDefault === 'function') e.preventDefault();
     try { if (e.pointerId != null && STATE.canvas.setPointerCapture) STATE.canvas.setPointerCapture(e.pointerId); } catch {}
     const { px, py, x, y } = getCanvasEventPosition(e);
-      console.log("[Room Mapper] Mouse down - Tool:", STATE.currentTool, "Position:", x, y);
+      console.debug("[Room Mapper] Mouse down - Tool:", STATE.currentTool, "Position:", x, y);
       
       if (STATE.currentTool === 'select') {
         // 1) Hit test for device: prefer exact cell match, then nearest within tolerance
@@ -1806,7 +1806,7 @@
         // Refresh the details panel to show updated ranges
         showDetails(zone);
         
-        console.log(`[Room Mapper] Updated ${field} for Zone ${zoneNum} to ${numValue}`);
+        console.debug(`[Room Mapper] Updated ${field} for Zone ${zoneNum} to ${numValue}`);
       }
     }
 
@@ -1882,7 +1882,7 @@
           // If no zone assigned, detect it from position
           if (!deviceZone && device.x !== undefined && device.y !== undefined) {
             deviceZone = findZoneForPosition(device.x, device.y, zones);
-            console.log(`[Room Mapper] Device ${device.deviceId} at (${device.x},${device.y}) detected in zone ${deviceZone}`);
+            console.debug(`[Room Mapper] Device ${device.deviceId} at (${device.x},${device.y}) detected in zone ${deviceZone}`);
           }
           
           // Match sensor, environmental_sensor, or any category containing 'sensor'
@@ -1901,7 +1901,7 @@
           }
         }
         
-        console.log('[Room Mapper] Zone sensor map:', zoneSensorMap);
+        console.debug('[Room Mapper] Zone sensor map:', zoneSensorMap);
         
         // Load current rooms.json
         const roomsResponse = await fetch('/data/rooms.json');
@@ -1972,7 +1972,7 @@
               }
             }
             
-            console.log(`[Room Mapper] Updated zone ${zoneNum}:`, {
+            console.debug(`[Room Mapper] Updated zone ${zoneNum}:`, {
               envSensor: zone.envSensor,
               sensors: zone.sensors,
               targetConditions: zone.targetConditions
@@ -2033,7 +2033,7 @@
           const detectedZone = (d.x != null && d.y != null) ? findZoneForPosition(d.x, d.y) : null;
           const finalZone = detectedZone !== null ? detectedZone : (d.device?.zone ?? null);
           
-          console.log(`[Room Mapper Save] Device ${d.deviceId} at (${d.x}, ${d.y}):`, {
+          console.debug(`[Room Mapper Save] Device ${d.deviceId} at (${d.x}, ${d.y}):`, {
             detectedZone,
             deviceZone: d.device?.zone,
             finalZone,
@@ -2076,7 +2076,7 @@
           
           // Refresh Groups v2 zone dropdown if it exists
           if (typeof window.refreshGroupsV2Zones === 'function') {
-            console.log('[Room Mapper] Refreshing Groups v2 zones...');
+            console.debug('[Room Mapper] Refreshing Groups v2 zones...');
             window.refreshGroupsV2Zones();
           }
         } else {
@@ -2098,7 +2098,7 @@
         const fileName = `room-map-${STATE.currentRoomId}.json`;
         const response = await fetch(`/data/${fileName}`);
         if (response.status === 404) {
-          console.log('[Room Mapper] No saved map for this room, starting fresh');
+          console.debug('[Room Mapper] No saved map for this room, starting fresh');
           return;
         }
         if (!response.ok) throw new Error('Failed to load saved map');
@@ -2117,7 +2117,7 @@
 
     async function loadExistingMap() {
       if (!STATE.currentRoomId) {
-        console.log('[Room Mapper] No room selected yet, skipping map load');
+        console.debug('[Room Mapper] No room selected yet, skipping map load');
         return;
       }
       
@@ -2128,7 +2128,7 @@
         if (response.ok) {
           const mapData = await response.json();
           await loadExistingMapData(mapData);
-          console.log(`[Room Mapper] Loaded existing map for room: ${STATE.currentRoomId}`);
+          console.debug(`[Room Mapper] Loaded existing map for room: ${STATE.currentRoomId}`);
           return;
         }
         
@@ -2138,14 +2138,14 @@
           const legacyData = await legacyResponse.json();
           if (legacyData.roomId === STATE.currentRoomId || legacyData.roomId === 'default') {
             await loadExistingMapData(legacyData);
-            console.log('[Room Mapper] Loaded legacy room-map.json');
+            console.debug('[Room Mapper] Loaded legacy room-map.json');
             return;
           }
         }
         
-        console.log('[Room Mapper] No existing map found for this room, starting fresh');
+        console.debug('[Room Mapper] No existing map found for this room, starting fresh');
       } catch (error) {
-        console.log('[Room Mapper] No existing map found, starting fresh:', error.message);
+        console.debug('[Room Mapper] No existing map found, starting fresh:', error.message);
       }
     }
 

@@ -137,12 +137,14 @@ router.get('/status', authenticateToken, async (req, res) => {
       let setupCompleted = false;
       let farmName = 'Farm';
       let roomCount = 0;
+      let certifications = {};
       if (req.farmStore) {
         try {
           const profile = await req.farmStore.get(farmId, 'farm_profile');
           if (profile && profile.setup_completed) {
             setupCompleted = true;
             farmName = profile.farmName || profile.name || 'Farm';
+            certifications = profile.certifications || {};
           }
           const rooms = await req.farmStore.get(farmId, 'rooms');
           if (Array.isArray(rooms)) roomCount = rooms.length;
@@ -153,6 +155,7 @@ router.get('/status', authenticateToken, async (req, res) => {
       return res.json({
         success: true,
         setupCompleted,
+        completed: setupCompleted,
         farm: {
           farmId,
           name: farmName,
@@ -160,17 +163,22 @@ router.get('/status', authenticateToken, async (req, res) => {
           timezone: 'America/New_York',
           hasBusinessHours: false
         },
+        certifications,
         roomCount
       });
     }
 
     // Get farm details including setup_completed flag
-    const farmResult = await pool.query(
-      'SELECT name, plan_type, timezone, business_hours, setup_completed FROM farms WHERE farm_id = $1',
-      [farmId]
-    );
-
-    const farm = farmResult.rows[0];
+    let farm = null;
+    try {
+      const farmResult = await pool.query(
+        'SELECT name, plan_type, setup_completed FROM farms WHERE farm_id = $1',
+        [farmId]
+      );
+      farm = farmResult.rows[0];
+    } catch (dbErr) {
+      console.warn('[Setup Wizard] farms query failed:', dbErr.message);
+    }
 
     // Check room count as fallback
     let roomCount = 0;
@@ -193,9 +201,23 @@ router.get('/status', authenticateToken, async (req, res) => {
     // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
     const setupCompleted = farm?.setup_completed === true || roomCount > 0;
 
+    // Load certifications from farmStore (works in both DB and no-DB modes)
+    let certifications = {};
+    if (req.farmStore) {
+      try {
+        const profile = await req.farmStore.get(farmId, 'farm_profile');
+        if (profile && profile.certifications) {
+          certifications = profile.certifications;
+        }
+      } catch (e) {
+        // Non-fatal — certifications are optional
+      }
+    }
+
     res.json({
       success: true,
       setupCompleted,
+      completed: setupCompleted,
       farm: {
         farmId,
         name: farm?.name,
@@ -203,6 +225,7 @@ router.get('/status', authenticateToken, async (req, res) => {
         timezone: farm?.timezone,
         hasBusinessHours: !!farm?.business_hours
       },
+      certifications,
       roomCount
     });
 
@@ -546,39 +569,21 @@ router.post('/rooms', authenticateToken, async (req, res) => {
  */
 router.get('/rooms', authenticateToken, async (req, res) => {
   try {
-    const pool = req.db;
-    if (!pool) {
-      // No DB mode — read rooms from farmStore
-      let rooms = [];
-      if (req.farmStore) {
-        try {
-          const stored = await req.farmStore.get(req.farmId, 'rooms');
-          if (Array.isArray(stored)) rooms = stored;
-        } catch (e) {
-          console.warn('[Setup Wizard] farmStore rooms read error:', e.message);
-        }
+    // Always use farmStore — it resolves DB → memory → flat file automatically.
+    // The legacy 'rooms' SQL table does not exist; room data lives in farm_data.
+    let rooms = [];
+    if (req.farmStore) {
+      try {
+        const stored = await req.farmStore.get(req.farmId, 'rooms');
+        if (Array.isArray(stored)) rooms = stored;
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore rooms read error:', e.message);
       }
-      return res.json({
-        success: true,
-        rooms
-      });
     }
-
-    const farmId = req.farmId;
-
-    const result = await pool.query(
-      `SELECT room_id, farm_id, name, type, capacity, description, created_at
-       FROM rooms
-       WHERE farm_id = $1
-       ORDER BY created_at ASC`,
-      [farmId]
-    );
-
-    res.json({
+    return res.json({
       success: true,
-      rooms: result.rows
+      rooms
     });
-
   } catch (error) {
     console.error('[Setup Wizard] Get rooms error:', error);
     res.status(500).json({ 

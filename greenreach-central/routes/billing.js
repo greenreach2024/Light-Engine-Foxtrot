@@ -7,6 +7,18 @@ import express from 'express';
 const router = express.Router();
 
 /**
+ * GET /api/billing/receipts
+ * Return billing receipts (stub — no payment system configured yet)
+ */
+router.get('/receipts', (req, res) => {
+  res.json({
+    status: 'ok',
+    receipts: [],
+    total: 0
+  });
+});
+
+/**
  * GET /api/billing/usage/:farmId
  * Return usage and limits (cloud)
  */

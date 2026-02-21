@@ -143,6 +143,15 @@ router.post('/api/farm/square/authorize', (req, res) => {
 });
 
 // ═══════════ Checkout Session (Stripe) ═══════════
+router.get('/api/farm/stripe/status', (req, res) => {
+  res.json({
+    ok: true,
+    connected: false,
+    status: 'not_connected',
+    message: 'Stripe integration not configured on this instance',
+  });
+});
+
 router.post('/api/farms/create-checkout-session', (req, res) => {
   const { planId, farmId, email } = req.body;
   // In production this would call Stripe API

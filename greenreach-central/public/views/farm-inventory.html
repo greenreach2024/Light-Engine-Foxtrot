@@ -760,8 +760,8 @@
         renderInventoryByHarvest(currentData, groupsData, forecastData, roomIdToName);
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
-        console.error('[loadInventory] Error:', error);
-        console.error('[loadInventory] Error stack:', error.stack);
+        console.error('[loadInventory] Error:', error?.message || error);
+        console.error('[loadInventory] Error stack:', error?.stack || '(no stack)');
         showError('Failed to load inventory data. Please try again.');
       } finally {
         hideLoading();

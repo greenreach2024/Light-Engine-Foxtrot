@@ -5442,7 +5442,7 @@ async function loadUsers() {
         // Fetch real users from API
         let users = [];
         try {
-            const resp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/users`, {
+            const resp = await fetch(`${API_BASE}/api/users/list`, {
                 headers: { 'Authorization': `Bearer ${currentSession.token}` }
             });
             if (resp.ok) {
@@ -6193,20 +6193,32 @@ function showNotification(message, type = 'info') {
 async function initUserManagement() {
     // Load current user info
     if (currentSession && currentSession.email) {
-        document.getElementById('current-user-email').value = currentSession.email || '';
-        document.getElementById('current-user-role').value = currentSession.role || 'admin';
+        const emailEl = document.getElementById('current-user-email');
+        const roleEl = document.getElementById('current-user-role');
+        if (emailEl) emailEl.value = currentSession.email || '';
+        if (roleEl) roleEl.value = currentSession.role || 'admin';
     }
 
-    // Setup event listeners
-    document.getElementById('change-password-form').addEventListener('submit', handlePasswordChange);
-    document.getElementById('add-user-btn').addEventListener('click', () => {
-        document.getElementById('add-user-form-container').style.display = 'block';
+    // Setup event listeners (with null guards for DOM elements)
+    const pwForm = document.getElementById('change-password-form');
+    if (pwForm) pwForm.addEventListener('submit', handlePasswordChange);
+
+    const addUserBtn = document.getElementById('add-user-btn');
+    if (addUserBtn) addUserBtn.addEventListener('click', () => {
+        const container = document.getElementById('add-user-form-container');
+        if (container) container.style.display = 'block';
     });
-    document.getElementById('cancel-add-user-btn').addEventListener('click', () => {
-        document.getElementById('add-user-form-container').style.display = 'none';
-        document.getElementById('add-user-form').reset();
+
+    const cancelBtn = document.getElementById('cancel-add-user-btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => {
+        const container = document.getElementById('add-user-form-container');
+        if (container) container.style.display = 'none';
+        const form = document.getElementById('add-user-form');
+        if (form) form.reset();
     });
-    document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
+
+    const addUserForm = document.getElementById('add-user-form');
+    if (addUserForm) addUserForm.addEventListener('submit', handleAddUser);
 
     // Load users list
     await loadUsers();

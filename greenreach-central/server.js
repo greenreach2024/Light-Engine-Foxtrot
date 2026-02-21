@@ -605,34 +605,17 @@ async function syncFarmData(options = {}) {
               logger.info(`[${syncLabel}] Stored groups (${groupsList.length}) for ${farmId}`);
             }
 
-            // Store rooms — prefer farm.json rooms (authoritative, never overwritten by edge sync)
-            // enriched with zone/tray/plant counts from groups
+            // Store rooms — preserve canonical format from rooms.json or farm.json
+            // NEVER transform zone strings to objects; consumers expect string arrays
             let roomsToStore;
-            if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
-              roomsToStore = farmData.rooms.map(room => {
-                const roomGroups = groupsList.filter(g => g.room === room.name);
-                const zoneNumbers = [...new Set(roomGroups.map(g => g.zone).filter(Boolean))];
-                return {
-                  id: room.id,
-                  name: room.name,
-                  type: 'vertical',
-                  zones: zoneNumbers.map(z => ({
-                    id: `${room.id}-z${z}`,
-                    name: `Zone ${z}`,
-                    zone: z
-                  })),
-                  groups: roomGroups.length,
-                  trays: roomGroups.reduce((s, g) => s + (g.trays || 0), 0),
-                  plants: roomGroups.reduce((s, g) => s + (g.plants || 0), 0)
-                };
-              });
-            } else {
-              // Fallback to rooms.json file
-              const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
-              if (fs.existsSync(roomsPath)) {
-                const roomsRaw = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-                roomsToStore = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || [roomsRaw]);
-              }
+            const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
+            if (fs.existsSync(roomsPath)) {
+              // Prefer rooms.json — it has full room data (zones, category, equipment)
+              const roomsRaw = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+              roomsToStore = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || [roomsRaw]);
+            } else if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
+              // Fall back to farm.json rooms (slim but correct format)
+              roomsToStore = farmData.rooms;
             }
             if (roomsToStore) {
               await dbQuery(
