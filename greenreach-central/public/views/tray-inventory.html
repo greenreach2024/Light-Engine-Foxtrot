@@ -4736,11 +4736,14 @@
             >
               🖨️ Print Harvest Label
             </button>
+            <div id="autoPrintStatus" style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.9rem;"></div>
             <div style="margin-top: 1rem;">
               <button onclick="closeScanModal()" class="button">Done</button>
             </div>
           </div>
         `;
+
+        triggerAutoHarvestLabelPrint(data?.label_print);
         
         // Refresh harvest list
         loadDashboardData();
@@ -4768,6 +4771,42 @@
       // Open label in new window to print
       const labelUrl = `${API_BASE}/api/labels/harvest?lot_code=${lotCode}&tray_run_id=${trayRunId}`;
       window.open(labelUrl, '_blank', 'width=600,height=800');
+    }
+
+    async function triggerAutoHarvestLabelPrint(labelPrintData) {
+      const statusEl = document.getElementById('autoPrintStatus');
+      if (!statusEl || !labelPrintData?.auto_print) return;
+
+      const printerConfigured = localStorage.getItem('thermalPrinterConfigured') === 'true';
+      if (!printerConfigured) {
+        statusEl.textContent = 'ℹ️ Auto-print skipped (thermal printer not configured).';
+        return;
+      }
+
+      statusEl.textContent = '🖨️ Sending harvest label to thermal printer...';
+      try {
+        const endpoint = labelPrintData.endpoint || '/api/printer/print-harvest';
+        const printRes = await fetch(`${currentAPI}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lotCode: labelPrintData.lotCode,
+            cropName: labelPrintData.cropName,
+            weight: labelPrintData.weight,
+            unit: labelPrintData.unit || 'oz'
+          })
+        });
+
+        if (!printRes.ok) {
+          const err = await printRes.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to send print job');
+        }
+
+        statusEl.textContent = '✓ Label sent to thermal printer.';
+      } catch (error) {
+        statusEl.textContent = '⚠️ Auto-print failed. Use "Print Harvest Label" to retry.';
+        console.warn('[Print] Harvest auto-print failed:', error.message);
+      }
     }
 
     // Show Simple Planting Schedule

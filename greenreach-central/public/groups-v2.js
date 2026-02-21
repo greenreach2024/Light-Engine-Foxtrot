@@ -6985,6 +6985,75 @@ function updateBsgPreview() {
 }
 
 /**
+ * Refresh auto-assign device pool from live discovery so Build Stock Groups can
+ * assign newly discovered lights/controllers without manual pre-refresh.
+ * @returns {Promise<{added:number,total:number}>}
+ */
+async function refreshBsgDiscoveryPool() {
+  const discoveryTimeoutMs = 8000;
+  const abortController = new AbortController();
+  const timeoutHandle = setTimeout(() => abortController.abort(), discoveryTimeoutMs);
+
+  try {
+    const response = await fetch('/discovery/devices', {
+      cache: 'no-store',
+      signal: abortController.signal
+    });
+    clearTimeout(timeoutHandle);
+    if (!response.ok) return { added: 0, total: 0 };
+
+    const payload = await response.json();
+    const devices = Array.isArray(payload?.devices) ? payload.devices : [];
+    if (!window.STATE) window.STATE = {};
+    if (!Array.isArray(window.STATE.iotDevices)) window.STATE.iotDevices = [];
+
+    const existingKeys = new Set(
+      window.STATE.iotDevices
+        .map(d => String(d?.id || d?.deviceId || d?.serial || d?.mac || '').trim())
+        .filter(Boolean)
+    );
+
+    let added = 0;
+    devices.forEach((device) => {
+      if (!device) return;
+      const key = String(device.id || device.deviceId || device.serial || device.mac || '').trim();
+      if (!key || existingKeys.has(key)) return;
+
+      const hintType = String(device?.hints?.type || '').toLowerCase();
+      const inferredType = hintType.includes('plug')
+        ? 'plug'
+        : (hintType.includes('light') || hintType.includes('grow') ? 'light' : 'device');
+
+      window.STATE.iotDevices.push({
+        id: key,
+        deviceId: key,
+        name: device.name || key,
+        protocol: device.protocol || '',
+        vendor: device.vendor || '',
+        manufacturer: device.vendor || '',
+        address: device.address || '',
+        ip: device.address || '',
+        category: hintType || inferredType,
+        type: inferredType,
+        deviceType: inferredType,
+        discoveredAt: device.lastSeen || new Date().toISOString(),
+        fromDiscovery: true
+      });
+
+      existingKeys.add(key);
+      added++;
+    });
+
+    syncIoTDevicesIntoLights();
+    return { added, total: devices.length };
+  } catch (error) {
+    clearTimeout(timeoutHandle);
+    console.warn('[Build Stock] Discovery refresh failed:', error?.message || error);
+    return { added: 0, total: 0 };
+  }
+}
+
+/**
  * Execute batch creation of stock groups
  * @returns {Promise<{created: number, skipped: number}>}
  */
@@ -7014,6 +7083,11 @@ async function executeBuildStockGroups() {
 
   if (!window.STATE) window.STATE = {};
   if (!Array.isArray(window.STATE.groups)) window.STATE.groups = [];
+
+  // Phase 2.7 orchestration: refresh live discovery pool before auto-assign.
+  if (!standardLightTemplate && autoAssign) {
+    await refreshBsgDiscoveryPool();
+  }
 
   const existingIds = new Set(window.STATE.groups.map(g => g.id));
   const unassigned = autoAssign ? getBsgUnassignedLights() : [];

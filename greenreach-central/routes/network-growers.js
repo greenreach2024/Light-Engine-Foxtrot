@@ -8,6 +8,7 @@
  *   GET /api/network/farms/:farmId        - Single farm detail
  *   GET /api/network/comparative-analytics - Cross-farm analytics
  *   GET /api/network/trends               - Network trend data
+ *   GET /api/network/buyer-behavior       - Buyer behavior and churn analytics
  *   GET /api/network/alerts               - Network alerts
  *   GET /api/growers/dashboard            - Grower management dashboard
  *   GET /api/growers/list                 - List all growers
@@ -175,7 +176,7 @@ router.get('/network/trends', async (req, res) => {
   try {
     const period = req.query.period || '90d';
     if (!(await isDatabaseAvailable())) {
-      return res.json({ success: true, trends: { period, networkGrowth: [], productionTrend: [], yieldTrend: [] } });
+      return res.json({ success: true, trends: { period, networkGrowth: [], productionTrend: [], demandTrend: [], yieldTrend: [] } });
     }
 
     const sinceDays = parseInt(period);
@@ -200,6 +201,40 @@ router.get('/network/trends', async (req, res) => {
       GROUP BY week ORDER BY week
     `, [sinceDate.toISOString()]);
 
+    // Demand trend: wholesale order demand per week
+    let demandResult = { rows: [] };
+    try {
+      demandResult = await query(`
+        SELECT
+          DATE_TRUNC('week', created_at) AS week,
+          COUNT(*) AS orders,
+          COALESCE(SUM(
+            (
+              SELECT SUM(
+                CASE
+                  WHEN (item->>'quantity') ~ '^[0-9]+(\\.[0-9]+)?$' THEN (item->>'quantity')::DECIMAL
+                  WHEN (item->>'qty') ~ '^[0-9]+(\\.[0-9]+)?$' THEN (item->>'qty')::DECIMAL
+                  ELSE 0
+                END
+              )
+              FROM jsonb_array_elements(COALESCE(order_data->'cart', '[]'::jsonb)) item
+            )
+          ), 0) AS total_units
+        FROM wholesale_orders
+        WHERE created_at >= $1
+        GROUP BY week
+        ORDER BY week
+      `, [sinceDate.toISOString()]);
+    } catch (demandError) {
+      console.warn('[Network] Demand trend unavailable:', demandError.message);
+    }
+
+    const productionTrend = prodResult.rows.map(r => ({
+      week: r.week,
+      harvests: parseInt(r.harvests),
+      avg_yield_oz: r.avg_yield ? parseFloat(r.avg_yield).toFixed(3) : null
+    }));
+
     res.json({
       success: true,
       trends: {
@@ -207,15 +242,115 @@ router.get('/network/trends', async (req, res) => {
         networkGrowth: growthResult.rows.map(r => ({
           week: r.week, new_farms: parseInt(r.new_farms)
         })),
-        productionTrend: prodResult.rows.map(r => ({
+        productionTrend,
+        demandTrend: demandResult.rows.map(r => ({
           week: r.week,
-          harvests: parseInt(r.harvests),
-          avg_yield_oz: r.avg_yield ? parseFloat(r.avg_yield).toFixed(3) : null
+          orders: parseInt(r.orders),
+          total_units: parseFloat(r.total_units || 0)
+        })),
+        yieldTrend: productionTrend.map(r => ({
+          week: r.week,
+          avg_yield_oz: r.avg_yield_oz
         })),
       }
     });
   } catch (error) {
     console.error('[Network] Trends error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── Buyer Behavior & Churn (Phase 2 Task 2.12) ───────────
+router.get('/network/buyer-behavior', async (req, res) => {
+  try {
+    const period = req.query.period || '90d';
+    if (!(await isDatabaseAvailable())) {
+      return res.json({
+        success: true,
+        behavior: {
+          period,
+          summary: { active_buyers: 0, at_risk_buyers: 0, churned_buyers: 0, repeat_rate: 0 },
+          buyers: []
+        }
+      });
+    }
+
+    const sinceDays = parseInt(period);
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - sinceDays);
+
+    const buyerStats = await query(`
+      WITH buyer_orders AS (
+        SELECT
+          COALESCE(NULLIF(buyer_email, ''), NULLIF(order_data->'buyer_account'->>'email', ''), buyer_id) AS buyer_key,
+          MAX(created_at) AS last_order_at,
+          MIN(created_at) AS first_order_at,
+          COUNT(*) AS total_orders,
+          COUNT(*) FILTER (WHERE created_at >= $1) AS period_orders,
+          COALESCE(SUM(
+            (
+              SELECT SUM(
+                CASE
+                  WHEN (item->>'quantity') ~ '^[0-9]+(\\.[0-9]+)?$' THEN (item->>'quantity')::DECIMAL
+                  WHEN (item->>'qty') ~ '^[0-9]+(\\.[0-9]+)?$' THEN (item->>'qty')::DECIMAL
+                  ELSE 0
+                END
+              )
+              FROM jsonb_array_elements(COALESCE(order_data->'cart', '[]'::jsonb)) item
+            )
+          ), 0) AS lifetime_units
+        FROM wholesale_orders
+        GROUP BY buyer_key
+      )
+      SELECT
+        buyer_key,
+        first_order_at,
+        last_order_at,
+        total_orders,
+        period_orders,
+        lifetime_units,
+        CASE
+          WHEN last_order_at < NOW() - INTERVAL '60 days' THEN 'churned'
+          WHEN last_order_at < NOW() - INTERVAL '30 days' THEN 'at_risk'
+          ELSE 'active'
+        END AS churn_status
+      FROM buyer_orders
+      WHERE buyer_key IS NOT NULL
+      ORDER BY last_order_at DESC
+      LIMIT 500
+    `, [sinceDate.toISOString()]);
+
+    const buyers = buyerStats.rows.map(row => ({
+      buyer: row.buyer_key,
+      first_order_at: row.first_order_at,
+      last_order_at: row.last_order_at,
+      total_orders: parseInt(row.total_orders),
+      period_orders: parseInt(row.period_orders),
+      lifetime_units: parseFloat(row.lifetime_units || 0),
+      churn_status: row.churn_status
+    }));
+
+    const total = buyers.length || 1;
+    const active = buyers.filter(b => b.churn_status === 'active').length;
+    const atRisk = buyers.filter(b => b.churn_status === 'at_risk').length;
+    const churned = buyers.filter(b => b.churn_status === 'churned').length;
+    const repeat = buyers.filter(b => b.total_orders > 1).length;
+
+    res.json({
+      success: true,
+      behavior: {
+        period,
+        summary: {
+          active_buyers: active,
+          at_risk_buyers: atRisk,
+          churned_buyers: churned,
+          repeat_rate: parseFloat(((repeat / total) * 100).toFixed(1))
+        },
+        buyers
+      }
+    });
+  } catch (error) {
+    console.error('[Network] Buyer behavior error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

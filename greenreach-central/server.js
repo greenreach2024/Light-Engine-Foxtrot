@@ -30,6 +30,7 @@ import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import envProxyRoutes from './routes/env-proxy.js';
+import discoveryProxyRoutes from './routes/discovery-proxy.js';
 import mlForecastRoutes from './routes/ml-forecast.js';
 import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
@@ -2091,6 +2092,8 @@ app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
+app.use('/discovery/devices', discoveryProxyRoutes); // Device discovery proxy to farm devices
+app.use('/api/discovery/devices', discoveryProxyRoutes); // API alias for discovery proxy
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers

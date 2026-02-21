@@ -4705,6 +4705,9 @@
             <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Crop / Recipe *</label>
             <input type="text" id="seedCrop" placeholder="e.g., Butterhead Lettuce" required
               style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            <div id="seedAiHint" style="font-size: 0.8rem; color: #60a5fa; margin-top: 4px;">
+              🤖 AI is selecting the best crop suggestion...
+            </div>
           </div>
 
           <div style="margin-bottom: 1rem;">
@@ -4746,6 +4749,36 @@
         </div>
       `;
       scanResult.style.display = 'block';
+      loadSuggestedSeedCrop(trayId);
+    }
+
+    async function loadSuggestedSeedCrop(trayId) {
+      const cropInput = document.getElementById('seedCrop');
+      const hintEl = document.getElementById('seedAiHint');
+      if (!cropInput || !hintEl) return;
+
+      try {
+        const params = new URLSearchParams();
+        if (trayId) params.set('trayId', trayId);
+        const suggestionRes = await fetch(`${currentAPI}/api/ai/suggested-crop?${params.toString()}`);
+        const suggestionData = await suggestionRes.json();
+
+        const suggestion = suggestionData?.suggestion || null;
+        if (suggestion?.cropName && !cropInput.value.trim()) {
+          cropInput.value = suggestion.cropName;
+        }
+
+        if (suggestion?.cropName) {
+          const confidencePct = suggestion.confidence != null
+            ? ` (${Math.round(suggestion.confidence * 100)}% confidence)`
+            : '';
+          hintEl.innerHTML = `🤖 AI suggestion: <strong style="color: #93c5fd;">${suggestion.cropName}</strong>${confidencePct} — you can edit this anytime.`;
+        } else {
+          hintEl.textContent = suggestionData?.reason || 'No AI suggestion available right now. Enter crop manually.';
+        }
+      } catch (error) {
+        hintEl.textContent = 'AI suggestion unavailable right now. Enter crop manually.';
+      }
     }
 
     async function submitSeed(trayId) {
@@ -4913,12 +4946,50 @@
           >
             🖨️ Print Harvest Label
           </button>
+          <div id="autoPrintStatus" style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.9rem;"></div>
           <div style="margin-top: 1rem;">
             <button onclick="closeScanModal()" class="button">Done</button>
           </div>
         </div>
       `;
+      triggerAutoHarvestLabelPrint(data?.label_print);
       loadDashboardData();
+    }
+
+    async function triggerAutoHarvestLabelPrint(labelPrintData) {
+      const statusEl = document.getElementById('autoPrintStatus');
+      if (!statusEl || !labelPrintData?.auto_print) return;
+
+      const printerConfigured = localStorage.getItem('thermalPrinterConfigured') === 'true';
+      if (!printerConfigured) {
+        statusEl.textContent = 'ℹ️ Auto-print skipped (thermal printer not configured).';
+        return;
+      }
+
+      statusEl.textContent = '🖨️ Sending harvest label to thermal printer...';
+      try {
+        const endpoint = labelPrintData.endpoint || '/api/printer/print-harvest';
+        const printRes = await fetch(`${currentAPI}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lotCode: labelPrintData.lotCode,
+            cropName: labelPrintData.cropName,
+            weight: labelPrintData.weight,
+            unit: labelPrintData.unit || 'oz'
+          })
+        });
+
+        if (!printRes.ok) {
+          const err = await printRes.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to send print job');
+        }
+
+        statusEl.textContent = '✓ Label sent to thermal printer.';
+      } catch (error) {
+        statusEl.textContent = '⚠️ Auto-print failed. Use "Print Harvest Label" to retry.';
+        console.warn('[Print] Harvest auto-print failed:', error.message);
+      }
     }
 
     // ────────────────────────────────────────────────────────────
