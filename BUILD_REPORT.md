@@ -196,6 +196,12 @@ Most modules follow a 4-file pattern: `validation.ts` → `service.ts` → `cont
 | `delivery-events.test.ts` | 10 | SSE event type validation, event bus integration |
 | **Total** | **66** | All algorithmic/pure-function code — no DB required |
 
+### API Contract Smoke Suite
+
+- `scripts/smoke-api.sh` runs **118 endpoint contract checks** across all API modules.
+- Covers auth bootstrap, seeded fixture setup, role-protected routes, write/read flows, and expected business-rule errors (e.g., `400`, `404`, `409`) while failing on unexpected statuses.
+- Integrated into CI via `smoke-api` GitHub Actions job (PostgreSQL service + migrate + seed + app boot + smoke run).
+
 ---
 
 ## Core Algorithms
@@ -266,6 +272,7 @@ All issues identified during codebase audit have been resolved:
 | --- | --- |
 | TypeScript compilation | **0 errors** |
 | Test suite | **66/66 passing** (277ms) |
+| API smoke contract | **118 checks / 0 failures** |
 | Seed data schema alignment | **Verified** (UUID-compatible, no invalid table references) |
 | Type ↔ SQL contract | **Aligned** |
 | Environment config | **Complete** |

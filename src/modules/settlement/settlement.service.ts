@@ -7,6 +7,12 @@ export class SettlementService {
   // ─── Fee Quotes (DPWRA pre-acceptance disclosure) ────────
 
   async createFeeQuote(input: CreateFeeQuoteInput) {
+    const route = await db("routes").where("id", input.route_id).first();
+    if (!route) throw new NotFoundError("Route", input.route_id);
+
+    const driver = await db("drivers").where("id", input.driver_id).first();
+    if (!driver) throw new NotFoundError("Driver", input.driver_id);
+
     const pay = calculateRoutePay(PAYOUT_POLICY, {
       distance_km: input.estimated_km,
       engaged_min: input.estimated_min,

@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "smoke:api": "bash scripts/smoke-api.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/ --ext .ts",

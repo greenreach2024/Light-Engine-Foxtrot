@@ -1,4 +1,5 @@
 import { db } from "../../db/index.js";
+import dayjs from "dayjs";
 import { env } from "../../config/env.js";
 import { NotFoundError } from "../../shared/utils/errors.js";
 import { generateRouteNumber } from "../../shared/utils/helpers.js";
@@ -67,12 +68,20 @@ export class RoutingService {
       costPerWaitMin: env.COST_PER_WAIT_MIN,
     };
 
+    const datePart = dayjs().format("YYYYMMDD");
+    const wavePart = wave.wave_label.includes("AM") ? "AM" : "PM";
+    const routePrefix = `RT-${datePart}-${wavePart}-`;
+    const existingResult = await db("routes")
+      .where("route_number", "like", `${routePrefix}%`)
+      .count("id as count");
+    const existingCount = Number(existingResult[0]?.count || 0);
+
     // Persist routes
     const routes: Route[] = [];
     for (let i = 0; i < vrpResults.length; i++) {
       const vrpRoute = vrpResults[i];
       const costResult = computeRouteCost(vrpRoute, rates);
-      const routeNumber = generateRouteNumber(wave.wave_label, i + 1);
+      const routeNumber = generateRouteNumber(wave.wave_label, existingCount + i + 1);
 
       const [route] = await db("routes")
         .insert({
