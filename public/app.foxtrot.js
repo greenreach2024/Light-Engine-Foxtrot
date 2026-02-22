@@ -9910,6 +9910,8 @@ class RoomWizard {
         this.updateSetupQueue();
         if (active.length) this.showError('hardwareError', '');
       });
+      // Mark listener attached to prevent duplicate attachment in showStep
+      hwHost.dataset.listenerAttached = 'true';
     }
 
     const hubRadios = document.querySelectorAll('input[name="roomHubPresence"]');
