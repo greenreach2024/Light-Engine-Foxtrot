@@ -1,6 +1,6 @@
 # AI Vision: Agent Rules & Skills
 
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Date**: February 21, 2026  
 **Source Authority**: `AI_VISION_REPORT.md` (v2, 52 opportunities, Central-first architecture)  
 **Companion To**: `AGENT_SKILLS_FRAMEWORK.md` (v1.3.0)  
@@ -175,6 +175,39 @@ grep -n "score.*0" greenreach-central/routes/network-growers.js
 ```
 ❌ PROHIBITED: Creating /api/network/my-custom-analytics alongside empty /api/network/comparative-analytics
 ✅ REQUIRED: Populate existing stub endpoints first, then extend
+```
+
+### Rule 2.5: Central Intelligence Contract (Mandatory)
+
+**Mandate**: Any GreenReach Central AI change MUST preserve the core intelligence contract and prove compatibility with existing farm integrations.
+
+| Contract Area | Required Behavior | Evidence Required |
+|--------------|-------------------|-------------------|
+| Ingestion | Central accepts canonical experiment records | Request/response example for `POST /api/sync/experiment-records` |
+| Aggregation | Nightly benchmark pipeline remains operational | Job trigger/log evidence or test output |
+| Push payload | `POST /api/health/ai-recommendations` remains backward-compatible | Sample payload showing existing + `network_intelligence` keys |
+| Analytics APIs | Existing `/api/network/*` endpoints are extended, not bypassed | Endpoint diff and sample response |
+
+```
+❌ PROHIBITED: Breaking existing AI recommendation payload keys consumed by farms
+❌ PROHIBITED: Replacing existing endpoints without migration/adapters
+✅ REQUIRED: Backward-compatible payload evolution with additive fields
+✅ REQUIRED: Include proof of contract compatibility in PR notes
+```
+
+### Rule 2.6: Central-First Scope Control
+
+**Mandate**: Central AI work must prioritize network leverage before farm-local optimization when both are possible in the same effort.
+
+Priority order for ambiguous scope:
+1. Enable Central ingestion of learnable data
+2. Enable Central benchmark/insight generation
+3. Enable Central push-back to farms
+4. Add farm-local optimization refinements
+
+```
+❌ PROHIBITED: Spending a sprint on farm-local tuning while Central still cannot ingest experiment records
+✅ REQUIRED: Resolve Central bottlenecks first when they block network learning
 ```
 
 ---
@@ -637,6 +670,20 @@ Prerequisites met:
 ✅ REQUIRED: "Phase 1 prerequisites: experiment records captured ✅, Central ingestion ✅ → proceed to Phase 2"
 ```
 
+### Rule 10.4: Central Promotion Gate
+
+**Mandate**: Central AI capabilities may only be promoted phase-by-phase after explicit validation of both data quality and downstream farm compatibility.
+
+Promotion evidence required:
+- Data quality checks passed (schema validity + threshold coverage)
+- Backward compatibility confirmed for farm consumers
+- At least one end-to-end sample from ingest → aggregate → push
+
+```
+❌ PROHIBITED: Promoting Central Phase 2/3 capability with only unit-level validation
+✅ REQUIRED: End-to-end validation artifact per promoted capability
+```
+
 ---
 
 ## 11. Agent Skills Required
@@ -732,6 +779,8 @@ Agents MUST understand ML training data requirements:
 - [ ] Uses existing pipes (Rule 2.2)
 - [ ] Respects Central's current phase (Rule 2.3)
 - [ ] Populates stubs before creating new endpoints (Rule 2.4)
+- [ ] Preserves Central intelligence contract (Rule 2.5)
+- [ ] Prioritizes Central bottlenecks before farm-only tuning (Rule 2.6)
 
 ### Data
 - [ ] Uses canonical experiment record schema (Rule 3.1)
@@ -753,6 +802,7 @@ Agents MUST understand ML training data requirements:
 ### Phase Gate
 - [ ] Correct phase identified (Rule 10.3)
 - [ ] Prerequisites for this phase met (Rule 10.1)
+- [ ] Central promotion evidence captured (Rule 10.4)
 
 Checklist completed: [DATE]
 Agent: [designation]
@@ -776,6 +826,8 @@ Agent: [designation]
 10. **In-memory ML** — ML features built on volatile in-memory data (Rule 9.2)
 11. **Single-duty scan** — Scan event that serves only 1 function (Rule 5.2)
 12. **Adds grower steps** — Feature increases manual actions instead of reducing them (Rule 5.1)
+13. **Central contract break** — Changes Central payload/API behavior without compatibility proof (Rule 2.5)
+14. **No promotion evidence** — Advances Central capability without end-to-end validation artifact (Rule 10.4)
 
 ### Architecture Agent MUST auto-reject if:
 
@@ -784,6 +836,7 @@ Agent: [designation]
 3. **Duplicate endpoint** — Creates new analytics endpoint alongside existing stubs (Rule 2.4)
 4. **P0 data not captured yet** — Proposes P2 or P3 features while P0 data collection is incomplete (Rule 9.1)
 5. **No scientific mode** — Feature doesn't serve OBSERVE, EXPERIMENT, or LEARN (Rule 1.3)
+6. **Central-first violation** — Farm-local optimization prioritized while Central ingestion/push bottlenecks remain unresolved (Rule 2.6)
 
 ---
 
