@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.git/
+.env
+*.log
+.DS_Store
+coverage/
+.vscode/
+*.tgz
+*.md
+tests/
+vitest.config.ts
+.github/
+public/
