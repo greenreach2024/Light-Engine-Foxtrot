@@ -78,6 +78,7 @@ import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
 import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
 import { initExperimentTables, createExperiment, activateExperiment, recordObservation, analyzeExperiment, completeExperiment, listExperiments, getExperiment, getExperimentsForFarm } from './jobs/experiment-orchestrator.js';
+import { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } from './jobs/production-planner.js';
 import { generateGovernanceReport, formatReportText } from './reports/governance-review.js';
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
@@ -2361,8 +2362,6 @@ app.get('/api/governance/report', async (req, res) => {
 });
 
 // ── Phase 5 Ticket 5.4: Network Production Planning ──────────────────
-
-const { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } = require('./jobs/production-planner');
 
 /**
  * GET /api/production/plan
