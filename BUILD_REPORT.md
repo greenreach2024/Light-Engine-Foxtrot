@@ -188,6 +188,10 @@ Delivery UX now includes explicit GreenReach Central navigation and contact path
 - `public/driver-apply.html` — dedicated `GreenReach Central` nav anchor + stakeholder communication section and footer contacts
 - `public/driver-portal.html` — dedicated `GreenReach Central` nav anchor + sidebar help links for farms/buyers/drivers/ops escalation
 
+### GreenReach Central AI Rules (Updated)
+
+- `public/delivery-platform.html` now includes an explicit **AI Rules (GreenReach Central)** block under the Central section, defining human-in-the-loop approvals, compliance/safety escalation, no autonomous financial penalties, mandatory audit logging, and approved stakeholder communication channels.
+
 ---
 
 ## Configuration
