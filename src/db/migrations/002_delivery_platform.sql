@@ -323,6 +323,6 @@ CREATE INDEX idx_pay_statement_lines_stmt ON pay_statement_lines (statement_id);
 CREATE INDEX idx_pay_statement_lines_route ON pay_statement_lines (route_id) WHERE route_id IS NOT NULL;
 CREATE INDEX idx_payout_batches_date ON payout_batches (pay_date);
 CREATE INDEX idx_payouts_batch ON payouts (batch_id);
-CREATE INDEX idx_payouts_driver ON payouts (driver_id);
+CREATE INDEX idx_payouts_driver_id ON payouts (driver_id);
 CREATE INDEX idx_pick_packs_order ON pick_packs (order_id);
 CREATE INDEX idx_stop_orders_order ON stop_orders (order_id);

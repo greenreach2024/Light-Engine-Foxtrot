@@ -11,4 +11,3 @@ coverage/
 tests/
 vitest.config.ts
 .github/
-public/

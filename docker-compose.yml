@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,6 +14,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://foxtrot:foxtrot@postgres:5432/light_engine_foxtrot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

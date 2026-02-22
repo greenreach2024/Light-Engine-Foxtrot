@@ -21,10 +21,13 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy compiled output + migrations + seeds + static assets
+# Copy compiled output (includes dist/scripts/migrate.js & seed.js)
 COPY --from=build /app/dist/ ./dist/
-COPY src/db/ ./src/db/
-COPY scripts/ ./scripts/
+
+# Copy SQL migration & seed files needed at runtime
+COPY src/db/ ./dist/db/
+
+# Copy static assets
 COPY public/ ./public/
 
 # Non-root user
