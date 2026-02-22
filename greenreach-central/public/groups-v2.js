@@ -787,8 +787,11 @@ async function loadZonesFromRoomMapper() {
   if (!zoneSelect) return;
 
   try {
-    // Load room map data
-    const response = await fetch('/data/room-map.json');
+    // Load room map data with auth header for farm-scoped data
+    const token = localStorage.getItem('token');
+    const response = await fetch('/data/room-map.json', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     if (!response.ok) {
       console.warn('[Groups V2] No room map data available, using default zones');
       populateDefaultZones(zoneSelect);

@@ -1851,16 +1851,40 @@ app.get('/data/room-map.json', async (req, res) => {
 
 app.get('/data/room-map-:roomId.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
-  const roomId = String(req.params.roomId || '').trim();
-  // Try room-specific map first (stored as room_map with room ID embedded)
-  const roomSpecificName = roomId ? `room-map-${roomId}.json` : 'room-map.json';
-  const roomSpecific = await farmStore.getGlobal(roomSpecificName);
-  if (roomSpecific) {
-    return res.json(roomSpecific);
-  }
+  // Room-specific suffix is deprecated; all room maps now stored as farm-scoped room_map
+  // The data includes roomId field to identify which room the map is for
+  const payload = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
+  return res.json(payload);
+});
 
-  const generic = await farmStore.get(fid, 'room_map') || { zones: [], devices: [] };
-  return res.json(generic);
+// POST handler for room-map save (supports both generic and per-room patterns)
+app.post('/data/room-map.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  try {
+    await farmStore.set(fid, 'room_map', req.body);
+    return res.json({ success: true, dataType: 'room_map', farmId: fid });
+  } catch (err) {
+    logger.error('[Room Map] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/data/room-map-:roomId.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  try {
+    // Normalize: store as room_map regardless of roomId suffix (data contains roomId field)
+    await farmStore.set(fid, 'room_map', req.body);
+    return res.json({ success: true, dataType: 'room_map', farmId: fid, roomId: req.params.roomId });
+  } catch (err) {
+    logger.error('[Room Map] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/weather', (req, res) => {

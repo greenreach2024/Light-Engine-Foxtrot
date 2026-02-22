@@ -30,6 +30,7 @@ const FILE_TO_DATA_TYPE = {
   'farm.json': 'farm_profile',
   'plans.json': 'plans',
   'light-setups.json': 'light_setups',
+  'room-map.json': 'room_map',
 };
 
 // Default empty responses for each data type (prevent frontend errors)
@@ -44,6 +45,7 @@ const EMPTY_DEFAULTS = {
   'farm.json': { farmId: 'pending', name: 'New Farm', status: 'setup' },
   'plans.json': { plans: [] },
   'light-setups.json': { lightSetups: [] },
+  'room-map.json': { zones: [], devices: [] },
 };
 
 /**

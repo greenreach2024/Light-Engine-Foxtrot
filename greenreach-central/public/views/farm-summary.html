@@ -2952,8 +2952,11 @@
       console.log('[Zone Summaries] Loading zone summaries...');
 
       try {
-        // Load room map data
-        const response = await fetch('/data/room-map.json');
+        // Load room map data with auth header for farm-scoped data
+        const token = localStorage.getItem('token');
+        const response = await fetch('/data/room-map.json', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (!response.ok) {
           console.warn('[Zone Summaries] No room map data available');
           container.innerHTML = '';

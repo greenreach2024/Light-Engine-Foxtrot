@@ -2062,9 +2062,13 @@
       try {
         // Save to room-specific file: room-map-{roomId}.json
         const fileName = `room-map-${STATE.currentRoomId}.json`;
+        const token = localStorage.getItem('token');
         const response = await fetch(`/data/${fileName}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify(mapData)
         });
         
