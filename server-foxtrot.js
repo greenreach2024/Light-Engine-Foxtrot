@@ -4453,6 +4453,70 @@ async function patchControllerLight(deviceId, hexPayload, shouldPowerOn) {
 let dailyResolverRunning = false;
 let dailyResolverTimer = null;
 
+
+// === DB stores (moved before first usage to avoid TDZ errors) ===
+// Phase 2, Ticket 2.7: Agent action audit log
+// Every AI agent recommendation / action is persisted for governance & review.
+const agentAuditDB = new Datastore({
+  filename: './data/agent-audit.db',
+  autoload: true,
+  timestampData: true
+});
+
+// ─── AI Vision Phase 1: Experiment Data Stores ─────────────────────────
+// P0: Recipe parameters applied per group per day (Rule 9.1, Task 1.1)
+const appliedRecipesDB = new Datastore({
+  filename: './data/applied-recipes.db',
+  autoload: true,
+  timestampData: true
+});
+
+// P0: Complete harvest outcome "experiment record" (Rule 3.1, Task 1.2)
+const harvestOutcomesDB = new Datastore({
+  filename: './data/harvest-outcomes.db',
+  autoload: true,
+  timestampData: true
+});
+
+const trayLossEventsDB = new Datastore({
+  filename: './data/tray-loss-events.db',
+  autoload: true,
+  timestampData: true
+});
+
+// I-1.9: Device integration records store (Integration Assistant)
+// Tracks all device integrations for network learning and Central sync
+const integrationDB = new Datastore({
+  filename: './data/integrations.db',
+  autoload: true,
+  timestampData: true
+});
+
+const trayFormatsDB = new Datastore({
+  filename: './data/tray-formats.db',
+  autoload: true,
+  timestampData: true
+});
+
+const traysDB = new Datastore({
+  filename: './data/trays.db',
+  autoload: true,
+  timestampData: true
+});
+
+// Inventory tracking databases
+const trayRunsDB = new Datastore({
+  filename: './data/tray-runs.db',
+  autoload: true,
+  timestampData: true
+});
+
+const trayPlacementsDB = new Datastore({
+  filename: './data/tray-placements.db',
+  autoload: true,
+  timestampData: true
+});
+
 async function runDailyPlanResolver(trigger = 'manual') {
   if (dailyResolverRunning) {
     console.warn(`[daily] resolver already running (trigger: ${trigger})`);
@@ -5199,9 +5263,17 @@ app.get('/env', async (req, res) => {
       analytics: aiBundle.analyticsByRoom.get(room.roomId) || null
     }));
 
-    // Validate outdoor sensor for ML readiness
-    const outdoorSensor = outdoorSensorValidator.findOutdoorSensor(zones);
-    const outdoorValidation = outdoorSensorValidator.validateOutdoorSensor(outdoorSensor);
+    // Outdoor conditions from weather API (no physical outdoor sensor needed)
+    let outdoorData = null;
+    if (LAST_WEATHER && LAST_WEATHER.current) {
+      outdoorData = {
+        temp: LAST_WEATHER.current.temperature_c,
+        rh: LAST_WEATHER.current.humidity,
+        timestamp: LAST_WEATHER.current.last_updated || new Date(LAST_WEATHER_AT).toISOString(),
+        zone: 'weather-api'
+      };
+    }
+    const outdoorValidation = outdoorSensorValidator.validateOutdoorSensor(outdoorData);
     const validationSummary = outdoorSensorValidator.getValidationSummary(outdoorValidation);
 
     res.json({
@@ -5228,7 +5300,11 @@ app.get('/env', async (req, res) => {
           analytics: room.analytics
         }))
       },
-      outdoor_sensor: validationSummary,
+      outdoor_conditions: {
+        ...validationSummary,
+        source: 'weather-api',
+        weather: LAST_WEATHER ? LAST_WEATHER.current : null
+      },
       meta: {
         envSource: zonesPayload.source,
         evaluatedAt: automationState.evaluatedAt,
@@ -5798,7 +5874,7 @@ function deviceDocToJson(d){
 function createDeviceStore(){
   ensureDbDir();
   // During tests, prefer an in-memory store to avoid filesystem races and unhandled rejections
-  const store = Datastore.create({
+  const store = new Datastore({
     filename: DB_PATH,
     autoload: !RUNNING_UNDER_NODE_TEST,
     timestampData: true,
@@ -9899,7 +9975,7 @@ app.post('/api/schedule-executor/device-registry', (req, res) => {
  * Harvest Logging Endpoint
  * Records actual harvest dates and calculates variance from planned schedules
  */
-app.post('/api/harvest', (req, res) => {
+app.post('/api/harvest', async (req, res) => {
   try {
     const harvestEntry = req.body;
     
@@ -17973,11 +18049,11 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
 // =====================================================
 // NeDB-backed stores for farm supplies inventory (Phase 0, Ticket 0.2)
 // In-memory arrays kept for fast reads; every mutation writes through to NeDB.
-const seedsInventoryDB = Datastore.create({ filename: './data/seeds-inventory.db', autoload: true });
-const packagingInventoryDB = Datastore.create({ filename: './data/packaging-inventory.db', autoload: true });
-const nutrientsInventoryDB = Datastore.create({ filename: './data/nutrients-inventory.db', autoload: true });
-const equipmentInventoryDB = Datastore.create({ filename: './data/equipment-inventory.db', autoload: true });
-const suppliesInventoryDB = Datastore.create({ filename: './data/supplies-inventory.db', autoload: true });
+const seedsInventoryDB = new Datastore({ filename: './data/seeds-inventory.db', autoload: true });
+const packagingInventoryDB = new Datastore({ filename: './data/packaging-inventory.db', autoload: true });
+const nutrientsInventoryDB = new Datastore({ filename: './data/nutrients-inventory.db', autoload: true });
+const equipmentInventoryDB = new Datastore({ filename: './data/equipment-inventory.db', autoload: true });
+const suppliesInventoryDB = new Datastore({ filename: './data/supplies-inventory.db', autoload: true });
 
 const seedsInventory = [];
 const packagingInventory = [];
@@ -24755,7 +24831,7 @@ let SETUP_WIZARDS = buildSetupWizards();
 let WIZARD_TEST_MODE = false;
 
 // Wizard state persistence with NeDB
-const wizardStatesDB = Datastore.create({
+const wizardStatesDB = new Datastore({
   filename: './data/wizard-states.db',
   autoload: true,
   timestampData: true
@@ -24763,71 +24839,18 @@ const wizardStatesDB = Datastore.create({
 const wizardStates = new Map(); // In-memory cache for fast access
 const wizardDiscoveryContext = new Map();
 
-// Inventory tracking databases
-const trayRunsDB = Datastore.create({
-  filename: './data/tray-runs.db',
-  autoload: true,
-  timestampData: true
-});
 
-const trayLossEventsDB = Datastore.create({
-  filename: './data/tray-loss-events.db',
-  autoload: true,
-  timestampData: true
-});
 
-const traysDB = Datastore.create({
-  filename: './data/trays.db',
-  autoload: true,
-  timestampData: true
-});
 
-const trayFormatsDB = Datastore.create({
-  filename: './data/tray-formats.db',
-  autoload: true,
-  timestampData: true
-});
 
-const trayPlacementsDB = Datastore.create({
-  filename: './data/tray-placements.db',
-  autoload: true,
-  timestampData: true
-});
 
-// ─── AI Vision Phase 1: Experiment Data Stores ─────────────────────────
-// P0: Recipe parameters applied per group per day (Rule 9.1, Task 1.1)
-const appliedRecipesDB = Datastore.create({
-  filename: './data/applied-recipes.db',
-  autoload: true,
-  timestampData: true
-});
 
-// P0: Complete harvest outcome "experiment record" (Rule 3.1, Task 1.2)
-const harvestOutcomesDB = Datastore.create({
-  filename: './data/harvest-outcomes.db',
-  autoload: true,
-  timestampData: true
-});
 
-// Phase 2, Ticket 2.7: Agent action audit log
-// Every AI agent recommendation / action is persisted for governance & review.
-const agentAuditDB = Datastore.create({
-  filename: './data/agent-audit.db',
-  autoload: true,
-  timestampData: true
-});
 
-// I-1.9: Device integration records store (Integration Assistant)
-// Tracks all device integrations for network learning and Central sync
-const integrationDB = Datastore.create({
-  filename: './data/integrations.db',
-  autoload: true,
-  timestampData: true
-});
 
 // I-3.10: Device health tracking store (Integration Assistant)
 // Tracks device uptime and connectivity for health monitoring
-const deviceHealthDB = Datastore.create({
+const deviceHealthDB = new Datastore({
   filename: './data/device-health.db',
   autoload: true,
   timestampData: true

@@ -106,102 +106,45 @@ async function fetchWeatherAPIData() {
 }
 
 /**
- * Check outdoor sensor validity before running ML job
- * Falls back to weather API if no outdoor sensor found
+ * Check outdoor conditions for ML job via weather API (primary source).
+ * No physical outdoor sensor required.
  */
 async function checkOutdoorSensorValidity() {
   try {
-    const envPath = path.join(PROJECT_ROOT, 'public', 'data', 'env.json');
-    
-    // Check if env.json exists
-    try {
-      await fs.access(envPath);
-    } catch (err) {
-      // Try weather API as fallback
-      const weatherData = await fetchWeatherAPIData();
-      if (weatherData) {
-        const validation = outdoorSensorValidator.validateOutdoorSensor(weatherData);
-        const gate = outdoorSensorValidator.gateMLOperation(validation);
-        
-        return {
-          valid: validation.isValid,
-          validation,
-          gate,
-          outdoor_sensor: {
-            zone: weatherData.zone,
-            temp: weatherData.temp,
-            rh: weatherData.rh,
-            age_minutes: validation.age_minutes,
-            source: 'weather-api'
-          }
-        };
-      }
-      
+    // Primary: use weather API for outdoor conditions
+    const weatherData = await fetchWeatherAPIData();
+    if (weatherData) {
+      log.info('Using weather API as outdoor conditions source');
+      const validation = outdoorSensorValidator.validateOutdoorSensor(weatherData);
+      const gate = outdoorSensorValidator.gateMLOperation(validation);
+
       return {
-        valid: false,
-        reason: 'No environmental data file found and weather API unavailable',
-        gate: { allowed: true, degraded: true, reason: 'no_env_data', message: 'No environmental data file found and weather API unavailable — ML proceeding in degraded mode' }
+        valid: validation.isValid,
+        validation,
+        gate,
+        outdoor_sensor: {
+          zone: weatherData.zone,
+          temp: weatherData.temp,
+          rh: weatherData.rh,
+          age_minutes: validation.age_minutes,
+          source: 'weather-api'
+        }
       };
     }
-    
-    // Read env.json
-    const content = await fs.readFile(envPath, 'utf-8');
-    const envData = JSON.parse(content);
-    
-    // Find outdoor sensor
-    const outdoorSensor = outdoorSensorValidator.findOutdoorSensor(envData);
-    
-    if (!outdoorSensor) {
-      // Try weather API as fallback
-      const weatherData = await fetchWeatherAPIData();
-      if (weatherData) {
-        log.info('Using weather API as outdoor data source');
-        const validation = outdoorSensorValidator.validateOutdoorSensor(weatherData);
-        const gate = outdoorSensorValidator.gateMLOperation(validation);
-        
-        return {
-          valid: validation.isValid,
-          validation,
-          gate,
-          outdoor_sensor: {
-            zone: weatherData.zone,
-            temp: weatherData.temp,
-            rh: weatherData.rh,
-            age_minutes: validation.age_minutes,
-            source: 'weather-api'
-          }
-        };
-      }
-      
-      return {
-        valid: false,
-        reason: 'No outdoor sensor found in environmental data and weather API unavailable',
-        gate: { allowed: true, degraded: true, reason: 'no_outdoor_sensor', message: 'No outdoor sensor found and weather API unavailable — ML proceeding in degraded mode' }
-      };
-    }
-    
-    // Validate outdoor sensor
-    const validation = outdoorSensorValidator.validateOutdoorSensor(outdoorSensor);
-    const gate = outdoorSensorValidator.gateMLOperation(validation);
-    
+
+    // Weather API unavailable — proceed in degraded mode
+    log.warn('Weather API unavailable — ML proceeding in degraded mode');
     return {
-      valid: validation.isValid,
-      validation,
-      gate,
-      outdoor_sensor: {
-        zone: outdoorSensor.zone,
-        temp: outdoorSensor.temp,
-        rh: outdoorSensor.rh,
-        age_minutes: validation.age_minutes,
-        source: 'sensor'
-      }
+      valid: false,
+      reason: 'Weather API unavailable',
+      gate: { allowed: true, degraded: true, reason: 'weather_api_unavailable', message: 'Weather API unavailable — ML proceeding in degraded mode (indoor-only features)' }
     };
   } catch (err) {
-    log.error(`Failed to check outdoor sensor: ${err.message}`);
+    log.error(`Failed to check outdoor conditions: ${err.message}`);
     return {
       valid: false,
       reason: err.message,
-      gate: { allowed: true, degraded: true, reason: 'validation_error', message: `Outdoor sensor check failed (${err.message}) — ML proceeding in degraded mode` }
+      gate: { allowed: true, degraded: true, reason: 'validation_error', message: `Outdoor conditions check failed (${err.message}) — ML proceeding in degraded mode` }
     };
   }
 }

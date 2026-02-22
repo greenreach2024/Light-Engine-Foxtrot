@@ -4206,7 +4206,7 @@ async function openEditCertificationsModal() {
         let certifications = { certifications: [], practices: [], attributes: [] };
         
         try {
-            const farmResponse = await fetch('/data/farm.json');
+            const farmResponse = await farmFetch('/data/farm.json');
             if (farmResponse.ok) {
                 const farmData = await farmResponse.json();
                 if (farmData.certifications) {

@@ -814,11 +814,12 @@ async function loadZonesFromRoomMapper() {
     noneOpt.textContent = '(none)';
     zoneSelect.appendChild(noneOpt);
 
-    // Add each zone from room mapper
+    // Add each zone from room mapper — use zone NAME as value (matches groups.json format)
     zones.forEach(zone => {
       const opt = document.createElement('option');
-      opt.value = String(zone.zone);
-      opt.textContent = zone.name || `Zone ${zone.zone}`;
+      const zoneName = zone.name || `Zone ${zone.zone}`;
+      opt.value = zoneName;
+      opt.textContent = zoneName;
       zoneSelect.appendChild(opt);
     });
 
@@ -836,12 +837,28 @@ function populateDefaultZones(zoneSelect) {
   noneOpt.value = '';
   noneOpt.textContent = '(none)';
   zoneSelect.appendChild(noneOpt);
-  
-  for (let i = 1; i <= 9; i++) {
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = `Zone ${i}`;
-    zoneSelect.appendChild(opt);
+
+  // Try to populate from STATE.rooms zones (string array from rooms.json)
+  const selectedRoom = document.getElementById('groupsV2RoomSelect')?.value;
+  const rooms = (window.STATE && Array.isArray(window.STATE.rooms)) ? window.STATE.rooms : [];
+  const matchedRoom = selectedRoom ? rooms.find(r => r.name === selectedRoom) : null;
+  const roomZones = matchedRoom && Array.isArray(matchedRoom.zones) ? matchedRoom.zones : [];
+
+  if (roomZones.length > 0) {
+    roomZones.forEach(zoneName => {
+      const opt = document.createElement('option');
+      opt.value = zoneName;
+      opt.textContent = zoneName;
+      zoneSelect.appendChild(opt);
+    });
+  } else {
+    // Hard fallback: generic Zone 1–9 with name-style values
+    for (let i = 1; i <= 9; i++) {
+      const opt = document.createElement('option');
+      opt.value = `Zone ${i}`;
+      opt.textContent = `Zone ${i}`;
+      zoneSelect.appendChild(opt);
+    }
   }
 }
 

@@ -1,8 +1,12 @@
 """
-Outdoor Sensor Data Quality Validation Module
+Outdoor Conditions Validation Module
 
-Validates outdoor sensor data quality and provides fallback to weather API
-when outdoor sensor is offline, stale, or providing invalid readings.
+Validates outdoor weather data quality for ML operations.
+Primary source: Weather API (Open-Meteo via /api/weather endpoint).
+No physical outdoor sensor is required — outdoor conditions are pulled from weather API.
+
+The OutdoorSensorValidator class is retained for data validation logic
+(range checks, staleness) and comparison utilities.
 """
 
 import logging

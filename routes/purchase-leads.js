@@ -12,7 +12,7 @@ import eventBus from '../lib/event-bus.js';
 const router = express.Router();
 
 // Persistent storage — NeDB backed (replaces volatile in-memory Map)
-const leadsDB = Datastore.create({
+const leadsDB = new Datastore({
   filename: './data/purchase-leads.db',
   autoload: true,
   timestampData: true

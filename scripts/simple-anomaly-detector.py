@@ -28,11 +28,9 @@ from outdoor_sensor_validator import OutdoorSensorValidator
 # Load historical sensor data
 DATA_PATH = Path(__file__).parent.parent / 'public/data/env.json'
 ROOM_MAP_PATH = Path(__file__).parent.parent / 'public/data/room-map.json'
+FARM_JSON_PATH = Path(__file__).parent.parent / 'public/data/farm.json'
 
-# Outdoor sensor device ID (East Outdoor Sensor)
-OUTDOOR_SENSOR_ID = 'CE2A83060A2C'
-
-# Initialize outdoor sensor validator
+# Initialize outdoor sensor validator (used for weather API fallback/validation)
 outdoor_validator = OutdoorSensorValidator()
 
 def get_placed_sensor_ids():
@@ -55,15 +53,60 @@ def get_placed_sensor_ids():
         print(f"Warning: Failed to load room-map.json: {e}", file=sys.stderr)
         return set()
 
-def find_outdoor_zone(zones):
-    """Find the outdoor sensor zone"""
-    for zone in zones:
-        device_id = zone.get('meta', {}).get('deviceId', '')
-        zone_name = zone.get('name', '').lower()
-        
-        # Match by device ID or name containing "outdoor" or "outside"
-        if device_id == OUTDOOR_SENSOR_ID or 'outdoor' in zone_name or 'outside' in zone_name:
-            return zone
+def fetch_weather_outdoor_data():
+    """Fetch outdoor conditions from weather API (no physical sensor required)"""
+    try:
+        response = requests.get('http://localhost:8091/api/weather/current', timeout=5)
+        if response.ok:
+            data = response.json()
+            if data.get('ok') and data.get('current'):
+                current = data['current']
+                return {
+                    'temp': current.get('temperature_c'),
+                    'rh': current.get('humidity'),
+                    'timestamp': current.get('last_updated', datetime.now().isoformat()),
+                    'source': 'weather-api',
+                    'description': current.get('description', '')
+                }
+    except Exception as e:
+        print(f"Warning: Weather API unavailable: {e}", file=sys.stderr)
+
+    # Fallback: try weather API with farm coordinates directly
+    try:
+        coords = _load_farm_coords()
+        if coords:
+            response = requests.get(
+                f'http://localhost:8091/api/weather?lat={coords["lat"]}&lng={coords["lng"]}',
+                timeout=5
+            )
+            if response.ok:
+                data = response.json()
+                if data.get('ok') and data.get('current'):
+                    current = data['current']
+                    return {
+                        'temp': current.get('temperature_c'),
+                        'rh': current.get('humidity'),
+                        'timestamp': current.get('last_updated', datetime.now().isoformat()),
+                        'source': 'weather-api',
+                        'description': current.get('description', '')
+                    }
+    except Exception as e:
+        print(f"Warning: Weather API fallback failed: {e}", file=sys.stderr)
+
+    return None
+
+
+def _load_farm_coords():
+    """Load farm coordinates from farm.json"""
+    try:
+        if FARM_JSON_PATH.exists():
+            with open(FARM_JSON_PATH, 'r') as f:
+                farm = json.load(f)
+            coords = farm.get('coordinates', {})
+            if coords.get('lat') and coords.get('lng'):
+                return coords
+    except Exception:
+        pass
     return None
 
 def get_outdoor_reading_at_time(outdoor_zone, target_timestamp, window_minutes=10):
@@ -203,8 +246,8 @@ def load_sensor_history():
     if not placed_sensor_ids:
         print("Warning: No sensors found in room-map.json - anomaly detection will be empty", file=sys.stderr)
     
-    # Find outdoor sensor
-    outdoor_zone = find_outdoor_zone(zones)
+    # Get outdoor conditions from weather API (no physical sensor needed)
+    weather_data = fetch_weather_outdoor_data()
     
     # Build feature matrix with outdoor influence:
     # Enhanced features: [indoor_temp, indoor_rh, indoor_vpd, outdoor_temp, outdoor_rh, temp_delta,
@@ -214,47 +257,21 @@ def load_sensor_history():
     zone_names = []
     outdoor_contexts = []
     
-    # Build outdoor history for time-lagged and rolling features
+    # No physical outdoor sensor history — weather API provides current snapshot only
     outdoor_history = []
-    if outdoor_zone and outdoor_zone.get('history'):
-        for reading in outdoor_zone.get('history', [])[-288:]:  # Last 24h
-            outdoor_history.append({
-                'temp': reading.get('tempC'),
-                'rh': reading.get('rh'),
-                'timestamp': reading.get('timestamp')
-            })
     
-    # Get outdoor sensor current values and validate them
+    # Get outdoor conditions from weather API
     outdoor_temp_ref = None
     outdoor_rh_ref = None
     outdoor_data_source = None
     
-    if outdoor_zone:
-        raw_outdoor_temp = outdoor_zone.get('sensors', {}).get('tempC', {}).get('current')
-        raw_outdoor_rh = outdoor_zone.get('sensors', {}).get('rh', {}).get('current')
-        last_sync = outdoor_zone.get('meta', {}).get('lastSync')
-        
-        # Validate outdoor sensor data with fallback to weather API
-        sensor_data = {
-            'temp': raw_outdoor_temp,
-            'rh': raw_outdoor_rh,
-            'last_sync': last_sync,
-            'device_id': OUTDOOR_SENSOR_ID
-        }
-        
-        validated = outdoor_validator.get_validated_outdoor_data(sensor_data, use_fallback=True)
-        
-        if validated['valid']:
-            outdoor_temp_ref = validated['temp']
-            outdoor_rh_ref = validated['rh']
-            outdoor_data_source = validated['source']
-            
-            if validated['used_fallback']:
-                print(f"Note: Using weather API for outdoor data (sensor {validated['validation']['errors']})", file=sys.stderr)
-            elif validated.get('weather_comparison', {}).get('warnings'):
-                print(f"Note: Outdoor sensor validated but with warnings: {validated['weather_comparison']['warnings']}", file=sys.stderr)
-        else:
-            print(f"Warning: Outdoor data unavailable - anomaly detection will have no outdoor context", file=sys.stderr)
+    if weather_data and weather_data.get('temp') is not None:
+        outdoor_temp_ref = weather_data['temp']
+        outdoor_rh_ref = weather_data.get('rh')
+        outdoor_data_source = 'weather-api'
+        print(f"Using weather API for outdoor conditions: {outdoor_temp_ref:.1f}°C, {outdoor_rh_ref}% RH ({weather_data.get('description', '')})", file=sys.stderr)
+    else:
+        print("Warning: Outdoor data unavailable — anomaly detection will have no outdoor context", file=sys.stderr)
     
     for zone in zones:
         zone_name = zone.get('name', 'Unknown')
@@ -268,9 +285,7 @@ def load_sensor_history():
         if zone_device_id and zone_device_id not in placed_sensor_ids:
             continue
         
-        # Skip all outdoor zones (outdoor sensor itself and any outdoor/outside zones)
-        if outdoor_zone and zone.get('id') == outdoor_zone.get('id'):
-            continue
+        # Skip all outdoor/outside-labeled zones (outdoor conditions come from weather API)
         if 'outdoor' in zone_name_lower or 'outside' in zone_name_lower:
             continue
         if 'outdoor' in zone_location or 'outside' in zone_location:
