@@ -171,6 +171,15 @@ Most modules follow a 4-file pattern: `validation.ts` → `service.ts` → `cont
 | `driver-portal.html` | 572 | Driver dashboard with route & earnings views |
 | `css/gr-delivery.css` | 494 | Shared stylesheet for all marketing pages |
 
+### GreenReach Central Governance Messaging (Updated)
+
+Delivery-facing UX and docs now explicitly state that **GreenReach Central** is the operating authority ("mothership") for the wholesale delivery service and cross-party communication:
+
+- `public/delivery-platform.html` — Central authority notice in hero section
+- `public/driver-portal.html` — Central operations/governance banner in driver home view
+- `public/driver-apply.html` — Central governance notice on public onboarding page
+- `README.md` — operating authority section documenting Central control model
+
 ---
 
 ## Configuration

@@ -8,6 +8,15 @@
 
 Light-Engine-Foxtrot orchestrates the last mile for perishable-goods producers (farms, co-ops, food hubs) delivering to wholesale buyers. The platform handles:
 
+### Operating Authority
+
+**GreenReach Central** is the control unit ("mothership") for delivery operations across the wholesale network. All delivery workflows in Light-Engine-Foxtrot run under GreenReach Central governance for:
+
+- Network-wide operating policy and compliance enforcement
+- Driver onboarding standards and payout governance
+- Cross-party communication to farms, buyers/receivers, and drivers
+- Incident escalation, exception management, and service accountability
+
 | Domain | Capability |
 | --- | --- |
 | **Ordering** | Multi-line orders per location with temp-class detection |
