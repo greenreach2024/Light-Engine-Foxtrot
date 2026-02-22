@@ -194,13 +194,17 @@
       resolvedUrl = window.API_BASE + url;
     }
 
-    if (token && (typeof resolvedUrl === 'string' && resolvedUrl.includes('/api/'))) {
+    // Inject JWT for ALL authenticated requests — both /api/ and /data/ endpoints.
+    // CRITICAL: /data/*.json requests MUST carry the JWT so the farmDataMiddleware
+    // can scope responses to the authenticated farm. Without this, requests fall
+    // through to unscoped flat files, leaking cross-farm data.
+    if (token && typeof resolvedUrl === 'string' && (resolvedUrl.includes('/api/') || resolvedUrl.includes('/data/'))) {
       options.headers = options.headers || {};
       options.headers['Authorization'] = `Bearer ${token}`;
     }
 
     // Inject farm slug header in cloud mode for tenant routing
-    if (window.FARM_SLUG && typeof resolvedUrl === 'string' && resolvedUrl.includes('/api/')) {
+    if (window.FARM_SLUG && typeof resolvedUrl === 'string' && (resolvedUrl.includes('/api/') || resolvedUrl.includes('/data/'))) {
       options.headers = options.headers || {};
       options.headers['X-Farm-Slug'] = window.FARM_SLUG;
     }

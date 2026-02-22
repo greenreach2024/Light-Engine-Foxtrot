@@ -250,20 +250,11 @@ export function farmDataWriteMiddleware(inMemoryStore) {
       inMemoryStore[dataType].set(farmId, dataToStore);
     }
 
-    // Also write to flat file as a durable fallback
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const { fileURLToPath } = await import('url');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.default.dirname(__filename);
-      const filePath = path.default.join(__dirname, '..', 'public', 'data', fileName);
-      await fs.promises.mkdir(path.default.dirname(filePath), { recursive: true });
-      await fs.promises.writeFile(filePath, JSON.stringify(dataToStore, null, 2), 'utf8');
-      logger.info(`[FarmData] Saved ${fileName} for farm ${farmId} to memory + file (no DB)`);
-    } catch (fileErr) {
-      logger.warn(`[FarmData] File write failed for ${fileName}:`, fileErr.message);
-    }
+    // DO NOT write to flat file as fallback — the flat file is shared across
+    // all farms and writing one farm's data there causes cross-farm data leaks
+    // when unauthenticated requests fall through to express.static.
+    // In-memory cache keyed by farmId is the safe fallback.
+    logger.info(`[FarmData] Saved ${fileName} for farm ${farmId} to memory (no DB)`);
 
     return res.json({ success: true, source: 'memory', farmId });
   };
