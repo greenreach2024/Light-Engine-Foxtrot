@@ -9877,7 +9877,7 @@ class RoomWizard {
     // Hardware categories (new step)
     // Use delegated click handling on the container so handlers are robust and not overwritten later.
     const hwHost = document.getElementById('roomHardwareCats');
-    if (hwHost) {
+    if (hwHost && !hwHost.dataset.listenerAttached) {
       // ensure baseline aria state for accessibility
       hwHost.querySelectorAll('.chip-option').forEach(btn => {
         if (!btn.hasAttribute('aria-pressed')) btn.setAttribute('aria-pressed', btn.hasAttribute('data-active') ? 'true' : 'false');
