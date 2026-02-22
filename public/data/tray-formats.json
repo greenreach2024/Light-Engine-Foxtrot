@@ -1,0 +1,76 @@
+{
+  "formats": [
+    {
+      "trayFormatId": "microgreens-10x20",
+      "name": "10x20 Microgreens Tray",
+      "plantSiteCount": 200,
+      "systemType": "NFT",
+      "isWeightBased": true,
+      "weightUnit": "oz",
+      "targetWeightPerSite": 0.5,
+      "description": "Standard 10x20 microgreens flat",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "lettuce-5x10",
+      "name": "5x10 Lettuce Tray",
+      "plantSiteCount": 24,
+      "systemType": "DWC",
+      "isWeightBased": false,
+      "weightUnit": "heads",
+      "description": "Deep water culture lettuce raft",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "seedling-72",
+      "name": "72-Cell Seedling Tray",
+      "plantSiteCount": 72,
+      "systemType": "Plug",
+      "isWeightBased": false,
+      "weightUnit": "heads",
+      "description": "Standard 72-cell plug tray for seedling starts",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "seedling-128",
+      "name": "128-Cell Seedling Tray",
+      "plantSiteCount": 128,
+      "systemType": "Plug",
+      "isWeightBased": false,
+      "weightUnit": "heads",
+      "description": "High-density 128-cell plug tray",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "nft-channel-36",
+      "name": "NFT Channel (36 sites)",
+      "plantSiteCount": 36,
+      "systemType": "NFT",
+      "isWeightBased": false,
+      "weightUnit": "heads",
+      "description": "Standard NFT channel system",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "zipgrow-tower",
+      "name": "ZipGrow Tower",
+      "plantSiteCount": 10,
+      "systemType": "Vertical",
+      "isWeightBased": false,
+      "weightUnit": "heads",
+      "description": "Vertical ZipGrow growing tower",
+      "isCustom": false
+    },
+    {
+      "trayFormatId": "herb-12",
+      "name": "Herb Tray (12 pots)",
+      "plantSiteCount": 12,
+      "systemType": "DWC",
+      "isWeightBased": true,
+      "weightUnit": "oz",
+      "targetWeightPerSite": 2,
+      "description": "12-pot herb growing tray",
+      "isCustom": false
+    }
+  ]
+}

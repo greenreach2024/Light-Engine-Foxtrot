@@ -738,6 +738,7 @@ const FARM_PATH = path.join(DATA_DIR, 'farm.json');
 const CONTROLLER_PATH = path.join(DATA_DIR, 'controller.json');
 const FORWARDER_PATH = path.join(DATA_DIR, 'forwarder.json');
 const GROUPS_PATH = path.join(DATA_DIR, 'groups.json');
+const TRAY_FORMATS_PATH = path.join(DATA_DIR, 'tray-formats.json');
 const PLANS_PATH = path.join(DATA_DIR, 'plans.json');
 const SCHEDULES_PATH = path.join(DATA_DIR, 'schedules.json');
 const ROOMS_PATH = path.join(DATA_DIR, 'rooms.json');
@@ -18892,128 +18893,20 @@ app.post('/api/ai/record-decision', asyncHandler(async (req, res) => {
 
 /**
  * GET /api/tray-formats
- * Returns available tray format definitions (NeDB implementation)
+ * Returns available tray format definitions (JSON file storage for persistence)
  */
 app.get('/api/tray-formats', async (req, res) => {
   try {
-    // Query all formats from NeDB
-    const formats = await trayFormatsDB.find({}).sort({ isCustom: 1, name: 1 });
-    
-    // If no formats exist, return default formats
-    if (formats.length === 0) {
-      const defaults = [
-        {
-          trayFormatId: 'microgreens-10x20',
-          name: '10x20 Microgreens Tray',
-          plantSiteCount: 200,
-          systemType: 'NFT',
-          isWeightBased: true,
-          weightUnit: 'oz',
-          targetWeightPerSite: 0.5,
-          description: 'Standard 10x20 microgreens flat',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'lettuce-5x10',
-          name: '5x10 Lettuce Tray',
-          plantSiteCount: 24,
-          systemType: 'DWC',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: 'Deep water culture lettuce raft',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'seedling-72',
-          name: '72-Cell Seedling Tray',
-          plantSiteCount: 72,
-          systemType: 'Plug',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: 'Standard 72-cell plug tray for seedling starts',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'seedling-128',
-          name: '128-Cell Seedling Tray',
-          plantSiteCount: 128,
-          systemType: 'Plug',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: 'High-density 128-cell plug tray',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'nft-channel-36',
-          name: 'NFT Channel (36 sites)',
-          plantSiteCount: 36,
-          systemType: 'NFT',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: '6-channel NFT system with 6 sites per channel',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'tower-garden-28',
-          name: 'Vertical Tower (28 sites)',
-          plantSiteCount: 28,
-          systemType: 'Aeroponic',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: 'Aeroponic tower garden with 28 planting sites',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'dwc-raft-48',
-          name: 'DWC Raft (48 sites)',
-          plantSiteCount: 48,
-          systemType: 'DWC',
-          isWeightBased: false,
-          weightUnit: 'heads',
-          description: 'Standard 2x4 floating raft with 48 net cups',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          trayFormatId: 'herb-12',
-          name: 'Herb Tray (12 pots)',
-          plantSiteCount: 12,
-          systemType: 'DWC',
-          isWeightBased: true,
-          weightUnit: 'oz',
-          targetWeightPerSite: 2,
-          description: '12-pot herb growing tray',
-          isCustom: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-      
-      // Insert defaults into NeDB for persistence
-      for (const format of defaults) {
-        await trayFormatsDB.insert(format);
-      }
-      
-      console.log('[tray-formats] Initialized with default formats');
-      return res.json(defaults);
+    // Load from JSON file for persistence across deployments
+    let formats = [];
+    if (fs.existsSync(TRAY_FORMATS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TRAY_FORMATS_PATH, 'utf8'));
+      formats = Array.isArray(data.formats) ? data.formats : (Array.isArray(data) ? data : []);
     }
     
-    // Normalize formats from NeDB (handle snake_case from test-farm-wizard)
+    // Normalize and return
     const normalized = formats.map(f => ({
-      trayFormatId: f.trayFormatId || f.tray_format_id || f._id,
+      trayFormatId: f.trayFormatId || f.tray_format_id || f._id || `format-${Date.now()}`,
       name: f.name || 'Unnamed Format',
       plantSiteCount: f.plantSiteCount || f.cells || (f.rows && f.columns ? f.rows * f.columns : 0),
       systemType: f.systemType || f.system_type || '',
@@ -19021,12 +18914,11 @@ app.get('/api/tray-formats', async (req, res) => {
       weightUnit: f.weightUnit || f.weight_unit || 'heads',
       targetWeightPerSite: f.targetWeightPerSite || f.target_weight_per_site || 0,
       description: f.description || '',
-      isCustom: f.isCustom !== undefined ? f.isCustom : (f.is_custom !== undefined ? f.is_custom : true),
-      rows: f.rows || 0,
-      columns: f.columns || 0,
+      isCustom: f.isCustom !== undefined ? f.isCustom : true,
       createdAt: f.createdAt || f.created_at || new Date().toISOString(),
       updatedAt: f.updatedAt || f.updated_at || new Date().toISOString()
     }));
+    
     res.json(normalized);
   } catch (error) {
     console.error('[tray-formats] Failed to load formats:', error);
@@ -19039,7 +18931,7 @@ app.get('/api/tray-formats', async (req, res) => {
 
 /**
  * POST /api/tray-formats
- * Create a new custom tray format (NeDB implementation)
+ * Create a new custom tray format (JSON file storage for persistence)
  */
 app.post('/api/tray-formats', async (req, res) => {
   try {
@@ -19062,9 +18954,15 @@ app.post('/api/tray-formats', async (req, res) => {
       });
     }
     
-    // Check for duplicate name
-    const existing = await trayFormatsDB.findOne({ name });
+    // Load existing formats from JSON file
+    let formats = [];
+    if (fs.existsSync(TRAY_FORMATS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TRAY_FORMATS_PATH, 'utf8'));
+      formats = Array.isArray(data.formats) ? data.formats : (Array.isArray(data) ? data : []);
+    }
     
+    // Check for duplicate name
+    const existing = formats.find(f => f.name === name);
     if (existing) {
       return res.status(409).json({ 
         error: 'Format with this name already exists',
@@ -19093,11 +18991,12 @@ app.post('/api/tray-formats', async (req, res) => {
       updatedAt: new Date().toISOString()
     };
     
-    // Insert into NeDB
-    const inserted = await trayFormatsDB.insert(format);
+    // Add to formats array and save to JSON file
+    formats.push(format);
+    await writeJsonQueued(TRAY_FORMATS_PATH, JSON.stringify({ formats }, null, 2));
     
-    console.log(`[tray-formats] Created: ${inserted.trayFormatId}`);
-    res.status(201).json(inserted);
+    console.log(`[tray-formats] Created: ${format.trayFormatId}`);
+    res.status(201).json(format);
     
   } catch (error) {
     console.error('[tray-formats] Create failed:', error);
@@ -19110,7 +19009,7 @@ app.post('/api/tray-formats', async (req, res) => {
 
 /**
  * PUT /api/tray-formats/:id
- * Update an existing tray format (NeDB implementation)
+ * Update an existing tray format (JSON file storage)
  */
 app.put('/api/tray-formats/:id', async (req, res) => {
   try {
@@ -19118,12 +19017,20 @@ app.put('/api/tray-formats/:id', async (req, res) => {
     const { name, plantSiteCount, systemType, trayMaterial, description,
             isWeightBased, targetWeightPerSite, weightUnit } = req.body;
     
-    // Find existing format
-    const existing = await trayFormatsDB.findOne({ trayFormatId: id });
+    // Load formats from JSON file
+    let formats = [];
+    if (fs.existsSync(TRAY_FORMATS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TRAY_FORMATS_PATH, 'utf8'));
+      formats = Array.isArray(data.formats) ? data.formats : (Array.isArray(data) ? data : []);
+    }
     
-    if (!existing) {
+    // Find existing format
+    const idx = formats.findIndex(f => f.trayFormatId === id);
+    if (idx === -1) {
       return res.status(404).json({ error: 'Format not found' });
     }
+    
+    const existing = formats[idx];
     
     // Prevent editing default formats
     if (!existing.isCustom) {
@@ -19133,24 +19040,15 @@ app.put('/api/tray-formats/:id', async (req, res) => {
       });
     }
     
-    // Build update object (only include provided fields)
-    const updates = {
-      updatedAt: new Date().toISOString()
-    };
-    
+    // Check for duplicate name (excluding current format)
     if (name !== undefined) {
-      // Check for duplicate name (excluding current format)
-      const duplicate = await trayFormatsDB.findOne({ 
-        name, 
-        trayFormatId: { $ne: id } 
-      });
-      
+      const duplicate = formats.find(f => f.name === name && f.trayFormatId !== id);
       if (duplicate) {
         return res.status(409).json({ 
           error: 'Another format with this name already exists' 
         });
       }
-      updates.name = name;
+      existing.name = name;
     }
     
     if (plantSiteCount !== undefined) {
@@ -19160,36 +19058,29 @@ app.put('/api/tray-formats/:id', async (req, res) => {
           error: 'plantSiteCount must be a number between 1 and 1000' 
         });
       }
-      updates.plantSiteCount = count;
+      existing.plantSiteCount = count;
     }
     
-    if (systemType !== undefined) updates.systemType = systemType || null;
-    if (trayMaterial !== undefined) updates.trayMaterial = trayMaterial || null;
-    if (description !== undefined) updates.description = description || null;
+    if (systemType !== undefined) existing.systemType = systemType || null;
+    if (trayMaterial !== undefined) existing.trayMaterial = trayMaterial || null;
+    if (description !== undefined) existing.description = description || null;
     
     if (isWeightBased !== undefined) {
-      updates.isWeightBased = isWeightBased === true;
-      updates.targetWeightPerSite = isWeightBased 
+      existing.isWeightBased = isWeightBased === true;
+      existing.targetWeightPerSite = isWeightBased 
         ? (parseFloat(targetWeightPerSite) || null) 
         : null;
-      updates.weightUnit = isWeightBased ? (weightUnit || 'oz') : 'heads';
+      existing.weightUnit = isWeightBased ? (weightUnit || 'oz') : 'heads';
     }
     
-    // Update in NeDB
-    const numUpdated = await trayFormatsDB.update(
-      { trayFormatId: id },
-      { $set: updates }
-    );
+    existing.updatedAt = new Date().toISOString();
+    formats[idx] = existing;
     
-    if (numUpdated === 0) {
-      return res.status(500).json({ error: 'Update operation failed' });
-    }
-    
-    // Fetch updated document
-    const updated = await trayFormatsDB.findOne({ trayFormatId: id });
+    // Save to JSON file
+    await writeJsonQueued(TRAY_FORMATS_PATH, JSON.stringify({ formats }, null, 2));
     
     console.log(`[tray-formats] Updated: ${id}`);
-    res.json(updated);
+    res.json(existing);
     
   } catch (error) {
     console.error('[tray-formats] Update failed:', error);
@@ -19202,18 +19093,26 @@ app.put('/api/tray-formats/:id', async (req, res) => {
 
 /**
  * DELETE /api/tray-formats/:id
- * Delete a custom tray format (NeDB implementation)
+ * Delete a custom tray format (JSON file storage)
  */
 app.delete('/api/tray-formats/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Find existing format
-    const existing = await trayFormatsDB.findOne({ trayFormatId: id });
+    // Load formats from JSON file
+    let formats = [];
+    if (fs.existsSync(TRAY_FORMATS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TRAY_FORMATS_PATH, 'utf8'));
+      formats = Array.isArray(data.formats) ? data.formats : (Array.isArray(data) ? data : []);
+    }
     
-    if (!existing) {
+    // Find existing format
+    const idx = formats.findIndex(f => f.trayFormatId === id);
+    if (idx === -1) {
       return res.status(404).json({ error: 'Format not found' });
     }
+    
+    const existing = formats[idx];
     
     // Prevent deleting default formats
     if (!existing.isCustom) {
@@ -19222,23 +19121,11 @@ app.delete('/api/tray-formats/:id', async (req, res) => {
       });
     }
     
-    // Check if format is in use by any trays
-    const traysUsingFormat = await traysDB.count({ trayFormatId: id });
+    // Remove from array
+    formats.splice(idx, 1);
     
-    if (traysUsingFormat > 0) {
-      return res.status(409).json({ 
-        error: 'Cannot delete format in use',
-        traysAffected: traysUsingFormat,
-        hint: 'Reassign or delete trays using this format first'
-      });
-    }
-    
-    // Delete from NeDB
-    const numRemoved = await trayFormatsDB.remove({ trayFormatId: id });
-    
-    if (numRemoved === 0) {
-      return res.status(500).json({ error: 'Delete operation failed' });
-    }
+    // Save to JSON file
+    await writeJsonQueued(TRAY_FORMATS_PATH, JSON.stringify({ formats }, null, 2));
     
     console.log(`[tray-formats] Deleted: ${id}`);
     res.json({ 
