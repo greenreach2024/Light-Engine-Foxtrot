@@ -81,7 +81,7 @@ export class ShipmentService {
 
     const [shipments, [{ count }]] = await Promise.all([
       query.clone().limit(perPage).offset(offset),
-      query.clone().count("id as count"),
+      query.clone().clearOrder().count("id as count"),
     ]);
 
     return { shipments, total: Number(count) };

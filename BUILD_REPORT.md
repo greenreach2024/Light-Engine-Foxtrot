@@ -15,14 +15,14 @@
 
 | Metric | Count |
 | --- | --- |
-| TypeScript source files | 93 |
-| TypeScript lines of code | 6,476 |
+| TypeScript source files | 95 |
+| TypeScript lines of code | 6,547 |
 | Test files | 6 |
-| Test lines of code | 662 |
+| Test lines of code | 669 |
 | Tests passing | 66 / 66 |
 | SQL migration lines | 900 |
 | HTML/CSS lines | 2,349 |
-| **Total lines of code** | **~10,387** |
+| **Total lines of code** | **~10,465** |
 
 ---
 
@@ -77,7 +77,7 @@ Most modules follow a 4-file pattern: `validation.ts` → `service.ts` → `cont
 
 ## API Surface
 
-**101 registered endpoints** across 17 route files.
+**101 API endpoints across 17 route files** + **1 health endpoint** (`/health`) = **102 total endpoints**.
 
 | Module | Endpoints |
 | --- | --- |
@@ -126,12 +126,12 @@ Most modules follow a 4-file pattern: `validation.ts` → `service.ts` → `cont
 
 | Group | Tables |
 | --- | --- |
-| Driver Onboarding | `driver_applications`, `driver_documents`, `driver_background_checks`, `driver_agreements`, `driver_payout_accounts` |
+| Driver Onboarding | `driver_documents`, `driver_background_checks`, `driver_agreements`, `driver_payout_accounts` |
 | Shipments | `shipments` |
 | Settlement | `fee_quotes`, `pay_statements`, `pay_statement_lines` |
 | Payouts | `payout_batches`, `payouts` |
 | Customer Members | `customer_members` |
-| + ALTER TABLE | `drivers` (onboarding_status, training columns), `route_stops` (actual times, wait_min, POD fields) |
+| + ALTER TABLE | `drivers` (`status`, `preferred_zone`, `capacity_totes_applied`, `stripe_connect_id`, `onboarding_completed_at`) |
 
 ---
 
@@ -239,12 +239,12 @@ All issues identified during codebase audit have been resolved:
 ## File Inventory
 
 ```
-93  TypeScript source files (src/)
+95  TypeScript source files (src/)
  6  Test files (tests/*.test.ts)
  1  Test setup (tests/setup.ts)
  3  SQL files (2 migrations + 1 seed)
  4  HTML/CSS marketing pages
- 2  Scripts (migrate.ts, seed.ts)
+ 4  Scripts (scripts/migrate.ts, scripts/seed.ts, src/scripts/migrate.ts, src/scripts/seed.ts)
  1  docker-compose.yml
  1  package.json
  1  package-lock.json
@@ -255,7 +255,7 @@ All issues identified during codebase audit have been resolved:
  1  README.md
  1  BUILD_REPORT.md
 ───
-118 total project files
+124 total project files
 ```
 
 ---
@@ -266,7 +266,7 @@ All issues identified during codebase audit have been resolved:
 | --- | --- |
 | TypeScript compilation | **0 errors** |
 | Test suite | **66/66 passing** (277ms) |
-| Seed data schema alignment | **Verified** |
+| Seed data schema alignment | **Verified** (UUID-compatible, no invalid table references) |
 | Type ↔ SQL contract | **Aligned** |
 | Environment config | **Complete** |
 | Documentation | **Up to date** |
