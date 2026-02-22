@@ -478,6 +478,336 @@ router.get('/by-slug/:slug', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/farms/public/search
+ * 
+ * Public endpoint for consumers to find local farms.
+ * Searches by location (lat/lng proximity) or city/postal code.
+ * Only returns farms with is_public = true and store_enabled = true.
+ * 
+ * Query params:
+ * - lat: User latitude (for proximity search)
+ * - lng: User longitude (for proximity search)
+ * - city: City name filter
+ * - postal: Postal code filter
+ * - radius: Search radius in km (default: 50)
+ * - limit: Max results (default: 20)
+ */
+router.get('/public/search', async (req, res) => {
+  try {
+    const { lat, lng, city, postal, radius = 50, limit = 20 } = req.query;
+    const dbPool = req.app.locals.db;
+    
+    if (!dbPool) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Database not available',
+        message: 'Farm search requires database connection'
+      });
+    }
+    
+    let farms = [];
+    
+    // Proximity search if coordinates provided
+    if (lat && lng) {
+      const userLat = parseFloat(lat);
+      const userLng = parseFloat(lng);
+      const radiusKm = parseInt(radius) || 50;
+      
+      // Haversine formula for distance calculation
+      const result = await dbPool.query(`
+        SELECT 
+          farm_id, name, farm_slug, address_city, address_province,
+          description, logo_url, delivery_radius_km,
+          latitude, longitude,
+          (6371 * acos(
+            cos(radians($1)) * cos(radians(latitude)) *
+            cos(radians(longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(latitude))
+          )) AS distance_km
+        FROM farms
+        WHERE is_public = true 
+          AND store_enabled = true
+          AND latitude IS NOT NULL 
+          AND longitude IS NOT NULL
+          AND (6371 * acos(
+            cos(radians($1)) * cos(radians(latitude)) *
+            cos(radians(longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(latitude))
+          )) <= $3
+        ORDER BY distance_km ASC
+        LIMIT $4
+      `, [userLat, userLng, radiusKm, parseInt(limit)]);
+      
+      farms = result.rows.map(f => ({
+        farm_id: f.farm_id,
+        name: f.name,
+        slug: f.farm_slug || f.farm_id,
+        city: f.address_city,
+        province: f.address_province,
+        description: f.description,
+        logo_url: f.logo_url,
+        delivery_radius_km: f.delivery_radius_km,
+        distance_km: parseFloat(f.distance_km?.toFixed(1)) || null,
+        delivers_to_you: f.delivery_radius_km >= f.distance_km
+      }));
+      
+    } else if (city || postal) {
+      // Text search by city or postal code
+      let query = `
+        SELECT farm_id, name, farm_slug, address_city, address_province,
+               description, logo_url, delivery_radius_km
+        FROM farms
+        WHERE is_public = true AND store_enabled = true
+      `;
+      const params = [];
+      
+      if (city) {
+        params.push(`%${city}%`);
+        query += ` AND LOWER(address_city) LIKE LOWER($${params.length})`;
+      }
+      if (postal) {
+        params.push(`${postal.substring(0, 3)}%`);
+        query += ` AND postal_code LIKE $${params.length}`;
+      }
+      
+      query += ` ORDER BY name LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit));
+      
+      const result = await dbPool.query(query, params);
+      
+      farms = result.rows.map(f => ({
+        farm_id: f.farm_id,
+        name: f.name,
+        slug: f.farm_slug || f.farm_id,
+        city: f.address_city,
+        province: f.address_province,
+        description: f.description,
+        logo_url: f.logo_url,
+        delivery_radius_km: f.delivery_radius_km,
+        distance_km: null
+      }));
+      
+    } else {
+      // No filters - return all public farms
+      const result = await dbPool.query(`
+        SELECT farm_id, name, farm_slug, address_city, address_province,
+               description, logo_url, delivery_radius_km
+        FROM farms
+        WHERE is_public = true AND store_enabled = true
+        ORDER BY name
+        LIMIT $1
+      `, [parseInt(limit)]);
+      
+      farms = result.rows.map(f => ({
+        farm_id: f.farm_id,
+        name: f.name,
+        slug: f.farm_slug || f.farm_id,
+        city: f.address_city,
+        province: f.address_province,
+        description: f.description,
+        logo_url: f.logo_url,
+        delivery_radius_km: f.delivery_radius_km,
+        distance_km: null
+      }));
+    }
+    
+    res.json({
+      ok: true,
+      count: farms.length,
+      farms
+    });
+    
+  } catch (error) {
+    console.error('[farms/public/search] Error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Search failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farms/public/:farmId
+ * 
+ * Get public profile for a specific farm.
+ * Only returns data if farm is public.
+ */
+router.get('/public/:farmId', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const dbPool = req.app.locals.db;
+    
+    if (!dbPool) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Database not available'
+      });
+    }
+    
+    const result = await dbPool.query(`
+      SELECT farm_id, name, farm_slug, address_city, address_province,
+             description, logo_url, delivery_radius_km, store_enabled
+      FROM farms
+      WHERE (farm_id = $1 OR farm_slug = $1) AND is_public = true
+    `, [farmId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Farm not found or not public'
+      });
+    }
+    
+    const farm = result.rows[0];
+    res.json({
+      ok: true,
+      farm: {
+        farm_id: farm.farm_id,
+        name: farm.name,
+        slug: farm.farm_slug || farm.farm_id,
+        city: farm.address_city,
+        province: farm.address_province,
+        description: farm.description,
+        logo_url: farm.logo_url,
+        delivery_radius_km: farm.delivery_radius_km,
+        store_enabled: farm.store_enabled
+      }
+    });
+    
+  } catch (error) {
+    console.error('[farms/public/:farmId] Error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get farm profile',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/farms/:farmId/public-profile
+ * 
+ * Update farm's public profile settings.
+ * Requires farm authentication.
+ */
+router.put('/:farmId/public-profile', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const {
+      is_public,
+      store_enabled,
+      description,
+      logo_url,
+      address_line1,
+      address_city,
+      address_province,
+      postal_code,
+      latitude,
+      longitude,
+      delivery_radius_km
+    } = req.body;
+    
+    const dbPool = req.app.locals.db;
+    
+    if (!dbPool) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Database not available'
+      });
+    }
+    
+    // Build update query dynamically
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (is_public !== undefined) {
+      updates.push(`is_public = $${paramIndex++}`);
+      params.push(is_public);
+    }
+    if (store_enabled !== undefined) {
+      updates.push(`store_enabled = $${paramIndex++}`);
+      params.push(store_enabled);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(description);
+    }
+    if (logo_url !== undefined) {
+      updates.push(`logo_url = $${paramIndex++}`);
+      params.push(logo_url);
+    }
+    if (address_line1 !== undefined) {
+      updates.push(`address_line1 = $${paramIndex++}`);
+      params.push(address_line1);
+    }
+    if (address_city !== undefined) {
+      updates.push(`address_city = $${paramIndex++}`);
+      params.push(address_city);
+    }
+    if (address_province !== undefined) {
+      updates.push(`address_province = $${paramIndex++}`);
+      params.push(address_province);
+    }
+    if (postal_code !== undefined) {
+      updates.push(`postal_code = $${paramIndex++}`);
+      params.push(postal_code);
+    }
+    if (latitude !== undefined) {
+      updates.push(`latitude = $${paramIndex++}`);
+      params.push(latitude);
+    }
+    if (longitude !== undefined) {
+      updates.push(`longitude = $${paramIndex++}`);
+      params.push(longitude);
+    }
+    if (delivery_radius_km !== undefined) {
+      updates.push(`delivery_radius_km = $${paramIndex++}`);
+      params.push(delivery_radius_km);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No fields to update'
+      });
+    }
+    
+    updates.push(`updated_at = NOW()`);
+    params.push(farmId);
+    
+    const result = await dbPool.query(`
+      UPDATE farms
+      SET ${updates.join(', ')}
+      WHERE farm_id = $${paramIndex}
+      RETURNING farm_id, name, is_public, store_enabled, address_city
+    `, params);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Farm not found'
+      });
+    }
+    
+    res.json({
+      ok: true,
+      message: 'Public profile updated',
+      farm: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('[farms/:farmId/public-profile] Error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to update profile',
+      message: error.message
+    });
+  }
+});
+
 // Initialize with a test registration code for development
 registrationCodes.set('TEST1234', {
   code: 'TEST1234',

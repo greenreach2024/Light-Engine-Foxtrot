@@ -2426,6 +2426,47 @@
             <input type="tel" id="storePhone" placeholder="(555) 123-4567" class="wizard-input" style="margin-top: 0.5rem;">
           </div>
           
+          <div class="wizard-divider" style="border-top: 1px solid #e0e0e0; margin: 2rem 0;"></div>
+          
+          <h3>Public Farm Discovery</h3>
+          <p class="wizard-description">Let customers find your farm when searching for local produce.</p>
+          
+          <div class="wizard-form-group">
+            <div class="wizard-checkbox-group">
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="isPublic"> List my farm in public search results
+              </label>
+              <label class="wizard-checkbox">
+                <input type="checkbox" id="storeEnabled"> Enable online store for customers
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Farm Address</label>
+            <input type="text" id="storeAddressLine1" placeholder="123 Farm Road" class="wizard-input">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+              <input type="text" id="storeAddressCity" placeholder="City" class="wizard-input">
+              <input type="text" id="storeAddressProvince" placeholder="Province/State" class="wizard-input">
+              <input type="text" id="storePostalCode" placeholder="Postal Code" class="wizard-input">
+            </div>
+          </div>
+          
+          <div class="wizard-form-group">
+            <label>Delivery Radius (km)</label>
+            <input type="number" id="storeDeliveryRadiusKm" value="50" min="0" step="10" class="wizard-input" style="max-width: 200px;">
+            <small>How far will you deliver to customers?</small>
+          </div>
+          
+          <div class="wizard-form-group">
+            <button type="button" class="wizard-btn-secondary" onclick="geocodeStoreAddress()">
+              📍 Auto-detect Location from Address
+            </button>
+            <div id="geocodeStatus" style="margin-top: 0.5rem; color: #666;"></div>
+            <input type="hidden" id="storeLatitude">
+            <input type="hidden" id="storeLongitude">
+          </div>
+          
           <div class="wizard-actions">
             <button class="wizard-btn-secondary" onclick="storeWizardPrev()">Back</button>
             <button class="wizard-btn-primary" onclick="saveStoreSettings()">Save Settings</button>
@@ -3127,15 +3168,90 @@
         minOrderAmount: parseFloat(document.getElementById('minOrderAmount').value),
         storeDescription: document.getElementById('storeDescription').value,
         storeEmail: document.getElementById('storeEmail').value,
-        storePhone: document.getElementById('storePhone').value
+        storePhone: document.getElementById('storePhone').value,
+        // Public discovery settings
+        is_public: document.getElementById('isPublic').checked,
+        store_enabled: document.getElementById('storeEnabled').checked,
+        description: document.getElementById('storeDescription').value,
+        address_line1: document.getElementById('storeAddressLine1').value,
+        address_city: document.getElementById('storeAddressCity').value,
+        address_province: document.getElementById('storeAddressProvince').value,
+        postal_code: document.getElementById('storePostalCode').value,
+        latitude: parseFloat(document.getElementById('storeLatitude').value) || null,
+        longitude: parseFloat(document.getElementById('storeLongitude').value) || null,
+        delivery_radius_km: parseInt(document.getElementById('storeDeliveryRadiusKm').value) || 50
       };
       
       Object.assign(storeWizardData, settings);
       
-      // TODO: Save to backend
-      console.log('Saving store settings:', storeWizardData);
+      // Save public profile to backend
+      const farmId = window.FARM_ID || 'FARM-001';
+      try {
+        const response = await fetch(`/api/farms/${farmId}/public-profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            is_public: settings.is_public,
+            store_enabled: settings.store_enabled,
+            description: settings.description,
+            address_line1: settings.address_line1,
+            address_city: settings.address_city,
+            address_province: settings.address_province,
+            postal_code: settings.postal_code,
+            latitude: settings.latitude,
+            longitude: settings.longitude,
+            delivery_radius_km: settings.delivery_radius_km
+          })
+        });
+        
+        const result = await response.json();
+        if (result.ok) {
+          console.log('Public profile saved:', result);
+        } else {
+          console.warn('Failed to save public profile:', result);
+        }
+      } catch (error) {
+        console.error('Error saving public profile:', error);
+      }
       
       storeWizardNext();
+    }
+    
+    // Geocode address using a free geocoding service
+    async function geocodeStoreAddress() {
+      const address = [
+        document.getElementById('storeAddressLine1').value,
+        document.getElementById('storeAddressCity').value,
+        document.getElementById('storeAddressProvince').value,
+        document.getElementById('storePostalCode').value
+      ].filter(Boolean).join(', ');
+      
+      const statusEl = document.getElementById('geocodeStatus');
+      
+      if (!address || address.length < 10) {
+        statusEl.innerHTML = '<span style="color: #f44336;">Please enter a complete address first</span>';
+        return;
+      }
+      
+      statusEl.innerHTML = '<span style="color: #666;">🔄 Looking up location...</span>';
+      
+      try {
+        // Using free OpenStreetMap Nominatim geocoding
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+        const results = await response.json();
+        
+        if (results && results.length > 0) {
+          const { lat, lon, display_name } = results[0];
+          document.getElementById('storeLatitude').value = lat;
+          document.getElementById('storeLongitude').value = lon;
+          statusEl.innerHTML = `<span style="color: #4caf50;">✓ Location found: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}</span>`;
+        } else {
+          statusEl.innerHTML = '<span style="color: #ff9800;">⚠ Location not found. You can still save settings.</span>';
+        }
+      } catch (error) {
+        console.error('Geocoding failed:', error);
+        statusEl.innerHTML = '<span style="color: #ff9800;">⚠ Geocoding service unavailable</span>';
+      }
     }
     
     function updateStoreSummary() {

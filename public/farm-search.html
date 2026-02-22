@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find Local Farms | GreenReach</title>
+  <meta name="description" content="Discover local farms near you. Shop fresh, locally grown produce directly from farmers in your area.">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #2d5016;
+      --primary-light: #4caf50;
+      --accent: #82c341;
+      --bg: #fbfbfd;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --success: #4caf50;
+      --warning: #ff9800;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.95);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    
+    .nav-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .nav-logo {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+    
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    
+    .nav-links a:hover {
+      opacity: 1;
+    }
+    
+    /* Hero Search */
+    .hero {
+      padding: 120px 24px 60px;
+      text-align: center;
+      background: linear-gradient(180deg, #f5f5f7 0%, var(--bg) 100%);
+    }
+    
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    
+    .hero p {
+      font-size: 20px;
+      color: var(--text-light);
+      margin-bottom: 32px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    /* Search Box */
+    .search-box {
+      max-width: 700px;
+      margin: 0 auto;
+      background: var(--card);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    }
+    
+    .search-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .search-input-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .search-input-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-light);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .search-input-group input,
+    .search-input-group select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.2s;
+    }
+    
+    .search-input-group input:focus,
+    .search-input-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    .search-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      flex: 1;
+    }
+    
+    .btn-primary:hover {
+      background: var(--primary-light);
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 2px solid var(--border);
+    }
+    
+    .btn-secondary:hover {
+      border-color: var(--primary);
+      background: #f5f5f7;
+    }
+    
+    .btn-location {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* Results */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    .results-header h2 {
+      font-size: 24px;
+      color: var(--text);
+    }
+    
+    .results-count {
+      color: var(--text-light);
+      font-size: 14px;
+    }
+    
+    .farms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    
+    .farm-card {
+      background: var(--card);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      transition: all 0.3s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    
+    .farm-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+    
+    .farm-card-image {
+      height: 180px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .farm-card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .farm-card-logo {
+      width: 80px;
+      height: 80px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: var(--primary);
+      font-weight: 700;
+    }
+    
+    .farm-card-distance {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    
+    .farm-card-delivery {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: var(--success);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .farm-card-content {
+      padding: 20px;
+    }
+    
+    .farm-card-name {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    
+    .farm-card-location {
+      font-size: 14px;
+      color: var(--text-light);
+      margin-bottom: 12px;
+    }
+    
+    .farm-card-description {
+      font-size: 14px;
+      color: var(--text);
+      opacity: 0.8;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .farm-card-footer {
+      padding: 16px 20px;
+      background: #f9f9fb;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .farm-card-cta {
+      background: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      margin-left: auto;
+    }
+    
+    .farm-card-cta:hover {
+      background: var(--primary-light);
+    }
+    
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 80px 24px;
+    }
+    
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+    }
+    
+    .empty-state h3 {
+      font-size: 24px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    
+    .empty-state p {
+      color: var(--text-light);
+      max-width: 400px;
+      margin: 0 auto 24px;
+    }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px 24px;
+    }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Footer */
+    footer {
+      background: var(--primary);
+      color: white;
+      padding: 40px 24px;
+      margin-top: 60px;
+    }
+    
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+    
+    .footer-section h4 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      opacity: 0.8;
+    }
+    
+    .footer-section a {
+      color: white;
+      text-decoration: none;
+      display: block;
+      margin-bottom: 8px;
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    
+    .footer-section a:hover {
+      opacity: 1;
+    }
+    
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 24px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      font-size: 13px;
+      opacity: 0.7;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 32px; }
+      .hero p { font-size: 16px; }
+      .search-row { flex-direction: column; }
+      .farms-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-content">
+      <a href="/" class="nav-logo">GreenReach</a>
+      <ul class="nav-links">
+        <li><a href="/wholesale-landing.html">Wholesale</a></li>
+        <li><a href="/farm-sales-landing.html">For Growers</a></li>
+        <li><a href="/about.html">About</a></li>
+      </ul>
+    </div>
+  </nav>
+  
+  <section class="hero">
+    <h1>Find Local Farms</h1>
+    <p>Discover fresh, locally grown produce from farms in your area. Shop directly and support local agriculture.</p>
+    
+    <div class="search-box">
+      <div class="search-row">
+        <div class="search-input-group">
+          <label>City or Postal Code</label>
+          <input type="text" id="searchLocation" placeholder="Enter city or postal code...">
+        </div>
+        <div class="search-input-group" style="flex: 0 0 150px;">
+          <label>Distance</label>
+          <select id="searchRadius">
+            <option value="25">25 km</option>
+            <option value="50" selected>50 km</option>
+            <option value="100">100 km</option>
+            <option value="200">200 km</option>
+          </select>
+        </div>
+      </div>
+      <div class="search-actions">
+        <button class="btn btn-secondary btn-location" onclick="useMyLocation()">
+          <span>📍</span> Use My Location
+        </button>
+        <button class="btn btn-primary" onclick="searchFarms()">
+          Search Farms
+        </button>
+      </div>
+    </div>
+  </section>
+  
+  <div class="container">
+    <div id="resultsHeader" class="results-header" style="display: none;">
+      <h2>Farms Near You</h2>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    
+    <div id="loadingState" class="loading" style="display: none;">
+      <div class="spinner"></div>
+      <p>Searching for farms...</p>
+    </div>
+    
+    <div id="farmsGrid" class="farms-grid"></div>
+    
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">🌾</div>
+      <h3>No Farms Found</h3>
+      <p>We couldn't find any farms in your area. Try expanding your search radius or check back later as more farms join.</p>
+      <button class="btn btn-primary" onclick="searchFarms('', 200)">Search 200 km</button>
+    </div>
+    
+    <div id="initialState" class="empty-state">
+      <div class="empty-state-icon">🚜</div>
+      <h3>Ready to Find Local Farms?</h3>
+      <p>Enter your location above or use your device's location to discover farms near you.</p>
+    </div>
+  </div>
+  
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h4>For Consumers</h4>
+        <a href="/farm-search.html">Find Local Farms</a>
+        <a href="/wholesale-landing.html">Wholesale Buyers</a>
+      </div>
+      <div class="footer-section">
+        <h4>For Growers</h4>
+        <a href="/farm-sales-landing.html">Sell Online</a>
+        <a href="/landing-main.html">Light Engine</a>
+      </div>
+      <div class="footer-section">
+        <h4>Company</h4>
+        <a href="/about.html">About GreenReach</a>
+        <a href="mailto:support@greenreach.io">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+  
+  <script>
+    let userLat = null;
+    let userLng = null;
+    
+    // Use browser geolocation
+    async function useMyLocation() {
+      const btn = event.target.closest('button');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span>🔄</span> Locating...';
+      btn.disabled = true;
+      
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000
+          });
+        });
+        
+        userLat = position.coords.latitude;
+        userLng = position.coords.longitude;
+        
+        document.getElementById('searchLocation').value = 'Current Location';
+        btn.innerHTML = '<span>✓</span> Location Set';
+        
+        // Auto-search after getting location
+        searchFarms();
+        
+      } catch (error) {
+        console.error('Geolocation failed:', error);
+        alert('Could not get your location. Please enter a city or postal code instead.');
+        btn.innerHTML = originalText;
+      }
+      
+      btn.disabled = false;
+    }
+    
+    // Geocode city/postal to coordinates
+    async function geocodeLocation(query) {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=ca,us`);
+        const results = await response.json();
+        
+        if (results && results.length > 0) {
+          return {
+            lat: parseFloat(results[0].lat),
+            lng: parseFloat(results[0].lon)
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error('Geocoding failed:', error);
+        return null;
+      }
+    }
+    
+    // Search for farms
+    async function searchFarms(overrideQuery, overrideRadius) {
+      const query = overrideQuery !== undefined ? overrideQuery : document.getElementById('searchLocation').value;
+      const radius = overrideRadius || document.getElementById('searchRadius').value;
+      
+      // Show loading
+      document.getElementById('initialState').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('loadingState').style.display = 'block';
+      document.getElementById('resultsHeader').style.display = 'none';
+      document.getElementById('farmsGrid').innerHTML = '';
+      
+      let searchLat = userLat;
+      let searchLng = userLng;
+      
+      // If no coordinates and we have a query, geocode it
+      if ((!searchLat || !searchLng) && query && query !== 'Current Location') {
+        const coords = await geocodeLocation(query);
+        if (coords) {
+          searchLat = coords.lat;
+          searchLng = coords.lng;
+        }
+      }
+      
+      try {
+        let url = `/api/farms/public/search?limit=50&radius=${radius}`;
+        
+        if (searchLat && searchLng) {
+          url += `&lat=${searchLat}&lng=${searchLng}`;
+        } else if (query && query !== 'Current Location') {
+          // Use city search if no coordinates
+          url += `&city=${encodeURIComponent(query)}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        document.getElementById('loadingState').style.display = 'none';
+        
+        if (data.ok && data.farms && data.farms.length > 0) {
+          renderFarms(data.farms);
+        } else {
+          document.getElementById('emptyState').style.display = 'block';
+        }
+        
+      } catch (error) {
+        console.error('Search failed:', error);
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'block';
+      }
+    }
+    
+    // Render farm cards
+    function renderFarms(farms) {
+      document.getElementById('resultsHeader').style.display = 'flex';
+      document.getElementById('resultsCount').textContent = `${farms.length} farm${farms.length !== 1 ? 's' : ''} found`;
+      
+      const grid = document.getElementById('farmsGrid');
+      grid.innerHTML = farms.map(farm => `
+        <a href="/farm-sales-shop.html?farm=${encodeURIComponent(farm.slug || farm.farm_id)}&name=${encodeURIComponent(farm.name)}" class="farm-card">
+          <div class="farm-card-image">
+            ${farm.logo_url 
+              ? `<img src="${farm.logo_url}" alt="${farm.name}">`
+              : `<div class="farm-card-logo">${(farm.name || 'F')[0].toUpperCase()}</div>`
+            }
+            ${farm.distance_km !== null && farm.distance_km !== undefined 
+              ? `<div class="farm-card-distance">${farm.distance_km} km</div>` 
+              : ''
+            }
+            ${farm.delivers_to_you 
+              ? `<div class="farm-card-delivery">Delivers to You</div>` 
+              : ''
+            }
+          </div>
+          <div class="farm-card-content">
+            <h3 class="farm-card-name">${farm.name || 'Local Farm'}</h3>
+            <p class="farm-card-location">${[farm.city, farm.province].filter(Boolean).join(', ') || 'Location not specified'}</p>
+            <p class="farm-card-description">${farm.description || 'Fresh, locally grown produce available for order.'}</p>
+          </div>
+          <div class="farm-card-footer">
+            ${farm.delivery_radius_km ? `<span>📦 Delivers up to ${farm.delivery_radius_km} km</span>` : ''}
+            <span class="farm-card-cta">Shop Now →</span>
+          </div>
+        </a>
+      `).join('');
+    }
+    
+    // Allow Enter key to search
+    document.getElementById('searchLocation').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        userLat = null;
+        userLng = null;
+        searchFarms();
+      }
+    });
+  </script>
+</body>
+</html>
