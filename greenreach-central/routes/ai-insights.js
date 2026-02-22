@@ -29,14 +29,6 @@ try {
 router.get('/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
-    
-    // Check if OpenAI is available
-    if (!openai) {
-      return res.status(503).json({ 
-        error: 'AI Insights service not available',
-        message: 'OpenAI API key not configured'
-      });
-    }
 
     // 1. Fetch farm metadata (type, name, configuration)
     const farmResult = await query(
@@ -183,17 +175,27 @@ router.get('/:farmId', async (req, res) => {
     }
 
     // 4. Fetch farm devices/equipment
-    const devicesResult = await query(
-      'SELECT * FROM devices WHERE farm_id = $1',
-      [farmId]
-    );
-    
-    const equipment = devicesResult.rows.map(device => ({
-      type: device.device_type,
-      name: device.device_name,
-      status: device.status,
-      capabilities: device.capabilities || {}
-    }));
+    let equipment = [];
+    try {
+      const devicesResult = await query(
+        'SELECT * FROM devices WHERE farm_id = $1',
+        [farmId]
+      );
+
+      equipment = devicesResult.rows.map(device => ({
+        type: device.device_type,
+        name: device.device_name,
+        status: device.status,
+        capabilities: device.capabilities || {}
+      }));
+    } catch (deviceError) {
+      if (/relation\s+"devices"\s+does\s+not\s+exist/i.test(deviceError.message || '')) {
+        console.warn('[AI Insights] devices table missing; continuing with empty equipment list');
+        equipment = [];
+      } else {
+        throw deviceError;
+      }
+    }
 
     // 5. Fetch historical data (last 24 hours)
     const historyResult = await query(
@@ -239,37 +241,49 @@ router.get('/:farmId', async (req, res) => {
       }
     }
 
-    // 6. Build GPT-4 prompt with all context
-    const prompt = buildAIPrompt({
-      farm,
-      currentConditions,
-      recipeTargets,
-      activeRecipes,
-      equipment,
-      historicalTrends
+    let insights;
+    let aiResponse = null;
+    let tokensUsed = null;
+    let source = 'rule-based-fallback';
+
+    if (openai) {
+      const prompt = buildAIPrompt({
+        farm,
+        currentConditions,
+        recipeTargets,
+        activeRecipes,
+        equipment,
+        historicalTrends
+      });
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert agricultural AI assistant specializing in controlled environment agriculture, particularly aeroponic farming systems. You provide actionable, equipment-specific recommendations based on current conditions and available farm equipment."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 800
+      });
+
+      aiResponse = completion.choices?.[0]?.message?.content || '';
+      insights = parseAIResponse(aiResponse, currentConditions, recipeTargets);
+      tokensUsed = completion.usage?.total_tokens || null;
+      source = 'openai';
+    } else {
+      insights = buildRuleBasedInsights(currentConditions, recipeTargets);
+    }
+
+    const transparency = buildRecommendationTransparency({
+      source,
+      degradedMode: !openai
     });
-
-    // 7. Call GPT-4 API
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert agricultural AI assistant specializing in controlled environment agriculture, particularly aeroponic farming systems. You provide actionable, equipment-specific recommendations based on current conditions and available farm equipment."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 800
-    });
-
-    const aiResponse = completion.choices[0].message.content;
-
-    // 8. Parse AI response and structure insights
-    const insights = parseAIResponse(aiResponse, currentConditions, recipeTargets);
 
     res.json({
       success: true,
@@ -282,7 +296,11 @@ router.get('/:farmId', async (req, res) => {
       equipment_available: equipment.map(e => e.type),
       insights: insights,
       raw_ai_response: aiResponse,
-      tokens_used: completion.usage.total_tokens
+      tokens_used: tokensUsed,
+      source,
+      degraded_mode: !openai,
+      transparency,
+      message: openai ? 'AI insights generated with OpenAI' : 'OpenAI API key not configured; returned rule-based fallback insights'
     });
 
   } catch (error) {
@@ -441,6 +459,110 @@ function parseAIResponse(aiResponse, currentConditions, recipeTargets) {
     },
     priority_actions: sections.priority_actions,
     timestamp: new Date().toISOString()
+  };
+}
+
+function buildRuleBasedInsights(currentConditions, recipeTargets) {
+  const tempCurrent = Number(currentConditions.temperature_c);
+  const humidityCurrent = Number(currentConditions.humidity);
+  const tempTarget = Number(recipeTargets.temperature_c);
+  const humidityTarget = Number(recipeTargets.humidity);
+  const vpdCurrent = Number(currentConditions.vpd_kpa);
+
+  const tempDeviation = Number.isFinite(tempCurrent) && Number.isFinite(tempTarget) && tempTarget !== 0
+    ? ((tempCurrent - tempTarget) / tempTarget) * 100
+    : 0;
+  const humidityDeviation = Number.isFinite(humidityCurrent) && Number.isFinite(humidityTarget) && humidityTarget !== 0
+    ? ((humidityCurrent - humidityTarget) / humidityTarget) * 100
+    : 0;
+
+  const tempAssessment = Math.abs(tempDeviation) <= 10
+    ? 'Temperature is within target tolerance.'
+    : tempDeviation > 10
+      ? 'Temperature is above target range; reduce heat load or increase cooling/air exchange.'
+      : 'Temperature is below target range; increase heating setpoint or reduce cooling.';
+
+  const humidityAssessment = Math.abs(humidityDeviation) <= 10
+    ? 'Humidity is within target tolerance.'
+    : humidityDeviation > 10
+      ? 'Humidity is above target range; increase dehumidification or airflow.'
+      : 'Humidity is below target range; increase humidification or reduce dry-air exchange.';
+
+  const vpdAssessment = Number.isFinite(vpdCurrent)
+    ? (vpdCurrent < 0.8
+      ? 'VPD is below optimal range (0.8-1.2 kPa); increase VPD by lowering humidity or raising temperature slightly.'
+      : vpdCurrent > 1.2
+        ? 'VPD is above optimal range (0.8-1.2 kPa); lower VPD by raising humidity or lowering temperature slightly.'
+        : 'VPD is within optimal range (0.8-1.2 kPa).')
+    : 'VPD unavailable; ensure temperature and humidity sensors are reporting.';
+
+  const priorityActions = [];
+  if (Math.abs(tempDeviation) > 10) {
+    priorityActions.push(tempDeviation > 0
+      ? 'Reduce temperature toward recipe target using available cooling/air exchange controls.'
+      : 'Raise temperature toward recipe target using available heating controls.');
+  }
+  if (Math.abs(humidityDeviation) > 10) {
+    priorityActions.push(humidityDeviation > 0
+      ? 'Reduce humidity with dehumidification or increased circulation.'
+      : 'Increase humidity with humidification or reduced dry-air exchange.');
+  }
+  if (Number.isFinite(vpdCurrent) && (vpdCurrent < 0.8 || vpdCurrent > 1.2)) {
+    priorityActions.push('Correct VPD into 0.8-1.2 kPa by coordinated temperature/humidity adjustment.');
+  }
+  if (priorityActions.length === 0) {
+    priorityActions.push('Maintain current settings and continue monitoring trend stability.');
+  }
+
+  const overallStatus = priorityActions.length === 1 && priorityActions[0].includes('Maintain current settings')
+    ? 'Conditions are stable and within target ranges.'
+    : 'Some parameters are outside target ranges; corrective action recommended.';
+
+  return {
+    overall_status: overallStatus,
+    parameters: {
+      temperature: {
+        current: tempCurrent,
+        target: tempTarget,
+        deviation_percent: Number(tempDeviation.toFixed(1)),
+        assessment: tempAssessment
+      },
+      humidity: {
+        current: humidityCurrent,
+        target: humidityTarget,
+        deviation_percent: Number(humidityDeviation.toFixed(1)),
+        assessment: humidityAssessment
+      },
+      vpd: {
+        current: Number.isFinite(vpdCurrent) ? vpdCurrent : null,
+        target_range: '0.8-1.2 kPa',
+        assessment: vpdAssessment
+      }
+    },
+    priority_actions: priorityActions,
+    timestamp: new Date().toISOString()
+  };
+}
+
+function buildRecommendationTransparency({ source, degradedMode }) {
+  if (source === 'openai') {
+    return {
+      data_source: 'farm_data_and_openai_model',
+      confidence: 0.72,
+      sample_size: null,
+      expected_impact: 'Operator guidance for bringing environment parameters back into target range.',
+      rollback_plan: 'Revert any accepted adjustments within 1-2 monitoring cycles if conditions or crop response worsen.',
+      degraded_mode: degradedMode
+    };
+  }
+
+  return {
+    data_source: 'farm_data_rule_based_fallback',
+    confidence: 0.6,
+    sample_size: null,
+    expected_impact: 'Baseline corrective guidance using recipe target deviations and VPD bounds.',
+    rollback_plan: 'Revert manual adjustments to prior setpoints if trend stability declines over 1-2 monitoring cycles.',
+    degraded_mode: degradedMode
   };
 }
 

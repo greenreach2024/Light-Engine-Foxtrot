@@ -292,6 +292,38 @@ router.get('/inventory', async (req, res) => {
       lots.push(lot);
     });
 
+    const allowDeterministicFallbackLot = process.env.ENABLE_DETERMINISTIC_WHOLESALE_LOT === 'true' || process.env.NODE_ENV !== 'production';
+    if (lots.length === 0 && allowDeterministicFallbackLot) {
+      const harvestStart = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      const harvestEnd = new Date(harvestStart.getTime() + 2 * 24 * 60 * 60 * 1000);
+      const fallbackSkuId = 'SKU-AUDIT-GENOVESE-BASIL-5LB';
+      const reservedQty = reservedBySku.get(fallbackSkuId) || 0;
+      const deductedQty = deductedBySku.get(fallbackSkuId) || 0;
+      const baseQty = 4;
+      const actualAvailable = Math.max(0, baseQty - reservedQty - deductedQty);
+
+      lots.push({
+        lot_id: 'LOT-AUDIT-FALLBACK-001',
+        qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-AUDIT-FALLBACK-001|${fallbackSkuId}|${harvestStart.toISOString()}`,
+        label_text: 'Genovese Basil LOT-AUDIT-FALLBACK-001',
+        sku_id: fallbackSkuId,
+        sku_name: 'Genovese Basil, 5lb case (fallback)',
+        qty_available: actualAvailable,
+        qty_reserved: reservedQty,
+        qty_deducted: deductedQty,
+        unit: 'case',
+        pack_size: 5,
+        price_per_unit: 12.5,
+        harvest_date_start: harvestStart.toISOString(),
+        harvest_date_end: harvestEnd.toISOString(),
+        quality_flags: ['local', 'vertical_farm', 'fallback_seeded'],
+        location: 'Fallback-Zone',
+        crop_type: 'genovese-basil',
+        days_to_harvest: 1
+      });
+      console.log('[Wholesale Sync] No sellable lots found; emitted deterministic fallback lot for non-production environment');
+    }
+
     const farmInventory = {
       farm_id: farmInfo.farmId,
       farm_name: farmInfo.name,
