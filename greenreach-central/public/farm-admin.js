@@ -15,6 +15,53 @@ function grLog(...args) { if (GR_DEBUG) console.debug(...args); }
 let currentSession = null;
 let farmData = null;
 
+function getPostLoginRedirectPath() {
+    const defaultPath = '/LE-farm-admin.html';
+    let returnPath = new URLSearchParams(window.location.search).get('return') || '';
+
+    for (let i = 0; i < 6 && returnPath; i++) {
+        let decoded = returnPath;
+        try {
+            decoded = decodeURIComponent(returnPath);
+        } catch (_) {}
+
+        try {
+            const parsed = new URL(decoded, window.location.origin);
+            const nestedReturn = parsed.searchParams.get('return');
+            if (nestedReturn) {
+                returnPath = nestedReturn;
+                continue;
+            }
+            returnPath = parsed.pathname + parsed.search + parsed.hash;
+        } catch (_) {
+            returnPath = decoded;
+        }
+
+        break;
+    }
+
+    if (!returnPath) return defaultPath;
+
+    let safePath = returnPath.trim();
+    try {
+        const parsed = new URL(safePath, window.location.origin);
+        if (parsed.origin !== window.location.origin) return defaultPath;
+        safePath = parsed.pathname + parsed.search + parsed.hash;
+    } catch (_) {
+        return defaultPath;
+    }
+
+    if (!safePath.startsWith('/')) {
+        safePath = `/${safePath.replace(/^\/+/, '')}`;
+    }
+
+    if (!safePath || safePath.includes('farm-admin-login')) {
+        return defaultPath;
+    }
+
+    return safePath;
+}
+
 /**
  * Initialize on page load
  */
@@ -53,7 +100,7 @@ function initLogin() {
             sessionStorage.removeItem('login_redirect_count');
         } else {
             sessionStorage.setItem('login_redirect_count', String(redirectCount + 1));
-            window.location.href = '/LE-farm-admin.html';
+            window.location.href = getPostLoginRedirectPath();
             return;
         }
     } else if (session && !hasToken) {
@@ -291,7 +338,7 @@ async function handleLogin(e) {
             showAlert('success', 'Login successful! Redirecting...');
             
             setTimeout(() => {
-                window.location.href = '/LE-farm-admin.html';
+                window.location.href = getPostLoginRedirectPath();
             }, 1000);
             
         } else {

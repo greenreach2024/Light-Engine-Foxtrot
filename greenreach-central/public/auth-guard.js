@@ -10,11 +10,59 @@
   const PUBLIC_PAGES = [
     '/',
     '/index.html',
+    '/farm-admin-login.html',
     '/LE-farm-admin.html',
     '/farm-sales-shop.html',  // Customer-facing online store
     '/health',                // System health check
     '/healthz'                // Simple health check
   ];
+
+  function sanitizeReturnPath(rawPath) {
+    const defaultPath = '/LE-farm-admin.html';
+    let returnPath = rawPath || '';
+
+    for (let i = 0; i < 6 && returnPath; i++) {
+      let decoded = returnPath;
+      try {
+        decoded = decodeURIComponent(returnPath);
+      } catch (_) {}
+
+      try {
+        const parsed = new URL(decoded, window.location.origin);
+        const nestedReturn = parsed.searchParams.get('return');
+        if (nestedReturn) {
+          returnPath = nestedReturn;
+          continue;
+        }
+        returnPath = parsed.pathname + parsed.search + parsed.hash;
+      } catch (_) {
+        returnPath = decoded;
+      }
+
+      break;
+    }
+
+    if (!returnPath) return defaultPath;
+
+    let safePath = String(returnPath).trim();
+    try {
+      const parsed = new URL(safePath, window.location.origin);
+      if (parsed.origin !== window.location.origin) return defaultPath;
+      safePath = parsed.pathname + parsed.search + parsed.hash;
+    } catch (_) {
+      return defaultPath;
+    }
+
+    if (!safePath.startsWith('/')) {
+      safePath = `/${safePath.replace(/^\/+/, '')}`;
+    }
+
+    if (!safePath || safePath.includes('farm-admin-login')) {
+      return defaultPath;
+    }
+
+    return safePath;
+  }
 
   // Check if current page requires authentication
   function requiresAuth() {
@@ -118,10 +166,9 @@
 
   // Redirect to login page (cloud-aware)
   function redirectToLogin() {
-    const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
     // In cloud mode, login page is on the same subdomain
     const loginBase = window.IS_CLOUD ? window.location.origin : '';
-    window.location.href = `${loginBase}/farm-admin-login.html?return=${returnUrl}`;
+    window.location.href = `${loginBase}/farm-admin-login.html`;
   }
 
   // Main authentication check
