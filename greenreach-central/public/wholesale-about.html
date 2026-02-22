@@ -379,6 +379,79 @@
       transform: translateY(-2px);
     }
 
+    /* Delivery Section */
+    .delivery-section {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      padding: 100px 22px;
+    }
+
+    .delivery-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .delivery-title {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+
+    .delivery-subtitle {
+      font-size: 21px;
+      line-height: 1.5;
+      color: var(--text-light);
+      margin-bottom: 60px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .delivery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .delivery-card {
+      background: white;
+      padding: 40px 32px;
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .delivery-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .delivery-card-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .delivery-card-text {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    @media (max-width: 734px) {
+      .delivery-title {
+        font-size: 36px;
+      }
+
+      .delivery-card {
+        padding: 32px 24px;
+      }
+    }
+
     /* Footer */
     footer {
       background: var(--text);
@@ -517,6 +590,10 @@
   </style>
 </head>
 <body>
+  <!-- Delivery Service Banner -->
+  <script src="/js/components/service-intro-banner.js"></script>
+  <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '#delivery' });</script>
+
   <!-- Navigation -->
   <nav>
     <div class="nav-content">
@@ -596,6 +673,40 @@
           </p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Delivery Service Section -->
+  <section class="delivery-section" id="delivery">
+    <div class="delivery-content">
+      <h2 class="delivery-title">Farm-to-Door Delivery</h2>
+      <p class="delivery-subtitle">
+        Fresh produce delivered directly to your business or home — harvested the morning of your delivery for maximum freshness.
+      </p>
+      
+      <div class="delivery-grid">
+        <div class="delivery-card">
+          <h3 class="delivery-card-title">Same-Day Harvest</h3>
+          <p class="delivery-card-text">Harvested the morning of your delivery for peak freshness and nutrition.</p>
+        </div>
+        
+        <div class="delivery-card">
+          <h3 class="delivery-card-title">Local Coverage</h3>
+          <p class="delivery-card-text">Serving Kingston and surrounding areas within 50km of our network farms.</p>
+        </div>
+        
+        <div class="delivery-card">
+          <h3 class="delivery-card-title">Flexible Scheduling</h3>
+          <p class="delivery-card-text">Choose your preferred delivery window, available Monday through Saturday.</p>
+        </div>
+        
+        <div class="delivery-card">
+          <h3 class="delivery-card-title">Sustainable Delivery</h3>
+          <p class="delivery-card-text">Reduced food miles, efficient routes, and returnable packaging options.</p>
+        </div>
+      </div>
+      
+      <a href="/GR-wholesale.html" class="btn-primary">Set Up Delivery</a>
     </div>
   </section>
 

@@ -1101,6 +1101,10 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+    <!-- Delivery Service Banner -->
+    <script src="/js/components/service-intro-banner.js"></script>
+    <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/wholesale-about.html#delivery' });</script>
+
     <!-- DEBUG BANNER REMOVED: Developer debug banner removed to reduce visible banners in production. Re-enable in dev with localStorage.setItem('gr.debug','true') -->
     
     <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
