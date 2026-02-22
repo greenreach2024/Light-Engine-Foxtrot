@@ -222,6 +222,23 @@
           "portfolio_optimization": { "tier": "require-approval" }
         }
       }
+    },
+
+    "developer": {
+      "description": "Developer mode: evaluate and propose code/config changes. All actions require human approval — no autonomous modifications.",
+      "capabilities": {
+        "developer": {
+          "evaluate_request":  { "tier": "auto" },
+          "propose_change":    { "tier": "require-approval" },
+          "list_proposals":    { "tier": "auto" },
+          "approve_proposal":  { "tier": "require-approval" },
+          "reject_proposal":   { "tier": "require-approval" }
+        },
+        "system": {
+          "status":            { "tier": "auto" },
+          "health_check":      { "tier": "auto" }
+        }
+      }
     }
   },
 

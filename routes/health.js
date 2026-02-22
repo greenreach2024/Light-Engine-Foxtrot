@@ -274,7 +274,7 @@ router.post('/ai-recommendations', async (req, res) => {
       });
     }
     
-    const { recommendations, farm_id, generated_at, network_intelligence } = req.body;
+    const { recommendations, farm_id, generated_at, network_intelligence, experiments } = req.body;
     
     if (!recommendations || !Array.isArray(recommendations)) {
       return res.status(400).json({
@@ -293,7 +293,9 @@ router.post('/ai-recommendations', async (req, res) => {
         timestamp: rec.timestamp || new Date().toISOString()
       })),
       // Network intelligence: crop benchmarks, demand signals, risk alerts
-      network_intelligence: network_intelligence || null
+      network_intelligence: network_intelligence || null,
+      // Phase 4 Ticket 4.7: Active A/B experiments assigned to this farm
+      experiments: experiments || []
     };
     
     await fs.writeFile(AI_RECOMMENDATIONS_PATH, JSON.stringify(data, null, 2));
@@ -316,7 +318,9 @@ router.post('/ai-recommendations', async (req, res) => {
 
     const niKeys = network_intelligence ? Object.keys(network_intelligence.crop_benchmarks || {}).length : 0;
     const modKeys = network_intelligence ? Object.keys(network_intelligence.recipe_modifiers || {}).length : 0;
-    console.log(`[Health API] \u2713 Received ${recommendations.length} AI recommendations + ${niKeys} benchmarks + ${modKeys} recipe modifiers from Central`);
+    const riskCount = network_intelligence?.risk_alerts?.length || 0;
+    const expCount = (experiments || []).length;
+    console.log(`[Health API] ✓ Received ${recommendations.length} AI recommendations + ${niKeys} benchmarks + ${modKeys} recipe modifiers + ${riskCount} risk alerts + ${expCount} experiments from Central`);
     
     res.json({
       ok: true,

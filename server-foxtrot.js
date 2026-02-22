@@ -10448,6 +10448,83 @@ app.get('/api/alerts/stats', (req, res) => {
   }
 });
 
+// ── Phase 4 Ticket 4.6: Developer Mode API ─────────────────────────────
+
+/**
+ * POST /api/developer/evaluate
+ * Evaluate a text change request for feasibility.
+ * Body: { request: "change the alert threshold to 25" }
+ */
+app.post('/api/developer/evaluate', async (req, res) => {
+  try {
+    const { evaluateRequest } = await import('./lib/developer-mode.js');
+    const result = evaluateRequest(req.body.request || '', { user: req.user?.email || req.body.user });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/propose
+ * Create a change proposal for human review.
+ * Body: { proposalId, description, targetFile?, configChanges?, scope, risk }
+ */
+app.post('/api/developer/propose', async (req, res) => {
+  try {
+    const { createProposal } = await import('./lib/developer-mode.js');
+    const proposal = createProposal(req.body.proposalId, {
+      ...req.body,
+      requestedBy: req.user?.email || req.body.user || 'api'
+    });
+    res.json({ ok: true, proposal });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/developer/proposals
+ * List all proposals. ?status=pending_review|applied|rejected
+ */
+app.get('/api/developer/proposals', async (req, res) => {
+  try {
+    const { listProposals } = await import('./lib/developer-mode.js');
+    const proposals = listProposals(req.query.status || null);
+    res.json({ ok: true, proposals, count: proposals.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/proposals/:id/approve
+ * Approve and apply a proposal.
+ */
+app.post('/api/developer/proposals/:id/approve', async (req, res) => {
+  try {
+    const { approveAndApply } = await import('./lib/developer-mode.js');
+    const result = approveAndApply(req.params.id, req.user?.email || req.body.user || 'api');
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/proposals/:id/reject
+ * Reject a proposal.
+ */
+app.post('/api/developer/proposals/:id/reject', async (req, res) => {
+  try {
+    const { rejectProposal } = await import('./lib/developer-mode.js');
+    const result = rejectProposal(req.params.id, req.user?.email || req.body.user || 'api', req.body.reason || '');
+    res.json({ ok: true, proposal: result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 /**
  * GET /api/ai/training-data
  * Comprehensive training data export API (Rule 9.3, Task 1.10)
@@ -20018,6 +20095,49 @@ app.get('/api/config/app', async (req, res) => {
       status: 'online'
     });
   }
+});
+
+// ── Phase 4 Ticket 4.1: Feature configuration endpoint ─────────────────
+// Per LIGHT_ENGINE_CONSOLIDATION_PROPOSAL.md — window.LE_CONFIG feature detection.
+// Clients call GET /api/config/features to know which features are available
+// based on deployment mode (edge vs. cloud).
+
+app.get('/api/config/features', (req, res) => {
+  const isEdge = edgeConfig.isEdgeMode();
+  const deploymentMode = isEdge ? 'edge' : 'cloud';
+
+  // Always-available features (both edge and cloud)
+  const features = {
+    monitoring: true,
+    inventory: true,
+    planning: true,
+    forecasting: true,
+    activityHub: true,
+    qualityControl: true,
+    trayOperations: true,
+    tabletPairing: true,
+    aiAssistant: true,
+    recipeModifiers: true,
+    alerts: true,
+    // Edge-only features (require 24/7 on-site hardware)
+    deviceControl: isEdge,
+    nutrientControl: isEdge,
+    criticalAlerts: isEdge,
+    sensorDirectRead: isEdge,
+    // Cloud-only features (require Central database)
+    networkDashboard: !isEdge,
+    crossFarmBenchmarks: !isEdge,
+    wholesaleNetwork: !isEdge
+  };
+
+  res.json({
+    ok: true,
+    deploymentMode,
+    features,
+    version: edgeConfig.getAll().version || '1.0.0',
+    farmId: edgeConfig.getFarmId(),
+    farmName: edgeConfig.getFarmName()
+  });
 });
 
 // ============================================================================

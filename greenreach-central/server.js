@@ -76,6 +76,9 @@ import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
+import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
+import { initExperimentTables, createExperiment, activateExperiment, recordObservation, analyzeExperiment, completeExperiment, listExperiments, getExperiment, getExperimentsForFarm } from './jobs/experiment-orchestrator.js';
+import { generateGovernanceReport, formatReportText } from './reports/governance-review.js';
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
 import { upsertNetworkFarm } from './services/networkFarmsStore.js';
@@ -2231,6 +2234,132 @@ app.get('/api/wholesale/demand-analysis', async (req, res) => {
 
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 
+// ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
+app.get('/api/network/harvest-conflicts', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 14;
+    const conflicts = await detectHarvestConflicts(days);
+    res.json({ ok: true, look_ahead_days: days, conflicts, count: conflicts.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.3: Supply/demand balance analysis ────────────────
+app.get('/api/network/supply-demand', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const analysis = await analyzeSupplyDemand(days);
+    res.json({ ok: true, ...analysis });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/network/risk-alerts', async (req, res) => {
+  try {
+    const alerts = await generateNetworkRiskAlerts();
+    res.json({ ok: true, alerts, count: alerts.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.7: A/B Recipe Experiment API ─────────────────────
+app.post('/api/experiments', async (req, res) => {
+  try {
+    const exp = await createExperiment(req.body);
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments', async (req, res) => {
+  try {
+    const status = req.query.status || null;
+    const experiments = await listExperiments(status);
+    res.json({ ok: true, experiments });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments/:id', async (req, res) => {
+  try {
+    const exp = await getExperiment(req.params.id);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/activate', async (req, res) => {
+  try {
+    const exp = await activateExperiment(req.params.id);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found or not in draft' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/observe', async (req, res) => {
+  try {
+    const { farm_id, arm, outcomes, group_id } = req.body;
+    await recordObservation(req.params.id, farm_id, arm, outcomes, group_id);
+    res.json({ ok: true, message: 'Observation recorded' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/analyze', async (req, res) => {
+  try {
+    const analysis = await analyzeExperiment(req.params.id);
+    res.json({ ok: true, analysis });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/complete', async (req, res) => {
+  try {
+    const { findings } = req.body;
+    const exp = await completeExperiment(req.params.id, findings);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments/farm/:farmId', async (req, res) => {
+  try {
+    const experiments = await getExperimentsForFarm(req.params.farmId);
+    res.json({ ok: true, experiments });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.8: Governance Review Report ──────────────────────
+app.get('/api/governance/report', async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 1;
+    const report = await generateGovernanceReport({ months });
+    const format = req.query.format || 'json';
+    if (format === 'text') {
+      res.type('text/plain').send(formatReportText(report));
+    } else {
+      res.json({ ok: true, report });
+    }
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // --- Crop Registry API (Phase 2a — single source of truth) ---
 app.get('/api/crops', (req, res) => {
   const registryPath = path.join(__dirname, 'public/data/crop-registry.json');
@@ -2398,6 +2527,14 @@ async function startServer() {
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
+
+      // Phase 4: Initialize A/B experiment tables
+      try {
+        await initExperimentTables();
+        logger.info('A/B experiment tables initialized');
+      } catch (expErr) {
+        logger.warn('A/B experiment table init failed (non-fatal)', { error: expErr.message });
+      }
 
       // Grant wizard (enabled by default)
       if (seedGrantPrograms) {

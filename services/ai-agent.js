@@ -124,6 +124,10 @@ export const SYSTEM_CAPABILITIES = {
   viability: {
     description: 'Farm closure risk scoring, acquisition evaluation, growth scenario modeling (strategy agent)',
     actions: ['closure_risk', 'acquisition_eval', 'growth_scenarios', 'competitive_position', 'portfolio_optimization']
+  },
+  developer: {
+    description: 'Developer mode: evaluate change requests, propose modifications, apply approved changes (human approval required)',
+    actions: ['evaluate_request', 'propose_change', 'list_proposals', 'approve_proposal', 'reject_proposal']
   }
 };
 
@@ -295,6 +299,10 @@ export async function executeAction(intent, context) {
       
       case 'viability':
         result = await executeViabilityAction(action, intent.parameters, context);
+        break;
+      
+      case 'developer':
+        result = await executeDeveloperAction(action, intent.parameters, context);
         break;
       
       default:
@@ -1471,6 +1479,90 @@ export async function getAuditLog(opts = {}) {
   if (opts.farm_id) filter.farm_id = opts.farm_id;
   const limit = opts.limit || 50;
   return _auditDB.find(filter).sort({ logged_at: -1 }).limit(limit);
+}
+
+// ── Phase 4 Ticket 4.6: Developer mode action handler ──────────────────────
+
+async function executeDeveloperAction(action, params, context) {
+  const { evaluateRequest, createProposal, listProposals, getProposal, approveAndApply, rejectProposal } = await import('../lib/developer-mode.js');
+
+  switch (action) {
+    case 'evaluate_request': {
+      const request = params?.request || params?.text || '';
+      const evaluation = evaluateRequest(request, context);
+      return {
+        success: true,
+        action: 'evaluate_request',
+        evaluation,
+        message: evaluation.feasible
+          ? `Request evaluated: ${evaluation.scope} scope, ${evaluation.risk} risk. Proposal ID: ${evaluation.proposalId}. Requires human approval.`
+          : `Request rejected: ${evaluation.reason}`
+      };
+    }
+
+    case 'propose_change': {
+      const proposal = createProposal(params.proposalId, {
+        description: params.description || 'No description provided',
+        targetFile: params.targetFile || null,
+        currentContent: params.currentContent || null,
+        proposedContent: params.proposedContent || null,
+        configChanges: params.configChanges || null,
+        scope: params.scope || 'unknown',
+        risk: params.risk || 'medium',
+        requestedBy: context?.user || 'unknown'
+      });
+      return {
+        success: true,
+        action: 'propose_change',
+        proposal,
+        message: `Proposal ${proposal.id} created. Status: pending_review. An authorized user must approve before changes are applied.`
+      };
+    }
+
+    case 'list_proposals': {
+      const status = params?.status || null;
+      const proposals = listProposals(status);
+      return {
+        success: true,
+        action: 'list_proposals',
+        proposals: proposals.map(p => ({
+          id: p.id,
+          status: p.status,
+          description: p.description,
+          scope: p.scope,
+          risk: p.risk,
+          created_at: p.created_at,
+          requested_by: p.requested_by
+        })),
+        count: proposals.length
+      };
+    }
+
+    case 'approve_proposal': {
+      const result = approveAndApply(params.proposalId, context?.user || 'unknown');
+      return {
+        success: result.applied,
+        action: 'approve_proposal',
+        result,
+        message: result.reason
+      };
+    }
+
+    case 'reject_proposal': {
+      const rejected = rejectProposal(params.proposalId, context?.user || 'unknown', params.reason || '');
+      return {
+        success: !!rejected,
+        action: 'reject_proposal',
+        proposal: rejected,
+        message: rejected
+          ? `Proposal ${params.proposalId} rejected.`
+          : 'Proposal not found.'
+      };
+    }
+
+    default:
+      return { success: false, error: `Unknown developer action: ${action}` };
+  }
 }
 
 export default {

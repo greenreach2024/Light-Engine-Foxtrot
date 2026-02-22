@@ -3805,6 +3805,50 @@
           });
           console.log(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
         }
+
+        // ── Phase 4 Ticket 4.4: Central Planting Suggestions ───────────────
+        try {
+          const envResp = await fetch('/env?hours=1');
+          const envData = await envResp.json();
+          const networkIntel = envData?.ai?.network_intelligence;
+          const riskAlerts = networkIntel?.risk_alerts || [];
+          const experiments = envData?.ai?.experiments || [];
+
+          if (riskAlerts.length > 0 || experiments.length > 0) {
+            let centralHtml = '<div style="margin-top:16px;padding:12px;background:#f0f7ff;border-radius:8px;border-left:4px solid #2d5016;">';
+            centralHtml += '<h4 style="margin:0 0 8px;color:#2d5016;font-size:0.9rem;">📡 Central Network Suggestions</h4>';
+
+            riskAlerts.forEach(alert => {
+              const color = alert.severity === 'high' ? '#c0392b' : alert.severity === 'medium' ? '#e67e22' : '#7f8c8d';
+              centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid ${color};">`;
+              centralHtml += `<span style="font-size:0.82rem;">${alert.message}</span>`;
+              centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
+              centralHtml += `<button onclick="this.closest('div[style]').style.opacity='0.4';this.disabled=true" style="font-size:0.75rem;padding:2px 8px;border:1px solid #2d5016;background:#eaf5e0;border-radius:4px;cursor:pointer;">✓ Noted</button>`;
+              centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+              centralHtml += `</div></div>`;
+            });
+
+            experiments.forEach(exp => {
+              centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid #8e44ad;">`;
+              centralHtml += `<span style="font-size:0.82rem;">🧪 <strong>A/B Experiment:</strong> ${exp.crop} — ${exp.hypothesis || 'spectrum test'}</span>`;
+              centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
+              centralHtml += `<button onclick="this.textContent='Accepted ✓';this.disabled=true;this.style.background='#d5f5e3'" style="font-size:0.75rem;padding:2px 8px;border:1px solid #8e44ad;background:#f5eef8;border-radius:4px;cursor:pointer;">Accept Experiment</button>`;
+              centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+              centralHtml += `</div></div>`;
+            });
+
+            centralHtml += '</div>';
+
+            // Insert into the first zone container
+            const firstZoneContainer = container.querySelector('.zone-card') || container.firstElementChild;
+            if (firstZoneContainer) {
+              firstZoneContainer.insertAdjacentHTML('afterbegin', centralHtml);
+              console.log(`[Zone Summaries] Rendered ${riskAlerts.length} Central risk alerts + ${experiments.length} experiments`);
+            }
+          }
+        } catch (centralErr) {
+          console.warn('[Zone Summaries] Central suggestions fetch failed (non-fatal):', centralErr.message);
+        }
       } catch (error) {
         console.error('[Zone Summaries] Failed to load zone summaries:', error);
         container.innerHTML = '';

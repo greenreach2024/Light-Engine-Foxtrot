@@ -10,6 +10,8 @@ import fetch from 'node-fetch';
 import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import { getNetworkModifiers } from '../jobs/yield-regression.js';
+import { generateNetworkRiskAlerts } from '../jobs/supply-demand-balancer.js';
+import { getExperimentsForFarm } from '../jobs/experiment-orchestrator.js';
 
 let openai = null;
 try {
@@ -142,8 +144,17 @@ async function pushToFarm(farm, recommendations, networkIntelligence) {
     generated_at: new Date().toISOString(),
     recommendations: recommendations,
     // Phase 1 Task 1.9 — Central-first intelligence channel (Rule 7.2)
-    network_intelligence: networkIntelligence || null
+    network_intelligence: networkIntelligence || null,
+    // Phase 4 Ticket 4.7: Active A/B experiments for this farm
+    experiments: []
   };
+
+  // Load active experiments assigned to this farm
+  try {
+    payload.experiments = await getExperimentsForFarm(farm.farm_id);
+  } catch (expErr) {
+    // Non-fatal — experiments are optional
+  }
 
   try {
     const response = await fetch(`${farm.url}/api/health/ai-recommendations`, {
@@ -226,12 +237,23 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Network modifiers load failed (non-fatal):', modErr.message);
       }
 
+      // Phase 4 Ticket 4.2/4.3: Network risk alerts (harvest conflicts + supply gaps)
+      let riskAlerts = [];
+      try {
+        riskAlerts = await generateNetworkRiskAlerts();
+        if (riskAlerts.length > 0) {
+          console.log(`[AI Pusher] Generated ${riskAlerts.length} network risk alert(s)`);
+        }
+      } catch (riskErr) {
+        console.warn('[AI Pusher] Risk alert generation failed (non-fatal):', riskErr.message);
+      }
+
       if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
           demand_signals: demandSignals,
           recipe_modifiers: recipeModifiers,
-          risk_alerts: [],
+          risk_alerts: riskAlerts,
           generated_at: new Date().toISOString()
         };
         console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);
