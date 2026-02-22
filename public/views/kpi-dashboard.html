@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPI Dashboard — GreenReach Light Engine</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card-bg: #1a1d27;
+      --card-border: #2a2d3a;
+      --text: #e1e4ec;
+      --text-muted: #8b8fa3;
+      --accent: #4ade80;
+      --accent-dim: rgba(74,222,128,0.15);
+      --warn: #facc15;
+      --warn-dim: rgba(250,204,21,0.15);
+      --danger: #f87171;
+      --danger-dim: rgba(248,113,113,0.15);
+      --blue: #60a5fa;
+      --blue-dim: rgba(96,165,250,0.15);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    .header .subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 2px;
+    }
+    .refresh-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .refresh-btn:hover { border-color: var(--accent); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      padding: 24px 32px;
+      max-width: 1400px;
+    }
+
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .kpi-card:hover { border-color: var(--accent); }
+    .kpi-card .label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .kpi-card .value {
+      font-size: 2.2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .kpi-card .unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .kpi-card .detail {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .kpi-card .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+    .badge.green { background: var(--accent-dim); color: var(--accent); }
+    .badge.yellow { background: var(--warn-dim); color: var(--warn); }
+    .badge.red { background: var(--danger-dim); color: var(--danger); }
+    .badge.blue { background: var(--blue-dim); color: var(--blue); }
+    .badge.gray { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+
+    .no-data {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 1.4rem;
+    }
+
+    .footer {
+      padding: 16px 32px;
+      border-top: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      display: flex;
+      gap: 24px;
+    }
+
+    .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+    .error-msg { color: var(--danger); padding: 24px 32px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>KPI Dashboard</h1>
+      <div class="subtitle" id="timestamp">Loading...</div>
+    </div>
+    <button class="refresh-btn" onclick="loadKPIs()">Refresh</button>
+  </div>
+
+  <div class="grid" id="kpi-grid">
+    <div class="loading">Loading KPIs...</div>
+  </div>
+
+  <div class="footer">
+    <span>Phase 2, Ticket 2.4 — Weekly KPI Dashboard</span>
+    <span id="source-info"></span>
+  </div>
+
+  <script>
+    const KPI_DEFS = {
+      fill_rate: {
+        label: 'Fill Rate',
+        icon: '📦',
+        description: '% of orders fully fulfilled',
+        goodAbove: 90,
+        warnAbove: 70
+      },
+      otif: {
+        label: 'OTIF',
+        icon: '🕐',
+        description: 'On-time-in-full delivery rate',
+        goodAbove: 90,
+        warnAbove: 75
+      },
+      contribution_margin: {
+        label: 'Contribution Margin',
+        icon: '💰',
+        description: 'Revenue minus variable costs',
+        goodAbove: null // monetary, not %
+      },
+      loss_rate: {
+        label: 'Loss Rate',
+        icon: '🥬',
+        description: 'Fraction of planted sites lost',
+        goodBelow: 5,
+        warnBelow: 15,
+        invertColor: true
+      },
+      forecast_error: {
+        label: 'Forecast Error',
+        icon: '🎯',
+        description: 'Predicted vs actual yield deviation',
+        goodBelow: 10,
+        warnBelow: 25,
+        invertColor: true
+      },
+      labor_minutes_per_kg: {
+        label: 'Labor Min / kg',
+        icon: '⏱️',
+        description: 'Labor time per kg harvested',
+        goodBelow: 10,
+        warnBelow: 20,
+        invertColor: true
+      },
+      input_reduction: {
+        label: 'Input Reduction',
+        icon: '🤖',
+        description: '% of fields auto-filled vs manual',
+        goodAbove: 60,
+        warnAbove: 30
+      }
+    };
+
+    function getColorBadge(def, value) {
+      if (value === null || value === undefined) return 'gray';
+      if (def.invertColor) {
+        if (def.goodBelow != null && value <= def.goodBelow) return 'green';
+        if (def.warnBelow != null && value <= def.warnBelow) return 'yellow';
+        return 'red';
+      } else {
+        if (def.goodAbove != null && value >= def.goodAbove) return 'green';
+        if (def.warnAbove != null && value >= def.warnAbove) return 'yellow';
+        if (def.goodAbove != null) return 'red';
+        return 'blue';
+      }
+    }
+
+    function formatValue(value, unit) {
+      if (value === null || value === undefined) return '<span class="no-data">—</span>';
+      if (unit === 'USD') return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
+      return value.toLocaleString();
+    }
+
+    function renderCard(key, kpi) {
+      const def = KPI_DEFS[key] || { label: key, icon: '📊', description: '' };
+      const color = getColorBadge(def, kpi.value);
+      const val = formatValue(kpi.value, kpi.unit);
+      const unitStr = (kpi.value !== null && kpi.unit && kpi.unit !== 'USD') ? kpi.unit : '';
+
+      let detail = '';
+      if (kpi.numerator !== undefined && kpi.denominator !== undefined) {
+        detail = `${kpi.numerator} / ${kpi.denominator}`;
+      }
+      if (kpi.sample_size) detail = `Sample: ${kpi.sample_size} records`;
+      if (kpi.note) detail = kpi.note;
+
+      return `
+        <div class="kpi-card">
+          <div class="label">${def.icon} ${def.label}</div>
+          <div class="value">${val} <span class="unit">${unitStr}</span></div>
+          <span class="badge ${color}">${kpi.source || 'unknown'}</span>
+          <div class="detail">${detail || def.description}</div>
+        </div>
+      `;
+    }
+
+    async function loadKPIs() {
+      const grid = document.getElementById('kpi-grid');
+      grid.innerHTML = '<div class="loading">Loading KPIs...</div>';
+
+      try {
+        const res = await fetch('/api/kpis');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        document.getElementById('timestamp').textContent =
+          'Generated: ' + new Date(data.generated_at).toLocaleString();
+
+        const kpis = data.kpis || {};
+        const order = [
+          'fill_rate', 'otif', 'contribution_margin', 'loss_rate',
+          'forecast_error', 'labor_minutes_per_kg', 'input_reduction'
+        ];
+
+        grid.innerHTML = order.map(key => {
+          const kpi = kpis[key] || { value: null, unit: '?', source: 'missing' };
+          return renderCard(key, kpi);
+        }).join('');
+
+        const sources = [...new Set(order.map(k => kpis[k]?.source).filter(Boolean))];
+        document.getElementById('source-info').textContent =
+          'Sources: ' + sources.join(', ');
+
+      } catch (err) {
+        grid.innerHTML = `<div class="error-msg">Failed to load KPIs: ${err.message}</div>`;
+      }
+    }
+
+    loadKPIs();
+    // Auto-refresh every 5 minutes
+    setInterval(loadKPIs, 300000);
+  </script>
+</body>
+</html>

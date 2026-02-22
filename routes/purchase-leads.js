@@ -7,6 +7,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import Datastore from '@seald-io/nedb';
+import eventBus from '../lib/event-bus.js';
 
 const router = express.Router();
 
@@ -82,6 +83,15 @@ router.post('/leads', async (req, res) => {
     await leadsDB.insert(lead);
 
     console.log(`[Purchase CRM] New lead created: ${leadId} - ${farmName} (${email})`);
+
+    // Ticket 2.8: Emit lead_created funnel event
+    eventBus.emitEvent('lead_created', {
+      lead_id: leadId,
+      farm_name: farmName,
+      email: email.toLowerCase(),
+      plan: plan || 'not_specified',
+      source: 'purchase_page'
+    });
 
     // Return success with lead details
     return res.status(201).json({
@@ -181,6 +191,14 @@ router.put('/leads/:leadId/status', async (req, res) => {
 
     await leadsDB.update({ lead_id: leadId }, { $set: updateFields });
     const updated = await leadsDB.findOne({ lead_id: leadId });
+
+    // Ticket 2.8: Emit lead_status_changed funnel event
+    eventBus.emitEvent('lead_status_changed', {
+      lead_id: leadId,
+      previous_status: lead.status,
+      new_status: status,
+      farm_name: lead.farm_name || null
+    });
 
     return res.json({
       ok: true,

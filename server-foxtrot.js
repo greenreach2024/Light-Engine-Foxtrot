@@ -11045,6 +11045,7 @@ import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
 import purchaseRouter from './routes/purchase.js';
 import purchaseLeadsRouter from './routes/purchase-leads.js';
+import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
@@ -11099,6 +11100,14 @@ app.use('/api/farms', purchaseRouter);
  * - PUT /api/purchase/leads/:leadId/status: Update lead status
  */
 app.use('/api/purchase', purchaseLeadsRouter);
+
+/**
+ * KPI Dashboard API — Phase 2, Ticket 2.4
+ * Core business metrics: fill rate, OTIF, margin, loss, forecast error, labor, input reduction
+ * - GET /api/kpis: Current KPI values
+ * - GET /api/kpis/history: Weekly snapshots (future)
+ */
+app.use('/api/kpis', kpisRouter);
 
 /**
  * Authentication & Device Pairing
@@ -18993,9 +19002,27 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       cropName: (trayRun.recipe_id || trayRun.crop || 'Unknown'),
       weight: weight || 'N/A',
       unit: 'oz',
+      harvestedAt: now.toISOString(),
       auto_print: true,     // signals client to auto-submit to /api/printer/print-harvest
       endpoint: '/api/printer/print-harvest'
     };
+
+    // -- Ticket 2.6: Server-side auto-print attempt -------------------------
+    // Fire the print request internally for zero-touch harvest labeling.
+    // Non-blocking — failure does not affect the harvest response.
+    let autoPrintResult = null;
+    try {
+      const port = process.env.PORT || 3000;
+      const printRes = await fetch(`http://localhost:${port}/api/printer/print-harvest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(labelPrintData),
+        signal: AbortSignal.timeout(3000)
+      });
+      autoPrintResult = printRes.ok ? 'sent' : 'printer_unavailable';
+    } catch (_printErr) {
+      autoPrintResult = 'printer_unavailable';
+    }
 
     // ── Phase 0 Task 0.4: Auto-generate experiment record on tray harvest ──
     // Non-blocking — failure here does not block the harvest response
@@ -19061,7 +19088,8 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
         : null,
       trace_id: traceRecord?.trace_id || null,
       experiment_id: experiment_id || null,
-      label_print: labelPrintData
+      label_print: labelPrintData,
+      auto_print_result: autoPrintResult
     });
   } catch (error) {
     console.error('[tray-runs] Error recording harvest:', error);
@@ -24170,6 +24198,18 @@ const harvestOutcomesDB = Datastore.create({
   autoload: true,
   timestampData: true
 });
+
+// Phase 2, Ticket 2.7: Agent action audit log
+// Every AI agent recommendation / action is persisted for governance & review.
+const agentAuditDB = Datastore.create({
+  filename: './data/agent-audit.db',
+  autoload: true,
+  timestampData: true
+});
+
+// Wire audit store into the AI agent service
+import { setAuditStore } from './services/ai-agent.js';
+setAuditStore(agentAuditDB);
 
 // Load wizard states from database on startup
 async function loadWizardStates() {

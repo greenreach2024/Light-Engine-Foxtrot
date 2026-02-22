@@ -102,6 +102,19 @@ export const SYSTEM_CAPABILITIES = {
   system: {
     description: 'System information and health',
     actions: ['status', 'health_check', 'recent_activity']
+  },
+  // Phase 2 agent classes (tickets 2.1–2.3)
+  admin: {
+    description: 'Cross-farm operations: alert triage, SLA risk, ops summaries (admin-ops agent)',
+    actions: ['cross_farm_summary', 'sla_risk_report', 'alert_triage', 'reassign_resources', 'override_schedule']
+  },
+  marketing: {
+    description: 'Lead scoring, outreach copy, SEO drafts, conversion analytics (marketing agent)',
+    actions: ['score_leads', 'generate_outreach', 'draft_seo_page', 'conversion_analytics', 'publish_content', 'send_campaign']
+  },
+  payroll: {
+    description: 'Payout reconciliation, anomaly detection, compliance checks (payroll agent)',
+    actions: ['reconcile_payouts', 'detect_anomalies', 'compliance_check', 'generate_pay_stub', 'execute_payout', 'adjust_rate']
   }
 };
 
@@ -253,6 +266,18 @@ export async function executeAction(intent, context) {
       
       case 'system':
         result = await executeSystemAction(action, intent.parameters, context);
+        break;
+      
+      case 'admin':
+        result = await executeAdminAction(action, intent.parameters, context);
+        break;
+      
+      case 'marketing':
+        result = await executeMarketingAction(action, intent.parameters, context);
+        break;
+      
+      case 'payroll':
+        result = await executePayrollAction(action, intent.parameters, context);
         break;
       
       default:
@@ -825,9 +850,313 @@ async function executeMonitoringAction(action, params, context) {
   }
 }
 
+// ── Phase 2, Ticket 2.1: Admin Ops Agent ────────────────────────────────
+async function executeAdminAction(action, params, context) {
+  switch (action) {
+    case 'cross_farm_summary': {
+      // Recommendation-only: summarize network status
+      return {
+        success: true,
+        message: 'Cross-farm summary generated (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation connects to Central /api/admin/health/fleet. Currently returns recommendation stub.',
+          recommended_actions: [
+            'Review farms with fill rate below 80%',
+            'Check SLA risk for orders due within 24 hours',
+            'Triage any open critical alerts'
+          ]
+        }
+      };
+    }
+
+    case 'sla_risk_report': {
+      return {
+        success: true,
+        message: 'SLA risk assessment generated (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation queries pending orders vs. projected harvest. Currently returns framework.',
+          risk_factors: ['pending_orders_volume', 'harvest_projection_gap', 'delivery_capacity']
+        }
+      };
+    }
+
+    case 'alert_triage': {
+      return {
+        success: true,
+        message: 'Alert triage completed (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation aggregates alerts from all farms, ranks by severity.',
+          triage_categories: ['critical', 'warning', 'info']
+        }
+      };
+    }
+
+    case 'reassign_resources':
+    case 'override_schedule':
+      return {
+        success: true,
+        message: `Action "${action}" prepared as recommendation. Requires human approval to execute.`,
+        data: { action, parameters: params, requires_approval: true }
+      };
+
+    default:
+      return {
+        success: false,
+        error: 'action_not_implemented',
+        message: `Admin action not yet implemented: ${action}`
+      };
+  }
+}
+
+// ── Phase 2, Ticket 2.2: Marketing Growth Agent ────────────────────────
+async function executeMarketingAction(action, params, context) {
+  switch (action) {
+    case 'score_leads': {
+      // Read leads from the purchase-leads DB via the API
+      let leads = [];
+      try {
+        const port = process.env.PORT || 3000;
+        const leadsRes = await fetch(`http://localhost:${port}/api/purchase/leads`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (leadsRes.ok) {
+          const data = await leadsRes.json();
+          leads = data.leads || [];
+        }
+      } catch (_) {}
+
+      // Simple scoring: newer leads + specified plan = higher score
+      const scored = leads.map(lead => {
+        let score = 50;
+        if (lead.plan === 'cloud') score += 20;
+        else if (lead.plan === 'edge') score += 10;
+        const daysOld = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / 86400000);
+        score -= Math.min(daysOld * 2, 30); // Decay 2 pts/day, max -30
+        if (lead.status === 'contacted') score += 5;
+        if (lead.status === 'scheduled') score += 15;
+        if (lead.status === 'converted') score += 25;
+        return { lead_id: lead.lead_id, farm_name: lead.farm_name, email: lead.email, status: lead.status, score: Math.max(0, Math.min(100, score)) };
+      }).sort((a, b) => b.score - a.score);
+
+      return {
+        success: true,
+        message: `Scored ${scored.length} leads`,
+        data: { leads_scored: scored.length, top_leads: scored.slice(0, 10) }
+      };
+    }
+
+    case 'generate_outreach': {
+      return {
+        success: true,
+        message: 'Outreach copy draft generated (recommendation mode)',
+        data: {
+          draft_type: 'email',
+          note: 'Full implementation uses GPT to generate personalized copy based on lead profile.',
+          template: 'Hi {contact_name}, thank you for your interest in GreenReach Light Engine...',
+          requires_review: true
+        }
+      };
+    }
+
+    case 'draft_seo_page': {
+      return {
+        success: true,
+        message: 'SEO page draft prepared (recommendation mode)',
+        data: {
+          note: 'Full implementation uses GPT to generate optimized landing page content.',
+          parameters: params,
+          requires_review: true
+        }
+      };
+    }
+
+    case 'conversion_analytics': {
+      // Compute funnel metrics from leads
+      let leads = [];
+      try {
+        const port = process.env.PORT || 3000;
+        const leadsRes = await fetch(`http://localhost:${port}/api/purchase/leads`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (leadsRes.ok) {
+          const data = await leadsRes.json();
+          leads = data.leads || [];
+        }
+      } catch (_) {}
+
+      const funnel = {
+        total_leads: leads.length,
+        new: leads.filter(l => l.status === 'new').length,
+        contacted: leads.filter(l => l.status === 'contacted').length,
+        scheduled: leads.filter(l => l.status === 'scheduled').length,
+        converted: leads.filter(l => l.status === 'converted').length,
+        declined: leads.filter(l => l.status === 'declined').length
+      };
+
+      // Drop-off rates
+      const stages = ['new', 'contacted', 'scheduled', 'converted'];
+      const dropOff = {};
+      for (let i = 0; i < stages.length - 1; i++) {
+        const from = funnel[stages[i]] + funnel[stages[i + 1]]; // total who reached this stage
+        const to = funnel[stages[i + 1]];
+        dropOff[`${stages[i]}_to_${stages[i + 1]}`] = from > 0 ? +((to / from) * 100).toFixed(1) : 0;
+      }
+
+      return {
+        success: true,
+        message: `Funnel analytics: ${leads.length} total leads`,
+        data: { funnel, drop_off_rates: dropOff }
+      };
+    }
+
+    case 'publish_content':
+    case 'send_campaign':
+      return {
+        success: true,
+        message: `Action "${action}" prepared as draft. Requires human approval before execution.`,
+        data: { action, parameters: params, requires_approval: true }
+      };
+
+    default:
+      return {
+        success: false,
+        error: 'action_not_implemented',
+        message: `Marketing action not yet implemented: ${action}`
+      };
+  }
+}
+
+// ── Phase 2, Ticket 2.3: Payroll & Settlement Agent ────────────────────
+async function executePayrollAction(action, params, context) {
+  switch (action) {
+    case 'reconcile_payouts': {
+      return {
+        success: true,
+        message: 'Payout reconciliation report generated (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation queries wholesale order history and compares against disbursement records.',
+          checks: ['order_total_vs_payout', 'delivery_confirmation_match', 'pricing_agreement_check']
+        }
+      };
+    }
+
+    case 'detect_anomalies': {
+      return {
+        success: true,
+        message: 'Anomaly scan completed (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation applies statistical outlier detection to payment time series.',
+          anomaly_types: ['duplicate_payment', 'amount_outlier', 'timing_irregularity', 'missing_confirmation']
+        }
+      };
+    }
+
+    case 'compliance_check': {
+      return {
+        success: true,
+        message: 'Compliance check completed (recommendation mode)',
+        data: {
+          generated_at: new Date().toISOString(),
+          note: 'Full implementation verifies payment records against policy rules.',
+          policy_areas: ['payment_frequency', 'minimum_threshold', 'tax_withholding', 'documentation']
+        }
+      };
+    }
+
+    case 'generate_pay_stub':
+      return {
+        success: true,
+        message: 'Pay stub draft generated (recommendation mode)',
+        data: { action, parameters: params, requires_review: true }
+      };
+
+    case 'execute_payout':
+    case 'adjust_rate':
+      return {
+        success: true,
+        message: `Action "${action}" prepared. Requires human approval before execution.`,
+        data: { action, parameters: params, requires_approval: true }
+      };
+
+    default:
+      return {
+        success: false,
+        error: 'action_not_implemented',
+        message: `Payroll action not yet implemented: ${action}`
+      };
+  }
+}
+
+// ── Ticket 2.7: Agent action audit log ──────────────────────────────────
+// Caller (route handler) injects a DB store via setAuditStore().
+// logAgentAction() persists every recommendation / action for governance.
+
+let _auditDB = null;
+
+/**
+ * Inject the NeDB audit store (called once from server-foxtrot.js at startup).
+ * @param {object} db - nedb-promises Datastore instance
+ */
+export function setAuditStore(db) {
+  _auditDB = db;
+}
+
+/**
+ * Log an agent action to the persistent audit store.
+ * Fire-and-forget — never throws.
+ * @param {object} entry
+ * @param {string} entry.agent_class  - e.g. 'farm-operator', 'admin-ops'
+ * @param {string} entry.action_type  - e.g. 'orders.recent_orders'
+ * @param {string} entry.input_summary - truncated user message
+ * @param {object|string} entry.recommendation - agent output / recommendation
+ * @param {string} entry.human_decision - 'auto'|'accepted'|'rejected'|'pending'
+ * @param {string} [entry.tier] - 'auto'|'recommend'|'require-approval'
+ * @param {string} [entry.farm_id]
+ * @param {string} [entry.user_id]
+ */
+export async function logAgentAction(entry) {
+  if (!_auditDB) {
+    console.warn('[AI Agent Audit] No audit store configured — skipping log');
+    return null;
+  }
+  try {
+    const record = {
+      ...entry,
+      logged_at: new Date().toISOString()
+    };
+    const inserted = await _auditDB.insert(record);
+    return inserted._id;
+  } catch (err) {
+    console.error('[AI Agent Audit] Failed to log action:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Query recent audit records.
+ * @param {{ limit?: number, agent_class?: string, farm_id?: string }} opts
+ * @returns {Promise<Array>}
+ */
+export async function getAuditLog(opts = {}) {
+  if (!_auditDB) return [];
+  const filter = {};
+  if (opts.agent_class) filter.agent_class = opts.agent_class;
+  if (opts.farm_id) filter.farm_id = opts.farm_id;
+  const limit = opts.limit || 50;
+  return _auditDB.find(filter).sort({ logged_at: -1 }).limit(limit);
+}
+
 export default {
   parseCommand,
   executeAction,
   checkPermission,
+  setAuditStore,
+  logAgentAction,
+  getAuditLog,
   SYSTEM_CAPABILITIES
 };

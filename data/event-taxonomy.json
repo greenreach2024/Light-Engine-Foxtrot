@@ -167,11 +167,42 @@
         "timestamp": "ISO8601"
       },
       "status": "planned"
+    },
+    "lead_created": {
+      "name": "lead_created",
+      "category": "commerce",
+      "description": "New purchase lead / interest form submitted (visitor → lead conversion)",
+      "emitted_by": ["routes/purchase-leads.js:POST /api/purchase/leads"],
+      "payload": {
+        "event_type": "lead_created",
+        "lead_id": "string",
+        "farm_name": "string",
+        "email": "string",
+        "plan": "string|null",
+        "source": "string",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "lead_status_changed": {
+      "name": "lead_status_changed",
+      "category": "commerce",
+      "description": "Lead funnel stage changed (e.g. new → contacted → scheduled → converted)",
+      "emitted_by": ["routes/purchase-leads.js:PUT /api/purchase/leads/:id/status"],
+      "payload": {
+        "event_type": "lead_status_changed",
+        "lead_id": "string",
+        "previous_status": "string",
+        "new_status": "string",
+        "farm_name": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
     }
   },
   "categories": {
     "grow": "Seed-to-harvest lifecycle events",
-    "commerce": "Orders, deliveries, and buyer interactions",
+    "commerce": "Orders, deliveries, buyer interactions, and marketing funnel",
     "finance": "Payments, payouts, and settlements",
     "quality": "Quality control and inspection",
     "ai": "AI agent actions and recommendations"
