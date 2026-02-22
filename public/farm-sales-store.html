@@ -744,12 +744,22 @@
       const password = document.getElementById('customer-password').value;
       
       try {
-        // Get current farm from Light Engine API
-        const response = await fetch('/api/config/app');
-        const config = await response.json();
+        // Priority: URL params > sessionStorage > /api/config/app
+        const urlFarmId = sessionStorage.getItem('store_farm_id');
+        const urlFarmName = sessionStorage.getItem('store_farm_name');
         
-        farmId = config.farmId || 'FARM-001';
-        farmName = config.farmName || 'Demo Farm';
+        if (urlFarmId) {
+          farmId = urlFarmId;
+          farmName = urlFarmName || urlFarmId;
+          console.log('[Store] Using farm from navigation context:', farmId);
+        } else {
+          // Fallback: Get current farm from Light Engine API
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || 'FARM-001';
+          farmName = config.farmName || 'Demo Farm';
+        }
         customerEmail = email;
         customerName = email.split('@')[0]; // Simple name extraction
         
@@ -806,11 +816,27 @@
       console.log('[Store] URL params:', window.location.search);
       console.log('[Store] isDemoMode:', isDemoMode);
       
+      // Priority 1: URL parameters (from navigation)
+      const urlFarmSlug = urlParams.get('farm');
+      const urlFarmId = urlParams.get('id');
+      const urlFarmName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+      
+      // Store URL params in sessionStorage for this tab
+      if (urlFarmId || urlFarmSlug) {
+        sessionStorage.setItem('store_farm_id', urlFarmId || urlFarmSlug);
+        sessionStorage.setItem('store_farm_name', urlFarmName || '');
+        console.log('[Store] Farm context from URL:', { urlFarmId, urlFarmSlug, urlFarmName });
+      }
+      
+      // Priority 2: sessionStorage (from previous navigation in this tab)
+      const sessionFarmId = sessionStorage.getItem('store_farm_id');
+      const sessionFarmName = sessionStorage.getItem('store_farm_name');
+      
       const savedToken = localStorage.getItem('farm_store_token');
       const savedEmail = localStorage.getItem('farm_store_email');
       const savedName = localStorage.getItem('farm_store_name');
-      const savedFarmId = localStorage.getItem('farm_id');
-      const savedFarmName = localStorage.getItem('farm_name');
+      const savedFarmId = urlFarmId || sessionFarmId || localStorage.getItem('farm_id');
+      const savedFarmName = urlFarmName || sessionFarmName || localStorage.getItem('farm_name');
       
       console.log('[Store] Saved credentials:', {
         hasToken: !!savedToken,

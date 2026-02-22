@@ -2020,14 +2020,33 @@
 
     /**
      * Load farm name from API and update page header
+     * Also stores farm context for navigation to sales pages
      */
     async function loadFarmNameIntoHeader() {
       try {
         const token = localStorage.getItem('token');
         let farmName = null;
+        let farmId = null;
+        let farmSlug = null;
         
-        // Try authenticated API first if token exists
-        if (token) {
+        // Try /api/config/app first (works without auth)
+        try {
+          const configResponse = await fetch('/api/config/app');
+          if (configResponse.ok) {
+            const config = await configResponse.json();
+            if (config.ok) {
+              farmId = config.farmId;
+              farmName = config.farmName;
+              farmSlug = config.farmSlug || config.farmId;
+              console.log('[Farm Summary] Loaded farm from /api/config/app:', { farmId, farmName, farmSlug });
+            }
+          }
+        } catch (err) {
+          console.log('[Farm Summary] /api/config/app failed:', err.message);
+        }
+        
+        // Try authenticated API if token exists and we didn't get a name
+        if (!farmName && token) {
           try {
             const response = await fetch('/api/farm/profile', {
               headers: {
@@ -2039,6 +2058,8 @@
               const data = await response.json();
               if (data.status === 'success' && data.farm && data.farm.name) {
                 farmName = data.farm.name;
+                farmId = farmId || data.farm.farm_id || data.farm.farmId;
+                farmSlug = farmSlug || data.farm.slug || data.farm.farm_slug;
                 console.log('[Farm Summary] Loaded farm name from API:', farmName);
               }
             }
@@ -2055,6 +2076,8 @@
               const farmData = await response.json();
               if (farmData && farmData.name) {
                 farmName = farmData.name;
+                farmId = farmId || farmData.farmId || farmData.farm_id;
+                farmSlug = farmSlug || farmData.slug || farmData.farm_slug;
                 console.log('[Farm Summary] Loaded farm name from farm.json:', farmName);
               }
             }
@@ -2074,12 +2097,43 @@
           
           // Update page title
           document.title = `${farmName} Room Summary - Light Engine`;
+          
+          // Store farm context for navigation to sales pages
+          if (farmId) {
+            sessionStorage.setItem('farm_id', farmId);
+            sessionStorage.setItem('farm_name', farmName);
+            sessionStorage.setItem('farm_slug', farmSlug || farmId);
+            console.log('[Farm Summary] Stored farm context in sessionStorage:', { farmId, farmName, farmSlug });
+            
+            // Update sales navigation links with farm context
+            updateSalesNavigationLinks(farmId, farmName, farmSlug || farmId);
+          }
         } else {
           console.warn('[Farm Summary] Could not load farm name from any source');
         }
       } catch (error) {
         console.error('[Farm Summary] Failed to load farm name:', error);
       }
+    }
+    
+    /**
+     * Update sales navigation links to include farm context
+     * This ensures POS/Store/Shop pages know which farm they're serving
+     */
+    function updateSalesNavigationLinks(farmId, farmName, farmSlug) {
+      const salesLinks = document.querySelectorAll('a[href*="farm-sales"]');
+      salesLinks.forEach(link => {
+        try {
+          const url = new URL(link.href, window.location.origin);
+          url.searchParams.set('farm', farmSlug);
+          url.searchParams.set('id', farmId);
+          url.searchParams.set('name', encodeURIComponent(farmName));
+          link.href = url.toString();
+          console.log('[Farm Summary] Updated sales link:', link.href);
+        } catch (err) {
+          console.warn('[Farm Summary] Failed to update link:', link.href, err.message);
+        }
+      });
     }
 
     document.addEventListener('DOMContentLoaded', async () => {

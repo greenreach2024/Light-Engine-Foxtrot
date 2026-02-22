@@ -776,11 +776,34 @@
     // Dynamic farm information loading
     async function loadFarmInfo() {
       try {
-        const response = await fetch('/api/config/app');
-        const config = await response.json();
+        // Priority 1: URL parameters (from navigation)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlFarmId = urlParams.get('id') || urlParams.get('farm');
+        const urlFarmName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
         
-        const farmName = config.farmName || 'Demo Farm';
-        const farmId = config.farmId || 'FARM-001';
+        // Store in sessionStorage for this tab
+        if (urlFarmId) {
+          sessionStorage.setItem('landing_farm_id', urlFarmId);
+          if (urlFarmName) sessionStorage.setItem('landing_farm_name', urlFarmName);
+          console.log('[Landing] Farm context from URL:', { urlFarmId, urlFarmName });
+        }
+        
+        // Get farm from: URL > session > API
+        const sessionFarmId = sessionStorage.getItem('landing_farm_id');
+        const sessionFarmName = sessionStorage.getItem('landing_farm_name');
+        
+        let farmName, farmId;
+        if (urlFarmId || sessionFarmId) {
+          farmId = urlFarmId || sessionFarmId;
+          farmName = urlFarmName || sessionFarmName || farmId;
+          console.log('[Landing] Using farm from navigation:', farmId);
+        } else {
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmName = config.farmName || 'Demo Farm';
+          farmId = config.farmId || 'FARM-001';
+        }
         
         // Update page title
         document.getElementById('page-title').textContent = `${farmName} | Fresh Local Produce`;

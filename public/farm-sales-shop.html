@@ -874,11 +874,34 @@
     // Initialize farm from config
     async function initializeFarm() {
       try {
-        const response = await fetch('/api/config/app');
-        const config = await response.json();
+        // Priority 1: URL parameters (from navigation)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlFarmId = urlParams.get('id') || urlParams.get('farm');
+        const urlFarmName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
         
-        selectedFarm = config.farmId || 'FARM-001';
-        const farmName = config.farmName || 'Demo Farm';
+        // Store in sessionStorage for this tab
+        if (urlFarmId) {
+          sessionStorage.setItem('shop_farm_id', urlFarmId);
+          if (urlFarmName) sessionStorage.setItem('shop_farm_name', urlFarmName);
+          console.log('[Shop] Farm context from URL:', { urlFarmId, urlFarmName });
+        }
+        
+        // Get farm from: URL > session > API
+        const sessionFarmId = sessionStorage.getItem('shop_farm_id');
+        const sessionFarmName = sessionStorage.getItem('shop_farm_name');
+        
+        let farmName;
+        if (urlFarmId || sessionFarmId) {
+          selectedFarm = urlFarmId || sessionFarmId;
+          farmName = urlFarmName || sessionFarmName || selectedFarm;
+          console.log('[Shop] Using farm from navigation:', selectedFarm);
+        } else {
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          selectedFarm = config.farmId || 'FARM-001';
+          farmName = config.farmName || 'Demo Farm';
+        }
         
         document.getElementById('farm-name').textContent = farmName;
         
