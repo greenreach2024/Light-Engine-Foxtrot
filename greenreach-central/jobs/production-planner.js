@@ -10,7 +10,7 @@
  * Farms receive plans as suggestions (auto-apply with override in Phase 5).
  */
 
-const { pool } = require('../db');
+import { query } from '../config/database.js';
 
 /**
  * Gather demand forecast from wholesale orders.
@@ -22,7 +22,7 @@ const { pool } = require('../db');
 async function gatherDemandForecast(forecastWeeks = 4) {
   try {
     // Get recent order history (last 8 weeks as baseline)
-    const { rows } = await pool.query(`
+    const { rows } = await query(`
       SELECT item_crop AS crop,
              SUM(item_quantity) AS total_qty,
              COUNT(DISTINCT id) AS order_count,
@@ -63,12 +63,12 @@ async function gatherDemandForecast(forecastWeeks = 4) {
  */
 async function getNetworkSupply() {
   try {
-    const { rows: farms } = await pool.query('SELECT farm_id, farm_name, url FROM farms WHERE active = true');
+    const { rows: farms } = await query('SELECT farm_id, farm_name, url FROM farms WHERE active = true');
     const supply = [];
 
     for (const farm of farms) {
       try {
-        const { rows: records } = await pool.query(`
+        const { rows: records } = await query(`
           SELECT crop,
                  COUNT(*) AS record_count,
                  AVG(grow_days) AS avg_grow_days,
@@ -112,7 +112,7 @@ async function getNetworkSupply() {
  */
 async function getFarmCapacities() {
   try {
-    const { rows } = await pool.query(`
+    const { rows } = await query(`
       SELECT farm_id, farm_name,
              (SELECT COUNT(DISTINCT crop) FROM experiment_records WHERE farm_id = f.farm_id) AS crop_diversity,
              (SELECT COUNT(*) FROM experiment_records WHERE farm_id = f.farm_id AND recorded_at > NOW() - INTERVAL '30 days') AS recent_records
@@ -322,7 +322,7 @@ async function generateAndDistributePlan(options = {}) {
   }
 
   // Get farm URLs
-  const { rows: farms } = await pool.query('SELECT farm_id, url FROM farms WHERE active = true');
+  const { rows: farms } = await query('SELECT farm_id, url FROM farms WHERE active = true');
   const farmUrlMap = {};
   for (const f of farms) farmUrlMap[f.farm_id] = f;
 
@@ -343,7 +343,7 @@ async function generateAndDistributePlan(options = {}) {
   };
 }
 
-module.exports = {
+export {
   gatherDemandForecast,
   getNetworkSupply,
   getFarmCapacities,
