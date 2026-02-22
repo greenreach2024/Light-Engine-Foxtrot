@@ -783,4 +783,146 @@ router.get('/ai-character', async (req, res) => {
   }
 });
 
+// ============================================================
+// DEVICE HEALTH ENDPOINTS — Ticket I-3.10
+// ============================================================
+
+/**
+ * GET /api/health/devices
+ * Get health status for all tracked devices
+ * Returns uptime %, status (healthy/degraded/critical), and check counts
+ */
+router.get('/devices', async (req, res) => {
+  try {
+    const { getAllDeviceHealth } = await import('../lib/device-health-tracker.js');
+    const devices = await getAllDeviceHealth();
+    
+    res.json({
+      ok: true,
+      count: devices.length,
+      devices,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/:deviceId
+ * Get health status for a specific device
+ */
+router.get('/devices/:deviceId', async (req, res) => {
+  try {
+    const { getDeviceUptime } = await import('../lib/device-health-tracker.js');
+    const { deviceId } = req.params;
+    
+    const health = await getDeviceUptime(deviceId);
+    
+    res.json({
+      ok: true,
+      deviceId,
+      ...health,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/summary
+ * Get aggregated device health summary for sync
+ */
+router.get('/devices/summary', async (req, res) => {
+  try {
+    const { getHealthSummaryForSync } = await import('../lib/device-health-tracker.js');
+    const summary = await getHealthSummaryForSync();
+    
+    res.json({
+      ok: true,
+      summary: summary || { total_devices: 0 },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health summary error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health summary',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/thresholds
+ * Get device uptime thresholds configuration
+ */
+router.get('/devices/thresholds', async (req, res) => {
+  try {
+    const { getThresholds } = await import('../lib/device-health-tracker.js');
+    res.json({
+      ok: true,
+      thresholds: getThresholds()
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/health/devices/thresholds
+ * Update device uptime thresholds
+ */
+router.put('/devices/thresholds', async (req, res) => {
+  try {
+    const { updateThresholds, getThresholds } = await import('../lib/device-health-tracker.js');
+    updateThresholds(req.body);
+    
+    res.json({
+      ok: true,
+      thresholds: getThresholds(),
+      message: 'Thresholds updated'
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/health/devices/:deviceId/check
+ * Record a device check result (for testing/manual tracking)
+ */
+router.post('/devices/:deviceId/check', async (req, res) => {
+  try {
+    const { recordDeviceCheck } = await import('../lib/device-health-tracker.js');
+    const { deviceId } = req.params;
+    const { success, latencyMs, error: errorMsg, protocol, deviceType } = req.body;
+    
+    await recordDeviceCheck(deviceId, success === true, {
+      latencyMs,
+      error: errorMsg,
+      protocol,
+      deviceType
+    });
+    
+    res.json({
+      ok: true,
+      message: `Recorded ${success ? 'success' : 'failure'} check for ${deviceId}`
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 export default router;

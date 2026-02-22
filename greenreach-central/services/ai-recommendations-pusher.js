@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { query } from '../config/database.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
 import fetch from 'node-fetch';
 import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
@@ -27,6 +27,118 @@ try {
 
 // API key for authenticating with farm servers
 const EDGE_API_KEY = process.env.GREENREACH_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+// ============================================================
+// DEVICE INTEGRATION RECOMMENDATIONS — Tickets I-4.9, I-4.10
+// ============================================================
+
+/**
+ * Get recommended drivers based on network success rates
+ * Ticket I-4.9: Push integration recommendations
+ * 
+ * Returns top drivers per protocol with high success rates
+ */
+async function getDeviceIntegrationRecommendations() {
+  if (!isDatabaseAvailable()) return null;
+  
+  try {
+    const minSamples = 3;
+    const minSuccessRate = 80;
+    
+    const result = await query(`
+      WITH driver_stats AS (
+        SELECT 
+          driver_id,
+          driver_version,
+          protocol,
+          COUNT(*) as usage_count,
+          COUNT(DISTINCT farm_id_hash) as farm_count,
+          ROUND(100.0 * SUM(CASE WHEN validation_passed = true THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)::numeric, 1) as success_rate,
+          ROUND(AVG(validation_signal_quality)::numeric, 1) as avg_signal,
+          ROW_NUMBER() OVER (PARTITION BY protocol ORDER BY 
+            (100.0 * SUM(CASE WHEN validation_passed = true THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) DESC,
+            COUNT(*) DESC
+          ) as rank
+        FROM device_integrations
+        WHERE driver_id IS NOT NULL
+        GROUP BY driver_id, driver_version, protocol
+        HAVING COUNT(*) >= $1
+      )
+      SELECT *
+      FROM driver_stats
+      WHERE rank = 1 AND success_rate >= $2
+      ORDER BY protocol
+    `, [minSamples, minSuccessRate]);
+    
+    if (result.rows.length === 0) return null;
+    
+    // Format recommendations
+    const recommendations = {};
+    for (const row of result.rows) {
+      recommendations[row.protocol] = {
+        recommended_driver: row.driver_id,
+        version: row.driver_version,
+        success_rate: parseFloat(row.success_rate),
+        farm_count: parseInt(row.farm_count),
+        avg_signal: parseFloat(row.avg_signal) || null,
+        message: `${Math.round(row.success_rate)}% of farms using ${row.driver_id} report stable operation`
+      };
+    }
+    
+    return recommendations;
+  } catch (err) {
+    console.warn('[AI Pusher] Device recommendations query failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Get warnings for problematic driver versions
+ * Ticket I-4.10: Driver version warnings
+ * 
+ * Returns drivers with >20% failure rate across network
+ */
+async function getDriverVersionWarnings() {
+  if (!isDatabaseAvailable()) return [];
+  
+  try {
+    const failureThreshold = 20; // 20% failure rate
+    const minSamples = 5;
+    
+    const result = await query(`
+      SELECT 
+        driver_id,
+        driver_version,
+        protocol,
+        COUNT(*) as usage_count,
+        COUNT(DISTINCT farm_id_hash) as affected_farms,
+        ROUND(100.0 * SUM(CASE WHEN validation_passed = false THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)::numeric, 1) as failure_rate,
+        ROUND(AVG(validation_dropout_rate)::numeric, 3) as avg_dropout
+      FROM device_integrations
+      WHERE driver_id IS NOT NULL
+      GROUP BY driver_id, driver_version, protocol
+      HAVING 
+        COUNT(*) >= $1 AND
+        (100.0 * SUM(CASE WHEN validation_passed = false THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) >= $2
+      ORDER BY failure_rate DESC
+      LIMIT 10
+    `, [minSamples, failureThreshold]);
+    
+    return result.rows.map(row => ({
+      driver_id: row.driver_id,
+      driver_version: row.driver_version,
+      protocol: row.protocol,
+      failure_rate: parseFloat(row.failure_rate),
+      affected_farms: parseInt(row.affected_farms),
+      avg_dropout: parseFloat(row.avg_dropout) || null,
+      severity: parseFloat(row.failure_rate) >= 50 ? 'critical' : 'warning',
+      message: `Driver ${row.driver_id} v${row.driver_version} has ${Math.round(row.failure_rate)}% failure rate across ${row.affected_farms} farm(s). Consider upgrading.`
+    }));
+  } catch (err) {
+    console.warn('[AI Pusher] Driver warnings query failed:', err.message);
+    return [];
+  }
+}
 
 /**
  * Analyze a single farm and generate recommendations
@@ -248,12 +360,36 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Risk alert generation failed (non-fatal):', riskErr.message);
       }
 
-      if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0) {
+      // Integration Assistant Phase 4 Ticket I-4.9: Device integration recommendations
+      let deviceIntegrations = null;
+      try {
+        deviceIntegrations = await getDeviceIntegrationRecommendations();
+        if (deviceIntegrations && Object.keys(deviceIntegrations).length > 0) {
+          console.log(`[AI Pusher] Loaded device recommendations for ${Object.keys(deviceIntegrations).length} protocol(s)`);
+        }
+      } catch (intErr) {
+        console.warn('[AI Pusher] Device recommendations failed (non-fatal):', intErr.message);
+      }
+
+      // Integration Assistant Phase 4 Ticket I-4.10: Driver version warnings
+      let integrationWarnings = [];
+      try {
+        integrationWarnings = await getDriverVersionWarnings();
+        if (integrationWarnings.length > 0) {
+          console.log(`[AI Pusher] Generated ${integrationWarnings.length} driver warning(s)`);
+        }
+      } catch (warnErr) {
+        console.warn('[AI Pusher] Driver warnings failed (non-fatal):', warnErr.message);
+      }
+
+      if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0 || deviceIntegrations || integrationWarnings.length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
           demand_signals: demandSignals,
           recipe_modifiers: recipeModifiers,
           risk_alerts: riskAlerts,
+          device_integrations: deviceIntegrations,
+          integration_warnings: integrationWarnings,
           generated_at: new Date().toISOString()
         };
         console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);

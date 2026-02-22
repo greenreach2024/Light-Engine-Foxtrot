@@ -24825,6 +24825,18 @@ const integrationDB = Datastore.create({
   timestampData: true
 });
 
+// I-3.10: Device health tracking store (Integration Assistant)
+// Tracks device uptime and connectivity for health monitoring
+const deviceHealthDB = Datastore.create({
+  filename: './data/device-health.db',
+  autoload: true,
+  timestampData: true
+});
+
+// Initialize device health tracker
+import { initHealthTracker } from './lib/device-health-tracker.js';
+initHealthTracker(deviceHealthDB);
+
 // Wire audit store into the AI agent service
 import { setAuditStore } from './services/ai-agent.js';
 setAuditStore(agentAuditDB);
