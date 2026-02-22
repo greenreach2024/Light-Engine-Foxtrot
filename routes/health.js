@@ -274,7 +274,7 @@ router.post('/ai-recommendations', async (req, res) => {
       });
     }
     
-    const { recommendations, farm_id, generated_at, network_intelligence } = req.body;
+    const { recommendations, farm_id, generated_at, network_intelligence, experiments } = req.body;
     
     if (!recommendations || !Array.isArray(recommendations)) {
       return res.status(400).json({
@@ -293,13 +293,34 @@ router.post('/ai-recommendations', async (req, res) => {
         timestamp: rec.timestamp || new Date().toISOString()
       })),
       // Network intelligence: crop benchmarks, demand signals, risk alerts
-      network_intelligence: network_intelligence || null
+      network_intelligence: network_intelligence || null,
+      // Phase 4 Ticket 4.7: Active A/B experiments assigned to this farm
+      experiments: experiments || []
     };
     
     await fs.writeFile(AI_RECOMMENDATIONS_PATH, JSON.stringify(data, null, 2));
-    
+
+    // Phase 3 Ticket 3.3: If network recipe modifiers are included, persist separately
+    if (network_intelligence?.recipe_modifiers && Object.keys(network_intelligence.recipe_modifiers).length > 0) {
+      try {
+        const modPath = join(__dirname, '../data/network-recipe-modifiers.json');
+        const modData = {
+          modifiers: network_intelligence.recipe_modifiers,
+          received_at: new Date().toISOString(),
+          source: 'central_push'
+        };
+        await fs.writeFile(modPath, JSON.stringify(modData, null, 2));
+        console.log(`[Health API] Stored ${Object.keys(network_intelligence.recipe_modifiers).length} network recipe modifiers`);
+      } catch (modErr) {
+        console.warn('[Health API] Could not persist network modifiers:', modErr.message);
+      }
+    }
+
     const niKeys = network_intelligence ? Object.keys(network_intelligence.crop_benchmarks || {}).length : 0;
-    console.log(`[Health API] ✓ Received ${recommendations.length} AI recommendations + ${niKeys} crop benchmarks from Central`);
+    const modKeys = network_intelligence ? Object.keys(network_intelligence.recipe_modifiers || {}).length : 0;
+    const riskCount = network_intelligence?.risk_alerts?.length || 0;
+    const expCount = (experiments || []).length;
+    console.log(`[Health API] ✓ Received ${recommendations.length} AI recommendations + ${niKeys} benchmarks + ${modKeys} recipe modifiers + ${riskCount} risk alerts + ${expCount} experiments from Central`);
     
     res.json({
       ok: true,
@@ -759,6 +780,148 @@ router.get('/ai-character', async (req, res) => {
       error: 'Failed to generate character',
       message: error.message
     });
+  }
+});
+
+// ============================================================
+// DEVICE HEALTH ENDPOINTS — Ticket I-3.10
+// ============================================================
+
+/**
+ * GET /api/health/devices
+ * Get health status for all tracked devices
+ * Returns uptime %, status (healthy/degraded/critical), and check counts
+ */
+router.get('/devices', async (req, res) => {
+  try {
+    const { getAllDeviceHealth } = await import('../lib/device-health-tracker.js');
+    const devices = await getAllDeviceHealth();
+    
+    res.json({
+      ok: true,
+      count: devices.length,
+      devices,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/:deviceId
+ * Get health status for a specific device
+ */
+router.get('/devices/:deviceId', async (req, res) => {
+  try {
+    const { getDeviceUptime } = await import('../lib/device-health-tracker.js');
+    const { deviceId } = req.params;
+    
+    const health = await getDeviceUptime(deviceId);
+    
+    res.json({
+      ok: true,
+      deviceId,
+      ...health,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/summary
+ * Get aggregated device health summary for sync
+ */
+router.get('/devices/summary', async (req, res) => {
+  try {
+    const { getHealthSummaryForSync } = await import('../lib/device-health-tracker.js');
+    const summary = await getHealthSummaryForSync();
+    
+    res.json({
+      ok: true,
+      summary: summary || { total_devices: 0 },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Health API] Device health summary error:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Failed to get device health summary',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/health/devices/thresholds
+ * Get device uptime thresholds configuration
+ */
+router.get('/devices/thresholds', async (req, res) => {
+  try {
+    const { getThresholds } = await import('../lib/device-health-tracker.js');
+    res.json({
+      ok: true,
+      thresholds: getThresholds()
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/health/devices/thresholds
+ * Update device uptime thresholds
+ */
+router.put('/devices/thresholds', async (req, res) => {
+  try {
+    const { updateThresholds, getThresholds } = await import('../lib/device-health-tracker.js');
+    updateThresholds(req.body);
+    
+    res.json({
+      ok: true,
+      thresholds: getThresholds(),
+      message: 'Thresholds updated'
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/health/devices/:deviceId/check
+ * Record a device check result (for testing/manual tracking)
+ */
+router.post('/devices/:deviceId/check', async (req, res) => {
+  try {
+    const { recordDeviceCheck } = await import('../lib/device-health-tracker.js');
+    const { deviceId } = req.params;
+    const { success, latencyMs, error: errorMsg, protocol, deviceType } = req.body;
+    
+    await recordDeviceCheck(deviceId, success === true, {
+      latencyMs,
+      error: errorMsg,
+      protocol,
+      deviceType
+    });
+    
+    res.json({
+      ok: true,
+      message: `Recorded ${success ? 'success' : 'failure'} check for ${deviceId}`
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 

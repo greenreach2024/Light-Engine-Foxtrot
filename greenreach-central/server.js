@@ -25,6 +25,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
 import adminRecipesRoutes from './routes/admin-recipes.js';
+import networkDevicesRoutes from './routes/network-devices.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
 import recipesRoutes from './routes/recipes.js';
@@ -76,6 +77,10 @@ import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
+import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
+import { initExperimentTables, createExperiment, activateExperiment, recordObservation, analyzeExperiment, completeExperiment, listExperiments, getExperiment, getExperimentsForFarm } from './jobs/experiment-orchestrator.js';
+import { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } from './jobs/production-planner.js';
+import { generateGovernanceReport, formatReportText } from './reports/governance-review.js';
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
 import { upsertNetworkFarm } from './services/networkFarmsStore.js';
@@ -2114,6 +2119,7 @@ app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to f
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
+app.use('/api/admin/network-devices', networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
@@ -2255,6 +2261,215 @@ app.get('/api/wholesale/demand-analysis', async (req, res) => {
 });
 
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
+
+// ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
+app.get('/api/network/harvest-conflicts', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 14;
+    const conflicts = await detectHarvestConflicts(days);
+    res.json({ ok: true, look_ahead_days: days, conflicts, count: conflicts.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.3: Supply/demand balance analysis ────────────────
+app.get('/api/network/supply-demand', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const analysis = await analyzeSupplyDemand(days);
+    res.json({ ok: true, ...analysis });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/network/risk-alerts', async (req, res) => {
+  try {
+    const alerts = await generateNetworkRiskAlerts();
+    res.json({ ok: true, alerts, count: alerts.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.7: A/B Recipe Experiment API ─────────────────────
+app.post('/api/experiments', async (req, res) => {
+  try {
+    const exp = await createExperiment(req.body);
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments', async (req, res) => {
+  try {
+    const status = req.query.status || null;
+    const experiments = await listExperiments(status);
+    res.json({ ok: true, experiments });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments/:id', async (req, res) => {
+  try {
+    const exp = await getExperiment(req.params.id);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/activate', async (req, res) => {
+  try {
+    const exp = await activateExperiment(req.params.id);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found or not in draft' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/observe', async (req, res) => {
+  try {
+    const { farm_id, arm, outcomes, group_id } = req.body;
+    await recordObservation(req.params.id, farm_id, arm, outcomes, group_id);
+    res.json({ ok: true, message: 'Observation recorded' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/analyze', async (req, res) => {
+  try {
+    const analysis = await analyzeExperiment(req.params.id);
+    res.json({ ok: true, analysis });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/experiments/:id/complete', async (req, res) => {
+  try {
+    const { findings } = req.body;
+    const exp = await completeExperiment(req.params.id, findings);
+    if (!exp) return res.status(404).json({ ok: false, error: 'Experiment not found' });
+    res.json({ ok: true, experiment: exp });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/experiments/farm/:farmId', async (req, res) => {
+  try {
+    const experiments = await getExperimentsForFarm(req.params.farmId);
+    res.json({ ok: true, experiments });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.8: Governance Review Report ──────────────────────
+app.get('/api/governance/report', async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 1;
+    const report = await generateGovernanceReport({ months });
+    const format = req.query.format || 'json';
+    if (format === 'text') {
+      res.type('text/plain').send(formatReportText(report));
+    } else {
+      res.json({ ok: true, report });
+    }
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 5 Ticket 5.4: Network Production Planning ──────────────────
+
+/**
+ * GET /api/production/plan
+ * Generate weekly seeding plan for the network without distributing.
+ */
+app.get('/api/production/plan', async (req, res) => {
+  try {
+    const forecastWeeks = parseInt(req.query.weeks) || 4;
+    const result = await generateWeeklyPlan({ forecastWeeks });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/production/plan/distribute
+ * Generate and push weekly seeding plans to all farms.
+ */
+app.post('/api/production/plan/distribute', async (req, res) => {
+  try {
+    const forecastWeeks = parseInt(req.body?.weeks) || 4;
+    const result = await generateAndDistributePlan({ forecastWeeks });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/production/demand
+ * Get demand forecast from wholesale order history.
+ */
+app.get('/api/production/demand', async (req, res) => {
+  try {
+    const forecast = await gatherDemandForecast();
+    res.json({ ok: true, forecast });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/production/supply
+ * Get current network supply status.
+ */
+app.get('/api/production/supply', async (req, res) => {
+  try {
+    const supply = await getNetworkSupply();
+    res.json({ ok: true, supply, count: supply.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 5 Ticket 5.6: Predictive Inventory Listing ────────────────
+
+/**
+ * GET /api/wholesale/predicted-inventory
+ * Get predicted inventory — products available before harvest with confidence levels.
+ * Buyers see "Available Feb 28" with confidence level for pre-ordering.
+ */
+app.get('/api/wholesale/predicted-inventory', async (req, res) => {
+  try {
+    const { generatePredictedInventory } = await import('./services/wholesaleNetworkAggregator.js');
+    const predictions = await generatePredictedInventory();
+    const minConfidence = parseFloat(req.query.min_confidence) || 0;
+    const filtered = minConfidence > 0
+      ? predictions.filter(p => p.confidence >= minConfidence)
+      : predictions;
+    res.json({
+      ok: true,
+      predicted_inventory: filtered,
+      count: filtered.length,
+      note: 'Predicted availability based on farm harvest patterns. Subject to change.',
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
 
 // --- Crop Registry API (Phase 2a — single source of truth) ---
 app.get('/api/crops', (req, res) => {
@@ -2423,6 +2638,14 @@ async function startServer() {
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
+
+      // Phase 4: Initialize A/B experiment tables
+      try {
+        await initExperimentTables();
+        logger.info('A/B experiment tables initialized');
+      } catch (expErr) {
+        logger.warn('A/B experiment table init failed (non-fatal)', { error: expErr.message });
+      }
 
       // Grant wizard (enabled by default)
       if (seedGrantPrograms) {

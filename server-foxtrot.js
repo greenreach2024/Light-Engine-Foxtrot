@@ -225,7 +225,10 @@ import { checkAndControlEnvironment } from './controller/checkAndControlEnvironm
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
+import eventBus from './lib/event-bus.js';
 import mlAutomation from './lib/ml-automation-controller.js';
+import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
+import { scoreAlert, prioritizeAlerts, recordAlertResponse, getAlertStats } from './lib/alert-prioritizer.js';
 
 // Edge mode support
 import edgeConfig from './lib/edge-config.js';
@@ -4527,8 +4530,49 @@ async function runDailyPlanResolver(trigger = 'manual') {
         const gradientTemp = toNumberOrNull(gradients.tempC) ?? 0;
         const gradientRh = toNumberOrNull(gradients.rh) ?? 0;
 
+        // Phase 3 Ticket 3.1 + Phase 5 Ticket 5.1: Apply per-crop recipe modifier
+        // Phase 5: Autonomous application with audit logging and auto-revert tracking
+        const cropName = (group.crop || group.cropName || plan?.crop || '').toLowerCase().replace(/\s+/g, '-');
+        let modifierResult = null;
+        if (cropName) {
+          try {
+            const { autonomousApplyModifier } = await import('./lib/recipe-modifier.js');
+            const farmId = process.env.FARM_ID || 'local';
+            const autoResult = await autonomousApplyModifier(cropName, {
+              ppfd: toNumberOrNull(lightTargets?.ppfd),
+              mix: lightTargets?.mix || {},
+              envTempC: envTargets?.tempC ?? null
+            }, typeof agentAuditDB !== 'undefined' ? agentAuditDB : null, farmId);
+
+            if (autoResult.applied) {
+              modifierResult = autoResult.targets;
+              console.log(`[daily] Autonomous recipe modifier applied for ${cropName}: ${autoResult.reason}`);
+            } else {
+              // Fall back to standard non-autonomous apply
+              modifierResult = applyRecipeModifier(cropName, {
+                ppfd: toNumberOrNull(lightTargets?.ppfd),
+                mix: lightTargets?.mix || {},
+                envTempC: envTargets?.tempC ?? null
+              });
+              if (modifierResult.modifierApplied) {
+                console.log(`[daily] Recipe modifier applied for ${cropName}: PPFD ${modifierResult.modifierDetails.ppfd_offset_pct}%, blue ${modifierResult.modifierDetails.blue_pct_offset}%, confidence ${modifierResult.modifierDetails.confidence}`);
+              }
+            }
+          } catch {
+            // Fallback: use original Phase 3 apply (non-autonomous)
+            modifierResult = applyRecipeModifier(cropName, {
+              ppfd: toNumberOrNull(lightTargets?.ppfd),
+              mix: lightTargets?.mix || {},
+              envTempC: envTargets?.tempC ?? null
+            });
+            if (modifierResult.modifierApplied) {
+              console.log(`[daily] Recipe modifier applied for ${cropName}: PPFD ${modifierResult.modifierDetails.ppfd_offset_pct}%`);
+            }
+          }
+        }
+
         // Convert recipe spectral targets to 4-channel mix (cw, ww, bl, rd)
-        const recipeMix = lightTargets?.mix || {};
+        const recipeMix = modifierResult?.modifierApplied ? modifierResult.mix : (lightTargets?.mix || {});
         let baseMix;
         
         // Check for green channel (supports both 'green' and 'gn' for backward compatibility)
@@ -4560,7 +4604,7 @@ async function runDailyPlanResolver(trigger = 'manual') {
           baseMix = normalizeMixInput(recipeMix);
         }
         
-        const basePpfd = toNumberOrNull(lightTargets?.ppfd);
+        const basePpfd = modifierResult?.modifierApplied ? toNumberOrNull(modifierResult.ppfd) : toNumberOrNull(lightTargets?.ppfd);
         const targetPpfd = basePpfd != null ? Math.max(0, basePpfd + gradientPpfd) : null;
         let workingMix = { ...baseMix };
         if (Number.isFinite(basePpfd) && basePpfd > 0 && Number.isFinite(targetPpfd)) {
@@ -4589,7 +4633,7 @@ async function runDailyPlanResolver(trigger = 'manual') {
             ? photoperiodFallback
             : (readPhotoperiodHours(plan?.defaults?.photoperiod) ?? null));
 
-        let envTargetTemp = envTargets?.tempC;
+        let envTargetTemp = modifierResult?.modifierApplied && modifierResult.envTempC != null ? modifierResult.envTempC : envTargets?.tempC;
         if (envTargetTemp != null && Number.isFinite(gradientTemp)) envTargetTemp += gradientTemp;
         let envTargetRh = envTargets?.rh;
         if (envTargetRh != null && Number.isFinite(gradientRh)) {
@@ -9904,6 +9948,55 @@ app.post('/api/harvest', (req, res) => {
     
     console.log(`[Harvest API] Recorded harvest for group ${harvestEntry.groupId}, variance: ${harvestEntry.variance} days`);
     
+    // ── Phase 0 Task 0.4: Auto-generate experiment record on harvest ────
+    // Non-blocking — failure here does not block the harvest response
+    try {
+      const experimentInput = {
+        groupId: harvestEntry.groupId,
+        crop: harvestEntry.crop || harvestEntry.cropName || null,
+        recipe_id: harvestEntry.recipeId || harvestEntry.recipe_id || null,
+        grow_days: harvestEntry.growDays || harvestEntry.grow_days || null,
+        planned_grow_days: harvestEntry.plannedGrowDays || harvestEntry.planned_grow_days || null,
+        weight_per_plant_oz: harvestEntry.weightPerPlant || harvestEntry.weight_per_plant_oz || null,
+        total_weight_oz: harvestEntry.totalWeight || harvestEntry.total_weight_oz || null,
+        planted_site_count: harvestEntry.plantedSiteCount || harvestEntry.planted_site_count || null,
+        zone: harvestEntry.zone || null,
+        room: harvestEntry.room || null,
+      };
+      const record = await buildExperimentRecord(experimentInput);
+      await harvestOutcomesDB.insert(record);
+      console.log(`[Harvest API] ✓ Experiment record auto-created for ${record.crop || harvestEntry.groupId}`);
+      syncExperimentToCenter(record).catch(e =>
+        console.warn('[Harvest API] Experiment Central sync deferred:', e?.message)
+      );
+
+      // Phase 3 Ticket 3.5: Record champion/challenger observation
+      try {
+        const { recordChampionChallenger, applyModifier, trackAutonomousPerformance } = await import('./lib/recipe-modifier.js');
+        const cropKey = (record.crop || '').toLowerCase().replace(/\s+/g, '-');
+        const modCheck = applyModifier(cropKey, { ppfd: null, mix: {}, envTempC: null });
+        await recordChampionChallenger({
+          crop: cropKey,
+          groupId: experimentInput.groupId,
+          modifierApplied: modCheck.modifierApplied,
+          modifierDetails: modCheck.modifierDetails,
+          outcomes: record.outcomes,
+          auditDB: typeof agentAuditDB !== 'undefined' ? agentAuditDB : null
+        });
+
+        // Phase 5 Ticket 5.1: Track autonomous performance for auto-revert
+        const farmId = process.env.FARM_ID || 'local';
+        await trackAutonomousPerformance(cropKey, record.outcomes,
+          typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+          farmId
+        );
+      } catch (ccErr) {
+        // Non-fatal — champion/challenger + autonomous tracking is best-effort
+      }
+    } catch (expErr) {
+      console.warn('[Harvest API] Experiment record creation failed (non-fatal):', expErr.message);
+    }
+
     return res.json({ 
       ok: true, 
       message: 'Harvest recorded successfully',
@@ -10191,6 +10284,365 @@ app.get('/api/harvest/experiment-stats', async (req, res) => {
   }
 });
 
+// ── Phase 3 Ticket 3.1: Recipe modifier API ──────────────────────────────
+
+/**
+ * GET /api/recipe-modifiers
+ * Return current per-crop recipe modifiers (local + network).
+ */
+app.get('/api/recipe-modifiers', async (req, res) => {
+  try {
+    const { loadModifiers } = await import('./lib/recipe-modifier.js');
+    const local = loadModifiers();
+
+    // Also load network modifiers if available
+    let network = { modifiers: {} };
+    try {
+      const raw = fs.readFileSync(path.join(process.cwd(), 'data', 'network-recipe-modifiers.json'), 'utf-8');
+      network = JSON.parse(raw);
+    } catch { /* no network modifiers yet */ }
+
+    res.json({
+      ok: true,
+      local: local.modifiers,
+      network: network.modifiers || {},
+      local_computed_at: local.computed_at,
+      network_received_at: network.received_at || null
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/compute
+ * Trigger recomputation of local recipe modifiers from experiment records.
+ */
+app.post('/api/recipe-modifiers/compute', async (req, res) => {
+  try {
+    const records = await harvestOutcomesDB.find({});
+    const result = computeRecipeModifiers(records, req.body?.minRecords || 10);
+    res.json({
+      ok: true,
+      crops_computed: Object.keys(result.modifiers).length,
+      modifiers: result.modifiers,
+      computed_at: result.computed_at
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/network/:crop/accept
+ * Accept a network recipe modifier suggestion for a crop (Ticket 3.3).
+ * Merges the network modifier into local modifiers.
+ */
+app.post('/api/recipe-modifiers/network/:crop/accept', async (req, res) => {
+  try {
+    const crop = req.params.crop.toLowerCase().replace(/\s+/g, '-');
+    const { loadModifiers, saveModifiers } = await import('./lib/recipe-modifier.js');
+
+    // Load network modifier
+    let network;
+    try {
+      const raw = fs.readFileSync(path.join(process.cwd(), 'data', 'network-recipe-modifiers.json'), 'utf-8');
+      network = JSON.parse(raw);
+    } catch {
+      return res.status(404).json({ ok: false, error: 'No network modifiers available' });
+    }
+
+    const netMod = network.modifiers?.[crop];
+    if (!netMod) {
+      return res.status(404).json({ ok: false, error: `No network modifier for crop: ${crop}` });
+    }
+
+    // Merge into local modifiers
+    const local = loadModifiers();
+    local.modifiers[crop] = {
+      ...netMod,
+      source: 'network_accepted',
+      accepted_at: new Date().toISOString()
+    };
+    local.version = (local.version || 0) + 1;
+    saveModifiers(local);
+
+    console.log(`[recipe-modifier] Accepted network modifier for ${crop}`);
+    res.json({ ok: true, crop, modifier: local.modifiers[crop] });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/network/:crop/dismiss
+ * Dismiss a network recipe modifier suggestion.
+ */
+app.post('/api/recipe-modifiers/network/:crop/dismiss', async (req, res) => {
+  const crop = req.params.crop.toLowerCase().replace(/\s+/g, '-');
+  console.log(`[recipe-modifier] Dismissed network modifier for ${crop}`);
+  res.json({ ok: true, crop, dismissed: true });
+});
+
+// ── Phase 3 Ticket 3.4: Manual retrain trigger ──────────────────────────
+
+/**
+ * POST /api/ml/retrain
+ * Trigger a manual model retrain cycle.
+ */
+app.post('/api/ml/retrain', async (req, res) => {
+  try {
+    const { trainMLModel } = await import('./lib/ml-training-pipeline.js');
+    const result = await trainMLModel();
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/ml/metrics
+ * Return current model metrics and training history.
+ */
+app.get('/api/ml/metrics', async (req, res) => {
+  try {
+    const { loadModelMetrics } = await import('./lib/ml-training-pipeline.js');
+    const metrics = await loadModelMetrics();
+    res.json({ ok: true, ...metrics });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 3 Ticket 3.5: Champion/Challenger comparison API ──────────────
+
+/**
+ * GET /api/recipe-modifiers/champion-challenger/:crop
+ * Compare champion (modifier applied) vs challenger (baseline) outcomes.
+ */
+app.get('/api/recipe-modifiers/champion-challenger/:crop', async (req, res) => {
+  try {
+    const { compareChampionChallenger } = await import('./lib/recipe-modifier.js');
+    const crop = req.params.crop.toLowerCase().replace(/\s+/g, '-');
+    const result = await compareChampionChallenger(
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+      crop
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 5 Ticket 5.1: Autonomous Recipe Adjustment APIs ──────────────
+
+/**
+ * GET /api/recipe-modifiers/autonomous/status
+ * Return autonomous eligibility and tracking status for all crops.
+ */
+app.get('/api/recipe-modifiers/autonomous/status', async (req, res) => {
+  try {
+    const { getAutonomousStatus } = await import('./lib/recipe-modifier.js');
+    const status = getAutonomousStatus();
+    res.json({ ok: true, crops: status });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/apply
+ * Autonomously apply a recipe modifier for a crop (within guardrail bounds).
+ * Body: { crop, targets: { ppfd, mix, envTempC } }
+ */
+app.post('/api/recipe-modifiers/autonomous/apply', async (req, res) => {
+  try {
+    const { crop, targets } = req.body;
+    if (!crop || !targets) return res.status(400).json({ ok: false, error: 'crop and targets required' });
+    const { autonomousApplyModifier } = await import('./lib/recipe-modifier.js');
+    const farmId = process.env.FARM_ID || 'local';
+    const result = await autonomousApplyModifier(crop, targets,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+      farmId
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/track-performance
+ * Record a harvest outcome for auto-revert tracking.
+ * Body: { crop, outcomes: { weight_per_plant_oz, quality_score } }
+ */
+app.post('/api/recipe-modifiers/autonomous/track-performance', async (req, res) => {
+  try {
+    const { crop, outcomes } = req.body;
+    if (!crop || !outcomes) return res.status(400).json({ ok: false, error: 'crop and outcomes required' });
+    const { trackAutonomousPerformance } = await import('./lib/recipe-modifier.js');
+    const farmId = process.env.FARM_ID || 'local';
+    const result = await trackAutonomousPerformance(crop, outcomes,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+      farmId
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/clear-revert/:crop
+ * Clear auto-revert flag after manual review. Requires approval.
+ */
+app.post('/api/recipe-modifiers/autonomous/clear-revert/:crop', async (req, res) => {
+  try {
+    const { clearRevert } = await import('./lib/recipe-modifier.js');
+    const result = clearRevert(req.params.crop);
+    if (typeof agentAuditDB !== 'undefined') {
+      await agentAuditDB.insert({
+        type: 'autonomous_recipe',
+        action: 'clear_revert',
+        agent_class: 'grow-advisor',
+        crop: req.params.crop,
+        farm_id: process.env.FARM_ID || 'local',
+        human_decision: 'accepted',
+        tier: 'require-approval',
+        timestamp: new Date().toISOString()
+      }).catch(() => {});
+    }
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 3 Ticket 3.9: Alert prioritization API ──────────────────────
+
+/**
+ * POST /api/alerts/score
+ * Score a batch of anomaly diagnostics and return only high-priority alerts.
+ * Body: { diagnostics: [...], farmContext?: { activeGroups, alertThreshold } }
+ */
+app.post('/api/alerts/score', async (req, res) => {
+  try {
+    const { diagnostics = [], farmContext = {} } = req.body;
+    const result = prioritizeAlerts(diagnostics, farmContext);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/alerts/response
+ * Record grower response to an alert (acknowledged, dismissed, acted_on).
+ * Body: { category: string, response: 'acknowledged'|'dismissed'|'acted_on' }
+ */
+app.post('/api/alerts/response', async (req, res) => {
+  try {
+    const { category, response } = req.body;
+    if (!category || !['acknowledged', 'dismissed', 'acted_on'].includes(response)) {
+      return res.status(400).json({ ok: false, error: 'category and response (acknowledged|dismissed|acted_on) required' });
+    }
+    const result = recordAlertResponse(category, response);
+    res.json({ ok: true, category, updated: result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/alerts/stats
+ * Get alert dismiss/acknowledge statistics for threshold tuning.
+ */
+app.get('/api/alerts/stats', (req, res) => {
+  try {
+    const stats = getAlertStats();
+    res.json({ ok: true, ...stats });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket 4.6: Developer Mode API ─────────────────────────────
+
+/**
+ * POST /api/developer/evaluate
+ * Evaluate a text change request for feasibility.
+ * Body: { request: "change the alert threshold to 25" }
+ */
+app.post('/api/developer/evaluate', async (req, res) => {
+  try {
+    const { evaluateRequest } = await import('./lib/developer-mode.js');
+    const result = evaluateRequest(req.body.request || '', { user: req.user?.email || req.body.user });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/propose
+ * Create a change proposal for human review.
+ * Body: { proposalId, description, targetFile?, configChanges?, scope, risk }
+ */
+app.post('/api/developer/propose', async (req, res) => {
+  try {
+    const { createProposal } = await import('./lib/developer-mode.js');
+    const proposal = createProposal(req.body.proposalId, {
+      ...req.body,
+      requestedBy: req.user?.email || req.body.user || 'api'
+    });
+    res.json({ ok: true, proposal });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/developer/proposals
+ * List all proposals. ?status=pending_review|applied|rejected
+ */
+app.get('/api/developer/proposals', async (req, res) => {
+  try {
+    const { listProposals } = await import('./lib/developer-mode.js');
+    const proposals = listProposals(req.query.status || null);
+    res.json({ ok: true, proposals, count: proposals.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/proposals/:id/approve
+ * Approve and apply a proposal.
+ */
+app.post('/api/developer/proposals/:id/approve', async (req, res) => {
+  try {
+    const { approveAndApply } = await import('./lib/developer-mode.js');
+    const result = approveAndApply(req.params.id, req.user?.email || req.body.user || 'api');
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/developer/proposals/:id/reject
+ * Reject a proposal.
+ */
+app.post('/api/developer/proposals/:id/reject', async (req, res) => {
+  try {
+    const { rejectProposal } = await import('./lib/developer-mode.js');
+    const result = rejectProposal(req.params.id, req.user?.email || req.body.user || 'api', req.body.reason || '');
+    res.json({ ok: true, proposal: result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 /**
  * GET /api/ai/training-data
  * Comprehensive training data export API (Rule 9.3, Task 1.10)
@@ -10418,25 +10870,102 @@ app.get('/api/ai/suggested-crop', asyncHandler(async (req, res) => {
   }
 }));
 
-app.get('/api/harvest/predict/:groupId', (req, res) => {
-  console.log(`[Harvest Predictions] Stub endpoint called for group: ${req.params.groupId}`);
-  res.json({ 
-    ok: true, 
-    prediction: null, 
-    groupId: req.params.groupId,
-    message: 'AI prediction service not available',
-    timestamp: new Date().toISOString()
-  });
+// ── Phase 5 Ticket 5.2: AI-Driven Harvest Timing ──────────────────────
+
+/**
+ * GET /api/harvest/predict/:groupId
+ * Predict harvest date for a specific group using growth & quality analysis.
+ */
+app.get('/api/harvest/predict/:groupId', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const prediction = await predictor.predict(req.params.groupId);
+    res.json({ ok: true, prediction, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.json({ ok: true, prediction: null, groupId: req.params.groupId, message: error.message, timestamp: new Date().toISOString() });
+  }
 });
 
-app.get('/api/harvest/predictions/all', (req, res) => {
-  console.log('[Harvest Predictions] Stub endpoint called for all predictions');
-  res.json({ 
-    ok: true, 
-    predictions: [], 
-    message: 'AI prediction service not available',
-    timestamp: new Date().toISOString()
-  });
+/**
+ * GET /api/harvest/predictions/all
+ * Predict harvest dates for all active groups.
+ */
+app.get('/api/harvest/predictions/all', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const activeGroups = await predictor.getActiveGroups();
+    const groupIds = activeGroups.map(g => g.id);
+    const predictions = await predictor.predictMultiple(groupIds);
+    res.json({ ok: true, predictions, count: predictions.length, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.json({ ok: true, predictions: [], message: error.message, timestamp: new Date().toISOString() });
+  }
+});
+
+/**
+ * GET /api/harvest/readiness
+ * Scan all active groups for harvest readiness with growth rate & quality analysis.
+ * Returns actionable notifications for groups approaching or at harvest readiness.
+ */
+app.get('/api/harvest/readiness', async (req, res) => {
+  try {
+    const { scanHarvestReadiness } = await import('./lib/harvest-readiness.js');
+    const notifications = await scanHarvestReadiness(
+      typeof harvestOutcomesDB !== 'undefined' ? harvestOutcomesDB : null,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null
+    );
+    res.json({ ok: true, notifications, count: notifications.length, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/harvest/readiness/:groupId
+ * Get readiness assessment for a specific group.
+ */
+app.get('/api/harvest/readiness/:groupId', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const { analyzeGrowthRate, analyzeQualityTrend, assessReadiness } = await import('./lib/harvest-readiness.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const group = await predictor.getGroup(req.params.groupId);
+    if (!group) return res.status(404).json({ ok: false, error: 'Group not found' });
+
+    const prediction = await predictor.predict(req.params.groupId);
+    let experimentRecords = [];
+    if (typeof harvestOutcomesDB !== 'undefined') {
+      experimentRecords = await harvestOutcomesDB.find({});
+    }
+    const growthAnalysis = analyzeGrowthRate(group.crop || 'Unknown', experimentRecords);
+    const qualityAnalysis = analyzeQualityTrend(group.crop || 'Unknown', experimentRecords);
+    const assessment = assessReadiness(group, prediction, growthAnalysis, qualityAnalysis);
+
+    res.json({ ok: true, assessment, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/harvest/growth-analysis/:crop
+ * Get growth rate and quality trend analysis for a crop.
+ */
+app.get('/api/harvest/growth-analysis/:crop', async (req, res) => {
+  try {
+    const { analyzeGrowthRate, analyzeQualityTrend } = await import('./lib/harvest-readiness.js');
+    let experimentRecords = [];
+    if (typeof harvestOutcomesDB !== 'undefined') {
+      experimentRecords = await harvestOutcomesDB.find({});
+    }
+    const growth = analyzeGrowthRate(req.params.crop, experimentRecords);
+    const quality = analyzeQualityTrend(req.params.crop, experimentRecords);
+    res.json({ ok: true, crop: req.params.crop, growth, quality, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 /**
@@ -11017,8 +11546,11 @@ import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
 import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
+import integrationsRouter, { initIntegrationRoutes, syncIntegrationsToCentral, getIntegrationRecordsForSync } from './routes/integrations.js';
+import { createWizardHandlers } from './lib/device-wizard.js';
 import purchaseRouter from './routes/purchase.js';
 import purchaseLeadsRouter from './routes/purchase-leads.js';
+import kpisRouter from './routes/kpis.js';
 import setupWizardRouter from './routes/setup-wizard.js';
 import pg from 'pg';
 
@@ -11056,6 +11588,44 @@ app.locals.db = dbPool;
 app.use('/api/farms', farmsRouter);
 
 /**
+ * Device Integrations API — Integration Assistant Phase 1
+ * Device integration records for network learning
+ * - GET /api/integrations: List all device integrations
+ * - GET /api/integrations/:id: Get specific integration
+ * - POST /api/integrations: Create device integration record
+ * - PATCH /api/integrations/:id: Update integration (validation/feedback)
+ * - DELETE /api/integrations/:id: Remove integration record
+ */
+initIntegrationRoutes(integrationDB);
+app.use('/api/integrations', integrationsRouter);
+
+/**
+ * Device Wizard API — Integration Assistant Phase 2 (Ticket I-2.10)
+ * Multi-step wizard for adding new devices with auto-discovery
+ * - POST /api/device-wizard/start: Start new wizard session
+ * - GET /api/device-wizard/:sessionId: Get wizard state
+ * - POST /api/device-wizard/:sessionId/protocol: Select protocol
+ * - POST /api/device-wizard/:sessionId/config: Set connection config
+ * - POST /api/device-wizard/:sessionId/discover: Discover devices
+ * - POST /api/device-wizard/:sessionId/select-device: Select device
+ * - POST /api/device-wizard/:sessionId/assign-room: Assign to room/zone
+ * - POST /api/device-wizard/:sessionId/save: Save integration record
+ * - POST /api/device-wizard/:sessionId/back: Go back one step
+ * - DELETE /api/device-wizard/:sessionId: Cancel/reset session
+ */
+const wizardHandlers = createWizardHandlers(integrationDB);
+app.post('/api/device-wizard/start', wizardHandlers.start);
+app.get('/api/device-wizard/:sessionId', wizardHandlers.getState);
+app.post('/api/device-wizard/:sessionId/protocol', wizardHandlers.selectProtocol);
+app.post('/api/device-wizard/:sessionId/config', wizardHandlers.setConfig);
+app.post('/api/device-wizard/:sessionId/discover', wizardHandlers.discover);
+app.post('/api/device-wizard/:sessionId/select-device', wizardHandlers.selectDevice);
+app.post('/api/device-wizard/:sessionId/assign-room', wizardHandlers.assignRoom);
+app.post('/api/device-wizard/:sessionId/save', wizardHandlers.save);
+app.post('/api/device-wizard/:sessionId/back', wizardHandlers.goBack);
+app.delete('/api/device-wizard/:sessionId', wizardHandlers.cancel);
+
+/**
  * Purchase & Onboarding Flow
  * Square payment processing, account creation, and welcome emails
  * - POST /api/farms/purchase: Complete purchase and create account
@@ -11073,6 +11643,14 @@ app.use('/api/farms', purchaseRouter);
  * - PUT /api/purchase/leads/:leadId/status: Update lead status
  */
 app.use('/api/purchase', purchaseLeadsRouter);
+
+/**
+ * KPI Dashboard API — Phase 2, Ticket 2.4
+ * Core business metrics: fill rate, OTIF, margin, loss, forecast error, labor, input reduction
+ * - GET /api/kpis: Current KPI values
+ * - GET /api/kpis/history: Weekly snapshots (future)
+ */
+app.use('/api/kpis', kpisRouter);
 
 /**
  * Authentication & Device Pairing
@@ -11691,14 +12269,38 @@ app.get('/api/ml/insights/anomalies', asyncHandler(async (req, res) => {
     const generatedAt = new Date(insights.timestamp);
     const age = Date.now() - generatedAt.getTime();
     const isStale = age > 30 * 60 * 1000; // 30 minutes
+
+    // Phase 3.9: Score and prioritize anomalies to reduce alert fatigue
+    let prioritized = null;
+    if (insights.anomalies && insights.anomalies.length > 0) {
+      const asDiagnostics = insights.anomalies.map(a => ({
+        ...a,
+        diagnosis: {
+          category: a.severity === 'critical' ? 'equipment_failure'
+            : a.severity === 'high' ? 'sensor_issue'
+            : a.severity === 'medium' ? 'control_loop'
+            : 'environmental',
+          urgency: a.severity || 'low',
+          confidence: a.confidence || 0.5,
+          weatherRelated: false
+        }
+      }));
+      prioritized = prioritizeAlerts(asDiagnostics);
+    }
     
     return res.json({
       ok: true,
       ...insights,
+      prioritization: prioritized ? {
+        surfaced_count: prioritized.surfaced.length,
+        suppressed_count: prioritized.suppressed,
+        total: prioritized.total
+      } : null,
       meta: {
         age_minutes: Math.round(age / 60000),
         is_stale: isStale,
-        cached: true
+        cached: true,
+        alert_prioritization: true
       }
     });
   } catch (error) {
@@ -17369,12 +17971,41 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
 // =====================================================
 // INVENTORY MANAGEMENT CRUD API
 // =====================================================
-// In-memory stores for farm supplies inventory
+// NeDB-backed stores for farm supplies inventory (Phase 0, Ticket 0.2)
+// In-memory arrays kept for fast reads; every mutation writes through to NeDB.
+const seedsInventoryDB = Datastore.create({ filename: './data/seeds-inventory.db', autoload: true });
+const packagingInventoryDB = Datastore.create({ filename: './data/packaging-inventory.db', autoload: true });
+const nutrientsInventoryDB = Datastore.create({ filename: './data/nutrients-inventory.db', autoload: true });
+const equipmentInventoryDB = Datastore.create({ filename: './data/equipment-inventory.db', autoload: true });
+const suppliesInventoryDB = Datastore.create({ filename: './data/supplies-inventory.db', autoload: true });
+
 const seedsInventory = [];
 const packagingInventory = [];
 const nutrientsInventory = [];
 const equipmentInventory = [];
 const suppliesInventory = [];
+
+// Load persisted inventory into memory on startup
+(async function loadPersistedInventories() {
+  try {
+    const [seeds, packaging, nutrients, equipment, supplies] = await Promise.all([
+      seedsInventoryDB.find({}),
+      packagingInventoryDB.find({}),
+      nutrientsInventoryDB.find({}),
+      equipmentInventoryDB.find({}),
+      suppliesInventoryDB.find({})
+    ]);
+    seedsInventory.push(...seeds);
+    packagingInventory.push(...packaging);
+    nutrientsInventory.push(...nutrients);
+    equipmentInventory.push(...equipment);
+    suppliesInventory.push(...supplies);
+    const total = seeds.length + packaging.length + nutrients.length + equipment.length + supplies.length;
+    if (total > 0) console.log(`[inventory] Loaded ${total} persisted supply items (${seeds.length} seeds, ${packaging.length} packaging, ${nutrients.length} nutrients, ${equipment.length} equipment, ${supplies.length} supplies)`);
+  } catch (err) {
+    console.warn('[inventory] Failed to load persisted inventories:', err.message);
+  }
+})();
 
 // Helper to generate unique IDs
 function generateId(prefix) {
@@ -17487,6 +18118,7 @@ app.post('/api/inventory/seeds', (req, res) => {
     created_at: new Date().toISOString()
   };
   seedsInventory.push(seed);
+  seedsInventoryDB.insert(seed).catch(e => console.warn('[inventory] Seed persist failed:', e.message));
   res.json({ ok: true, seed });
 });
 
@@ -17500,6 +18132,7 @@ app.put('/api/inventory/seeds/:id', (req, res) => {
     ...req.body,
     updated_at: new Date().toISOString()
   };
+  seedsInventoryDB.update({ seed_id: req.params.id }, seedsInventory[index], { upsert: true }).catch(e => console.warn('[inventory] Seed update persist failed:', e.message));
   res.json({ ok: true, seed: seedsInventory[index] });
 });
 
@@ -17509,6 +18142,7 @@ app.delete('/api/inventory/seeds/:id', (req, res) => {
   if (index === -1) return res.status(404).json({ ok: false, message: 'Seed not found' });
   
   seedsInventory.splice(index, 1);
+  seedsInventoryDB.remove({ seed_id: req.params.id }, {}).catch(e => console.warn('[inventory] Seed delete persist failed:', e.message));
   res.json({ ok: true, message: 'Seed deleted' });
 });
 
@@ -17534,6 +18168,7 @@ app.post('/api/inventory/packaging', (req, res) => {
     created_at: new Date().toISOString()
   };
   packagingInventory.push(packaging);
+  packagingInventoryDB.insert(packaging).catch(e => console.warn('[inventory] Packaging persist failed:', e.message));
   res.json({ ok: true, packaging });
 });
 
@@ -17547,6 +18182,7 @@ app.post('/api/inventory/packaging/:id/restock', (req, res) => {
   pkg.last_restocked = new Date().toISOString();
   pkg.restock_notes = notes;
   
+  packagingInventoryDB.update({ packaging_id: req.params.id }, pkg, { upsert: true }).catch(e => console.warn('[inventory] Packaging restock persist failed:', e.message));
   res.json({ ok: true, packaging: pkg });
 });
 
@@ -17574,6 +18210,7 @@ app.post('/api/inventory/nutrients/:id/usage', (req, res) => {
   nutrient.last_used = date || new Date().toISOString();
   nutrient.applied_to = applied_to;
   
+  nutrientsInventoryDB.update({ nutrient_id: req.params.id }, nutrient, { upsert: true }).catch(e => console.warn('[inventory] Nutrient usage persist failed:', e.message));
   res.json({ ok: true, nutrient });
 });
 
@@ -17613,6 +18250,7 @@ app.post('/api/inventory/equipment/:id/maintenance', (req, res) => {
   
   equipment.last_maintenance = date_performed;
   
+  equipmentInventoryDB.update({ equipment_id: req.params.id }, equipment, { upsert: true }).catch(e => console.warn('[inventory] Equipment maintenance persist failed:', e.message));
   res.json({ ok: true, equipment });
 });
 
@@ -17640,6 +18278,7 @@ app.post('/api/inventory/supplies/:id/usage', (req, res) => {
   supply.last_used = date || new Date().toISOString();
   supply.usage_purpose = purpose;
   
+  suppliesInventoryDB.update({ supply_id: req.params.id }, supply, { upsert: true }).catch(e => console.warn('[inventory] Supply usage persist failed:', e.message));
   res.json({ ok: true, supply });
 });
 
@@ -18930,9 +19569,77 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       cropName: (trayRun.recipe_id || trayRun.crop || 'Unknown'),
       weight: weight || 'N/A',
       unit: 'oz',
+      harvestedAt: now.toISOString(),
       auto_print: true,     // signals client to auto-submit to /api/printer/print-harvest
       endpoint: '/api/printer/print-harvest'
     };
+
+    // -- Ticket 2.6: Server-side auto-print attempt -------------------------
+    // Fire the print request internally for zero-touch harvest labeling.
+    // Non-blocking — failure does not affect the harvest response.
+    let autoPrintResult = null;
+    try {
+      const port = process.env.PORT || 3000;
+      const printRes = await fetch(`http://localhost:${port}/api/printer/print-harvest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(labelPrintData),
+        signal: AbortSignal.timeout(3000)
+      });
+      autoPrintResult = printRes.ok ? 'sent' : 'printer_unavailable';
+    } catch (_printErr) {
+      autoPrintResult = 'printer_unavailable';
+    }
+
+    // ── Phase 0 Task 0.4: Auto-generate experiment record on tray harvest ──
+    // Non-blocking — failure here does not block the harvest response
+    let experiment_id = null;
+    try {
+      const seedDate = trayRun.seeded_at || trayRun.created_at;
+      const growDays = seedDate ? Math.floor((now - new Date(seedDate)) / 86400000) : null;
+      const weightPerPlant = (weight && harvestedCount) ? +(weight / harvestedCount).toFixed(3) : null;
+
+      const experimentInput = {
+        groupId: trayRun.group_id || trayRun.groupId || trayRunId,
+        crop: trayRun.recipe_id || trayRun.crop || null,
+        recipe_id: trayRun.recipe_id || null,
+        grow_days: growDays,
+        planned_grow_days: null,
+        weight_per_plant_oz: weightPerPlant,
+        total_weight_oz: weight,
+        planted_site_count: harvestedCount,
+        tray_format: trayRun.tray_format_id || null,
+        system_type: null,
+        zone: trayRun.zone || null,
+        room: trayRun.room || null,
+      };
+      const record = await buildExperimentRecord(experimentInput);
+      const inserted = await harvestOutcomesDB.insert(record);
+      experiment_id = inserted._id;
+      console.log(`[tray-runs] ✓ Experiment record auto-created for ${record.crop || trayRunId}`);
+      syncExperimentToCenter(record).catch(e =>
+        console.warn('[tray-runs] Experiment Central sync deferred:', e?.message)
+      );
+    } catch (expErr) {
+      console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
+    }
+
+    // Phase 1 Ticket 1.6 — emit standardized harvest event
+    eventBus.emitEvent('harvest', {
+      tray_run_id: trayRunId,
+      group_id: trayRun?.group_id || null,
+      crop: trayRun?.crop || trayRun?.recipe_id || null,
+      total_weight_oz: weight || null,
+      harvested_count: harvestedCount,
+      planted_count: trayRun?.planted_site_count || null,
+      loss_count: null,
+      grow_days: trayRun?.seeded_at ? Math.floor((Date.now() - new Date(trayRun.seeded_at).getTime()) / 86400000) : null,
+      quality_grade: null,
+      experiment_id: experiment_id || null,
+      zone: null,
+      room: null,
+      harvested_by: null,
+    });
 
     res.json({
       success: true,
@@ -18947,7 +19654,9 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
         ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
         : null,
       trace_id: traceRecord?.trace_id || null,
-      label_print: labelPrintData
+      experiment_id: experiment_id || null,
+      label_print: labelPrintData,
+      auto_print_result: autoPrintResult
     });
   } catch (error) {
     console.error('[tray-runs] Error recording harvest:', error);
@@ -19100,6 +19809,21 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     }
 
     console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
+
+    // Phase 1 Ticket 1.6 — emit standardized seed event
+    eventBus.emitEvent('seed', {
+      tray_run_id: trayRunId,
+      group_id: groupId || null,
+      crop: recipe,
+      variety: variety || null,
+      seed_count: resolvedPlantCount,
+      tray_format: trayFormat?.name || null,
+      zone: null,
+      room: null,
+      recipe_id: recipe,
+      seeded_by: null,
+    });
+
     res.json({
       success: true,
       tray_run_id: trayRunId,
@@ -19291,6 +20015,18 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
     
     const insertedEvent = await trayLossEventsDB.insert(lossEvent);
     
+    // Phase 1 Ticket 1.6 — emit standardized loss event
+    eventBus.emitEvent('loss', {
+      tray_run_id: trayRunId,
+      group_id: trayRun?.group_id || null,
+      crop: crop_name || crop_id || trayRun?.crop || null,
+      loss_count: lost_quantity ? parseInt(lost_quantity) : null,
+      loss_reason: loss_reason,
+      loss_category: 'other',
+      zone: lossEvent.environment_snapshot?.zone || null,
+      reported_by: null,
+    });
+
     // Update tray run status to LOST
     await trayRunsDB.update(
       { _id: trayRunId },
@@ -19594,6 +20330,49 @@ app.get('/api/config/app', async (req, res) => {
       status: 'online'
     });
   }
+});
+
+// ── Phase 4 Ticket 4.1: Feature configuration endpoint ─────────────────
+// Per LIGHT_ENGINE_CONSOLIDATION_PROPOSAL.md — window.LE_CONFIG feature detection.
+// Clients call GET /api/config/features to know which features are available
+// based on deployment mode (edge vs. cloud).
+
+app.get('/api/config/features', (req, res) => {
+  const isEdge = edgeConfig.isEdgeMode();
+  const deploymentMode = isEdge ? 'edge' : 'cloud';
+
+  // Always-available features (both edge and cloud)
+  const features = {
+    monitoring: true,
+    inventory: true,
+    planning: true,
+    forecasting: true,
+    activityHub: true,
+    qualityControl: true,
+    trayOperations: true,
+    tabletPairing: true,
+    aiAssistant: true,
+    recipeModifiers: true,
+    alerts: true,
+    // Edge-only features (require 24/7 on-site hardware)
+    deviceControl: isEdge,
+    nutrientControl: isEdge,
+    criticalAlerts: isEdge,
+    sensorDirectRead: isEdge,
+    // Cloud-only features (require Central database)
+    networkDashboard: !isEdge,
+    crossFarmBenchmarks: !isEdge,
+    wholesaleNetwork: !isEdge
+  };
+
+  res.json({
+    ok: true,
+    deploymentMode,
+    features,
+    version: edgeConfig.getAll().version || '1.0.0',
+    farmId: edgeConfig.getFarmId(),
+    farmName: edgeConfig.getFarmName()
+  });
 });
 
 // ============================================================================
@@ -24029,6 +24808,38 @@ const harvestOutcomesDB = Datastore.create({
   autoload: true,
   timestampData: true
 });
+
+// Phase 2, Ticket 2.7: Agent action audit log
+// Every AI agent recommendation / action is persisted for governance & review.
+const agentAuditDB = Datastore.create({
+  filename: './data/agent-audit.db',
+  autoload: true,
+  timestampData: true
+});
+
+// I-1.9: Device integration records store (Integration Assistant)
+// Tracks all device integrations for network learning and Central sync
+const integrationDB = Datastore.create({
+  filename: './data/integrations.db',
+  autoload: true,
+  timestampData: true
+});
+
+// I-3.10: Device health tracking store (Integration Assistant)
+// Tracks device uptime and connectivity for health monitoring
+const deviceHealthDB = Datastore.create({
+  filename: './data/device-health.db',
+  autoload: true,
+  timestampData: true
+});
+
+// Initialize device health tracker
+import { initHealthTracker } from './lib/device-health-tracker.js';
+initHealthTracker(deviceHealthDB);
+
+// Wire audit store into the AI agent service
+import { setAuditStore } from './services/ai-agent.js';
+setAuditStore(agentAuditDB);
 
 // Load wizard states from database on startup
 async function loadWizardStates() {

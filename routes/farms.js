@@ -346,6 +346,138 @@ router.get('/list', (req, res) => {
   });
 });
 
+/**
+ * GET /api/farms/available
+ * 
+ * List available farms for farm selector UI.
+ * Returns farms from database (cloud mode) or in-memory (edge mode).
+ * Used by farm-sales pages when no farm context is present.
+ */
+router.get('/available', async (req, res) => {
+  try {
+    const dbPool = req.app.locals.db;
+    
+    // Try database first (cloud mode)
+    if (dbPool) {
+      const result = await dbPool.query(
+        'SELECT farm_id, name, farm_slug FROM farms WHERE status = $1 OR status IS NULL ORDER BY name',
+        ['active']
+      );
+      
+      if (result.rows && result.rows.length > 0) {
+        return res.json({
+          ok: true,
+          source: 'database',
+          farms: result.rows.map(f => ({
+            farm_id: f.farm_id,
+            name: f.name,
+            slug: f.farm_slug || f.farm_id
+          }))
+        });
+      }
+    }
+    
+    // Fallback to in-memory registered farms
+    if (registeredFarms.size > 0) {
+      const farms = Array.from(registeredFarms.values()).map(farm => ({
+        farm_id: farm.farm_id,
+        name: farm.farm_name || farm.farm_id,
+        slug: farm.farm_slug || farm.farm_id
+      }));
+      
+      return res.json({
+        ok: true,
+        source: 'memory',
+        farms
+      });
+    }
+    
+    // No farms available
+    return res.json({
+      ok: true,
+      source: 'none',
+      farms: [],
+      message: 'No farms registered. Use demo tokens for testing.'
+    });
+    
+  } catch (error) {
+    console.error('[farms/available] Error:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Failed to list farms',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farms/by-slug/:slug
+ * 
+ * Look up a farm by its slug. Used for resolving
+ * ?farm=notable-sprout URLs to farm_id.
+ */
+router.get('/by-slug/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const dbPool = req.app.locals.db;
+    
+    if (!slug) {
+      return res.status(400).json({ ok: false, error: 'Slug is required' });
+    }
+    
+    // Try database first
+    if (dbPool) {
+      const result = await dbPool.query(
+        'SELECT farm_id, name, farm_slug FROM farms WHERE farm_slug = $1 OR farm_id = $1',
+        [slug]
+      );
+      
+      if (result.rows && result.rows.length > 0) {
+        const farm = result.rows[0];
+        return res.json({
+          ok: true,
+          source: 'database',
+          farm: {
+            farm_id: farm.farm_id,
+            name: farm.name,
+            slug: farm.farm_slug || farm.farm_id
+          }
+        });
+      }
+    }
+    
+    // Try in-memory farms
+    for (const [id, farm] of registeredFarms) {
+      if (farm.farm_slug === slug || id === slug) {
+        return res.json({
+          ok: true,
+          source: 'memory',
+          farm: {
+            farm_id: id,
+            name: farm.farm_name || id,
+            slug: farm.farm_slug || id
+          }
+        });
+      }
+    }
+    
+    // Not found
+    return res.status(404).json({
+      ok: false,
+      error: 'Farm not found',
+      slug
+    });
+    
+  } catch (error) {
+    console.error('[farms/by-slug] Error:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Failed to look up farm',
+      message: error.message
+    });
+  }
+});
+
 // Initialize with a test registration code for development
 registrationCodes.set('TEST1234', {
   code: 'TEST1234',

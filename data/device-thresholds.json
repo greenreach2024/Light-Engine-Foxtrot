@@ -1,0 +1,42 @@
+{
+  "default": {
+    "minUptime": 90,
+    "alertOnFailure": 3,
+    "description": "Default threshold for unknown device types"
+  },
+  "light": {
+    "minUptime": 95,
+    "alertOnFailure": 2,
+    "description": "Grow lights - critical for plant health"
+  },
+  "sensor": {
+    "minUptime": 85,
+    "alertOnFailure": 5,
+    "description": "Environment sensors - some dropout tolerable"
+  },
+  "hvac": {
+    "minUptime": 95,
+    "alertOnFailure": 2,
+    "description": "HVAC/climate control - critical"
+  },
+  "plug": {
+    "minUptime": 90,
+    "alertOnFailure": 3,
+    "description": "Smart plugs - moderate tolerance"
+  },
+  "irrigation": {
+    "minUptime": 92,
+    "alertOnFailure": 2,
+    "description": "Irrigation controllers - water management critical"
+  },
+  "co2": {
+    "minUptime": 90,
+    "alertOnFailure": 3,
+    "description": "CO2 controllers - moderate criticality"
+  },
+  "camera": {
+    "minUptime": 80,
+    "alertOnFailure": 10,
+    "description": "Monitoring cameras - high dropout tolerance"
+  }
+}

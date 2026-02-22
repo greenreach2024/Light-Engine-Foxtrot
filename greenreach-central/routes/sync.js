@@ -1375,4 +1375,133 @@ router.post('/restore/:farmId', authenticateFarm, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/sync/device-integrations
+ * Receive anonymized device integration records from edge devices.
+ * Part of Integration Assistant Phase 1 (Ticket I-1.9).
+ * 
+ * Records contain:
+ * - farm_id_hash: SHA256 hash of farm_id (privacy-safe)
+ * - records: Array of integration records with device info, validation metrics, feedback
+ * 
+ * Data is stored in device_integrations table for network learning.
+ */
+router.post('/device-integrations', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const { farm_id_hash, records } = req.body;
+    
+    if (!Array.isArray(records)) {
+      return res.status(400).json({
+        success: false,
+        error: 'records must be an array'
+      });
+    }
+    
+    if (records.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No records to sync',
+        inserted: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Validate we have a hash (privacy requirement)
+    const hashToUse = farm_id_hash || (farmId ? 
+      require('crypto').createHash('sha256').update(farmId).digest('hex') : null);
+    
+    if (!hashToUse) {
+      return res.status(400).json({
+        success: false,
+        error: 'farm_id_hash is required for privacy'
+      });
+    }
+    
+    logger.info(`[Sync] Receiving ${records.length} device integration record(s) for farm hash ${hashToUse.substring(0, 8)}...`);
+    
+    if (!await isDatabaseAvailable()) {
+      // Store in memory if no DB
+      if (!inMemoryStore.integrations) inMemoryStore.integrations = new Map();
+      const existing = inMemoryStore.integrations.get(hashToUse) || [];
+      inMemoryStore.integrations.set(hashToUse, [...existing, ...records]);
+      
+      logger.info(`[Sync] Stored ${records.length} integration record(s) in memory for farm hash ${hashToUse.substring(0, 8)}...`);
+      
+      return res.json({
+        success: true,
+        message: `Stored ${records.length} integration record(s) in memory`,
+        inserted: records.length,
+        storage: 'memory',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Insert into device_integrations table
+    let inserted = 0;
+    let errors = 0;
+    
+    for (const record of records) {
+      try {
+        await query(
+          `INSERT INTO device_integrations (
+            farm_id_hash, record_id, device_type, device_make_model,
+            driver_id, driver_version, protocol, capabilities,
+            install_context, validation_passed, validation_signal_quality,
+            validation_dropout_rate, validation_latency_ms,
+            grower_feedback_rating, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          ON CONFLICT (farm_id_hash, record_id) DO UPDATE SET
+            validation_passed = EXCLUDED.validation_passed,
+            validation_signal_quality = EXCLUDED.validation_signal_quality,
+            validation_dropout_rate = EXCLUDED.validation_dropout_rate,
+            validation_latency_ms = EXCLUDED.validation_latency_ms,
+            grower_feedback_rating = EXCLUDED.grower_feedback_rating,
+            updated_at = NOW()`,
+          [
+            hashToUse,
+            record.record_id,
+            record.device_type || null,
+            record.device_make_model || null,
+            record.driver_id || null,
+            record.driver_version || null,
+            record.protocol || null,
+            JSON.stringify(record.capabilities || {}),
+            JSON.stringify(record.install_context || {}),
+            record.validation?.passed ?? null,
+            record.validation?.signal_quality ?? null,
+            record.validation?.dropout_rate ?? null,
+            record.validation?.latency_ms ?? null,
+            record.feedback?.rating ?? null,
+            record.created_at || new Date().toISOString()
+          ]
+        );
+        inserted++;
+      } catch (err) {
+        logger.warn(`[Sync] Failed to insert integration record ${record.record_id}:`, err.message);
+        errors++;
+      }
+    }
+    
+    logger.info(`[Sync] Inserted ${inserted} device integration record(s) for farm hash ${hashToUse.substring(0, 8)}... (${errors} errors)`);
+    
+    res.json({
+      success: true,
+      message: `Synced ${inserted} integration record(s)`,
+      inserted,
+      errors,
+      storage: 'database',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('[Sync] Error syncing device integrations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync device integrations',
+      message: error.message
+    });
+  }
+});
+
 export default router;
