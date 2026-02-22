@@ -1165,13 +1165,63 @@ async function loadCropsFromDatabase() {
         const crops = [...new Set(data.groups.map(g => g.crop).filter(c => c && c.trim()))].sort();
         
         // Initialize pricing data
+        // Phase 3 Ticket 3.6: Fetch dynamic pricing suggestions from order history
+        let dynamicPricing = {};
+        try {
+            const dpResp = await fetch(`${API_BASE}/api/market-intelligence/dynamic-pricing?days=90`);
+            if (dpResp.ok) {
+                const dpData = await dpResp.json();
+                if (dpData.ok && dpData.crops) {
+                    dynamicPricing = dpData.crops;
+                    console.log(` Dynamic pricing loaded for ${Object.keys(dynamicPricing).length} crops`);
+                }
+            }
+        } catch (dpErr) {
+            console.warn(' Dynamic pricing fetch failed (using defaults):', dpErr.message);
+        }
+
         pricingData = crops.map(crop => {
             const saved = localStorage.getItem(`pricing_${crop}`);
             if (saved) {
-                return JSON.parse(saved);
+                const parsed = JSON.parse(saved);
+                // Enrich with AI suggestion if available
+                const dp = dynamicPricing[crop];
+                if (dp && dp.source === 'order_history') {
+                    parsed.aiSuggestion = {
+                        retail: dp.suggested_retail_cad,
+                        ws1: dp.suggested_ws_discount_pct.tier1,
+                        ws2: dp.suggested_ws_discount_pct.tier2,
+                        ws3: dp.suggested_ws_discount_pct.tier3,
+                        confidence: dp.confidence,
+                        data_points: dp.data_points
+                    };
+                }
+                return parsed;
             }
             
-            // Use defaults or initialize
+            // Check dynamic pricing first, then static defaults
+            const dp = dynamicPricing[crop];
+            if (dp && dp.source === 'order_history' && dp.confidence !== 'low') {
+                return {
+                    crop,
+                    retail: dp.suggested_retail_cad,
+                    ws1Discount: dp.suggested_ws_discount_pct.tier1,
+                    ws2Discount: dp.suggested_ws_discount_pct.tier2,
+                    ws3Discount: dp.suggested_ws_discount_pct.tier3,
+                    isTaxable: false,
+                    priceSource: 'ai_dynamic',
+                    aiSuggestion: {
+                        retail: dp.suggested_retail_cad,
+                        ws1: dp.suggested_ws_discount_pct.tier1,
+                        ws2: dp.suggested_ws_discount_pct.tier2,
+                        ws3: dp.suggested_ws_discount_pct.tier3,
+                        confidence: dp.confidence,
+                        data_points: dp.data_points
+                    }
+                };
+            }
+
+            // Use static defaults
             const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 15, ws2: 25, ws3: 35 };
             return {
                 crop,
@@ -1179,7 +1229,8 @@ async function loadCropsFromDatabase() {
                 ws1Discount: defaults.ws1,
                 ws2Discount: defaults.ws2,
                 ws3Discount: defaults.ws3,
-                isTaxable: false
+                isTaxable: false,
+                priceSource: 'static'
             };
         });
         

@@ -360,4 +360,182 @@ router.get('/product/:productName', async (req, res) => {
   }
 });
 
+// ── Phase 3 Ticket 3.6: Dynamic Pricing v1 ──────────────────────────────
+
+/**
+ * GET /api/market-intelligence/dynamic-pricing
+ * Analyze wholesale order history to compute price sensitivity per crop,
+ * and return suggested price ranges with confidence levels.
+ *
+ * Replaces static percentage discounts with data-driven suggestions.
+ */
+router.get('/dynamic-pricing', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 90;
+    const port = process.env.PORT || 8091;
+
+    // Fetch wholesale order history with pricing data
+    let orderHistory;
+    try {
+      const histResp = await fetch(`http://localhost:${port}/api/wholesale/orders/history?days=${days}`);
+      if (histResp.ok) {
+        const histData = await histResp.json();
+        orderHistory = histData.sales_history || [];
+      }
+    } catch { /* no wholesale data */ }
+
+    if (!orderHistory || orderHistory.length === 0) {
+      // Fall back to static data with a "no_data" flag
+      return res.json({
+        ok: true,
+        source: 'static_fallback',
+        message: 'No wholesale order history — using static defaults',
+        crops: Object.fromEntries(
+          Object.entries(MARKET_DATA_SOURCES).map(([crop, data]) => [
+            crop,
+            {
+              suggested_retail_cad: data.avgPriceCAD,
+              suggested_ws_discount_pct: { tier1: 15, tier2: 25, tier3: 35 },
+              confidence: 'low',
+              data_points: 0,
+              source: 'static'
+            }
+          ])
+        )
+      });
+    }
+
+    // Group orders by crop and extract pricing signals
+    const cropOrders = {};
+    for (const entry of orderHistory) {
+      const crop = (entry.crop || '').trim();
+      if (!crop) continue;
+      if (!cropOrders[crop]) cropOrders[crop] = [];
+
+      const qty = parseFloat(entry.quantity) || 0;
+      const pricePerUnit = parseFloat(entry.price_per_unit || entry.unit_price) || 0;
+      const accepted = entry.status !== 'rejected' && entry.status !== 'cancelled';
+
+      cropOrders[crop].push({
+        date: entry.date,
+        quantity: qty,
+        price_per_unit: pricePerUnit,
+        accepted,
+        buyer_segment: entry.buyer_type || entry.buyer_segment || 'unknown'
+      });
+    }
+
+    // Compute per-crop pricing analysis
+    const crops = {};
+    for (const [crop, orders] of Object.entries(cropOrders)) {
+      const accepted = orders.filter(o => o.accepted && o.price_per_unit > 0);
+      const rejected = orders.filter(o => !o.accepted && o.price_per_unit > 0);
+
+      if (accepted.length === 0 && rejected.length === 0) continue;
+
+      // Price statistics on accepted orders
+      const prices = accepted.map(o => o.price_per_unit).sort((a, b) => a - b);
+      const avgPrice = prices.length > 0
+        ? prices.reduce((s, p) => s + p, 0) / prices.length
+        : 0;
+      const medianPrice = prices.length > 0
+        ? prices[Math.floor(prices.length / 2)]
+        : 0;
+      const minPrice = prices.length > 0 ? prices[0] : 0;
+      const maxPrice = prices.length > 0 ? prices[prices.length - 1] : 0;
+
+      // Price sensitivity: what's the acceptance rate at different price points?
+      const allPrices = orders.filter(o => o.price_per_unit > 0);
+      const priceQuartiles = computeQuartiles(allPrices.map(o => o.price_per_unit));
+      
+      // Buyer segment analysis
+      const bySegment = {};
+      for (const o of accepted) {
+        const seg = o.buyer_segment || 'unknown';
+        if (!bySegment[seg]) bySegment[seg] = { orders: 0, totalQty: 0, avgPrice: 0, prices: [] };
+        bySegment[seg].orders++;
+        bySegment[seg].totalQty += o.quantity;
+        bySegment[seg].prices.push(o.price_per_unit);
+      }
+      for (const seg of Object.values(bySegment)) {
+        seg.avgPrice = seg.prices.length > 0
+          ? +(seg.prices.reduce((s, p) => s + p, 0) / seg.prices.length).toFixed(2)
+          : 0;
+        delete seg.prices;
+      }
+
+      // Compute suggested wholesale discounts based on volume/price tiers
+      const suggestedRetail = maxPrice > 0 ? +(maxPrice * 1.1).toFixed(2) : avgPrice;
+      const ws1Discount = avgPrice > 0 && suggestedRetail > 0
+        ? +((1 - avgPrice / suggestedRetail) * 100).toFixed(1)
+        : 15;
+      const ws2Discount = Math.min(ws1Discount + 10, 40);
+      const ws3Discount = Math.min(ws2Discount + 10, 50);
+
+      // Confidence based on data volume
+      const confidence = accepted.length >= 20 ? 'high'
+        : accepted.length >= 10 ? 'medium'
+        : 'low';
+
+      // Acceptance rate
+      const acceptanceRate = allPrices.length > 0
+        ? +(accepted.length / allPrices.length * 100).toFixed(1)
+        : null;
+
+      crops[crop] = {
+        suggested_retail_cad: +suggestedRetail.toFixed(2),
+        suggested_ws_discount_pct: {
+          tier1: +Math.max(5, ws1Discount).toFixed(1),
+          tier2: +Math.max(10, ws2Discount).toFixed(1),
+          tier3: +Math.max(15, ws3Discount).toFixed(1)
+        },
+        price_range: {
+          min: +minPrice.toFixed(2),
+          avg: +avgPrice.toFixed(2),
+          median: +medianPrice.toFixed(2),
+          max: +maxPrice.toFixed(2)
+        },
+        confidence,
+        data_points: accepted.length,
+        rejected_count: rejected.length,
+        acceptance_rate_pct: acceptanceRate,
+        buyer_segments: bySegment,
+        quartiles: priceQuartiles,
+        source: 'order_history',
+        period_days: days
+      };
+    }
+
+    return res.json({
+      ok: true,
+      source: Object.keys(crops).length > 0 ? 'order_history' : 'static_fallback',
+      period_days: days,
+      total_orders: orderHistory.length,
+      crops
+    });
+
+  } catch (error) {
+    console.error('[Market Intelligence] Dynamic pricing error:', error);
+    return res.status(500).json({
+      ok: false,
+      message: 'Failed to compute dynamic pricing'
+    });
+  }
+});
+
+/**
+ * Compute quartiles for a sorted array of numbers.
+ */
+function computeQuartiles(values) {
+  if (!values || values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const q = (p) => {
+    const idx = (sorted.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return lo === hi ? sorted[lo] : +(sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)).toFixed(2);
+  };
+  return { q25: q(0.25), q50: q(0.5), q75: q(0.75) };
+}
+
 export default router;

@@ -297,9 +297,26 @@ router.post('/ai-recommendations', async (req, res) => {
     };
     
     await fs.writeFile(AI_RECOMMENDATIONS_PATH, JSON.stringify(data, null, 2));
-    
+
+    // Phase 3 Ticket 3.3: If network recipe modifiers are included, persist separately
+    if (network_intelligence?.recipe_modifiers && Object.keys(network_intelligence.recipe_modifiers).length > 0) {
+      try {
+        const modPath = join(__dirname, '../data/network-recipe-modifiers.json');
+        const modData = {
+          modifiers: network_intelligence.recipe_modifiers,
+          received_at: new Date().toISOString(),
+          source: 'central_push'
+        };
+        await fs.writeFile(modPath, JSON.stringify(modData, null, 2));
+        console.log(`[Health API] Stored ${Object.keys(network_intelligence.recipe_modifiers).length} network recipe modifiers`);
+      } catch (modErr) {
+        console.warn('[Health API] Could not persist network modifiers:', modErr.message);
+      }
+    }
+
     const niKeys = network_intelligence ? Object.keys(network_intelligence.crop_benchmarks || {}).length : 0;
-    console.log(`[Health API] ✓ Received ${recommendations.length} AI recommendations + ${niKeys} crop benchmarks from Central`);
+    const modKeys = network_intelligence ? Object.keys(network_intelligence.recipe_modifiers || {}).length : 0;
+    console.log(`[Health API] \u2713 Received ${recommendations.length} AI recommendations + ${niKeys} benchmarks + ${modKeys} recipe modifiers from Central`);
     
     res.json({
       ok: true,

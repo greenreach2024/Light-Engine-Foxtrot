@@ -182,6 +182,46 @@
           "adjust_light_schedule": { "tier": "require-approval" }
         }
       }
+    },
+
+    "deployment": {
+      "description": "New site readiness scoring, preflight checks, deployment plans. Advisory only — never executes deployments.",
+      "capabilities": {
+        "monitoring": {
+          "get_readings":     { "tier": "auto" },
+          "zone_status":      { "tier": "auto" },
+          "alert_status":     { "tier": "auto" },
+          "view_automation":  { "tier": "auto" }
+        },
+        "system": {
+          "status":           { "tier": "auto" },
+          "health_check":     { "tier": "auto" }
+        },
+        "deployment": {
+          "site_readiness":      { "tier": "auto" },
+          "preflight_check":     { "tier": "auto" },
+          "generate_plan":       { "tier": "recommend" },
+          "compliance_baseline": { "tier": "auto" },
+          "network_topology":    { "tier": "auto" }
+        }
+      }
+    },
+
+    "viability": {
+      "description": "Farm closure risk scoring, acquisition evaluation, strategic growth analysis. All outputs require board review.",
+      "capabilities": {
+        "reports": {
+          "sales_report":     { "tier": "auto" },
+          "daily_summary":    { "tier": "auto" }
+        },
+        "viability": {
+          "closure_risk":         { "tier": "auto" },
+          "acquisition_eval":     { "tier": "require-approval" },
+          "growth_scenarios":     { "tier": "recommend" },
+          "competitive_position": { "tier": "auto" },
+          "portfolio_optimization": { "tier": "require-approval" }
+        }
+      }
     }
   },
 

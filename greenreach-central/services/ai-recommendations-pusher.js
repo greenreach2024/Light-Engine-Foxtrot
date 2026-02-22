@@ -9,6 +9,7 @@ import { query } from '../config/database.js';
 import fetch from 'node-fetch';
 import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
+import { getNetworkModifiers } from '../jobs/yield-regression.js';
 
 let openai = null;
 try {
@@ -213,11 +214,24 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Demand analysis failed (non-fatal):', demandErr.message);
       }
 
-      if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0) {
+      // Phase 3 Ticket 3.3: Network recipe modifiers from yield regression
+      let recipeModifiers = {};
+      try {
+        const modData = await getNetworkModifiers();
+        recipeModifiers = modData?.modifiers || {};
+        if (Object.keys(recipeModifiers).length > 0) {
+          console.log(`[AI Pusher] Loaded network recipe modifiers for ${Object.keys(recipeModifiers).length} crop(s)`);
+        }
+      } catch (modErr) {
+        console.warn('[AI Pusher] Network modifiers load failed (non-fatal):', modErr.message);
+      }
+
+      if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
           demand_signals: demandSignals,
-          risk_alerts: [],          // Phase 3 placeholder
+          recipe_modifiers: recipeModifiers,
+          risk_alerts: [],
           generated_at: new Date().toISOString()
         };
         console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);

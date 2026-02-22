@@ -115,6 +115,15 @@ export const SYSTEM_CAPABILITIES = {
   payroll: {
     description: 'Payout reconciliation, anomaly detection, compliance checks (payroll agent)',
     actions: ['reconcile_payouts', 'detect_anomalies', 'compliance_check', 'generate_pay_stub', 'execute_payout', 'adjust_rate']
+  },
+  // Phase 3 agent classes (tickets 3.7–3.8)
+  deployment: {
+    description: 'New site readiness scoring, preflight checks, deployment plan generation (deployment agent)',
+    actions: ['site_readiness', 'preflight_check', 'generate_plan', 'compliance_baseline', 'network_topology']
+  },
+  viability: {
+    description: 'Farm closure risk scoring, acquisition evaluation, growth scenario modeling (strategy agent)',
+    actions: ['closure_risk', 'acquisition_eval', 'growth_scenarios', 'competitive_position', 'portfolio_optimization']
   }
 };
 
@@ -278,6 +287,14 @@ export async function executeAction(intent, context) {
       
       case 'payroll':
         result = await executePayrollAction(action, intent.parameters, context);
+        break;
+      
+      case 'deployment':
+        result = await executeDeploymentAction(action, intent.parameters, context);
+        break;
+      
+      case 'viability':
+        result = await executeViabilityAction(action, intent.parameters, context);
         break;
       
       default:
@@ -1088,6 +1105,311 @@ async function executePayrollAction(action, params, context) {
         success: false,
         error: 'action_not_implemented',
         message: `Payroll action not yet implemented: ${action}`
+      };
+  }
+}
+
+// ── Phase 3 Ticket 3.7: Product Deployment Agent ──────────────────────────
+
+async function executeDeploymentAction(action, params, context) {
+  const port = process.env.PORT || 8091;
+
+  switch (action) {
+    case 'site_readiness': {
+      // Assess readiness by checking key system components
+      const checks = [];
+      let score = 100;
+
+      // Check API connectivity
+      try {
+        const resp = await fetch(`http://localhost:${port}/api/health`);
+        checks.push({ check: 'api_health', status: resp.ok ? 'pass' : 'fail' });
+        if (!resp.ok) score -= 20;
+      } catch {
+        checks.push({ check: 'api_health', status: 'fail' });
+        score -= 20;
+      }
+
+      // Check farm.json exists
+      try {
+        const resp = await fetch(`http://localhost:${port}/api/farm`);
+        const data = await resp.json();
+        checks.push({ check: 'farm_profile', status: data?.farmId ? 'pass' : 'warn', detail: data?.farmId || 'missing' });
+        if (!data?.farmId) score -= 15;
+      } catch {
+        checks.push({ check: 'farm_profile', status: 'fail' });
+        score -= 15;
+      }
+
+      // Check groups.json
+      try {
+        const resp = await fetch(`http://localhost:${port}/data/groups.json`);
+        const data = await resp.json();
+        checks.push({ check: 'groups_config', status: data?.groups?.length > 0 ? 'pass' : 'warn', count: data?.groups?.length || 0 });
+      } catch {
+        checks.push({ check: 'groups_config', status: 'warn' });
+        score -= 5;
+      }
+
+      // Check lighting recipes
+      try {
+        const resp = await fetch(`http://localhost:${port}/data/lighting-recipes.json`);
+        checks.push({ check: 'lighting_recipes', status: resp.ok ? 'pass' : 'warn' });
+        if (!resp.ok) score -= 10;
+      } catch {
+        checks.push({ check: 'lighting_recipes', status: 'warn' });
+        score -= 10;
+      }
+
+      // Check IoT devices
+      try {
+        const resp = await fetch(`http://localhost:${port}/data/iot-devices.json`);
+        const data = await resp.json();
+        const deviceCount = data?.devices?.length || Object.keys(data || {}).length;
+        checks.push({ check: 'iot_devices', status: deviceCount > 0 ? 'pass' : 'warn', count: deviceCount });
+        if (deviceCount === 0) score -= 10;
+      } catch {
+        checks.push({ check: 'iot_devices', status: 'warn' });
+        score -= 10;
+      }
+
+      const blocking = checks.filter(c => c.status === 'fail').map(c => c.check);
+      const warnings = checks.filter(c => c.status === 'warn').map(c => c.check);
+
+      return {
+        success: true,
+        data: {
+          readiness_score: Math.max(0, score),
+          checks,
+          blocking_issues: blocking,
+          warnings,
+          recommendation: score >= 80 ? 'Site is ready for deployment' :
+            score >= 50 ? 'Site has issues that should be resolved before deployment' :
+            'Site is not ready — resolve blocking issues first'
+        }
+      };
+    }
+
+    case 'preflight_check':
+      return {
+        success: true,
+        tier: 'recommend',
+        message: 'Preflight check: verify firmware versions, API keys, and network connectivity before go-live.',
+        data: {
+          checklist: [
+            'Verify all IoT device firmware is up to date',
+            'Confirm Central API key is configured',
+            'Test network connectivity to Central',
+            'Validate lighting recipes for all crop groups',
+            'Confirm zone-to-device bindings are correct',
+            'Run a test schedule execution cycle'
+          ]
+        }
+      };
+
+    case 'generate_plan':
+      return {
+        success: true,
+        tier: 'recommend',
+        message: 'Deployment plan generated. Requires human review before execution.',
+        data: {
+          deployment_steps: [
+            { step: 1, description: 'Install and configure Light Engine server', estimated_hours: 2, dependencies: [] },
+            { step: 2, description: 'Register IoT devices and configure zones', estimated_hours: 4, dependencies: ['step_1'] },
+            { step: 3, description: 'Upload lighting recipes and create crop groups', estimated_hours: 2, dependencies: ['step_2'] },
+            { step: 4, description: 'Configure Central sync and API keys', estimated_hours: 1, dependencies: ['step_1'] },
+            { step: 5, description: 'Run preflight checks and test automation', estimated_hours: 2, dependencies: ['step_3', 'step_4'] },
+            { step: 6, description: 'Go-live: enable schedule executor', estimated_hours: 1, dependencies: ['step_5'] },
+            { step: 7, description: 'Monitor first 48 hours for anomalies', estimated_hours: 4, dependencies: ['step_6'] }
+          ],
+          total_estimated_hours: 16,
+          requires_approval: true
+        }
+      };
+
+    case 'compliance_baseline':
+      return {
+        success: true,
+        tier: 'recommend',
+        message: 'Compliance baseline assessment for the target region.',
+        data: {
+          checks: [
+            { area: 'food_safety', status: 'review_required', note: 'Verify GAP certification for the facility' },
+            { area: 'electrical', status: 'review_required', note: 'LED fixtures must meet local electrical codes' },
+            { area: 'water_quality', status: 'review_required', note: 'Nutrient solution disposal per local regulations' },
+            { area: 'data_privacy', status: 'pass', note: 'Farm data stored locally on edge server' }
+          ]
+        }
+      };
+
+    case 'network_topology':
+      return {
+        success: true,
+        tier: 'recommend',
+        message: 'Network topology review for new site integration.',
+        data: {
+          considerations: [
+            'Check for existing farms serving the same geographic region',
+            'Verify Central can reach the new site (firewall rules, port forwarding)',
+            'Assess network bandwidth for sensor data sync (minimum 1 Mbps)',
+            'Plan crop specialization to avoid network-wide oversupply'
+          ]
+        }
+      };
+
+    default:
+      return {
+        success: false,
+        error: 'action_not_implemented',
+        message: `Deployment action not yet implemented: ${action}`
+      };
+  }
+}
+
+// ── Phase 3 Ticket 3.8: Strategy & Viability Agent ──────────────────────
+
+async function executeViabilityAction(action, params, context) {
+  const port = process.env.PORT || 8091;
+
+  switch (action) {
+    case 'closure_risk': {
+      // Analyze farm health metrics for closure risk
+      let kpiData = {};
+      try {
+        const resp = await fetch(`http://localhost:${port}/api/kpis`);
+        if (resp.ok) kpiData = await resp.json();
+      } catch { /* no KPI data */ }
+
+      const metrics = kpiData.metrics || {};
+      let riskScore = 0;
+
+      // Score based on KPIs (higher = more risk)
+      const fillRate = metrics.fill_rate?.value;
+      if (fillRate != null) {
+        if (fillRate < 0.5) riskScore += 30;
+        else if (fillRate < 0.7) riskScore += 15;
+        else if (fillRate < 0.85) riskScore += 5;
+      } else {
+        riskScore += 10; // No data = minor risk signal
+      }
+
+      const lossRate = metrics.loss_rate?.value;
+      if (lossRate != null) {
+        if (lossRate > 0.2) riskScore += 25;
+        else if (lossRate > 0.1) riskScore += 10;
+      }
+
+      const margin = metrics.contribution_margin?.value;
+      if (margin != null) {
+        if (margin < 0) riskScore += 30;
+        else if (margin < 500) riskScore += 15;
+      } else {
+        riskScore += 10;
+      }
+
+      const trafficLight = riskScore >= 50 ? 'red' : riskScore >= 25 ? 'yellow' : 'green';
+
+      return {
+        success: true,
+        data: {
+          traffic_light: trafficLight,
+          risk_score: Math.min(100, riskScore),
+          key_metrics: {
+            fill_rate: fillRate,
+            loss_rate: lossRate,
+            contribution_margin: margin
+          },
+          scenarios: [
+            { name: 'Continue operations', description: 'Maintain current operations with targeted improvements', probability: trafficLight === 'green' ? 'high' : 'medium' },
+            { name: 'Restructure', description: 'Reduce crop variety, focus on highest-margin crops', probability: 'medium' },
+            { name: 'Seek acquisition', description: 'Explore acquisition by another network member', probability: trafficLight === 'red' ? 'medium' : 'low' }
+          ],
+          recommendation: `Farm risk level: ${trafficLight.toUpperCase()}. ${
+            trafficLight === 'green' ? 'Farm is healthy. Continue current strategy.' :
+            trafficLight === 'yellow' ? 'Monitor closely. Consider operational improvements.' :
+            'Action required. Review alternatives before next governance cycle.'
+          }`,
+          requires_board_review: true
+        }
+      };
+    }
+
+    case 'acquisition_eval':
+      return {
+        success: true,
+        tier: 'recommend',
+        requiresConfirmation: true,
+        message: 'Acquisition evaluation requires target farm profile data. Provide farm_id or profile for analysis.',
+        data: {
+          required_inputs: ['target_farm_id', 'asking_price', 'current_revenue', 'crop_mix', 'facility_age'],
+          evaluation_criteria: [
+            'Geographic fit with existing network',
+            'Crop specialization complementarity',
+            'Equipment and facility condition',
+            'Customer base overlap',
+            'Regulatory compliance status'
+          ],
+          requires_board_review: true
+        }
+      };
+
+    case 'growth_scenarios':
+      return {
+        success: true,
+        tier: 'recommend',
+        message: 'Growth scenario modeling — provide expansion parameters for detailed projections.',
+        data: {
+          scenario_types: [
+            { name: 'organic_growth', description: 'Expand capacity at existing sites' },
+            { name: 'new_site', description: 'Deploy Light Engine at a new facility' },
+            { name: 'acquisition', description: 'Acquire an existing farm operation' }
+          ],
+          required_inputs: ['scenario_type', 'investment_budget', 'timeline_months'],
+          requires_board_review: true
+        }
+      };
+
+    case 'competitive_position': {
+      // Compare against network averages (uses local KPIs as proxy)
+      let kpiData = {};
+      try {
+        const resp = await fetch(`http://localhost:${port}/api/kpis`);
+        if (resp.ok) kpiData = await resp.json();
+      } catch { /* no data */ }
+
+      return {
+        success: true,
+        data: {
+          farm_metrics: kpiData.metrics || {},
+          network_comparison: 'Network average comparison requires Central data — showing local metrics only',
+          recommendation: 'Request full network benchmarks from Central for comprehensive competitive analysis',
+          requires_board_review: true
+        }
+      };
+    }
+
+    case 'portfolio_optimization':
+      return {
+        success: true,
+        tier: 'recommend',
+        requiresConfirmation: true,
+        message: 'Portfolio optimization requires cross-farm data from Central.',
+        data: {
+          analysis_dimensions: [
+            'Crop mix diversification across network',
+            'Capacity utilization per farm',
+            'Regional demand alignment',
+            'Seasonal coverage gaps'
+          ],
+          requires_board_review: true
+        }
+      };
+
+    default:
+      return {
+        success: false,
+        error: 'action_not_implemented',
+        message: `Viability action not yet implemented: ${action}`
       };
   }
 }
