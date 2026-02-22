@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delivery Platform | GreenReach</title>
+  <meta name="description" content="Last-mile delivery platform for local food — driver onboarding, real-time tracking, automated payouts, and compliance-ready settlement.">
+  <link rel="stylesheet" href="css/gr-delivery.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(251,251,253,0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .nav-content {
+      max-width: 1000px; margin: 0 auto; padding: 0 22px;
+      height: 44px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-logo { text-decoration: none; display: flex; align-items: center; }
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a { color: var(--text); text-decoration: none; font-size: 12px; font-weight: 400; opacity: 0.8; transition: opacity 0.3s; }
+    .nav-links a:hover { opacity: 1; }
+    .nav-cta {
+      background: var(--primary); color: white; padding: 8px 16px;
+      border-radius: 980px; text-decoration: none; font-size: 12px; font-weight: 500; transition: background 0.3s;
+    }
+    .nav-cta:hover { background: var(--accent); color: var(--primary); }
+    .hero {
+      padding: 120px 22px 80px; text-align: center;
+      background: linear-gradient(180deg, var(--bg) 0%, rgba(130,195,65,0.05) 100%);
+    }
+    .hero-eyebrow { display: flex; justify-content: center; margin-bottom: 12px; }
+    .hero-eyebrow img { height: 80px; width: auto; }
+    .hero-title { font-size: 64px; font-weight: 700; line-height: 1.0625; letter-spacing: -0.015em; margin-bottom: 20px; color: var(--primary); }
+    .hero-subtitle { font-size: 28px; font-weight: 600; line-height: 1.14286; letter-spacing: 0.007em; color: var(--text); margin-bottom: 16px; }
+    .hero-description { font-size: 21px; line-height: 1.381; letter-spacing: 0.011em; color: var(--text-light); max-width: 800px; margin: 0 auto 40px; }
+    .feature-section { padding: 80px 22px; max-width: 1200px; margin: 0 auto; }
+    .feature-content { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .feature-text { max-width: 500px; }
+    .feature-eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .feature-title { font-size: 48px; font-weight: 700; line-height: 1.08349; letter-spacing: -0.003em; margin-bottom: 20px; color: var(--primary); }
+    .feature-description { font-size: 21px; line-height: 1.381; letter-spacing: 0.011em; color: var(--text-light); margin-bottom: 24px; }
+    .feature-list { list-style: none; padding: 0; }
+    .feature-list li { padding: 12px 0; padding-left: 32px; position: relative; color: var(--text); font-size: 17px; line-height: 1.47059; }
+    .feature-list li:before { content: '✓'; position: absolute; left: 0; color: var(--accent); font-weight: 700; font-size: 24px; }
+    .feature-visual {
+      background: linear-gradient(135deg, rgba(130,195,65,0.1) 0%, rgba(45,80,22,0.05) 100%);
+      border-radius: 24px; padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px;
+    }
+    .stats-section { padding: 80px 22px; background: var(--primary); color: white; text-align: center; }
+    footer { background: var(--text); color: white; padding: 80px 22px 40px; }
+    .footer-content { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .footer-about h3 { font-size: 24px; margin-bottom: 16px; color: var(--accent); }
+    .footer-about p { font-size: 15px; line-height: 1.6; opacity: 0.8; }
+    .footer-links h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; color: var(--accent); }
+    .footer-links ul { list-style: none; }
+    .footer-links a { color: white; text-decoration: none; font-size: 14px; opacity: 0.7; transition: opacity 0.3s; display: block; margin-bottom: 12px; }
+    .footer-links a:hover { opacity: 1; }
+    .footer-bottom { text-align: center; padding-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; opacity: 0.6; }
+    @media (max-width: 768px) {
+      .hero-title { font-size: 48px; }
+      .hero-subtitle { font-size: 24px; }
+      .feature-title { font-size: 40px; }
+      .feature-content { grid-template-columns: 1fr; gap: 40px; }
+      .footer-content { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation (identical to grow-and-sell.html) -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo"><img src="https://greenreachgreens.com/images/greenreach-clr.png" alt="GreenReach" /></a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/greenreach-grow.html">GROW</a></li>
+        <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+        <li><a href="/grow-and-sell.html">GreenReach Wholesale</a></li>
+        <li><a href="/grant-wizard.html">Funding Support</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+        <li><a href="https://calendly.com/greenreachfarms" class="nav-cta">Schedule a Call</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════ HERO ═══════════════════ -->
+  <section class="hero">
+    <div class="hero-eyebrow">
+      <img src="https://greenreachgreens.com/images/greenreach-clr.png" alt="GreenReach" />
+    </div>
+    <h1 class="hero-title">From farm gate<br/>to loading dock</h1>
+    <p class="hero-subtitle">Last-mile delivery platform for local food</p>
+    <p class="hero-description">
+      Optimised routing, real-time tracking, automated driver payments, and full compliance—built
+      into the same wholesale portal your farms and buyers already use.
+    </p>
+    <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+      <a href="driver-apply.html" class="gr-btn gr-btn--primary" style="font-size: 17px; padding: 16px 32px;">Apply to Drive</a>
+      <a href="https://calendly.com/greenreachfarms" class="gr-btn gr-btn--outline" style="font-size: 17px; padding: 16px 32px;">Book a Demo</a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 1 · DRIVER ACCESS MODEL ═══════════════════ -->
+  <section class="feature-section" id="drivers">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Driver Access Model</div>
+        <h2 class="feature-title">Apply, onboard, deliver</h2>
+        <p class="feature-description">
+          Independent drivers apply through a public page, complete a checkpoint-style onboarding funnel,
+          and become active only when every requirement is met—docs, background check, banking, and agreement.
+        </p>
+        <ul class="feature-list">
+          <li>Public application — email, phone, preferred zones, vehicle info</li>
+          <li>Skip-style onboarding checklist with status pills</li>
+          <li>Background check integration (in progress / passed)</li>
+          <li>Banking setup via Stripe Connect for automated payouts</li>
+          <li>Contractor agreement + DPWRA pay disclosure acceptance</li>
+          <li>Ontario DPWRA compliant — pay details shown before first assignment</li>
+        </ul>
+        <div style="margin-top: 32px; display: flex; gap: 12px; flex-wrap: wrap;">
+          <a href="driver-apply.html" class="gr-btn gr-btn--primary gr-btn--sm">Apply to Drive</a>
+          <a href="driver-portal.html" class="gr-btn gr-btn--secondary gr-btn--sm">View Driver Portal</a>
+        </div>
+      </div>
+      <div class="feature-visual">
+        <!-- Driver State Machine -->
+        <div style="width: 100%;">
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; text-align: center;">Driver Account State Machine</div>
+          <div class="gr-state-diagram" style="justify-content: center;">
+            <span class="gr-state-diagram__node gr-state-diagram__node--inactive">APPLICANT</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--inactive">DOCS_PENDING</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--inactive">BACKGROUND_PENDING</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--inactive">BANKING_PENDING</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--inactive">AGREEMENT_PENDING</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--active">ACTIVE</span>
+            <span class="gr-state-diagram__arrow">⇄</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--warn">SUSPENDED</span>
+          </div>
+          <!-- Onboarding checklist preview -->
+          <div style="margin-top: 28px;">
+            <ul class="gr-checklist">
+              <li class="gr-checklist__item">
+                <div class="gr-checklist__icon gr-checklist__icon--done">✓</div>
+                <div class="gr-checklist__body">
+                  <div class="gr-checklist__label">Identity & Documents</div>
+                  <div class="gr-checklist__desc">Driver's licence, insurance, right-to-work</div>
+                </div>
+                <span class="gr-pill gr-pill--active">Verified</span>
+              </li>
+              <li class="gr-checklist__item">
+                <div class="gr-checklist__icon gr-checklist__icon--pending">⏳</div>
+                <div class="gr-checklist__body">
+                  <div class="gr-checklist__label">Background Check</div>
+                  <div class="gr-checklist__desc">Submitted — estimated 2-3 business days</div>
+                </div>
+                <span class="gr-pill gr-pill--pending">In Progress</span>
+              </li>
+              <li class="gr-checklist__item">
+                <div class="gr-checklist__icon gr-checklist__icon--locked">🔒</div>
+                <div class="gr-checklist__body">
+                  <div class="gr-checklist__label">Banking & Payout Setup</div>
+                  <div class="gr-checklist__desc">Connect your bank via Stripe</div>
+                </div>
+                <span class="gr-pill gr-pill--neutral">Not Started</span>
+              </li>
+              <li class="gr-checklist__item">
+                <div class="gr-checklist__icon gr-checklist__icon--locked">🔒</div>
+                <div class="gr-checklist__body">
+                  <div class="gr-checklist__label">Contractor Agreement</div>
+                  <div class="gr-checklist__desc">Pay disclosure, pay period, engaged-time rules</div>
+                </div>
+                <span class="gr-pill gr-pill--neutral">Not Started</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 2 · BUYER/RECEIVER ACCESS ═══════════════════ -->
+  <section class="feature-section" style="background: rgba(130,195,65,0.03); padding: 80px 22px;">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">Buyer &amp; Receiver Roles</div>
+      <h2 class="feature-title">Right access, right people</h2>
+      <p class="feature-description">
+        Wholesale accounts support two roles. The person ordering and managing billing shouldn't
+        be blocked by dock operations—and the receiver at the dock shouldn't see payment details.
+      </p>
+      <div class="gr-grid-2" style="margin-top: 48px;">
+        <!-- Buyer Admin card -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">👤</div>
+            <div>
+              <div class="gr-card__title">Buyer Admin</div>
+              <div class="gr-card__subtitle">Full account control</div>
+            </div>
+          </div>
+          <ul class="feature-list" style="margin: 0;">
+            <li>Browse catalog &amp; place orders</li>
+            <li>Manage invoices, terms, credits</li>
+            <li>Invite team members &amp; assign roles</li>
+            <li>View billing statements &amp; payment history</li>
+            <li>Set delivery preferences &amp; standing orders</li>
+          </ul>
+        </div>
+        <!-- Receiver card -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">📦</div>
+            <div>
+              <div class="gr-card__title">Receiver</div>
+              <div class="gr-card__subtitle">Dock &amp; delivery operations</div>
+            </div>
+          </div>
+          <ul class="feature-list" style="margin: 0;">
+            <li>Track deliveries in real time</li>
+            <li>View POD — signature, photos, pin</li>
+            <li>Report issues — damage, partial, missing</li>
+            <li>Set delivery window preferences</li>
+            <li style="color: var(--text-light); font-style: italic;">No access to billing, invoices, or pricing</li>
+          </ul>
+        </div>
+      </div>
+      <!-- Invite flow -->
+      <div class="gr-card" style="margin-top: 32px; text-align: center; padding: 40px;">
+        <div style="font-size: 15px; color: var(--text-light); margin-bottom: 16px;">Receiver Invite Flow</div>
+        <div class="gr-state-diagram" style="justify-content: center;">
+          <span class="gr-state-diagram__node gr-state-diagram__node--active">Buyer Admin</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">"Team" tab → Invite</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">Email sent</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">Set password</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--active">role = RECEIVER</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 3 · SHIPMENT TRACKING & TIMELINE ═══════════════════ -->
+  <section class="feature-section" id="tracking">
+    <div class="feature-content">
+      <div class="feature-text">
+        <div class="feature-eyebrow">Everyone Sees The Same Truth</div>
+        <h2 class="feature-title">Shipment tracking &amp; timeline</h2>
+        <p class="feature-description">
+          One event backbone powers buyer, driver, and ops views. Status pills derive from events—never
+          ad-hoc flags—so nobody disagrees on where a delivery stands.
+        </p>
+        <div style="margin-top: 24px;">
+          <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 12px;">Object Model</div>
+          <div class="gr-state-diagram">
+            <span class="gr-state-diagram__node gr-state-diagram__node--info">Order</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--active">Shipment</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--info">Route</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--info">Stop</span>
+            <span class="gr-state-diagram__arrow">→</span>
+            <span class="gr-state-diagram__node gr-state-diagram__node--active">POD</span>
+          </div>
+        </div>
+        <ul class="feature-list" style="margin-top: 24px;">
+          <li>GPS pings every 10–20s while on active route</li>
+          <li>ETA per stop computed server-side</li>
+          <li>Buyer sees status + ETA + "X minutes away" (privacy-safe)</li>
+          <li>SSE streaming for live timeline + ETA updates</li>
+          <li>Geofence-triggered ARRIVING event</li>
+        </ul>
+      </div>
+      <div class="feature-visual" style="align-items: stretch;">
+        <!-- Timeline preview -->
+        <div style="width: 100%;">
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px;">Shared Status Timeline</div>
+          <ul class="gr-timeline">
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ORDER_PLACED</div>
+              <div class="gr-timeline__meta">Feb 21, 8:14 AM · Buyer</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">FARM_CONFIRMED</div>
+              <div class="gr-timeline__meta">Feb 21, 8:22 AM · System</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">READY_FOR_PICKUP</div>
+              <div class="gr-timeline__meta">Feb 21, 10:05 AM · Farm</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">DRIVER_ASSIGNED</div>
+              <div class="gr-timeline__meta">Feb 21, 10:08 AM · Dispatch</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">PICKED_UP</div>
+              <div class="gr-timeline__meta">Feb 21, 10:45 AM · Driver — 6 totes scanned</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--active">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">EN_ROUTE_TO_STOP</div>
+              <div class="gr-timeline__meta">Feb 21, 11:02 AM · ETA 11:34 AM</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ARRIVING</div>
+              <div class="gr-timeline__meta">Geofence trigger</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">DELIVERED_CONFIRMED</div>
+              <div class="gr-timeline__meta">Awaiting POD</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ MAP + ETA + POD Cards ═══════════════════ -->
+  <section style="padding: 40px 22px; background: var(--bg);">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="gr-grid-3">
+        <!-- Map card -->
+        <div class="gr-card" style="padding: 0; overflow: hidden;">
+          <div class="gr-map-card">
+            <div class="gr-map-card__placeholder">
+              <span>🗺️</span>
+              Live route map
+            </div>
+            <div class="gr-map-card__eta">
+              <div class="gr-map-card__eta-label">Estimated arrival</div>
+              <div class="gr-map-card__eta-value">32 min</div>
+            </div>
+          </div>
+        </div>
+        <!-- POD card -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">✍️</div>
+            <div>
+              <div class="gr-card__title">Proof of Delivery</div>
+              <div class="gr-card__subtitle">Required for payout</div>
+            </div>
+          </div>
+          <div class="gr-pod-card" style="margin-top: 8px;">
+            <div class="gr-pod-card__thumb">📷</div>
+            <div class="gr-pod-card__detail">
+              <div class="gr-pod-card__label">Type</div>
+              <div class="gr-pod-card__value">Signature + Photo</div>
+              <div class="gr-pod-card__label" style="margin-top: 12px;">Captured</div>
+              <div class="gr-pod-card__value">11:38 AM · GPS verified</div>
+              <div class="gr-pod-card__label" style="margin-top: 12px;">Signed by</div>
+              <div class="gr-pod-card__value">M. Chen, Receiving</div>
+            </div>
+          </div>
+        </div>
+        <!-- Pay estimate card -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">💰</div>
+            <div>
+              <div class="gr-card__title">Route Pay Estimate</div>
+              <div class="gr-card__subtitle">Shown before accept</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px;">
+            <div class="gr-pay-card">
+              <div><div class="gr-pay-card__label">Base</div></div>
+              <div class="gr-pay-card__amount">$15.00</div>
+            </div>
+            <div class="gr-pay-card">
+              <div><div class="gr-pay-card__label">32.4 km × $0.55</div></div>
+              <div class="gr-pay-card__amount">$17.82</div>
+            </div>
+            <div class="gr-pay-card">
+              <div><div class="gr-pay-card__label">68 min × $0.18</div></div>
+              <div class="gr-pay-card__amount">$12.24</div>
+            </div>
+            <div class="gr-pay-card">
+              <div><div class="gr-pay-card__label">4 stops × $1.25</div></div>
+              <div class="gr-pay-card__amount">$5.00</div>
+            </div>
+            <div class="gr-pay-card" style="border: 2px solid var(--accent); background: rgba(130,195,65,0.04);">
+              <div><div class="gr-pay-card__label" style="font-weight: 700;">Estimated Total</div></div>
+              <div class="gr-pay-card__amount" style="font-size: 28px;">$50.06</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 4 · POD-GATED PAYMENTS ═══════════════════ -->
+  <section class="feature-section" id="payments">
+    <div class="feature-content">
+      <div class="feature-visual" style="padding: 32px;">
+        <!-- Settlement pipeline flow -->
+        <div style="width: 100%;">
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px; text-align: center;">Settlement Pipeline</div>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="gr-card" style="padding: 20px; text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 8px;">📱</div>
+              <div style="font-weight: 600;">1. Driver marks stop delivered</div>
+              <div style="font-size: 13px; color: var(--text-light);">Uploads POD: signature OR photo OR receiver PIN</div>
+            </div>
+            <div style="text-align: center; font-size: 24px; color: var(--accent);">↓</div>
+            <div class="gr-card" style="padding: 20px; text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 8px;">✅</div>
+              <div style="font-weight: 600;">2. System validates POD</div>
+              <div style="font-size: 13px; color: var(--text-light);">Timestamp + artifact + GPS coords + exception code</div>
+            </div>
+            <div style="text-align: center; font-size: 24px; color: var(--accent);">↓</div>
+            <div class="gr-card" style="padding: 20px; text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
+              <div style="font-weight: 600;">3. Settlement calculates pay</div>
+              <div style="font-size: 13px; color: var(--text-light);">Creates immutable PayStatementLine → CLEARED status</div>
+            </div>
+            <div style="text-align: center; font-size: 24px; color: var(--accent);">↓</div>
+            <div class="gr-card" style="padding: 20px; text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 8px;">💸</div>
+              <div style="font-weight: 600;">4. Weekly payout batch</div>
+              <div style="font-size: 13px; color: var(--text-light);">Stripe Connect manual payout — funds held until POD confirmed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="feature-text">
+        <div class="feature-eyebrow">Automated Driver Payments</div>
+        <h2 class="feature-title">No POD, no payout</h2>
+        <p class="feature-description">
+          A stop becomes payable only when it has a timestamp, a POD artifact, GPS coordinates,
+          and an exception code (if applicable). Once locked, pay statements are immutable—adjustments
+          become separate lines.
+        </p>
+        <ul class="feature-list">
+          <li>POD gate: delivery timestamp + artifact + GPS required</li>
+          <li>Stripe Connect for contractor payouts</li>
+          <li>Manual payouts hold funds until delivery confirmed</li>
+          <li>Weekly pay period (Monday–Sunday), pay day Friday</li>
+          <li>Minimum guarantee: route pay ≥ min rate × engaged minutes</li>
+          <li>DPWRA compliant: pay period, pay day, assignment details</li>
+        </ul>
+        <div class="gr-card" style="margin-top: 24px; padding: 20px; background: rgba(130,195,65,0.04);">
+          <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 8px;">🇨🇦 Ontario DPWRA (July 1, 2025)</div>
+          <div style="font-size: 14px; color: var(--text-light); line-height: 1.5;">
+            Once a driver becomes ACTIVE, the platform provides pay calculation details, pay periods,
+            pay day, and assignment start/finish times. "Engaged time" = accept to finish.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 5 · PAYOUT POLICY ═══════════════════ -->
+  <section style="padding: 80px 22px; background: rgba(130,195,65,0.03);">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">Payout Rules Engine</div>
+      <h2 class="feature-title" style="font-size: 40px;">Configurable settlement policy</h2>
+      <p class="feature-description" style="max-width: 700px;">
+        Pay formula, minimum guarantees, exception handling, and hold/release rules—all defined
+        in a single policy config that the settlement engine evaluates automatically.
+      </p>
+      <div class="gr-grid-2" style="margin-top: 40px; align-items: start;">
+        <div class="gr-code-block" style="font-size: 12px; line-height: 1.7;">
+<span class="gr-code-key">payout_policy</span>:
+  <span class="gr-code-key">pay_period</span>:
+    <span class="gr-code-key">frequency</span>: <span class="gr-code-str">WEEKLY</span>
+    <span class="gr-code-key">period_start</span>: <span class="gr-code-str">MONDAY</span>
+    <span class="gr-code-key">pay_day</span>: <span class="gr-code-str">FRIDAY</span>
+    <span class="gr-code-key">timezone</span>: <span class="gr-code-str">America/Toronto</span>
+
+  <span class="gr-code-key">payable_gate</span>:
+    <span class="gr-code-key">require_pod</span>: <span class="gr-code-num">true</span>
+    <span class="gr-code-key">pod_types_allowed</span>: [<span class="gr-code-str">SIG</span>, <span class="gr-code-str">PHOTO</span>, <span class="gr-code-str">PIN</span>]
+    <span class="gr-code-key">hold_if_exception_open</span>: <span class="gr-code-num">true</span>
+
+  <span class="gr-code-key">driver_pay_formula</span>:
+    <span class="gr-code-key">base</span>: <span class="gr-code-num">15.00</span>
+    <span class="gr-code-key">per_km</span>: <span class="gr-code-num">0.55</span>
+    <span class="gr-code-key">per_engaged_min</span>: <span class="gr-code-num">0.18</span>
+    <span class="gr-code-key">per_stop</span>: <span class="gr-code-num">1.25</span>
+    <span class="gr-code-key">wait</span>:
+      <span class="gr-code-key">grace_min</span>: <span class="gr-code-num">10</span>
+      <span class="gr-code-key">per_wait_min</span>: <span class="gr-code-num">0.20</span>
+
+  <span class="gr-code-key">minimum_guarantee</span>:
+    <span class="gr-code-key">enabled</span>: <span class="gr-code-num">true</span>
+    <span class="gr-code-key">rule</span>: <span class="gr-code-str">"pay ≥ min_rate × engaged_min"</span></div>
+        <div>
+          <!-- Exception handling cards -->
+          <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 16px;">Exception Handling</div>
+          <div class="gr-card" style="margin-bottom: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600;">Receiver not available</div>
+                <div style="font-size: 13px; color: var(--text-light);">Call → Wait → Return · Wait pay ✓ · Return pay ✓</div>
+              </div>
+              <span class="gr-pill gr-pill--pending">Wait Pay</span>
+            </div>
+          </div>
+          <div class="gr-card" style="margin-bottom: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600;">Partial delivery</div>
+                <div style="font-size: 13px; color: var(--text-light);">Requires photo · Driver paid · Customer credit separate</div>
+              </div>
+              <span class="gr-pill gr-pill--active">Driver Paid</span>
+            </div>
+          </div>
+          <div class="gr-card" style="margin-bottom: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600;">Refused delivery</div>
+                <div style="font-size: 13px; color: var(--text-light);">Requires signature or photo · Attempt + return paid</div>
+              </div>
+              <span class="gr-pill gr-pill--active">Driver Paid</span>
+            </div>
+          </div>
+          <div class="gr-card" style="margin-bottom: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600;">Damaged goods</div>
+                <div style="font-size: 13px; color: var(--text-light);">Photo required · Credit cap 30% · Dispute hold if repeat</div>
+              </div>
+              <span class="gr-pill gr-pill--error">Hold if Repeat</span>
+            </div>
+          </div>
+          <div style="margin-top: 20px; font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 12px;">Hold / Release Rules</div>
+          <div class="gr-card" style="padding: 20px;">
+            <div style="font-size: 14px; line-height: 1.8;">
+              <div><code style="background: rgba(45,80,22,0.06); padding: 2px 8px; border-radius: 6px; font-size: 13px;">POD_MISSING</code> · <code style="background: rgba(45,80,22,0.06); padding: 2px 8px; border-radius: 6px; font-size: 13px;">GPS_MISMATCH</code> · <code style="background: rgba(45,80,22,0.06); padding: 2px 8px; border-radius: 6px; font-size: 13px;">FRAUD_FLAG</code></div>
+              <div style="margin-top: 8px; color: var(--text-light); font-size: 13px;">
+                POD verified → <span class="gr-pill gr-pill--active" style="font-size: 11px;">RELEASE</span>
+                &nbsp; Ops override → <span class="gr-pill gr-pill--active" style="font-size: 11px;">RELEASE</span>
+                &nbsp; Confirmed fraud → <span class="gr-pill gr-pill--error" style="font-size: 11px;">REVERSE</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 6 · DATA MODEL ═══════════════════ -->
+  <section class="feature-section" id="data-model">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">Data Model</div>
+      <h2 class="feature-title" style="font-size: 40px;">Tables you actually need</h2>
+      <p class="feature-description" style="max-width: 700px;">
+        Relational schema designed for PostgreSQL. Four domains: identity &amp; access,
+        commerce &amp; fulfillment, delivery execution, and pricing &amp; settlement.
+      </p>
+
+      <div class="gr-grid-2" style="margin-top: 40px; gap: 32px; align-items: start;">
+        <!-- Identity & Access -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">🔐</div>
+            <div class="gr-card__title">Identity &amp; Access</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Table</th><th>Key Columns</th></tr></thead>
+            <tbody>
+              <tr><td><code>users</code></td><td>email, phone, role, hashed_pw</td></tr>
+              <tr><td><code>customer_accounts</code></td><td>name, billing_terms</td></tr>
+              <tr><td><code>customer_members</code></td><td>user_id, account_id, role</td></tr>
+              <tr><td><code>drivers</code></td><td>status, zone, vehicle_type, capacity</td></tr>
+              <tr><td><code>driver_documents</code></td><td>type, url, status, expires_at</td></tr>
+              <tr><td><code>driver_background_checks</code></td><td>provider, status</td></tr>
+              <tr><td><code>driver_payout_accounts</code></td><td>provider, last4, status</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Commerce & Fulfillment -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">🛒</div>
+            <div class="gr-card__title">Commerce &amp; Fulfillment</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Table</th><th>Key Columns</th></tr></thead>
+            <tbody>
+              <tr><td><code>orders</code></td><td>customer_account_id, status, window, totals</td></tr>
+              <tr><td><code>order_lines</code></td><td>sku_id, qty, weight, temp_class</td></tr>
+              <tr><td><code>pick_packs</code></td><td>order_id, status, totes_actual</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Delivery Execution -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">🚚</div>
+            <div class="gr-card__title">Delivery Execution</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Table</th><th>Key Columns</th></tr></thead>
+            <tbody>
+              <tr><td><code>shipments</code></td><td>wave_id, status, pickup_site_id</td></tr>
+              <tr><td><code>shipment_orders</code></td><td>shipment_id, order_id (M2M)</td></tr>
+              <tr><td><code>routes</code></td><td>wave_id, driver_id, km/min planned</td></tr>
+              <tr><td><code>stops</code></td><td>route_id, address, window, seq, eta</td></tr>
+              <tr><td><code>stop_orders</code></td><td>stop_id, order_id (M2M)</td></tr>
+              <tr><td><code>pods</code></td><td>stop_id, type, artifact_ref, gps</td></tr>
+              <tr><td><code>delivery_events</code></td><td>entity_type/id, event_type, ts</td></tr>
+              <tr><td><code>telemetry</code></td><td>route_id, driver_id, gps, speed</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pricing & Settlement -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">💳</div>
+            <div class="gr-card__title">Pricing &amp; Settlement</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Table</th><th>Key Columns</th></tr></thead>
+            <tbody>
+              <tr><td><code>fee_quotes</code></td><td>order_id, route_id, breakdown, total</td></tr>
+              <tr><td><code>driver_offers</code></td><td>route_id, driver_id, pay_estimate</td></tr>
+              <tr><td><code>pay_statements</code></td><td>driver_id, period, total, status</td></tr>
+              <tr><td><code>pay_statement_lines</code></td><td>route/stop, amount, payable_status</td></tr>
+              <tr><td><code>payout_batches</code></td><td>pay_day, period, status</td></tr>
+              <tr><td><code>payouts</code></td><td>driver_id, amount, provider_ref</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 7 · API ENDPOINTS ═══════════════════ -->
+  <section style="padding: 80px 22px; background: rgba(130,195,65,0.03);">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">API Reference</div>
+      <h2 class="feature-title" style="font-size: 40px;">Endpoints by app</h2>
+      <p class="feature-description" style="max-width: 700px;">
+        RESTful API grouped by portal. Real-time updates via Server-Sent Events.
+      </p>
+
+      <div class="gr-grid-2" style="margin-top: 40px; gap: 32px; align-items: start;">
+        <!-- Buyer API -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">🏪</div>
+            <div class="gr-card__title">Buyer Portal</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST</code></td><td><code>/api/orders</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/orders?status=&amp;date=</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/orders/{id}</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/orders/{id}/tracking</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/orders/{id}/issues</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/team</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/team/invite</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Driver API -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">🚗</div>
+            <div class="gr-card__title">Driver Portal</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST</code></td><td><code>/api/driver/apply</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/documents</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/banking/link</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/agreement/accept</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/driver/offers</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/offers/{id}/accept</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/stops/{id}/pod</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/stops/{id}/exception</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/driver/telemetry/batch</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/driver/pay-statements</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Ops API -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">⚙️</div>
+            <div class="gr-card__title">Ops Console</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST</code></td><td><code>/api/waves/build</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/routes/optimize</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/routes/{id}/publish</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/routes/{id}/assign-driver</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/settlement/run</code></td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/payouts/run</code></td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/exceptions?status=</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Realtime -->
+        <div class="gr-card">
+          <div class="gr-card__header">
+            <div class="gr-card__icon">📡</div>
+            <div class="gr-card__title">Real-Time Tracking</div>
+          </div>
+          <table class="gr-data-table" style="margin-top: 8px;">
+            <thead><tr><th>Method</th><th>Endpoint</th></tr></thead>
+            <tbody>
+              <tr><td><code>SSE</code></td><td><code>/api/stream/orders/{id}</code></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top: 16px; padding: 16px; background: rgba(130,195,65,0.05); border-radius: 12px; font-size: 14px; color: var(--text-light);">
+            Server-Sent Events stream timeline + ETA updates. Upgrade to WebSocket if real-time chat or ops interventions are needed later.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 8 · EVENT TOPICS ═══════════════════ -->
+  <section class="feature-section" id="events">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">Event-Driven Architecture</div>
+      <h2 class="feature-title" style="font-size: 40px;">Single source of truth</h2>
+      <p class="feature-description" style="max-width: 700px;">
+        Every state change writes to <code style="background: rgba(45,80,22,0.06); padding: 2px 8px; border-radius: 6px; font-size: 17px; color: var(--primary);">delivery_events</code>.
+        UI status pills are derived from events—Buyer, Driver, and Ops never disagree.
+      </p>
+
+      <div class="gr-grid-2" style="margin-top: 40px; align-items: start;">
+        <div>
+          <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 16px;">18 Event Topics</div>
+          <ul class="gr-timeline">
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ORDER_PLACED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ORDER_CONFIRMED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">PICK_PACK_STARTED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">READY_FOR_PICKUP</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">WAVE_BUILT</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ROUTE_OPTIMIZED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">ROUTE_PUBLISHED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">DRIVER_ASSIGNED</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--done">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">DRIVER_EN_ROUTE_TO_FARM</div>
+            </li>
+            <li class="gr-timeline__item gr-timeline__item--active">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">PICKED_UP</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">STOP_EN_ROUTE</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">STOP_ARRIVED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">STOP_POD_SUBMITTED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">STOP_POD_ACCEPTED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">STOP_EXCEPTION_RECORDED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">DELIVERY_CONFIRMED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">PAY_STATEMENT_LOCKED</div>
+            </li>
+            <li class="gr-timeline__item">
+              <div class="gr-timeline__dot"></div>
+              <div class="gr-timeline__title">PAYOUT_BATCH_EXECUTED</div>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 16px;">Who sees what</div>
+          <div class="gr-card" style="margin-bottom: 16px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">🏪 Buyer tracking UI</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <span class="gr-pill gr-pill--info">ORDER_PLACED</span>
+              <span class="gr-pill gr-pill--info">ROUTE_PUBLISHED</span>
+              <span class="gr-pill gr-pill--info">DRIVER_ASSIGNED</span>
+              <span class="gr-pill gr-pill--info">PICKED_UP</span>
+              <span class="gr-pill gr-pill--info">STOP_*</span>
+              <span class="gr-pill gr-pill--info">DELIVERED</span>
+            </div>
+          </div>
+          <div class="gr-card" style="margin-bottom: 16px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">🚗 Driver app</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <span class="gr-pill gr-pill--info">DRIVER_ASSIGNED</span>
+              <span class="gr-pill gr-pill--info">PICKED_UP</span>
+              <span class="gr-pill gr-pill--info">STOP_*</span>
+              <span class="gr-pill gr-pill--info">POD_*</span>
+              <span class="gr-pill gr-pill--info">PAY_STATEMENT</span>
+            </div>
+          </div>
+          <div class="gr-card" style="margin-bottom: 16px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">⚙️ Ops console</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <span class="gr-pill gr-pill--active">ALL EVENTS</span>
+            </div>
+            <div style="font-size: 13px; color: var(--text-light); margin-top: 8px;">
+              Full visibility including EXCEPTION_*, PAYOUT_*, settlement holds
+            </div>
+          </div>
+          <div class="gr-card" style="background: rgba(130,195,65,0.04);">
+            <div style="font-weight: 600; margin-bottom: 8px;">📐 Design rule</div>
+            <div style="font-size: 14px; color: var(--text-light); line-height: 1.5;">
+              Status pills are <strong>derived from events</strong>, never from ad-hoc flags.
+              Every participant reads the same <code style="background: rgba(45,80,22,0.06); padding: 2px 6px; border-radius: 4px; font-size: 13px;">delivery_events</code> timeline.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 9 · CRA REPORTING ═══════════════════ -->
+  <section class="stats-section" id="compliance">
+    <h2 style="font-size: 48px; font-weight: 700; margin-bottom: 16px;">Built for Canadian compliance</h2>
+    <p style="font-size: 19px; opacity: 0.85; max-width: 700px; margin: 0 auto 48px;">
+      Ontario DPWRA, CRA contractor reporting, and transparent settlement—baked in from day one.
+    </p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; max-width: 1200px; margin: 0 auto;">
+      <div style="background: rgba(255,255,255,0.95); border: 1px solid rgba(130,195,65,0.2); border-radius: 16px; padding: 32px; text-align: center;">
+        <div style="font-size: 56px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">T4A</div>
+        <div style="font-size: 15px; line-height: 1.4; color: var(--text);">CRA reporting — Box 048 for fees-for-service paid to contractors</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.95); border: 1px solid rgba(130,195,65,0.2); border-radius: 16px; padding: 32px; text-align: center;">
+        <div style="font-size: 56px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">$500</div>
+        <div style="font-size: 15px; line-height: 1.4; color: var(--text);">Administrative policy threshold for reporting contractor payments</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.95); border: 1px solid rgba(130,195,65,0.2); border-radius: 16px; padding: 32px; text-align: center;">
+        <div style="font-size: 56px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">DPWRA</div>
+        <div style="font-size: 15px; line-height: 1.4; color: var(--text);">Ontario Digital Platform Workers' Rights Act — in force July 1, 2025</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.95); border: 1px solid rgba(130,195,65,0.2); border-radius: 16px; padding: 32px; text-align: center;">
+        <div style="font-size: 56px; font-weight: 700; color: var(--accent); margin-bottom: 12px;">Weekly</div>
+        <div style="font-size: 15px; line-height: 1.4; color: var(--text);">Pay period Mon–Sun, pay day Friday — immutable statements</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ UI COMPONENTS PREVIEW ═══════════════════ -->
+  <section class="feature-section">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div class="feature-eyebrow">UI Components</div>
+      <h2 class="feature-title" style="font-size: 40px;">Cards that match your layout</h2>
+      <p class="feature-description" style="max-width: 700px;">
+        All new UI is built as namespaced <code style="background: rgba(45,80,22,0.06); padding: 2px 8px; border-radius: 6px; font-size: 17px; color: var(--primary);">gr-*</code> CSS classes
+        loaded from a single file. Zero edits to existing global styles.
+      </p>
+      <div class="gr-grid-4" style="margin-top: 40px;">
+        <div class="gr-card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">Timeline Card</div>
+          <div style="font-size: 13px; color: var(--text-light);">.gr-timeline</div>
+        </div>
+        <div class="gr-card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 32px; margin-bottom: 12px;">🗺️</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">Map / ETA Card</div>
+          <div style="font-size: 13px; color: var(--text-light);">.gr-map-card</div>
+        </div>
+        <div class="gr-card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 32px; margin-bottom: 12px;">✍️</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">POD Card</div>
+          <div style="font-size: 13px; color: var(--text-light);">.gr-pod-card</div>
+        </div>
+        <div class="gr-card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 32px; margin-bottom: 12px;">💰</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">Pay Statement</div>
+          <div style="font-size: 13px; color: var(--text-light);">.gr-pay-card</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ CTA ═══════════════════ -->
+  <section style="padding: 80px 22px; text-align: center; background: linear-gradient(180deg, var(--bg) 0%, rgba(130,195,65,0.05) 100%);">
+    <h2 style="font-size: 48px; font-weight: 700; color: var(--primary); margin-bottom: 16px;">Ready to deliver?</h2>
+    <p style="font-size: 21px; color: var(--text-light); max-width: 600px; margin: 0 auto 40px;">
+      Whether you're a farm, a buyer, or a driver — the platform connects everyone in the local food chain.
+    </p>
+    <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+      <a href="driver-apply.html" class="gr-btn gr-btn--primary" style="font-size: 17px; padding: 16px 32px;">Apply to Drive</a>
+      <a href="/grow-and-sell.html" class="gr-btn gr-btn--secondary" style="font-size: 17px; padding: 16px 32px;">Wholesale Portal</a>
+      <a href="https://calendly.com/greenreachfarms" class="gr-btn gr-btn--outline" style="font-size: 17px; padding: 16px 32px;">Book a Demo</a>
+    </div>
+  </section>
+
+  <!-- Footer (identical to grow-and-sell.html) -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.</p>
+      </div>
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/greenreach-grow.html">GROW</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
+          <li><a href="/grant-wizard.html">Funding Support</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+          <li><a href="mailto:info@greenreachfarms.com">Contact Us</a></li>
+          <li><a href="https://calendly.com/greenreachfarms">Schedule a Call</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Farm Server</a></li>
+          <li><a href="/landing-cloud.html">Management Platform</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Delivery</h4>
+        <ul>
+          <li><a href="delivery-platform.html">Platform Overview</a></li>
+          <li><a href="driver-apply.html">Drive for GreenReach</a></li>
+          <li><a href="driver-portal.html">Driver Portal</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+</body>
+</html>

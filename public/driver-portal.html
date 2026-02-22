@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Portal | GreenReach Delivery</title>
+  <meta name="description" content="GreenReach driver portal — onboarding, route offers, earnings, and settings.">
+  <link rel="stylesheet" href="css/gr-delivery.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2d5016; --accent: #82c341; --text: #1d1d1f;
+      --text-light: #86868b; --bg: #fbfbfd; --surface: #ffffff;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.47059; font-size: 17px;
+      -webkit-font-smoothing: antialiased; overflow-x: hidden;
+    }
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(251,251,253,0.92); backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000; border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .nav-content {
+      max-width: 1000px; margin: 0 auto; padding: 0 22px;
+      height: 44px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-logo { text-decoration: none; display: flex; align-items: center; }
+    .nav-logo img { height: 32px; width: auto; }
+    .nav-links { display: flex; gap: 32px; list-style: none; align-items: center; }
+    .nav-links a { color: var(--text); text-decoration: none; font-size: 12px; font-weight: 400; opacity: 0.8; transition: opacity 0.3s; }
+    .nav-links a:hover { opacity: 1; }
+    .nav-cta {
+      background: var(--primary); color: white; padding: 8px 16px;
+      border-radius: 980px; text-decoration: none; font-size: 12px; font-weight: 500; transition: background 0.3s;
+    }
+    .nav-cta:hover { background: var(--accent); color: var(--primary); }
+    .portal-layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 44px); margin-top: 44px; }
+    .portal-sidebar {
+      background: var(--surface); border-right: 1px solid rgba(0,0,0,0.08); padding: 24px 0; position: sticky; top: 44px; height: calc(100vh - 44px); overflow-y: auto;
+    }
+    .portal-sidebar__section { padding: 0 16px; margin-bottom: 24px; }
+    .portal-sidebar__label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); padding: 0 8px; margin-bottom: 8px; }
+    .portal-sidebar__link {
+      display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px;
+      text-decoration: none; color: var(--text); font-size: 14px; transition: background 0.2s; cursor: pointer;
+    }
+    .portal-sidebar__link:hover { background: rgba(0,0,0,0.04); }
+    .portal-sidebar__link--active { background: rgba(130,195,65,0.12); color: var(--primary); font-weight: 600; }
+    .portal-sidebar__icon { font-size: 18px; width: 24px; text-align: center; }
+    .portal-main { padding: 32px 40px; max-width: 960px; }
+    .portal-header { margin-bottom: 32px; }
+    .portal-header__greeting { font-size: 28px; font-weight: 700; color: var(--primary); }
+    .portal-header__sub { font-size: 15px; color: var(--text-light); margin-top: 4px; }
+    .portal-section { margin-bottom: 40px; }
+    .portal-section__title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+    .availability-toggle {
+      display: flex; align-items: center; gap: 16px; padding: 20px 24px;
+      background: var(--surface); border: 1px solid rgba(0,0,0,0.08); border-radius: 12px;
+    }
+    .toggle-switch { position: relative; width: 52px; height: 30px; cursor: pointer; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: #ccc; border-radius: 15px; transition: 0.3s;
+    }
+    .toggle-slider:before {
+      content: ''; position: absolute; height: 24px; width: 24px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%; transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
+    .toggle-label { font-size: 16px; font-weight: 600; }
+    .toggle-status { font-size: 13px; color: var(--text-light); }
+    .offer-card {
+      background: var(--surface); border: 1px solid rgba(0,0,0,0.08); border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center;
+    }
+    .offer-card__route { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .offer-card__detail { font-size: 13px; color: var(--text-light); }
+    .offer-card__pay { text-align: right; }
+    .offer-card__amount { font-size: 22px; font-weight: 700; color: var(--primary); }
+    .offer-card__breakdown { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+    .offer-card__actions { display: flex; gap: 8px; margin-top: 12px; grid-column: 1 / -1; }
+    .earnings-summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;
+    }
+    .earnings-stat {
+      background: var(--surface); border: 1px solid rgba(0,0,0,0.08); border-radius: 12px;
+      padding: 20px; text-align: center;
+    }
+    .earnings-stat__value { font-size: 28px; font-weight: 700; color: var(--primary); }
+    .earnings-stat__label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+    @media (max-width: 768px) {
+      .portal-layout { grid-template-columns: 1fr; }
+      .portal-sidebar { display: none; }
+      .portal-main { padding: 20px 16px; }
+      .earnings-summary { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo"><img src="https://greenreachgreens.com/images/greenreach-clr.png" alt="GreenReach" /></a>
+      <ul class="nav-links">
+        <li><a href="delivery-platform.html">Platform</a></li>
+        <li><a href="#" style="font-weight: 600; opacity: 1;">Driver Portal</a></li>
+        <li><a href="#" class="nav-cta">Log Out</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="portal-layout">
+    <!-- Sidebar -->
+    <aside class="portal-sidebar">
+      <div class="portal-sidebar__section">
+        <div class="portal-sidebar__label">Driver</div>
+        <a class="portal-sidebar__link portal-sidebar__link--active" data-tab="home">
+          <span class="portal-sidebar__icon">🏠</span> Home
+        </a>
+        <a class="portal-sidebar__link" data-tab="onboarding">
+          <span class="portal-sidebar__icon">📋</span> Onboarding
+        </a>
+        <a class="portal-sidebar__link" data-tab="earnings">
+          <span class="portal-sidebar__icon">💰</span> Earnings
+        </a>
+        <a class="portal-sidebar__link" data-tab="settings">
+          <span class="portal-sidebar__icon">⚙️</span> Settings
+        </a>
+      </div>
+      <div class="portal-sidebar__section">
+        <div class="portal-sidebar__label">Help</div>
+        <a class="portal-sidebar__link" href="delivery-platform.html">
+          <span class="portal-sidebar__icon">📖</span> Docs
+        </a>
+        <a class="portal-sidebar__link" href="mailto:drivers@greenreachfarms.com">
+          <span class="portal-sidebar__icon">✉️</span> Support
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="portal-main">
+
+      <!-- ============ HOME TAB ============ -->
+      <div id="tab-home">
+        <div class="portal-header">
+          <div class="portal-header__greeting">Good morning, Driver</div>
+          <div class="portal-header__sub">Wednesday, January 15 • Hamilton / Niagara zone</div>
+        </div>
+
+        <!-- Availability -->
+        <div class="portal-section">
+          <div class="portal-section__title">Availability</div>
+          <div class="availability-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+            <div>
+              <div class="toggle-label">You're available</div>
+              <div class="toggle-status">Receiving route offers • Online since 6:42 AM</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Route -->
+        <div class="portal-section">
+          <div class="portal-section__title">Active Route</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+              <div>
+                <div style="font-size: 18px; font-weight: 700;">Route #R-20260115-003</div>
+                <div style="font-size: 13px; color: var(--text-light); margin-top: 4px;">5 stops • 38.2 km • Est. 2h 15m</div>
+              </div>
+              <span class="gr-pill gr-pill--active">In Progress</span>
+            </div>
+
+            <!-- Mini timeline -->
+            <div class="gr-timeline" style="margin: 16px 0;">
+              <div class="gr-timeline__event" style="--dot-bg: var(--accent);">
+                <div class="gr-timeline__dot" style="background: var(--accent);">✓</div>
+                <div class="gr-timeline__content">
+                  <div class="gr-timeline__title">Pickup — Sunrise Greens Farm</div>
+                  <div class="gr-timeline__meta">7:15 AM • 24 totes loaded</div>
+                </div>
+              </div>
+              <div class="gr-timeline__event" style="--dot-bg: var(--primary);">
+                <div class="gr-timeline__dot" style="background: var(--primary); animation: pulse 2s infinite;">●</div>
+                <div class="gr-timeline__content">
+                  <div class="gr-timeline__title">Stop 2 — Metro Kitchen Supply</div>
+                  <div class="gr-timeline__meta">ETA 8:20 AM • 6 totes</div>
+                </div>
+              </div>
+              <div class="gr-timeline__event" style="--dot-bg: #ccc;">
+                <div class="gr-timeline__dot" style="background: #ddd;"></div>
+                <div class="gr-timeline__content">
+                  <div class="gr-timeline__title" style="color: var(--text-light);">Stop 3 — Hamilton Community Co-op</div>
+                  <div class="gr-timeline__meta">Window 8:30–9:30 AM • 8 totes</div>
+                </div>
+              </div>
+              <div class="gr-timeline__event" style="--dot-bg: #ccc;">
+                <div class="gr-timeline__dot" style="background: #ddd;"></div>
+                <div class="gr-timeline__content">
+                  <div class="gr-timeline__title" style="color: var(--text-light);">+2 more stops</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button class="gr-btn gr-btn--primary gr-btn--sm">Navigate to Stop</button>
+              <button class="gr-btn gr-btn--outline gr-btn--sm">Record POD</button>
+              <button class="gr-btn gr-btn--secondary gr-btn--sm">Report Issue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending Offers -->
+        <div class="portal-section">
+          <div class="portal-section__title">Route Offers</div>
+          <div class="offer-card">
+            <div>
+              <div class="offer-card__route">Route #R-20260115-007</div>
+              <div class="offer-card__detail">3 stops • 22 km • Est. 1h 30m • Window 10:00 AM – 12:00 PM</div>
+            </div>
+            <div class="offer-card__pay">
+              <div class="offer-card__amount">$48.60</div>
+              <div class="offer-card__breakdown">$15 base + $12.10 km + $13.50 time + $3.75 stops + $4.25 wait</div>
+            </div>
+            <div class="offer-card__actions">
+              <button class="gr-btn gr-btn--primary gr-btn--sm">Accept</button>
+              <button class="gr-btn gr-btn--outline gr-btn--sm">Decline</button>
+              <span style="font-size: 12px; color: var(--text-light); align-self: center; margin-left: auto;">Expires in 4:32</span>
+            </div>
+          </div>
+          <div class="offer-card">
+            <div>
+              <div class="offer-card__route">Route #R-20260115-011</div>
+              <div class="offer-card__detail">4 stops • 31 km • Est. 2h 00m • Window 1:00 PM – 3:30 PM</div>
+            </div>
+            <div class="offer-card__pay">
+              <div class="offer-card__amount">$62.15</div>
+              <div class="offer-card__breakdown">$15 base + $17.05 km + $21.60 time + $5.00 stops + $3.50 wait</div>
+            </div>
+            <div class="offer-card__actions">
+              <button class="gr-btn gr-btn--primary gr-btn--sm">Accept</button>
+              <button class="gr-btn gr-btn--outline gr-btn--sm">Decline</button>
+              <span style="font-size: 12px; color: var(--text-light); align-self: center; margin-left: auto;">Expires in 9:15</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ONBOARDING TAB ============ -->
+      <div id="tab-onboarding" style="display: none;">
+        <div class="portal-header">
+          <div class="portal-header__greeting">Onboarding Checklist</div>
+          <div class="portal-header__sub">Complete all items to start receiving route offers</div>
+        </div>
+
+        <!-- Progress -->
+        <div style="background: var(--surface); border-radius: 12px; padding: 20px 24px; border: 1px solid rgba(0,0,0,0.08); margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 14px; font-weight: 600;">Progress</span>
+            <span style="font-size: 14px; color: var(--text-light);">3 of 5 complete</span>
+          </div>
+          <div style="background: #eee; border-radius: 4px; height: 8px; overflow: hidden;">
+            <div style="background: var(--accent); height: 100%; width: 60%; border-radius: 4px; transition: width 0.3s;"></div>
+          </div>
+        </div>
+
+        <!-- Status pills summary -->
+        <div class="gr-state-diagram" style="margin-bottom: 24px; flex-wrap: wrap;">
+          <span class="gr-state-diagram__node gr-state-diagram__node--active">APPLICANT</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--active">DOCS_PENDING</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--active">BG_CHECK</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">BANKING</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">AGREEMENT</span>
+          <span class="gr-state-diagram__arrow">→</span>
+          <span class="gr-state-diagram__node gr-state-diagram__node--inactive">ACTIVE</span>
+        </div>
+
+        <!-- Checklist items -->
+        <div class="gr-checklist">
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: var(--accent);">✓</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Email & Phone Verification</div>
+              <div class="gr-checklist__desc">Verified on Jan 10, 2026</div>
+            </div>
+            <span class="gr-pill gr-pill--active">Done</span>
+          </div>
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: var(--accent);">✓</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Driver's Licence</div>
+              <div class="gr-checklist__desc">class_g.pdf — Accepted Jan 11</div>
+            </div>
+            <span class="gr-pill gr-pill--active">Done</span>
+          </div>
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: var(--accent);">✓</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Vehicle Insurance</div>
+              <div class="gr-checklist__desc">insurance_cert.pdf — Accepted Jan 11</div>
+            </div>
+            <span class="gr-pill gr-pill--active">Done</span>
+          </div>
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: #f5a623;">⏳</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Background Check</div>
+              <div class="gr-checklist__desc">Submitted Jan 12 — typically 1-3 business days</div>
+            </div>
+            <span class="gr-pill gr-pill--pending">Processing</span>
+          </div>
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: #ccc;">○</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Banking Setup</div>
+              <div class="gr-checklist__desc">Link your bank account for direct deposit via Stripe Connect</div>
+            </div>
+            <div>
+              <button class="gr-btn gr-btn--primary gr-btn--sm" disabled>Awaiting Background Check</button>
+            </div>
+          </div>
+
+          <div class="gr-checklist__item">
+            <div class="gr-checklist__icon" style="color: #ccc;">○</div>
+            <div class="gr-checklist__body">
+              <div class="gr-checklist__title">Contractor Agreement & Pay Disclosure</div>
+              <div class="gr-checklist__desc">Sign independent contractor agreement and DPWRA pay policy disclosure</div>
+            </div>
+            <div>
+              <button class="gr-btn gr-btn--outline gr-btn--sm" disabled>Locked</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Document Upload Area -->
+        <div class="portal-section" style="margin-top: 32px;">
+          <div class="portal-section__title">Upload Documents</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div class="gr-form" style="max-width: 100%;">
+              <div class="gr-form__group">
+                <label class="gr-form__label">Document type</label>
+                <select class="gr-form__select">
+                  <option value="">Select document type...</option>
+                  <option value="licence">Driver's Licence</option>
+                  <option value="insurance">Vehicle Insurance Certificate</option>
+                  <option value="right_to_work">Right to Work in Canada</option>
+                  <option value="vehicle_photo">Vehicle Photo</option>
+                </select>
+              </div>
+              <div style="border: 2px dashed rgba(0,0,0,0.12); border-radius: 12px; padding: 40px; text-align: center;">
+                <div style="font-size: 32px; margin-bottom: 8px;">📄</div>
+                <div style="font-size: 14px; color: var(--text-light);">Drag file here or click to browse</div>
+                <div style="font-size: 12px; color: var(--text-light); margin-top: 4px;">PDF, JPG, PNG • Max 10 MB</div>
+              </div>
+              <button class="gr-btn gr-btn--primary" style="margin-top: 12px;">Upload Document</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ EARNINGS TAB ============ -->
+      <div id="tab-earnings" style="display: none;">
+        <div class="portal-header">
+          <div class="portal-header__greeting">Earnings</div>
+          <div class="portal-header__sub">Pay period: Jan 6 – Jan 12 • Pay day: Friday, Jan 17</div>
+        </div>
+
+        <div class="earnings-summary">
+          <div class="earnings-stat">
+            <div class="earnings-stat__value">$847.30</div>
+            <div class="earnings-stat__label">This Week</div>
+          </div>
+          <div class="earnings-stat">
+            <div class="earnings-stat__value">14</div>
+            <div class="earnings-stat__label">Routes Completed</div>
+          </div>
+          <div class="earnings-stat">
+            <div class="earnings-stat__value">28.5h</div>
+            <div class="earnings-stat__label">Engaged Time</div>
+          </div>
+        </div>
+
+        <!-- Pay statement -->
+        <div class="portal-section">
+          <div class="portal-section__title">Current Pay Statement</div>
+          <div class="gr-card" style="padding: 0; overflow: hidden;">
+            <table class="gr-data-table" style="width: 100%;">
+              <thead>
+                <tr><th>Line Item</th><th style="text-align: right;">Amount</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Base fee (14 routes × $15)</td><td style="text-align: right;">$210.00</td></tr>
+                <tr><td>Distance (486.3 km × $0.55)</td><td style="text-align: right;">$267.47</td></tr>
+                <tr><td>Engaged time (1,710 min × $0.18)</td><td style="text-align: right;">$307.80</td></tr>
+                <tr><td>Stop fee (52 stops × $1.25)</td><td style="text-align: right;">$65.00</td></tr>
+                <tr><td>Wait time (38 min × $0.20, after 10m grace)</td><td style="text-align: right;">$7.60</td></tr>
+                <tr style="border-top: 2px solid var(--primary);">
+                  <td style="font-weight: 700;">Subtotal</td>
+                  <td style="text-align: right; font-weight: 700;">$857.87</td>
+                </tr>
+                <tr><td>Minimum guarantee adjustment</td><td style="text-align: right; color: var(--text-light);">—</td></tr>
+                <tr><td>Hold: Stop #S-047 partial (pending review)</td><td style="text-align: right; color: #c33;">−$10.57</td></tr>
+                <tr style="background: rgba(130,195,65,0.06);">
+                  <td style="font-weight: 700; font-size: 16px;">Net Pay</td>
+                  <td style="text-align: right; font-weight: 700; font-size: 16px; color: var(--primary);">$847.30</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Past statements -->
+        <div class="portal-section">
+          <div class="portal-section__title">Past Pay Statements</div>
+          <div class="gr-card" style="padding: 0; overflow: hidden;">
+            <table class="gr-data-table" style="width: 100%;">
+              <thead>
+                <tr><th>Period</th><th>Routes</th><th>Hours</th><th style="text-align: right;">Net Pay</th><th style="text-align: right;">Status</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Dec 30 – Jan 5</td><td>12</td><td>24.0h</td><td style="text-align: right;">$712.40</td><td style="text-align: right;"><span class="gr-pill gr-pill--active">Paid</span></td></tr>
+                <tr><td>Dec 23 – Dec 29</td><td>10</td><td>20.5h</td><td style="text-align: right;">$598.15</td><td style="text-align: right;"><span class="gr-pill gr-pill--active">Paid</span></td></tr>
+                <tr><td>Dec 16 – Dec 22</td><td>15</td><td>31.0h</td><td style="text-align: right;">$923.70</td><td style="text-align: right;"><span class="gr-pill gr-pill--active">Paid</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- DPWRA + CRA note -->
+        <div class="gr-card" style="padding: 20px; background: rgba(130,195,65,0.04); margin-top: 16px;">
+          <div style="font-size: 13px; font-weight: 600; color: var(--primary); margin-bottom: 4px;">Pay Transparency (DPWRA)</div>
+          <div style="font-size: 13px; color: var(--text-light); line-height: 1.5;">
+            Your pay is calculated as: base per route + per-km + per-engaged-minute + per-stop + wait time (after 10 min grace).
+            Minimum guarantee applies if engaged-hour rate falls below threshold. Pay period: Mon–Sun. Pay day: Friday.
+            If total fees exceed $500 in a calendar year, a CRA T4A (Box 048) will be issued.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ SETTINGS TAB ============ -->
+      <div id="tab-settings" style="display: none;">
+        <div class="portal-header">
+          <div class="portal-header__greeting">Settings</div>
+          <div class="portal-header__sub">Manage your profile, vehicle, and preferences</div>
+        </div>
+
+        <div class="portal-section">
+          <div class="portal-section__title">Profile</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div class="gr-form" style="max-width: 100%;">
+              <div class="gr-grid-2" style="gap: 16px;">
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Full name</label>
+                  <input type="text" class="gr-form__input" value="Jane Driver" readonly>
+                </div>
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Email</label>
+                  <input type="email" class="gr-form__input" value="jane@example.com" readonly>
+                  <div class="gr-form__hint">✓ Verified</div>
+                </div>
+              </div>
+              <div class="gr-grid-2" style="gap: 16px;">
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Phone</label>
+                  <input type="tel" class="gr-form__input" value="+1 (555) 012-3456" readonly>
+                  <div class="gr-form__hint">✓ Verified</div>
+                </div>
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Preferred zone</label>
+                  <select class="gr-form__select">
+                    <option value="hamilton-niagara" selected>Hamilton / Niagara</option>
+                    <option value="gta-east">GTA — East</option>
+                    <option value="gta-west">GTA — West</option>
+                    <option value="gta-north">GTA — North</option>
+                    <option value="kitchener-waterloo">Kitchener-Waterloo</option>
+                    <option value="ottawa">Ottawa</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-section">
+          <div class="portal-section__title">Vehicle</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div class="gr-form" style="max-width: 100%;">
+              <div class="gr-grid-2" style="gap: 16px;">
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Vehicle type</label>
+                  <select class="gr-form__select">
+                    <option value="van" selected>Cargo Van</option>
+                    <option value="car">Car / SUV</option>
+                    <option value="reefer_van">Refrigerated Van</option>
+                    <option value="reefer_truck">Refrigerated Truck</option>
+                    <option value="pickup">Pickup Truck</option>
+                  </select>
+                </div>
+                <div class="gr-form__group">
+                  <label class="gr-form__label">Capacity (kg)</label>
+                  <input type="number" class="gr-form__input" value="500">
+                </div>
+              </div>
+              <button class="gr-btn gr-btn--primary" style="margin-top: 8px;">Save Changes</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-section">
+          <div class="portal-section__title">Banking</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="font-size: 32px;">🏦</div>
+              <div>
+                <div style="font-size: 15px; font-weight: 600;">Stripe Connect</div>
+                <div style="font-size: 13px; color: var(--text-light);">Account ending in •••• 4242 • Last payout Jan 10</div>
+              </div>
+              <button class="gr-btn gr-btn--outline gr-btn--sm" style="margin-left: auto;">Manage</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-section">
+          <div class="portal-section__title">Notifications</div>
+          <div class="gr-card" style="padding: 24px;">
+            <div class="gr-form" style="max-width: 100%;">
+              <label class="gr-form__checkbox"><input type="checkbox" checked><span>Route offer notifications (push)</span></label>
+              <label class="gr-form__checkbox"><input type="checkbox" checked><span>Pay statement ready (email)</span></label>
+              <label class="gr-form__checkbox"><input type="checkbox"><span>Weekly earnings summary (email)</span></label>
+              <label class="gr-form__checkbox"><input type="checkbox" checked><span>Document expiry reminders</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // Simple tab switching
+    document.querySelectorAll('[data-tab]').forEach(link => {
+      link.addEventListener('click', () => {
+        // Hide all tabs
+        document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+        // Deactivate all links
+        document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('portal-sidebar__link--active'));
+        // Show target
+        const target = link.getAttribute('data-tab');
+        document.getElementById('tab-' + target).style.display = 'block';
+        link.classList.add('portal-sidebar__link--active');
+      });
+    });
+  </script>
+</body>
+</html>

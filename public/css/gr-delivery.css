@@ -1,0 +1,494 @@
+/* ══════════════════════════════════════════════════════════════
+   GreenReach Delivery Platform — Namespaced Component Styles
+   File: css/gr-delivery.css
+   Rule: NO edits to global selectors. All classes prefixed gr-
+   Uses existing CSS variables:
+     --primary: #2d5016   --accent: #82c341
+     --text: #1d1d1f      --text-light: #86868b
+     --bg: #fbfbfd        --surface: #ffffff
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Status Pills ─────────────────────────────────────────── */
+.gr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 980px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.gr-pill--active   { background: rgba(130,195,65,0.15); color: #2d5016; }
+.gr-pill--pending  { background: rgba(255,179,0,0.15);  color: #8a6400; }
+.gr-pill--error    { background: rgba(220,53,69,0.12);  color: #a71d2a; }
+.gr-pill--neutral  { background: rgba(0,0,0,0.06);      color: var(--text-light); }
+.gr-pill--info     { background: rgba(45,80,22,0.08);   color: var(--primary); }
+
+.gr-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.gr-pill--active::before  { background: var(--accent); }
+.gr-pill--pending::before { background: #ffb300; }
+.gr-pill--error::before   { background: #dc3545; }
+.gr-pill--neutral::before { background: var(--text-light); }
+.gr-pill--info::before    { background: var(--primary); }
+
+/* ── Vertical Timeline ────────────────────────────────────── */
+.gr-timeline {
+  position: relative;
+  padding: 0;
+  list-style: none;
+}
+.gr-timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: rgba(130,195,65,0.25);
+}
+.gr-timeline__item {
+  position: relative;
+  padding: 0 0 28px 48px;
+  font-size: 15px;
+  line-height: 1.47;
+}
+.gr-timeline__item:last-child { padding-bottom: 0; }
+.gr-timeline__dot {
+  position: absolute;
+  left: 8px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid rgba(130,195,65,0.4);
+  z-index: 1;
+}
+.gr-timeline__item--done .gr-timeline__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.gr-timeline__item--active .gr-timeline__dot {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(45,80,22,0.15);
+}
+.gr-timeline__title {
+  font-weight: 600;
+  color: var(--text);
+}
+.gr-timeline__meta {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* ── Checklist (onboarding) ───────────────────────────────── */
+.gr-checklist {
+  list-style: none;
+  padding: 0;
+}
+.gr-checklist__item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 16px;
+  margin-bottom: 12px;
+  transition: box-shadow 0.2s;
+}
+.gr-checklist__item:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+}
+.gr-checklist__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.gr-checklist__icon--done    { background: rgba(130,195,65,0.15); }
+.gr-checklist__icon--pending { background: rgba(255,179,0,0.12); }
+.gr-checklist__icon--locked  { background: rgba(0,0,0,0.05); }
+.gr-checklist__body {
+  flex: 1;
+}
+.gr-checklist__label {
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text);
+}
+.gr-checklist__desc {
+  font-size: 14px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+.gr-checklist__action {
+  flex-shrink: 0;
+}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.gr-card {
+  background: var(--surface);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 20px;
+  padding: 32px;
+  transition: box-shadow 0.3s;
+}
+.gr-card:hover {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+}
+.gr-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.gr-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(130,195,65,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.gr-card__title {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text);
+}
+.gr-card__subtitle {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+/* POD card */
+.gr-pod-card {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.gr-pod-card__thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  background: rgba(130,195,65,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--primary);
+}
+.gr-pod-card__detail { font-size: 15px; }
+.gr-pod-card__label  { font-size: 13px; color: var(--text-light); margin-bottom: 2px; }
+.gr-pod-card__value  { font-weight: 500; color: var(--text); }
+
+/* Map / ETA card */
+.gr-map-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 200px;
+  background: linear-gradient(135deg, rgba(130,195,65,0.06) 0%, rgba(45,80,22,0.04) 100%);
+}
+.gr-map-card__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-light);
+  font-size: 15px;
+  gap: 8px;
+}
+.gr-map-card__placeholder span { font-size: 48px; }
+.gr-map-card__eta {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: var(--surface);
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+.gr-map-card__eta-label { font-size: 12px; color: var(--text-light); }
+.gr-map-card__eta-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+
+/* Pay statement card */
+.gr-pay-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 16px;
+  margin-bottom: 10px;
+}
+.gr-pay-card__label { font-size: 15px; color: var(--text); }
+.gr-pay-card__detail { font-size: 13px; color: var(--text-light); }
+.gr-pay-card__amount {
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--primary);
+  text-align: right;
+}
+
+/* ── State Machine Diagram ────────────────────────────────── */
+.gr-state-diagram {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 24px;
+}
+.gr-state-diagram__node {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 2px solid transparent;
+}
+.gr-state-diagram__node--inactive {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-light);
+  border-color: rgba(0,0,0,0.08);
+}
+.gr-state-diagram__node--active {
+  background: rgba(130,195,65,0.15);
+  color: var(--primary);
+  border-color: var(--accent);
+}
+.gr-state-diagram__node--warn {
+  background: rgba(220,53,69,0.08);
+  color: #a71d2a;
+  border-color: rgba(220,53,69,0.2);
+}
+.gr-state-diagram__arrow {
+  font-size: 18px;
+  color: var(--text-light);
+  padding: 0 4px;
+}
+
+/* ── Data Tables ──────────────────────────────────────────── */
+.gr-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.gr-data-table thead th {
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  text-align: left;
+  padding: 14px 16px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gr-data-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  color: var(--text);
+  vertical-align: top;
+}
+.gr-data-table tbody tr:last-child td { border-bottom: none; }
+.gr-data-table tbody tr:nth-child(even) { background: rgba(130,195,65,0.02); }
+.gr-data-table code {
+  background: rgba(45,80,22,0.06);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--primary);
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
+/* ── Forms ────────────────────────────────────────────────── */
+.gr-form { max-width: 540px; }
+.gr-form__group {
+  margin-bottom: 24px;
+}
+.gr-form__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.gr-form__hint {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+.gr-form__input,
+.gr-form__select,
+.gr-form__textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none;
+}
+.gr-form__input:focus,
+.gr-form__select:focus,
+.gr-form__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(130,195,65,0.15);
+}
+.gr-form__textarea { min-height: 100px; resize: vertical; }
+.gr-form__checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.gr-form__checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.gr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border-radius: 980px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition: background 0.3s, transform 0.2s, box-shadow 0.2s;
+  text-decoration: none;
+}
+.gr-btn:active { transform: scale(0.98); }
+.gr-btn--primary {
+  background: var(--primary);
+  color: white;
+}
+.gr-btn--primary:hover {
+  background: var(--accent);
+  color: var(--primary);
+}
+.gr-btn--secondary {
+  background: rgba(45,80,22,0.08);
+  color: var(--primary);
+}
+.gr-btn--secondary:hover {
+  background: rgba(45,80,22,0.14);
+}
+.gr-btn--sm {
+  padding: 8px 18px;
+  font-size: 14px;
+}
+.gr-btn--outline {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--primary);
+}
+.gr-btn--outline:hover {
+  background: var(--primary);
+  color: white;
+}
+
+/* ── Section Tabs ─────────────────────────────────────────── */
+.gr-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.04);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+.gr-tabs__tab {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-light);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.gr-tabs__tab--active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Layout helpers ───────────────────────────────────────── */
+.gr-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.gr-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.gr-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.gr-section {
+  padding: 80px 22px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.gr-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.06);
+  margin: 60px 0;
+}
+
+/* ── YAML / Code block ────────────────────────────────────── */
+.gr-code-block {
+  background: #1d1d1f;
+  color: #e0e0e0;
+  border-radius: 16px;
+  padding: 28px 32px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-x: auto;
+  white-space: pre;
+}
+.gr-code-block .gr-code-key   { color: var(--accent); }
+.gr-code-block .gr-code-str   { color: #f5c542; }
+.gr-code-block .gr-code-num   { color: #7ec8e3; }
+.gr-code-block .gr-code-comment { color: #6a6a6a; }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .gr-grid-2 { grid-template-columns: 1fr; }
+  .gr-grid-3 { grid-template-columns: 1fr; }
+  .gr-grid-4 { grid-template-columns: 1fr 1fr; }
+  .gr-state-diagram { justify-content: center; }
+  .gr-tabs { flex-wrap: wrap; }
+  .gr-pod-card { grid-template-columns: 1fr; }
+}
