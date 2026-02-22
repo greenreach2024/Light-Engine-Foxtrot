@@ -1,15 +1,21 @@
 /**
  * Purchase Leads CRM Endpoint
  * Handles pre-order/interest submissions from purchase.html page
+ * Persisted to NeDB (Phase 0, Ticket 0.3)
  */
 
 import express from 'express';
 import crypto from 'crypto';
+import Datastore from '@seald-io/nedb';
 
 const router = express.Router();
 
-// In-memory storage (would be database in production)
-const leads = new Map();
+// Persistent storage — NeDB backed (replaces volatile in-memory Map)
+const leadsDB = Datastore.create({
+  filename: './data/purchase-leads.db',
+  autoload: true,
+  timestampData: true
+});
 
 /**
  * Generate unique lead ID
@@ -72,8 +78,8 @@ router.post('/leads', async (req, res) => {
       updated_at: timestamp
     };
 
-    // Save lead
-    leads.set(leadId, lead);
+    // Save lead to persistent DB
+    await leadsDB.insert(lead);
 
     console.log(`[Purchase CRM] New lead created: ${leadId} - ${farmName} (${email})`);
 
@@ -103,9 +109,9 @@ router.post('/leads', async (req, res) => {
  * GET /api/purchase/leads
  * Retrieve all leads (admin/internal use)
  */
-router.get('/leads', (req, res) => {
+router.get('/leads', async (req, res) => {
   try {
-    const allLeads = Array.from(leads.values());
+    const allLeads = await leadsDB.find({}).sort({ created_at: -1 });
     
     return res.json({
       ok: true,
@@ -125,10 +131,10 @@ router.get('/leads', (req, res) => {
  * GET /api/purchase/leads/:leadId
  * Retrieve specific lead
  */
-router.get('/leads/:leadId', (req, res) => {
+router.get('/leads/:leadId', async (req, res) => {
   try {
     const { leadId } = req.params;
-    const lead = leads.get(leadId);
+    const lead = await leadsDB.findOne({ lead_id: leadId });
 
     if (!lead) {
       return res.status(404).json({
@@ -154,12 +160,12 @@ router.get('/leads/:leadId', (req, res) => {
  * PUT /api/purchase/leads/:leadId/status
  * Update lead status (contacted, scheduled, converted, declined)
  */
-router.put('/leads/:leadId/status', (req, res) => {
+router.put('/leads/:leadId/status', async (req, res) => {
   try {
     const { leadId } = req.params;
     const { status, notes } = req.body;
 
-    const lead = leads.get(leadId);
+    const lead = await leadsDB.findOne({ lead_id: leadId });
     if (!lead) {
       return res.status(404).json({
         ok: false,
@@ -167,15 +173,18 @@ router.put('/leads/:leadId/status', (req, res) => {
       });
     }
 
-    lead.status = status;
-    lead.notes = notes || lead.notes;
-    lead.updated_at = new Date().toISOString();
+    const updateFields = {
+      status,
+      updated_at: new Date().toISOString()
+    };
+    if (notes) updateFields.notes = notes;
 
-    leads.set(leadId, lead);
+    await leadsDB.update({ lead_id: leadId }, { $set: updateFields });
+    const updated = await leadsDB.findOne({ lead_id: leadId });
 
     return res.json({
       ok: true,
-      lead
+      lead: updated
     });
   } catch (error) {
     console.error('[Purchase CRM] Failed to update lead:', error);

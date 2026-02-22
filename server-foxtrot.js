@@ -9904,6 +9904,31 @@ app.post('/api/harvest', (req, res) => {
     
     console.log(`[Harvest API] Recorded harvest for group ${harvestEntry.groupId}, variance: ${harvestEntry.variance} days`);
     
+    // ── Phase 0 Task 0.4: Auto-generate experiment record on harvest ────
+    // Non-blocking — failure here does not block the harvest response
+    try {
+      const experimentInput = {
+        groupId: harvestEntry.groupId,
+        crop: harvestEntry.crop || harvestEntry.cropName || null,
+        recipe_id: harvestEntry.recipeId || harvestEntry.recipe_id || null,
+        grow_days: harvestEntry.growDays || harvestEntry.grow_days || null,
+        planned_grow_days: harvestEntry.plannedGrowDays || harvestEntry.planned_grow_days || null,
+        weight_per_plant_oz: harvestEntry.weightPerPlant || harvestEntry.weight_per_plant_oz || null,
+        total_weight_oz: harvestEntry.totalWeight || harvestEntry.total_weight_oz || null,
+        planted_site_count: harvestEntry.plantedSiteCount || harvestEntry.planted_site_count || null,
+        zone: harvestEntry.zone || null,
+        room: harvestEntry.room || null,
+      };
+      const record = await buildExperimentRecord(experimentInput);
+      await harvestOutcomesDB.insert(record);
+      console.log(`[Harvest API] ✓ Experiment record auto-created for ${record.crop || harvestEntry.groupId}`);
+      syncExperimentToCenter(record).catch(e =>
+        console.warn('[Harvest API] Experiment Central sync deferred:', e?.message)
+      );
+    } catch (expErr) {
+      console.warn('[Harvest API] Experiment record creation failed (non-fatal):', expErr.message);
+    }
+
     return res.json({ 
       ok: true, 
       message: 'Harvest recorded successfully',
@@ -17369,12 +17394,41 @@ app.get('/api/inventory/forecast/:days?', (req, res) => {
 // =====================================================
 // INVENTORY MANAGEMENT CRUD API
 // =====================================================
-// In-memory stores for farm supplies inventory
+// NeDB-backed stores for farm supplies inventory (Phase 0, Ticket 0.2)
+// In-memory arrays kept for fast reads; every mutation writes through to NeDB.
+const seedsInventoryDB = Datastore.create({ filename: './data/seeds-inventory.db', autoload: true });
+const packagingInventoryDB = Datastore.create({ filename: './data/packaging-inventory.db', autoload: true });
+const nutrientsInventoryDB = Datastore.create({ filename: './data/nutrients-inventory.db', autoload: true });
+const equipmentInventoryDB = Datastore.create({ filename: './data/equipment-inventory.db', autoload: true });
+const suppliesInventoryDB = Datastore.create({ filename: './data/supplies-inventory.db', autoload: true });
+
 const seedsInventory = [];
 const packagingInventory = [];
 const nutrientsInventory = [];
 const equipmentInventory = [];
 const suppliesInventory = [];
+
+// Load persisted inventory into memory on startup
+(async function loadPersistedInventories() {
+  try {
+    const [seeds, packaging, nutrients, equipment, supplies] = await Promise.all([
+      seedsInventoryDB.find({}),
+      packagingInventoryDB.find({}),
+      nutrientsInventoryDB.find({}),
+      equipmentInventoryDB.find({}),
+      suppliesInventoryDB.find({})
+    ]);
+    seedsInventory.push(...seeds);
+    packagingInventory.push(...packaging);
+    nutrientsInventory.push(...nutrients);
+    equipmentInventory.push(...equipment);
+    suppliesInventory.push(...supplies);
+    const total = seeds.length + packaging.length + nutrients.length + equipment.length + supplies.length;
+    if (total > 0) console.log(`[inventory] Loaded ${total} persisted supply items (${seeds.length} seeds, ${packaging.length} packaging, ${nutrients.length} nutrients, ${equipment.length} equipment, ${supplies.length} supplies)`);
+  } catch (err) {
+    console.warn('[inventory] Failed to load persisted inventories:', err.message);
+  }
+})();
 
 // Helper to generate unique IDs
 function generateId(prefix) {
@@ -17487,6 +17541,7 @@ app.post('/api/inventory/seeds', (req, res) => {
     created_at: new Date().toISOString()
   };
   seedsInventory.push(seed);
+  seedsInventoryDB.insert(seed).catch(e => console.warn('[inventory] Seed persist failed:', e.message));
   res.json({ ok: true, seed });
 });
 
@@ -17500,6 +17555,7 @@ app.put('/api/inventory/seeds/:id', (req, res) => {
     ...req.body,
     updated_at: new Date().toISOString()
   };
+  seedsInventoryDB.update({ seed_id: req.params.id }, seedsInventory[index], { upsert: true }).catch(e => console.warn('[inventory] Seed update persist failed:', e.message));
   res.json({ ok: true, seed: seedsInventory[index] });
 });
 
@@ -17509,6 +17565,7 @@ app.delete('/api/inventory/seeds/:id', (req, res) => {
   if (index === -1) return res.status(404).json({ ok: false, message: 'Seed not found' });
   
   seedsInventory.splice(index, 1);
+  seedsInventoryDB.remove({ seed_id: req.params.id }, {}).catch(e => console.warn('[inventory] Seed delete persist failed:', e.message));
   res.json({ ok: true, message: 'Seed deleted' });
 });
 
@@ -17534,6 +17591,7 @@ app.post('/api/inventory/packaging', (req, res) => {
     created_at: new Date().toISOString()
   };
   packagingInventory.push(packaging);
+  packagingInventoryDB.insert(packaging).catch(e => console.warn('[inventory] Packaging persist failed:', e.message));
   res.json({ ok: true, packaging });
 });
 
@@ -17547,6 +17605,7 @@ app.post('/api/inventory/packaging/:id/restock', (req, res) => {
   pkg.last_restocked = new Date().toISOString();
   pkg.restock_notes = notes;
   
+  packagingInventoryDB.update({ packaging_id: req.params.id }, pkg, { upsert: true }).catch(e => console.warn('[inventory] Packaging restock persist failed:', e.message));
   res.json({ ok: true, packaging: pkg });
 });
 
@@ -17574,6 +17633,7 @@ app.post('/api/inventory/nutrients/:id/usage', (req, res) => {
   nutrient.last_used = date || new Date().toISOString();
   nutrient.applied_to = applied_to;
   
+  nutrientsInventoryDB.update({ nutrient_id: req.params.id }, nutrient, { upsert: true }).catch(e => console.warn('[inventory] Nutrient usage persist failed:', e.message));
   res.json({ ok: true, nutrient });
 });
 
@@ -17613,6 +17673,7 @@ app.post('/api/inventory/equipment/:id/maintenance', (req, res) => {
   
   equipment.last_maintenance = date_performed;
   
+  equipmentInventoryDB.update({ equipment_id: req.params.id }, equipment, { upsert: true }).catch(e => console.warn('[inventory] Equipment maintenance persist failed:', e.message));
   res.json({ ok: true, equipment });
 });
 
@@ -17640,6 +17701,7 @@ app.post('/api/inventory/supplies/:id/usage', (req, res) => {
   supply.last_used = date || new Date().toISOString();
   supply.usage_purpose = purpose;
   
+  suppliesInventoryDB.update({ supply_id: req.params.id }, supply, { upsert: true }).catch(e => console.warn('[inventory] Supply usage persist failed:', e.message));
   res.json({ ok: true, supply });
 });
 
@@ -18934,6 +18996,39 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       endpoint: '/api/printer/print-harvest'
     };
 
+    // ── Phase 0 Task 0.4: Auto-generate experiment record on tray harvest ──
+    // Non-blocking — failure here does not block the harvest response
+    let experiment_id = null;
+    try {
+      const seedDate = trayRun.seeded_at || trayRun.created_at;
+      const growDays = seedDate ? Math.floor((now - new Date(seedDate)) / 86400000) : null;
+      const weightPerPlant = (weight && harvestedCount) ? +(weight / harvestedCount).toFixed(3) : null;
+
+      const experimentInput = {
+        groupId: trayRun.group_id || trayRun.groupId || trayRunId,
+        crop: trayRun.recipe_id || trayRun.crop || null,
+        recipe_id: trayRun.recipe_id || null,
+        grow_days: growDays,
+        planned_grow_days: null,
+        weight_per_plant_oz: weightPerPlant,
+        total_weight_oz: weight,
+        planted_site_count: harvestedCount,
+        tray_format: trayRun.tray_format_id || null,
+        system_type: null,
+        zone: trayRun.zone || null,
+        room: trayRun.room || null,
+      };
+      const record = await buildExperimentRecord(experimentInput);
+      const inserted = await harvestOutcomesDB.insert(record);
+      experiment_id = inserted._id;
+      console.log(`[tray-runs] ✓ Experiment record auto-created for ${record.crop || trayRunId}`);
+      syncExperimentToCenter(record).catch(e =>
+        console.warn('[tray-runs] Experiment Central sync deferred:', e?.message)
+      );
+    } catch (expErr) {
+      console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
+    }
+
     res.json({
       success: true,
       trayRunId,
@@ -18947,6 +19042,7 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
         ? 'This tray has been selected for a full weigh-in. Please weigh the entire cut crop and record the weight.'
         : null,
       trace_id: traceRecord?.trace_id || null,
+      experiment_id: experiment_id || null,
       label_print: labelPrintData
     });
   } catch (error) {

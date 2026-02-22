@@ -140,7 +140,7 @@ async function checkOutdoorSensorValidity() {
       return {
         valid: false,
         reason: 'No environmental data file found and weather API unavailable',
-        gate: { allowed: false, reason: 'no_env_data' }
+        gate: { allowed: true, degraded: true, reason: 'no_env_data', message: 'No environmental data file found and weather API unavailable — ML proceeding in degraded mode' }
       };
     }
     
@@ -176,7 +176,7 @@ async function checkOutdoorSensorValidity() {
       return {
         valid: false,
         reason: 'No outdoor sensor found in environmental data and weather API unavailable',
-        gate: { allowed: false, reason: 'no_outdoor_sensor' }
+        gate: { allowed: true, degraded: true, reason: 'no_outdoor_sensor', message: 'No outdoor sensor found and weather API unavailable — ML proceeding in degraded mode' }
       };
     }
     
@@ -201,7 +201,7 @@ async function checkOutdoorSensorValidity() {
     return {
       valid: false,
       reason: err.message,
-      gate: { allowed: false, reason: 'validation_error' }
+      gate: { allowed: true, degraded: true, reason: 'validation_error', message: `Outdoor sensor check failed (${err.message}) — ML proceeding in degraded mode` }
     };
   }
 }
@@ -310,6 +310,7 @@ async function runAnomalyDetection() {
   
   // Check outdoor sensor validity first
   const sensorCheck = await checkOutdoorSensorValidity();
+  const isDegraded = sensorCheck.gate.degraded === true;
   
   if (!sensorCheck.gate.allowed) {
     const message = sensorCheck.gate.message || sensorCheck.reason || 'Outdoor sensor validation failed';
@@ -330,7 +331,11 @@ async function runAnomalyDetection() {
     return { ok: false, error: message, ml_gated: true };
   }
   
-  log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+  if (isDegraded) {
+    log.warn(`Anomaly detection running in DEGRADED mode (indoor-only features): ${sensorCheck.gate.message}`);
+  } else {
+    log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+  }
   
   try {
     const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'simple-anomaly-detector.py');
@@ -408,6 +413,7 @@ async function runForecast(zone, hours = CONFIG.forecastHours) {
   
   // Check outdoor sensor validity first
   const sensorCheck = await checkOutdoorSensorValidity();
+  const isDegraded = sensorCheck.gate.degraded === true;
   
   if (!sensorCheck.gate.allowed) {
     log.warn(`Skipping forecast for ${zone}: ${sensorCheck.gate.message}`);
@@ -427,7 +433,11 @@ async function runForecast(zone, hours = CONFIG.forecastHours) {
     return { ok: false, zone, error: sensorCheck.gate.message, ml_gated: true };
   }
   
-  log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+  if (isDegraded) {
+    log.warn(`Forecast for ${zone} running in DEGRADED mode (indoor-only features): ${sensorCheck.gate.message}`);
+  } else {
+    log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+  }
   
   try {
     const scriptPath = path.join(PROJECT_ROOT, 'backend', 'predictive_forecast.py');
