@@ -2100,7 +2100,10 @@
       
       try {
         const fileName = `room-map-${STATE.currentRoomId}.json`;
-        const response = await fetch(`/data/${fileName}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/data/${fileName}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (response.status === 404) {
           console.debug('[Room Mapper] No saved map for this room, starting fresh');
           return;
@@ -2126,9 +2129,11 @@
       }
       
       try {
-        // Try to load room-specific map first
+        // Try to load room-specific map first (with auth for farm-scoped data)
+        const token = localStorage.getItem('token');
+        const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
         const fileName = `room-map-${STATE.currentRoomId}.json`;
-        const response = await fetch(`/data/${fileName}`);
+        const response = await fetch(`/data/${fileName}`, { headers: authHeaders });
         if (response.ok) {
           const mapData = await response.json();
           await loadExistingMapData(mapData);
@@ -2137,7 +2142,7 @@
         }
         
         // Fallback: try legacy room-map.json if it exists and matches current room
-        const legacyResponse = await fetch('/data/room-map.json');
+        const legacyResponse = await fetch('/data/room-map.json', { headers: authHeaders });
         if (legacyResponse.ok) {
           const legacyData = await legacyResponse.json();
           if (legacyData.roomId === STATE.currentRoomId || legacyData.roomId === 'default') {
