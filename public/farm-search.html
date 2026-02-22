@@ -537,36 +537,70 @@
     let userLat = null;
     let userLng = null;
     
-    // Use browser geolocation
+    // Use browser geolocation or IP-based fallback
     async function useMyLocation() {
       const btn = event.target.closest('button');
       const originalText = btn.innerHTML;
       btn.innerHTML = '<span>🔄</span> Locating...';
       btn.disabled = true;
       
-      try {
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000
+      // Check if geolocation is available and we're on HTTPS
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+      
+      if (isSecure && navigator.geolocation) {
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000
+            });
           });
-        });
-        
-        userLat = position.coords.latitude;
-        userLng = position.coords.longitude;
-        
-        document.getElementById('searchLocation').value = 'Current Location';
-        btn.innerHTML = '<span>✓</span> Location Set';
-        
-        // Auto-search after getting location
-        searchFarms();
-        
-      } catch (error) {
-        console.error('Geolocation failed:', error);
-        alert('Could not get your location. Please enter a city or postal code instead.');
-        btn.innerHTML = originalText;
+          
+          userLat = position.coords.latitude;
+          userLng = position.coords.longitude;
+          
+          document.getElementById('searchLocation').value = 'Current Location';
+          btn.innerHTML = '<span>✓</span> Location Set';
+          btn.disabled = false;
+          
+          // Auto-search after getting location
+          searchFarms();
+          return;
+          
+        } catch (error) {
+          console.warn('Browser geolocation failed, trying IP fallback:', error);
+        }
       }
       
+      // Fallback: Use IP-based geolocation (works over HTTP)
+      try {
+        const response = await fetch('https://ipapi.co/json/');
+        const data = await response.json();
+        
+        if (data.latitude && data.longitude) {
+          userLat = data.latitude;
+          userLng = data.longitude;
+          
+          const locationName = data.city ? `${data.city}, ${data.region_code || data.country_code}` : 'Approximate Location';
+          document.getElementById('searchLocation').value = locationName;
+          btn.innerHTML = '<span>✓</span> Location Set';
+          btn.disabled = false;
+          
+          // Auto-search
+          searchFarms();
+          return;
+        }
+      } catch (error) {
+        console.warn('IP geolocation failed:', error);
+      }
+      
+      // All methods failed
+      const message = isSecure 
+        ? 'Could not determine your location. Please enter a city or postal code.'
+        : 'Location services require HTTPS. Please enter a city or postal code to search.';
+      
+      alert(message);
+      btn.innerHTML = originalText;
       btn.disabled = false;
     }
     
