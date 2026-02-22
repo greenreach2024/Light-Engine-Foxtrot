@@ -593,9 +593,11 @@ async function syncFarmData(options = {}) {
         
         if (response.ok) {
           const data = await response.text();
-          const localPath = path.join(FARM_DATA_DIR, file);
-          fs.writeFileSync(localPath, data, 'utf8');
-          logger.info(`[${syncLabel}] Updated ${file} from edge device`);
+          // DO NOT write to flat files — flat files in public/data/ are
+          // served by express.static to unauthenticated requests, causing
+          // cross-farm data leaks. The DB upsert below is the correct
+          // persistence path for multi-tenant mode.
+          logger.info(`[${syncLabel}] Fetched ${file} from edge device (DB upsert follows)`);
           updated++;
         }
       } catch (err) {

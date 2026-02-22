@@ -14,9 +14,26 @@
  * server URL.
  */
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
+
+// Lazy-loaded farm API key cache for X-Farm-ID validation
+let _farmApiKeys = null;
+function loadFarmApiKeys() {
+  if (_farmApiKeys !== null) return _farmApiKeys;
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const keysPath = resolve(__dirname, '..', 'public', 'data', 'farm-api-keys.json');
+    _farmApiKeys = JSON.parse(readFileSync(keysPath, 'utf8'));
+  } catch {
+    _farmApiKeys = {};
+  }
+  return _farmApiKeys;
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 
@@ -68,9 +85,23 @@ function extractFarmId(req) {
     }
   }
 
-  // 2. X-Farm-ID header (edge device / API key auth)
-  if (req.headers['x-farm-id']) {
-    return req.headers['x-farm-id'];
+  // 2. X-Farm-ID header — ONLY trust if accompanied by a valid API key
+  const headerFarmId = req.headers['x-farm-id'];
+  const headerApiKey = req.headers['x-api-key'];
+  if (headerFarmId && headerApiKey) {
+    // Validate against env-based key first
+    const envKey = process.env.WHOLESALE_FARM_API_KEY;
+    if (envKey && headerApiKey === envKey) {
+      return headerFarmId;
+    }
+    // Check farm-api-keys.json
+    const keys = loadFarmApiKeys();
+    const farmEntry = keys[headerFarmId];
+    if (farmEntry?.api_key === headerApiKey && farmEntry?.status === 'active') {
+      return headerFarmId;
+    }
+    // Invalid API key — do NOT trust the X-Farm-ID
+    logger.warn(`[FarmData] Rejected X-Farm-ID '${headerFarmId}' — invalid API key`);
   }
 
   // 3. Session/cookie-based farmId (future)
@@ -127,8 +158,19 @@ export function farmDataMiddleware(inMemoryStore) {
 
     const farmId = extractFarmId(req);
 
-    // No farm context → fall through to flat file (legacy single-farm mode)
-    if (!farmId) return next();
+    // No farm context → return empty defaults for mapped data files.
+    // NEVER fall through to express.static for data files — those flat files
+    // may contain another farm's data, causing cross-farm data leaks.
+    if (!farmId) {
+      const emptyDefault = EMPTY_DEFAULTS[fileName];
+      if (emptyDefault != null) {
+        logger.debug(`[FarmData] No farm context for ${fileName}, returning empty default`);
+        return res.json(typeof emptyDefault === 'object' && !Array.isArray(emptyDefault)
+          ? { ...emptyDefault }
+          : emptyDefault);
+      }
+      return next();
+    }
 
     // 1. Try database
     const dbData = await loadFromDatabase(farmId, dataType);
