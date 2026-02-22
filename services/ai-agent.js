@@ -6,9 +6,68 @@
  * - Executes system commands based on intent
  * - Provides context-aware responses
  * - Includes safety controls and confirmation for destructive actions
+ * - Permission matrix gates actions by agent class and approval tier
  */
 
 import axios from 'axios';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ── Permission matrix ──────────────────────────────────────────────────
+let agentPermissions = null;
+
+function loadPermissions() {
+  if (agentPermissions) return agentPermissions;
+  try {
+    const raw = readFileSync(join(__dirname, '..', 'data', 'agent-permissions.json'), 'utf-8');
+    agentPermissions = JSON.parse(raw);
+    console.log('[AI Agent] Permission matrix loaded —', Object.keys(agentPermissions.agent_classes).length, 'agent classes');
+  } catch (err) {
+    console.error('[AI Agent] Failed to load agent-permissions.json:', err.message);
+    agentPermissions = { agent_classes: {}, defaults: { unknown_action_tier: 'require-approval' } };
+  }
+  return agentPermissions;
+}
+
+/**
+ * Check whether an agent class is allowed to perform an action and at what tier.
+ * @param {string} agentClass - Agent class (e.g. 'farm-operator', 'admin-ops')
+ * @param {string} category   - Action category (e.g. 'orders')
+ * @param {string} action     - Specific action (e.g. 'create_order')
+ * @returns {{ allowed: boolean, tier: string, reason?: string }}
+ */
+export function checkPermission(agentClass, category, action) {
+  const perms = loadPermissions();
+  const defaults = perms.defaults || {};
+
+  // Resolve agent class — fall back to default
+  const className = perms.agent_classes[agentClass]
+    ? agentClass
+    : (defaults.unknown_agent_class || 'farm-operator');
+
+  const classDef = perms.agent_classes[className];
+  if (!classDef) {
+    return { allowed: false, tier: 'require-approval', reason: `Unknown agent class: ${agentClass}` };
+  }
+
+  const catPerms = classDef.capabilities?.[category];
+  if (!catPerms) {
+    return { allowed: false, tier: 'require-approval', reason: `Agent class "${className}" has no access to category "${category}"` };
+  }
+
+  const actionPerm = catPerms[action];
+  if (!actionPerm) {
+    // Action not listed — use default tier
+    const fallbackTier = defaults.unknown_action_tier || 'require-approval';
+    return { allowed: fallbackTier !== 'require-approval', tier: fallbackTier, reason: `Action "${action}" not explicitly listed; defaulting to ${fallbackTier}` };
+  }
+
+  return { allowed: true, tier: actionPerm.tier };
+}
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -123,7 +182,7 @@ export async function parseCommand(userMessage, conversationHistory = []) {
  * @returns {Promise<object>} Action result
  */
 export async function executeAction(intent, context) {
-  const { farmStores, farmId, userId } = context;
+  const { farmStores, farmId, userId, agentClass } = context;
   const [category, action] = intent.intent.split('.');
 
   // Verify capability exists
@@ -135,29 +194,66 @@ export async function executeAction(intent, context) {
     };
   }
 
+  // ── Permission gate ──────────────────────────────────────────────────
+  const perm = checkPermission(agentClass || 'farm-operator', category, action);
+
+  if (!perm.allowed) {
+    console.log(`[AI Agent] BLOCKED ${intent.intent} for class="${agentClass}": ${perm.reason}`);
+    return {
+      success: false,
+      error: 'permission_denied',
+      message: perm.reason || `Agent class "${agentClass}" is not permitted to perform ${intent.intent}`,
+      tier: perm.tier
+    };
+  }
+
+  if (perm.tier === 'require-approval') {
+    console.log(`[AI Agent] APPROVAL REQUIRED for ${intent.intent} (class="${agentClass}")`);
+    return {
+      success: false,
+      error: 'approval_required',
+      message: `This action requires human approval before execution: ${intent.intent}`,
+      tier: 'require-approval',
+      intent: intent
+    };
+  }
+
+  if (perm.tier === 'recommend') {
+    // Allow execution but flag the result as a recommendation
+    console.log(`[AI Agent] RECOMMEND tier for ${intent.intent} (class="${agentClass}")`);
+  }
+
   // Execute based on category and action
   try {
+    let result;
     switch (category) {
       case 'inventory':
-        return await executeInventoryAction(action, intent.parameters, context);
+        result = await executeInventoryAction(action, intent.parameters, context);
+        break;
       
       case 'orders':
-        return await executeOrdersAction(action, intent.parameters, context);
+        result = await executeOrdersAction(action, intent.parameters, context);
+        break;
       
       case 'sales':
-        return await executeSalesAction(action, intent.parameters, context);
+        result = await executeSalesAction(action, intent.parameters, context);
+        break;
       
       case 'reports':
-        return await executeReportsAction(action, intent.parameters, context);
+        result = await executeReportsAction(action, intent.parameters, context);
+        break;
       
       case 'checklists':
-        return await executeChecklistsAction(action, intent.parameters, context);
+        result = await executeChecklistsAction(action, intent.parameters, context);
+        break;
       
       case 'monitoring':
-        return await executeMonitoringAction(action, intent.parameters, context);
+        result = await executeMonitoringAction(action, intent.parameters, context);
+        break;
       
       case 'system':
-        return await executeSystemAction(action, intent.parameters, context);
+        result = await executeSystemAction(action, intent.parameters, context);
+        break;
       
       default:
         return {
@@ -166,6 +262,14 @@ export async function executeAction(intent, context) {
           message: `Category not implemented: ${category}`
         };
     }
+
+    // Tag recommend-tier results so the UI can present them as suggestions
+    if (perm.tier === 'recommend' && result?.success) {
+      result.tier = 'recommend';
+      result.requiresConfirmation = true;
+    }
+
+    return result;
   } catch (error) {
     console.error(`[AI Agent] Action execution failed (${intent.intent}):`, error);
     return {
@@ -724,5 +828,6 @@ async function executeMonitoringAction(action, params, context) {
 export default {
   parseCommand,
   executeAction,
+  checkPermission,
   SYSTEM_CAPABILITIES
 };

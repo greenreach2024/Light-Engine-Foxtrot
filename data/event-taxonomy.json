@@ -1,0 +1,179 @@
+{
+  "$schema": "event-taxonomy-v1",
+  "version": "1.0.0",
+  "description": "Canonical event names and schemas for Light Engine Foxtrot. All system events should emit payloads conforming to these definitions.",
+  "events": {
+    "seed": {
+      "name": "seed",
+      "category": "grow",
+      "description": "Seeds planted into a tray or grow site",
+      "emitted_by": ["server-foxtrot.js:POST /api/tray-runs"],
+      "payload": {
+        "event_type": "seed",
+        "tray_run_id": "string",
+        "group_id": "string|null",
+        "crop": "string",
+        "variety": "string|null",
+        "seed_count": "number",
+        "tray_format": "string|null",
+        "zone": "string|null",
+        "room": "string|null",
+        "recipe_id": "string|null",
+        "seeded_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "transplant": {
+      "name": "transplant",
+      "category": "grow",
+      "description": "Plants moved from one tray/zone to another",
+      "emitted_by": [],
+      "payload": {
+        "event_type": "transplant",
+        "tray_run_id": "string",
+        "from_zone": "string",
+        "to_zone": "string",
+        "plant_count": "number",
+        "crop": "string",
+        "transplanted_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    },
+    "harvest": {
+      "name": "harvest",
+      "category": "grow",
+      "description": "Crop harvested from a tray or grow site",
+      "emitted_by": [
+        "server-foxtrot.js:POST /api/harvest",
+        "server-foxtrot.js:POST /api/tray-runs/:id/harvest"
+      ],
+      "payload": {
+        "event_type": "harvest",
+        "tray_run_id": "string|null",
+        "group_id": "string|null",
+        "crop": "string",
+        "total_weight_oz": "number",
+        "harvested_count": "number",
+        "planted_count": "number",
+        "loss_count": "number",
+        "grow_days": "number",
+        "quality_grade": "string|null",
+        "experiment_id": "string|null",
+        "zone": "string|null",
+        "room": "string|null",
+        "harvested_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "loss": {
+      "name": "loss",
+      "category": "grow",
+      "description": "Plant loss recorded (disease, mechanical, environmental, etc.)",
+      "emitted_by": ["server-foxtrot.js:POST /api/tray-runs/:id/loss"],
+      "payload": {
+        "event_type": "loss",
+        "tray_run_id": "string",
+        "group_id": "string|null",
+        "crop": "string",
+        "loss_count": "number",
+        "loss_reason": "string",
+        "loss_category": "disease|mechanical|environmental|pest|other",
+        "zone": "string|null",
+        "reported_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
+    },
+    "order": {
+      "name": "order",
+      "category": "commerce",
+      "description": "Wholesale or retail order placed by a buyer",
+      "emitted_by": ["server-foxtrot.js:POST /api/wholesale/webhook/order"],
+      "payload": {
+        "event_type": "order",
+        "order_id": "string",
+        "buyer_id": "string",
+        "items": "array",
+        "total_amount": "number",
+        "currency": "string",
+        "status": "string",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    },
+    "delivery": {
+      "name": "delivery",
+      "category": "commerce",
+      "description": "Order delivered or picked up by buyer",
+      "emitted_by": [],
+      "payload": {
+        "event_type": "delivery",
+        "order_id": "string",
+        "delivery_method": "pickup|delivery",
+        "delivered_at": "ISO8601",
+        "signed_by": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    },
+    "payout": {
+      "name": "payout",
+      "category": "finance",
+      "description": "Payment settled for a completed order",
+      "emitted_by": [],
+      "payload": {
+        "event_type": "payout",
+        "order_id": "string",
+        "amount": "number",
+        "currency": "string",
+        "method": "string",
+        "reference": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    },
+    "quality_check": {
+      "name": "quality_check",
+      "category": "quality",
+      "description": "Quality control inspection of harvested product",
+      "emitted_by": [],
+      "payload": {
+        "event_type": "quality_check",
+        "lot_code": "string",
+        "crop": "string",
+        "grade": "A|B|C|reject",
+        "inspector": "string|null",
+        "notes": "string|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    },
+    "agent_action": {
+      "name": "agent_action",
+      "category": "ai",
+      "description": "AI agent generated a recommendation or took an autonomous action",
+      "emitted_by": ["services/ai-agent.js"],
+      "payload": {
+        "event_type": "agent_action",
+        "agent_class": "string",
+        "action_type": "recommendation|autonomous|escalation",
+        "input_summary": "string",
+        "recommendation": "string",
+        "human_decision": "accepted|rejected|pending|null",
+        "confidence": "number|null",
+        "timestamp": "ISO8601"
+      },
+      "status": "planned"
+    }
+  },
+  "categories": {
+    "grow": "Seed-to-harvest lifecycle events",
+    "commerce": "Orders, deliveries, and buyer interactions",
+    "finance": "Payments, payouts, and settlements",
+    "quality": "Quality control and inspection",
+    "ai": "AI agent actions and recommendations"
+  }
+}

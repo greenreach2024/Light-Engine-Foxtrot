@@ -1,0 +1,194 @@
+{
+  "_version": "1.0.0",
+  "_description": "Agent permission matrix — defines per-agent-class action scopes and human-approval tiers. Loaded by services/ai-agent.js to gate actions at runtime.",
+  "_tiers": {
+    "auto": "Action executes immediately without human confirmation",
+    "recommend": "Agent generates recommendation; human reviews and clicks to apply",
+    "require-approval": "Action queued for explicit human approval before execution"
+  },
+
+  "agent_classes": {
+    "farm-operator": {
+      "description": "Default agent class for day-to-day farm staff and on-site operators",
+      "capabilities": {
+        "inventory": {
+          "list_products":    { "tier": "auto" },
+          "low_stock_alert":  { "tier": "auto" },
+          "search_product":   { "tier": "auto" },
+          "product_details":  { "tier": "auto" },
+          "inventory_value":  { "tier": "auto" }
+        },
+        "orders": {
+          "list_orders":      { "tier": "auto" },
+          "recent_orders":    { "tier": "auto" },
+          "order_status":     { "tier": "auto" },
+          "order_details":    { "tier": "auto" },
+          "create_order":     { "tier": "recommend" }
+        },
+        "sales": {
+          "list_customers":   { "tier": "auto" },
+          "customer_details": { "tier": "auto" },
+          "top_customers":    { "tier": "auto" },
+          "revenue_today":    { "tier": "auto" }
+        },
+        "reports": {
+          "sales_report":     { "tier": "auto" },
+          "inventory_report": { "tier": "auto" },
+          "export_data":      { "tier": "recommend" },
+          "daily_summary":    { "tier": "auto" }
+        },
+        "checklists": {
+          "daily_checklist":  { "tier": "auto" },
+          "harvest_checklist":{ "tier": "auto" },
+          "quality_check":    { "tier": "auto" },
+          "closing_checklist":{ "tier": "auto" }
+        },
+        "monitoring": {
+          "get_readings":     { "tier": "auto" },
+          "zone_status":      { "tier": "auto" },
+          "alert_status":     { "tier": "auto" },
+          "view_automation":  { "tier": "auto" }
+        },
+        "system": {
+          "status":           { "tier": "auto" },
+          "health_check":     { "tier": "auto" },
+          "recent_activity":  { "tier": "auto" }
+        }
+      }
+    },
+
+    "admin-ops": {
+      "description": "Cross-farm alert triage, SLA risk assessment, and operational summaries",
+      "capabilities": {
+        "inventory": {
+          "list_products":    { "tier": "auto" },
+          "low_stock_alert":  { "tier": "auto" },
+          "search_product":   { "tier": "auto" },
+          "product_details":  { "tier": "auto" },
+          "inventory_value":  { "tier": "auto" }
+        },
+        "orders": {
+          "list_orders":      { "tier": "auto" },
+          "recent_orders":    { "tier": "auto" },
+          "order_status":     { "tier": "auto" },
+          "order_details":    { "tier": "auto" },
+          "create_order":     { "tier": "require-approval" }
+        },
+        "sales": {
+          "list_customers":   { "tier": "auto" },
+          "customer_details": { "tier": "auto" },
+          "top_customers":    { "tier": "auto" },
+          "revenue_today":    { "tier": "auto" }
+        },
+        "reports": {
+          "sales_report":     { "tier": "auto" },
+          "inventory_report": { "tier": "auto" },
+          "export_data":      { "tier": "recommend" },
+          "daily_summary":    { "tier": "auto" }
+        },
+        "checklists": {
+          "daily_checklist":  { "tier": "auto" },
+          "harvest_checklist":{ "tier": "auto" },
+          "quality_check":    { "tier": "auto" },
+          "closing_checklist":{ "tier": "auto" }
+        },
+        "monitoring": {
+          "get_readings":     { "tier": "auto" },
+          "zone_status":      { "tier": "auto" },
+          "alert_status":     { "tier": "auto" },
+          "view_automation":  { "tier": "auto" }
+        },
+        "system": {
+          "status":           { "tier": "auto" },
+          "health_check":     { "tier": "auto" },
+          "recent_activity":  { "tier": "auto" }
+        },
+        "admin": {
+          "cross_farm_summary":  { "tier": "auto" },
+          "sla_risk_report":     { "tier": "auto" },
+          "alert_triage":        { "tier": "auto" },
+          "reassign_resources":  { "tier": "require-approval" },
+          "override_schedule":   { "tier": "require-approval" }
+        }
+      }
+    },
+
+    "marketing": {
+      "description": "Lead scoring, outreach copy, SEO drafts, conversion analytics. Content generation only — no autonomous publishing.",
+      "capabilities": {
+        "sales": {
+          "list_customers":   { "tier": "auto" },
+          "customer_details": { "tier": "auto" },
+          "top_customers":    { "tier": "auto" },
+          "revenue_today":    { "tier": "auto" }
+        },
+        "reports": {
+          "sales_report":     { "tier": "auto" },
+          "export_data":      { "tier": "recommend" },
+          "daily_summary":    { "tier": "auto" }
+        },
+        "marketing": {
+          "score_leads":         { "tier": "auto" },
+          "generate_outreach":   { "tier": "recommend" },
+          "draft_seo_page":      { "tier": "recommend" },
+          "conversion_analytics":{ "tier": "auto" },
+          "publish_content":     { "tier": "require-approval" },
+          "send_campaign":       { "tier": "require-approval" }
+        }
+      }
+    },
+
+    "payroll": {
+      "description": "Payout reconciliation, exception detection, policy compliance. Read-only analysis — no autonomous payments.",
+      "capabilities": {
+        "reports": {
+          "sales_report":     { "tier": "auto" },
+          "daily_summary":    { "tier": "auto" }
+        },
+        "payroll": {
+          "reconcile_payouts":   { "tier": "auto" },
+          "detect_anomalies":    { "tier": "auto" },
+          "compliance_check":    { "tier": "auto" },
+          "generate_pay_stub":   { "tier": "recommend" },
+          "execute_payout":      { "tier": "require-approval" },
+          "adjust_rate":         { "tier": "require-approval" }
+        }
+      }
+    },
+
+    "grow-advisor": {
+      "description": "Crop optimization, experiment analysis, recipe tuning. Advisory only — does not modify recipes or schedules without approval.",
+      "capabilities": {
+        "inventory": {
+          "list_products":    { "tier": "auto" },
+          "product_details":  { "tier": "auto" }
+        },
+        "monitoring": {
+          "get_readings":     { "tier": "auto" },
+          "zone_status":      { "tier": "auto" },
+          "alert_status":     { "tier": "auto" },
+          "view_automation":  { "tier": "auto" }
+        },
+        "checklists": {
+          "harvest_checklist":{ "tier": "auto" },
+          "quality_check":    { "tier": "auto" }
+        },
+        "grow": {
+          "analyze_experiments":   { "tier": "auto" },
+          "recommend_recipe":      { "tier": "recommend" },
+          "compare_benchmarks":    { "tier": "auto" },
+          "predict_harvest":       { "tier": "auto" },
+          "modify_recipe":         { "tier": "require-approval" },
+          "adjust_light_schedule": { "tier": "require-approval" }
+        }
+      }
+    }
+  },
+
+  "defaults": {
+    "unknown_agent_class": "farm-operator",
+    "unknown_action_tier": "require-approval",
+    "max_auto_actions_per_minute": 30,
+    "require_approval_expiry_hours": 24
+  }
+}

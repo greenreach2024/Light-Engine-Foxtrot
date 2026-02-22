@@ -2,6 +2,11 @@
  * Market Intelligence API
  * Monitors North American retail produce pricing and market events
  * Provides real-time price anomaly detection for wholesale buyers
+ *
+ * Phase 1 Ticket 1.4 — Pricing hierarchy:
+ *   1. Real wholesale order history (if available)
+ *   2. Central crop benchmarks (if available)
+ *   3. Static fallback data (always available)
  */
 
 import express from 'express';
@@ -21,6 +26,52 @@ const pool = new pg.Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
+
+/**
+ * Fetch real pricing from wholesale order history.
+ * Returns per-crop avg price, volume, and trend from the last N days.
+ * Falls back to null if no data available.
+ */
+async function fetchWholesaleOrderPricing(days = 60) {
+  try {
+    const res = await fetch(`http://localhost:${process.env.PORT || 8091}/api/wholesale/orders/history?days=${days}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.ok || !data.sales_history || data.sales_history.length === 0) return null;
+
+    // Aggregate per crop
+    const cropMap = {};
+    for (const entry of data.sales_history) {
+      const crop = (entry.crop || '').trim();
+      if (!crop) continue;
+      if (!cropMap[crop]) cropMap[crop] = { totalQty: 0, totalRevenue: 0, count: 0, dates: [] };
+      const qty = parseFloat(entry.quantity) || 0;
+      const price = parseFloat(entry.price_per_unit || entry.unit_price) || 0;
+      cropMap[crop].totalQty += qty;
+      cropMap[crop].totalRevenue += qty * price;
+      cropMap[crop].count += 1;
+      cropMap[crop].dates.push(entry.date);
+    }
+
+    // Build per-crop pricing summary
+    const pricing = {};
+    for (const [crop, stats] of Object.entries(cropMap)) {
+      const avgPrice = stats.totalRevenue > 0 && stats.totalQty > 0
+        ? stats.totalRevenue / stats.totalQty
+        : null;
+      pricing[crop] = {
+        avgPriceCAD: avgPrice,
+        totalVolume: stats.totalQty,
+        orderCount: stats.count,
+        source: 'wholesale_orders',
+        period_days: days,
+      };
+    }
+    return Object.keys(pricing).length > 0 ? pricing : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * North American Retail Market Data Sources
@@ -235,23 +286,33 @@ router.get('/price-alerts', async (req, res) => {
  */
 router.get('/market-overview', async (req, res) => {
   try {
+    // Attempt to enrich with real wholesale order pricing
+    const realPricing = await fetchWholesaleOrderPricing(60);
+
     const overview = {
       timestamp: new Date().toISOString(),
-      products: Object.entries(MARKET_DATA_SOURCES).map(([product, data]) => ({
-        product,
-        currentPrice: data.avgPriceCAD / data.avgWeightOz,
-        priceUnit: 'CAD per oz',
-        trend: data.trend,
-        trendPercent: data.trendPercent,
-        retailers: data.retailers,
-        lastUpdated: data.lastUpdated,
-        articlesCount: data.articles?.length || 0
-      })),
+      products: Object.entries(MARKET_DATA_SOURCES).map(([product, data]) => {
+        const live = realPricing && realPricing[product];
+        const price = live && live.avgPriceCAD != null ? live.avgPriceCAD : data.avgPriceCAD / data.avgWeightOz;
+        return {
+          product,
+          currentPrice: price,
+          priceUnit: 'CAD per oz',
+          trend: data.trend,
+          trendPercent: data.trendPercent,
+          retailers: data.retailers,
+          lastUpdated: data.lastUpdated,
+          articlesCount: data.articles?.length || 0,
+          source: live ? 'wholesale_orders' : 'static_fallback',
+          orderVolume: live ? live.totalVolume : null,
+        };
+      }),
       summary: {
         totalProducts: Object.keys(MARKET_DATA_SOURCES).length,
         increasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'increasing').length,
         decreasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'decreasing').length,
-        stable: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'stable').length
+        stable: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'stable').length,
+        liveDataCrops: realPricing ? Object.keys(realPricing).length : 0,
       }
     };
     

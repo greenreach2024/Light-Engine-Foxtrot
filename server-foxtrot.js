@@ -225,6 +225,7 @@ import { checkAndControlEnvironment } from './controller/checkAndControlEnvironm
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
 import anomalyHistory from './lib/anomaly-history.js';
+import eventBus from './lib/event-bus.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 
 // Edge mode support
@@ -19029,6 +19030,23 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       console.warn('[tray-runs] Experiment record creation failed (non-fatal):', expErr.message);
     }
 
+    // Phase 1 Ticket 1.6 — emit standardized harvest event
+    eventBus.emitEvent('harvest', {
+      tray_run_id: trayRunId,
+      group_id: trayRun?.group_id || null,
+      crop: trayRun?.crop || trayRun?.recipe_id || null,
+      total_weight_oz: weight || null,
+      harvested_count: harvestedCount,
+      planted_count: trayRun?.planted_site_count || null,
+      loss_count: null,
+      grow_days: trayRun?.seeded_at ? Math.floor((Date.now() - new Date(trayRun.seeded_at).getTime()) / 86400000) : null,
+      quality_grade: null,
+      experiment_id: experiment_id || null,
+      zone: null,
+      room: null,
+      harvested_by: null,
+    });
+
     res.json({
       success: true,
       trayRunId,
@@ -19196,6 +19214,21 @@ app.post('/api/trays/:trayId/seed', async (req, res) => {
     }
 
     console.log(`[tray-runs] Seeded: ${trayRunId} tray=${trayId} crop=${recipe} plants=${resolvedPlantCount ?? 'unknown'} (${plantCountSource || 'no data'}) targetWeight=${targetWeightOz ?? 'none'} (${targetWeightSource || 'no data'})${seed_source ? ` source=${seed_source}` : ''}${groupId ? ` group=${groupId}` : ''}`);
+
+    // Phase 1 Ticket 1.6 — emit standardized seed event
+    eventBus.emitEvent('seed', {
+      tray_run_id: trayRunId,
+      group_id: groupId || null,
+      crop: recipe,
+      variety: variety || null,
+      seed_count: resolvedPlantCount,
+      tray_format: trayFormat?.name || null,
+      zone: null,
+      room: null,
+      recipe_id: recipe,
+      seeded_by: null,
+    });
+
     res.json({
       success: true,
       tray_run_id: trayRunId,
@@ -19387,6 +19420,18 @@ app.post('/api/tray-runs/:id/loss', async (req, res) => {
     
     const insertedEvent = await trayLossEventsDB.insert(lossEvent);
     
+    // Phase 1 Ticket 1.6 — emit standardized loss event
+    eventBus.emitEvent('loss', {
+      tray_run_id: trayRunId,
+      group_id: trayRun?.group_id || null,
+      crop: crop_name || crop_id || trayRun?.crop || null,
+      loss_count: lost_quantity ? parseInt(lost_quantity) : null,
+      loss_reason: loss_reason,
+      loss_category: 'other',
+      zone: lossEvent.environment_snapshot?.zone || null,
+      reported_by: null,
+    });
+
     // Update tray run status to LOST
     await trayRunsDB.update(
       { _id: trayRunId },
