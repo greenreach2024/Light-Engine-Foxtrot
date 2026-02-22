@@ -11546,6 +11546,8 @@ import farmSalesLotTrackingRouter from './routes/farm-sales/lot-tracking.js';
 import farmSalesAIAgentRouter from './routes/farm-sales/ai-agent.js';
 import authRouter from './routes/auth.js';
 import farmsRouter from './routes/farms.js';
+import integrationsRouter, { initIntegrationRoutes, syncIntegrationsToCentral, getIntegrationRecordsForSync } from './routes/integrations.js';
+import { createWizardHandlers } from './lib/device-wizard.js';
 import purchaseRouter from './routes/purchase.js';
 import purchaseLeadsRouter from './routes/purchase-leads.js';
 import kpisRouter from './routes/kpis.js';
@@ -11584,6 +11586,44 @@ app.locals.db = dbPool;
  * - GET /api/farms/codes/list: List all registration codes (admin)
  */
 app.use('/api/farms', farmsRouter);
+
+/**
+ * Device Integrations API — Integration Assistant Phase 1
+ * Device integration records for network learning
+ * - GET /api/integrations: List all device integrations
+ * - GET /api/integrations/:id: Get specific integration
+ * - POST /api/integrations: Create device integration record
+ * - PATCH /api/integrations/:id: Update integration (validation/feedback)
+ * - DELETE /api/integrations/:id: Remove integration record
+ */
+initIntegrationRoutes(integrationDB);
+app.use('/api/integrations', integrationsRouter);
+
+/**
+ * Device Wizard API — Integration Assistant Phase 2 (Ticket I-2.10)
+ * Multi-step wizard for adding new devices with auto-discovery
+ * - POST /api/device-wizard/start: Start new wizard session
+ * - GET /api/device-wizard/:sessionId: Get wizard state
+ * - POST /api/device-wizard/:sessionId/protocol: Select protocol
+ * - POST /api/device-wizard/:sessionId/config: Set connection config
+ * - POST /api/device-wizard/:sessionId/discover: Discover devices
+ * - POST /api/device-wizard/:sessionId/select-device: Select device
+ * - POST /api/device-wizard/:sessionId/assign-room: Assign to room/zone
+ * - POST /api/device-wizard/:sessionId/save: Save integration record
+ * - POST /api/device-wizard/:sessionId/back: Go back one step
+ * - DELETE /api/device-wizard/:sessionId: Cancel/reset session
+ */
+const wizardHandlers = createWizardHandlers(integrationDB);
+app.post('/api/device-wizard/start', wizardHandlers.start);
+app.get('/api/device-wizard/:sessionId', wizardHandlers.getState);
+app.post('/api/device-wizard/:sessionId/protocol', wizardHandlers.selectProtocol);
+app.post('/api/device-wizard/:sessionId/config', wizardHandlers.setConfig);
+app.post('/api/device-wizard/:sessionId/discover', wizardHandlers.discover);
+app.post('/api/device-wizard/:sessionId/select-device', wizardHandlers.selectDevice);
+app.post('/api/device-wizard/:sessionId/assign-room', wizardHandlers.assignRoom);
+app.post('/api/device-wizard/:sessionId/save', wizardHandlers.save);
+app.post('/api/device-wizard/:sessionId/back', wizardHandlers.goBack);
+app.delete('/api/device-wizard/:sessionId', wizardHandlers.cancel);
 
 /**
  * Purchase & Onboarding Flow
@@ -24773,6 +24813,14 @@ const harvestOutcomesDB = Datastore.create({
 // Every AI agent recommendation / action is persisted for governance & review.
 const agentAuditDB = Datastore.create({
   filename: './data/agent-audit.db',
+  autoload: true,
+  timestampData: true
+});
+
+// I-1.9: Device integration records store (Integration Assistant)
+// Tracks all device integrations for network learning and Central sync
+const integrationDB = Datastore.create({
+  filename: './data/integrations.db',
   autoload: true,
   timestampData: true
 });
