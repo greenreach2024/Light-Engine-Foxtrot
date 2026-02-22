@@ -3344,12 +3344,22 @@
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Timezone</label>
                                 <select id="settings-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    <option value="America/New_York">Eastern Time (ET)</option>
-                                    <option value="America/Chicago">Central Time (CT)</option>
-                                    <option value="America/Denver">Mountain Time (MT)</option>
-                                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                                    <option value="America/Anchorage">Alaska Time (AKT)</option>
-                                    <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                                    <optgroup label="North America — US">
+                                      <option value="America/New_York">Eastern Time (ET)</option>
+                                      <option value="America/Chicago">Central Time (CT)</option>
+                                      <option value="America/Denver">Mountain Time (MT)</option>
+                                      <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                      <option value="America/Anchorage">Alaska Time (AKT)</option>
+                                      <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                                    </optgroup>
+                                    <optgroup label="North America — Canada">
+                                      <option value="America/Toronto">Eastern — Toronto</option>
+                                      <option value="America/Winnipeg">Central — Winnipeg</option>
+                                      <option value="America/Edmonton">Mountain — Edmonton</option>
+                                      <option value="America/Vancouver">Pacific — Vancouver</option>
+                                      <option value="America/Halifax">Atlantic — Halifax</option>
+                                      <option value="America/St_Johns">Newfoundland — St. John's</option>
+                                    </optgroup>
                                 </select>
                             </div>
                         </div>
@@ -4922,12 +4932,22 @@
             <div>
               <label style="display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-secondary); font-size: 13px;">Timezone *</label>
               <select id="setup-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);" required>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="America/Anchorage">Alaska Time (AKT)</option>
-                <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                <optgroup label="North America — US">
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                </optgroup>
+                <optgroup label="North America — Canada">
+                  <option value="America/Toronto">Eastern — Toronto</option>
+                  <option value="America/Winnipeg">Central — Winnipeg</option>
+                  <option value="America/Edmonton">Mountain — Edmonton</option>
+                  <option value="America/Vancouver">Pacific — Vancouver</option>
+                  <option value="America/Halifax">Atlantic — Halifax</option>
+                  <option value="America/St_Johns">Newfoundland — St. John's</option>
+                </optgroup>
               </select>
             </div>
             <input type="hidden" id="setup-latitude">

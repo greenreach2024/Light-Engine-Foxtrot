@@ -4674,63 +4674,101 @@ async function showFirstTimeSetup() {
             }
         }
         
-        // Fetch farm data from API to pre-fill fields with purchase info
+        // Fetch farm data to pre-fill wizard fields from existing farm profile
         try {
-            console.log('[Setup] Fetching user profile for wizard pre-fill...');
-            console.log('[Setup] Token:', token);
-            console.log('[Setup] API_BASE:', window.API_BASE || '(empty)');
+            console.log('[Setup] Fetching farm.json for wizard pre-fill...');
+            const farmResponse = await fetch('/data/farm.json');
             
-            // Use /api/user/profile to get buyer/user data (not farm data which doesn't exist yet)
-            const apiUrl = `${window.API_BASE || ''}/api/user/profile`;
-            console.log('[Setup] Fetching from:', apiUrl);
-            
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'same-origin'
-            });
-            
-            console.log('[Setup] User profile response status:', response.status, response.statusText);
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('[Setup] User profile data received:', data);
+            if (farmResponse.ok) {
+                const farmData = await farmResponse.json();
+                console.log('[Setup] farm.json loaded for pre-fill:', farmData);
                 
-                if (data.status === 'success' && data.user) {
-                    console.log('[Setup] Pre-filling wizard with buyer/user data:', data.user);
-                    
-                    // Pre-fill Step 2: Business Profile with data from GreenReach buyer profile
-                    const farmNameField = document.getElementById('setup-farm-name');
-                    const contactNameField = document.getElementById('setup-contact-name');
-                    const contactEmailField = document.getElementById('setup-contact-email');
-                    
-                    console.log('[Setup] Form fields found:', {
-                        farmName: !!farmNameField,
-                        contactName: !!contactNameField,
-                        contactEmail: !!contactEmailField
-                    });
-                    
-                    if (data.user.businessName && farmNameField) {
-                        farmNameField.value = data.user.businessName;
-                        console.log('[Setup] Set farm name:', data.user.businessName);
+                // --- Step 2: Business Profile ---
+                const farmNameField = document.getElementById('setup-farm-name');
+                const contactNameField = document.getElementById('setup-contact-name');
+                const contactEmailField = document.getElementById('setup-contact-email');
+                const contactPhoneField = document.getElementById('setup-contact-phone');
+                const contactWebsiteField = document.getElementById('setup-contact-website');
+                
+                const farmName = farmData.farmName || farmData.name || '';
+                const contactName = farmData.contact?.name || farmData.contactName || '';
+                const contactEmail = farmData.contact?.email || farmData.email || '';
+                const contactPhone = farmData.contact?.phone || farmData.phone || '';
+                const contactWebsite = farmData.contact?.website || farmData.website || '';
+                
+                if (farmName && farmNameField) farmNameField.value = farmName;
+                if (contactName && contactNameField) contactNameField.value = contactName;
+                if (contactEmail && contactEmailField) contactEmailField.value = contactEmail;
+                if (contactPhone && contactPhoneField) contactPhoneField.value = contactPhone;
+                if (contactWebsite && contactWebsiteField) contactWebsiteField.value = contactWebsite;
+                
+                console.log('[Setup] Step 2 seeded:', { farmName, contactName, contactEmail, contactPhone });
+                
+                // --- Step 3: Location ---
+                const addressField = document.getElementById('setup-address');
+                const cityField = document.getElementById('setup-city');
+                const stateField = document.getElementById('setup-state');
+                const postalField = document.getElementById('setup-postal');
+                const timezoneField = document.getElementById('setup-timezone');
+                const latField = document.getElementById('setup-latitude');
+                const lngField = document.getElementById('setup-longitude');
+                
+                if (farmData.address && addressField) addressField.value = farmData.address;
+                if (farmData.city && cityField) cityField.value = farmData.city;
+                if (farmData.state && stateField) stateField.value = farmData.state;
+                if (farmData.postalCode && postalField) postalField.value = farmData.postalCode;
+                
+                // Set timezone — ensure the option exists before setting
+                if (farmData.timezone && timezoneField) {
+                    const tzOption = timezoneField.querySelector(`option[value="${farmData.timezone}"]`);
+                    if (tzOption) {
+                        timezoneField.value = farmData.timezone;
+                    } else {
+                        // Dynamically add the timezone option if missing from the select
+                        const opt = document.createElement('option');
+                        opt.value = farmData.timezone;
+                        opt.textContent = farmData.timezone.replace(/_/g, ' ').replace('America/', '');
+                        timezoneField.insertBefore(opt, timezoneField.firstChild);
+                        timezoneField.value = farmData.timezone;
                     }
-                    if (data.user.name && contactNameField) {
-                        contactNameField.value = data.user.name;
-                        console.log('[Setup] Set contact name:', data.user.name);
-                    }
-                    if (data.user.email && contactEmailField) {
-                        contactEmailField.value = data.user.email;
-                        console.log('[Setup] Set email:', data.user.email);
-                    }
-                } else {
-                    console.warn('[Setup] API response missing user data:', data);
                 }
+                
+                // Coordinates
+                const coords = farmData.coordinates || {};
+                if (coords.lat && latField) latField.value = coords.lat;
+                if (coords.lng && lngField) lngField.value = coords.lng;
+                
+                console.log('[Setup] Step 3 seeded:', { address: farmData.address, city: farmData.city, state: farmData.state, lat: coords.lat, lng: coords.lng });
+                
+                // --- Step 4: Rooms & Zones ---
+                if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
+                    setupData.rooms = farmData.rooms.map(r => ({
+                        id: r.id || `room-${Math.random().toString(36).substr(2, 6)}`,
+                        name: r.name || r,
+                        zones: Array.isArray(r.zones) ? r.zones : []
+                    }));
+                    renderSetupRooms();
+                    console.log('[Setup] Step 4 seeded:', setupData.rooms.length, 'rooms');
+                }
+                
+                // --- Step 5: Certifications ---
+                if (farmData.certifications) {
+                    (farmData.certifications.certifications || []).forEach(cert => {
+                        const cb = document.querySelector(`input[name="certification"][value="${cert}"]`);
+                        if (cb) cb.checked = true;
+                    });
+                    (farmData.certifications.practices || []).forEach(p => {
+                        const cb = document.querySelector(`input[name="practice"][value="${p}"]`);
+                        if (cb) cb.checked = true;
+                    });
+                    console.log('[Setup] Step 5 seeded certifications');
+                }
+                
+                // Store farmId for setup completion
+                if (farmData.farmId) setupData.farmId = farmData.farmId;
+                
             } else {
-                const errorText = await response.text();
-                console.error('[Setup] Farm profile API returned error:', response.status, response.statusText, errorText);
+                console.warn('[Setup] farm.json not available (status:', farmResponse.status, '), wizard starts empty');
             }
         } catch (error) {
             console.error('[Setup] Could not fetch farm data for pre-fill:', error);
