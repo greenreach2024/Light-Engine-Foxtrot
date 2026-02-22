@@ -225,6 +225,9 @@
         <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="store-setup">
           Online Store Setup
         </button>
+        <button type="button" class="sidebar-link" data-sidebar-link data-group="business-setup" data-wizard="delivery-setup">
+          Delivery Setup
+        </button>
         <a class="sidebar-link" href="./views/procurement-portal.html" role="menuitem">
           Procurement Portal
         </a>
@@ -2492,6 +2495,224 @@
     </div>
   </div>
 
+  <!-- Delivery Setup Wizard -->
+  <div id="deliveryWizardModal" class="wizard-modal" style="display: none;">
+    <div class="wizard-overlay" onclick="closeDeliveryWizard()"></div>
+    <div class="wizard-container">
+      <div class="wizard-header">
+        <h2>Delivery Setup</h2>
+        <p class="wizard-subtitle">Configure delivery options for your customers</p>
+        <button class="wizard-close" onclick="closeDeliveryWizard()" aria-label="Close">&times;</button>
+      </div>
+      
+      <div class="wizard-progress">
+        <div class="wizard-step active" data-step="1">
+          <div class="wizard-step-number">1</div>
+          <div class="wizard-step-label">Enable</div>
+        </div>
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-step-number">2</div>
+          <div class="wizard-step-label">Zones & Fees</div>
+        </div>
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-step-number">3</div>
+          <div class="wizard-step-label">Schedule</div>
+        </div>
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-step-number">4</div>
+          <div class="wizard-step-label">Instructions</div>
+        </div>
+      </div>
+      
+      <div class="wizard-content">
+        <!-- Step 1: Enable Delivery -->
+        <div class="wizard-panel" data-panel="1" style="display: block;">
+          <h3>Enable Delivery Service</h3>
+          <p class="wizard-description">Choose which sales channels will offer delivery.</p>
+          
+          <div class="wizard-form-group" style="margin-top: 1.5rem;">
+            <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--surface-alt); border-radius: 8px; margin-bottom: 1rem;">
+              <input type="checkbox" id="deliveryEnabled" onchange="updateDeliveryPreview()">
+              <div>
+                <strong style="font-size: 1.1rem;">Enable Delivery Service</strong>
+                <p style="margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.9rem;">Turn on delivery for your farm</p>
+              </div>
+            </label>
+          </div>
+          
+          <div id="deliveryTypeOptions" style="display: none; margin-top: 1.5rem;">
+            <h4>Delivery Channels</h4>
+            <div class="wizard-checkbox-group" style="margin-top: 1rem;">
+              <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem;">
+                <input type="checkbox" id="deliveryTypeD2C" checked>
+                <div>
+                  <strong>Direct-to-Consumer (D2C)</strong>
+                  <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Online store and farm stand customers</p>
+                </div>
+              </label>
+              <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryTypeWholesale" checked>
+                <div>
+                  <strong>Wholesale</strong>
+                  <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Restaurant and retail buyers</p>
+                </div>
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="closeDeliveryWizard()">Cancel</button>
+            <button class="wizard-btn-primary" onclick="deliveryWizardNext()" id="deliveryNextBtn1">Next: Zones & Fees</button>
+          </div>
+        </div>
+        
+        <!-- Step 2: Zones & Fees -->
+        <div class="wizard-panel" data-panel="2" style="display: none;">
+          <h3>Delivery Zones & Fees</h3>
+          <p class="wizard-description">Set delivery fees based on distance or use a flat rate.</p>
+          
+          <div class="wizard-form-group">
+            <label>Fee Structure</label>
+            <select id="deliveryFeeStructure" class="wizard-input" onchange="updateFeeStructureUI()">
+              <option value="zone_based">Zone-Based (by distance)</option>
+              <option value="flat">Flat Rate</option>
+              <option value="free_over_min">Free Over Minimum Order</option>
+            </select>
+          </div>
+          
+          <div id="flatFeeSection" style="display: none; margin-top: 1rem;">
+            <div class="wizard-form-group">
+              <label>Flat Delivery Fee ($)</label>
+              <input type="number" id="deliveryFlatFee" class="wizard-input" value="5.00" min="0" step="0.50">
+            </div>
+          </div>
+          
+          <div id="freeOverMinSection" style="display: none; margin-top: 1rem;">
+            <div class="wizard-form-group">
+              <label>Free Delivery Minimum ($)</label>
+              <input type="number" id="deliveryFreeMin" class="wizard-input" value="100" min="0" step="10">
+              <small>Orders above this amount get free delivery</small>
+            </div>
+          </div>
+          
+          <div id="zoneBasedSection" style="margin-top: 1rem;">
+            <h4>Delivery Zones</h4>
+            <div id="deliveryZonesList" style="margin-top: 0.75rem;">
+              <!-- Zones will be rendered here -->
+            </div>
+            <button type="button" class="wizard-btn-secondary" onclick="addDeliveryZone()" style="margin-top: 0.75rem;">
+              + Add Zone
+            </button>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="deliveryWizardPrev()">Back</button>
+            <button class="wizard-btn-primary" onclick="deliveryWizardNext()">Next: Schedule</button>
+          </div>
+        </div>
+        
+        <!-- Step 3: Schedule -->
+        <div class="wizard-panel" data-panel="3" style="display: none;">
+          <h3>Delivery Schedule</h3>
+          <p class="wizard-description">Set when deliveries are available.</p>
+          
+          <div class="wizard-form-group">
+            <label>Delivery Days</label>
+            <div class="wizard-checkbox-group" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDayMon" checked> Mon
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDayTue" checked> Tue
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDayWed" checked> Wed
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDayThu" checked> Thu
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDayFri" checked> Fri
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDaySat"> Sat
+              </label>
+              <label class="wizard-checkbox" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px;">
+                <input type="checkbox" id="deliveryDaySun"> Sun
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group" style="margin-top: 1.5rem;">
+            <label>Time Windows</label>
+            <div style="margin-top: 0.5rem;">
+              <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0;">
+                <input type="checkbox" id="deliveryWindowMorning" checked>
+                <span>Morning (8am - 12pm)</span>
+              </label>
+              <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0;">
+                <input type="checkbox" id="deliveryWindowAfternoon" checked>
+                <span>Afternoon (12pm - 4pm)</span>
+              </label>
+              <label class="wizard-checkbox" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0;">
+                <input type="checkbox" id="deliveryWindowEvening">
+                <span>Evening (4pm - 8pm)</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="wizard-form-group" style="margin-top: 1.5rem;">
+            <label>Lead Time (hours)</label>
+            <input type="number" id="deliveryLeadTime" class="wizard-input" value="24" min="1" max="168" step="1">
+            <small>Minimum advance notice required for delivery orders</small>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="deliveryWizardPrev()">Back</button>
+            <button class="wizard-btn-primary" onclick="deliveryWizardNext()">Next: Instructions</button>
+          </div>
+        </div>
+        
+        <!-- Step 4: Instructions -->
+        <div class="wizard-panel" data-panel="4" style="display: none;">
+          <h3>Driver Instructions & Contact</h3>
+          <p class="wizard-description">Provide information for delivery drivers and your contact details.</p>
+          
+          <div class="wizard-form-group">
+            <label>Farm Pickup Location</label>
+            <input type="text" id="deliveryPickupAddress" class="wizard-input" placeholder="123 Farm Road, City, Province">
+            <small>Where drivers pick up orders from your farm</small>
+          </div>
+          
+          <div class="wizard-form-group" style="margin-top: 1rem;">
+            <label>Pickup Instructions for Drivers</label>
+            <textarea id="deliveryDriverInstructions" rows="3" class="wizard-input" 
+              placeholder="e.g., Enter through the north gate. Cooler is in the shipping shed. Call if gate is locked."></textarea>
+          </div>
+          
+          <div class="wizard-form-group" style="margin-top: 1rem;">
+            <label>Contact Phone (for drivers)</label>
+            <input type="tel" id="deliveryContactPhone" class="wizard-input" placeholder="(555) 123-4567">
+          </div>
+          
+          <div style="margin-top: 2rem; padding: 1rem; background: var(--success-bg, #d4edda); border-radius: 8px; border: 1px solid var(--success-border, #c3e6cb);">
+            <h4 style="margin: 0 0 0.5rem; color: var(--success, #155724);">✓ Delivery Setup Summary</h4>
+            <div id="deliverySummary" style="font-size: 0.9rem; color: var(--text-secondary);">
+              <!-- Summary will be rendered here -->
+            </div>
+          </div>
+          
+          <div class="wizard-actions">
+            <button class="wizard-btn-secondary" onclick="deliveryWizardPrev()">Back</button>
+            <button class="wizard-btn-primary wizard-btn-success" onclick="saveDeliverySettings()">
+              Save Delivery Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Show intro card sequence when page loads
     window.addEventListener('DOMContentLoaded', () => {
@@ -2964,6 +3185,303 @@
       window.open(storeUrl, '_blank');
     }
     
+    // =========================================================================
+    // DELIVERY WIZARD FUNCTIONS
+    // =========================================================================
+    
+    let deliveryWizardStep = 1;
+    let deliveryWizardData = {
+      enabled: false,
+      delivery_types: { d2c: true, wholesale: true },
+      fee_structure: 'zone_based',
+      flat_fee: 5.00,
+      free_delivery_minimum: 100,
+      zones: [
+        { id: 'zone_local', name: 'Local (0-10 km)', fee: 0, min_order: 25, max_distance_km: 10 },
+        { id: 'zone_nearby', name: 'Nearby (10-25 km)', fee: 5, min_order: 35, max_distance_km: 25 },
+        { id: 'zone_extended', name: 'Extended (25-50 km)', fee: 10, min_order: 50, max_distance_km: 50 }
+      ],
+      delivery_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      time_windows: {
+        morning: true,
+        afternoon: true,
+        evening: false
+      },
+      lead_time_hours: 24,
+      pickup_address: '',
+      driver_instructions: '',
+      contact_phone: ''
+    };
+    
+    async function openDeliveryWizard() {
+      const modal = document.getElementById('deliveryWizardModal');
+      modal.style.display = 'flex';
+      deliveryWizardStep = 1;
+      
+      // Try to load existing settings
+      try {
+        const farmId = localStorage.getItem('farm_id') || window.FARM_ID;
+        if (farmId) {
+          const resp = await fetch(`/api/farm-sales/delivery/settings`, {
+            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('farm_token') || '') }
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.ok && data.settings) {
+              Object.assign(deliveryWizardData, data.settings);
+              populateDeliveryForm();
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Could not load delivery settings:', e);
+      }
+      
+      // Hide all panels first
+      modal.querySelectorAll('.wizard-panel').forEach(p => p.style.display = 'none');
+      
+      // Show panel 1
+      const panel1 = modal.querySelector('.wizard-panel[data-panel="1"]');
+      if (panel1) panel1.style.display = 'block';
+      
+      updateDeliveryWizardProgress();
+      renderDeliveryZones();
+    }
+    
+    function populateDeliveryForm() {
+      document.getElementById('deliveryEnabled').checked = deliveryWizardData.enabled;
+      document.getElementById('deliveryTypeD2C').checked = deliveryWizardData.delivery_types?.d2c ?? true;
+      document.getElementById('deliveryTypeWholesale').checked = deliveryWizardData.delivery_types?.wholesale ?? true;
+      document.getElementById('deliveryFeeStructure').value = deliveryWizardData.fee_structure || 'zone_based';
+      document.getElementById('deliveryFlatFee').value = deliveryWizardData.flat_fee || 5;
+      document.getElementById('deliveryFreeMin').value = deliveryWizardData.free_delivery_minimum || 100;
+      document.getElementById('deliveryLeadTime').value = deliveryWizardData.lead_time_hours || 24;
+      document.getElementById('deliveryPickupAddress').value = deliveryWizardData.pickup_location?.address || '';
+      document.getElementById('deliveryDriverInstructions').value = deliveryWizardData.driver_instructions || '';
+      document.getElementById('deliveryContactPhone').value = deliveryWizardData.contact_phone || '';
+      
+      // Days
+      const days = deliveryWizardData.delivery_days || [];
+      document.getElementById('deliveryDayMon').checked = days.includes('monday');
+      document.getElementById('deliveryDayTue').checked = days.includes('tuesday');
+      document.getElementById('deliveryDayWed').checked = days.includes('wednesday');
+      document.getElementById('deliveryDayThu').checked = days.includes('thursday');
+      document.getElementById('deliveryDayFri').checked = days.includes('friday');
+      document.getElementById('deliveryDaySat').checked = days.includes('saturday');
+      document.getElementById('deliveryDaySun').checked = days.includes('sunday');
+      
+      // Time windows
+      const tw = deliveryWizardData.time_windows || {};
+      document.getElementById('deliveryWindowMorning').checked = tw.MORNING?.enabled ?? true;
+      document.getElementById('deliveryWindowAfternoon').checked = tw.AFTERNOON?.enabled ?? true;
+      document.getElementById('deliveryWindowEvening').checked = tw.EVENING?.enabled ?? false;
+      
+      updateDeliveryPreview();
+      updateFeeStructureUI();
+    }
+    
+    function closeDeliveryWizard() {
+      document.getElementById('deliveryWizardModal').style.display = 'none';
+    }
+    
+    function updateDeliveryWizardProgress() {
+      document.querySelectorAll('#deliveryWizardModal .wizard-step').forEach((step, index) => {
+        const stepNumber = index + 1;
+        step.classList.remove('active', 'completed');
+        if (stepNumber < deliveryWizardStep) {
+          step.classList.add('completed');
+        } else if (stepNumber === deliveryWizardStep) {
+          step.classList.add('active');
+        }
+      });
+    }
+    
+    function deliveryWizardNext() {
+      if (deliveryWizardStep < 4) {
+        document.querySelector('#deliveryWizardModal .wizard-panel[data-panel="' + deliveryWizardStep + '"]').style.display = 'none';
+        deliveryWizardStep++;
+        document.querySelector('#deliveryWizardModal .wizard-panel[data-panel="' + deliveryWizardStep + '"]').style.display = 'block';
+        updateDeliveryWizardProgress();
+        
+        if (deliveryWizardStep === 4) {
+          updateDeliverySummary();
+        }
+      }
+    }
+    
+    function deliveryWizardPrev() {
+      if (deliveryWizardStep > 1) {
+        document.querySelector('#deliveryWizardModal .wizard-panel[data-panel="' + deliveryWizardStep + '"]').style.display = 'none';
+        deliveryWizardStep--;
+        document.querySelector('#deliveryWizardModal .wizard-panel[data-panel="' + deliveryWizardStep + '"]').style.display = 'block';
+        updateDeliveryWizardProgress();
+      }
+    }
+    
+    function updateDeliveryPreview() {
+      const enabled = document.getElementById('deliveryEnabled').checked;
+      const typeOptions = document.getElementById('deliveryTypeOptions');
+      if (typeOptions) {
+        typeOptions.style.display = enabled ? 'block' : 'none';
+      }
+    }
+    
+    function updateFeeStructureUI() {
+      const structure = document.getElementById('deliveryFeeStructure').value;
+      document.getElementById('flatFeeSection').style.display = structure === 'flat' ? 'block' : 'none';
+      document.getElementById('freeOverMinSection').style.display = structure === 'free_over_min' ? 'block' : 'none';
+      document.getElementById('zoneBasedSection').style.display = structure === 'zone_based' ? 'block' : 'none';
+    }
+    
+    function renderDeliveryZones() {
+      const container = document.getElementById('deliveryZonesList');
+      if (!container) return;
+      
+      container.innerHTML = deliveryWizardData.zones.map((zone, index) => `
+        <div class="delivery-zone-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;">
+          <input type="text" value="${zone.name}" placeholder="Zone Name" 
+            onchange="updateDeliveryZone(${index}, 'name', this.value)"
+            style="flex: 2; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+          <input type="number" value="${zone.fee}" placeholder="Fee" min="0" step="0.50"
+            onchange="updateDeliveryZone(${index}, 'fee', parseFloat(this.value))"
+            style="width: 80px; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+          <span style="color: var(--text-muted);">$</span>
+          <input type="number" value="${zone.min_order}" placeholder="Min" min="0" step="5"
+            onchange="updateDeliveryZone(${index}, 'min_order', parseFloat(this.value))"
+            style="width: 80px; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+          <span style="color: var(--text-muted); font-size: 0.85rem;">min</span>
+          <button type="button" onclick="removeDeliveryZone(${index})" 
+            style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 1.25rem;">&times;</button>
+        </div>
+      `).join('');
+    }
+    
+    function updateDeliveryZone(index, field, value) {
+      if (deliveryWizardData.zones[index]) {
+        deliveryWizardData.zones[index][field] = value;
+      }
+    }
+    
+    function removeDeliveryZone(index) {
+      deliveryWizardData.zones.splice(index, 1);
+      renderDeliveryZones();
+    }
+    
+    function addDeliveryZone() {
+      deliveryWizardData.zones.push({
+        id: 'zone_' + Date.now(),
+        name: 'New Zone',
+        fee: 0,
+        min_order: 0,
+        max_distance_km: 25
+      });
+      renderDeliveryZones();
+    }
+    
+    function updateDeliverySummary() {
+      const summary = document.getElementById('deliverySummary');
+      if (!summary) return;
+      
+      const enabled = document.getElementById('deliveryEnabled').checked;
+      const d2c = document.getElementById('deliveryTypeD2C').checked;
+      const wholesale = document.getElementById('deliveryTypeWholesale').checked;
+      const feeStructure = document.getElementById('deliveryFeeStructure').value;
+      
+      const days = [];
+      if (document.getElementById('deliveryDayMon').checked) days.push('Mon');
+      if (document.getElementById('deliveryDayTue').checked) days.push('Tue');
+      if (document.getElementById('deliveryDayWed').checked) days.push('Wed');
+      if (document.getElementById('deliveryDayThu').checked) days.push('Thu');
+      if (document.getElementById('deliveryDayFri').checked) days.push('Fri');
+      if (document.getElementById('deliveryDaySat').checked) days.push('Sat');
+      if (document.getElementById('deliveryDaySun').checked) days.push('Sun');
+      
+      const channels = [];
+      if (d2c) channels.push('D2C');
+      if (wholesale) channels.push('Wholesale');
+      
+      let feeSummary = '';
+      if (feeStructure === 'flat') {
+        feeSummary = `Flat fee: $${document.getElementById('deliveryFlatFee').value}`;
+      } else if (feeStructure === 'free_over_min') {
+        feeSummary = `Free over $${document.getElementById('deliveryFreeMin').value}`;
+      } else {
+        feeSummary = `${deliveryWizardData.zones.length} delivery zones configured`;
+      }
+      
+      summary.innerHTML = `
+        <p><strong>Status:</strong> ${enabled ? 'Enabled' : 'Disabled'}</p>
+        ${enabled ? `
+          <p><strong>Channels:</strong> ${channels.join(', ') || 'None'}</p>
+          <p><strong>Fees:</strong> ${feeSummary}</p>
+          <p><strong>Days:</strong> ${days.join(', ') || 'None'}</p>
+          <p><strong>Lead Time:</strong> ${document.getElementById('deliveryLeadTime').value} hours</p>
+        ` : ''}
+      `;
+    }
+    
+    async function saveDeliverySettings() {
+      // Collect all data from form
+      const settings = {
+        enabled: document.getElementById('deliveryEnabled').checked,
+        delivery_types: {
+          d2c: document.getElementById('deliveryTypeD2C').checked,
+          wholesale: document.getElementById('deliveryTypeWholesale').checked
+        },
+        fee_structure: document.getElementById('deliveryFeeStructure').value,
+        flat_fee: parseFloat(document.getElementById('deliveryFlatFee').value) || 5,
+        free_delivery_minimum: parseFloat(document.getElementById('deliveryFreeMin').value) || 100,
+        zones: deliveryWizardData.zones,
+        delivery_days: [],
+        time_windows: {
+          MORNING: { enabled: document.getElementById('deliveryWindowMorning').checked },
+          AFTERNOON: { enabled: document.getElementById('deliveryWindowAfternoon').checked },
+          EVENING: { enabled: document.getElementById('deliveryWindowEvening').checked }
+        },
+        lead_time_hours: parseInt(document.getElementById('deliveryLeadTime').value) || 24,
+        pickup_location: {
+          address: document.getElementById('deliveryPickupAddress').value
+        },
+        driver_instructions: document.getElementById('deliveryDriverInstructions').value,
+        contact_phone: document.getElementById('deliveryContactPhone').value
+      };
+      
+      // Collect delivery days
+      if (document.getElementById('deliveryDayMon').checked) settings.delivery_days.push('monday');
+      if (document.getElementById('deliveryDayTue').checked) settings.delivery_days.push('tuesday');
+      if (document.getElementById('deliveryDayWed').checked) settings.delivery_days.push('wednesday');
+      if (document.getElementById('deliveryDayThu').checked) settings.delivery_days.push('thursday');
+      if (document.getElementById('deliveryDayFri').checked) settings.delivery_days.push('friday');
+      if (document.getElementById('deliveryDaySat').checked) settings.delivery_days.push('saturday');
+      if (document.getElementById('deliveryDaySun').checked) settings.delivery_days.push('sunday');
+      
+      try {
+        const resp = await fetch('/api/farm-sales/delivery/settings', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (localStorage.getItem('farm_token') || '')
+          },
+          body: JSON.stringify(settings)
+        });
+        
+        if (resp.ok) {
+          alert('Delivery settings saved successfully!');
+          closeDeliveryWizard();
+        } else {
+          const error = await resp.json();
+          alert('Failed to save: ' + (error.message || 'Unknown error'));
+        }
+      } catch (e) {
+        console.error('Save delivery settings failed:', e);
+        alert('Failed to save delivery settings. Please try again.');
+      }
+    }
+    
+    // =========================================================================
+    // END DELIVERY WIZARD FUNCTIONS
+    // =========================================================================
+    
     const DASH_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') ||
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
@@ -3009,6 +3527,8 @@
             openPaymentWizard();
           } else if (wizard === 'store-setup') {
             openStoreWizard();
+          } else if (wizard === 'delivery-setup') {
+            openDeliveryWizard();
           }
         });
       });
@@ -3022,6 +3542,7 @@
       // Make functions globally accessible for testing
       window.testPaymentWizard = openPaymentWizard;
       window.testStoreWizard = openStoreWizard;
+      window.testDeliveryWizard = openDeliveryWizard;
     }
     
     if (document.readyState === 'loading') {

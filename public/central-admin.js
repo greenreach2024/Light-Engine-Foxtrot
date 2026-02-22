@@ -881,6 +881,7 @@ function renderContextualSidebar() {
                     items: [
                         { label: 'Admin Dashboard', view: 'wholesale-admin' },
                         { label: 'Buyers', view: 'wholesale-buyers' },
+                        { label: 'Delivery Management', view: 'delivery-management' },
                         { label: 'Buyer Portal', view: 'wholesale-buyer' }
                     ]
                 },
@@ -2704,6 +2705,10 @@ async function navigate(view, element) {
             if (INFO_CARDS['wholesale-buyer']) {
                 showInfoCard(createInfoCard(INFO_CARDS['wholesale-buyer'].title, INFO_CARDS['wholesale-buyer'].subtitle, INFO_CARDS['wholesale-buyer'].sections));
             }
+            break;
+        case 'delivery-management':
+            document.getElementById('delivery-management-view').style.display = 'block';
+            await loadDeliveryManagementData();
             break;
         case 'overview':
             document.getElementById('overview-view').style.display = 'block';
@@ -5332,6 +5337,201 @@ console.log('✅ [Global Functions] User management functions exposed to window:
 
 // ============================================================================
 // AUTHENTICATION INITIALIZATION - Run auth check on page load
+// ============================================================================
+// DELIVERY MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Load delivery management dashboard data
+ */
+async function loadDeliveryManagementData() {
+    console.log('[Delivery] Loading delivery management data...');
+    
+    try {
+        // Load today's deliveries from all farms
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get list of farms to query their deliveries
+        const farmsResp = await fetch(`${API_BASE}/api/admin/farms`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        
+        let farms = [];
+        if (farmsResp.ok) {
+            const farmsData = await farmsResp.json();
+            farms = farmsData.farms || [];
+        }
+        
+        // For now, show placeholder data with counts
+        updateDeliveryKPIs({
+            pending: 0,
+            inTransit: 0,
+            completed: 0,
+            farmsWithDelivery: farms.filter(f => f.delivery_enabled).length || 0
+        });
+        
+        renderDeliveriesList([]);
+        renderFarmDeliverySettings(farms);
+        
+    } catch (error) {
+        console.error('[Delivery] Failed to load data:', error);
+        document.getElementById('deliveries-list').innerHTML = `
+            <p style="text-align: center; color: var(--danger); padding: 2rem;">
+                Failed to load delivery data. Please try again.
+            </p>
+        `;
+    }
+}
+
+/**
+ * Update delivery KPI cards
+ */
+function updateDeliveryKPIs(data) {
+    document.getElementById('delivery-pending-count').textContent = data.pending || 0;
+    document.getElementById('delivery-transit-count').textContent = data.inTransit || 0;
+    document.getElementById('delivery-completed-count').textContent = data.completed || 0;
+    document.getElementById('delivery-farms-count').textContent = data.farmsWithDelivery || 0;
+    
+    if (data.pending + data.completed > 0) {
+        const pct = Math.round((data.completed / (data.pending + data.completed)) * 100);
+        document.getElementById('delivery-completed-pct').textContent = `${pct}% on-time`;
+    }
+}
+
+/**
+ * Render deliveries list
+ */
+function renderDeliveriesList(deliveries) {
+    const container = document.getElementById('deliveries-list');
+    
+    if (!deliveries || deliveries.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                <h3 style="margin-bottom: 0.5rem;">No deliveries scheduled</h3>
+                <p>Deliveries will appear here when wholesale buyers place orders with delivery.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--surface-alt); text-align: left;">
+                    <th style="padding: 0.75rem;">Order ID</th>
+                    <th style="padding: 0.75rem;">Farm</th>
+                    <th style="padding: 0.75rem;">Buyer</th>
+                    <th style="padding: 0.75rem;">Time Slot</th>
+                    <th style="padding: 0.75rem;">Status</th>
+                    <th style="padding: 0.75rem;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${deliveries.map(d => `
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem;">${d.order_id}</td>
+                        <td style="padding: 0.75rem;">${d.farm_name || d.farm_id}</td>
+                        <td style="padding: 0.75rem;">${d.buyer_name || d.buyer_email}</td>
+                        <td style="padding: 0.75rem;">${d.time_slot || 'Flexible'}</td>
+                        <td style="padding: 0.75rem;">
+                            <span class="badge badge-${getDeliveryStatusClass(d.status)}">${d.status}</span>
+                        </td>
+                        <td style="padding: 0.75rem;">
+                            <button class="btn btn-sm" onclick="viewDeliveryDetails('${d.delivery_id}')">View</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Get CSS class for delivery status badge
+ */
+function getDeliveryStatusClass(status) {
+    const statusClasses = {
+        'scheduled': 'info',
+        'assigned': 'warning',
+        'en_route': 'primary',
+        'delivered': 'success',
+        'failed': 'danger'
+    };
+    return statusClasses[status] || 'secondary';
+}
+
+/**
+ * Render farm delivery settings summary
+ */
+function renderFarmDeliverySettings(farms) {
+    const container = document.getElementById('farm-delivery-settings');
+    
+    if (!farms || farms.length === 0) {
+        container.innerHTML = `
+            <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                No farms registered yet.
+            </p>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--surface-alt); text-align: left;">
+                    <th style="padding: 0.75rem;">Farm</th>
+                    <th style="padding: 0.75rem;">Delivery Status</th>
+                    <th style="padding: 0.75rem;">Channels</th>
+                    <th style="padding: 0.75rem;">Fee Structure</th>
+                    <th style="padding: 0.75rem;">Delivery Days</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${farms.slice(0, 20).map(farm => `
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem;">${farm.name || farm.farm_id}</td>
+                        <td style="padding: 0.75rem;">
+                            <span class="badge badge-${farm.delivery_enabled ? 'success' : 'secondary'}">
+                                ${farm.delivery_enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </td>
+                        <td style="padding: 0.75rem;">
+                            ${farm.delivery_types?.d2c ? 'D2C ' : ''}${farm.delivery_types?.wholesale ? 'Wholesale' : ''}
+                            ${!farm.delivery_types?.d2c && !farm.delivery_types?.wholesale ? '-' : ''}
+                        </td>
+                        <td style="padding: 0.75rem;">${farm.fee_structure || '-'}</td>
+                        <td style="padding: 0.75rem;">${farm.delivery_days?.join(', ') || '-'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Refresh deliveries list
+ */
+async function refreshDeliveries() {
+    await loadDeliveryManagementData();
+}
+
+/**
+ * Placeholder for route optimization
+ */
+async function optimizeRoutes() {
+    alert('Route optimization will analyze pending deliveries and create optimal routes based on location and time windows.');
+}
+
+/**
+ * Placeholder for viewing delivery details
+ */
+function viewDeliveryDetails(deliveryId) {
+    alert(`Delivery details for ${deliveryId} - Full details modal coming soon.`);
+}
+
+// ============================================================================
+// AUTHENTICATION FUNCTIONS
 // ============================================================================
 (async function initAuth() {
     console.log('🔐 [initAuth] Starting authentication check...');

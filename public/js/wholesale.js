@@ -1952,17 +1952,20 @@
         const paymentToken = await this.createPaymentToken();
 
         // Prepare order data
+        const fulfillmentMethod = document.querySelector('input[name="fulfillment-method"]:checked')?.value || 'delivery';
+        
         const orderData = {
           buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
           buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
           buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
           buyer_phone: this.currentBuyer?.phone || '',
-          delivery_address: document.getElementById('delivery-address')?.value,
-          delivery_city: document.getElementById('delivery-city')?.value,
-          delivery_province: document.getElementById('delivery-province')?.value,
-          delivery_postal_code: document.getElementById('delivery-postal')?.value,
+          fulfillment_method: fulfillmentMethod,
+          delivery_address: fulfillmentMethod === 'delivery' ? document.getElementById('delivery-address')?.value : null,
+          delivery_city: fulfillmentMethod === 'delivery' ? document.getElementById('delivery-city')?.value : null,
+          delivery_province: fulfillmentMethod === 'delivery' ? document.getElementById('delivery-province')?.value : null,
+          delivery_postal_code: fulfillmentMethod === 'delivery' ? document.getElementById('delivery-postal')?.value : null,
           delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
-          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
+          delivery_time_slot: fulfillmentMethod === 'delivery' ? (document.getElementById('delivery-time-slot')?.value || 'flexible') : null,
           fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
           cart_items: this.cart.map(item => ({
             sku_id: item.sku_id,
@@ -2328,4 +2331,98 @@
       });
     }
   });
+  
+  // =========================================================================
+  // FULFILLMENT METHOD HANDLERS (global functions for checkout)
+  // =========================================================================
+  
+  /**
+   * Handle fulfillment method toggle (pickup vs delivery)
+   */
+  window.updateFulfillmentMethod = function() {
+    const method = document.querySelector('input[name="fulfillment-method"]:checked')?.value || 'delivery';
+    const deliveryAddressFields = document.getElementById('delivery-address-fields');
+    const pickupAddressFields = document.getElementById('pickup-address-fields');
+    const deliveryTimeSlotGroup = document.getElementById('delivery-time-slot-group');
+    const deliveryDetailsSection = document.getElementById('delivery-details-section');
+    const deliveryDetailsSectionH2 = deliveryDetailsSection?.querySelector('h2');
+    
+    // Update styles on fulfillment options
+    document.querySelectorAll('.fulfillment-option').forEach(opt => {
+      const input = opt.querySelector('input');
+      if (input?.value === method) {
+        opt.style.borderColor = 'var(--accent)';
+        opt.style.background = 'rgba(130, 195, 65, 0.05)';
+      } else {
+        opt.style.borderColor = 'var(--border)';
+        opt.style.background = 'transparent';
+      }
+    });
+    
+    if (method === 'pickup') {
+      // Show pickup fields, hide delivery fields
+      if (deliveryAddressFields) deliveryAddressFields.style.display = 'none';
+      if (pickupAddressFields) pickupAddressFields.style.display = 'block';
+      if (deliveryTimeSlotGroup) deliveryTimeSlotGroup.style.display = 'none';
+      if (deliveryDetailsSectionH2) deliveryDetailsSectionH2.textContent = 'Pickup Details';
+      
+      // Make delivery address fields not required
+      ['delivery-address', 'delivery-city', 'delivery-postal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.removeAttribute('required');
+      });
+    } else {
+      // Show delivery fields, hide pickup fields
+      if (deliveryAddressFields) deliveryAddressFields.style.display = 'block';
+      if (pickupAddressFields) pickupAddressFields.style.display = 'none';
+      if (deliveryTimeSlotGroup) deliveryTimeSlotGroup.style.display = 'block';
+      if (deliveryDetailsSectionH2) deliveryDetailsSectionH2.textContent = 'Delivery Details';
+      
+      // Make delivery address fields required again
+      ['delivery-address', 'delivery-city', 'delivery-postal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('required', 'required');
+      });
+    }
+    
+    // Update cart summary with delivery fee
+    updateCheckoutTotals();
+  };
+  
+  /**
+   * Update checkout totals including delivery fees
+   */
+  window.updateCheckoutTotals = function() {
+    const method = document.querySelector('input[name="fulfillment-method"]:checked')?.value || 'delivery';
+    const deliveryFeeDisplay = document.getElementById('delivery-fee-display');
+    
+    // For now, show a placeholder. In production, this would fetch actual farm delivery fees.
+    if (method === 'pickup') {
+      if (deliveryFeeDisplay) deliveryFeeDisplay.textContent = 'Free';
+    } else {
+      // Calculate delivery fee based on cart farms and their delivery settings
+      // This is a placeholder - would need to check each farm's delivery settings
+      if (deliveryFeeDisplay) deliveryFeeDisplay.textContent = 'Fee varies by farm & zone';
+    }
+  };
+  
+  /**
+   * Load delivery settings for farms in cart
+   */
+  window.loadFarmDeliverySettings = async function(farmIds) {
+    const settings = {};
+    for (const farmId of farmIds) {
+      try {
+        const resp = await fetch(`/api/farm-sales/delivery/settings/public/${farmId}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          settings[farmId] = data;
+        }
+      } catch (e) {
+        console.log(`Could not load delivery settings for farm ${farmId}:`, e);
+      }
+    }
+    return settings;
+  };
+  
 })();

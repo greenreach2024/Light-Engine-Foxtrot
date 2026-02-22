@@ -2287,6 +2287,101 @@
                 </div>
             </div>
 
+            <!-- Delivery Management View -->
+            <div id="delivery-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Delivery Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Delivery Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Manage delivery schedules, routes, and driver assignments</p>
+                </div>
+
+                <!-- Delivery KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Pending Deliveries</div>
+                        <div class="kpi-value" id="delivery-pending-count">0</div>
+                        <div class="kpi-change neutral">Today</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">In Transit</div>
+                        <div class="kpi-value" id="delivery-transit-count">0</div>
+                        <div class="kpi-change positive">Active now</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Completed Today</div>
+                        <div class="kpi-value" id="delivery-completed-count">0</div>
+                        <div class="kpi-change positive" id="delivery-completed-pct">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Farms Offering Delivery</div>
+                        <div class="kpi-value" id="delivery-farms-count">0</div>
+                        <div class="kpi-change neutral">Configured</div>
+                    </div>
+                </div>
+
+                <!-- Delivery Actions -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2>Today's Deliveries</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <select id="delivery-date-filter" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border);">
+                                <option value="today">Today</option>
+                                <option value="tomorrow">Tomorrow</option>
+                                <option value="week">This Week</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="refreshDeliveries()">
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="deliveries-list" style="min-height: 200px;">
+                            <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                Loading deliveries...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Routes -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2>Delivery Routes</h2>
+                        <button class="btn btn-secondary" onclick="optimizeRoutes()">
+                            Optimize Routes
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="delivery-routes-list" style="min-height: 150px;">
+                            <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                No routes created yet. Add deliveries and click "Optimize Routes" to generate.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Farm Delivery Settings -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header">
+                        <h2>Farm Delivery Settings</h2>
+                    </div>
+                    <div class="card-body">
+                        <div id="farm-delivery-settings" style="min-height: 150px;">
+                            <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                Loading farm delivery configurations...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Farm Management View -->
             <div id="farm-management-view" class="view" style="display: none;">
                 <div class="breadcrumb">

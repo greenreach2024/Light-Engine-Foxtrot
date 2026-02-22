@@ -1,6 +1,12 @@
 /**
  * Farm Sales - Delivery Management
  * Route planning and delivery scheduling for D2C orders (MULTI-TENANT)
+ * 
+ * Includes:
+ * - Farm delivery settings (enable/disable, fees, zones, schedules)
+ * - Delivery scheduling and tracking
+ * - Route optimization
+ * - Wholesale delivery integration
  */
 
 import express from 'express';
@@ -9,30 +15,283 @@ import { farmStores } from '../../lib/farm-store.js';
 
 const router = express.Router();
 
-// Apply authentication to all routes
-router.use(farmAuthMiddleware);
+// In-memory farm delivery settings (would be persisted to DB in production)
+const farmDeliverySettings = new Map();
 
 // In-memory route storage (shared across farms for optimization)
 const routes = new Map();
 const routeSequence = { current: 100 };
 
 /**
- * Delivery time windows (configurable by farm)
+ * Default delivery time windows
  */
-const TIME_WINDOWS = {
-  MORNING: { id: 'morning', label: 'Morning (8am-12pm)', start: '08:00', end: '12:00' },
-  AFTERNOON: { id: 'afternoon', label: 'Afternoon (12pm-4pm)', start: '12:00', end: '16:00' },
-  EVENING: { id: 'evening', label: 'Evening (4pm-8pm)', start: '16:00', end: '20:00' }
+const DEFAULT_TIME_WINDOWS = {
+  MORNING: { id: 'morning', label: 'Morning (8am-12pm)', start: '08:00', end: '12:00', enabled: true },
+  AFTERNOON: { id: 'afternoon', label: 'Afternoon (12pm-4pm)', start: '12:00', end: '16:00', enabled: true },
+  EVENING: { id: 'evening', label: 'Evening (4pm-8pm)', start: '16:00', end: '20:00', enabled: false }
 };
 
 /**
- * Delivery zones (would be configured per farm's service area)
+ * Default delivery zones
  */
+const DEFAULT_DELIVERY_ZONES = [
+  { id: 'zone_local', name: 'Local (0-10 km)', fee: 0, min_order: 25, max_distance_km: 10 },
+  { id: 'zone_nearby', name: 'Nearby (10-25 km)', fee: 5, min_order: 35, max_distance_km: 25 },
+  { id: 'zone_extended', name: 'Extended (25-50 km)', fee: 10, min_order: 50, max_distance_km: 50 }
+];
+
+/**
+ * Get farm delivery settings (creates defaults if not exists)
+ */
+function getFarmDeliverySettings(farmId) {
+  if (!farmDeliverySettings.has(farmId)) {
+    farmDeliverySettings.set(farmId, {
+      farm_id: farmId,
+      enabled: false,
+      delivery_types: {
+        wholesale: false,
+        d2c: false
+      },
+      fee_structure: 'zone_based', // 'flat', 'zone_based', 'distance_based', 'free_over_min'
+      flat_fee: 5.00,
+      free_delivery_minimum: 100,
+      zones: JSON.parse(JSON.stringify(DEFAULT_DELIVERY_ZONES)),
+      time_windows: JSON.parse(JSON.stringify(DEFAULT_TIME_WINDOWS)),
+      delivery_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      lead_time_hours: 24, // Minimum hours advance notice for delivery
+      max_deliveries_per_window: 20,
+      driver_instructions: '',
+      contact_phone: '',
+      pickup_location: {
+        address: '',
+        notes: ''
+      },
+      updated_at: new Date().toISOString()
+    });
+  }
+  return farmDeliverySettings.get(farmId);
+}
+
+// Helper to get time windows for a farm
+function getTimeWindowsForFarm(farmId) {
+  const settings = getFarmDeliverySettings(farmId);
+  return settings.time_windows;
+}
+
+// Helper to get zones for a farm
+function getZonesForFarm(farmId) {
+  const settings = getFarmDeliverySettings(farmId);
+  return settings.zones;
+}
+
+// Legacy TIME_WINDOWS for backwards compatibility
+const TIME_WINDOWS = DEFAULT_TIME_WINDOWS;
 const DELIVERY_ZONES = {
   ZONE_A: { id: 'zone_a', name: 'Downtown', fee: 0, min_order: 25 },
   ZONE_B: { id: 'zone_b', name: 'Suburbs', fee: 5, min_order: 35 },
   ZONE_C: { id: 'zone_c', name: 'Rural', fee: 10, min_order: 50 }
 };
+
+// ============================================================================
+// PUBLIC ROUTES (no auth required - for buyers checking delivery availability)
+// ============================================================================
+
+/**
+ * GET /api/farm-sales/delivery/settings/public/:farmId
+ * Get public delivery settings for a farm (for buyers to see delivery options)
+ */
+router.get('/settings/public/:farmId', (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const settings = getFarmDeliverySettings(farmId);
+    
+    // Return only public-facing settings
+    res.json({
+      ok: true,
+      delivery_enabled: settings.enabled,
+      delivery_types: settings.delivery_types,
+      fee_structure: settings.fee_structure,
+      flat_fee: settings.flat_fee,
+      free_delivery_minimum: settings.free_delivery_minimum,
+      zones: settings.zones.map(z => ({
+        id: z.id,
+        name: z.name,
+        fee: z.fee,
+        min_order: z.min_order
+      })),
+      time_windows: Object.entries(settings.time_windows)
+        .filter(([_, w]) => w.enabled)
+        .map(([_, w]) => ({
+          id: w.id,
+          label: w.label,
+          start: w.start,
+          end: w.end
+        })),
+      delivery_days: settings.delivery_days,
+      lead_time_hours: settings.lead_time_hours
+    });
+  } catch (error) {
+    console.error('[delivery] Get public settings failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'settings_fetch_failed',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// AUTHENTICATED ROUTES (farm auth required)
+// ============================================================================
+
+// Apply authentication to remaining routes
+router.use(farmAuthMiddleware);
+
+/**
+ * GET /api/farm-sales/delivery/settings
+ * Get full delivery settings for the authenticated farm
+ */
+router.get('/settings', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const settings = getFarmDeliverySettings(farmId);
+    
+    res.json({
+      ok: true,
+      settings
+    });
+  } catch (error) {
+    console.error('[delivery] Get settings failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'settings_fetch_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/farm-sales/delivery/settings
+ * Update delivery settings for the authenticated farm
+ */
+router.put('/settings', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const updates = req.body;
+    const settings = getFarmDeliverySettings(farmId);
+    
+    // Merge updates
+    const allowedFields = [
+      'enabled', 'delivery_types', 'fee_structure', 'flat_fee',
+      'free_delivery_minimum', 'zones', 'time_windows', 'delivery_days',
+      'lead_time_hours', 'max_deliveries_per_window', 'driver_instructions',
+      'contact_phone', 'pickup_location'
+    ];
+    
+    allowedFields.forEach(field => {
+      if (updates[field] !== undefined) {
+        settings[field] = updates[field];
+      }
+    });
+    
+    settings.updated_at = new Date().toISOString();
+    farmDeliverySettings.set(farmId, settings);
+    
+    console.log(`[delivery] Updated settings for farm ${farmId}:`, {
+      enabled: settings.enabled,
+      delivery_types: settings.delivery_types
+    });
+    
+    res.json({
+      ok: true,
+      message: 'Delivery settings updated',
+      settings
+    });
+  } catch (error) {
+    console.error('[delivery] Update settings failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'settings_update_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/delivery/zones
+ * Add a new delivery zone
+ */
+router.post('/zones', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { name, fee, min_order, max_distance_km } = req.body;
+    const settings = getFarmDeliverySettings(farmId);
+    
+    const newZone = {
+      id: `zone_${Date.now()}`,
+      name: name || 'New Zone',
+      fee: fee || 0,
+      min_order: min_order || 0,
+      max_distance_km: max_distance_km || 25
+    };
+    
+    settings.zones.push(newZone);
+    settings.updated_at = new Date().toISOString();
+    farmDeliverySettings.set(farmId, settings);
+    
+    res.status(201).json({
+      ok: true,
+      zone: newZone,
+      zones: settings.zones
+    });
+  } catch (error) {
+    console.error('[delivery] Add zone failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'zone_add_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/farm-sales/delivery/zones/:zoneId
+ * Remove a delivery zone
+ */
+router.delete('/zones/:zoneId', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { zoneId } = req.params;
+    const settings = getFarmDeliverySettings(farmId);
+    
+    const initialLength = settings.zones.length;
+    settings.zones = settings.zones.filter(z => z.id !== zoneId);
+    
+    if (settings.zones.length === initialLength) {
+      return res.status(404).json({
+        ok: false,
+        error: 'zone_not_found',
+        message: `Zone ${zoneId} not found`
+      });
+    }
+    
+    settings.updated_at = new Date().toISOString();
+    farmDeliverySettings.set(farmId, settings);
+    
+    res.json({
+      ok: true,
+      message: 'Zone removed',
+      zones: settings.zones
+    });
+  } catch (error) {
+    console.error('[delivery] Remove zone failed:', error);
+    res.status(500).json({
+      ok: false,
+      error: 'zone_remove_failed',
+      message: error.message
+    });
+  }
+});
 
 /**
  * GET /api/farm-sales/delivery/windows

@@ -1803,6 +1803,29 @@
         <h1>Checkout</h1>
         
         <div class="checkout-section">
+          <h2>Fulfillment Method</h2>
+          <div id="fulfillment-method-options" style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <label class="fulfillment-option" style="flex: 1; padding: 1rem; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+              <input type="radio" name="fulfillment-method" value="pickup" style="margin-right: 0.5rem;" onchange="updateFulfillmentMethod()">
+              <strong>Farm Pickup</strong>
+              <p style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">Pick up from farm location</p>
+              <p style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--success); font-weight: 500;">Free</p>
+            </label>
+            <label class="fulfillment-option" style="flex: 1; padding: 1rem; border: 2px solid var(--accent); border-radius: 8px; cursor: pointer; background: rgba(130, 195, 65, 0.05); transition: all 0.2s;">
+              <input type="radio" name="fulfillment-method" value="delivery" checked style="margin-right: 0.5rem;" onchange="updateFulfillmentMethod()">
+              <strong>Delivery</strong>
+              <p style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">Delivered to your location</p>
+              <p id="delivery-fee-display" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--primary); font-weight: 500;">Fee varies by zone</p>
+            </label>
+          </div>
+          
+          <div id="delivery-not-available-notice" style="display: none; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; margin-bottom: 1rem;">
+            <strong>⚠️ Delivery not available</strong>
+            <p style="margin: 0.5rem 0 0; font-size: 0.9rem;">One or more farms in your cart don't offer delivery. You can still pick up from each farm location.</p>
+          </div>
+        </div>
+        
+        <div class="checkout-section" id="delivery-details-section">
           <h2>Delivery Details</h2>
           <form id="checkout-form">
             <div class="form-group">
@@ -1828,43 +1851,58 @@
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="delivery-address">Delivery Address</label>
-              <input type="text" id="delivery-address" placeholder="Street Address" required />
+            <div id="delivery-address-fields">
+              <div class="form-group">
+                <label for="delivery-address">Delivery Address</label>
+                <input type="text" id="delivery-address" placeholder="Street Address" required />
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="delivery-city">City</label>
+                  <input type="text" id="delivery-city" required />
+                </div>
+                <div class="form-group">
+                  <label for="delivery-province">Province</label>
+                  <select id="delivery-province" required>
+                    <option value="BC">British Columbia</option>
+                    <option value="AB">Alberta</option>
+                    <option value="SK">Saskatchewan</option>
+                    <option value="MB">Manitoba</option>
+                    <option value="ON">Ontario</option>
+                    <option value="QC">Quebec</option>
+                    <option value="NB">New Brunswick</option>
+                    <option value="NS">Nova Scotia</option>
+                    <option value="PE">Prince Edward Island</option>
+                    <option value="NL">Newfoundland and Labrador</option>
+                    <option value="YT">Yukon</option>
+                    <option value="NT">Northwest Territories</option>
+                    <option value="NU">Nunavut</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="delivery-postal">Postal Code</label>
+                  <input type="text" id="delivery-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" required />
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="delivery-instructions">Delivery Instructions (optional)</label>
+                <textarea id="delivery-instructions" placeholder="Loading dock hours, gate codes, contact person, special handling..."></textarea>
+                <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                  ℹ️ These notes will be shared with the delivery driver
+                </p>
+              </div>
             </div>
             
-            <div class="form-row">
-              <div class="form-group">
-                <label for="delivery-city">City</label>
-                <input type="text" id="delivery-city" required />
+            <div id="pickup-address-fields" style="display: none;">
+              <div class="form-group" style="background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                <h4 style="margin: 0 0 0.5rem;">Pickup Location(s)</h4>
+                <div id="pickup-locations-list">
+                  <!-- Populated by JS based on farms in cart -->
+                  <p style="color: var(--text-secondary); font-size: 0.9rem;">Pickup locations will be displayed after you place your order.</p>
+                </div>
               </div>
-              <div class="form-group">
-                <label for="delivery-province">Province</label>
-                <select id="delivery-province" required>
-                  <option value="BC">British Columbia</option>
-                  <option value="AB">Alberta</option>
-                  <option value="SK">Saskatchewan</option>
-                  <option value="MB">Manitoba</option>
-                  <option value="ON">Ontario</option>
-                  <option value="QC">Quebec</option>
-                  <option value="NB">New Brunswick</option>
-                  <option value="NS">Nova Scotia</option>
-                  <option value="PE">Prince Edward Island</option>
-                  <option value="NL">Newfoundland and Labrador</option>
-                  <option value="YT">Yukon</option>
-                  <option value="NT">Northwest Territories</option>
-                  <option value="NU">Nunavut</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="delivery-postal">Postal Code</label>
-                <input type="text" id="delivery-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" required />
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="delivery-instructions">Delivery Instructions (optional)</label>
-              <textarea id="delivery-instructions" placeholder="Loading dock hours, gate codes, etc."></textarea>
             </div>
 
             <div class="form-group">
@@ -1875,7 +1913,7 @@
               </p>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="delivery-time-slot-group">
               <label for="delivery-time-slot">Preferred Delivery Time</label>
               <select id="delivery-time-slot" required>
                 <option value="">Select time slot...</option>
