@@ -82,6 +82,27 @@ function eventId() {
   return `TE-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
+function isDemoOrTestText(value) {
+  return /(\btest\b|\bdemo\b)/i.test(String(value || ''));
+}
+
+function isVisibleTraceRecord(record) {
+  return !(
+    isDemoOrTestText(record?.common_name)
+    || isDemoOrTestText(record?.recipe_id)
+    || isDemoOrTestText(record?.lot_code)
+  );
+}
+
+function getVisibleTraceRecords() {
+  return traceRecords.filter(isVisibleTraceRecord);
+}
+
+function getVisibleTraceEvents() {
+  const visibleLots = new Set(getVisibleTraceRecords().map((record) => record.lot_code));
+  return traceEvents.filter((event) => visibleLots.has(event.lot_code));
+}
+
 // ======================================================================
 //  AUTO-CREATE trace record  (called internally from harvest endpoint)
 // ======================================================================
@@ -266,7 +287,7 @@ export function updateTraceStatus(lotCode, status, operator, detail) {
 // ── GET / — List trace records with filters ──────────────────────────
 router.get('/', (req, res) => {
   const { status, crop, lot_code, from_date, to_date, limit } = req.query;
-  let results = [...traceRecords];
+  let results = getVisibleTraceRecords();
 
   if (status)    results = results.filter(r => r.status === status);
   if (crop)      results = results.filter(r => (r.common_name || '').toLowerCase().includes(crop.toLowerCase()));
@@ -284,26 +305,28 @@ router.get('/', (req, res) => {
 router.get('/stats', (req, res) => {
   const now = new Date();
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const visibleRecords = getVisibleTraceRecords();
+  const visibleEvents = getVisibleTraceEvents();
 
-  const total   = traceRecords.length;
-  const active  = traceRecords.filter(r => ['harvested', 'packed'].includes(r.status)).length;
-  const shipped = traceRecords.filter(r => r.status === 'shipped').length;
-  const recent  = traceRecords.filter(r => r.harvest_date >= thirtyDaysAgo).length;
-  const withCustomer = traceRecords.filter(r => r.customers.length > 0).length;
-  const crops   = [...new Set(traceRecords.map(r => r.common_name))].length;
+  const total   = visibleRecords.length;
+  const active  = visibleRecords.filter(r => ['harvested', 'packed'].includes(r.status)).length;
+  const shipped = visibleRecords.filter(r => r.status === 'shipped').length;
+  const recent  = visibleRecords.filter(r => r.harvest_date >= thirtyDaysAgo).length;
+  const withCustomer = visibleRecords.filter(r => r.customers.length > 0).length;
+  const crops   = [...new Set(visibleRecords.map(r => r.common_name))].length;
 
   res.json({
     success: true,
-    stats: { total, active, shipped, recent, withCustomer, crops, events: traceEvents.length }
+    stats: { total, active, shipped, recent, withCustomer, crops, events: visibleEvents.length }
   });
 });
 
 // ── GET /:lotCode — Full trace detail for a single lot ───────────────
 router.get('/lot/:lotCode', (req, res) => {
-  const record = traceRecords.find(r => r.lot_code === req.params.lotCode);
+  const record = getVisibleTraceRecords().find(r => r.lot_code === req.params.lotCode);
   if (!record) return res.status(404).json({ success: false, error: 'Lot not found' });
 
-  const events = traceEvents
+  const events = getVisibleTraceEvents()
     .filter(e => e.lot_code === req.params.lotCode)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -312,10 +335,10 @@ router.get('/lot/:lotCode', (req, res) => {
 
 // ── GET /:lotCode/timeline — Public scannable QR endpoint ────────────
 router.get('/lot/:lotCode/timeline', (req, res) => {
-  const record = traceRecords.find(r => r.lot_code === req.params.lotCode);
+  const record = getVisibleTraceRecords().find(r => r.lot_code === req.params.lotCode);
   if (!record) return res.status(404).json({ success: false, error: 'Lot not found' });
 
-  const events = traceEvents
+  const events = getVisibleTraceEvents()
     .filter(e => e.lot_code === req.params.lotCode)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -376,10 +399,10 @@ router.post('/event', (req, res) => {
 
 // ── GET /recall/:lotCode — Recall report (SFCR 24-hour response) ─────
 router.get('/recall/:lotCode', async (req, res) => {
-  const record = traceRecords.find(r => r.lot_code === req.params.lotCode);
+  const record = getVisibleTraceRecords().find(r => r.lot_code === req.params.lotCode);
   if (!record) return res.status(404).json({ success: false, error: 'Lot not found' });
 
-  const events = traceEvents
+  const events = getVisibleTraceEvents()
     .filter(e => e.lot_code === req.params.lotCode)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -446,7 +469,7 @@ router.get('/recall/:lotCode', async (req, res) => {
 // ── GET /sfcr-export — Full SFCR compliance export (plain text CSV) ──
 router.get('/sfcr-export', async (req, res) => {
   const { from_date, to_date, format } = req.query;
-  let records = [...traceRecords];
+  let records = getVisibleTraceRecords();
 
   if (from_date) records = records.filter(r => r.harvest_date >= from_date);
   if (to_date)   records = records.filter(r => r.harvest_date <= to_date);
@@ -518,7 +541,7 @@ router.get('/sfcr-export', async (req, res) => {
 
 // ── GET /label-data/:lotCode — All data needed for SFCR-compliant label
 router.get('/label-data/:lotCode', async (req, res) => {
-  const record = traceRecords.find(r => r.lot_code === req.params.lotCode);
+  const record = getVisibleTraceRecords().find(r => r.lot_code === req.params.lotCode);
   if (!record) return res.status(404).json({ success: false, error: 'Lot not found' });
 
   const farm = await getFarmConfig();
