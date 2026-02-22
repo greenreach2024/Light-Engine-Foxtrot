@@ -204,6 +204,121 @@ function shouldUseNetworkAllocation(req) {
   return true;
 }
 
+const DELIVERY_WINDOWS = ['morning', 'afternoon', 'evening'];
+const DELIVERY_ZONE_RULES = {
+  ZONE_A: { id: 'zone_a', fee: 0, min_order: 25 },
+  ZONE_B: { id: 'zone_b', fee: 5, min_order: 35 },
+  ZONE_C: { id: 'zone_c', fee: 10, min_order: 50 }
+};
+
+function parseBooleanEnv(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const normalized = String(value).toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+/**
+ * POST /api/wholesale/delivery/quote
+ * Buyer-auth delivery quote endpoint for checkout UX.
+ */
+router.post('/delivery/quote', requireBuyerAuth, async (req, res) => {
+  try {
+    const {
+      subtotal = 0,
+      zone,
+      requested_window,
+      fulfillment_method = 'delivery'
+    } = req.body || {};
+
+    const numericSubtotal = Math.max(0, Number(subtotal) || 0);
+    const requestedWindow = String(requested_window || '').trim().toLowerCase();
+    const requestedZone = String(zone || '').trim().toUpperCase();
+    const zoneRule = DELIVERY_ZONE_RULES[requestedZone] || null;
+
+    const deliveryEnabled = parseBooleanEnv(process.env.WHOLESALE_DELIVERY_ENABLED, true);
+    const baseFee = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_BASE_FEE || 0));
+    const baseMinOrder = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_MIN_ORDER || 25));
+    const fee = Math.max(baseFee, Number(zoneRule?.fee || 0));
+    const minimumOrder = Math.max(baseMinOrder, Number(zoneRule?.min_order || 0));
+
+    if (String(fulfillment_method).toLowerCase() === 'pickup') {
+      return res.json({
+        status: 'ok',
+        data: {
+          ok: true,
+          eligible: true,
+          fee: 0,
+          minimum_order: 0,
+          windows: DELIVERY_WINDOWS,
+          reason: 'pickup_selected'
+        }
+      });
+    }
+
+    if (!deliveryEnabled) {
+      return res.json({
+        status: 'ok',
+        data: {
+          ok: true,
+          eligible: false,
+          fee,
+          minimum_order: minimumOrder,
+          windows: DELIVERY_WINDOWS,
+          reason: 'delivery_disabled'
+        }
+      });
+    }
+
+    if (requestedWindow && !DELIVERY_WINDOWS.includes(requestedWindow)) {
+      return res.json({
+        status: 'ok',
+        data: {
+          ok: true,
+          eligible: false,
+          fee,
+          minimum_order: minimumOrder,
+          windows: DELIVERY_WINDOWS,
+          reason: 'window_unavailable'
+        }
+      });
+    }
+
+    if (numericSubtotal < minimumOrder) {
+      return res.json({
+        status: 'ok',
+        data: {
+          ok: true,
+          eligible: false,
+          fee,
+          minimum_order: minimumOrder,
+          windows: DELIVERY_WINDOWS,
+          reason: 'below_minimum_order'
+        }
+      });
+    }
+
+    return res.json({
+      status: 'ok',
+      data: {
+        ok: true,
+        eligible: true,
+        fee,
+        minimum_order: minimumOrder,
+        windows: DELIVERY_WINDOWS,
+        reason: null
+      }
+    });
+  } catch (error) {
+    console.error('[Wholesale] Delivery quote failed:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Unable to compute delivery quote'
+    });
+  }
+});
+
 /**
  * GET /api/wholesale/catalog
  * Get wholesale catalog with optional filtering by farm certifications

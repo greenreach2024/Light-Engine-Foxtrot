@@ -15,6 +15,22 @@ function grLog(...args) { if (GR_DEBUG) console.debug(...args); }
 let currentSession = null;
 let farmData = null;
 
+/**
+ * Auth-aware fetch: automatically attaches the JWT Bearer token to requests
+ * so the farm-data middleware can scope data to the correct farm.
+ * Falls back to plain fetch if no session/token exists.
+ */
+function farmFetch(url, opts = {}) {
+    const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (token && token !== 'local-access') {
+        if (!opts.headers) opts.headers = {};
+        if (!opts.headers['Authorization'] && !opts.headers['authorization']) {
+            opts.headers['Authorization'] = `Bearer ${token}`;
+        }
+    }
+    return fetch(url, opts);
+}
+
 function getPostLoginRedirectPath() {
     const defaultPath = '/LE-farm-admin.html';
     let returnPath = new URLSearchParams(window.location.search).get('return') || '';
@@ -1158,7 +1174,7 @@ async function loadCropsFromDatabase() {
             console.log(' Pricing cache cleared. Loading new defaults.');
         }
         
-        const response = await fetch(`${API_BASE}/data/groups.json`);
+        const response = await farmFetch(`${API_BASE}/data/groups.json`);
         const data = await response.json();
         
         // Extract unique crop names (filter empty strings for farms with no crops yet)
@@ -3913,7 +3929,7 @@ async function loadSettings() {
         // Load farm data from /data/farm.json (source of truth for edge devices)
         let farmData = {};
         try {
-            const farmResponse = await fetch('/data/farm.json');
+            const farmResponse = await farmFetch('/data/farm.json');
             if (farmResponse.ok) {
                 farmData = await farmResponse.json();
                 console.log('[Farm Settings] Loaded farm data from /data/farm.json:', farmData);

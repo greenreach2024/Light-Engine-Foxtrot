@@ -34,6 +34,62 @@ const DELIVERY_ZONES = {
   ZONE_C: { id: 'zone_c', name: 'Rural', fee: 10, min_order: 50 }
 };
 
+// Farm-scoped MVP settings (in-memory for now; persistence in follow-up slice)
+const deliverySettingsByFarm = new Map();
+const deliveryWindowsByFarm = new Map();
+
+function getDefaultDeliverySettings() {
+  return {
+    enabled: false,
+    base_fee: 0,
+    min_order: 25,
+    lead_time_hours: 24,
+    max_deliveries_per_window: 20,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function getFarmDeliverySettings(farmId) {
+  if (!deliverySettingsByFarm.has(farmId)) {
+    deliverySettingsByFarm.set(farmId, getDefaultDeliverySettings());
+  }
+  return deliverySettingsByFarm.get(farmId);
+}
+
+function getDefaultDeliveryWindows() {
+  return Object.values(TIME_WINDOWS).map((window) => ({
+    ...window,
+    active: true
+  }));
+}
+
+function getFarmDeliveryWindows(farmId) {
+  if (!deliveryWindowsByFarm.has(farmId)) {
+    deliveryWindowsByFarm.set(farmId, getDefaultDeliveryWindows());
+  }
+  return deliveryWindowsByFarm.get(farmId);
+}
+
+function normalizeWindowsInput(input = []) {
+  if (!Array.isArray(input)) return null;
+  const allowedIds = new Set(Object.values(TIME_WINDOWS).map((w) => w.id));
+
+  const normalized = input
+    .map((item) => ({
+      id: String(item.id || '').trim(),
+      active: item.active !== false
+    }))
+    .filter((item) => allowedIds.has(item.id));
+
+  if (!normalized.length) return null;
+
+  const byId = new Map(normalized.map((w) => [w.id, w.active]));
+  return Object.values(TIME_WINDOWS).map((window) => ({
+    ...window,
+    active: byId.has(window.id) ? byId.get(window.id) : true
+  }));
+}
+
 /**
  * GET /api/farm-sales/delivery/windows
  * Get available delivery windows for a date
@@ -47,17 +103,25 @@ router.get('/windows', (req, res) => {
     const { date, zone } = req.query;
     const farmId = req.farm_id;
 
+    // Config mode (MVP): return farm-scoped delivery window settings
     if (!date) {
-      return res.status(400).json({
-        ok: false,
-        error: 'date_required',
-        message: 'Date parameter required (YYYY-MM-DD)'
+      return res.json({
+        ok: true,
+        farm_id: farmId,
+        windows: getFarmDeliveryWindows(farmId)
       });
     }
 
     const deliveryDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const settings = getFarmDeliverySettings(farmId);
+    const configuredWindows = getFarmDeliveryWindows(farmId);
+    const activeWindows = configuredWindows.filter((w) => w.active);
+    const effectiveWindowTemplates = activeWindows.length
+      ? activeWindows
+      : configuredWindows;
 
     // Can't deliver in the past
     if (deliveryDate < today) {
@@ -72,9 +136,9 @@ router.get('/windows', (req, res) => {
     const existingDeliveries = farmStores.deliveries.getAllForFarm(farmId)
       .filter(d => d.delivery_date === date);
 
-    const windows = Object.values(TIME_WINDOWS).map(window => {
+    const windows = effectiveWindowTemplates.map(window => {
       const windowDeliveries = existingDeliveries.filter(d => d.time_slot === window.id);
-      const capacity = 20; // Max deliveries per window
+      const capacity = Number(settings.max_deliveries_per_window || 20);
       const available = capacity - windowDeliveries.length;
 
       return {
@@ -101,6 +165,188 @@ router.get('/windows', (req, res) => {
       message: error.message
     });
   }
+});
+
+/**
+ * PUT /api/farm-sales/delivery/windows
+ * Update active delivery windows for farm
+ */
+router.put('/windows', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const normalized = normalizeWindowsInput(req.body?.windows);
+
+    if (!normalized) {
+      return res.status(400).json({
+        ok: false,
+        error: 'invalid_windows',
+        message: 'windows must be a non-empty array with valid window IDs'
+      });
+    }
+
+    deliveryWindowsByFarm.set(farmId, normalized);
+
+    return res.json({
+      ok: true,
+      farm_id: farmId,
+      windows: normalized,
+      updated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[farm-sales] Delivery windows update failed:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'windows_update_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/delivery/settings
+ * Get farm-scoped delivery settings
+ */
+router.get('/settings', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    return res.json({
+      ok: true,
+      farm_id: farmId,
+      settings: getFarmDeliverySettings(farmId)
+    });
+  } catch (error) {
+    console.error('[farm-sales] Delivery settings get failed:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'settings_get_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/farm-sales/delivery/settings
+ * Update farm-scoped delivery settings
+ */
+router.put('/settings', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const current = getFarmDeliverySettings(farmId);
+    const incoming = req.body || {};
+
+    const next = {
+      ...current,
+      enabled: incoming.enabled === undefined ? current.enabled : Boolean(incoming.enabled),
+      base_fee: incoming.base_fee === undefined ? current.base_fee : Math.max(0, Number(incoming.base_fee) || 0),
+      min_order: incoming.min_order === undefined ? current.min_order : Math.max(0, Number(incoming.min_order) || 0),
+      lead_time_hours: incoming.lead_time_hours === undefined ? current.lead_time_hours : Math.max(0, Number(incoming.lead_time_hours) || 0),
+      max_deliveries_per_window:
+        incoming.max_deliveries_per_window === undefined
+          ? current.max_deliveries_per_window
+          : Math.max(1, Number(incoming.max_deliveries_per_window) || 1),
+      updated_at: new Date().toISOString()
+    };
+
+    deliverySettingsByFarm.set(farmId, next);
+
+    return res.json({
+      ok: true,
+      farm_id: farmId,
+      settings: next
+    });
+  } catch (error) {
+    console.error('[farm-sales] Delivery settings update failed:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'settings_update_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/farm-sales/delivery/quote
+ * Compute a simple delivery quote for current farm
+ */
+router.post('/quote', (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { subtotal = 0, zone, requested_window } = req.body || {};
+    const settings = getFarmDeliverySettings(farmId);
+    const configuredWindows = getFarmDeliveryWindows(farmId);
+    const activeWindows = configuredWindows.filter((w) => w.active).map((w) => w.id);
+
+    const requestedZone = String(zone || '').trim().toUpperCase();
+    const zoneConfig = DELIVERY_ZONES[requestedZone] || null;
+    const effectiveMinOrder = Math.max(
+      Number(settings.min_order || 0),
+      Number(zoneConfig?.min_order || 0)
+    );
+    const baseFee = Number(settings.base_fee || 0);
+    const zoneFee = Number(zoneConfig?.fee || 0);
+    const fee = Math.max(baseFee, zoneFee);
+    const numericSubtotal = Math.max(0, Number(subtotal) || 0);
+
+    if (!settings.enabled) {
+      return res.json({
+        ok: true,
+        eligible: false,
+        fee,
+        minimum_order: effectiveMinOrder,
+        windows: activeWindows,
+        reason: 'delivery_disabled'
+      });
+    }
+
+    if (requested_window && activeWindows.length && !activeWindows.includes(requested_window)) {
+      return res.json({
+        ok: true,
+        eligible: false,
+        fee,
+        minimum_order: effectiveMinOrder,
+        windows: activeWindows,
+        reason: 'window_unavailable'
+      });
+    }
+
+    if (numericSubtotal < effectiveMinOrder) {
+      return res.json({
+        ok: true,
+        eligible: false,
+        fee,
+        minimum_order: effectiveMinOrder,
+        windows: activeWindows,
+        reason: 'below_minimum_order'
+      });
+    }
+
+    return res.json({
+      ok: true,
+      eligible: true,
+      fee,
+      minimum_order: effectiveMinOrder,
+      windows: activeWindows,
+      reason: null
+    });
+  } catch (error) {
+    console.error('[farm-sales] Delivery quote failed:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'quote_failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/farm-sales/delivery/zones
+ * Get delivery zones and fee structure
+ */
+router.get('/zones', (req, res) => {
+  res.json({
+    ok: true,
+    zones: Object.values(DELIVERY_ZONES)
+  });
 });
 
 /**
@@ -464,17 +710,6 @@ router.get('/routes', (req, res) => {
       message: error.message
     });
   }
-});
-
-/**
- * GET /api/farm-sales/delivery/zones
- * Get delivery zones and fee structure
- */
-router.get('/zones', (req, res) => {
-  res.json({
-    ok: true,
-    zones: Object.values(DELIVERY_ZONES)
-  });
 });
 
 export default router;

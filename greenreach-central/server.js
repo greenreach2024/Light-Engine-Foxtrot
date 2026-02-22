@@ -548,8 +548,8 @@ async function syncFarmIdentity(edgeUrl) {
     };
 
     await dbQuery(
-      `INSERT INTO farms (farm_id, name, email, api_url, metadata, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, 'active', NOW(), NOW())
+      `INSERT INTO farms (farm_id, name, email, api_url, metadata, status, registration_code, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, 'active', encode(gen_random_bytes(8), 'hex'), NOW(), NOW())
        ON CONFLICT (farm_id) DO UPDATE SET
          name = COALESCE(NULLIF($2, ''), farms.name),
          email = COALESCE(NULLIF($3, ''), farms.email),
@@ -612,76 +612,106 @@ async function syncFarmData(options = {}) {
     syncStatus.filesUpdated += updated;
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
     
-    // After syncing files, store env.json as telemetry in the farm_data DB table
-    // so the GET /api/sync/:farmId/telemetry endpoint can return it
+    // After syncing files, store ALL data types in the farm_data DB table
+    // so authenticated users get complete data via the farm-data middleware.
     try {
-      const envJsonPath = path.join(FARM_DATA_DIR, 'env.json');
       const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
-      if (fs.existsSync(envJsonPath) && fs.existsSync(farmJsonPath)) {
-        const envData = JSON.parse(fs.readFileSync(envJsonPath, 'utf8'));
+      if (fs.existsSync(farmJsonPath)) {
         const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
         const farmId = farmData.farmId;
         if (farmId) {
           const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
           if (await isDatabaseAvailable()) {
-            // Store telemetry (env zones)
-            if (envData.zones) {
-              const telemetryData = {
-                zones: envData.zones || [],
-                sensors: {},
-                timestamp: envData.updatedAt || new Date().toISOString()
-              };
+
+            // Helper: upsert a data type into farm_data
+            async function upsertFarmData(dataType, data) {
               await dbQuery(
                 `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
                  VALUES ($1, $2, $3, NOW())
                  ON CONFLICT (farm_id, data_type)
                  DO UPDATE SET data = $3, updated_at = NOW()`,
-                [farmId, 'telemetry', JSON.stringify(telemetryData)]
+                [farmId, dataType, JSON.stringify(data)]
               );
-              logger.info(`[${syncLabel}] Stored telemetry (${envData.zones.length} zones) in DB for ${farmId}`);
             }
 
-            // Store groups (always store as flat array so consumers get Array.isArray() = true)
+            // 1. Telemetry — store the FULL env.json so authenticated users get
+            //    complete zone/room/target data, not just a zones-only extract.
+            const envJsonPath = path.join(FARM_DATA_DIR, 'env.json');
+            if (fs.existsSync(envJsonPath)) {
+              const envData = JSON.parse(fs.readFileSync(envJsonPath, 'utf8'));
+              await upsertFarmData('telemetry', envData);
+              logger.info(`[${syncLabel}] Stored telemetry (full env.json) for ${farmId}`);
+            }
+
+            // 2. Groups — flat array
             const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
-            let groupsList = [];
             if (fs.existsSync(groupsPath)) {
               const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-              groupsList = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
-              await dbQuery(
-                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-                 VALUES ($1, 'groups', $2, NOW())
-                 ON CONFLICT (farm_id, data_type)
-                 DO UPDATE SET data = $2, updated_at = NOW()`,
-                [farmId, JSON.stringify(groupsList)]
-              );
+              const groupsList = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
+              await upsertFarmData('groups', groupsList);
               logger.info(`[${syncLabel}] Stored groups (${groupsList.length}) for ${farmId}`);
             }
 
-            // Store rooms — preserve canonical format from rooms.json or farm.json
-            // NEVER transform zone strings to objects; consumers expect string arrays
-            let roomsToStore;
+            // 3. Rooms — preserve canonical format
             const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
+            let roomsToStore;
             if (fs.existsSync(roomsPath)) {
-              // Prefer rooms.json — it has full room data (zones, category, equipment)
               const roomsRaw = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
               roomsToStore = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || [roomsRaw]);
             } else if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
-              // Fall back to farm.json rooms (slim but correct format)
               roomsToStore = farmData.rooms;
             }
             if (roomsToStore) {
-              await dbQuery(
-                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-                 VALUES ($1, 'rooms', $2, NOW())
-                 ON CONFLICT (farm_id, data_type)
-                 DO UPDATE SET data = $2, updated_at = NOW()`,
-                [farmId, JSON.stringify(roomsToStore)]
-              );
+              await upsertFarmData('rooms', roomsToStore);
               logger.info(`[${syncLabel}] Stored rooms (${roomsToStore.length}) for ${farmId}`);
             }
 
+            // 4. Schedules
+            const schedulesPath = path.join(FARM_DATA_DIR, 'schedules.json');
+            if (fs.existsSync(schedulesPath)) {
+              const schedulesRaw = JSON.parse(fs.readFileSync(schedulesPath, 'utf8'));
+              await upsertFarmData('schedules', schedulesRaw);
+              logger.info(`[${syncLabel}] Stored schedules for ${farmId}`);
+            }
+
+            // 5. IoT Devices
+            const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
+            if (fs.existsSync(devicesPath)) {
+              const devicesRaw = JSON.parse(fs.readFileSync(devicesPath, 'utf8'));
+              const devicesList = Array.isArray(devicesRaw) ? devicesRaw : (devicesRaw.devices || []);
+              await upsertFarmData('devices', devicesList);
+              logger.info(`[${syncLabel}] Stored devices (${devicesList.length}) for ${farmId}`);
+            }
+
+            // 6. Farm profile
+            await upsertFarmData('farm_profile', farmData);
+            logger.info(`[${syncLabel}] Stored farm_profile for ${farmId}`);
+
+            // 7. Room map
+            const roomMapPath = path.join(FARM_DATA_DIR, 'room-map.json');
+            if (fs.existsSync(roomMapPath)) {
+              const roomMapRaw = JSON.parse(fs.readFileSync(roomMapPath, 'utf8'));
+              await upsertFarmData('room_map', roomMapRaw);
+              logger.info(`[${syncLabel}] Stored room_map for ${farmId}`);
+            }
+
+            // 8. Light setups (if available)
+            const lightSetupsPath = path.join(FARM_DATA_DIR, 'light-setups.json');
+            if (fs.existsSync(lightSetupsPath)) {
+              const lightSetupsRaw = JSON.parse(fs.readFileSync(lightSetupsPath, 'utf8'));
+              await upsertFarmData('light_setups', lightSetupsRaw);
+              logger.info(`[${syncLabel}] Stored light_setups for ${farmId}`);
+            }
+
+            // 9. Plans (if available)
+            const plansPath = path.join(FARM_DATA_DIR, 'plans.json');
+            if (fs.existsSync(plansPath)) {
+              const plansRaw = JSON.parse(fs.readFileSync(plansPath, 'utf8'));
+              await upsertFarmData('plans', plansRaw);
+              logger.info(`[${syncLabel}] Stored plans for ${farmId}`);
+            }
+
             // Update farms table with name, email, contact, location from farm.json
-            // Merge into existing metadata so heartbeat data isn't overwritten
             const farmMeta = {
               contact: farmData.contact || {},
               location: farmData.location || '',

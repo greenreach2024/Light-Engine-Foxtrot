@@ -1,20 +1,3 @@
-/**
- * Service Introduction Banner Component
- * 
- * Reusable dismissible announcement banner for new features/services.
- * Persists dismissal state in localStorage to avoid showing repeatedly.
- * 
- * Usage:
- *   const banner = new ServiceIntroBanner({
- *     serviceId: 'delivery-service-2026',
- *     title: 'New: Farm-to-Door Delivery',
- *     description: 'Fresh produce delivered to your business or home.',
- *     ctaText: 'Learn More',
- *     ctaUrl: '/views/delivery-setup.html'
- *   });
- *   document.body.insertAdjacentHTML('afterbegin', banner.render());
- */
-
 class ServiceIntroBanner {
   constructor(options = {}) {
     this.serviceId = options.serviceId || 'default-service';
@@ -23,134 +6,133 @@ class ServiceIntroBanner {
     this.ctaText = options.ctaText || 'Learn More';
     this.ctaUrl = options.ctaUrl || '#';
     this.dismissKey = `dismissed_banner_${this.serviceId}`;
-    this.theme = options.theme || 'green'; // green, blue, purple
   }
 
-  /**
-   * Check if user has previously dismissed this banner
-   */
+  static ensureStyles() {
+    if (document.getElementById('service-intro-banner-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'service-intro-banner-styles';
+    style.textContent = `
+      .service-intro-banner {
+        position: relative;
+        z-index: 1000;
+        border-bottom: 1px solid var(--border, var(--text-muted));
+        background: var(--primary, var(--bg-secondary));
+        color: var(--text-primary, #fff);
+      }
+      .service-intro-banner__inner {
+        width: 100%;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0.625rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .service-intro-banner__text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+      }
+      .service-intro-banner__title {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .service-intro-banner__desc {
+        font-size: 0.8125rem;
+        color: var(--text-secondary, currentColor);
+      }
+      .service-intro-banner__actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .service-intro-banner__cta {
+        border: 1px solid var(--border, currentColor);
+        border-radius: 6px;
+        padding: 0.35rem 0.75rem;
+        text-decoration: none;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: inherit;
+        background: transparent;
+      }
+      .service-intro-banner__dismiss {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 0.2rem 0.4rem;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   isDismissed() {
-    return localStorage.getItem(this.dismissKey) !== null;
+    try {
+      return localStorage.getItem(this.dismissKey) !== null;
+    } catch (_error) {
+      return false;
+    }
   }
 
-  /**
-   * Get theme colors based on theme name
-   */
-  getThemeColors() {
-    const themes = {
-      green: { gradient: 'linear-gradient(135deg, #4ade80 0%, #16a34a 100%)', cta: '#16a34a' },
-      blue: { gradient: 'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)', cta: '#2563eb' },
-      purple: { gradient: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)', cta: '#7c3aed' }
-    };
-    return themes[this.theme] || themes.green;
-  }
-
-  /**
-   * Render the banner HTML
-   * Returns empty string if already dismissed
-   */
   render() {
     if (this.isDismissed()) return '';
 
-    const colors = this.getThemeColors();
-    
     return `
-      <div class="service-intro-banner" id="banner-${this.serviceId}" style="
-        background: ${colors.gradient};
-        color: white;
-        padding: 12px 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        z-index: 1000;
-      ">
-        <div class="banner-content" style="
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          max-width: 1200px;
-          width: 100%;
-          justify-content: center;
-          flex-wrap: wrap;
-        ">
-          <div class="banner-text" style="text-align: left;">
-            <strong style="font-size: 1rem; display: block; margin-bottom: 2px;">${this.title}</strong>
-            <span style="font-size: 0.875rem; opacity: 0.95;">${this.description}</span>
+      <div class="service-intro-banner" id="banner-${this.serviceId}">
+        <div class="service-intro-banner__inner">
+          <div class="service-intro-banner__text">
+            <span class="service-intro-banner__title">${this.title}</span>
+            <span class="service-intro-banner__desc">${this.description}</span>
           </div>
-          <a href="${this.ctaUrl}" class="banner-cta" style="
-            background: white;
-            color: ${colors.cta};
-            padding: 8px 20px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.875rem;
-            white-space: nowrap;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-          " onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.2)'" 
-             onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'">${this.ctaText}</a>
-          <button class="banner-dismiss" onclick="ServiceIntroBanner.dismiss('${this.serviceId}')" style="
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            opacity: 0.7;
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            padding: 4px 8px;
-            line-height: 1;
-          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" 
-             aria-label="Dismiss banner" title="Dismiss">&times;</button>
+          <div class="service-intro-banner__actions">
+            <a href="${this.ctaUrl}" class="service-intro-banner__cta">${this.ctaText}</a>
+            <button
+              type="button"
+              class="service-intro-banner__dismiss"
+              onclick="ServiceIntroBanner.dismiss('${this.serviceId}')"
+              aria-label="Dismiss banner"
+              title="Dismiss"
+            >×</button>
+          </div>
         </div>
       </div>
     `;
   }
 
-  /**
-   * Static method to dismiss a banner by serviceId
-   * Called from onclick handler
-   */
   static dismiss(serviceId) {
-    localStorage.setItem(`dismissed_banner_${serviceId}`, Date.now().toString());
+    try {
+      localStorage.setItem(`dismissed_banner_${serviceId}`, Date.now().toString());
+    } catch (_error) {
+    }
+
     const banner = document.getElementById(`banner-${serviceId}`);
-    if (banner) {
-      banner.style.transition = 'opacity 0.3s ease, max-height 0.3s ease';
-      banner.style.opacity = '0';
-      banner.style.maxHeight = '0';
-      banner.style.overflow = 'hidden';
-      setTimeout(() => banner.remove(), 300);
+    if (banner) banner.remove();
+  }
+
+  static reset(serviceId) {
+    try {
+      localStorage.removeItem(`dismissed_banner_${serviceId}`);
+    } catch (_error) {
     }
   }
 
-  /**
-   * Static method to reset a banner (for testing)
-   */
-  static reset(serviceId) {
-    localStorage.removeItem(`dismissed_banner_${serviceId}`);
-    console.log(`Banner ${serviceId} reset. Refresh page to see it again.`);
-  }
-
-  /**
-   * Static method to create and inject delivery service banner
-   * Convenience method for the most common use case
-   */
   static injectDeliveryBanner(options = {}) {
+    ServiceIntroBanner.ensureStyles();
     const banner = new ServiceIntroBanner({
       serviceId: 'delivery-service-2026',
       title: 'New: Farm-to-Door Delivery',
       description: 'Fresh, locally-grown produce delivered directly to your business or home.',
-      ctaText: 'Set Up Delivery',
+      ctaText: 'Learn More',
       ctaUrl: options.ctaUrl || '/wholesale-about.html#delivery',
-      theme: 'green',
       ...options
     });
-    
+
     const html = banner.render();
     if (html) {
       document.body.insertAdjacentHTML('afterbegin', html);
@@ -158,7 +140,6 @@ class ServiceIntroBanner {
   }
 }
 
-// Export for module usage (if applicable)
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = ServiceIntroBanner;
 }

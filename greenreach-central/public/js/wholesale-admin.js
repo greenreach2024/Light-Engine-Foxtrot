@@ -588,6 +588,11 @@
 
       tbody.innerHTML = this.farms
         .map((farm) => {
+          const farmName = farm.farm_name || farm.name || 'N/A';
+          const locationText = this.formatFarmLocation(farm.location);
+          const farmStatus = farm.status || 'active';
+          const lastSyncAt = farm.last_sync || farm.updated_at || farm.created_at || null;
+
           const certBadges = (farm.certifications || []).map(c => 
             `<span class="badge badge-info">${c}</span>`
           ).join(' ');
@@ -599,11 +604,11 @@
           return `
           <tr>
             <td>${farm.farm_id}</td>
-            <td>${farm.farm_name || 'N/A'}</td>
-            <td>${farm.location?.city || 'N/A'}, ${farm.location?.province || 'N/A'}</td>
-            <td><span class="badge ${farm.status}">${farm.status}</span></td>
+            <td>${farmName}</td>
+            <td>${locationText}</td>
+            <td><span class="badge ${farmStatus}">${farmStatus}</span></td>
             <td>
-              ${farm.last_sync ? new Date(farm.last_sync).toLocaleString() : 'Never'}
+              ${lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Never'}
             </td>
             <td>
               ${certBadges || 'None'}
@@ -615,6 +620,19 @@
         `;
         })
         .join('');
+    },
+
+    formatFarmLocation(location) {
+      if (!location) return 'N/A';
+      if (typeof location === 'string') return location;
+
+      const city = location.city || location.town || location.locality || '';
+      const region = location.province || location.state || location.region || '';
+      if (city && region) return `${city}, ${region}`;
+      if (city) return city;
+      if (region) return region;
+
+      return 'N/A';
     },
 
     async loadPayments() {

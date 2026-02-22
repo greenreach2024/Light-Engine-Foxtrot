@@ -1821,6 +1821,14 @@
                 Delivery date sets the first fulfillment date.
               </p>
             </div>
+
+            <div class="form-group">
+              <label for="fulfillment-method">Fulfillment Method</label>
+              <select id="fulfillment-method" required>
+                <option value="delivery" selected>Delivery</option>
+                <option value="pickup">Pickup</option>
+              </select>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="buyer-name">Business Name</label>
@@ -1891,6 +1899,10 @@
               <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
                 Farms will coordinate delivery within your preferred window
               </p>
+            </div>
+
+            <div class="form-group">
+              <div id="delivery-quote-status" style="font-size: 0.9rem; color: var(--text-secondary);">Delivery quote will appear after allocation preview.</div>
             </div>
           </form>
         </div>

@@ -142,15 +142,17 @@ router.post('/login', async (req, res) => {
       const { rows } = await req.db.query(userQuery, params);
 
       if (rows.length === 0) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication failed',
-          message: 'Invalid email or password'
-        });
+        // No user found in DB for this farm — fall through to fallback credentials.
+        // This handles farms that exist in the `farms` table but haven't registered
+        // user accounts in `farm_users` yet (e.g. farms synced from edge devices).
+        console.log(`[Auth] No farm_users entry for ${farm_id || normalizedEmail}, falling through to fallback`);
+        useDatabase = false;
+      } else {
+        user = rows[0];
       }
+    }
 
-      user = rows[0];
-
+    if (useDatabase && user) {
       // Check if farm is active
       if (user.farm_status !== 'active') {
         return res.status(403).json({
@@ -174,7 +176,7 @@ router.post('/login', async (req, res) => {
     } else {
       // Fallback mode — farm_id + password authentication (no database)
       // Matches server-foxtrot.js edge auth pattern: email is optional
-      console.log(`[Auth] No database available, using fallback credentials (farm_id + password)`);
+      console.log(`[Auth] Fallback credentials mode for ${farm_id || 'default'}`);
 
       // Only password must match; email is optional
       if (password !== FALLBACK_FARM.password) {
@@ -185,7 +187,22 @@ router.post('/login', async (req, res) => {
         });
       }
 
-      user = FALLBACK_FARM;
+      user = { ...FALLBACK_FARM };
+
+      // If a specific farm_id was requested and it exists in the farms table,
+      // use that farm's name so the JWT and response are accurate.
+      if (farm_id && req.db) {
+        try {
+          const farmRow = await req.db.query(
+            'SELECT farm_id, name, status FROM farms WHERE farm_id = $1',
+            [farm_id]
+          );
+          if (farmRow.rows.length > 0) {
+            user.farm_id = farmRow.rows[0].farm_id;
+            user.farm_name = farmRow.rows[0].name;
+          }
+        } catch (_) { /* best-effort */ }
+      }
     }
 
     // Generate JWT token

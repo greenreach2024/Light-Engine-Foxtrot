@@ -1,5 +1,23 @@
 Production Light Engine Foxtrot system
 
+## 💾 Workspace Location (REQUIRED)
+
+**All coding projects live on the external CodeVault drive:**
+
+| Item | Path |
+|------|------|
+| **Canonical workspace** | `/Volumes/CodeVault/Projects/Light-Engine-Foxtrot` |
+| **Symlink (backward compat)** | `~/Light-Engine-Foxtrot` → CodeVault |
+| **All active projects** | `/Volumes/CodeVault/Projects/` |
+| **Archived/reference repos** | `/Volumes/CodeVault/Archive/` |
+
+**Rules:**
+- New projects MUST be created under `/Volumes/CodeVault/Projects/`
+- Use relative paths in code; use CodeVault absolute paths in scripts
+- The `~/Light-Engine-Foxtrot` symlink is for backward compatibility only
+- If CodeVault is not mounted, do NOT create projects on the internal drive — alert the user
+- The drive is APFS-formatted (supports Unix permissions, symlinks, case-sensitive operations)
+
 ## 🎯 Agent Skills Framework (REQUIRED READING)
 
 **ALL agents MUST read `.github/AGENT_SKILLS_FRAMEWORK.md` before any work.**

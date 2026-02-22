@@ -18,6 +18,7 @@
     currentBuyer: null,
     authTab: 'sign-in',
     productRequests: [],
+    deliveryQuote: null,
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -125,6 +126,13 @@
         this.loadCatalog();
         if (this.currentView === 'checkout') this.previewAllocation();
       });
+
+      ['fulfillment-method', 'delivery-time-slot', 'delivery-address', 'delivery-city', 'delivery-province', 'delivery-postal']
+        .forEach((fieldId) => {
+          document.getElementById(fieldId)?.addEventListener('change', () => {
+            if (this.currentView === 'checkout') this.previewAllocation();
+          });
+        });
 
       document.getElementById('sort-by')?.addEventListener('change', () => {
         this.renderCatalog();
@@ -953,9 +961,95 @@
       };
     },
 
+    getFulfillmentMethod() {
+      return document.getElementById('fulfillment-method')?.value || 'delivery';
+    },
+
+    getCartSubtotal() {
+      return this.cart.reduce((sum, item) => sum + (Number(item.price_per_unit) * Number(item.quantity)), 0);
+    },
+
+    getDeliveryZoneFromPostal(postalCode = '') {
+      const normalized = String(postalCode || '').replace(/\s+/g, '').toUpperCase();
+      const first = normalized.charAt(0);
+      if (!first) return null;
+      if (['M', 'H'].includes(first)) return 'ZONE_A';
+      if (['L', 'N', 'K'].includes(first)) return 'ZONE_B';
+      return 'ZONE_C';
+    },
+
+    async refreshDeliveryQuote(allocation) {
+      const quoteEl = document.getElementById('delivery-quote-status');
+      if (!quoteEl) return;
+
+      const method = this.getFulfillmentMethod();
+      if (method === 'pickup') {
+        this.deliveryQuote = {
+          eligible: true,
+          fee: 0,
+          minimum_order: 0,
+          reason: 'pickup_selected'
+        };
+        quoteEl.textContent = 'Pickup selected. No delivery fee will be applied.';
+        quoteEl.style.color = 'var(--text-secondary)';
+        return;
+      }
+
+      quoteEl.textContent = 'Calculating delivery quote...';
+      quoteEl.style.color = 'var(--text-secondary)';
+
+      try {
+        const postalCode = document.getElementById('delivery-postal')?.value || '';
+        const zone = this.getDeliveryZoneFromPostal(postalCode);
+        const requestedWindow = document.getElementById('delivery-time-slot')?.value || null;
+        const subtotal = Number(allocation?.subtotal || this.getCartSubtotal() || 0);
+
+        const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
+          method: 'POST',
+          body: JSON.stringify({
+            subtotal,
+            zone,
+            requested_window: requestedWindow,
+            fulfillment_method: method
+          })
+        });
+
+        if (response.ok && json?.status === 'ok' && json?.data) {
+          this.deliveryQuote = json.data;
+          if (json.data.eligible) {
+            quoteEl.textContent = `Delivery available. Estimated delivery fee: $${Number(json.data.fee || 0).toFixed(2)}.`;
+            quoteEl.style.color = 'var(--success)';
+          } else {
+            const min = Number(json.data.minimum_order || 0).toFixed(2);
+            const reason = json.data.reason === 'below_minimum_order'
+              ? `Minimum order for delivery is $${min}.`
+              : 'Delivery is not available for the selected options.';
+            quoteEl.textContent = reason;
+            quoteEl.style.color = 'var(--error)';
+          }
+          return;
+        }
+
+        this.deliveryQuote = null;
+        quoteEl.textContent = 'Unable to load delivery quote right now.';
+        quoteEl.style.color = 'var(--text-secondary)';
+      } catch (error) {
+        console.error('Delivery quote error:', error);
+        this.deliveryQuote = null;
+        quoteEl.textContent = 'Unable to load delivery quote right now.';
+        quoteEl.style.color = 'var(--text-secondary)';
+      }
+    },
+
     async previewAllocation() {
       if (this.cart.length === 0) {
         document.getElementById('allocation-preview').innerHTML = '<p>Your cart is empty</p>';
+        const quoteEl = document.getElementById('delivery-quote-status');
+        if (quoteEl) {
+          quoteEl.textContent = 'Delivery quote will appear after allocation preview.';
+          quoteEl.style.color = 'var(--text-secondary)';
+        }
+        this.deliveryQuote = null;
         return;
       }
 
@@ -985,6 +1079,7 @@
         });
 
         if (response.ok && json?.status === 'ok') {
+          await this.refreshDeliveryQuote(json.data);
           this.renderAllocationPreview(json.data);
           return;
         }
@@ -999,6 +1094,9 @@
     renderAllocationPreview(allocation) {
       const container = document.getElementById('allocation-preview');
       const cadence = allocation.recurrence?.cadence || this.getRecurrence().cadence;
+      const quote = this.deliveryQuote;
+      const quoteFee = Number(quote?.fee || 0);
+      const quoteEligible = quote?.eligible !== false;
 
       container.innerHTML = `
         <p style="margin-bottom: 0.75rem; color: var(--text-secondary);">Fulfillment cadence: <strong>${cadence.replace('_', ' ')}</strong></p>
@@ -1026,6 +1124,10 @@
           )
           .join('')}
         <div class="cart-summary">
+          <div class="cart-summary-row">
+            <span>Estimated delivery fee:</span>
+            <span>${quoteEligible ? `$${quoteFee.toFixed(2)}` : 'Unavailable'}</span>
+          </div>
           <div class="cart-summary-row">
             <span>Broker fee (GreenReach):</span>
             <span>$${Number(allocation.broker_fee_total || 0).toFixed(2)}</span>
@@ -1963,6 +2065,11 @@
 
         const deliveryDate = document.getElementById('delivery-date')?.value || this.deliveryDate;
         const cadence = document.getElementById('fulfillment-cadence')?.value || 'one_time';
+        const fulfillmentMethod = this.getFulfillmentMethod();
+
+        if (fulfillmentMethod === 'delivery' && this.deliveryQuote && this.deliveryQuote.eligible === false) {
+          throw new Error('Delivery is not eligible for this order. Adjust your cart or switch to pickup.');
+        }
 
         const cartItems = this.cart.map(item => ({
           sku_id: item.sku_id,
@@ -1997,6 +2104,10 @@
             delivery_date: deliveryDate,
             delivery_address: deliveryAddress,
             recurrence: { cadence },
+            fulfillment: {
+              method: fulfillmentMethod,
+              requested_window: document.getElementById('delivery-time-slot')?.value || null
+            },
             cart: cartItems,
             payment_provider: paymentProvider,
             payment_source: paymentSource,

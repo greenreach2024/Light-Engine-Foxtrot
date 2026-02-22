@@ -1,0 +1,328 @@
+{
+  "roomId": "room-3xxjln",
+  "name": "Main Grow Room",
+  "gridSize": 30,
+  "cellSize": 40,
+  "version": 2,
+  "devices": [
+    {
+      "deviceId": "room-3xxjln-fans-0",
+      "x": 29,
+      "y": 0,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-1",
+      "x": 29,
+      "y": 3,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-2",
+      "x": 29,
+      "y": 6,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-3",
+      "x": 29,
+      "y": 9,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-4",
+      "x": 29,
+      "y": 12,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-5",
+      "x": 29,
+      "y": 15,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-6",
+      "x": 29,
+      "y": 17,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-7",
+      "x": 0,
+      "y": 17,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-8",
+      "x": 0,
+      "y": 14,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-9",
+      "x": 0,
+      "y": 11,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-10",
+      "x": 0,
+      "y": 8,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-11",
+      "x": 0,
+      "y": 5,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-12",
+      "x": 0,
+      "y": 3,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-13",
+      "x": 0,
+      "y": 1,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-19",
+      "x": 13,
+      "y": 17,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-18",
+      "x": 15,
+      "y": 17,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-17",
+      "x": 13,
+      "y": 12,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-16",
+      "x": 15,
+      "y": 12,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-15",
+      "x": 15,
+      "y": 8,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 2,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    },
+    {
+      "deviceId": "room-3xxjln-fans-14",
+      "x": 13,
+      "y": 8,
+      "snapshot": {
+        "name": "Unknown Device",
+        "type": "Unknown",
+        "protocol": "Unknown",
+        "category": "fans",
+        "zone": 1,
+        "room": "Main Grow Room",
+        "icon": "○"
+      }
+    }
+  ],
+  "zones": [
+    {
+      "zone": 1,
+      "name": "Zone 1",
+      "color": "#3b82f6",
+      "x1": 0,
+      "y1": 0,
+      "x2": 13,
+      "y2": 18,
+      "tempSetpoint": {
+        "min": 20,
+        "max": 24
+      },
+      "rhSetpoint": {
+        "min": 58,
+        "max": 65
+      },
+      "rhDelta": 5
+    },
+    {
+      "zone": 2,
+      "name": "Zone 2",
+      "color": "#10b981",
+      "x1": 15,
+      "y1": 0,
+      "x2": 29,
+      "y2": 18,
+      "tempSetpoint": {
+        "min": 20,
+        "max": 24
+      },
+      "rhSetpoint": {
+        "min": 58,
+        "max": 65
+      },
+      "rhDelta": 5
+    }
+  ],
+  "lastUpdated": "2026-02-19T20:16:43.773Z"
+}
