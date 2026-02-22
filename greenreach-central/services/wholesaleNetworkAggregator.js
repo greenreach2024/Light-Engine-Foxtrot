@@ -197,6 +197,35 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
     await refreshNetworkInventory();
   }
 
+  // ── Phase 5 Ticket 5.5: Quality-based autonomous routing ──
+  // Load quality scores from crop benchmarks (Central DB) for each farm×crop
+  let qualityScores = {};
+  try {
+    const { pool } = await import('../db.js');
+    const { rows } = await pool.query(`
+      SELECT farm_id, crop,
+             AVG(quality_score) AS avg_quality,
+             AVG(weight_per_plant_oz) AS avg_weight,
+             AVG(loss_rate) AS avg_loss,
+             COUNT(*) AS record_count
+      FROM experiment_records
+      WHERE quality_score IS NOT NULL
+        AND recorded_at > NOW() - INTERVAL '90 days'
+      GROUP BY farm_id, crop
+    `);
+    for (const row of rows) {
+      const key = `${row.farm_id}::${(row.crop || '').toLowerCase()}`;
+      qualityScores[key] = {
+        avg_quality: parseFloat(row.avg_quality) || 0,
+        avg_weight: parseFloat(row.avg_weight) || 0,
+        avg_loss: parseFloat(row.avg_loss) || 0,
+        record_count: parseInt(row.record_count)
+      };
+    }
+  } catch {
+    // Quality scoring unavailable — fall back to first-available
+  }
+
   const allocations = [];
   const unavailable = [];
 
@@ -207,14 +236,28 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
       continue;
     }
 
-    // Allocate from first farm with sufficient stock
+    // Sort farms by quality score (highest first) for quality-based routing
+    const cropName = (skuData.product_name || '').toLowerCase();
+    const rankedFarms = [...skuData.farms].sort((a, b) => {
+      const keyA = `${a.farm_id}::${cropName}`;
+      const keyB = `${b.farm_id}::${cropName}`;
+      const scoreA = qualityScores[keyA]?.avg_quality || 0;
+      const scoreB = qualityScores[keyB]?.avg_quality || 0;
+      // Primary: quality score (desc), Secondary: lower loss rate (asc)
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const lossA = qualityScores[keyA]?.avg_loss || 1;
+      const lossB = qualityScores[keyB]?.avg_loss || 1;
+      return lossA - lossB;
+    });
+
     let remaining = item.quantity || 1;
     const itemAllocations = [];
 
-    for (const farm of skuData.farms) {
+    for (const farm of rankedFarms) {
       if (remaining <= 0) break;
       const alloc = Math.min(remaining, farm.qty_available);
       if (alloc > 0) {
+        const qualityKey = `${farm.farm_id}::${cropName}`;
         itemAllocations.push({
           sku_id: item.sku_id,
           farm_id: farm.farm_id,
@@ -223,7 +266,9 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
           price_per_unit: farm.price_per_unit,
           product_name: skuData.product_name || item.sku_id,
           unit: skuData.unit || 'case',
-          size: skuData.size || 5
+          size: skuData.size || 5,
+          quality_score: qualityScores[qualityKey]?.avg_quality || null,
+          routing_reason: qualityScores[qualityKey] ? 'quality_ranked' : 'first_available'
         });
         remaining -= alloc;
       }
@@ -245,8 +290,17 @@ export async function buildAggregateCatalog() {
     await refreshNetworkInventory();
   }
 
+  // ── Phase 5 Ticket 5.6: Include predicted inventory ──
+  let predictedInventory = [];
+  try {
+    predictedInventory = await generatePredictedInventory();
+  } catch {
+    // Non-fatal — predicted inventory is best-effort
+  }
+
   return {
     skus: inventoryCache.skus,
+    predicted: predictedInventory,
     farms: inventoryCache.farms.map(f => ({
       farm_id: f.farm_id,
       farm_name: f.farm_name,
@@ -255,6 +309,99 @@ export async function buildAggregateCatalog() {
     })),
     lastRefresh: inventoryCache.lastRefresh
   };
+}
+
+/**
+ * Phase 5 Ticket 5.6: Predictive Inventory Listing
+ *
+ * Based on Central's harvest predictions and experiment records,
+ * auto-list products on wholesale marketplace before harvest.
+ * Buyers see "Available Feb 28" with confidence level.
+ */
+export async function generatePredictedInventory() {
+  try {
+    const { pool } = await import('../db.js');
+
+    // Get active crops across network with estimated harvest dates
+    const { rows } = await pool.query(`
+      SELECT er.farm_id, er.crop,
+             f.farm_name,
+             AVG(er.grow_days) AS avg_grow_days,
+             AVG(er.outcomes->>'weight_per_plant_oz')::numeric AS avg_weight,
+             AVG(er.outcomes->>'quality_score')::numeric AS avg_quality,
+             MAX(er.recorded_at) AS last_harvest,
+             COUNT(*) AS harvest_count
+      FROM experiment_records er
+      JOIN farms f ON f.farm_id = er.farm_id
+      WHERE er.recorded_at > NOW() - INTERVAL '90 days'
+        AND er.outcomes->>'weight_per_plant_oz' IS NOT NULL
+      GROUP BY er.farm_id, er.crop, f.farm_name
+      HAVING COUNT(*) >= 3
+      ORDER BY er.crop, avg_quality DESC
+    `);
+
+    const predictions = [];
+    const now = new Date();
+
+    for (const row of rows) {
+      const lastHarvest = new Date(row.last_harvest);
+      const avgGrowDays = Math.round(parseFloat(row.avg_grow_days) || 30);
+
+      // Estimate next harvest: last harvest + avg grow cycle
+      // Assume farm re-seeds shortly after harvest
+      const daysSinceLastHarvest = (now - lastHarvest) / 86400000;
+      const daysToNextHarvest = Math.max(0, avgGrowDays - daysSinceLastHarvest);
+      const estimatedAvailableDate = new Date(now.getTime() + daysToNextHarvest * 86400000);
+
+      // Confidence based on data volume and recency
+      let confidence = 0.5;
+      const harvestCount = parseInt(row.harvest_count);
+      if (harvestCount >= 10) confidence += 0.2;
+      else if (harvestCount >= 5) confidence += 0.1;
+      if (daysSinceLastHarvest < avgGrowDays * 2) confidence += 0.15; // Recent activity
+      if (parseFloat(row.avg_quality) >= 8) confidence += 0.1; // Consistent quality
+      confidence = Math.min(0.95, confidence);
+
+      // Skip if availability is too far out (> 45 days)
+      if (daysToNextHarvest > 45) continue;
+
+      // Estimate quantity based on historical yields
+      const avgWeightOz = parseFloat(row.avg_weight) || 2;
+      const estimatedPlants = 50; // Default estimate per batch
+      const estimatedCases = Math.max(1, Math.round((avgWeightOz * estimatedPlants) / (5 * 16))); // 5lb cases
+
+      const cropName = row.crop || 'Unknown';
+      predictions.push({
+        type: 'predicted',
+        farm_id: row.farm_id,
+        farm_name: row.farm_name,
+        crop: cropName,
+        product_name: cropName,
+        estimated_available_date: estimatedAvailableDate.toISOString().split('T')[0],
+        days_until_available: Math.round(daysToNextHarvest),
+        available_now: daysToNextHarvest <= 0,
+        confidence: +confidence.toFixed(2),
+        confidence_label: confidence >= 0.8 ? 'high' : confidence >= 0.6 ? 'medium' : 'low',
+        estimated_quantity: estimatedCases,
+        unit: 'case',
+        avg_quality_score: parseFloat(row.avg_quality)?.toFixed(1) || null,
+        avg_weight_oz: avgWeightOz.toFixed(2),
+        harvest_history_count: harvestCount,
+        display_text: daysToNextHarvest <= 0
+          ? `Available now from ${row.farm_name}`
+          : `Available ${estimatedAvailableDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(confidence * 100)}% confidence)`
+      });
+    }
+
+    // Sort by availability date (soonest first)
+    predictions.sort((a, b) => a.days_until_available - b.days_until_available);
+
+    logger.info(`[NetworkAgg] Generated ${predictions.length} predicted inventory listings`);
+    return predictions;
+  } catch (err) {
+    logger.warn(`[NetworkAgg] Predicted inventory generation failed: ${err.message}`);
+    return [];
+  }
 }
 
 export async function generateNetworkRecommendations(buyerId) {

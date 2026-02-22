@@ -2360,6 +2360,91 @@ app.get('/api/governance/report', async (req, res) => {
   }
 });
 
+// ── Phase 5 Ticket 5.4: Network Production Planning ──────────────────
+
+const { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } = require('./jobs/production-planner');
+
+/**
+ * GET /api/production/plan
+ * Generate weekly seeding plan for the network without distributing.
+ */
+app.get('/api/production/plan', async (req, res) => {
+  try {
+    const forecastWeeks = parseInt(req.query.weeks) || 4;
+    const result = await generateWeeklyPlan({ forecastWeeks });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/production/plan/distribute
+ * Generate and push weekly seeding plans to all farms.
+ */
+app.post('/api/production/plan/distribute', async (req, res) => {
+  try {
+    const forecastWeeks = parseInt(req.body?.weeks) || 4;
+    const result = await generateAndDistributePlan({ forecastWeeks });
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/production/demand
+ * Get demand forecast from wholesale order history.
+ */
+app.get('/api/production/demand', async (req, res) => {
+  try {
+    const forecast = await gatherDemandForecast();
+    res.json({ ok: true, forecast });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/production/supply
+ * Get current network supply status.
+ */
+app.get('/api/production/supply', async (req, res) => {
+  try {
+    const supply = await getNetworkSupply();
+    res.json({ ok: true, supply, count: supply.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 5 Ticket 5.6: Predictive Inventory Listing ────────────────
+
+/**
+ * GET /api/wholesale/predicted-inventory
+ * Get predicted inventory — products available before harvest with confidence levels.
+ * Buyers see "Available Feb 28" with confidence level for pre-ordering.
+ */
+app.get('/api/wholesale/predicted-inventory', async (req, res) => {
+  try {
+    const { generatePredictedInventory } = await import('./services/wholesaleNetworkAggregator.js');
+    const predictions = await generatePredictedInventory();
+    const minConfidence = parseFloat(req.query.min_confidence) || 0;
+    const filtered = minConfidence > 0
+      ? predictions.filter(p => p.confidence >= minConfidence)
+      : predictions;
+    res.json({
+      ok: true,
+      predicted_inventory: filtered,
+      count: filtered.length,
+      note: 'Predicted availability based on farm harvest patterns. Subject to change.',
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // --- Crop Registry API (Phase 2a — single source of truth) ---
 app.get('/api/crops', (req, res) => {
   const registryPath = path.join(__dirname, 'public/data/crop-registry.json');

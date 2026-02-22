@@ -3671,6 +3671,175 @@
     function processVoiceCommand(command) {
       let response = '';
 
+      // ── Phase 5 Ticket 5.3: Intent recognition with API routing ──
+
+      // HARVEST ACTION: "record harvest for group 12" / "harvest group 5"
+      const harvestActionMatch = command.match(/(?:record |log |submit |do )?harvest(?:ing)?\s+(?:for\s+)?(?:group\s+)?(\S+)/i);
+      if (harvestActionMatch && !command.includes('list') && !command.includes('show') && !command.includes('ready') && !command.includes('predict') && !command.includes('status')) {
+        const groupId = harvestActionMatch[1];
+        response = `Recording harvest for group ${groupId}...`;
+        showResponse(response);
+        speakResponse(response);
+        // Open harvest modal for this group
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof openHarvestModal === 'function') {
+            openHarvestModal(groupId);
+          } else {
+            showHarvestListModal();
+          }
+        }, 500);
+        return;
+      }
+
+      // HARVEST READINESS: "what's ready to harvest" / "harvest readiness" / "ready to pick"
+      if ((command.includes('ready') && (command.includes('harvest') || command.includes('pick'))) ||
+          command.includes('readiness') || command.includes('what should i harvest')) {
+        response = 'Checking harvest readiness...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/harvest/readiness`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.notifications && data.notifications.length > 0) {
+              const items = data.notifications.map(n => n.message).join('. ');
+              const resp = `${data.notifications.length} group${data.notifications.length > 1 ? 's' : ''} ready: ${items}`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              const resp = 'No groups are currently at harvest readiness. All crops are still growing.';
+              showResponse(resp);
+              speakResponse(resp);
+            }
+          })
+          .catch(() => {
+            showResponse('Could not check harvest readiness.');
+            speakResponse('Could not check harvest readiness.');
+          });
+        return;
+      }
+
+      // HARVEST PREDICTION: "predict harvest for group 12" / "when will group 5 be ready"
+      const predictMatch = command.match(/(?:predict|forecast|when)\s+(?:harvest\s+)?(?:for\s+)?(?:group\s+)?(\S+)/i);
+      if (predictMatch && (command.includes('predict') || command.includes('when') || command.includes('forecast'))) {
+        const groupId = predictMatch[1].replace(/[?.!]/g, '');
+        response = `Predicting harvest for group ${groupId}...`;
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/harvest/predict/${groupId}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.prediction) {
+              const p = data.prediction;
+              const resp = `Group ${groupId} ${p.crop}: predicted harvest in ${p.daysRemaining} days, confidence ${Math.round(p.confidence * 100)}%.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse(`No prediction available for group ${groupId}.`);
+              speakResponse(`No prediction available for group ${groupId}.`);
+            }
+          })
+          .catch(() => {
+            showResponse('Could not get harvest prediction.');
+            speakResponse('Could not get harvest prediction.');
+          });
+        return;
+      }
+
+      // SEEDING / PLANTING ACTION: "seed basil" / "start planting kale" / "new tray of arugula"
+      const seedMatch = command.match(/(?:seed|plant|start|new tray)\s+(?:of\s+)?(?:some\s+)?(\w[\w\s]*)/i);
+      if (seedMatch && (command.includes('seed') || command.includes('plant') || command.includes('new tray'))) {
+        const crop = seedMatch[1].trim();
+        response = `Opening seeding form for ${crop}...`;
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof openNewTrayModal === 'function') {
+            openNewTrayModal(crop);
+          } else if (typeof showPlantingSchedule === 'function') {
+            showPlantingSchedule();
+          }
+        }, 500);
+        return;
+      }
+
+      // QUALITY CHECK: "quality check" / "run QA" / "check quality for group 5"
+      const qaMatch = command.match(/(?:quality|qa|qc)\s*(?:check|inspection|report)?(?:\s+(?:for\s+)?(?:group\s+)?(\S+))?/i);
+      if (qaMatch && (command.includes('quality') || command.includes(' qa') || command.includes(' qc'))) {
+        const groupId = qaMatch[1];
+        response = groupId ? `Opening quality check for group ${groupId}...` : 'Opening quality checkpoint...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof submitQACheckpoint === 'function' && groupId) {
+            submitQACheckpoint(groupId);
+          } else if (typeof loadChecklistInModal === 'function') {
+            loadChecklistInModal();
+          }
+        }, 500);
+        return;
+      }
+
+      // ENVIRONMENT STATUS: "environment status" / "how are the zones" / "zone status"
+      if (command.includes('environment') || command.includes('zone status') || command.includes('how are the zones')) {
+        response = 'Checking environment status...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/env`)
+          .then(r => r.json())
+          .then(data => {
+            const zones = data.zones || [];
+            if (zones.length > 0) {
+              const summaries = zones.slice(0, 3).map(z => {
+                const temp = z.sensors?.temperature?.current || z.sensors?.temp?.current || 'N/A';
+                const rh = z.sensors?.rh?.current || z.sensors?.humidity?.current || 'N/A';
+                return `${z.name || z.id}: ${temp}°F, ${rh}% humidity`;
+              });
+              const resp = `Zone status: ${summaries.join('. ')}.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse('No zone data available.');
+              speakResponse('No zone data available.');
+            }
+          })
+          .catch(() => {
+            showResponse('Could not retrieve environment data.');
+            speakResponse('Could not retrieve environment data.');
+          });
+        return;
+      }
+
+      // RECIPE STATUS: "recipe status" / "what recipes are active"
+      if (command.includes('recipe') && (command.includes('status') || command.includes('active') || command.includes('modifier'))) {
+        response = 'Checking recipe modifier status...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/recipe-modifiers/autonomous/status`)
+          .then(r => r.json())
+          .then(data => {
+            const crops = Object.entries(data.crops || {});
+            if (crops.length > 0) {
+              const items = crops.map(([c, s]) => `${c}: ${s.auto_eligible ? 'autonomous' : s.reverted ? 'reverted' : 'manual'}`);
+              const resp = `Recipe modifiers: ${items.join(', ')}.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse('No recipe modifiers computed yet.');
+              speakResponse('No recipe modifiers computed yet.');
+            }
+          })
+          .catch(() => {
+            showResponse('Could not check recipe status.');
+            speakResponse('Could not check recipe status.');
+          });
+        return;
+      }
+
+      // ── Original voice commands (kept for backward compatibility) ──
+
       // Planting schedule command
       if (command.includes('plant') && (command.includes('schedule') || command.includes('plan'))) {
         response = 'Loading planting schedule.';
@@ -3742,11 +3911,11 @@
       }
       // Help
       else if (command.includes('help') || command.includes('what can')) {
-        response = 'I can help you check harvest status, inventory, temperature, humidity, tasks, and seedling counts. Just ask!';
+        response = 'I can help with: harvest readiness, harvest predictions, record harvest, seed a crop, quality checks, zone status, recipe status, inventory, temperature, humidity, tasks, and seedlings. Just ask!';
       }
       // Default
       else {
-        response = 'I didn\'t understand that. Try asking about harvest, inventory, temperature, tasks, or seedlings.';
+        response = 'I didn\'t understand that. Try: "what\'s ready to harvest", "seed basil", "quality check", "zone status", or say "help" for all commands.';
       }
 
       showResponse(response);

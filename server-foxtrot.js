@@ -4530,17 +4530,44 @@ async function runDailyPlanResolver(trigger = 'manual') {
         const gradientTemp = toNumberOrNull(gradients.tempC) ?? 0;
         const gradientRh = toNumberOrNull(gradients.rh) ?? 0;
 
-        // Phase 3 Ticket 3.1: Apply per-crop recipe modifier (if computed)
+        // Phase 3 Ticket 3.1 + Phase 5 Ticket 5.1: Apply per-crop recipe modifier
+        // Phase 5: Autonomous application with audit logging and auto-revert tracking
         const cropName = (group.crop || group.cropName || plan?.crop || '').toLowerCase().replace(/\s+/g, '-');
         let modifierResult = null;
         if (cropName) {
-          modifierResult = applyRecipeModifier(cropName, {
-            ppfd: toNumberOrNull(lightTargets?.ppfd),
-            mix: lightTargets?.mix || {},
-            envTempC: envTargets?.tempC ?? null
-          });
-          if (modifierResult.modifierApplied) {
-            console.log(`[daily] Recipe modifier applied for ${cropName}: PPFD ${modifierResult.modifierDetails.ppfd_offset_pct}%, blue ${modifierResult.modifierDetails.blue_pct_offset}%, confidence ${modifierResult.modifierDetails.confidence}`);
+          try {
+            const { autonomousApplyModifier } = await import('./lib/recipe-modifier.js');
+            const farmId = process.env.FARM_ID || 'local';
+            const autoResult = await autonomousApplyModifier(cropName, {
+              ppfd: toNumberOrNull(lightTargets?.ppfd),
+              mix: lightTargets?.mix || {},
+              envTempC: envTargets?.tempC ?? null
+            }, typeof agentAuditDB !== 'undefined' ? agentAuditDB : null, farmId);
+
+            if (autoResult.applied) {
+              modifierResult = autoResult.targets;
+              console.log(`[daily] Autonomous recipe modifier applied for ${cropName}: ${autoResult.reason}`);
+            } else {
+              // Fall back to standard non-autonomous apply
+              modifierResult = applyRecipeModifier(cropName, {
+                ppfd: toNumberOrNull(lightTargets?.ppfd),
+                mix: lightTargets?.mix || {},
+                envTempC: envTargets?.tempC ?? null
+              });
+              if (modifierResult.modifierApplied) {
+                console.log(`[daily] Recipe modifier applied for ${cropName}: PPFD ${modifierResult.modifierDetails.ppfd_offset_pct}%, blue ${modifierResult.modifierDetails.blue_pct_offset}%, confidence ${modifierResult.modifierDetails.confidence}`);
+              }
+            }
+          } catch {
+            // Fallback: use original Phase 3 apply (non-autonomous)
+            modifierResult = applyRecipeModifier(cropName, {
+              ppfd: toNumberOrNull(lightTargets?.ppfd),
+              mix: lightTargets?.mix || {},
+              envTempC: envTargets?.tempC ?? null
+            });
+            if (modifierResult.modifierApplied) {
+              console.log(`[daily] Recipe modifier applied for ${cropName}: PPFD ${modifierResult.modifierDetails.ppfd_offset_pct}%`);
+            }
           }
         }
 
@@ -9945,7 +9972,7 @@ app.post('/api/harvest', (req, res) => {
 
       // Phase 3 Ticket 3.5: Record champion/challenger observation
       try {
-        const { recordChampionChallenger, applyModifier } = await import('./lib/recipe-modifier.js');
+        const { recordChampionChallenger, applyModifier, trackAutonomousPerformance } = await import('./lib/recipe-modifier.js');
         const cropKey = (record.crop || '').toLowerCase().replace(/\s+/g, '-');
         const modCheck = applyModifier(cropKey, { ppfd: null, mix: {}, envTempC: null });
         await recordChampionChallenger({
@@ -9956,8 +9983,15 @@ app.post('/api/harvest', (req, res) => {
           outcomes: record.outcomes,
           auditDB: typeof agentAuditDB !== 'undefined' ? agentAuditDB : null
         });
+
+        // Phase 5 Ticket 5.1: Track autonomous performance for auto-revert
+        const farmId = process.env.FARM_ID || 'local';
+        await trackAutonomousPerformance(cropKey, record.outcomes,
+          typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+          farmId
+        );
       } catch (ccErr) {
-        // Non-fatal — champion/challenger tracking is best-effort
+        // Non-fatal — champion/challenger + autonomous tracking is best-effort
       }
     } catch (expErr) {
       console.warn('[Harvest API] Experiment record creation failed (non-fatal):', expErr.message);
@@ -10400,6 +10434,90 @@ app.get('/api/recipe-modifiers/champion-challenger/:crop', async (req, res) => {
   }
 });
 
+// ── Phase 5 Ticket 5.1: Autonomous Recipe Adjustment APIs ──────────────
+
+/**
+ * GET /api/recipe-modifiers/autonomous/status
+ * Return autonomous eligibility and tracking status for all crops.
+ */
+app.get('/api/recipe-modifiers/autonomous/status', async (req, res) => {
+  try {
+    const { getAutonomousStatus } = await import('./lib/recipe-modifier.js');
+    const status = getAutonomousStatus();
+    res.json({ ok: true, crops: status });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/apply
+ * Autonomously apply a recipe modifier for a crop (within guardrail bounds).
+ * Body: { crop, targets: { ppfd, mix, envTempC } }
+ */
+app.post('/api/recipe-modifiers/autonomous/apply', async (req, res) => {
+  try {
+    const { crop, targets } = req.body;
+    if (!crop || !targets) return res.status(400).json({ ok: false, error: 'crop and targets required' });
+    const { autonomousApplyModifier } = await import('./lib/recipe-modifier.js');
+    const farmId = process.env.FARM_ID || 'local';
+    const result = await autonomousApplyModifier(crop, targets,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+      farmId
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/track-performance
+ * Record a harvest outcome for auto-revert tracking.
+ * Body: { crop, outcomes: { weight_per_plant_oz, quality_score } }
+ */
+app.post('/api/recipe-modifiers/autonomous/track-performance', async (req, res) => {
+  try {
+    const { crop, outcomes } = req.body;
+    if (!crop || !outcomes) return res.status(400).json({ ok: false, error: 'crop and outcomes required' });
+    const { trackAutonomousPerformance } = await import('./lib/recipe-modifier.js');
+    const farmId = process.env.FARM_ID || 'local';
+    const result = await trackAutonomousPerformance(crop, outcomes,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null,
+      farmId
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/recipe-modifiers/autonomous/clear-revert/:crop
+ * Clear auto-revert flag after manual review. Requires approval.
+ */
+app.post('/api/recipe-modifiers/autonomous/clear-revert/:crop', async (req, res) => {
+  try {
+    const { clearRevert } = await import('./lib/recipe-modifier.js');
+    const result = clearRevert(req.params.crop);
+    if (typeof agentAuditDB !== 'undefined') {
+      await agentAuditDB.insert({
+        type: 'autonomous_recipe',
+        action: 'clear_revert',
+        agent_class: 'grow-advisor',
+        crop: req.params.crop,
+        farm_id: process.env.FARM_ID || 'local',
+        human_decision: 'accepted',
+        tier: 'require-approval',
+        timestamp: new Date().toISOString()
+      }).catch(() => {});
+    }
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ── Phase 3 Ticket 3.9: Alert prioritization API ──────────────────────
 
 /**
@@ -10752,25 +10870,102 @@ app.get('/api/ai/suggested-crop', asyncHandler(async (req, res) => {
   }
 }));
 
-app.get('/api/harvest/predict/:groupId', (req, res) => {
-  console.log(`[Harvest Predictions] Stub endpoint called for group: ${req.params.groupId}`);
-  res.json({ 
-    ok: true, 
-    prediction: null, 
-    groupId: req.params.groupId,
-    message: 'AI prediction service not available',
-    timestamp: new Date().toISOString()
-  });
+// ── Phase 5 Ticket 5.2: AI-Driven Harvest Timing ──────────────────────
+
+/**
+ * GET /api/harvest/predict/:groupId
+ * Predict harvest date for a specific group using growth & quality analysis.
+ */
+app.get('/api/harvest/predict/:groupId', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const prediction = await predictor.predict(req.params.groupId);
+    res.json({ ok: true, prediction, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.json({ ok: true, prediction: null, groupId: req.params.groupId, message: error.message, timestamp: new Date().toISOString() });
+  }
 });
 
-app.get('/api/harvest/predictions/all', (req, res) => {
-  console.log('[Harvest Predictions] Stub endpoint called for all predictions');
-  res.json({ 
-    ok: true, 
-    predictions: [], 
-    message: 'AI prediction service not available',
-    timestamp: new Date().toISOString()
-  });
+/**
+ * GET /api/harvest/predictions/all
+ * Predict harvest dates for all active groups.
+ */
+app.get('/api/harvest/predictions/all', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const activeGroups = await predictor.getActiveGroups();
+    const groupIds = activeGroups.map(g => g.id);
+    const predictions = await predictor.predictMultiple(groupIds);
+    res.json({ ok: true, predictions, count: predictions.length, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.json({ ok: true, predictions: [], message: error.message, timestamp: new Date().toISOString() });
+  }
+});
+
+/**
+ * GET /api/harvest/readiness
+ * Scan all active groups for harvest readiness with growth rate & quality analysis.
+ * Returns actionable notifications for groups approaching or at harvest readiness.
+ */
+app.get('/api/harvest/readiness', async (req, res) => {
+  try {
+    const { scanHarvestReadiness } = await import('./lib/harvest-readiness.js');
+    const notifications = await scanHarvestReadiness(
+      typeof harvestOutcomesDB !== 'undefined' ? harvestOutcomesDB : null,
+      typeof agentAuditDB !== 'undefined' ? agentAuditDB : null
+    );
+    res.json({ ok: true, notifications, count: notifications.length, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/harvest/readiness/:groupId
+ * Get readiness assessment for a specific group.
+ */
+app.get('/api/harvest/readiness/:groupId', async (req, res) => {
+  try {
+    const { default: HarvestPredictor } = await import('./lib/harvest-predictor.js');
+    const { analyzeGrowthRate, analyzeQualityTrend, assessReadiness } = await import('./lib/harvest-readiness.js');
+    const predictor = new HarvestPredictor(path.join(process.cwd(), 'data'));
+    const group = await predictor.getGroup(req.params.groupId);
+    if (!group) return res.status(404).json({ ok: false, error: 'Group not found' });
+
+    const prediction = await predictor.predict(req.params.groupId);
+    let experimentRecords = [];
+    if (typeof harvestOutcomesDB !== 'undefined') {
+      experimentRecords = await harvestOutcomesDB.find({});
+    }
+    const growthAnalysis = analyzeGrowthRate(group.crop || 'Unknown', experimentRecords);
+    const qualityAnalysis = analyzeQualityTrend(group.crop || 'Unknown', experimentRecords);
+    const assessment = assessReadiness(group, prediction, growthAnalysis, qualityAnalysis);
+
+    res.json({ ok: true, assessment, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/harvest/growth-analysis/:crop
+ * Get growth rate and quality trend analysis for a crop.
+ */
+app.get('/api/harvest/growth-analysis/:crop', async (req, res) => {
+  try {
+    const { analyzeGrowthRate, analyzeQualityTrend } = await import('./lib/harvest-readiness.js');
+    let experimentRecords = [];
+    if (typeof harvestOutcomesDB !== 'undefined') {
+      experimentRecords = await harvestOutcomesDB.find({});
+    }
+    const growth = analyzeGrowthRate(req.params.crop, experimentRecords);
+    const quality = analyzeQualityTrend(req.params.crop, experimentRecords);
+    res.json({ ok: true, crop: req.params.crop, growth, quality, timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 /**

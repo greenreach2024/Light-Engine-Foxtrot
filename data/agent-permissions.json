@@ -157,7 +157,7 @@
     },
 
     "grow-advisor": {
-      "description": "Crop optimization, experiment analysis, recipe tuning. Advisory only — does not modify recipes or schedules without approval.",
+      "description": "Crop optimization, experiment analysis, recipe tuning. Autonomous recipe adjustment within guardrail bounds (±5% spectrum, ±1°C temp, ±15 PPFD). Auto-reverts on regression.",
       "capabilities": {
         "inventory": {
           "list_products":    { "tier": "auto" },
@@ -174,12 +174,16 @@
           "quality_check":    { "tier": "auto" }
         },
         "grow": {
-          "analyze_experiments":   { "tier": "auto" },
-          "recommend_recipe":      { "tier": "recommend" },
-          "compare_benchmarks":    { "tier": "auto" },
-          "predict_harvest":       { "tier": "auto" },
-          "modify_recipe":         { "tier": "require-approval" },
-          "adjust_light_schedule": { "tier": "require-approval" }
+          "analyze_experiments":       { "tier": "auto" },
+          "recommend_recipe":          { "tier": "recommend" },
+          "compare_benchmarks":        { "tier": "auto" },
+          "predict_harvest":           { "tier": "auto" },
+          "modify_recipe":             { "tier": "require-approval" },
+          "adjust_light_schedule":     { "tier": "require-approval" },
+          "auto_apply_recipe":         { "tier": "auto", "notes": "Phase 5: Autonomous within guardrail bounds. Auto-reverts on regression." },
+          "auto_revert_recipe":        { "tier": "auto", "notes": "Phase 5: Auto-revert on 2 consecutive underperformances." },
+          "clear_revert":              { "tier": "require-approval", "notes": "Phase 5: Manual review required to re-enable autonomous application." },
+          "autonomous_status":         { "tier": "auto" }
         }
       }
     },
