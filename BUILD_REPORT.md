@@ -180,6 +180,14 @@ Delivery-facing UX and docs now explicitly state that **GreenReach Central** is 
 - `public/driver-apply.html` — Central governance notice on public onboarding page
 - `README.md` — operating authority section documenting Central control model
 
+### GreenReach Central IA & Communication Paths (Expanded)
+
+Delivery UX now includes explicit GreenReach Central navigation and contact pathways so all stakeholders can route updates and escalation through Central:
+
+- `public/delivery-platform.html` — dedicated `GreenReach Central` nav anchor + stakeholder communication section and footer contacts
+- `public/driver-apply.html` — dedicated `GreenReach Central` nav anchor + stakeholder communication section and footer contacts
+- `public/driver-portal.html` — dedicated `GreenReach Central` nav anchor + sidebar help links for farms/buyers/drivers/ops escalation
+
 ---
 
 ## Configuration
