@@ -45,16 +45,29 @@ frontend/
 hq-app/
 edge-app/
 esp32/
+esp32-firmware/
 examples/
 /data/
 data.aws-backup/
 lib.aws-backup/
 server.aws-backup/
-greenreach-central/.ebextensions/
+greenreach-central/
+
+# Large media files
+*.mov
+*.mp4
+*.avi
+*.har
+public/videos/
+public/images/*.jpeg
+public/images/plant-farm/
 
 # Database files (if any)
 *.db
 *.sqlite
+*.elf
+*.map
+*.a
 
 # Environment files
 .env.local
@@ -63,3 +76,16 @@ greenreach-central/.ebextensions/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Build artifacts
+*.bundle.js
+
+# Scripts and tools not needed in production
+*.sh
+*.py
+alembic.ini
+alembic/
+create-*.js
+check-*.js
+cleanup-*.sh
+build-and-verify.sh
