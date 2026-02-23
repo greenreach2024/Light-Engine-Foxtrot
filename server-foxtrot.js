@@ -10513,7 +10513,9 @@ app.get('/api/harvest/experiment-records', async (req, res) => {
  * Uses existing Central URL from farm.json or env var.
  */
 async function syncExperimentToCenter(record) {
-  const centralUrl = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL;
+  const centralUrl = process.env.GREENREACH_CENTRAL_URL
+    || process.env.CENTRAL_URL
+    || (process.env.NODE_ENV === 'production' ? null : 'http://127.0.0.1:3100');
   if (!centralUrl) return; // No Central configured — farm-only mode
 
   try {
