@@ -479,6 +479,116 @@ router.get('/network/alerts', async (req, res) => {
   }
 });
 
+// ─── Cross-Farm Anomaly Correlation (Phase 3 T33) ────────────
+router.get('/network/anomaly-correlation', async (req, res) => {
+  try {
+    if (!(await isDatabaseAvailable())) {
+      return res.json({ success: true, correlations: [], total: 0 });
+    }
+
+    const windowDays = parseInt(req.query.window_days) || 14;
+
+    // Find anomalies that appear at multiple farms within the time window
+    // Group by crop + anomaly type (high loss, low yield, quality drop)
+
+    // 1. High-loss anomalies by crop across farms
+    const lossCorrelation = await query(`
+      SELECT er.crop,
+             COUNT(DISTINCT er.farm_id) AS farm_count,
+             ARRAY_AGG(DISTINCT er.farm_id) AS farm_ids,
+             AVG((er.outcomes->>'loss_rate')::DECIMAL) AS avg_loss_rate,
+             MAX((er.outcomes->>'loss_rate')::DECIMAL) AS max_loss_rate,
+             MIN(er.recorded_at) AS first_seen,
+             MAX(er.recorded_at) AS last_seen
+      FROM experiment_records er
+      WHERE er.recorded_at >= NOW() - INTERVAL '1 day' * $1
+        AND (er.outcomes->>'loss_rate')::DECIMAL > 0.10
+        AND er.crop IS NOT NULL
+      GROUP BY er.crop
+      HAVING COUNT(DISTINCT er.farm_id) >= 2
+      ORDER BY farm_count DESC, avg_loss_rate DESC
+    `, [windowDays]);
+
+    // 2. Low-yield anomalies by crop (below 70% of benchmark)
+    const benchmarks = await query('SELECT crop, avg_weight_per_plant_oz FROM crop_benchmarks');
+    const benchMap = {};
+    for (const b of benchmarks.rows) benchMap[b.crop] = parseFloat(b.avg_weight_per_plant_oz);
+
+    const yieldCorrelation = [];
+    if (Object.keys(benchMap).length > 0) {
+      const yieldResult = await query(`
+        SELECT er.crop,
+               COUNT(DISTINCT er.farm_id) AS farm_count,
+               ARRAY_AGG(DISTINCT er.farm_id) AS farm_ids,
+               AVG((er.outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield,
+               MIN(er.recorded_at) AS first_seen,
+               MAX(er.recorded_at) AS last_seen
+        FROM experiment_records er
+        WHERE er.recorded_at >= NOW() - INTERVAL '1 day' * $1
+          AND er.outcomes->>'weight_per_plant_oz' IS NOT NULL
+          AND er.crop IS NOT NULL
+        GROUP BY er.crop
+        HAVING COUNT(DISTINCT er.farm_id) >= 2
+      `, [windowDays]);
+
+      for (const row of yieldResult.rows) {
+        const bench = benchMap[row.crop];
+        if (bench && parseFloat(row.avg_yield) < bench * 0.7) {
+          yieldCorrelation.push({
+            anomaly_type: 'network_low_yield',
+            crop: row.crop,
+            farm_count: parseInt(row.farm_count),
+            farm_ids: row.farm_ids,
+            avg_yield_oz: +parseFloat(row.avg_yield).toFixed(3),
+            benchmark_oz: +bench.toFixed(3),
+            pct_of_benchmark: +((parseFloat(row.avg_yield) / bench) * 100).toFixed(1),
+            first_seen: row.first_seen,
+            last_seen: row.last_seen,
+            severity: parseFloat(row.avg_yield) < bench * 0.5 ? 'critical' : 'warning',
+            message: `${row.crop}: ${row.farm_count} farms below 70% yield benchmark (avg ${parseFloat(row.avg_yield).toFixed(2)} vs ${bench.toFixed(2)} oz)`
+          });
+        }
+      }
+    }
+
+    // Build correlations array
+    const correlations = [];
+
+    for (const row of lossCorrelation.rows) {
+      correlations.push({
+        anomaly_type: 'network_high_loss',
+        crop: row.crop,
+        farm_count: parseInt(row.farm_count),
+        farm_ids: row.farm_ids,
+        avg_loss_rate: +parseFloat(row.avg_loss_rate).toFixed(3),
+        max_loss_rate: +parseFloat(row.max_loss_rate).toFixed(3),
+        first_seen: row.first_seen,
+        last_seen: row.last_seen,
+        severity: parseFloat(row.avg_loss_rate) > 0.25 ? 'critical' : 'warning',
+        message: `${row.crop}: ${row.farm_count} farms with >10% loss (avg ${(parseFloat(row.avg_loss_rate) * 100).toFixed(1)}%)`
+      });
+    }
+
+    correlations.push(...yieldCorrelation);
+
+    // Sort by severity then farm_count
+    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    correlations.sort((a, b) =>
+      (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9) || b.farm_count - a.farm_count
+    );
+
+    res.json({
+      success: true,
+      correlations,
+      total: correlations.length,
+      window_days: windowDays
+    });
+  } catch (error) {
+    console.error('[Network] Anomaly correlation error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ─── Grower Dashboard ──────────────────────────────────────
 router.get('/growers/dashboard', async (req, res) => {
   try {
@@ -774,6 +884,80 @@ router.get('/performance/:growerId', async (req, res) => {
     });
   } catch (error) {
     console.error('[Network] Performance error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── Cross-Farm Energy Benchmarks (Phase 3 T35) ─────────────
+router.get('/network/energy-benchmarks', async (req, res) => {
+  try {
+    if (!(await isDatabaseAvailable())) {
+      return res.json({ success: true, benchmarks: {}, farms: [] });
+    }
+
+    // Aggregate energy_kwh_per_kg by crop across all farms
+    const cropResult = await query(`
+      SELECT er.crop,
+             COUNT(*) AS harvest_count,
+             COUNT(DISTINCT er.farm_id) AS farm_count,
+             AVG((er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS avg_kwh_per_kg,
+             MIN((er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS best_kwh_per_kg,
+             MAX((er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS worst_kwh_per_kg,
+             PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY (er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS p25,
+             PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY (er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS p75
+      FROM experiment_records er
+      WHERE er.outcomes->>'energy_kwh_per_kg' IS NOT NULL
+        AND er.crop IS NOT NULL
+        AND er.recorded_at >= NOW() - INTERVAL '90 days'
+      GROUP BY er.crop
+      HAVING COUNT(*) >= 3
+      ORDER BY avg_kwh_per_kg ASC
+    `);
+
+    const benchmarks = {};
+    for (const row of cropResult.rows) {
+      benchmarks[row.crop] = {
+        avg_kwh_per_kg: +parseFloat(row.avg_kwh_per_kg).toFixed(2),
+        best_kwh_per_kg: +parseFloat(row.best_kwh_per_kg).toFixed(2),
+        worst_kwh_per_kg: +parseFloat(row.worst_kwh_per_kg).toFixed(2),
+        p25: row.p25 ? +parseFloat(row.p25).toFixed(2) : null,
+        p75: row.p75 ? +parseFloat(row.p75).toFixed(2) : null,
+        farm_count: parseInt(row.farm_count),
+        harvest_count: parseInt(row.harvest_count)
+      };
+    }
+
+    // Per-farm energy efficiency ranking
+    const farmResult = await query(`
+      SELECT er.farm_id, f.name AS farm_name,
+             AVG((er.outcomes->>'energy_kwh_per_kg')::DECIMAL) AS avg_kwh_per_kg,
+             COUNT(*) AS harvest_count
+      FROM experiment_records er
+      LEFT JOIN farms f ON f.farm_id = er.farm_id
+      WHERE er.outcomes->>'energy_kwh_per_kg' IS NOT NULL
+        AND er.recorded_at >= NOW() - INTERVAL '90 days'
+      GROUP BY er.farm_id, f.name
+      HAVING COUNT(*) >= 2
+      ORDER BY avg_kwh_per_kg ASC
+      LIMIT 20
+    `);
+
+    const farms = farmResult.rows.map((f, i) => ({
+      rank: i + 1,
+      farm_id: f.farm_id,
+      farm_name: f.farm_name || f.farm_id,
+      avg_kwh_per_kg: +parseFloat(f.avg_kwh_per_kg).toFixed(2),
+      harvest_count: parseInt(f.harvest_count)
+    }));
+
+    res.json({
+      success: true,
+      benchmarks,
+      farms,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Network] Energy benchmarks error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

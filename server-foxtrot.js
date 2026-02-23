@@ -228,6 +228,7 @@ import anomalyHistory from './lib/anomaly-history.js';
 import eventBus from './lib/event-bus.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
+import { logDailyFixtureRun, getFixtureHours } from './lib/led-aging.js';
 import { scoreAlert, prioritizeAlerts, recordAlertResponse, getAlertStats } from './lib/alert-prioritizer.js';
 import { executeSafetyEnvelope } from './lib/device-safety-envelope.js';
 
@@ -4748,6 +4749,11 @@ async function runDailyPlanResolver(trigger = 'manual') {
             status: patchResult?.status ?? null,
             error: patchResult?.ok ? null : (patchResult?.error || null)
           });
+
+          // Phase 3 (T27): Log LED fixture run hours for aging tracker
+          if (shouldPowerOn && resolvedPhotoperiod > 0) {
+            try { logDailyFixtureRun(deviceId, resolvedPhotoperiod); } catch {}
+          }
         }
 
         const envScopeCandidates = [
@@ -10319,6 +10325,31 @@ app.get('/api/harvest', (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /**
+ * Phase 3 T35: Estimate energy consumption (kWh per kg) from fixture data.
+ */
+function estimateEnergyKwhPerKg(farmContext, growDays, totalWeightOz) {
+  try {
+    if (!growDays || !totalWeightOz || totalWeightOz <= 0) return null;
+    const devicesData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'devices.json'), 'utf-8'));
+    const devices = Array.isArray(devicesData) ? devicesData : devicesData.devices || [];
+    let totalWatts = 0, fixtureCount = 0;
+    for (const d of devices) {
+      const w = d.wattage || d.watts || d.nominalW || 0;
+      if (w > 0) { totalWatts += w; fixtureCount++; }
+    }
+    if (totalWatts === 0 || fixtureCount === 0) return null;
+    const dailyHours = farmContext.fixture_hours && growDays > 1
+      ? Math.min(24, farmContext.fixture_hours / growDays) : 16;
+    const totalKwh = (totalWatts * dailyHours * growDays) / 1000;
+    const totalKg = totalWeightOz * 0.0283495;
+    if (totalKg <= 0) return null;
+    const kwhPerKg = totalKwh / totalKg;
+    if (kwhPerKg < 1 || kwhPerKg > 500) return null;
+    return +kwhPerKg.toFixed(1);
+  } catch { return null; }
+}
+
+/**
  * Helper: Build experiment record from harvest context.
  * Aggregates applied recipe params over the grow cycle from appliedRecipesDB.
  */
@@ -10346,11 +10377,27 @@ async function buildExperimentRecord(opts) {
       season,
       system_type: system_type || 'nft',
       tray_format: tray_format || '',
-      fixture_hours: null // TODO: track cumulative LED hours per fixture
+      fixture_hours: null // Phase 3 (T27): populated below from LED aging tracker
     };
   } catch (e) {
     farmContext = { farm_id: process.env.FARM_ID || 'unknown', region: '', season: '', system_type: system_type || '' };
   }
+
+  // Phase 3 (T27): Populate fixture_hours from LED aging tracker
+  try {
+    const groupsData = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'groups.json'), 'utf-8'));
+    const groups = groupsData.groups || groupsData;
+    const group = Array.isArray(groups) ? groups.find(g => g.id === groupId) : null;
+    if (group) {
+      const deviceIds = (group.lights || group.devices || group.members || []).map(d => typeof d === 'string' ? d : d?.id).filter(Boolean);
+      if (deviceIds.length > 0) {
+        const hours = deviceIds.map(id => getFixtureHours(id)).filter(h => h != null);
+        if (hours.length > 0) {
+          farmContext.fixture_hours = +Math.max(...hours).toFixed(0);
+        }
+      }
+    }
+  } catch {}
 
   // Aggregate applied recipe params over grow cycle for this group
   let recipe_params_avg = { ppfd: null, blue_pct: null, red_pct: null, green_pct: null, far_red_pct: null, temp_c: null, humidity_pct: null, ec: null, ph: null };
@@ -10444,7 +10491,8 @@ async function buildExperimentRecord(opts) {
       weight_per_plant_oz: weight_per_plant_oz != null ? +parseFloat(weight_per_plant_oz).toFixed(3) : null,
       quality_score: quality_score != null ? parseInt(quality_score) : null,
       loss_rate: loss_rate != null ? +parseFloat(loss_rate).toFixed(3) : null,
-      energy_kwh_per_kg: energy_kwh_per_kg != null ? +parseFloat(energy_kwh_per_kg).toFixed(1) : null,
+      energy_kwh_per_kg: energy_kwh_per_kg != null ? +parseFloat(energy_kwh_per_kg).toFixed(1)
+        : estimateEnergyKwhPerKg(farmContext, grow_days, total_weight_oz),
     },
     farm_context: farmContext,
     recorded_at: new Date().toISOString()
@@ -20555,6 +20603,47 @@ app.get('/api/losses/current', async (req, res) => {
   } catch (error) {
     console.error('[inventory] Error fetching loss statistics:', error);
     res.status(500).json({ error: 'Failed to fetch loss statistics' });
+  }
+});
+
+/**
+ * GET /api/losses/predict
+ * Phase 3 T29 - Loss prediction from environment trends
+ */
+app.get('/api/losses/predict', async (req, res) => {
+  try {
+    if (isDemoMode()) {
+      return res.json({ alerts: [], status: 'demo_mode' });
+    }
+    const { buildLossRiskProfiles, predictLossRisk } = await import('./lib/loss-predictor.js');
+    const lossEvents = await trayLossEventsDB.find({});
+    const mapped = lossEvents.map(e => ({
+      crop: e.crop_name || e.crop_id,
+      reason: e.loss_reason,
+      zone: e.zone,
+      timestamp: e.created_at,
+      qty: e.quantity_lost || 1,
+      envSnapshot: e.environment_snapshot || null
+    }));
+    const profiles = buildLossRiskProfiles(mapped);
+    const alerts = [];
+    if (envState.zones) {
+      for (const [zoneId, zone] of Object.entries(envState.zones)) {
+        const r = zone.sensors?.[0]?.readings;
+        if (!r) continue;
+        const currentEnv = { tempC: r.temperature_c ?? r.temp, rh: r.humidity ?? r.humidity_pct, vpd: r.vpd ?? null };
+        const zoneAlerts = predictLossRisk(currentEnv, profiles);
+        zoneAlerts.forEach(a => { a.zone = zoneId; a.zone_name = zone.name || zone.zone_name; });
+        alerts.push(...zoneAlerts);
+      }
+    }
+    res.json({
+      alerts: alerts.sort((a, b) => b.risk_score - a.risk_score),
+      profiles_summary: { total_events: profiles.total_events, reasons_profiled: profiles.reasons_profiled || 0, status: profiles.status }
+    });
+  } catch (error) {
+    console.error('[loss-predict] Error:', error);
+    res.status(500).json({ error: 'Loss prediction failed' });
   }
 });
 
