@@ -11359,6 +11359,73 @@ app.use('/api/health', healthRouter);
  */
 app.use('/api/mdns', mdnsDiscoveryRouter);
 
+// ─── AI Vision T19: Auto-Assign Discovered Lights to Groups ──────────
+// Rule 8.1: Suggestions only — grower must approve before any assignment
+
+/**
+ * POST /api/devices/discover-and-suggest
+ * Run device discovery, then generate group assignment suggestions.
+ * Returns suggestions for grower review — nothing is auto-applied.
+ */
+app.post('/api/devices/discover-and-suggest', asyncHandler(async (req, res) => {
+  const { suggestAssignments } = await import('./lib/device-group-suggester.js');
+  const { DeviceDiscovery } = await import('./lib/device-discovery.js');
+  const discovery = new DeviceDiscovery();
+  const { subnet, filter } = req.body || {};
+
+  const result = await discovery.discoverDevices({ subnet, filter: filter || 'light_controller' });
+  const suggestions = suggestAssignments(result.devices || []);
+
+  res.json({
+    ok: true,
+    discovery: result.summary,
+    ...suggestions
+  });
+}));
+
+/**
+ * GET /api/devices/pending-assignments
+ * Get current pending assignment suggestions for grower review.
+ */
+app.get('/api/devices/pending-assignments', asyncHandler(async (req, res) => {
+  const { getPendingAssignments } = await import('./lib/device-group-suggester.js');
+  const pending = getPendingAssignments();
+  res.json({ ok: true, ...pending });
+}));
+
+/**
+ * POST /api/devices/assignments/approve
+ * Grower approves one or more suggested assignments.
+ * Body: { assignments: [{ deviceId, groupId }] }
+ * Rule 8.1: This is the explicit grower approval step.
+ */
+app.post('/api/devices/assignments/approve', asyncHandler(async (req, res) => {
+  const { approveAssignments } = await import('./lib/device-group-suggester.js');
+  const { assignments } = req.body || {};
+  if (!Array.isArray(assignments) || assignments.length === 0) {
+    return res.status(400).json({ ok: false, error: 'assignments array required' });
+  }
+  const result = approveAssignments(assignments);
+  res.json({ ok: true, ...result });
+}));
+
+/**
+ * POST /api/devices/assignments/dismiss
+ * Grower dismisses one or more suggested assignments.
+ * Body: { dismissals: [{ deviceId, reason? }] }
+ * Rule 8.1: Decision logged as training signal.
+ */
+app.post('/api/devices/assignments/dismiss', asyncHandler(async (req, res) => {
+  const { dismissAssignments } = await import('./lib/device-group-suggester.js');
+  const { dismissals } = req.body || {};
+  if (!Array.isArray(dismissals) || dismissals.length === 0) {
+    return res.status(400).json({ ok: false, error: 'dismissals array required' });
+  }
+  const result = dismissAssignments(dismissals);
+  res.json({ ok: true, ...result });
+}));
+
+
 /**
  * Cloud-to-Edge Migration Routes
  * - POST /api/migration/export: Export complete farm data from cloud

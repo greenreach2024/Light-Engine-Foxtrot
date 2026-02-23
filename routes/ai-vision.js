@@ -269,4 +269,136 @@ router.post('/checklist-photo', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/qa/quality-trends
+ * AI Vision Phase 3, T30: Quality trend analysis over time
+ * Aggregates health_score from qa_checkpoints by crop/period
+ *
+ * Feedback loop: 3 (Spectrum → Quality) — OBSERVE mode
+ * Connects quality scores to spectrum/recipe inputs over time
+ *
+ * Query params:
+ *   ?crop=genovese-basil     — filter by crop (from batch_id prefix)
+ *   ?farm_id=FARM-...        — filter by farm
+ *   ?since=2025-01-01        — start date (default 90 days ago)
+ *   ?period=week             — grouping: day|week|month (default week)
+ */
+router.get('/quality-trends', async (req, res) => {
+    try {
+        const { crop, farm_id, period = 'week' } = req.query;
+        const since = req.query.since || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Map period to PostgreSQL date_trunc interval
+        const validPeriods = { day: 'day', week: 'week', month: 'month' };
+        const truncPeriod = validPeriods[period] || 'week';
+
+        // Build WHERE clauses
+        const conditions = ['created_at >= $1'];
+        const params = [since];
+        let paramIdx = 2;
+
+        if (farm_id) {
+            conditions.push(`farm_id = $${paramIdx++}`);
+            params.push(farm_id);
+        }
+        if (crop) {
+            // batch_id often starts with crop name or group reference — use ILIKE
+            conditions.push(`batch_id ILIKE $${paramIdx++}`);
+            params.push(`%${crop}%`);
+        }
+
+        const whereClause = conditions.join(' AND ');
+
+        // Aggregate health scores by period
+        const trendQuery = `
+            SELECT
+                date_trunc('${truncPeriod}', created_at) AS period_start,
+                COUNT(*) AS checkpoint_count,
+                ROUND(AVG((metrics->>'health_score')::numeric), 1) AS avg_health_score,
+                ROUND(MIN((metrics->>'health_score')::numeric), 1) AS min_health_score,
+                ROUND(MAX((metrics->>'health_score')::numeric), 1) AS max_health_score,
+                COUNT(*) FILTER (WHERE result = 'pass' OR result = 'pass_with_notes') AS pass_count,
+                COUNT(*) FILTER (WHERE result = 'fail') AS fail_count,
+                ROUND(
+                    COUNT(*) FILTER (WHERE result = 'pass' OR result = 'pass_with_notes')::numeric /
+                    NULLIF(COUNT(*)::numeric, 0) * 100, 1
+                ) AS pass_rate_pct
+            FROM qa_checkpoints
+            WHERE ${whereClause}
+              AND metrics->>'health_score' IS NOT NULL
+            GROUP BY period_start
+            ORDER BY period_start ASC
+        `;
+
+        const trendResult = await db(trendQuery, params);
+
+        // Overall summary
+        const summaryQuery = `
+            SELECT
+                COUNT(*) AS total_checkpoints,
+                ROUND(AVG((metrics->>'health_score')::numeric), 1) AS avg_health_score,
+                ROUND(STDDEV((metrics->>'health_score')::numeric), 1) AS stddev_health_score,
+                COUNT(DISTINCT batch_id) AS unique_batches,
+                COUNT(DISTINCT farm_id) AS unique_farms,
+                COUNT(*) FILTER (WHERE result = 'pass' OR result = 'pass_with_notes') AS total_pass,
+                COUNT(*) FILTER (WHERE result = 'fail') AS total_fail
+            FROM qa_checkpoints
+            WHERE ${whereClause}
+              AND metrics->>'health_score' IS NOT NULL
+        `;
+
+        const summaryResult = await db(summaryQuery, params);
+        const summary = summaryResult.rows[0] || {};
+
+        // Compute trend direction from first/last period
+        const trends = trendResult.rows || [];
+        let trend_direction = 'stable';
+        if (trends.length >= 2) {
+            const first = parseFloat(trends[0].avg_health_score);
+            const last = parseFloat(trends[trends.length - 1].avg_health_score);
+            const delta = last - first;
+            if (delta > 2) trend_direction = 'improving';
+            else if (delta < -2) trend_direction = 'declining';
+        }
+
+        res.json({
+            success: true,
+            data: {
+                period: truncPeriod,
+                since,
+                filters: { crop: crop || null, farm_id: farm_id || null },
+                summary: {
+                    total_checkpoints: parseInt(summary.total_checkpoints) || 0,
+                    avg_health_score: parseFloat(summary.avg_health_score) || null,
+                    stddev_health_score: parseFloat(summary.stddev_health_score) || null,
+                    unique_batches: parseInt(summary.unique_batches) || 0,
+                    unique_farms: parseInt(summary.unique_farms) || 0,
+                    pass_rate_pct: summary.total_pass && summary.total_checkpoints
+                        ? +(((parseInt(summary.total_pass) / parseInt(summary.total_checkpoints)) * 100).toFixed(1))
+                        : null,
+                    trend_direction
+                },
+                trends: trends.map(t => ({
+                    period_start: t.period_start,
+                    checkpoint_count: parseInt(t.checkpoint_count),
+                    avg_health_score: parseFloat(t.avg_health_score),
+                    min_health_score: parseFloat(t.min_health_score),
+                    max_health_score: parseFloat(t.max_health_score),
+                    pass_count: parseInt(t.pass_count),
+                    fail_count: parseInt(t.fail_count),
+                    pass_rate_pct: parseFloat(t.pass_rate_pct)
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('[AI Vision] Error in quality-trends:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to compute quality trends',
+            message: error.message
+        });
+    }
+});
+
 export default router;

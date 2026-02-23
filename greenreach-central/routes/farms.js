@@ -337,6 +337,12 @@ router.post('/register', async (req, res, next) => {
               crop_benchmarks: networkBenchmarks.crop_benchmarks,
               demand_signals: demandSignals,
               risk_alerts: [],
+              recipe_modifiers: await (async () => {
+                try {
+                  const { getNetworkModifiers } = await import('../jobs/yield-regression.js');
+                  return await getNetworkModifiers();
+                } catch { return null; }
+              })(),
               generated_at: now,
               source: 'onboarding_push'
             }

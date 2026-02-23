@@ -293,6 +293,17 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_benchmark_crop ON crop_benchmarks(crop);
   `);
 
+  // AI Vision Phase 3: Network recipe modifiers table (T31/T32)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS network_recipe_modifiers (
+      id SERIAL PRIMARY KEY,
+      modifiers JSONB NOT NULL,
+      computed_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_network_recipe_modifiers_computed
+      ON network_recipe_modifiers(computed_at DESC);
+  `);
+
   // Device integration learning records (Integration Assistant, Ticket I-1.9)
   await client.query(`
     CREATE TABLE IF NOT EXISTS device_integrations (

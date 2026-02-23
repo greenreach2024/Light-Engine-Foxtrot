@@ -46,6 +46,7 @@ import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-us
 import farmSalesRouter from './routes/farm-sales.js';
 import networkGrowersRouter from './routes/network-growers.js';
 import experimentRecordsRouter, { startBenchmarkScheduler } from './routes/experiment-records.js';
+import { runYieldRegression } from './jobs/yield-regression.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
@@ -2670,6 +2671,16 @@ async function startServer() {
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
+
+      // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)
+      // Run once after 5 min, then weekly
+      setTimeout(() => {
+        runYieldRegression().catch(e => logger.warn('Initial yield regression failed', { error: e.message }));
+      }, 5 * 60 * 1000);
+      setInterval(() => {
+        runYieldRegression().catch(e => logger.warn('Yield regression failed', { error: e.message }));
+      }, 7 * 24 * 60 * 60 * 1000); // Weekly
+      logger.info('Yield regression scheduler enabled (weekly + initial 5min delay)');
 
       // Phase 4: Initialize A/B experiment tables
       try {
