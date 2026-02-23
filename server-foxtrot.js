@@ -176,6 +176,10 @@ import lightsDB from './lib/lights-database.js';
 import ScheduleExecutor from './lib/schedule-executor.js';
 import { solveSpectrum, toPWM } from './lib/spectral-solver.js';
 import { mountMLRoutes } from './routes/ml.js';
+import { mountSuccessionRoutes } from './routes/succession.js';
+import { AdaptiveControl } from './lib/adaptive-control.js';
+import { AnomalyDiagnostics } from './lib/anomaly-diagnostics.js';
+import { SuccessionPlanner } from './lib/succession-planner.js';
 import { validateLicense } from './lib/license-manager.js';
 import { autoEnforceFeatures, requireFeature } from './server/middleware/feature-flags.js';
 import healthRouter from './routes/health.js';
@@ -736,6 +740,11 @@ const CLOUD_ENDPOINT_URL = process.env.CLOUD_ENDPOINT_URL || process.env.AWS_END
 const ENV_SOURCE = process.env.ENV_SOURCE || (CLOUD_ENDPOINT_URL ? "cloud" : "local");
 const ENV_PATH = path.resolve("./public/data/env.json");
 const DATA_DIR = path.resolve("./public/data");
+
+// Sprint 0: P2 Adaptive Control, P8 Anomaly Diagnostics, P4 Succession Planner
+const adaptiveControl = new AdaptiveControl({ tier: 1 });
+const anomalyDiagnostics = new AnomalyDiagnostics(DATA_DIR);
+const successionPlanner = new SuccessionPlanner(DATA_DIR);
 const FARM_PATH = path.join(DATA_DIR, 'farm.json');
 const CONTROLLER_PATH = path.join(DATA_DIR, 'controller.json');
 const FORWARDER_PATH = path.join(DATA_DIR, 'forwarder.json');
@@ -11321,6 +11330,74 @@ app.get('/api/harvest/growth-analysis/:crop', async (req, res) => {
  */
 mountMLRoutes(app);
 
+// P8: Anomaly diagnostics endpoint — enriches anomaly detection with diagnostic reasoning
+app.get('/api/ml/diagnostics', async (req, res) => {
+  try {
+    // 1) Run anomaly detection (reuse the /api/ml/anomalies Python pipeline)
+    const { spawn } = await import('node:child_process');
+    const pyBin = process.env.PYTHON_BIN || 'python3';
+    const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
+    const args = [
+      scriptPath, '--json',
+      ...(process.env.ML_INDOOR_CSV ? ['--input', process.env.ML_INDOOR_CSV] : []),
+      ...(process.env.ML_OUTDOOR_CSV ? ['--outdoor', process.env.ML_OUTDOOR_CSV] : [])
+    ];
+
+    const anomalyResult = await new Promise((resolve, reject) => {
+      const proc = spawn(pyBin, args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+      let stdout = '', stderr = '';
+      proc.stdout.on('data', d => stdout += d);
+      proc.stderr.on('data', d => stderr += d);
+      proc.on('close', code => {
+        if (code !== 0) {
+          if (/ModuleNotFoundError|sklearn/i.test(stderr)) {
+            return reject(new Error('ML dependencies not installed (scikit-learn required)'));
+          }
+          return reject(new Error(`Anomaly script exited with code ${code}: ${stderr.slice(0, 200)}`));
+        }
+        try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON from anomaly detector')); }
+      });
+      proc.on('error', reject);
+    });
+
+    // 2) Build context for diagnostics
+    const anomalies = anomalyResult.anomalies || [];
+    const context = {
+      weather: LAST_WEATHER?.current || null,
+      history: anomalyHistory || [],
+      automationLogs: []
+    };
+
+    // 3) Run diagnostics
+    const diagnostics = await anomalyDiagnostics.diagnoseMultiple(anomalies, context);
+    const summary = anomalyDiagnostics.getSummary(diagnostics);
+
+    res.json({
+      ok: true,
+      diagnostics,
+      summary,
+      anomalyCount: anomalyResult.anomaly_count || anomalies.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[ml/diagnostics] Error:', error.message);
+    const statusCode = error.message.includes('not installed') ? 503 : 500;
+    res.status(statusCode).json({ ok: false, error: error.message, diagnostics: [], summary: {} });
+  }
+});
+
+/**
+ * P4: Succession Planner Routes
+ * - POST /api/succession/schedule: Generate planting schedule
+ * - GET  /api/succession/duration/:crop: Get growth duration
+ * - POST /api/succession/suggest: Suggest plantings from demand
+ * - POST /api/succession/optimize: Request AI optimization
+ * - GET  /api/succession/forecast/:crop: Get harvest forecast
+ * - GET  /api/succession/gaps/:crop: Detect inventory gaps
+ * - GET  /api/succession/strategy/:crop: Get harvest strategy
+ */
+mountSuccessionRoutes(app, successionPlanner);
+
 /**
  * License Management Routes
  * - GET /api/license: Get license info
@@ -21045,26 +21122,13 @@ app.use('/api', (req, res, next) => {
 const isControllerDisabled = process.env.CTRL === 'DISABLED' || process.env.CTRL === 'disabled' || process.env.CTRL === 'false';
 if (!isControllerDisabled) {
   console.log('[Foxtrot] Controller proxy enabled, target:', getController());
-  app.use('/api', proxyCorsMiddleware, createProxyMiddleware({
-  // Initial target is required; router() will be consulted per-request
-  target: getController(),
-  router: () => getController(),
-  changeOrigin: true,
-  xfwd: true,
-  logLevel: 'debug',
-  timeout: 5000,
-  proxyTimeout: 5000,
-  agent: keepAliveHttpAgent,  // Use HTTP agent directly (controller is HTTP, not HTTPS)
-  // Filter: only proxy paths that should go to the Grow3 controller
-  // Exclude paths handled by Node.js server (env, automation, switchbot, kasa, etc.)
-  filter: (pathname, req) => {
+  // Proxy filter function — must be 1st arg to createProxyMiddleware in v2.x
+  // (passing it as an option is silently ignored in v2)
+  const proxyFilter = (pathname, req) => {
     try {
-      // Don't proxy these paths - they're handled by Node.js server
-      // Note: When mounted at /api, pathname will be /groups not /api/groups
       const fullPath = req.originalUrl || pathname;
       console.log(`[Proxy Filter] Checking path: pathname="${pathname}", fullPath="${fullPath}"`);
       
-      // Since proxy is mounted at /api, remove /api prefix for matching
       const excludePaths = [
         '/planning',
         '/env',
@@ -21080,30 +21144,31 @@ if (!isControllerDisabled) {
         '/device/',
         '/notifications',
         '/ml/',
-        '/health/',        // AI Health Monitoring endpoints
-        '/admin/',         // Central admin multi-farm endpoints
-        '/demo-farm',      // Demo farm data
-        '/inventory/',     // Inventory endpoints (current, forecast)
-        '/tray-formats',   // Tray format definitions
-        '/recipes',        // Lighting recipes
-        '/crops',          // Crop definitions
-        '/trays/',         // Tray operations (register, seed, etc.)
-        '/tray-runs/',     // Tray run operations (place, harvest, loss)
-        '/losses/',        // Loss tracking and statistics
-        '/config/',        // Farm configuration endpoints
-        '/setup',          // Setup activation + persistence endpoints
-        '/crop-pricing',   // Crop pricing configuration
-        '/farm-auth/',     // Farm authentication for Sales Terminal
-        '/farm/auth/',     // Farm authentication alternate path
-        '/farm-sales/',    // Farm Sales Terminal inventory and POS
-        '/wholesale/',     // Wholesale inventory and catalog
-        '/rooms',          // Rooms data for edge mode
-        '/groups',         // Groups data for edge mode
-        '/farm/info',      // Farm metadata - legacy Charlie endpoint
-        '/bus-mappings'    // Bus mapping configuration for edge mode
+        '/health/',
+        '/admin/',
+        '/demo-farm',
+        '/inventory/',
+        '/tray-formats',
+        '/recipes',
+        '/crops',
+        '/trays/',
+        '/tray-runs/',
+        '/losses/',
+        '/config/',
+        '/setup',
+        '/crop-pricing',
+        '/farm-auth/',
+        '/farm/auth/',
+        '/farm-sales/',
+        '/wholesale/',
+        '/rooms',
+        '/groups',
+        '/farm/info',
+        '/bus-mappings',
+        '/succession',     // P4: Succession planner endpoints
+        '/devices/scan'    // P1: Device scanner endpoint
       ];
       
-      // Check if pathname starts with any excluded pattern
       const shouldExclude = excludePaths.some(excluded => pathname.startsWith(excluded));
       
       if (shouldExclude) {
@@ -21112,12 +21177,23 @@ if (!isControllerDisabled) {
       }
       
       console.log(`[Proxy Filter] Proxying ${fullPath} to controller`);
-      return true; // Proxy everything else to controller
+      return true;
     } catch (error) {
       console.error('[Proxy Filter] ERROR:', error.message);
-      return true; // Default to proxy on error
+      return true;
     }
-  },
+  };
+
+  app.use('/api', proxyCorsMiddleware, createProxyMiddleware(proxyFilter, {
+  // Initial target is required; router() will be consulted per-request
+  target: getController(),
+  router: () => getController(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 5000,
+  proxyTimeout: 5000,
+  agent: keepAliveHttpAgent,
   // Ensure controller receives exactly one /api prefix
   pathRewrite: (path /* e.g., "/devicedatas" or "/api/devicedatas" */) => {
     return path.startsWith('/api/') ? path : `/api${path}`;
@@ -26221,6 +26297,62 @@ async function discoverBLEDevices() {
 }
 
 // Farm device status endpoints for live testing
+// P1: Device scanner endpoint — frontend-friendly wrapper around discovery
+app.post('/api/devices/scan', async (req, res) => {
+  console.log('[P1] Device scan requested');
+  try {
+    // Delegate to existing /discovery/scan logic via internal fetch
+    const internalUrl = `http://127.0.0.1:${PORT}/discovery/scan`;
+    const scanResponse = await fetch(internalUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(5000)
+    }).catch(() => null);
+
+    let devices = [];
+    if (scanResponse && scanResponse.ok) {
+      const body = await scanResponse.json();
+      devices = body.devices || [];
+    } else {
+      // Fallback: try direct SwitchBot + Kasa discovery
+      try {
+        const sbResponse = await fetch(`http://127.0.0.1:${PORT}/api/switchbot/devices`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+        if (sbResponse && sbResponse.ok) {
+          const sbData = await sbResponse.json();
+          const sbDevices = (sbData.devices || sbData.body?.deviceList || []).map(d => ({
+            id: d.deviceId || d.id,
+            name: d.deviceName || d.name || 'SwitchBot Device',
+            brand: 'SwitchBot',
+            type: d.deviceType || 'unknown',
+            category: 'sensor'
+          }));
+          devices.push(...sbDevices);
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    const summary = {
+      total: devices.length,
+      byBrand: {},
+      byCategory: {},
+      scannedAt: new Date().toISOString()
+    };
+    for (const d of devices) {
+      const brand = d.brand || 'Unknown';
+      const cat = d.category || 'other';
+      summary.byBrand[brand] = (summary.byBrand[brand] || 0) + 1;
+      summary.byCategory[cat] = (summary.byCategory[cat] || 0) + 1;
+    }
+
+    res.json({ ok: true, devices, summary });
+  } catch (error) {
+    console.error('[P1] Device scan error:', error.message);
+    res.status(500).json({ ok: false, error: error.message, devices: [], summary: {} });
+  }
+});
+
+
 app.get('/api/device/:deviceId/status', async (req, res) => {
   const { deviceId } = req.params;
   
@@ -27903,7 +28035,13 @@ function setupLiveSensorSync() {
           plugManager: prePlugManager,
           groups,
           targets,
-          lastActions: preAutomationEngine._lastEnvironmentalActions || {}
+          lastActions: preAutomationEngine._lastEnvironmentalActions || {},
+          adaptiveControl,
+          outdoorContext: LAST_WEATHER?.current ? {
+            temp: LAST_WEATHER.current.temperature_c,
+            rh: LAST_WEATHER.current.humidity,
+            timestamp: LAST_WEATHER.current.last_updated || new Date().toISOString()
+          } : null
         });
         
         // Save last actions
@@ -27921,6 +28059,8 @@ function setupLiveSensorSync() {
   }
 
   if (IS_TEST_ENV) {
+
+
     if (SENSOR_SYNC_TIMER) {
       clearInterval(SENSOR_SYNC_TIMER);
       SENSOR_SYNC_TIMER = null;
@@ -28281,6 +28421,62 @@ async function startServer() {
       console.log('[Cleanup] ✓ Reservation cleanup job started (runs hourly)');
     } catch (error) {
       console.warn('[Cleanup] Failed to start reservation cleanup job:', error?.message || error);
+    }
+
+    // ── Sprint 0: ML Periodic Scheduling ──────────────────────────────────
+    // Runs anomaly detection + harvest prediction refresh periodically
+    try {
+      const ML_SCHEDULE_INTERVAL = parseInt(process.env.ML_SCHEDULE_INTERVAL || '900000', 10); // 15 min default
+      let mlScheduleInFlight = false;
+
+      async function runMLSchedule() {
+        if (mlScheduleInFlight) { console.log('[ML Schedule] Skipping — already in flight'); return; }
+        mlScheduleInFlight = true;
+        try {
+          // 1) Run anomaly detection
+          const { spawn } = await import('node:child_process');
+          const pyBin = process.env.PYTHON_BIN || 'python3';
+          const scriptPath = path.join(__dirname, 'scripts', 'simple-anomaly-detector.py');
+          const anomalyResult = await new Promise((resolve, reject) => {
+            const proc = spawn(pyBin, [scriptPath, '--json'], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+            let stdout = '', stderr = '';
+            proc.stdout.on('data', d => stdout += d);
+            proc.stderr.on('data', d => stderr += d);
+            proc.on('close', code => {
+              if (code !== 0) return reject(new Error(stderr.slice(0, 200)));
+              try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid JSON')); }
+            });
+            proc.on('error', reject);
+          });
+          if (anomalyResult.anomalies?.length) {
+            console.log(`[ML Schedule] Detected ${anomalyResult.anomalies.length} anomalies`);
+          }
+
+          // 2) Refresh harvest predictions
+          try {
+            const { HarvestPredictor } = await import('./lib/harvest-predictor.js');
+            const predictor = new HarvestPredictor({ dataDir: DATA_DIR });
+            await predictor.predictAll();
+            console.log('[ML Schedule] Harvest predictions refreshed');
+          } catch (e) {
+            console.warn('[ML Schedule] Harvest prediction refresh failed:', e.message);
+          }
+        } catch (err) {
+          console.warn('[ML Schedule] Error:', err.message);
+        } finally {
+          mlScheduleInFlight = false;
+        }
+      }
+
+      if (process.env.NODE_ENV !== 'test') {
+        const mlInitTimer = setTimeout(runMLSchedule, 60_000);
+        mlInitTimer.unref();
+        const mlPeriodicTimer = setInterval(runMLSchedule, ML_SCHEDULE_INTERVAL);
+        mlPeriodicTimer.unref();
+        console.log(`[ML Schedule] Periodic ML scheduling enabled (interval: ${ML_SCHEDULE_INTERVAL / 1000}s)`);
+      }
+    } catch (mlSchedErr) {
+      console.warn('[ML Schedule] Failed to initialize:', mlSchedErr.message);
     }
 
       // Start background refresh for zone bindings (every 30s)
