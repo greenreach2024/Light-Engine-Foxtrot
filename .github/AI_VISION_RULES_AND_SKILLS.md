@@ -700,7 +700,7 @@ Agents working on AI/ML features MUST understand these components:
 | Spectral solver | `lib/spectral-solver.js` | 3×4 NNLS spectrum mixing |
 | Recipe engine | `automation/recipe-environmental-targets.js` | Daily target calculator from recipe DB |
 | Adaptive control Tier 1 | `automation/outdoor-aware-adaptive-control.js` | Rule-based outdoor response |
-| Weight reconciliation | `lib/crop-weight-reconciliation.js` | Harvest weight + environment snapshots |
+| Weight reconciliation | `routes/crop-weight-reconciliation.js` | Harvest weight + environment snapshots |
 | AI agent + vision | `routes/ai-vision.js`, `backend/ai_vision.py` | GPT-4o-mini analysis |
 | AI recommendations pusher | `greenreach-central/services/ai-recommendations-pusher.js` | 30-min push channel |
 | Wholesale network aggregator | `greenreach-central/wholesaleNetworkAggregator.js` | 5-min cross-farm inventory |

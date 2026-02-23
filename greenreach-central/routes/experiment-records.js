@@ -37,20 +37,77 @@ router.post('/sync/experiment-records', async (req, res) => {
     // Ensure farm exists in farms table (auto-register if needed)
     const farmCheck = await query('SELECT farm_id FROM farms WHERE farm_id = $1', [farm_id]);
     if (farmCheck.rows.length === 0) {
-      await query(
-        `INSERT INTO farms (farm_id, name, status, created_at)
-         VALUES ($1, $2, 'active', NOW())
-         ON CONFLICT (farm_id) DO NOTHING`,
-        [farm_id, farm_id]
-      );
+      try {
+        // Newer schemas may require registration_code (NOT NULL)
+        const registrationCode = `REG-${farm_id}`.slice(0, 64);
+        await query(
+          `INSERT INTO farms (farm_id, name, registration_code, status, created_at)
+           VALUES ($1, $2, $3, 'active', NOW())
+           ON CONFLICT (farm_id) DO NOTHING`,
+          [farm_id, farm_id, registrationCode]
+        );
+      } catch (insertErr) {
+        // Fallback for legacy schemas without registration_code
+        if (/registration_code|column .* does not exist/i.test(insertErr?.message || '')) {
+          await query(
+            `INSERT INTO farms (farm_id, name, status, created_at)
+             VALUES ($1, $2, 'active', NOW())
+             ON CONFLICT (farm_id) DO NOTHING`,
+            [farm_id, farm_id]
+          );
+        } else {
+          throw insertErr;
+        }
+      }
     }
 
+    const isValidIsoTimestamp = (value) => {
+      if (!value || typeof value !== 'string') return false;
+      const parsed = new Date(value);
+      return !Number.isNaN(parsed.getTime());
+    };
+
     let ingested = 0;
+    let deduplicated = 0;
+    let rejected = 0;
     for (const record of records) {
       try {
         // Validate canonical schema fields (Rule 3.1)
-        if (!record.crop) {
-          console.warn(`[ExperimentRecords] Skipping record without crop from ${farm_id}`);
+        if (!record?.crop || typeof record.crop !== 'string') {
+          console.warn(`[ExperimentRecords] Skipping record without valid crop from ${farm_id}`);
+          rejected++;
+          continue;
+        }
+        if (!record?.outcomes || typeof record.outcomes !== 'object') {
+          console.warn(`[ExperimentRecords] Skipping record without outcomes from ${farm_id}`);
+          rejected++;
+          continue;
+        }
+        if (!isValidIsoTimestamp(record?.recorded_at)) {
+          console.warn(`[ExperimentRecords] Skipping record without valid recorded_at from ${farm_id}`);
+          rejected++;
+          continue;
+        }
+
+        const normalizedCrop = record.crop.trim().toLowerCase();
+        const normalizedRecipeId = record.recipe_id || null;
+        const normalizedRecordedAt = new Date(record.recorded_at).toISOString();
+
+        // Idempotency guard (DP-11): suppress duplicate replay inserts
+        // Natural key: farm_id + crop + recipe_id + recorded_at
+        const duplicateCheck = await query(
+          `SELECT id
+             FROM experiment_records
+            WHERE farm_id = $1
+              AND crop = $2
+              AND COALESCE(recipe_id, '') = COALESCE($3, '')
+              AND recorded_at = $4
+            LIMIT 1`,
+          [farm_id, normalizedCrop, normalizedRecipeId, normalizedRecordedAt]
+        );
+
+        if (duplicateCheck.rows.length > 0) {
+          deduplicated++;
           continue;
         }
 
@@ -62,28 +119,31 @@ router.post('/sync/experiment-records', async (req, res) => {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             farm_id,
-            record.crop,
-            record.recipe_id || null,
+            normalizedCrop,
+            normalizedRecipeId,
             record.grow_days || null,
             record.planned_grow_days || null,
             JSON.stringify(record.recipe_params_avg || {}),
             JSON.stringify(record.environment_achieved_avg || {}),
             JSON.stringify(record.outcomes || {}),
             JSON.stringify(record.farm_context || {}),
-            record.recorded_at || new Date().toISOString()
+            normalizedRecordedAt
           ]
         );
         ingested++;
       } catch (recErr) {
         console.warn(`[ExperimentRecords] Failed to insert record:`, recErr.message);
+        rejected++;
       }
     }
 
-    console.log(`[ExperimentRecords] ✓ Ingested ${ingested}/${records.length} records from ${farm_id}`);
+    console.log(`[ExperimentRecords] ✓ Ingested ${ingested}/${records.length} records from ${farm_id} (deduped=${deduplicated}, rejected=${rejected})`);
 
     res.json({
       ok: true,
       ingested,
+      deduplicated,
+      rejected,
       total_submitted: records.length,
       farm_id
     });

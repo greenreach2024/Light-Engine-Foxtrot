@@ -293,6 +293,35 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_benchmark_crop ON crop_benchmarks(crop);
   `);
 
+  // Device integration learning records (Integration Assistant, Ticket I-1.9)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_integrations (
+      id SERIAL PRIMARY KEY,
+      farm_id_hash VARCHAR(128) NOT NULL,
+      record_id VARCHAR(255) NOT NULL,
+      device_type VARCHAR(255),
+      device_make_model VARCHAR(255),
+      driver_id VARCHAR(255),
+      driver_version VARCHAR(64),
+      protocol VARCHAR(128),
+      capabilities JSONB DEFAULT '{}',
+      install_context JSONB DEFAULT '{}',
+      validation_passed BOOLEAN,
+      validation_signal_quality DECIMAL(8,2),
+      validation_dropout_rate DECIMAL(8,4),
+      validation_latency_ms INTEGER,
+      grower_feedback_rating DECIMAL(4,2),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (farm_id_hash, record_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_device_integrations_farm_hash ON device_integrations(farm_id_hash);
+    CREATE INDEX IF NOT EXISTS idx_device_integrations_protocol ON device_integrations(protocol);
+    CREATE INDEX IF NOT EXISTS idx_device_integrations_driver ON device_integrations(driver_id);
+    CREATE INDEX IF NOT EXISTS idx_device_integrations_created_at ON device_integrations(created_at);
+  `);
+
   // Create products table for inventory sync
   await client.query(`
     CREATE TABLE IF NOT EXISTS products (

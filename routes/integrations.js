@@ -9,7 +9,9 @@
  */
 
 import { Router } from 'express';
-import { createHash } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import Datastore from '@seald-io/nedb';
 import axios from 'axios';
 
@@ -17,6 +19,39 @@ const router = Router();
 
 // Integration DB will be passed in during initialization
 let integrationDB = null;
+let farmHashPepperCache = null;
+
+const FARM_HASH_PEPPER_PATH = path.join(process.cwd(), 'data', '.farm-id-hash-pepper');
+
+function getFarmHashPepper() {
+  if (farmHashPepperCache) return farmHashPepperCache;
+
+  const envPepper = process.env.FARM_ID_HASH_PEPPER || process.env.FARM_HASH_PEPPER;
+  if (envPepper && typeof envPepper === 'string' && envPepper.trim()) {
+    farmHashPepperCache = envPepper.trim();
+    return farmHashPepperCache;
+  }
+
+  try {
+    if (fs.existsSync(FARM_HASH_PEPPER_PATH)) {
+      const existing = fs.readFileSync(FARM_HASH_PEPPER_PATH, 'utf8').trim();
+      if (existing) {
+        farmHashPepperCache = existing;
+        return farmHashPepperCache;
+      }
+    }
+
+    const generated = randomBytes(32).toString('hex');
+    fs.mkdirSync(path.dirname(FARM_HASH_PEPPER_PATH), { recursive: true });
+    fs.writeFileSync(FARM_HASH_PEPPER_PATH, generated, { mode: 0o600 });
+    farmHashPepperCache = generated;
+    console.log('[integrations] Generated local farm hash pepper for HMAC pseudonymization');
+    return farmHashPepperCache;
+  } catch (error) {
+    console.warn('[integrations] Failed to load/create farm hash pepper; using SHA-256 fallback:', error?.message);
+    return null;
+  }
+}
 
 /**
  * Initialize integration routes with database store
@@ -36,13 +71,25 @@ function generateRecordId() {
   return `INT-${date}-${random}`;
 }
 
+function hashFarmIdLegacy(farmId) {
+  return createHash('sha256').update(String(farmId)).digest('hex');
+}
+
 /**
  * Hash farm_id for privacy-safe Central sync
  * @param {string} farmId - Plain farm_id
  * @returns {string} SHA256 hash
  */
-function hashFarmId(farmId) {
-  return createHash('sha256').update(farmId).digest('hex');
+export function hashFarmId(farmId) {
+  const normalizedFarmId = String(farmId || '').trim();
+  if (!normalizedFarmId) return null;
+
+  const pepper = getFarmHashPepper();
+  if (pepper) {
+    return createHmac('sha256', pepper).update(normalizedFarmId).digest('hex');
+  }
+
+  return hashFarmIdLegacy(normalizedFarmId);
 }
 
 /**
@@ -309,8 +356,13 @@ export async function syncIntegrationsToCentral(farmId, centralUrl, apiKey) {
       created_at: r.created_at
     }));
     
+    const farmIdHash = hashFarmId(farmId);
+    const farmIdHashLegacy = hashFarmIdLegacy(farmId);
+
     const payload = {
-      farm_id_hash: hashFarmId(farmId),
+      farm_id_hash: farmIdHash,
+      farm_id_hash_legacy: farmIdHashLegacy,
+      farm_hash_version: farmIdHash === farmIdHashLegacy ? 'sha256:v1-fallback' : 'hmac-sha256:v2',
       records: anonymizedRecords
     };
     

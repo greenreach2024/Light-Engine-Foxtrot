@@ -65,6 +65,9 @@ public/data/iot-devices.json
 public/data/switchbot-devices.json
 public/data/system-alerts.json
 
+# Secrets (HMAC pepper for farm ID pseudonymization)
+data/.farm-id-hash-pepper
+
 # Database files (runtime only)
 *.db
 *.sqlite

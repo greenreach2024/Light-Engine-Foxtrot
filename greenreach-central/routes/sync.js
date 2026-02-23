@@ -1381,7 +1381,9 @@ router.post('/restore/:farmId', authenticateFarm, async (req, res) => {
  * Part of Integration Assistant Phase 1 (Ticket I-1.9).
  * 
  * Records contain:
- * - farm_id_hash: SHA256 hash of farm_id (privacy-safe)
+ * - farm_id_hash: pseudonymous farm hash (HMAC-SHA-256 preferred)
+ * - farm_id_hash_legacy: optional legacy SHA-256 farm hash (migration support)
+ * - farm_hash_version: optional version marker (e.g., hmac-sha256:v2)
  * - records: Array of integration records with device info, validation metrics, feedback
  * 
  * Data is stored in device_integrations table for network learning.
@@ -1389,7 +1391,7 @@ router.post('/restore/:farmId', authenticateFarm, async (req, res) => {
 router.post('/device-integrations', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req;
-    const { farm_id_hash, records } = req.body;
+    const { farm_id_hash, farm_id_hash_legacy, farm_hash_version, records } = req.body;
     
     if (!Array.isArray(records)) {
       return res.status(400).json({
@@ -1417,8 +1419,12 @@ router.post('/device-integrations', authenticateFarm, async (req, res) => {
         error: 'farm_id_hash is required for privacy'
       });
     }
+
+    const legacyHash = farm_id_hash_legacy && farm_id_hash_legacy !== hashToUse
+      ? farm_id_hash_legacy
+      : null;
     
-    logger.info(`[Sync] Receiving ${records.length} device integration record(s) for farm hash ${hashToUse.substring(0, 8)}...`);
+    logger.info(`[Sync] Receiving ${records.length} device integration record(s) for farm hash ${hashToUse.substring(0, 8)}... version=${farm_hash_version || 'unspecified'}`);
     
     if (!await isDatabaseAvailable()) {
       // Store in memory if no DB
@@ -1443,6 +1449,16 @@ router.post('/device-integrations', authenticateFarm, async (req, res) => {
     
     for (const record of records) {
       try {
+        // Migration assist: if this record exists under legacy hash, move it to the new hash.
+        if (legacyHash) {
+          await query(
+            `UPDATE device_integrations
+             SET farm_id_hash = $1, updated_at = NOW()
+             WHERE farm_id_hash = $2 AND record_id = $3`,
+            [hashToUse, legacyHash, record.record_id]
+          );
+        }
+
         await query(
           `INSERT INTO device_integrations (
             farm_id_hash, record_id, device_type, device_make_model,
