@@ -10218,8 +10218,8 @@ app.post('/api/harvest', async (req, res) => {
     try {
       const experimentInput = {
         groupId: harvestEntry.groupId,
-        crop: harvestEntry.crop || harvestEntry.cropName || null,
-        recipe_id: harvestEntry.recipeId || harvestEntry.recipe_id || null,
+        crop: harvestEntry.crop || harvestEntry.cropName || harvestEntry.planId || harvestEntry.plan_id || null,
+        recipe_id: harvestEntry.recipeId || harvestEntry.recipe_id || harvestEntry.planId || harvestEntry.plan_id || null,
         grow_days: harvestEntry.growDays || harvestEntry.grow_days || null,
         planned_grow_days: harvestEntry.plannedGrowDays || harvestEntry.planned_grow_days || null,
         weight_per_plant_oz: harvestEntry.weightPerPlant || harvestEntry.weight_per_plant_oz || null,
@@ -10401,10 +10401,41 @@ async function buildExperimentRecord(opts) {
     }
   } catch (e) { /* env snapshot is best-effort */ }
 
+  let resolvedCrop = (crop || '').toString().trim();
+  let resolvedRecipeId = recipe_id || null;
+
+  if (!resolvedCrop && resolvedRecipeId) {
+    resolvedCrop = String(resolvedRecipeId).trim();
+  }
+
+  if (!resolvedCrop && groupId) {
+    try {
+      const groupsRaw = fs.readFileSync(GROUPS_PATH, 'utf-8');
+      const groupsParsed = JSON.parse(groupsRaw);
+      const groups = Array.isArray(groupsParsed) ? groupsParsed : (groupsParsed.groups || []);
+      const group = groups.find(g => String(g.id) === String(groupId));
+      if (group) {
+        const groupCrop = group.crop || group.plan || group.recipe || null;
+        if (groupCrop) {
+          resolvedCrop = String(groupCrop).trim();
+        }
+        if (!resolvedRecipeId) {
+          resolvedRecipeId = group.recipe || group.plan || null;
+        }
+      }
+    } catch (e) {
+      // best-effort fallback
+    }
+  }
+
+  if (!resolvedCrop) {
+    resolvedCrop = 'unknown-crop';
+  }
+
   return {
     farm_id: farmContext.farm_id,
-    crop: (crop || '').toLowerCase().replace(/\s+/g, '-'),
-    recipe_id: recipe_id || null,
+    crop: resolvedCrop.toLowerCase().replace(/\s+/g, '-'),
+    recipe_id: resolvedRecipeId,
     grow_days: grow_days != null ? parseInt(grow_days) : null,
     planned_grow_days: planned_grow_days != null ? parseInt(planned_grow_days) : null,
     recipe_params_avg,
