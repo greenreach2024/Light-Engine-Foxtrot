@@ -1,1 +1,1 @@
-web: cd greenreach-central && npm start
+web: node server-foxtrot.js
