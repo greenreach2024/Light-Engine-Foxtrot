@@ -4767,10 +4767,21 @@
     }
 
     // Print Harvest Label
-    function printHarvestLabel(lotCode, trayRunId) {
-      // Open label in new window to print
-      const labelUrl = `${API_BASE}/api/labels/harvest?lot_code=${lotCode}&tray_run_id=${trayRunId}`;
-      window.open(labelUrl, '_blank', 'width=600,height=800');
+    async function printHarvestLabel(lotCode, trayRunId) {
+      // Phase 2 Task 2.4: Print via thermal printer endpoint
+      try {
+        const res = await fetch(`${currentAPI}/api/printer/print-harvest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lotCode, cropName: '', trayRunId, unit: 'oz' })
+        });
+        if (!res.ok) {
+          window.open(`${currentAPI}/api/printer/label-preview?lot_code=${lotCode}&tray_run_id=${trayRunId}`, '_blank', 'width=600,height=800');
+        }
+      } catch (err) {
+        console.warn('[Print] Manual harvest label print failed:', err.message);
+        window.open(`${currentAPI}/api/printer/label-preview?lot_code=${lotCode}&tray_run_id=${trayRunId}`, '_blank', 'width=600,height=800');
+      }
     }
 
     async function triggerAutoHarvestLabelPrint(labelPrintData) {

@@ -234,25 +234,41 @@ router.get('/comparative-analytics', async (req, res) => {
 
 /**
  * GET /api/network/trends
- * Returns network-wide trends
+ * Returns network-wide trends — proxied from GreenReach Central
+ * Phase 2 Task 2.11: Populate network trends endpoint
  */
 router.get('/trends', async (req, res) => {
   try {
-    const { days = 30 } = req.query;
-    
-    // Return mock data for now
-      res.json({
-        ok: true,
-        trends: [],
-        period_days: parseInt(days)
-      });
+    const { days = 30, period } = req.query;
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL
+      || process.env.CENTRAL_URL
+      || (process.env.NODE_ENV === 'production' ? null : 'http://127.0.0.1:3100');
+
+    if (!centralUrl) {
+      return res.json({ ok: true, trends: [], period_days: parseInt(days), source: 'none' });
+    }
+
+    const qs = period ? `?period=${period}` : `?period=${days}d`;
+    const upstream = await fetch(`${centralUrl}/api/network/trends${qs}`, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (!upstream.ok) {
+      console.warn(`[Network Trends] Central returned ${upstream.status}`);
+      return res.json({ ok: true, trends: [], period_days: parseInt(days), source: 'central_error' });
+    }
+
+    const data = await upstream.json();
+    res.json({ ok: true, ...data, source: 'central' });
   } catch (error) {
-    console.error('[Network Trends] Error:', error);
-      res.status(500).json({
-        ok: false,
-        message: 'Failed to load trends',
-        error: error.message
-      });
+    console.error('[Network Trends] Error proxying from Central:', error.message);
+    res.json({
+      ok: true,
+      trends: [],
+      period_days: parseInt(req.query.days || 30),
+      source: 'proxy_error'
+    });
   }
 });
 

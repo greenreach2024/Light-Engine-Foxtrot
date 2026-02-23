@@ -236,7 +236,8 @@ router.post('/register', async (req, res, next) => {
       contact,
       registration_code,
       farm_name,
-      contact_email
+      contact_email,
+      api_url
     } = req.body;
 
     const now = new Date().toISOString();
@@ -265,16 +266,17 @@ router.post('/register', async (req, res, next) => {
 
     // Persist to database
     await query(
-      `INSERT INTO farms (farm_id, name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, metadata, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      `INSERT INTO farms (farm_id, name, status, last_heartbeat, jwt_secret, api_key, api_secret, plan_type, metadata, api_url, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
        ON CONFLICT (farm_id) DO UPDATE SET
          name = EXCLUDED.name,
          metadata = EXCLUDED.metadata,
          jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
          api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
          api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
+         api_url = COALESCE(EXCLUDED.api_url, farms.api_url),
          updated_at = NOW()`,
-      [resolvedFarmId, resolvedName, 'active', now, jwtSecret, apiKey, apiSecret, 'light-engine', JSON.stringify(metadata)]
+      [resolvedFarmId, resolvedName, 'active', now, jwtSecret, apiKey, apiSecret, 'light-engine', JSON.stringify(metadata), api_url || null]
     );
 
     // Also keep in-memory
@@ -314,6 +316,44 @@ router.post('/register', async (req, res, next) => {
       message: 'Farm registered successfully',
       network_benchmarks: networkBenchmarks
     });
+
+    // Phase 2 Task 2.9: Immediate push of benchmarks + demand signals to new farm
+    // Fire-and-forget — don't block the registration response
+    const farmApiUrl = api_url || metadata?.api_url || metadata?.url || null;
+    if (farmApiUrl && networkBenchmarks) {
+      setImmediate(async () => {
+        try {
+          let demandSignals = {};
+          try {
+            const { analyzeDemandPatterns } = await import('../services/wholesaleMemoryStore.js');
+            demandSignals = await analyzeDemandPatterns();
+          } catch (_) {}
+
+          const payload = {
+            farm_id: resolvedFarmId,
+            generated_at: now,
+            recommendations: [],
+            network_intelligence: {
+              crop_benchmarks: networkBenchmarks.crop_benchmarks,
+              demand_signals: demandSignals,
+              risk_alerts: [],
+              generated_at: now,
+              source: 'onboarding_push'
+            }
+          };
+
+          const pushRes = await fetch(`${farmApiUrl}/api/health/ai-recommendations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000)
+          });
+          logger.info(`[Onboarding] Benchmark push to ${resolvedFarmId}: ${pushRes.status}`);
+        } catch (pushErr) {
+          logger.warn(`[Onboarding] Benchmark push to ${resolvedFarmId} failed (non-fatal): ${pushErr.message}`);
+        }
+      });
+    }
   } catch (error) {
     logger.error('Error registering farm:', error);
     res.status(500).json({ success: false, error: 'Failed to register farm', message: error.message });
