@@ -83,6 +83,7 @@ Thumbs.db
 # Scripts and tools not needed in production
 *.sh
 *.py
+!scripts/simple-anomaly-detector.py
 alembic.ini
 alembic/
 create-*.js
