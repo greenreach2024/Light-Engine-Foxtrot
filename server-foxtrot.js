@@ -21169,7 +21169,9 @@ if (!isControllerDisabled) {
         '/devices/scan'    // P1: Device scanner endpoint
       ];
       
-      const shouldExclude = excludePaths.some(excluded => pathname.startsWith(excluded));
+      // Strip /api prefix — http-proxy-middleware v2 passes full path including mount point
+      const normalizedPath = pathname.replace(/^\/api/, '');
+      const shouldExclude = excludePaths.some(excluded => normalizedPath.startsWith(excluded));
       
       if (shouldExclude) {
         console.log(`[Proxy Filter] Skipping ${fullPath} - handled by Node.js server`);
