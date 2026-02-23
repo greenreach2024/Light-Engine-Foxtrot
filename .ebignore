@@ -84,6 +84,10 @@ Thumbs.db
 *.sh
 *.py
 !scripts/simple-anomaly-detector.py
+
+# Preserve EB platform hooks (MUST come AFTER *.sh exclusion to override it)
+!.platform/
+!.platform/**
 alembic.ini
 alembic/
 create-*.js
