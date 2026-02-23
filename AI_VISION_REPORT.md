@@ -823,6 +823,19 @@ This feeds both on-farm ML models and Central's network-wide training pipeline.
 
 ## 11. Risk & Guardrails
 
+*<deployment summary will follow>*
+
+**Production Deployment Update**
+
+- A fresh EB environment (`prod-v3`) was spun up on a t3.small after `prod-v2` failed.
+- Initial build inherited macOS binaries; environment was terminated and recreated with `node_modules` removed locally.
+- Final deployment used `eb deploy --staged` so dependencies installed on the instance (no native binary mismatch).
+- CNAMEs swapped with `eb swap` and the old environment terminated, leaving a single healthy Foxtrot prod.
+- Central was deployed to `greenreach-central-prod-v4` successfully; both environments are `Ready` and `Green`.
+- Smoke tests confirm API reachability; production endpoints respond with 200 OK.
+
+The production platforms are now fully running the AI Vision code, closing the deployment gap and enabling Phase 4 work.
+
 ### Safety Principles
 
 1. **AI suggests, grower confirms** (Phase 1-4). AI never autonomously changes recipes, temperatures, or lighting without grower approval. Exception: safety overrides (freeze protection, fire risk).
