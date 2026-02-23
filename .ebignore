@@ -84,6 +84,8 @@ Thumbs.db
 *.sh
 *.py
 !scripts/simple-anomaly-detector.py
+!backend/outdoor_influence.py
+!backend/outdoor_sensor_validator.py
 
 # Preserve EB platform hooks (MUST come AFTER *.sh exclusion to override it)
 !.platform/

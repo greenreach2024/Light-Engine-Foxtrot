@@ -73,6 +73,72 @@ async function fetchWholesaleOrderPricing(days = 60) {
   }
 }
 
+
+
+/**
+ * Central benchmark cache — refreshes every 6 hours.
+ */
+let _centralBenchmarkCache = null;
+let _centralBenchmarkCacheTime = 0;
+const CENTRAL_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Fetch crop benchmarks from GreenReach Central.
+ * Returns per-crop pricing benchmarks from network-wide experiment records.
+ * Cached for 6 hours to avoid hammering Central.
+ */
+async function fetchCentralBenchmarks() {
+  try {
+    const now = Date.now();
+    if (_centralBenchmarkCache && (now - _centralBenchmarkCacheTime) < CENTRAL_CACHE_TTL_MS) {
+      return _centralBenchmarkCache;
+    }
+
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL
+      || process.env.CENTRAL_URL
+      || 'http://localhost:3100';
+
+    const resp = await fetch(`${centralUrl}/api/crop-benchmarks`, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    if (!data.ok || !data.benchmarks || data.benchmarks.length === 0) return null;
+
+    // Convert benchmarks into pricing-compatible format
+    const pricing = {};
+    for (const b of data.benchmarks) {
+      const crop = (b.crop || '').trim();
+      if (!crop) continue;
+      pricing[crop] = {
+        avgWeightPerPlantOz: b.avg_weight_per_plant_oz,
+        avgGrowDays: b.avg_grow_days,
+        avgLossRate: b.avg_loss_rate,
+        farmCount: b.farm_count,
+        harvestCount: b.harvest_count,
+        avgTempC: b.avg_temp_c,
+        avgHumidityPct: b.avg_humidity_pct,
+        avgPpfd: b.avg_ppfd,
+        computedAt: b.computed_at,
+        source: 'central_benchmarks'
+      };
+    }
+
+    if (Object.keys(pricing).length > 0) {
+      _centralBenchmarkCache = pricing;
+      _centralBenchmarkCacheTime = now;
+      console.log(`[Market Intelligence] Cached Central benchmarks for ${Object.keys(pricing).length} crop(s)`);
+      return pricing;
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Market Intelligence] Central benchmarks fetch failed:', err.message);
+    return null;
+  }
+}
+
 /**
  * North American Retail Market Data Sources
  * Real pricing from major retailers updated weekly
@@ -259,7 +325,25 @@ router.get('/price-alerts', async (req, res) => {
       return bChange - aChange;
     });
     
-    console.log(`[Market Intelligence] Generated ${alerts.length} price alerts (threshold: ${threshold}%)`);
+    // Enrich alerts with Central benchmark data (Tier 2)
+    const benchmarks = await fetchCentralBenchmarks();
+    if (benchmarks) {
+      for (const alert of alerts) {
+        const bm = benchmarks[alert.product];
+        if (bm) {
+          alert.centralBenchmark = {
+            avgWeightPerPlantOz: bm.avgWeightPerPlantOz,
+            avgGrowDays: bm.avgGrowDays,
+            farmCount: bm.farmCount,
+            harvestCount: bm.harvestCount,
+            source: 'central_benchmarks',
+            computedAt: bm.computedAt
+          };
+        }
+      }
+    }
+
+    console.log(`[Market Intelligence] Generated ${alerts.length} price alerts (threshold: ${threshold}%), central benchmarks: ${benchmarks ? 'yes' : 'no'}`);
     
     return res.json({
       ok: true,
@@ -267,7 +351,8 @@ router.get('/price-alerts', async (req, res) => {
       timestamp: now.toISOString(),
       threshold: parseInt(threshold),
       totalProductsMonitored: Object.keys(MARKET_DATA_SOURCES).length,
-      alertsGenerated: alerts.length
+      alertsGenerated: alerts.length,
+      centralBenchmarksAvailable: !!benchmarks
     });
     
   } catch (error) {
@@ -312,6 +397,7 @@ router.get('/market-overview', async (req, res) => {
         increasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'increasing').length,
         decreasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'decreasing').length,
         stable: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'stable').length,
+        centralBenchmarksAvailable: !!(await fetchCentralBenchmarks()),
         liveDataCrops: realPricing ? Object.keys(realPricing).length : 0,
       }
     };
@@ -385,11 +471,35 @@ router.get('/dynamic-pricing', async (req, res) => {
     } catch { /* no wholesale data */ }
 
     if (!orderHistory || orderHistory.length === 0) {
-      // Fall back to static data with a "no_data" flag
+      // Try Central benchmarks before static fallback (Tier 2)
+      const benchmarks = await fetchCentralBenchmarks();
+      if (benchmarks && Object.keys(benchmarks).length > 0) {
+        return res.json({
+          ok: true,
+          source: 'central_benchmarks',
+          message: 'No wholesale orders — using Central network benchmarks',
+          centralBenchmarks: benchmarks,
+          crops: Object.fromEntries(
+            Object.entries(MARKET_DATA_SOURCES).map(([crop, data]) => {
+              const bm = benchmarks[crop];
+              return [crop, {
+                suggested_retail_cad: data.avgPriceCAD,
+                suggested_ws_discount_pct: { tier1: 15, tier2: 25, tier3: 35 },
+                confidence: bm ? 'medium' : 'low',
+                data_points: bm ? bm.harvestCount : 0,
+                source: bm ? 'central_benchmarks' : 'static',
+                benchmark: bm || null
+              }];
+            })
+          )
+        });
+      }
+
+      // Fall back to static data with a "no_data" flag (Tier 4)
       return res.json({
         ok: true,
         source: 'static_fallback',
-        message: 'No wholesale order history — using static defaults',
+        message: 'No wholesale order history or Central benchmarks — using static defaults',
         crops: Object.fromEntries(
           Object.entries(MARKET_DATA_SOURCES).map(([crop, data]) => [
             crop,
