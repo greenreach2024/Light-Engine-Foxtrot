@@ -229,6 +229,7 @@ import eventBus from './lib/event-bus.js';
 import mlAutomation from './lib/ml-automation-controller.js';
 import { applyModifier as applyRecipeModifier, computeModifiers as computeRecipeModifiers } from './lib/recipe-modifier.js';
 import { scoreAlert, prioritizeAlerts, recordAlertResponse, getAlertStats } from './lib/alert-prioritizer.js';
+import { executeSafetyEnvelope } from './lib/device-safety-envelope.js';
 
 // Edge mode support
 import edgeConfig from './lib/edge-config.js';
@@ -8826,41 +8827,96 @@ app.post("/api/kasa/devices/:deviceId/control", asyncHandler(async (req, res) =>
       });
     }
     
-    let result;
-    
-    switch (action) {
-      case 'turnOn':
-        result = await targetDevice.setPowerState(true);
-        break;
-      case 'turnOff':
-        result = await targetDevice.setPowerState(false);
-        break;
-      case 'toggle':
-        const info = await targetDevice.getSysInfo();
-        result = await targetDevice.setPowerState(!info.relay_state);
-        break;
-      case 'setAlias':
-        result = await targetDevice.setAlias(value);
-        break;
-      default:
-        return res.status(400).json({
-          success: false,
-          error: `Unknown action: ${action}`
-        });
+    const actionMap = {
+      turnOn: 'turnOn',
+      turnOff: 'turnOff',
+      toggle: 'toggle',
+      setAlias: 'setAlias'
+    };
+
+    const mappedCommand = actionMap[action];
+    if (!mappedCommand) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown action: ${action}`
+      });
     }
-    
-    // Get updated status
-    const status = await targetDevice.getSysInfo();
-    
+
+    const safetyResult = await executeSafetyEnvelope({
+      device: {
+        deviceId,
+        deviceType: targetDevice.model || 'kasa-device',
+        protocol: 'kasa-lan',
+        safetyCategory: req.body?.safetyCategory
+      },
+      command: mappedCommand,
+      args: {
+        action,
+        value
+      },
+      context: {
+        source: req.body?.source || req.body?.context?.source || 'api',
+        userId: req.user?.userId || req.user?.email || 'system',
+        sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+        confirmed: req.body?.confirmed,
+        confirmation: req.body?.confirmation
+      },
+      execute: async () => {
+        let result;
+
+        switch (action) {
+          case 'turnOn':
+            result = await targetDevice.setPowerState(true);
+            break;
+          case 'turnOff':
+            result = await targetDevice.setPowerState(false);
+            break;
+          case 'toggle': {
+            const info = await targetDevice.getSysInfo();
+            result = await targetDevice.setPowerState(!info.relay_state);
+            break;
+          }
+          case 'setAlias':
+            result = await targetDevice.setAlias(value);
+            break;
+          default:
+            result = null;
+            break;
+        }
+
+        const status = await targetDevice.getSysInfo();
+        return {
+          result,
+          status
+        };
+      }
+    });
+
+    if (!safetyResult.allowed) {
+      return res.status(409).json({
+        success: false,
+        error: 'safety_blocked',
+        reason: safetyResult.reason,
+        remediation: safetyResult.remediation,
+        auditId: safetyResult.auditId,
+        action,
+        deviceId
+      });
+    }
+
     res.json({
       success: true,
-      action: action,
-      deviceId: deviceId,
-      result: result,
+      action,
+      deviceId,
+      result: safetyResult.result?.result,
       status: {
-        state: status.relay_state,
-        alias: status.alias,
-        rssi: status.rssi
+        state: safetyResult.result?.status?.relay_state,
+        alias: safetyResult.result?.status?.alias,
+        rssi: safetyResult.result?.status?.rssi
+      },
+      safety: {
+        auditId: safetyResult.auditId,
+        allowed: true
       }
     });
     
@@ -8944,31 +9000,94 @@ app.post("/api/device/:deviceId/power", async (req, res) => {
   try {
     const { deviceId } = req.params;
     const { state } = req.body; // 'on' or 'off'
-    
-    console.log(`Power control request for device ${deviceId}: ${state}`);
-    
-    // For research lights, attempt to send commands via controller
-    try {
-      const controllerUrl = `${getController().replace(/\/$/, '')}/api/device/${encodeURIComponent(deviceId)}/power`;
-      const response = await fetch(controllerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state })
+
+    const normalizedState = String(state || '').toLowerCase();
+    const command = normalizedState === 'on' || normalizedState === 'true' ? 'turnOn' : 'turnOff';
+
+    const safetyResult = await executeSafetyEnvelope({
+      device: {
+        deviceId,
+        deviceType: req.body?.deviceType || 'device-power',
+        protocol: 'controller-proxy',
+        safetyCategory: req.body?.safetyCategory
+      },
+      command,
+      args: {
+        state
+      },
+      context: {
+        source: req.body?.source || req.body?.context?.source || 'api',
+        userId: req.user?.userId || req.user?.email || 'system',
+        sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+        confirmed: req.body?.confirmed,
+        confirmation: req.body?.confirmation
+      },
+      execute: async () => {
+        const controllerUrl = `${getController().replace(/\/$/, '')}/api/device/${encodeURIComponent(deviceId)}/power`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+        let response;
+        try {
+          response = await fetch(controllerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state }),
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (response.ok) {
+          return {
+            proxied: true,
+            response: await response.json()
+          };
+        }
+
+        return {
+          proxied: false,
+          response: null
+        };
+      }
+    });
+
+    if (!safetyResult.allowed) {
+      return res.status(409).json({
+        success: false,
+        error: 'safety_blocked',
+        reason: safetyResult.reason,
+        remediation: safetyResult.remediation,
+        auditId: safetyResult.auditId
       });
-      
-      if (response.ok) {
-        const result = await response.json();
-        return res.json({ success: true, message: `Device ${state} command sent`, data: result });
-      } else {
-        console.warn(`Controller power control failed for ${deviceId}:`, response.status);
+    }
+
+    try {
+      if (safetyResult.result?.proxied) {
+        return res.json({
+          success: true,
+          message: `Device ${state} command sent`,
+          data: safetyResult.result.response,
+          safety: {
+            auditId: safetyResult.auditId,
+            allowed: true
+          }
+        });
       }
     } catch (controllerError) {
       console.warn(`Controller unavailable for power control of ${deviceId}:`, controllerError.message);
     }
-    
-    // Fallback: log the command (for research purposes)
+
     console.log(`Research light ${deviceId} power ${state} (logged only)`);
-    res.json({ success: true, message: `Power ${state} command logged for research light ${deviceId}` });
+    res.json({
+      success: true,
+      message: `Power ${state} command logged for research light ${deviceId}`,
+      safety: {
+        auditId: safetyResult.auditId,
+        allowed: true
+      }
+    });
     
   } catch (error) {
     console.error(`Device power control error for ${req.params.deviceId}:`, error);
@@ -8984,28 +9103,98 @@ app.post("/api/device/:deviceId/spectrum", async (req, res) => {
     
     console.log(`Spectrum control request for device ${deviceId}:`, { cw, ww, bl, rd });
     
-    // For research lights, attempt to send commands via controller
-    try {
-      const controllerUrl = `${getController().replace(/\/$/, '')}/api/device/${encodeURIComponent(deviceId)}/spectrum`;
-      const response = await fetch(controllerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cw, ww, bl, rd })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        return res.json({ success: true, message: "Spectrum applied", data: result });
-      } else {
-        console.warn(`Controller spectrum control failed for ${deviceId}:`, response.status);
+    const safetyResult = await executeSafetyEnvelope({
+      device: {
+        deviceId,
+        deviceType: req.body?.deviceType || 'device-spectrum',
+        protocol: 'controller-proxy',
+        safetyCategory: req.body?.safetyCategory || 'actuator-low'
+      },
+      command: 'setSpectrum',
+      args: {
+        cw,
+        ww,
+        bl,
+        rd
+      },
+      context: {
+        source: req.body?.source || req.body?.context?.source || 'api',
+        userId: req.user?.userId || req.user?.email || 'system',
+        sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+        confirmed: req.body?.confirmed,
+        confirmation: req.body?.confirmation
+      },
+      execute: async () => {
+        try {
+          const controllerUrl = `${getController().replace(/\/$/, '')}/api/device/${encodeURIComponent(deviceId)}/spectrum`;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1500);
+          let response;
+
+          try {
+            response = await fetch(controllerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cw, ww, bl, rd }),
+              signal: controller.signal
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+
+          if (response.ok) {
+            return {
+              proxied: true,
+              response: await response.json()
+            };
+          }
+
+          console.warn(`Controller spectrum control failed for ${deviceId}:`, response.status);
+          return {
+            proxied: false,
+            response: null
+          };
+        } catch (controllerError) {
+          console.warn(`Controller unavailable for spectrum control of ${deviceId}:`, controllerError.message);
+          return {
+            proxied: false,
+            response: null
+          };
+        }
       }
-    } catch (controllerError) {
-      console.warn(`Controller unavailable for spectrum control of ${deviceId}:`, controllerError.message);
+    });
+
+    if (!safetyResult.allowed) {
+      return res.status(409).json({
+        success: false,
+        error: 'safety_blocked',
+        reason: safetyResult.reason,
+        remediation: safetyResult.remediation,
+        auditId: safetyResult.auditId
+      });
     }
-    
-    // Fallback: log the command (for research purposes)
+
+    if (safetyResult.result?.proxied) {
+      return res.json({
+        success: true,
+        message: 'Spectrum applied',
+        data: safetyResult.result.response,
+        safety: {
+          auditId: safetyResult.auditId,
+          allowed: true
+        }
+      });
+    }
+
     console.log(`Research light ${deviceId} spectrum CW:${cw}% WW:${ww}% Blue:${bl}% Red:${rd}% (logged only)`);
-    res.json({ success: true, message: `Spectrum command logged for research light ${deviceId}` });
+    res.json({
+      success: true,
+      message: `Spectrum command logged for research light ${deviceId}`,
+      safety: {
+        auditId: safetyResult.auditId,
+        allowed: true
+      }
+    });
     
   } catch (error) {
     console.error(`Device spectrum control error for ${req.params.deviceId}:`, error);
@@ -25938,45 +26127,162 @@ app.get('/api/device/:deviceId/status', async (req, res) => {
 app.post('/api/device/:deviceId/power', async (req, res) => {
   const { deviceId } = req.params;
   const { state } = req.body; // 'on' or 'off'
-  
-  console.log(` Farm Light Control: ${deviceId} → ${state}`);
-  
+
+  const normalizedState = String(state || '').toLowerCase();
+  const command = normalizedState === 'on' || normalizedState === 'true' ? 'turnOn' : 'turnOff';
+
+  const safetyResult = await executeSafetyEnvelope({
+    device: {
+      deviceId,
+      deviceType: req.body?.deviceType || 'device-power-fallback',
+      protocol: 'farm-fallback',
+      safetyCategory: req.body?.safetyCategory
+    },
+    command,
+    args: {
+      state
+    },
+    context: {
+      source: req.body?.source || req.body?.context?.source || 'api-fallback',
+      userId: req.user?.userId || req.user?.email || 'system',
+      sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+      confirmed: req.body?.confirmed,
+      confirmation: req.body?.confirmation
+    },
+    execute: async () => {
+      console.log(` Farm Light Control: ${deviceId} → ${state}`);
+      return { logged: true };
+    }
+  });
+
+  if (!safetyResult.allowed) {
+    return res.status(409).json({
+      success: false,
+      error: 'safety_blocked',
+      reason: safetyResult.reason,
+      remediation: safetyResult.remediation,
+      auditId: safetyResult.auditId,
+      deviceId,
+      action: 'power'
+    });
+  }
+
   res.json({
     deviceId,
     action: 'power',
     state,
     timestamp: new Date().toISOString(),
-    success: true
+    success: true,
+    safety: {
+      auditId: safetyResult.auditId,
+      allowed: true
+    }
   });
 });
 
 app.post('/api/device/:deviceId/spectrum', async (req, res) => {
   const { deviceId } = req.params;
   const { spectrum } = req.body;
-  
-  console.log(`🌈 Farm Light Spectrum: ${deviceId}`, spectrum);
-  
+
+  const safetyResult = await executeSafetyEnvelope({
+    device: {
+      deviceId,
+      deviceType: req.body?.deviceType || 'device-spectrum-fallback',
+      protocol: 'farm-fallback',
+      safetyCategory: req.body?.safetyCategory || 'actuator-low'
+    },
+    command: 'setSpectrum',
+    args: {
+      spectrum
+    },
+    context: {
+      source: req.body?.source || req.body?.context?.source || 'api-fallback',
+      userId: req.user?.userId || req.user?.email || 'system',
+      sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+      confirmed: req.body?.confirmed,
+      confirmation: req.body?.confirmation
+    },
+    execute: async () => {
+      console.log(`🌈 Farm Light Spectrum: ${deviceId}`, spectrum);
+      return { logged: true };
+    }
+  });
+
+  if (!safetyResult.allowed) {
+    return res.status(409).json({
+      success: false,
+      error: 'safety_blocked',
+      reason: safetyResult.reason,
+      remediation: safetyResult.remediation,
+      auditId: safetyResult.auditId,
+      deviceId,
+      action: 'spectrum'
+    });
+  }
+
   res.json({
     deviceId,
     action: 'spectrum',
     spectrum,
     timestamp: new Date().toISOString(),
-    success: true
+    success: true,
+    safety: {
+      auditId: safetyResult.auditId,
+      allowed: true
+    }
   });
 });
 
 app.post('/api/device/:deviceId/dimming', async (req, res) => {
   const { deviceId } = req.params;
   const { level } = req.body; // 0-100
-  
-  console.log(`🔆 Farm Light Dimming: ${deviceId} → ${level}%`);
-  
+
+  const safetyResult = await executeSafetyEnvelope({
+    device: {
+      deviceId,
+      deviceType: req.body?.deviceType || 'device-dimming-fallback',
+      protocol: 'farm-fallback',
+      safetyCategory: req.body?.safetyCategory || 'actuator-low'
+    },
+    command: 'setDimming',
+    args: {
+      level
+    },
+    context: {
+      source: req.body?.source || req.body?.context?.source || 'api-fallback',
+      userId: req.user?.userId || req.user?.email || 'system',
+      sessionId: req.headers['x-request-id'] || req.body?.sessionId || null,
+      confirmed: req.body?.confirmed,
+      confirmation: req.body?.confirmation
+    },
+    execute: async () => {
+      console.log(`🔆 Farm Light Dimming: ${deviceId} → ${level}%`);
+      return { logged: true };
+    }
+  });
+
+  if (!safetyResult.allowed) {
+    return res.status(409).json({
+      success: false,
+      error: 'safety_blocked',
+      reason: safetyResult.reason,
+      remediation: safetyResult.remediation,
+      auditId: safetyResult.auditId,
+      deviceId,
+      action: 'dimming'
+    });
+  }
+
   res.json({
     deviceId,
     action: 'dimming',
     level,
     timestamp: new Date().toISOString(),
-    success: true
+    success: true,
+    safety: {
+      auditId: safetyResult.auditId,
+      allowed: true
+    }
   });
 });
 
