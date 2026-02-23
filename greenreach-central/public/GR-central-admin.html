@@ -3826,6 +3826,530 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Wholesale Pricing Management View -->
+            <div id="pricing-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Pricing &amp; Products</span>
+                </div>
+
+                <div class="header">
+                    <h1>Pricing &amp; Product Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Set crop prices, manage product catalog, create mixes &amp; bundles</p>
+                </div>
+
+                <!-- Pricing KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Price Offers</div>
+                        <div class="kpi-value" id="pricing-active-offers">—</div>
+                        <div class="kpi-change neutral"><span>Current offers</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Acceptance Rate</div>
+                        <div class="kpi-value" id="pricing-acceptance-rate">—</div>
+                        <div class="kpi-change neutral"><span>Last 30 days</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Products in Catalog</div>
+                        <div class="kpi-value" id="pricing-product-count">—</div>
+                        <div class="kpi-change neutral"><span>Active SKUs</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Pending Counter-Offers</div>
+                        <div class="kpi-value" id="pricing-counter-offers">—</div>
+                        <div class="kpi-change neutral"><span>Needs review</span></div>
+                    </div>
+                </div>
+
+                <!-- Set New Price -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Set Wholesale Price</div>
+                    </div>
+                    <div class="card-body">
+                        <form id="set-price-form" onsubmit="submitWholesalePrice(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Crop / Product</label>
+                                <input type="text" id="price-crop" placeholder="e.g. Basil, Lettuce Mix" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Wholesale Price ($/lb)</label>
+                                <input type="number" id="price-amount" step="0.01" min="0.01" placeholder="4.50" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Pricing Tier</label>
+                                <select id="price-tier" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <option value="cost-plus">Cost-Plus (20% margin)</option>
+                                    <option value="demand-based" selected>Demand-Based</option>
+                                    <option value="premium">Premium</option>
+                                    <option value="promotional">Promotional</option>
+                                </select>
+                            </div>
+                            <div style="grid-column: 1 / -1; display: flex; gap: 12px; align-items: end;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Reasoning / Notes</label>
+                                    <input type="text" id="price-reasoning" placeholder="Market adjustment, seasonal pricing..." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white; white-space: nowrap;">Send Price Offer</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Active Price Offers -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Active Price Offers</div>
+                        <button class="btn" onclick="loadPricingManagement()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Offer ID</th>
+                                        <th>Crop</th>
+                                        <th>Price</th>
+                                        <th>Tier</th>
+                                        <th>Acceptance Rate</th>
+                                        <th>Responses</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pricing-offers-tbody">
+                                    <tr><td colspan="9" class="loading">Loading price offers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Catalog -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Product Catalog</div>
+                        <button class="btn" onclick="showAddProductModal()" style="background: var(--accent-green); color: white;">+ Add Product</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Category</th>
+                                        <th>Type</th>
+                                        <th>Unit</th>
+                                        <th>Current Price</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="product-catalog-tbody">
+                                    <tr><td colspan="8" class="loading">Loading product catalog...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Farm Cost Surveys -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Farm Cost Surveys</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Cost-basis protection: price must exceed max farm cost + 20%</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Farm</th>
+                                        <th>Crop</th>
+                                        <th>Cost/Unit</th>
+                                        <th>Unit</th>
+                                        <th>Survey Date</th>
+                                        <th>Valid Until</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cost-surveys-tbody">
+                                    <tr><td colspan="7" class="loading">Loading cost surveys...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delivery Management View -->
+            <div id="delivery-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Delivery Services</span>
+                </div>
+
+                <div class="header">
+                    <h1>Delivery Services Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Configure delivery zones, rates, drivers, and fee distribution</p>
+                </div>
+
+                <!-- Delivery KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Zones</div>
+                        <div class="kpi-value" id="delivery-zone-count">—</div>
+                        <div class="kpi-change neutral"><span>Configured</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Drivers</div>
+                        <div class="kpi-value" id="delivery-driver-count">—</div>
+                        <div class="kpi-change neutral"><span>Available</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Deliveries (30d)</div>
+                        <div class="kpi-value" id="delivery-count-30d">—</div>
+                        <div class="kpi-change neutral"><span>Completed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Revenue (30d)</div>
+                        <div class="kpi-value" id="delivery-revenue-30d">—</div>
+                        <div class="kpi-change neutral"><span>Delivery fees</span></div>
+                    </div>
+                </div>
+
+                <!-- Delivery Zones -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Delivery Zones &amp; Rates</div>
+                        <button class="btn" onclick="showAddZoneModal()" style="background: var(--accent-green); color: white;">+ Add Zone</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Zone</th>
+                                        <th>Description</th>
+                                        <th>Delivery Fee</th>
+                                        <th>Min Order</th>
+                                        <th>Delivery Windows</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="delivery-zones-tbody">
+                                    <tr><td colspan="7" class="loading">Loading delivery zones...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Global Delivery Settings</div>
+                    </div>
+                    <div class="card-body">
+                        <form id="delivery-settings-form" onsubmit="saveDeliverySettings(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Base Delivery Fee ($)</label>
+                                <input type="number" id="delivery-base-fee" step="0.50" min="0" value="0" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Min Order Amount ($)</label>
+                                <input type="number" id="delivery-min-order" step="1" min="0" value="25" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Delivery Status</label>
+                                <select id="delivery-enabled" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <option value="true" selected>Enabled</option>
+                                    <option value="false">Disabled</option>
+                                </select>
+                            </div>
+                            <div style="grid-column: 1 / -1;">
+                                <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white;">Save Settings</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Driver Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Driver Management</div>
+                        <button class="btn" onclick="showAddDriverModal()" style="background: var(--accent-green); color: white;">+ Add Driver</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Driver</th>
+                                        <th>Phone</th>
+                                        <th>Vehicle</th>
+                                        <th>Zones Assigned</th>
+                                        <th>Deliveries (30d)</th>
+                                        <th>Rating</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="drivers-tbody">
+                                    <tr><td colspan="8" class="loading">Loading drivers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fee Collection & Distribution -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Fee Collection &amp; Distribution</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Last 30 days</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 20px;">
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Total Fees Collected</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--accent-green);" id="fees-collected">$0.00</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Driver Payouts</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);" id="driver-payouts">$0.00</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Platform Revenue</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--accent-blue);" id="platform-delivery-revenue">$0.00</div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Order ID</th>
+                                        <th>Zone</th>
+                                        <th>Driver</th>
+                                        <th>Fee Charged</th>
+                                        <th>Driver Share</th>
+                                        <th>Platform Share</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fee-distribution-tbody">
+                                    <tr><td colspan="8" class="loading">Loading fee data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Agent Monitoring View -->
+            <div id="ai-monitoring-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>AI Governance</span>
+                    <span>/</span>
+                    <span>Agent Monitoring</span>
+                </div>
+
+                <div class="header">
+                    <h1>AI Agent Monitoring</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Monitor AI agent activity, recommendation pusher, and usage metrics</p>
+                </div>
+
+                <!-- AI KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">AI Pusher Status</div>
+                        <div class="kpi-value" id="ai-pusher-status">—</div>
+                        <div class="kpi-change neutral"><span>Service health</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Recommendations (24h)</div>
+                        <div class="kpi-value" id="ai-recs-24h">—</div>
+                        <div class="kpi-change neutral"><span>Pushed to farms</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Agent Chat Sessions</div>
+                        <div class="kpi-value" id="ai-chat-sessions">—</div>
+                        <div class="kpi-change neutral"><span>Total sessions</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">API Cost (30d)</div>
+                        <div class="kpi-value" id="ai-api-cost">—</div>
+                        <div class="kpi-change neutral"><span>OpenAI usage</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Farms Covered</div>
+                        <div class="kpi-value" id="ai-farms-covered">—</div>
+                        <div class="kpi-change neutral"><span>Receiving AI insights</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active AI Rules</div>
+                        <div class="kpi-value" id="ai-active-rules">—</div>
+                        <div class="kpi-change neutral"><span>Governance rules</span></div>
+                    </div>
+                </div>
+
+                <!-- AI Recommendations Pusher -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recommendations Pusher Service</div>
+                        <button class="btn" onclick="loadAiMonitoring()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <div>
+                                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-secondary);">Service Configuration</h4>
+                                <div id="ai-pusher-config" style="font-size: 13px; line-height: 2;">
+                                    <div><strong>Model:</strong> <span id="ai-model-name">GPT-4</span></div>
+                                    <div><strong>Push Interval:</strong> <span id="ai-push-interval">30 minutes</span></div>
+                                    <div><strong>OpenAI Key:</strong> <span id="ai-key-status">—</span></div>
+                                    <div><strong>Last Run:</strong> <span id="ai-last-run">—</span></div>
+                                    <div><strong>Next Run:</strong> <span id="ai-next-run">—</span></div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-secondary);">Push Statistics</h4>
+                                <div id="ai-push-stats" style="font-size: 13px; line-height: 2;">
+                                    <div><strong>Total Pushes:</strong> <span id="ai-total-pushes">—</span></div>
+                                    <div><strong>Successful:</strong> <span id="ai-success-pushes">—</span></div>
+                                    <div><strong>Failed:</strong> <span id="ai-failed-pushes">—</span></div>
+                                    <div><strong>Avg Recommendations/Farm:</strong> <span id="ai-avg-recs">—</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent AI Activity Log -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recent AI Activity</div>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="ai-activity-filter" onchange="filterAiActivity(this.value)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px;">
+                                <option value="all">All Activity</option>
+                                <option value="recommendations">Recommendations</option>
+                                <option value="chat">Chat Sessions</option>
+                                <option value="errors">Errors Only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Type</th>
+                                        <th>Farm</th>
+                                        <th>Details</th>
+                                        <th>Status</th>
+                                        <th>Tokens Used</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ai-activity-tbody">
+                                    <tr><td colspan="6" class="loading">Loading AI activity...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Feedback Loops Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">AI Feedback Loops</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">5 core feedback loops per AI Vision</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;" id="ai-feedback-loops">
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid var(--accent-green);">
+                                <div style="font-size: 20px; margin-bottom: 4px;">🌾</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Recipe → Yield</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-recipe-yield">Phase 1</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid var(--accent-blue);">
+                                <div style="font-size: 20px; margin-bottom: 4px;">🌡️</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Env → Loss</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-env-loss">Phase 1</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #a855f7;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">💡</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Spectrum → Quality</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-spectrum-quality">Phase 2</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #f59e0b;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏱️</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Timing → Efficiency</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-timing-efficiency">Phase 2</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #ef4444;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">📊</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Demand → Production</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-demand-production">Phase 3</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Opportunities Roadmap -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">AI Opportunities Roadmap</div>
+                    </div>
+                    <div class="card-body" id="ai-roadmap-body">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: var(--accent-green); margin-bottom: 8px;">Phase 1: Foundation</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Experiment records<br>Cost survey collection<br>Demand signal capture<br>Recipe modifier bounds
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">Phase 2: Learn</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Cross-farm benchmarks<br>Yield predictions<br>Energy optimization<br>Quality scoring
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #a855f7; margin-bottom: 8px;">Phase 3: Optimize</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Auto recipe tuning<br>Demand forecasting<br>Dynamic pricing<br>Spectrum optimization
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #f59e0b; margin-bottom: 8px;">Phase 4: Automate</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Full-cycle automation<br>Predictive maintenance<br>Supply chain AI<br>Market intelligence
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #ef4444; margin-bottom: 8px;">Phase 5: Network</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Multi-farm intelligence<br>Regional optimization<br>Carbon trading AI<br>Network-wide learning
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 

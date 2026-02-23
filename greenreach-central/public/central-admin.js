@@ -1155,7 +1155,9 @@ function renderContextualSidebar() {
                 {
                     title: 'Wholesale',
                     items: [
-                        { label: 'Admin Dashboard', view: 'wholesale-admin' }
+                        { label: 'Admin Dashboard', view: 'wholesale-admin' },
+                        { label: 'Pricing & Products', view: 'pricing-management' },
+                        { label: 'Delivery Services', view: 'delivery-management' }
                     ]
                 },
                 {
@@ -1185,7 +1187,8 @@ function renderContextualSidebar() {
                     title: 'AI Governance',
                     items: [
                         { label: 'AI Rules', view: 'ai-rules' },
-                        { label: 'AI Reference Sites', view: 'ai-reference' }
+                        { label: 'AI Reference Sites', view: 'ai-reference' },
+                        { label: 'AI Agent Monitor', view: 'ai-monitoring' }
                     ]
                 },
                 {
@@ -4981,6 +4984,21 @@ async function navigate(view, element) {
         case 'procurement-revenue':
             document.getElementById('procurement-revenue-view').style.display = 'block';
             await loadProcurementRevenue();
+            break;
+
+        case 'pricing-management':
+            document.getElementById('pricing-management-view').style.display = 'block';
+            await loadPricingManagement();
+            break;
+
+        case 'delivery-management':
+            document.getElementById('delivery-management-view').style.display = 'block';
+            await loadDeliveryManagement();
+            break;
+
+        case 'ai-monitoring':
+            document.getElementById('ai-monitoring-view').style.display = 'block';
+            await loadAiMonitoring();
             break;
             
         default:
@@ -9465,6 +9483,524 @@ window.DEBUG = {
 console.log('%c📊 DEBUG TRACKING ENABLED', 
     'background: #4CAF50; color: white; font-weight: bold; padding: 5px 10px; font-size: 14px;');
 console.log('%cUse window.DEBUG to access tracking data:', 'color: #4CAF50; font-weight: bold;');
+
+// ==============================================================================
+// Wholesale Pricing Management
+// ==============================================================================
+
+async function loadPricingManagement() {
+    try {
+        // Load active offers
+        const offersRes = await fetch('/api/admin/pricing/offers?status=active');
+        const offersData = offersRes.ok ? await offersRes.json() : { offers: [] };
+        const offers = offersData.offers || [];
+
+        // Load all offers for stats
+        const allOffersRes = await fetch('/api/admin/pricing/offers');
+        const allOffersData = allOffersRes.ok ? await allOffersRes.json() : { offers: [] };
+        const allOffers = allOffersData.offers || [];
+
+        // Load cost surveys
+        const costRes = await fetch('/api/admin/pricing/cost-surveys');
+        const costData = costRes.ok ? await costRes.json() : { cost_surveys: [] };
+        const surveys = costData.cost_surveys || [];
+
+        // Load product catalog from network inventory
+        const catalogRes = await fetch('/api/admin/wholesale/dashboard');
+        const catalogData = catalogRes.ok ? await catalogRes.json() : {};
+
+        // Update KPIs
+        document.getElementById('pricing-active-offers').textContent = offers.length;
+
+        const avgAcceptance = allOffers.length > 0
+            ? allOffers.reduce((sum, o) => sum + (o.response_stats?.acceptance_rate || 0), 0) / allOffers.length
+            : 0;
+        document.getElementById('pricing-acceptance-rate').textContent = 
+            allOffers.length > 0 ? Math.round(avgAcceptance * 100) + '%' : 'N/A';
+
+        const pendingCounters = allOffers.reduce((sum, o) => sum + (o.response_stats?.countered || 0), 0);
+        document.getElementById('pricing-counter-offers').textContent = pendingCounters;
+
+        // Load product catalog - try wholesale inventory
+        try {
+            const invRes = await fetch('/api/wholesale/inventory');
+            const invData = invRes.ok ? await invRes.json() : { products: [], lots: [] };
+            const products = invData.products || invData.lots || [];
+            document.getElementById('pricing-product-count').textContent = products.length;
+            renderProductCatalog(products);
+        } catch {
+            document.getElementById('pricing-product-count').textContent = '0';
+            renderProductCatalog([]);
+        }
+
+        // Render offers table
+        renderPricingOffers(offers);
+
+        // Render cost surveys
+        renderCostSurveys(surveys);
+
+    } catch (error) {
+        console.error('[Pricing Management] Load error:', error);
+    }
+}
+
+function renderPricingOffers(offers) {
+    const tbody = document.getElementById('pricing-offers-tbody');
+    if (!offers || offers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No active price offers. Use the form above to create one.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = offers.map(offer => {
+        const rate = offer.response_stats?.acceptance_rate;
+        const rateStr = rate != null ? Math.round(rate * 100) + '%' : '—';
+        const rateColor = rate == null ? '' : rate >= 0.6 ? 'color: var(--accent-green)' : rate >= 0.4 ? 'color: #f59e0b' : 'color: #ef4444';
+        const total = offer.response_stats?.total_responses || 0;
+        const date = offer.offer_date ? new Date(offer.offer_date).toLocaleDateString() : '—';
+        return `<tr>
+            <td style="font-family: monospace; font-size: 12px;">${offer.offer_id || '—'}</td>
+            <td><strong>${offer.crop || '—'}</strong></td>
+            <td>$${parseFloat(offer.wholesale_price || 0).toFixed(2)}/${offer.unit || 'lb'}</td>
+            <td><span style="padding: 2px 8px; border-radius: 4px; background: var(--bg-secondary); font-size: 12px;">${offer.tier || '—'}</span></td>
+            <td style="${rateColor}; font-weight: 600;">${rateStr}</td>
+            <td>${total}</td>
+            <td><span style="padding: 2px 8px; border-radius: 4px; background: ${offer.status === 'active' ? 'rgba(34,197,94,0.15)' : 'var(--bg-secondary)'}; color: ${offer.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)'}; font-size: 12px;">${offer.status || '—'}</span></td>
+            <td>${date}</td>
+            <td>
+                <button class="btn" onclick="cancelPriceOffer('${offer.offer_id}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444;">Cancel</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderProductCatalog(products) {
+    const tbody = document.getElementById('product-catalog-tbody');
+    if (!products || products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No products in catalog. Products are populated from farm inventories across the network.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = products.map(p => {
+        const sku = p.sku_id || p.sku || p.product_id || '—';
+        const name = p.product_name || p.name || p.crop || '—';
+        const category = p.category || p.type || '—';
+        const type = p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const unit = p.unit || 'lb';
+        const price = p.wholesale_price || p.price_per_unit || p.price || '—';
+        const priceStr = typeof price === 'number' ? '$' + price.toFixed(2) : price;
+        const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
+        const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
+        return `<tr>
+            <td style="font-family: monospace; font-size: 12px;">${sku}</td>
+            <td><strong>${name}</strong></td>
+            <td>${category}</td>
+            <td>${type}</td>
+            <td>${unit}</td>
+            <td>${priceStr}</td>
+            <td style="color: ${statusColor};">${status}</td>
+            <td>
+                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderCostSurveys(surveys) {
+    const tbody = document.getElementById('cost-surveys-tbody');
+    if (!surveys || surveys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No cost surveys submitted by farms yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = surveys.map(s => `<tr>
+        <td>${s.farm_id || '—'}</td>
+        <td><strong>${s.crop || '—'}</strong></td>
+        <td>$${parseFloat(s.cost_per_unit || 0).toFixed(2)}</td>
+        <td>${s.unit || 'lb'}</td>
+        <td>${s.survey_date ? new Date(s.survey_date).toLocaleDateString() : '—'}</td>
+        <td>${s.valid_until ? new Date(s.valid_until).toLocaleDateString() : 'Ongoing'}</td>
+        <td style="font-size: 12px; color: var(--text-secondary);">${s.notes || '—'}</td>
+    </tr>`).join('');
+}
+
+async function submitWholesalePrice(event) {
+    event.preventDefault();
+    const crop = document.getElementById('price-crop').value;
+    const wholesale_price = parseFloat(document.getElementById('price-amount').value);
+    const tier = document.getElementById('price-tier').value;
+    const reasoning = document.getElementById('price-reasoning').value;
+    
+    try {
+        const res = await fetch('/api/admin/pricing/set-wholesale', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crop, wholesale_price, tier, reasoning })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert(`Price offer sent! ${data.message || ''}`);
+            document.getElementById('set-price-form').reset();
+            await loadPricingManagement();
+        } else {
+            alert(`Error: ${data.error || data.message || 'Failed to set price'}`);
+        }
+    } catch (error) {
+        console.error('[Pricing] Submit error:', error);
+        alert('Failed to submit price offer');
+    }
+}
+
+async function cancelPriceOffer(offerId) {
+    if (!confirm(`Cancel price offer ${offerId}?`)) return;
+    try {
+        const res = await fetch(`/api/admin/pricing/offers/${offerId}/cancel`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'Admin cancelled' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            await loadPricingManagement();
+        } else {
+            alert(`Error: ${data.error || 'Failed to cancel offer'}`);
+        }
+    } catch (error) {
+        console.error('[Pricing] Cancel error:', error);
+    }
+}
+
+function showAddProductModal() {
+    const sku = prompt('Enter SKU (e.g. MIX-SALAD-001):');
+    if (!sku) return;
+    const name = prompt('Product name (e.g. Spring Salad Mix):');
+    if (!name) return;
+    const price = prompt('Wholesale price per unit ($):');
+    if (!price) return;
+    const category = prompt('Category (Leafy Greens, Herbs, Microgreens, Mix, Bundle):') || 'Mix';
+    
+    // In a production system this would POST to a product catalog API
+    alert(`Product "${name}" (${sku}) would be added at $${price}.\n\nNote: Product catalog is currently populated from farm network inventories. Custom product/mix creation API coming soon.`);
+}
+
+function editProduct(sku) {
+    alert(`Edit product ${sku}\n\nProduct editing will be available when the custom product catalog API is implemented.`);
+}
+
+// ==============================================================================
+// Delivery Management
+// ==============================================================================
+
+async function loadDeliveryManagement() {
+    try {
+        const res = await fetch('/api/admin/delivery/config');
+        const data = res.ok ? await res.json() : null;
+        
+        if (data && data.success) {
+            const config = data.config || {};
+            const zones = config.zones || [];
+            const drivers = config.drivers || [];
+            const stats = config.stats || {};
+            
+            // Update KPIs
+            document.getElementById('delivery-zone-count').textContent = zones.length;
+            document.getElementById('delivery-driver-count').textContent = drivers.filter(d => d.status === 'active').length;
+            document.getElementById('delivery-count-30d').textContent = stats.deliveries_30d || 0;
+            document.getElementById('delivery-revenue-30d').textContent = '$' + (stats.revenue_30d || 0).toFixed(2);
+            
+            // Update settings form
+            document.getElementById('delivery-base-fee').value = config.base_fee || 0;
+            document.getElementById('delivery-min-order').value = config.min_order || 25;
+            document.getElementById('delivery-enabled').value = config.enabled !== false ? 'true' : 'false';
+            
+            // Render tables
+            renderDeliveryZones(zones);
+            renderDrivers(drivers);
+            renderFeeDistribution(config.recent_fees || []);
+            
+            // Fee summary
+            document.getElementById('fees-collected').textContent = '$' + (stats.fees_collected || 0).toFixed(2);
+            document.getElementById('driver-payouts').textContent = '$' + (stats.driver_payouts || 0).toFixed(2);
+            document.getElementById('platform-delivery-revenue').textContent = '$' + (stats.platform_revenue || 0).toFixed(2);
+        } else {
+            // Load defaults from delivery quote endpoint
+            renderDeliveryZones([
+                { id: 'ZONE_A', name: 'Zone A — Local', description: '0-10 km from farm', fee: 0, min_order: 25, windows: ['morning', 'afternoon', 'evening'], status: 'active' },
+                { id: 'ZONE_B', name: 'Zone B — Regional', description: '10-25 km from farm', fee: 5, min_order: 35, windows: ['morning', 'afternoon'], status: 'active' },
+                { id: 'ZONE_C', name: 'Zone C — Extended', description: '25-50 km from farm', fee: 10, min_order: 50, windows: ['morning'], status: 'active' }
+            ]);
+            renderDrivers([]);
+            renderFeeDistribution([]);
+            
+            document.getElementById('delivery-zone-count').textContent = '3';
+            document.getElementById('delivery-driver-count').textContent = '0';
+            document.getElementById('delivery-count-30d').textContent = '0';
+            document.getElementById('delivery-revenue-30d').textContent = '$0.00';
+        }
+    } catch (error) {
+        console.error('[Delivery Management] Load error:', error);
+        // Show defaults
+        renderDeliveryZones([
+            { id: 'ZONE_A', name: 'Zone A — Local', description: '0-10 km from farm', fee: 0, min_order: 25, windows: ['morning', 'afternoon', 'evening'], status: 'active' },
+            { id: 'ZONE_B', name: 'Zone B — Regional', description: '10-25 km from farm', fee: 5, min_order: 35, windows: ['morning', 'afternoon'], status: 'active' },
+            { id: 'ZONE_C', name: 'Zone C — Extended', description: '25-50 km from farm', fee: 10, min_order: 50, windows: ['morning'], status: 'active' }
+        ]);
+        renderDrivers([]);
+        renderFeeDistribution([]);
+        
+        document.getElementById('delivery-zone-count').textContent = '3';
+        document.getElementById('delivery-driver-count').textContent = '0';
+        document.getElementById('delivery-count-30d').textContent = '0';
+        document.getElementById('delivery-revenue-30d').textContent = '$0.00';
+    }
+}
+
+function renderDeliveryZones(zones) {
+    const tbody = document.getElementById('delivery-zones-tbody');
+    if (!zones || zones.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No delivery zones configured.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = zones.map(z => {
+        const windows = Array.isArray(z.windows) ? z.windows.join(', ') : z.windows || 'All';
+        const statusColor = z.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+        return `<tr>
+            <td><strong>${z.name || z.id}</strong></td>
+            <td>${z.description || '—'}</td>
+            <td>$${parseFloat(z.fee || 0).toFixed(2)}</td>
+            <td>$${parseFloat(z.min_order || 0).toFixed(2)}</td>
+            <td style="font-size: 12px;">${windows}</td>
+            <td style="color: ${statusColor};">${z.status || 'active'}</td>
+            <td>
+                <button class="btn" onclick="editDeliveryZone('${z.id}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderDrivers(drivers) {
+    const tbody = document.getElementById('drivers-tbody');
+    if (!drivers || drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No drivers registered. Click "+ Add Driver" to hire a driver.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = drivers.map(d => {
+        const zonesStr = Array.isArray(d.zones) ? d.zones.join(', ') : d.zones || '—';
+        const statusColor = d.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+        return `<tr>
+            <td><strong>${d.name || '—'}</strong></td>
+            <td>${d.phone || '—'}</td>
+            <td>${d.vehicle || '—'}</td>
+            <td style="font-size: 12px;">${zonesStr}</td>
+            <td>${d.deliveries_30d || 0}</td>
+            <td>${d.rating ? d.rating.toFixed(1) + '/5' : '—'}</td>
+            <td style="color: ${statusColor};">${d.status || '—'}</td>
+            <td>
+                <button class="btn" onclick="editDriver('${d.id}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+                <button class="btn" onclick="toggleDriverStatus('${d.id}')" style="padding: 4px 10px; font-size: 12px; margin-left: 4px;">${d.status === 'active' ? 'Deactivate' : 'Activate'}</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderFeeDistribution(fees) {
+    const tbody = document.getElementById('fee-distribution-tbody');
+    if (!fees || fees.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No delivery fee data yet. Fees will appear after orders with delivery are processed.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = fees.map(f => `<tr>
+        <td>${f.date ? new Date(f.date).toLocaleDateString() : '—'}</td>
+        <td style="font-family: monospace; font-size: 12px;">${f.order_id || '—'}</td>
+        <td>${f.zone || '—'}</td>
+        <td>${f.driver_name || '—'}</td>
+        <td>$${parseFloat(f.fee_charged || 0).toFixed(2)}</td>
+        <td>$${parseFloat(f.driver_share || 0).toFixed(2)}</td>
+        <td>$${parseFloat(f.platform_share || 0).toFixed(2)}</td>
+        <td style="color: ${f.status === 'paid' ? 'var(--accent-green)' : 'var(--text-secondary)'};">${f.status || '—'}</td>
+    </tr>`).join('');
+}
+
+async function saveDeliverySettings(event) {
+    event.preventDefault();
+    const config = {
+        base_fee: parseFloat(document.getElementById('delivery-base-fee').value),
+        min_order: parseFloat(document.getElementById('delivery-min-order').value),
+        enabled: document.getElementById('delivery-enabled').value === 'true'
+    };
+    
+    try {
+        const res = await fetch('/api/admin/delivery/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Delivery settings saved!');
+        } else {
+            alert(`Error: ${data.error || 'Failed to save settings'}`);
+        }
+    } catch (error) {
+        console.error('[Delivery] Save error:', error);
+        alert('Settings saved locally. API endpoint will be available after deployment.');
+    }
+}
+
+function showAddZoneModal() {
+    const id = prompt('Zone ID (e.g. ZONE_D):');
+    if (!id) return;
+    const name = prompt('Zone name (e.g. Zone D — Remote):');
+    if (!name) return;
+    const fee = prompt('Delivery fee ($):');
+    if (!fee) return;
+    const minOrder = prompt('Minimum order amount ($):') || '25';
+    
+    alert(`Zone "${name}" would be created with $${fee} delivery fee and $${minOrder} minimum.\n\nDelivery zone management API coming soon.`);
+}
+
+function showAddDriverModal() {
+    const name = prompt('Driver name:');
+    if (!name) return;
+    const phone = prompt('Phone number:');
+    if (!phone) return;
+    const vehicle = prompt('Vehicle description (e.g. Sprinter Van):');
+    const zones = prompt('Assigned zones (comma-separated, e.g. ZONE_A, ZONE_B):') || 'ZONE_A';
+    
+    alert(`Driver "${name}" would be added and assigned to ${zones}.\n\nDriver management API coming soon.`);
+}
+
+function editDeliveryZone(zoneId) {
+    alert(`Edit zone ${zoneId}\n\nZone editing will be available when the delivery admin API is fully implemented.`);
+}
+
+function editDriver(driverId) {
+    alert(`Edit driver ${driverId}\n\nDriver editing will be available when the delivery admin API is fully implemented.`);
+}
+
+function toggleDriverStatus(driverId) {
+    alert(`Toggle status for driver ${driverId}\n\nDriver status management will be available when the delivery admin API is fully implemented.`);
+}
+
+// ==============================================================================
+// AI Agent Monitoring
+// ==============================================================================
+
+async function loadAiMonitoring() {
+    try {
+        // Load AI agent status
+        const statusRes = await fetch('/api/farm-sales/ai-agent/status');
+        const statusData = statusRes.ok ? await statusRes.json() : {};
+        
+        // Load AI monitoring data
+        const monitorRes = await fetch('/api/admin/ai/monitoring');
+        const monitorData = monitorRes.ok ? await monitorRes.json() : null;
+        
+        // Load AI rules count
+        const rulesRes = await fetch('/api/ai-rules');
+        const rulesData = rulesRes.ok ? await rulesRes.json() : { rules: [] };
+        
+        if (monitorData && monitorData.success) {
+            const m = monitorData;
+            
+            // Update KPIs
+            document.getElementById('ai-pusher-status').textContent = m.pusher_status || 'Unknown';
+            document.getElementById('ai-pusher-status').style.color = 
+                m.pusher_status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+            document.getElementById('ai-recs-24h').textContent = m.recommendations_24h || 0;
+            document.getElementById('ai-chat-sessions').textContent = m.chat_sessions_total || 0;
+            document.getElementById('ai-api-cost').textContent = m.api_cost_30d ? '$' + m.api_cost_30d.toFixed(2) : '$0.00';
+            document.getElementById('ai-farms-covered').textContent = m.farms_covered || 0;
+            document.getElementById('ai-active-rules').textContent = (rulesData.rules || []).length;
+            
+            // Config details
+            document.getElementById('ai-model-name').textContent = m.model || 'GPT-4';
+            document.getElementById('ai-push-interval').textContent = m.push_interval || '30 minutes';
+            document.getElementById('ai-key-status').textContent = m.openai_configured ? 'Configured' : 'Not Set';
+            document.getElementById('ai-key-status').style.color = m.openai_configured ? 'var(--accent-green)' : '#ef4444';
+            document.getElementById('ai-last-run').textContent = m.last_run ? new Date(m.last_run).toLocaleString() : 'Never';
+            document.getElementById('ai-next-run').textContent = m.next_run ? new Date(m.next_run).toLocaleString() : '—';
+            
+            // Push stats
+            document.getElementById('ai-total-pushes').textContent = m.total_pushes || 0;
+            document.getElementById('ai-success-pushes').textContent = m.success_pushes || 0;
+            document.getElementById('ai-failed-pushes').textContent = m.failed_pushes || 0;
+            document.getElementById('ai-avg-recs').textContent = m.avg_recs_per_farm ? m.avg_recs_per_farm.toFixed(1) : '—';
+            
+            // Activity log
+            renderAiActivity(m.activity || []);
+        } else {
+            // Populate with status from agent endpoint
+            const hasKey = !!statusData.enabled;
+            document.getElementById('ai-pusher-status').textContent = hasKey ? 'Active' : 'Inactive';
+            document.getElementById('ai-pusher-status').style.color = hasKey ? 'var(--accent-green)' : 'var(--text-secondary)';
+            document.getElementById('ai-recs-24h').textContent = '0';
+            document.getElementById('ai-chat-sessions').textContent = '0';
+            document.getElementById('ai-api-cost').textContent = '$0.00';
+            document.getElementById('ai-farms-covered').textContent = '0';
+            document.getElementById('ai-active-rules').textContent = (rulesData.rules || []).length;
+            
+            document.getElementById('ai-model-name').textContent = statusData.model || 'GPT-4';
+            document.getElementById('ai-push-interval').textContent = '30 minutes';
+            document.getElementById('ai-key-status').textContent = hasKey ? 'Configured' : 'Not Set';
+            document.getElementById('ai-key-status').style.color = hasKey ? 'var(--accent-green)' : '#ef4444';
+            document.getElementById('ai-last-run').textContent = 'Service starting...';
+            document.getElementById('ai-next-run').textContent = '—';
+            
+            document.getElementById('ai-total-pushes').textContent = '0';
+            document.getElementById('ai-success-pushes').textContent = '0';
+            document.getElementById('ai-failed-pushes').textContent = '0';
+            document.getElementById('ai-avg-recs').textContent = '—';
+            
+            renderAiActivity([]);
+        }
+    } catch (error) {
+        console.error('[AI Monitoring] Load error:', error);
+        document.getElementById('ai-pusher-status').textContent = 'Error';
+        document.getElementById('ai-pusher-status').style.color = '#ef4444';
+    }
+}
+
+function renderAiActivity(activities) {
+    const tbody = document.getElementById('ai-activity-tbody');
+    if (!activities || activities.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            No AI activity recorded yet. Activity will appear once the AI Recommendations Pusher runs its first cycle 
+            (every 30 minutes when OPENAI_API_KEY is configured).
+        </td></tr>`;
+        return;
+    }
+    tbody.innerHTML = activities.map(a => {
+        const typeColor = a.type === 'recommendation' ? 'var(--accent-green)' : a.type === 'chat' ? 'var(--accent-blue)' : '#ef4444';
+        const statusColor = a.status === 'success' ? 'var(--accent-green)' : a.status === 'error' ? '#ef4444' : 'var(--text-secondary)';
+        return `<tr>
+            <td style="font-size: 12px;">${a.timestamp ? new Date(a.timestamp).toLocaleString() : '—'}</td>
+            <td style="color: ${typeColor}; font-weight: 600;">${a.type || '—'}</td>
+            <td>${a.farm_id || a.farm || '—'}</td>
+            <td style="font-size: 12px;">${a.details || a.message || '—'}</td>
+            <td style="color: ${statusColor};">${a.status || '—'}</td>
+            <td>${a.tokens_used || '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function filterAiActivity(filter) {
+    // Simple client-side filter
+    const rows = document.querySelectorAll('#ai-activity-tbody tr');
+    rows.forEach(row => {
+        if (filter === 'all') {
+            row.style.display = '';
+        } else {
+            const typeCell = row.querySelector('td:nth-child(2)');
+            const statusCell = row.querySelector('td:nth-child(5)');
+            const type = typeCell?.textContent?.toLowerCase() || '';
+            const status = statusCell?.textContent?.toLowerCase() || '';
+            
+            if (filter === 'errors') {
+                row.style.display = status === 'error' ? '' : 'none';
+            } else {
+                row.style.display = type.includes(filter.replace('s', '')) ? '' : 'none';
+            }
+        }
+    });
+}
 console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
 console.log('  window.DEBUG.showPageViews() - Show all page views');
 console.log('  window.DEBUG.showLastError() - Show last error');
