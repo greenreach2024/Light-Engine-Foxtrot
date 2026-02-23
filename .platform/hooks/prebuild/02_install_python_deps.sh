@@ -14,9 +14,12 @@ fi
 
 python3 --version || { echo "ERROR: python3 not available"; exit 0; }
 
+# Ensure pip is available (AL2023 may not have pip3 in PATH)
+python3 -m ensurepip --upgrade 2>/dev/null || true
+
 # Install from requirements.txt (only ML deps to keep it fast)
 # Full requirements.txt has FastAPI etc. which aren't needed for Node.js server
-pip3 install --user \
+python3 -m pip install --user \
     "scikit-learn>=1.4.0" \
     "numpy>=1.26.0" \
     "pandas>=2.2.0" \
@@ -31,3 +34,4 @@ pip3 install --user \
 echo "=== Python ML dependencies installed ==="
 python3 -c "import sklearn; print(f'scikit-learn {sklearn.__version__}')" 2>&1 || true
 python3 -c "import numpy; print(f'numpy {numpy.__version__}')" 2>&1 || true
+python3 -c "import pandas; print(f'pandas {pandas.__version__}')" 2>&1 || true
