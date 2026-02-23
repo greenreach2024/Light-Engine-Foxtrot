@@ -27,11 +27,57 @@ const router = Router();
 router.get('/network/dashboard', async (req, res) => {
   try {
     let farmCount = 0, activeFarms = 0;
+    let totalProductionCapacity = 0;
+    let alerts = [];
+    let recentActivity = [];
+
     if (await isDatabaseAvailable()) {
       const result = await query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = \'active\') as active FROM farms');
       farmCount = parseInt(result.rows[0].total);
       activeFarms = parseInt(result.rows[0].active);
+
+      // Production capacity: total harvest count last 30 days
+      const capResult = await query(
+        `SELECT COUNT(*) as harvests_30d,
+                COALESCE(SUM((outcomes->>'weight_per_plant_oz')::DECIMAL), 0) AS total_yield_oz
+         FROM experiment_records
+         WHERE recorded_at >= NOW() - INTERVAL '30 days'`
+      );
+      totalProductionCapacity = parseInt(capResult.rows[0].harvests_30d);
+
+      // Alerts: reuse same logic as /api/network/alerts (high loss + below benchmark)
+      const lossAlerts = await query(
+        `SELECT er.farm_id, f.name AS farm_name, er.crop,
+                (er.outcomes->>'loss_rate')::DECIMAL AS loss_rate
+         FROM experiment_records er
+         LEFT JOIN farms f ON f.farm_id = er.farm_id
+         WHERE er.recorded_at >= NOW() - INTERVAL '30 days'
+           AND (er.outcomes->>'loss_rate')::DECIMAL > 0.15
+         ORDER BY loss_rate DESC LIMIT 5`
+      );
+      alerts = lossAlerts.rows.map(r => ({
+        type: 'high_loss_rate',
+        severity: parseFloat(r.loss_rate) > 0.25 ? 'critical' : 'warning',
+        farm_name: r.farm_name || r.farm_id,
+        crop: r.crop,
+        message: `${r.farm_name || r.farm_id}: ${r.crop} loss ${(parseFloat(r.loss_rate) * 100).toFixed(1)}%`
+      }));
+
+      // Recent activity: latest experiment records
+      const actResult = await query(
+        `SELECT er.farm_id, f.name AS farm_name, er.crop, er.recorded_at
+         FROM experiment_records er
+         LEFT JOIN farms f ON f.farm_id = er.farm_id
+         ORDER BY er.recorded_at DESC LIMIT 10`
+      );
+      recentActivity = actResult.rows.map(r => ({
+        type: 'harvest',
+        farm_name: r.farm_name || r.farm_id,
+        crop: r.crop,
+        recorded_at: r.recorded_at
+      }));
     }
+
     res.json({
       success: true,
       dashboard: {
@@ -39,9 +85,9 @@ router.get('/network/dashboard', async (req, res) => {
         activeFarms,
         offlineFarms: farmCount - activeFarms,
         networkHealth: activeFarms > 0 ? 'healthy' : 'no_farms',
-        totalProductionCapacity: 0,
-        alerts: [],
-        recentActivity: [],
+        totalProductionCapacity,
+        alerts,
+        recentActivity,
       }
     });
   } catch (error) {
@@ -437,18 +483,67 @@ router.get('/network/alerts', async (req, res) => {
 router.get('/growers/dashboard', async (req, res) => {
   try {
     let growerCount = 0;
+    let pendingCount = 0;
+    let averageRating = 0;
+    let topPerformers = [];
+
     if (await isDatabaseAvailable()) {
       const result = await query("SELECT COUNT(*) as cnt FROM farms WHERE status = 'active'");
       growerCount = parseInt(result.rows[0].cnt);
+
+      // Pending applications: farms with status 'pending'
+      const pendResult = await query("SELECT COUNT(*) as cnt FROM farms WHERE status = 'pending'");
+      pendingCount = parseInt(pendResult.rows[0].cnt);
+
+      // Average rating: composite score from leaderboard logic
+      // yield efficiency (40%) + low loss (30%) + consistency (30%)
+      const ratingResult = await query(`
+        SELECT AVG(score) as avg_score FROM (
+          SELECT
+            LEAST(100, GREATEST(0,
+              COALESCE(AVG((er.outcomes->>'weight_per_plant_oz')::DECIMAL) * 10, 0) * 0.4 +
+              (1.0 - LEAST(1.0, COALESCE(AVG((er.outcomes->>'loss_rate')::DECIMAL), 0.5))) * 100 * 0.3 +
+              GREATEST(0, 100 - COALESCE(STDDEV((er.outcomes->>'weight_per_plant_oz')::DECIMAL), 10) * 20) * 0.3
+            )) AS score
+          FROM experiment_records er
+          JOIN farms f ON f.farm_id = er.farm_id AND f.status = 'active'
+          GROUP BY er.farm_id
+          HAVING COUNT(*) >= 1
+        ) sub
+      `);
+      averageRating = parseFloat(ratingResult.rows[0]?.avg_score || 0).toFixed(1);
+
+      // Top performers: top 5 by composite score
+      const topResult = await query(`
+        SELECT er.farm_id, f.name, COUNT(*) AS harvest_count,
+          LEAST(100, GREATEST(0,
+            COALESCE(AVG((er.outcomes->>'weight_per_plant_oz')::DECIMAL) * 10, 0) * 0.4 +
+            (1.0 - LEAST(1.0, COALESCE(AVG((er.outcomes->>'loss_rate')::DECIMAL), 0.5))) * 100 * 0.3 +
+            GREATEST(0, 100 - COALESCE(STDDEV((er.outcomes->>'weight_per_plant_oz')::DECIMAL), 10) * 20) * 0.3
+          )) AS score
+        FROM experiment_records er
+        JOIN farms f ON f.farm_id = er.farm_id AND f.status = 'active'
+        GROUP BY er.farm_id, f.name
+        HAVING COUNT(*) >= 1
+        ORDER BY score DESC
+        LIMIT 5
+      `);
+      topPerformers = topResult.rows.map(r => ({
+        farmId: r.farm_id,
+        name: r.name || r.farm_id,
+        score: parseFloat(r.score).toFixed(1),
+        harvestCount: parseInt(r.harvest_count)
+      }));
     }
+
     res.json({
       success: true,
       dashboard: {
         totalGrowers: growerCount,
         activeGrowers: growerCount,
-        pendingApplications: 0,
-        averageRating: 0,
-        topPerformers: [],
+        pendingApplications: pendingCount,
+        averageRating: parseFloat(averageRating),
+        topPerformers,
       }
     });
   } catch (error) {
@@ -461,12 +556,39 @@ router.get('/growers/list', async (req, res) => {
   try {
     let growers = [];
     if (await isDatabaseAvailable()) {
-      const result = await query(
-        "SELECT farm_id, name, status, email, created_at FROM farms WHERE status = 'active' ORDER BY name"
-      );
+      // Join farms with experiment_records for rating and wholesale_orders for order count
+      const result = await query(`
+        SELECT f.farm_id, f.name, f.status, f.email, f.created_at,
+          COALESCE(stats.score, 0) AS rating,
+          COALESCE(stats.harvest_count, 0) AS harvest_count,
+          COALESCE(orders.order_count, 0) AS total_orders
+        FROM farms f
+        LEFT JOIN (
+          SELECT er.farm_id,
+            COUNT(*) AS harvest_count,
+            LEAST(100, GREATEST(0,
+              COALESCE(AVG((er.outcomes->>'weight_per_plant_oz')::DECIMAL) * 10, 0) * 0.4 +
+              (1.0 - LEAST(1.0, COALESCE(AVG((er.outcomes->>'loss_rate')::DECIMAL), 0.5))) * 100 * 0.3 +
+              GREATEST(0, 100 - COALESCE(STDDEV((er.outcomes->>'weight_per_plant_oz')::DECIMAL), 10) * 20) * 0.3
+            )) AS score
+          FROM experiment_records er
+          GROUP BY er.farm_id
+        ) stats ON stats.farm_id = f.farm_id
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS order_count
+          FROM wholesale_orders wo
+          WHERE wo.assigned_farms @> jsonb_build_array(jsonb_build_object('farm_id', f.farm_id))
+             OR wo.assigned_farms::text LIKE '%' || f.farm_id || '%'
+        ) orders ON true
+        WHERE f.status = 'active'
+        ORDER BY f.name
+      `);
       growers = result.rows.map(f => ({
         id: f.farm_id, name: f.name, status: f.status,
-        email: f.email, joinedAt: f.created_at, rating: 0, totalOrders: 0,
+        email: f.email, joinedAt: f.created_at,
+        rating: parseFloat(parseFloat(f.rating).toFixed(1)),
+        harvestCount: parseInt(f.harvest_count),
+        totalOrders: parseInt(f.total_orders),
       }));
     }
     res.json({ success: true, growers, total: growers.length });
