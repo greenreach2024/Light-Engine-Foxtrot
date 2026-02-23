@@ -18,8 +18,8 @@ python3 --version || { echo "ERROR: python3 not available"; exit 0; }
 python3 -m ensurepip --upgrade 2>/dev/null || true
 
 # Install from requirements.txt (only ML deps to keep it fast)
-# Full requirements.txt has FastAPI etc. which aren't needed for Node.js server
-python3 -m pip install --user \
+# Install system-wide (not --user) so all users including webapp can access
+python3 -m pip install \
     "scikit-learn>=1.4.0" \
     "numpy>=1.26.0" \
     "pandas>=2.2.0" \
