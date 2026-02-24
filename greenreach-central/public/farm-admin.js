@@ -4060,6 +4060,9 @@ async function loadSettings() {
         document.getElementById('webhook-inventory').checked = settings.webhookInventory || false;
         document.getElementById('webhook-harvest').checked = settings.webhookHarvest || false;
         
+        // Delivery Settings (from API, not localStorage)
+        loadDeliverySettings();
+        
     } catch (error) {
         console.error('Error loading settings:', error);
         showToast('Error loading settings', 'error');
@@ -4194,6 +4197,167 @@ async function saveSettings() {
     } catch (error) {
         console.error('Error saving settings:', error);
         showToast('Error saving settings', 'error');
+    }
+}
+
+// ─── Delivery Settings (Phase 4) ────────────────────────────────────────
+
+/**
+ * Load delivery settings from API and populate the form
+ */
+async function loadDeliverySettings() {
+    try {
+        const response = await farmFetch('/api/farm-sales/delivery/config');
+        if (!response.ok) {
+            console.warn('[Delivery] Failed to load config:', response.status);
+            return;
+        }
+        const data = await response.json();
+        if (!data.success) return;
+
+        const cfg = data.config;
+
+        // Populate form fields
+        const enabledEl = document.getElementById('delivery-enabled');
+        const configFields = document.getElementById('delivery-config-fields');
+        if (enabledEl) {
+            enabledEl.checked = cfg.enabled;
+            enabledEl.addEventListener('change', toggleDeliveryFields);
+        }
+        if (configFields) {
+            configFields.style.display = cfg.enabled ? 'block' : 'none';
+        }
+
+        const baseFeeEl = document.getElementById('delivery-base-fee');
+        const minOrderEl = document.getElementById('delivery-min-order');
+        if (baseFeeEl) baseFeeEl.value = cfg.base_fee || 0;
+        if (minOrderEl) minOrderEl.value = cfg.min_order || 25;
+
+        // Render delivery windows editor
+        if (cfg.windows && cfg.windows.length > 0) {
+            renderDeliveryWindows(cfg.windows);
+        }
+
+        console.log('[Delivery] Settings loaded:', cfg.enabled ? 'enabled' : 'disabled');
+    } catch (error) {
+        console.error('[Delivery] Error loading settings:', error);
+    }
+}
+
+/**
+ * Toggle delivery config fields visibility based on enabled checkbox
+ */
+function toggleDeliveryFields() {
+    const enabled = document.getElementById('delivery-enabled')?.checked;
+    const configFields = document.getElementById('delivery-config-fields');
+    if (configFields) {
+        configFields.style.display = enabled ? 'block' : 'none';
+    }
+}
+
+/**
+ * Render delivery windows editor into the placeholder div
+ */
+function renderDeliveryWindows(windows) {
+    const container = document.getElementById('delivery-windows-editor');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    windows.forEach(w => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: grid; grid-template-columns: auto 1fr 80px 80px; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card);';
+        row.dataset.windowId = w.window_id;
+
+        row.innerHTML = `
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; min-width: 40px;">
+                <input type="checkbox" class="dw-active" ${w.active ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--accent-green);">
+            </label>
+            <span style="font-weight: 500; color: var(--text-primary); font-size: 14px;">${w.label || w.window_id}</span>
+            <input type="time" class="dw-start" value="${w.start_time || '06:00'}" style="padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 13px;">
+            <input type="time" class="dw-end" value="${w.end_time || '10:00'}" style="padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 13px;">
+        `;
+
+        container.appendChild(row);
+    });
+}
+
+/**
+ * Collect delivery window values from the editor
+ */
+function collectDeliveryWindows() {
+    const container = document.getElementById('delivery-windows-editor');
+    if (!container) return [];
+
+    const rows = container.querySelectorAll('[data-window-id]');
+    const windows = [];
+    rows.forEach(row => {
+        windows.push({
+            window_id: row.dataset.windowId,
+            label: row.querySelector('span')?.textContent?.trim() || row.dataset.windowId,
+            start_time: row.querySelector('.dw-start')?.value || '06:00',
+            end_time: row.querySelector('.dw-end')?.value || '10:00',
+            active: row.querySelector('.dw-active')?.checked ?? true
+        });
+    });
+    return windows;
+}
+
+/**
+ * Save delivery settings + windows to API
+ */
+async function saveDeliverySettings() {
+    const statusEl = document.getElementById('delivery-save-status');
+    if (statusEl) {
+        statusEl.textContent = 'Saving…';
+        statusEl.style.color = 'var(--text-muted)';
+    }
+
+    try {
+        const enabled = document.getElementById('delivery-enabled')?.checked ?? false;
+        const baseFee = parseFloat(document.getElementById('delivery-base-fee')?.value || '0');
+        const minOrder = parseFloat(document.getElementById('delivery-min-order')?.value || '25');
+
+        // Save config
+        const configResp = await farmFetch('/api/farm-sales/delivery/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled, base_fee: baseFee, min_order: minOrder })
+        });
+
+        if (!configResp.ok) {
+            const err = await configResp.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to save delivery config');
+        }
+
+        // Save windows
+        const windows = collectDeliveryWindows();
+        if (windows.length > 0) {
+            const winResp = await farmFetch('/api/farm-sales/delivery/windows', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ windows })
+            });
+            if (!winResp.ok) {
+                const err = await winResp.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to save delivery windows');
+            }
+        }
+
+        if (statusEl) {
+            statusEl.textContent = 'Saved ✓';
+            statusEl.style.color = 'var(--accent-green)';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        }
+        showToast('Delivery settings saved', 'success');
+        console.log('[Delivery] Settings saved — enabled:', enabled, 'fee:', baseFee, 'min:', minOrder);
+    } catch (error) {
+        console.error('[Delivery] Save failed:', error);
+        if (statusEl) {
+            statusEl.textContent = 'Error: ' + error.message;
+            statusEl.style.color = 'var(--accent-red)';
+        }
+        showToast('Error saving delivery settings', 'error');
     }
 }
 

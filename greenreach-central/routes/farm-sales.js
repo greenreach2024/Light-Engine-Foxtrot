@@ -2,25 +2,29 @@
  * Farm Sales Routes
  * Stubs for the farm-sales subsystem used by:
  *   - farm-sales-landing.html, farm-sales-pos.html, farm-sales-store.html, farm-sales-shop.html
- *   - farm-admin.js (orders, QuickBooks)
+ *   - farm-admin.js (orders, QuickBooks, delivery settings)
  *   - farm-summary.html (inventory)
  *
  * Endpoints:
- *   GET  /api/config/app                   - App config (farm mode, features)
- *   GET  /api/farm-auth/demo-tokens        - Demo auth tokens for POS/store
- *   GET  /api/farm-sales/orders            - Farm direct-sales orders
- *   GET  /api/farm-sales/inventory         - Farm retail inventory
- *   GET  /api/farm-sales/subscriptions/plans - Subscription plans
- *   GET  /api/farm-sales/quickbooks/status - QuickBooks integration status
- *   POST /api/farm-sales/quickbooks/auth   - QuickBooks OAuth start
+ *   GET  /api/config/app                       - App config (farm mode, features)
+ *   GET  /api/farm-auth/demo-tokens            - Demo auth tokens for POS/store
+ *   GET  /api/farm-sales/orders                - Farm direct-sales orders
+ *   GET  /api/farm-sales/inventory             - Farm retail inventory
+ *   GET  /api/farm-sales/subscriptions/plans   - Subscription plans
+ *   GET  /api/farm-sales/quickbooks/status     - QuickBooks integration status
+ *   POST /api/farm-sales/quickbooks/auth       - QuickBooks OAuth start
  *   POST /api/farm-sales/quickbooks/disconnect - Disconnect QuickBooks
- *   POST /api/farm-sales/quickbooks/sync-* - QuickBooks sync operations
- *   GET  /api/farm-sales/ai-agent/status   - AI agent status
- *   POST /api/farm-sales/ai-agent/chat     - AI agent chat
- *   GET  /api/demo/intro-cards             - Demo intro card data
+ *   POST /api/farm-sales/quickbooks/sync-*     - QuickBooks sync operations
+ *   GET  /api/farm-sales/ai-agent/status       - AI agent status
+ *   POST /api/farm-sales/ai-agent/chat         - AI agent chat
+ *   GET  /api/farm-sales/delivery/config       - Get delivery settings + windows
+ *   PUT  /api/farm-sales/delivery/config       - Update delivery settings
+ *   PUT  /api/farm-sales/delivery/windows      - Bulk upsert delivery windows
+ *   GET  /api/demo/intro-cards                 - Demo intro card data
  */
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
@@ -146,6 +150,161 @@ router.post('/farm-sales/ai-agent/chat', (req, res) => {
     response: 'AI agent is not currently enabled. Please configure it in farm settings.',
     sessionId: null,
   });
+});
+
+// ─── Farm Delivery Settings (farm-admin.js) ────────────────
+// GET /api/farm-sales/delivery/config — delivery settings + windows for this farm
+router.get('/farm-sales/delivery/config', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
+    }
+
+    let settings = { enabled: false, base_fee: 0, min_order: 25, lead_time_hours: 24, max_deliveries_per_window: 20 };
+    let windows = [];
+
+    if (isDatabaseAvailable()) {
+      const settingsResult = await query(
+        'SELECT * FROM farm_delivery_settings WHERE farm_id = $1', [farmId]
+      );
+      if (settingsResult.rows.length > 0) {
+        const r = settingsResult.rows[0];
+        settings = {
+          enabled: r.enabled,
+          base_fee: Number(r.base_fee),
+          min_order: Number(r.min_order),
+          lead_time_hours: Number(r.lead_time_hours || 24),
+          max_deliveries_per_window: Number(r.max_deliveries_per_window || 20)
+        };
+      }
+
+      const windowsResult = await query(
+        'SELECT * FROM farm_delivery_windows WHERE farm_id = $1 ORDER BY window_id', [farmId]
+      );
+      windows = windowsResult.rows.map(r => ({
+        window_id: r.window_id,
+        label: r.label,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        active: r.active
+      }));
+    }
+
+    // Provide defaults if no windows configured yet
+    if (windows.length === 0) {
+      windows = [
+        { window_id: 'morning',   label: 'Morning',   start_time: '06:00', end_time: '10:00', active: true },
+        { window_id: 'afternoon', label: 'Afternoon', start_time: '11:00', end_time: '15:00', active: true },
+        { window_id: 'evening',   label: 'Evening',   start_time: '16:00', end_time: '20:00', active: false }
+      ];
+    }
+
+    res.json({ success: true, config: { ...settings, windows } });
+  } catch (error) {
+    console.error('[Farm Delivery] Config get failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/farm-sales/delivery/config — update delivery settings
+router.put('/farm-sales/delivery/config', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
+    }
+
+    const { enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window } = req.body;
+
+    if (isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET
+           enabled = COALESCE($2, farm_delivery_settings.enabled),
+           base_fee = COALESCE($3, farm_delivery_settings.base_fee),
+           min_order = COALESCE($4, farm_delivery_settings.min_order),
+           lead_time_hours = COALESCE($5, farm_delivery_settings.lead_time_hours),
+           max_deliveries_per_window = COALESCE($6, farm_delivery_settings.max_deliveries_per_window),
+           updated_at = NOW()`,
+        [
+          farmId,
+          enabled ?? null,
+          base_fee != null ? parseFloat(base_fee) : null,
+          min_order != null ? parseFloat(min_order) : null,
+          lead_time_hours != null ? parseInt(lead_time_hours) : null,
+          max_deliveries_per_window != null ? parseInt(max_deliveries_per_window) : null
+        ]
+      );
+
+      const result = await query('SELECT * FROM farm_delivery_settings WHERE farm_id = $1', [farmId]);
+      const r = result.rows[0];
+      console.log('[Farm Delivery] Config updated for farm:', farmId);
+      return res.json({
+        success: true,
+        config: {
+          enabled: r.enabled,
+          base_fee: Number(r.base_fee),
+          min_order: Number(r.min_order),
+          lead_time_hours: Number(r.lead_time_hours),
+          max_deliveries_per_window: Number(r.max_deliveries_per_window)
+        }
+      });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Farm Delivery] Config update failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/farm-sales/delivery/windows — bulk upsert delivery windows
+router.put('/farm-sales/delivery/windows', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
+    }
+
+    const { windows } = req.body;
+    if (!Array.isArray(windows)) {
+      return res.status(400).json({ success: false, error: 'windows array is required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      for (const w of windows) {
+        if (!w.window_id) continue;
+        await query(
+          `INSERT INTO farm_delivery_windows (farm_id, window_id, label, start_time, end_time, active, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (farm_id, window_id) DO UPDATE SET
+             label = COALESCE($3, farm_delivery_windows.label),
+             start_time = COALESCE($4, farm_delivery_windows.start_time),
+             end_time = COALESCE($5, farm_delivery_windows.end_time),
+             active = COALESCE($6, farm_delivery_windows.active),
+             updated_at = NOW()`,
+          [farmId, w.window_id, w.label || w.window_id, w.start_time || '06:00', w.end_time || '10:00', w.active ?? true]
+        );
+      }
+
+      const result = await query(
+        'SELECT * FROM farm_delivery_windows WHERE farm_id = $1 ORDER BY window_id', [farmId]
+      );
+      const saved = result.rows.map(r => ({
+        window_id: r.window_id, label: r.label,
+        start_time: r.start_time, end_time: r.end_time, active: r.active
+      }));
+      console.log('[Farm Delivery] Windows updated for farm:', farmId, '—', saved.length, 'windows');
+      return res.json({ success: true, windows: saved });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Farm Delivery] Windows update failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ─── Demo Intro Cards ──────────────────────────────────────
