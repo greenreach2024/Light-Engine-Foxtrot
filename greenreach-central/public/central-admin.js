@@ -1466,7 +1466,8 @@ async function loadDashboardData() {
         await Promise.all([
             loadKPIs(),
             loadFarms(),
-            checkAlerts()
+            checkAlerts(),
+            loadDeliveryReadiness()
         ]);
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -1552,6 +1553,58 @@ async function loadKPIs() {
         if (alertsCard) alertsCard.style.display = 'none';
     } catch (error) {
         console.error('Error loading KPIs:', error);
+    }
+}
+
+/**
+ * Load delivery readiness data for the overview dashboard card
+ */
+async function loadDeliveryReadiness() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/readiness`);
+        if (!response.ok) {
+            console.warn('[Delivery Readiness] API returned', response.status);
+            return;
+        }
+        const data = await response.json();
+        if (!data.success) return;
+
+        const { farms, summary } = data;
+
+        // Update summary counts
+        const readyEl = document.getElementById('dr-ready-count');
+        const enabledEl = document.getElementById('dr-enabled-count');
+        const totalEl = document.getElementById('dr-total-count');
+        if (readyEl) readyEl.textContent = summary.ready || 0;
+        if (enabledEl) enabledEl.textContent = summary.enabled || 0;
+        if (totalEl) totalEl.textContent = summary.total || 0;
+
+        // Render farm rows
+        const tbody = document.getElementById('dr-farm-rows');
+        if (!tbody) return;
+
+        if (farms.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No farms have configured delivery yet</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = farms.map(f => {
+            const statusBadge = f.ready
+                ? '<span style="background: rgba(16,185,129,0.15); color: var(--accent-green); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Ready</span>'
+                : f.enabled
+                    ? '<span style="background: rgba(245,158,11,0.15); color: var(--accent-yellow); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Partial</span>'
+                    : '<span style="background: rgba(107,114,128,0.15); color: var(--text-muted); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Off</span>';
+            return `<tr>
+                <td style="font-weight: 500;">${f.farm_id}</td>
+                <td>${statusBadge}</td>
+                <td>${f.active_windows}</td>
+                <td>${f.active_zones}</td>
+                <td>$${f.base_fee.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+    } catch (error) {
+        console.warn('[Delivery Readiness] Error loading:', error);
+        // Non-critical — leave card in loading state, don't block dashboard
     }
 }
 
@@ -6840,9 +6893,7 @@ function filterAnomalies() {
     console.log('[Anomalies] Filter triggered');
 }
 
-function filterAlerts() {
-    console.log('[Alerts] Filter triggered');
-}
+// filterAlerts() defined above at the alerts view section
 
 /**
  * ===================================

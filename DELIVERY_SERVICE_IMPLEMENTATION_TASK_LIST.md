@@ -90,9 +90,9 @@ Execution Rule: Complete in order; do not expand scope without review.
 ## Slice 6 — Central Read-Only Readiness
 
 ### Tasks
-- [ ] Add a small readiness card/table to `GR-central-admin.html`.
-- [ ] Show farms with delivery enabled + windows configured.
-- [ ] Read-only only for MVP.
+- [x] Add a small readiness card/table to `GR-central-admin.html`.
+- [x] Show farms with delivery enabled + windows configured.
+- [x] Read-only only for MVP.
 
 ### Acceptance
 - Admin can quickly see rollout readiness by farm.
