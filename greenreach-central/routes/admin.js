@@ -2958,25 +2958,34 @@ router.get('/farms/:farmId/devices', async (req, res) => {
         
         // Try to get devices from farm_data sync table
         let devices = [];
+        let source = 'database';
         try {
-            const result = await query(
-                `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
-                [farmId, 'devices']
-            );
-            
-            if (result.rows.length > 0) {
-                devices = result.rows[0].data || [];
+            if (await isDatabaseAvailable()) {
+                const result = await query(
+                    `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+                    [farmId, 'devices']
+                );
+                if (result.rows.length > 0) {
+                    devices = result.rows[0].data || [];
+                }
             }
         } catch (e) {
             console.warn('[Admin API] farm_data table not available:', e.message);
         }
         
-        // If no synced devices, return empty array
+        // Fall back to in-memory sync store
+        if (devices.length === 0) {
+            const store = getInMemoryStore();
+            devices = (store.devices && store.devices.get(farmId)) || [];
+            if (devices.length > 0) source = 'memory';
+        }
+        
         res.json({
             success: true,
             devices: devices,
             count: devices.length,
-            farmId: farmId
+            farmId: farmId,
+            source
         });
         
     } catch (error) {

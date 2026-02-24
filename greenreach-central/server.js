@@ -688,6 +688,38 @@ async function syncFarmData(options = {}) {
       logger.info(`[${syncLabel}] In-memory: schedules for ${[...aliasFarmIds].join(', ')}`);
     }
 
+    // Devices: prefer iot-devices.json, but extract from room-map.json if empty
+    if (!store.devices) store.devices = new Map();
+    let devicesList = [];
+    if (fetched['iot-devices.json']) {
+      const raw = fetched['iot-devices.json'];
+      devicesList = Array.isArray(raw) ? raw : (raw.devices || []);
+    }
+    if (devicesList.length === 0 && fetched['room-map.json']) {
+      const rmDevices = fetched['room-map.json'].devices || [];
+      devicesList = rmDevices.map(d => ({
+        device_code: d.deviceId || d.id,
+        device_type: d.snapshot?.category || d.snapshot?.type || 'unknown',
+        name: d.snapshot?.name || d.deviceId || 'Unknown Device',
+        zone: d.snapshot?.zone != null ? `Zone ${d.snapshot.zone}` : 'Unassigned',
+        room: d.snapshot?.room || 'Main Grow Room',
+        status: 'online',
+        last_seen: new Date().toISOString()
+      }));
+      logger.info(`[${syncLabel}] Extracted ${devicesList.length} devices from room-map.json`);
+    }
+    if (devicesList.length > 0) {
+      for (const fid of aliasFarmIds) store.devices.set(fid, devicesList);
+      logger.info(`[${syncLabel}] In-memory: ${devicesList.length} devices for ${[...aliasFarmIds].join(', ')}`);
+    }
+
+    // Room map: store in-memory for potential future use
+    if (!store.room_map) store.room_map = new Map();
+    if (fetched['room-map.json']) {
+      for (const fid of aliasFarmIds) store.room_map.set(fid, fetched['room-map.json']);
+      logger.info(`[${syncLabel}] In-memory: room_map for ${[...aliasFarmIds].join(', ')}`);
+    }
+
     // ── DB upsert (when available) ──
     try {
       const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');

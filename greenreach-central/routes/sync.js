@@ -1098,6 +1098,11 @@ router.get('/:farmId/devices', async (req, res) => {
       }
     }
 
+    // Fall back to in-memory store
+    if (devices.length === 0 && inMemoryStore.devices) {
+      devices = inMemoryStore.devices.get(farmId) || [];
+    }
+
     // Fall back to synced iot-devices.json file
     if (devices.length === 0) {
       try {
