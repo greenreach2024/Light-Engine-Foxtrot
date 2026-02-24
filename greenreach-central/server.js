@@ -585,9 +585,10 @@ async function syncFarmData(options = {}) {
     logger.info(`[${syncLabel}] Syncing data from edge device: ${edgeUrl}`);
     let updated = 0;
     let errors = 0;
-    
+    const fetched = {}; // file -> parsed JSON from edge
+
+    // Fetch ALL data files from edge (including farm.json for farmId)
     for (const file of SYNC_DATA_FILES) {
-      if (file === 'farm.json') continue; // Don't overwrite farm.json with edge version
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
@@ -595,18 +596,35 @@ async function syncFarmData(options = {}) {
         clearTimeout(timeout);
         
         if (response.ok) {
-          const data = await response.text();
+          const text = await response.text();
+          try { fetched[file] = JSON.parse(text); } catch { /* non-JSON */ }
           // DO NOT write to flat files — flat files in public/data/ are
           // served by express.static to unauthenticated requests, causing
-          // cross-farm data leaks. The DB upsert below is the correct
-          // persistence path for multi-tenant mode.
-          logger.info(`[${syncLabel}] Fetched ${file} from edge device (DB upsert follows)`);
+          // cross-farm data leaks. In-memory store + DB are the correct
+          // persistence paths for multi-tenant mode.
+          logger.info(`[${syncLabel}] Fetched ${file} from edge device`);
           updated++;
         }
       } catch (err) {
         errors++;
         logger.warn(`[${syncLabel}] Could not fetch ${file} from ${edgeUrl}: ${err.message}`);
       }
+    }
+
+    // Also fetch extra files not in SYNC_DATA_FILES
+    for (const extra of ['schedules.json', 'light-setups.json', 'plans.json']) {
+      if (fetched[extra]) continue;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(`${edgeUrl}/data/${extra}`, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (response.ok) {
+          const text = await response.text();
+          try { fetched[extra] = JSON.parse(text); } catch { /* non-JSON */ }
+          logger.info(`[${syncLabel}] Fetched ${extra} from edge device`);
+        }
+      } catch { /* optional files — ignore errors */ }
     }
     
     // Update sync status
@@ -616,167 +634,156 @@ async function syncFarmData(options = {}) {
     syncStatus.errorCount += errors;
     syncStatus.filesUpdated += updated;
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
-    
-    // After syncing files, store ALL data types in the farm_data DB table
-    // so authenticated users get complete data via the farm-data middleware.
-    try {
+
+    // Resolve farmId: fetched farm.json → local farm.json → FARM_ID env var
+    let farmId = fetched['farm.json']?.farmId;
+    if (!farmId) {
       const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
       if (fs.existsSync(farmJsonPath)) {
-        const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
-        const farmId = farmData.farmId;
-        if (farmId) {
-          const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
-          if (await isDatabaseAvailable()) {
+        try { farmId = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')).farmId; } catch { /* ignore */ }
+      }
+    }
+    if (!farmId) farmId = process.env.FARM_ID;
+    if (!farmId) {
+      logger.warn(`[${syncLabel}] Cannot determine farm ID — skipping data storage`);
+      return { ok: true, updated, errors, warning: 'no_farm_id' };
+    }
 
-            // Helper: upsert a data type into farm_data
-            async function upsertFarmData(dataType, data) {
-              await dbQuery(
-                `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
-                 VALUES ($1, $2, $3, NOW())
-                 ON CONFLICT (farm_id, data_type)
-                 DO UPDATE SET data = $3, updated_at = NOW()`,
-                [farmId, dataType, JSON.stringify(data)]
-              );
-            }
+    // ── Always populate in-memory store (primary storage when DB is down) ──
+    const store = getInMemoryStore();
+    const farmData = fetched['farm.json'] || {};
 
-            // 1. Telemetry — store the FULL env.json so authenticated users get
-            //    complete zone/room/target data, not just a zones-only extract.
-            const envJsonPath = path.join(FARM_DATA_DIR, 'env.json');
-            if (fs.existsSync(envJsonPath)) {
-              const envData = JSON.parse(fs.readFileSync(envJsonPath, 'utf8'));
-              await upsertFarmData('telemetry', envData);
-              logger.info(`[${syncLabel}] Stored telemetry (full env.json) for ${farmId}`);
-            }
+    if (fetched['groups.json']) {
+      const raw = fetched['groups.json'];
+      const groupsList = Array.isArray(raw) ? raw : (raw.groups || []);
+      store.groups.set(farmId, groupsList);
+      logger.info(`[${syncLabel}] In-memory: ${groupsList.length} groups for ${farmId}`);
+    }
 
-            // 2. Groups — flat array
-            const groupsPath = path.join(FARM_DATA_DIR, 'groups.json');
-            if (fs.existsSync(groupsPath)) {
-              const groupsRaw = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-              const groupsList = Array.isArray(groupsRaw) ? groupsRaw : (groupsRaw.groups || []);
-              await upsertFarmData('groups', groupsList);
-              logger.info(`[${syncLabel}] Stored groups (${groupsList.length}) for ${farmId}`);
-            }
+    if (fetched['rooms.json']) {
+      const raw = fetched['rooms.json'];
+      const roomsList = Array.isArray(raw) ? raw : (raw.rooms || [raw]);
+      store.rooms.set(farmId, roomsList);
+      logger.info(`[${syncLabel}] In-memory: ${roomsList.length} rooms for ${farmId}`);
+    }
 
-            // 3. Rooms — preserve canonical format
-            const roomsPath = path.join(FARM_DATA_DIR, 'rooms.json');
-            let roomsToStore;
-            if (fs.existsSync(roomsPath)) {
-              const roomsRaw = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
-              roomsToStore = Array.isArray(roomsRaw) ? roomsRaw : (roomsRaw.rooms || [roomsRaw]);
-            } else if (Array.isArray(farmData.rooms) && farmData.rooms.length > 0) {
-              roomsToStore = farmData.rooms;
-            }
-            if (roomsToStore) {
-              await upsertFarmData('rooms', roomsToStore);
-              logger.info(`[${syncLabel}] Stored rooms (${roomsToStore.length}) for ${farmId}`);
-            }
+    if (fetched['env.json']) {
+      if (!store.telemetry) store.telemetry = new Map();
+      store.telemetry.set(farmId, fetched['env.json']);
+      logger.info(`[${syncLabel}] In-memory: telemetry for ${farmId}`);
+    }
 
-            // 4. Schedules
-            const schedulesPath = path.join(FARM_DATA_DIR, 'schedules.json');
-            if (fs.existsSync(schedulesPath)) {
-              const schedulesRaw = JSON.parse(fs.readFileSync(schedulesPath, 'utf8'));
-              await upsertFarmData('schedules', schedulesRaw);
-              logger.info(`[${syncLabel}] Stored schedules for ${farmId}`);
-            }
+    if (fetched['schedules.json']) {
+      store.schedules.set(farmId, fetched['schedules.json']);
+      logger.info(`[${syncLabel}] In-memory: schedules for ${farmId}`);
+    }
 
-            // 5. IoT Devices
-            const devicesPath = path.join(FARM_DATA_DIR, 'iot-devices.json');
-            if (fs.existsSync(devicesPath)) {
-              const devicesRaw = JSON.parse(fs.readFileSync(devicesPath, 'utf8'));
-              const devicesList = Array.isArray(devicesRaw) ? devicesRaw : (devicesRaw.devices || []);
-              await upsertFarmData('devices', devicesList);
-              logger.info(`[${syncLabel}] Stored devices (${devicesList.length}) for ${farmId}`);
-            }
-
-            // 6. Farm profile
-            await upsertFarmData('farm_profile', farmData);
-            logger.info(`[${syncLabel}] Stored farm_profile for ${farmId}`);
-
-            // 7. Room map
-            const roomMapPath = path.join(FARM_DATA_DIR, 'room-map.json');
-            if (fs.existsSync(roomMapPath)) {
-              const roomMapRaw = JSON.parse(fs.readFileSync(roomMapPath, 'utf8'));
-              await upsertFarmData('room_map', roomMapRaw);
-              logger.info(`[${syncLabel}] Stored room_map for ${farmId}`);
-            }
-
-            // 8. Light setups (if available)
-            const lightSetupsPath = path.join(FARM_DATA_DIR, 'light-setups.json');
-            if (fs.existsSync(lightSetupsPath)) {
-              const lightSetupsRaw = JSON.parse(fs.readFileSync(lightSetupsPath, 'utf8'));
-              await upsertFarmData('light_setups', lightSetupsRaw);
-              logger.info(`[${syncLabel}] Stored light_setups for ${farmId}`);
-            }
-
-            // 9. Plans (if available)
-            const plansPath = path.join(FARM_DATA_DIR, 'plans.json');
-            if (fs.existsSync(plansPath)) {
-              const plansRaw = JSON.parse(fs.readFileSync(plansPath, 'utf8'));
-              await upsertFarmData('plans', plansRaw);
-              logger.info(`[${syncLabel}] Stored plans for ${farmId}`);
-            }
-
-            // Update farms table with name, email, contact, location from farm.json
-            const farmMeta = {
-              contact: farmData.contact || {},
-              location: farmData.location || '',
-              address: farmData.address || '',
-              city: farmData.city || '',
-              state: farmData.state || '',
-              postalCode: farmData.postalCode || '',
-              region: farmData.region || '',
-              coordinates: farmData.coordinates || {},
-              website: farmData.contact?.website || farmData.website || '',
-              phone: farmData.contact?.phone || farmData.phone || '',
-              contactName: farmData.contact?.name || farmData.contactName || '',
-              roomsList: farmData.rooms || []
-            };
-            await dbQuery(
-              `UPDATE farms SET
-                name = COALESCE(NULLIF($1, ''), name),
-                email = COALESCE(NULLIF($2, ''), email),
-                metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
-                updated_at = NOW()
-              WHERE farm_id = $4`,
-              [farmData.name || '', farmData.contact?.email || farmData.email || '', JSON.stringify(farmMeta), farmId]
-            );
-            logger.info(`[${syncLabel}] Updated farm metadata for ${farmId}: name="${farmData.name}"`);
-          }
+    // ── DB upsert (when available) ──
+    try {
+      const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+      if (farmId && await isDatabaseAvailable()) {
+        async function upsertFarmData(dataType, data) {
+          await dbQuery(
+            `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (farm_id, data_type)
+             DO UPDATE SET data = $3, updated_at = NOW()`,
+            [farmId, dataType, JSON.stringify(data)]
+          );
         }
+
+        // Use fetched data (from edge), falling back to local files
+        const resolve = (fetchedKey, localFile, extractor) => {
+          if (fetched[fetchedKey]) return extractor ? extractor(fetched[fetchedKey]) : fetched[fetchedKey];
+          const p = path.join(FARM_DATA_DIR, localFile || fetchedKey);
+          if (fs.existsSync(p)) {
+            const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+            return extractor ? extractor(raw) : raw;
+          }
+          return null;
+        };
+
+        const telemetry = resolve('env.json', 'env.json');
+        if (telemetry) { await upsertFarmData('telemetry', telemetry); logger.info(`[${syncLabel}] DB: telemetry for ${farmId}`); }
+
+        const groups = resolve('groups.json', 'groups.json', r => Array.isArray(r) ? r : (r.groups || []));
+        if (groups) { await upsertFarmData('groups', groups); logger.info(`[${syncLabel}] DB: ${groups.length} groups for ${farmId}`); }
+
+        const rooms = resolve('rooms.json', 'rooms.json', r => Array.isArray(r) ? r : (r.rooms || [r]));
+        if (rooms) { await upsertFarmData('rooms', rooms); logger.info(`[${syncLabel}] DB: ${rooms.length} rooms for ${farmId}`); }
+
+        const schedules = resolve('schedules.json', 'schedules.json');
+        if (schedules) { await upsertFarmData('schedules', schedules); logger.info(`[${syncLabel}] DB: schedules for ${farmId}`); }
+
+        const devices = resolve('iot-devices.json', 'iot-devices.json', r => Array.isArray(r) ? r : (r.devices || []));
+        if (devices) { await upsertFarmData('devices', devices); logger.info(`[${syncLabel}] DB: ${devices.length} devices for ${farmId}`); }
+
+        if (Object.keys(farmData).length > 0) {
+          await upsertFarmData('farm_profile', farmData);
+          logger.info(`[${syncLabel}] DB: farm_profile for ${farmId}`);
+        }
+
+        const roomMap = resolve('room-map.json', 'room-map.json');
+        if (roomMap) { await upsertFarmData('room_map', roomMap); logger.info(`[${syncLabel}] DB: room_map for ${farmId}`); }
+
+        const lightSetups = resolve('light-setups.json', 'light-setups.json');
+        if (lightSetups) { await upsertFarmData('light_setups', lightSetups); logger.info(`[${syncLabel}] DB: light_setups for ${farmId}`); }
+
+        const plans = resolve('plans.json', 'plans.json');
+        if (plans) { await upsertFarmData('plans', plans); logger.info(`[${syncLabel}] DB: plans for ${farmId}`); }
+
+        // Update farms table metadata
+        const farmMeta = {
+          contact: farmData.contact || {},
+          location: farmData.location || '',
+          address: farmData.address || '',
+          city: farmData.city || '',
+          state: farmData.state || '',
+          postalCode: farmData.postalCode || '',
+          region: farmData.region || '',
+          coordinates: farmData.coordinates || {},
+          website: farmData.contact?.website || farmData.website || '',
+          phone: farmData.contact?.phone || farmData.phone || '',
+          contactName: farmData.contact?.name || farmData.contactName || '',
+          roomsList: farmData.rooms || []
+        };
+        await dbQuery(
+          `UPDATE farms SET
+            name = COALESCE(NULLIF($1, ''), name),
+            email = COALESCE(NULLIF($2, ''), email),
+            metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+            updated_at = NOW()
+          WHERE farm_id = $4`,
+          [farmData.name || '', farmData.contact?.email || farmData.email || '', JSON.stringify(farmMeta), farmId]
+        );
+        logger.info(`[${syncLabel}] DB: Updated farm metadata for ${farmId}: name="${farmData.name}"`);
       }
     } catch (telErr) {
-      logger.warn(`[${syncLabel}] Failed to store synced data in DB:`, telErr.message);
+      logger.warn(`[${syncLabel}] DB upsert skipped or failed:`, telErr.message);
     }
 
     // Also register this edge farm in the wholesale network store
     // so the aggregator can fetch its inventory
-    if (updated > 0) {
+    if (updated > 0 && farmId && edgeUrl) {
       try {
-        const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
-        if (fs.existsSync(farmJsonPath)) {
-          const farmData = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
-          const farmId = farmData.farmId;
-          if (farmId && edgeUrl) {
-            await upsertNetworkFarm(farmId, {
-              name: farmData.name || farmId,
-              api_url: edgeUrl,
-              url: edgeUrl,
-              status: 'active',
-              contact: farmData.contact || {},
-              location: { region: farmData.region, city: farmData.location }
-            });
-            // Also persist api_url to DB so heartbeats can rediscover it after restart
-            try {
-              const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
-              if (await isDatabaseAvailable()) {
-                await dbQuery('UPDATE farms SET api_url = $1 WHERE farm_id = $2 AND (api_url IS NULL OR api_url != $1)', [edgeUrl, farmId]);
-              }
-            } catch (dbErr) {
-              logger.warn(`[${syncLabel}] Failed to persist api_url to DB:`, dbErr.message);
-            }
-            logger.info(`[${syncLabel}] Registered farm ${farmId} in wholesale network (${edgeUrl})`);
+        await upsertNetworkFarm(farmId, {
+          name: farmData.name || farmId,
+          api_url: edgeUrl,
+          url: edgeUrl,
+          status: 'active',
+          contact: farmData.contact || {},
+          location: { region: farmData.region, city: farmData.location }
+        });
+        // Also persist api_url to DB so heartbeats can rediscover it after restart
+        try {
+          const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+          if (await isDatabaseAvailable()) {
+            await dbQuery('UPDATE farms SET api_url = $1 WHERE farm_id = $2 AND (api_url IS NULL OR api_url != $1)', [edgeUrl, farmId]);
           }
+        } catch (dbErr) {
+          logger.warn(`[${syncLabel}] Failed to persist api_url to DB:`, dbErr.message);
         }
+        logger.info(`[${syncLabel}] Registered farm ${farmId} in wholesale network (${edgeUrl})`);
       } catch (regErr) {
         logger.warn(`[${syncLabel}] Failed to register farm in network store:`, regErr.message);
       }
