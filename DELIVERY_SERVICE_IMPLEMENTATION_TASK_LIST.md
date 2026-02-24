@@ -78,9 +78,9 @@ Execution Rule: Complete in order; do not expand scope without review.
 ## Slice 5 — Farm Admin Delivery Settings UI
 
 ### Tasks
-- [ ] Add minimal settings form and windows editor to farm admin surface.
-- [ ] Read/write settings via new endpoints.
-- [ ] Add basic validation and save feedback.
+- [x] Add minimal settings form and windows editor to farm admin surface.
+- [x] Read/write settings via new endpoints.
+- [x] Add basic validation and save feedback.
 
 ### Acceptance
 - Farm can configure delivery enabled state, base fee, min order, and windows.
