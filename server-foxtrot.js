@@ -18278,8 +18278,9 @@ app.post('/api/user/change-password', asyncHandler(async (req, res) => {
   }
   
   try {
-    // Decode token to get farmId and email
-    const decoded = jwt.decode(token);
+    // Verify token and decode
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || !decoded.farmId || !decoded.email) {
       return res.status(401).json({
         status: 'error',
@@ -18287,27 +18288,9 @@ app.post('/api/user/change-password', asyncHandler(async (req, res) => {
       });
     }
     
-    // Get farm's JWT secret from database
-    const farmResult = await req.app.locals.db.query(
-      'SELECT jwt_secret FROM farms WHERE farm_id = $1',
-      [decoded.farmId]
-    );
-    
-    if (farmResult.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Farm not found'
-      });
-    }
-    
-    const jwtSecret = farmResult.rows[0].jwt_secret;
-    
-    // Verify token with farm's secret
-    jwt.verify(token, jwtSecret);
-    
     // Get user's current password hash
     const userResult = await req.app.locals.db.query(
-      'SELECT password_hash FROM farm_users WHERE farm_id = $1 AND email = $2',
+      'SELECT password_hash FROM users WHERE farm_id = $1 AND email = $2',
       [decoded.farmId, decoded.email]
     );
     
@@ -18332,7 +18315,7 @@ app.post('/api/user/change-password', asyncHandler(async (req, res) => {
     
     // Update password
     await req.app.locals.db.query(
-      'UPDATE farm_users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE farm_id = $2 AND email = $3',
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE farm_id = $2 AND email = $3',
       [newPasswordHash, decoded.farmId, decoded.email]
     );
     
@@ -18375,8 +18358,9 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
   }
   
   try {
-    // Verify requester is an admin
-    const decoded = jwt.decode(token);
+    // Verify token and check admin role
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || decoded.role !== 'admin') {
       return res.status(403).json({
         status: 'error',
@@ -18386,7 +18370,7 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
     
     // Check if user already exists
     const existingUser = await req.app.locals.db.query(
-      'SELECT id FROM farm_users WHERE farm_id = $1 AND email = $2',
+      'SELECT user_id FROM users WHERE farm_id = $1 AND email = $2',
       [farmId, email]
     );
     
@@ -18402,8 +18386,8 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
     
     // Create user
     await req.app.locals.db.query(
-      `INSERT INTO farm_users (farm_id, email, name, role, password_hash, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      `INSERT INTO users (farm_id, email, name, role, password_hash, is_active, email_verified, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [farmId, email, name, role, passwordHash]
     );
     
@@ -18436,6 +18420,7 @@ app.get('/api/users/list', asyncHandler(async (req, res) => {
     });
   }
   
+  const token = authHeader.substring(7);
   const { farmId } = req.query;
   
   if (!farmId) {
@@ -18446,8 +18431,12 @@ app.get('/api/users/list', asyncHandler(async (req, res) => {
   }
   
   try {
+    // Verify token
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    jwt.verify(token, jwtSecret);
+    
     const result = await req.app.locals.db.query(
-      'SELECT email, name, role, created_at FROM farm_users WHERE farm_id = $1 ORDER BY created_at DESC',
+      'SELECT user_id, email, name, role, is_active, created_at, last_login FROM users WHERE farm_id = $1 ORDER BY created_at DESC',
       [farmId]
     );
     
@@ -18490,8 +18479,9 @@ app.delete('/api/users/delete', asyncHandler(async (req, res) => {
   }
   
   try {
-    // Verify requester is an admin
-    const decoded = jwt.decode(token);
+    // Verify token and check admin role
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || decoded.role !== 'admin') {
       return res.status(403).json({
         status: 'error',
@@ -18509,7 +18499,7 @@ app.delete('/api/users/delete', asyncHandler(async (req, res) => {
     
     // Delete user
     await req.app.locals.db.query(
-      'DELETE FROM farm_users WHERE farm_id = $1 AND email = $2',
+      'DELETE FROM users WHERE farm_id = $1 AND email = $2',
       [farmId, email]
     );
     

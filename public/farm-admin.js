@@ -5500,7 +5500,7 @@ async function loadUsers() {
         // Fetch real users from API
         let users = [];
         try {
-            const resp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/users`, {
+            const resp = await fetch(`${API_BASE}/api/users/list?farmId=${currentSession.farmId}`, {
                 headers: { 'Authorization': `Bearer ${currentSession.token}` }
             });
             if (resp.ok) {
@@ -5626,7 +5626,19 @@ function closeInviteUserModal() {
 }
 
 /**
- * Send user invitation
+ * Generate a random temporary password
+ */
+function generateTempPassword(length = 12) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+}
+
+/**
+ * Send user invitation (creates user with temp password)
  */
 async function sendUserInvitation(event) {
     event.preventDefault();
@@ -5636,33 +5648,46 @@ async function sendUserInvitation(event) {
     const lastName = document.getElementById('invite-last-name').value;
     const role = document.getElementById('invite-role').value;
     const message = document.getElementById('invite-message').value;
+    const tempPassword = generateTempPassword();
+    const fullName = `${firstName} ${lastName}`.trim();
     
     try {
-        // In production, would call API
-        // const response = await fetch('/api/users/invite', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //         'X-Farm-ID': localStorage.getItem('farm_id')
-        //     },
-        //     body: JSON.stringify({ email, firstName, lastName, role, message })
-        // });
+        const response = await fetch(`${API_BASE}/api/users/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                name: fullName,
+                role,
+                password: tempPassword,
+                farmId: currentSession.farmId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to create user');
+        }
         
-        showToast(`Invitation sent to ${email}`, 'success');
         closeInviteUserModal();
         
-        // Add to pending invitations table
-        addPendingInvitation({
-            email,
-            role,
-            invitedBy: currentSession?.email || 'admin@greereachfarms.com',
-            sent: new Date().toISOString(),
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        });
+        // Show temp password to admin so they can share it manually
+        // (email sending is not available - SES sandbox restriction)
+        const credentialsMsg = `User created successfully!\n\nLogin credentials for ${fullName}:\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nPlease share these credentials securely with the user and ask them to change their password after first login.`;
+        alert(credentialsMsg);
+        
+        showToast(`User ${email} created successfully`, 'success');
+        
+        // Reload users list
+        loadUsers();
         
     } catch (error) {
-        console.error('Error sending invitation:', error);
-        showToast('Error sending invitation', 'error');
+        console.error('Error creating user:', error);
+        showToast(error.message || 'Error creating user', 'error');
     }
 }
 
