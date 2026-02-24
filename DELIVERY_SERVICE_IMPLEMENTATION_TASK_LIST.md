@@ -1,7 +1,7 @@
 # Delivery Service MVP — Implementation Agent Task List
 
-Date: 2026-02-22  
-Source Plan: DELIVERY_SERVICE_ARCHITECTURE_PLAN.md  
+Date: 2026-02-22 (updated 2026-02-23 post-review, Phase 2 completed 2026-02-23)  
+Source Plan: DELIVERY_SERVICE_ARCHITECTURE_PLAN.md + DELIVERY_SERVICE_IMPLEMENTATION_PLAN.md v2.0.0  
 Execution Rule: Complete in order; do not expand scope without review.
 
 ---
@@ -25,13 +25,18 @@ Execution Rule: Complete in order; do not expand scope without review.
 
 ---
 
-## Slice 2 — Delivery Settings API (MVP backend)
+## Slice 2 — Delivery Settings API (MVP backend) — NEEDS REWORK
+
+> **⚠️ Post-Audit Note (v2.0.0)**: Slice 2 endpoints exist but use in-memory `Map()` storage. After Phase 0.3 migration applies, these endpoints must be **refactored to use PostgreSQL** (`farm_delivery_settings`, `farm_delivery_windows` tables). All reads become `SELECT ... WHERE farm_id = $1`, all writes become `INSERT ... ON CONFLICT DO UPDATE`. The checked boxes below reflect API shape completion only, not persistence.
 
 ### Tasks
 - [x] Add farm-scoped `GET/PUT /api/farm-sales/delivery/settings` in `routes/farm-sales/delivery.js`.
 - [x] Add farm-scoped `GET/PUT /api/farm-sales/delivery/windows` in `routes/farm-sales/delivery.js`.
 - [x] Keep compatibility with existing `/windows` response structure.
 - [x] Enforce auth + farm scope from middleware (ignore arbitrary client farm IDs).
+- [x] **Refactor settings storage from `deliverySettingsByFarm` Map to `farm_delivery_settings` table.**
+- [x] **Refactor windows storage from `deliveryWindowsByFarm` Map to `farm_delivery_windows` table.**
+- [x] **Use upsert pattern (`INSERT ... ON CONFLICT DO UPDATE`) for all writes.**
 
 ### Acceptance
 - Settings and windows roundtrip per farm without cross-farm leakage.
@@ -39,12 +44,16 @@ Execution Rule: Complete in order; do not expand scope without review.
 
 ---
 
-## Slice 3 — Delivery Quote Endpoint (MVP backend)
+## Slice 3 — Delivery Quote Endpoint (MVP backend) — NEEDS REWORK
+
+> **⚠️ Post-Audit Note (v2.0.0)**: Quote endpoint currently reads settings/windows from in-memory Maps. After Phase 0.3, it must read from database. Zone matching must use `postal_prefix` LIKE query against `farm_delivery_zones` table (no PostGIS). The `routes` Map must also be farm-scoped (Phase 0.4 tenant isolation fix).
 
 ### Tasks
 - [x] Add `POST /api/farm-sales/delivery/quote`.
 - [x] Implement simple rules engine (delivery enabled flag, min order, fee, window availability).
 - [x] Return additive payload: `{ ok, eligible, fee, minimum_order, windows, reason }`.
+- [x] **Switch from in-memory zone lookup to `farm_delivery_zones` PostgreSQL query.**
+- [x] **Replace `routes` Map reads with farm-scoped database queries.**
 
 ### Acceptance
 - Deterministic quote behavior from test fixtures.
