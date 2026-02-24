@@ -1,0 +1,98 @@
+[
+  {
+    "trayFormatId": "microgreens-10x20",
+    "name": "Microgreens 10x20 Flat",
+    "plantSiteCount": 1,
+    "systemType": "soil",
+    "trayMaterial": "plastic",
+    "description": "Standard 10x20 microgreens flat — sold by weight",
+    "isWeightBased": true,
+    "targetWeightPerSite": 8,
+    "weightUnit": "oz",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "lettuce-5x10",
+    "name": "Lettuce 5x10 Plug Tray",
+    "plantSiteCount": 50,
+    "systemType": "soil",
+    "trayMaterial": "plastic",
+    "description": "50-cell plug tray for lettuce transplants",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "seedling-72",
+    "name": "72-Cell Seedling Tray",
+    "plantSiteCount": 72,
+    "systemType": "soil",
+    "trayMaterial": "plastic",
+    "description": "Standard 72-cell seedling propagation tray",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "seedling-128",
+    "name": "128-Cell Seedling Tray",
+    "plantSiteCount": 128,
+    "systemType": "soil",
+    "trayMaterial": "plastic",
+    "description": "High-density 128-cell seedling tray",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "nft-channel-36",
+    "name": "NFT Channel (36 sites)",
+    "plantSiteCount": 36,
+    "systemType": "nft",
+    "trayMaterial": "plastic",
+    "description": "Nutrient Film Technique channel with 36 plant sites",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "tower-garden-28",
+    "name": "Tower Garden (28 sites)",
+    "plantSiteCount": 28,
+    "systemType": "aeroponics",
+    "trayMaterial": "tower",
+    "description": "Vertical aeroponic tower with 28 plant sites",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "dwc-raft-48",
+    "name": "DWC Raft (48 sites)",
+    "plantSiteCount": 48,
+    "systemType": "dwc",
+    "trayMaterial": "plastic",
+    "description": "Deep Water Culture floating raft with 48 net cups",
+    "isWeightBased": false,
+    "targetWeightPerSite": null,
+    "weightUnit": "heads",
+    "isCustom": false
+  },
+  {
+    "trayFormatId": "herb-12",
+    "name": "Herb Pot Tray (12 pots)",
+    "plantSiteCount": 12,
+    "systemType": "soil",
+    "trayMaterial": "plastic",
+    "description": "12-pot herb tray for retail herb production",
+    "isWeightBased": true,
+    "targetWeightPerSite": 2,
+    "weightUnit": "oz",
+    "isCustom": false
+  }
+]

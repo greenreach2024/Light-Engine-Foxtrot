@@ -287,6 +287,10 @@ function farmIdFromReq(req) {
   // Query parameter
   if (req.query?.farm_id) return req.query.farm_id;
 
+  // Fall back to FARM_ID env var (single-tenant mode — ensures data
+  // gets stored under the canonical farm ID even when no header is sent)
+  if (process.env.FARM_ID) return process.env.FARM_ID;
+
   return null;
 }
 

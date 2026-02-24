@@ -727,6 +727,27 @@ async function syncFarmData(options = {}) {
       logger.info(`[${syncLabel}] In-memory: farm_profile for ${[...aliasFarmIds].join(', ')}`);
     }
 
+    // Tray formats: hydrate in-memory from flat file if not already populated
+    // (tray formats are created via UI, not synced from edge, so they only
+    //  live in the flat file / DB — seed them into memory on startup)
+    if (!store.tray_formats) store.tray_formats = new Map();
+    for (const fid of aliasFarmIds) {
+      if (!store.tray_formats.has(fid)) {
+        try {
+          const tfPath = path.join(FARM_DATA_DIR, 'tray-formats.json');
+          if (fs.existsSync(tfPath)) {
+            const tfData = JSON.parse(fs.readFileSync(tfPath, 'utf8'));
+            if (Array.isArray(tfData) && tfData.length > 0) {
+              store.tray_formats.set(fid, tfData);
+              logger.info(`[${syncLabel}] In-memory: ${tfData.length} tray_formats from flat file for ${fid}`);
+            }
+          }
+        } catch (tfErr) {
+          logger.warn(`[${syncLabel}] Failed to load tray-formats.json:`, tfErr.message);
+        }
+      }
+    }
+
     // ── DB upsert (when available) ──
     try {
       const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
