@@ -143,6 +143,7 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
 // Configure CSP to allow inline scripts for public pages while maintaining security.
 const isProduction = process.env.NODE_ENV === 'production';
 app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'same-site' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -856,8 +857,18 @@ const corsOptions = {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3000',
       'http://localhost:8091',
-      'https://greenreachgreens.com'
+      'https://greenreachgreens.com',
+      'http://greenreachgreens.com',
+      'https://www.greenreachgreens.com',
+      'http://www.greenreachgreens.com',
+      'https://urbanyeild.ca',
+      'http://urbanyeild.ca'
     ];
+    // Allow *.greenreachgreens.com and *.urbanyeild.ca farm subdomains
+    const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    if (host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca')) {
+      return callback(null, true);
+    }
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

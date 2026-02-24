@@ -283,6 +283,7 @@ app.use(helmet({
       upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
   },
+  crossOriginResourcePolicy: { policy: 'same-site' },
   hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
   noSniff: true,
   referrerPolicy: { policy: 'same-origin' },
@@ -666,8 +667,12 @@ app.use((req, res, next) => {
   const ALLOWED_ORIGINS = [
     'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
     'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
     'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
     'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
     'http://greenreachgreens.com',
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
@@ -679,9 +684,17 @@ app.use((req, res, next) => {
     'http://localhost:8091',
     'http://127.0.0.1:8091',
   ];
+
+  // Allow any *.greenreachgreens.com or *.urbanyeild.ca subdomain (farm subdomains)
+  const isSubdomain = (() => {
+    try {
+      const host = new URL(origin || '').hostname;
+      return host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca');
+    } catch { return false; }
+  })();
   
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    // Whitelisted origin
+  if (origin && (ALLOWED_ORIGINS.includes(origin) || isSubdomain)) {
+    // Whitelisted origin or farm subdomain
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   } else if (!origin) {
@@ -5031,8 +5044,12 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
   const ALLOWED_ORIGINS = [
     'http://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
     'http://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'http://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
     'https://light-engine-demo-1765326376.s3-website-us-east-1.amazonaws.com',
     'https://light-engine-foxtrot-prod.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
+    'https://light-engine-foxtrot-prod-v3.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com',
     'http://greenreachgreens.com',
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
@@ -5044,10 +5061,18 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
     'http://localhost:8091',
     'http://127.0.0.1:8091',
   ];
+
+  // Allow any *.greenreachgreens.com or *.urbanyeild.ca subdomain (farm subdomains)
+  const isSubdomain = (() => {
+    try {
+      const host = new URL(origin || '').hostname;
+      return host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca');
+    } catch { return false; }
+  })();
   
-  // Check if origin is allowed
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    // Whitelisted origin
+  // Check if origin is allowed (includes farm subdomains)
+  if (origin && (ALLOWED_ORIGINS.includes(origin) || isSubdomain)) {
+    // Whitelisted origin or farm subdomain
     res.setHeader('Access-Control-Allow-Origin', origin);
     const existingVary = res.getHeader('Vary');
     if (existingVary) {
@@ -26411,6 +26436,9 @@ const wizardStatesDB = new Datastore({
   autoload: true,
   timestampData: true
 });
+// Expose wizardStatesDB on app.locals so route modules (routes/setup.js)
+// can access it via req.app.locals.wizardStatesDB in edge/NeDB mode.
+app.locals.wizardStatesDB = wizardStatesDB;
 const wizardStates = new Map(); // In-memory cache for fast access
 const wizardDiscoveryContext = new Map();
 
