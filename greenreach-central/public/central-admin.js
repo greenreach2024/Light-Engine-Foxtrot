@@ -2326,6 +2326,7 @@ async function viewRoomDetail(farmId, roomId) {
     };
     
     // Step 1: Fetch room metadata (name, counts)
+    let roomMetadataZones = []; // string array like ["Zone 1", "Zone 2"]
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
         if (response.ok) {
@@ -2337,6 +2338,7 @@ async function viewRoomDetail(farmId, roomId) {
                 console.log('[room-detail] Found room metadata:', room);
                 roomData.name = room.name || roomData.name;
                 roomData.roomId = room.roomId || room.id || room.room_id || roomId;
+                roomMetadataZones = Array.isArray(room.zones) ? room.zones : [];
                 // Don't use environmental data from room - it's not there
             }
         }
@@ -2397,6 +2399,27 @@ async function viewRoomDetail(farmId, roomId) {
         }
     } catch (err) {
         console.error('[room-detail] Failed to fetch farm telemetry:', err);
+    }
+    
+    // Step 2b: Merge room metadata zones with telemetry zones
+    // Room metadata has zone names (e.g. ["Zone 1", "Zone 2"])
+    // Telemetry may only have zones with sensors — add missing ones as stubs
+    if (roomMetadataZones.length > 0) {
+        const telemetryZoneNames = new Set(roomData.zones.map(z => 
+            (z.name || z.zone_name || '').toLowerCase()
+        ));
+        roomMetadataZones.forEach((zoneName, idx) => {
+            if (!telemetryZoneNames.has(String(zoneName).toLowerCase())) {
+                const zoneNum = idx + 1;
+                roomData.zones.push({
+                    id: `zone-${zoneNum}`,
+                    name: String(zoneName),
+                    location: String(zoneName),
+                    sensors: {}
+                });
+                console.log(`[room-detail] Added room metadata zone without sensor: ${zoneName}`);
+            }
+        });
     }
     
     // Step 3: Fetch devices for this farm/room

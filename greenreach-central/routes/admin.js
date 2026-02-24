@@ -11,7 +11,7 @@ import adminRecipesRoutes from './admin-recipes.js';
 import adminPricingRoutes from './admin-pricing.js';
 import adminDeliveryRoutes from './admin-delivery.js';
 import adminAiMonitoringRoutes from './admin-ai-monitoring.js';
-import { getInMemoryGroups } from './sync.js';
+import { getInMemoryGroups, getInMemoryStore } from './sync.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
@@ -1512,7 +1512,9 @@ router.get('/farms/:farmId/rooms', async (req, res) => {
     try {
         const { farmId } = req.params;
         if (!(await isDatabaseAvailable())) {
-            return res.json({ success: true, rooms: [], count: 0, farmId, source: 'memory' });
+            const store = getInMemoryStore();
+            const rooms = store.rooms?.get(farmId) || [];
+            return res.json({ success: true, rooms, count: rooms.length, farmId, source: 'memory' });
         }
 
         const result = await query(
@@ -1545,7 +1547,10 @@ router.get('/farms/:farmId/zones', async (req, res) => {
     try {
         const { farmId } = req.params;
         if (!(await isDatabaseAvailable())) {
-            return res.json({ success: true, zones: [], count: 0, farmId, source: 'memory' });
+            const store = getInMemoryStore();
+            const telemetry = store.telemetry?.get(farmId) || {};
+            const zones = Array.isArray(telemetry.zones) ? telemetry.zones : [];
+            return res.json({ success: true, zones, count: zones.length, farmId, source: 'memory' });
         }
 
         const telemetryResult = await query(
@@ -1577,7 +1582,9 @@ router.get('/farms/:farmId/groups', async (req, res) => {
     try {
         const { farmId } = req.params;
         if (!(await isDatabaseAvailable())) {
-            return res.json({ success: true, groups: [], count: 0, farmId, source: 'memory' });
+            const store = getInMemoryStore();
+            const groups = store.groups?.get(farmId) || [];
+            return res.json({ success: true, groups, count: groups.length, farmId, source: 'memory' });
         }
 
         const groupsResult = await query(
@@ -1609,7 +1616,12 @@ router.get('/farms/:farmId/groups', async (req, res) => {
 router.get('/rooms', async (req, res) => {
     try {
         if (!(await isDatabaseAvailable())) {
-            return res.json({ success: true, rooms: [], count: 0, source: 'memory' });
+            const store = getInMemoryStore();
+            const rooms = [];
+            for (const [farmId, farmRooms] of (store.rooms || new Map())) {
+                (Array.isArray(farmRooms) ? farmRooms : []).forEach(r => rooms.push({ ...r, farmId }));
+            }
+            return res.json({ success: true, rooms, count: rooms.length, source: 'memory' });
         }
 
         const result = await query(
@@ -1636,7 +1648,13 @@ router.get('/rooms', async (req, res) => {
 router.get('/zones', async (req, res) => {
     try {
         if (!(await isDatabaseAvailable())) {
-            return res.json({ success: true, zones: [], count: 0, source: 'memory' });
+            const store = getInMemoryStore();
+            const zones = [];
+            for (const [farmId, telemetry] of (store.telemetry || new Map())) {
+                const list = Array.isArray(telemetry?.zones) ? telemetry.zones : [];
+                list.forEach(z => zones.push({ ...z, farmId }));
+            }
+            return res.json({ success: true, zones, count: zones.length, source: 'memory' });
         }
 
         const result = await query(
