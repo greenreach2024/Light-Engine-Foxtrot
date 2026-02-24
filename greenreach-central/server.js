@@ -635,18 +635,28 @@ async function syncFarmData(options = {}) {
     syncStatus.filesUpdated += updated;
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
 
-    // Resolve farmId: fetched farm.json → local farm.json → FARM_ID env var
-    let farmId = fetched['farm.json']?.farmId;
+    // Resolve farmId: FARM_ID env var takes priority (canonical ID), then
+    // fetched farm.json, then local farm.json. The edge may have a stale
+    // wizard-generated ID while the env var has the real production ID.
+    let farmId = process.env.FARM_ID;
+    const fetchedFarmId = fetched['farm.json']?.farmId;
+    if (!farmId) farmId = fetchedFarmId;
     if (!farmId) {
       const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
       if (fs.existsSync(farmJsonPath)) {
         try { farmId = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')).farmId; } catch { /* ignore */ }
       }
     }
-    if (!farmId) farmId = process.env.FARM_ID;
     if (!farmId) {
       logger.warn(`[${syncLabel}] Cannot determine farm ID — skipping data storage`);
       return { ok: true, updated, errors, warning: 'no_farm_id' };
+    }
+
+    // If edge farmId differs from canonical, log it and store under both
+    const aliasFarmIds = new Set([farmId]);
+    if (fetchedFarmId && fetchedFarmId !== farmId) {
+      aliasFarmIds.add(fetchedFarmId);
+      logger.info(`[${syncLabel}] Edge farmId '${fetchedFarmId}' differs from canonical '${farmId}' — storing under both`);
     }
 
     // ── Always populate in-memory store (primary storage when DB is down) ──
@@ -656,26 +666,26 @@ async function syncFarmData(options = {}) {
     if (fetched['groups.json']) {
       const raw = fetched['groups.json'];
       const groupsList = Array.isArray(raw) ? raw : (raw.groups || []);
-      store.groups.set(farmId, groupsList);
-      logger.info(`[${syncLabel}] In-memory: ${groupsList.length} groups for ${farmId}`);
+      for (const fid of aliasFarmIds) store.groups.set(fid, groupsList);
+      logger.info(`[${syncLabel}] In-memory: ${groupsList.length} groups for ${[...aliasFarmIds].join(', ')}`);
     }
 
     if (fetched['rooms.json']) {
       const raw = fetched['rooms.json'];
       const roomsList = Array.isArray(raw) ? raw : (raw.rooms || [raw]);
-      store.rooms.set(farmId, roomsList);
-      logger.info(`[${syncLabel}] In-memory: ${roomsList.length} rooms for ${farmId}`);
+      for (const fid of aliasFarmIds) store.rooms.set(fid, roomsList);
+      logger.info(`[${syncLabel}] In-memory: ${roomsList.length} rooms for ${[...aliasFarmIds].join(', ')}`);
     }
 
     if (fetched['env.json']) {
       if (!store.telemetry) store.telemetry = new Map();
-      store.telemetry.set(farmId, fetched['env.json']);
-      logger.info(`[${syncLabel}] In-memory: telemetry for ${farmId}`);
+      for (const fid of aliasFarmIds) store.telemetry.set(fid, fetched['env.json']);
+      logger.info(`[${syncLabel}] In-memory: telemetry for ${[...aliasFarmIds].join(', ')}`);
     }
 
     if (fetched['schedules.json']) {
-      store.schedules.set(farmId, fetched['schedules.json']);
-      logger.info(`[${syncLabel}] In-memory: schedules for ${farmId}`);
+      for (const fid of aliasFarmIds) store.schedules.set(fid, fetched['schedules.json']);
+      logger.info(`[${syncLabel}] In-memory: schedules for ${[...aliasFarmIds].join(', ')}`);
     }
 
     // ── DB upsert (when available) ──
