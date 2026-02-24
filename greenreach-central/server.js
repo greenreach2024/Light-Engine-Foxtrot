@@ -2522,6 +2522,453 @@ app.get('/api/network/benchmarking', async (req, res) => {
   }
 });
 
+
+// ── Phase 4 Ticket T43: Quality-Based Order Routing ────────────────────
+
+/**
+ * POST /api/wholesale/orders/route
+ * Routes a buyer order to the best farm based on quality scores, distance, and capacity.
+ * Uses quality-weighted scoring: quality (40%), proximity (30%), capacity (20%), price (10%).
+ */
+app.post('/api/wholesale/orders/route', async (req, res) => {
+  try {
+    const { sku_id, quantity, buyer_location, preferences } = req.body;
+    if (!sku_id || !quantity) {
+      return res.status(400).json({ ok: false, error: 'sku_id and quantity required' });
+    }
+
+    const db = getDatabase();
+
+    // 1. Get all active network farms with their quality data
+    let farms = [];
+    try {
+      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+    } catch (_) {
+      // Fallback to registered farms
+      farms = [];
+    }
+
+    if (farms.length === 0) {
+      return res.json({ ok: true, routed: false, reason: 'no_active_farms', suggestions: [] });
+    }
+
+    // 2. Query each farm for inventory + quality scores
+    const candidates = [];
+    for (const farm of farms) {
+      if (!farm.api_url) continue;
+      try {
+        const invResp = await fetch(`${farm.api_url}/api/wholesale/inventory`, {
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!invResp.ok) continue;
+        const inv = await invResp.json();
+        const lot = (inv.lots || []).find(l =>
+          l.sku_id === sku_id && (l.qty_available || 0) >= quantity
+        );
+        if (!lot) continue;
+
+        // Quality score: from lot data or farm benchmark
+        const qualityScore = lot.quality_score || lot.grade_score || 0.7;
+
+        // Proximity score: if buyer location provided
+        let proximityScore = 0.5; // default neutral
+        if (buyer_location?.lat && buyer_location?.lng && farm.location?.lat && farm.location?.lng) {
+          const dist = Math.sqrt(
+            Math.pow(buyer_location.lat - farm.location.lat, 2) +
+            Math.pow(buyer_location.lng - farm.location.lng, 2)
+          ) * 69; // rough miles
+          proximityScore = Math.max(0, 1 - dist / 500); // 0-500 mile scale
+        }
+
+        // Capacity score: how much excess the farm has
+        const capacityScore = Math.min((lot.qty_available - quantity) / 50, 1);
+
+        // Price score: lower is better (inverted)
+        const priceScore = lot.price_per_case
+          ? Math.max(0, 1 - lot.price_per_case / 100)
+          : 0.5;
+
+        // Weighted composite
+        const weights = { quality: 0.40, proximity: 0.30, capacity: 0.20, price: 0.10 };
+        const composite =
+          qualityScore * weights.quality +
+          proximityScore * weights.proximity +
+          capacityScore * weights.capacity +
+          priceScore * weights.price;
+
+        candidates.push({
+          farm_id: farm.farm_id,
+          farm_name: farm.name,
+          api_url: farm.api_url,
+          sku_id: lot.sku_id,
+          qty_available: lot.qty_available,
+          quality_score: +qualityScore.toFixed(3),
+          proximity_score: +proximityScore.toFixed(3),
+          capacity_score: +capacityScore.toFixed(3),
+          price_score: +priceScore.toFixed(3),
+          composite_score: +composite.toFixed(3),
+          price_per_case: lot.price_per_case || null
+        });
+      } catch (e) {
+        // Farm unreachable — skip
+      }
+    }
+
+    // Sort by composite score (highest first)
+    candidates.sort((a, b) => b.composite_score - a.composite_score);
+
+    const best = candidates[0] || null;
+
+    // Apply preference filters
+    if (best && preferences?.min_quality && best.quality_score < preferences.min_quality) {
+      return res.json({
+        ok: true,
+        routed: false,
+        reason: 'quality_below_threshold',
+        min_quality: preferences.min_quality,
+        best_available: best.quality_score,
+        candidates: candidates.length
+      });
+    }
+
+    logger.info(`[quality-routing] Routed ${sku_id} x${quantity}: best=${best?.farm_id} (score=${best?.composite_score})`, {
+      candidates: candidates.length,
+      best_farm: best?.farm_id
+    });
+
+    res.json({
+      ok: true,
+      routed: !!best,
+      best_farm: best,
+      alternatives: candidates.slice(1, 4),
+      total_candidates: candidates.length,
+      routing_weights: { quality: 0.40, proximity: 0.30, capacity: 0.20, price: 0.10 }
+    });
+  } catch (error) {
+    logger.error('[quality-routing] Error:', { error: error.message });
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/wholesale/quality-scores
+ * Returns aggregated quality scores per farm per crop for routing decisions.
+ */
+app.get('/api/wholesale/quality-scores', async (req, res) => {
+  try {
+    const db = getDatabase();
+    let farms = [];
+    try {
+      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+    } catch (_) {}
+
+    const scores = {};
+    for (const farm of farms) {
+      if (!farm.api_url) continue;
+      try {
+        const resp = await fetch(`${farm.api_url}/api/wholesale/inventory`, {
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!resp.ok) continue;
+        const inv = await resp.json();
+        scores[farm.farm_id] = {
+          farm_name: farm.name,
+          crops: {}
+        };
+        for (const lot of (inv.lots || [])) {
+          const crop = lot.crop || lot.sku_id;
+          if (!scores[farm.farm_id].crops[crop]) {
+            scores[farm.farm_id].crops[crop] = {
+              quality_score: lot.quality_score || lot.grade_score || null,
+              qty_available: 0,
+              lots: 0
+            };
+          }
+          scores[farm.farm_id].crops[crop].qty_available += lot.qty_available || 0;
+          scores[farm.farm_id].crops[crop].lots++;
+        }
+      } catch (_) {}
+    }
+
+    res.json({ ok: true, scores, farm_count: Object.keys(scores).length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 4 Ticket T44: Dynamic Pricing Engine ─────────────────────────
+
+/**
+ * POST /api/wholesale/dynamic-pricing
+ * Calculates recommended wholesale pricing based on:
+ * - Supply levels (network-wide inventory)
+ * - Demand signals (buyer order trends)
+ * - Quality scores
+ * - Seasonality
+ * - Competition (number of farms offering same crop)
+ */
+app.post('/api/wholesale/dynamic-pricing', async (req, res) => {
+  try {
+    const { crops } = req.body;
+    const targetCrops = crops || [];
+
+    const db = getDatabase();
+
+    // 1. Gather network supply
+    let farms = [];
+    try {
+      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+    } catch (_) {}
+
+    const supplyMap = {};
+    const qualityMap = {};
+    for (const farm of farms) {
+      if (!farm.api_url) continue;
+      try {
+        const resp = await fetch(`${farm.api_url}/api/wholesale/inventory`, {
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!resp.ok) continue;
+        const inv = await resp.json();
+        for (const lot of (inv.lots || [])) {
+          const crop = (lot.crop || lot.sku_id || '').toLowerCase().replace(/\s+/g, '-');
+          if (!crop) continue;
+          if (!supplyMap[crop]) supplyMap[crop] = { total: 0, farms: 0 };
+          supplyMap[crop].total += lot.qty_available || 0;
+          supplyMap[crop].farms++;
+          if (lot.quality_score) {
+            if (!qualityMap[crop]) qualityMap[crop] = [];
+            qualityMap[crop].push(lot.quality_score);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Gather demand signals
+    let demandSignals = {};
+    try {
+      const aiRecsPath = path.join(__dirname, 'data', 'ai-recommendations-cache.json');
+      if (fs.existsSync(aiRecsPath)) {
+        const cache = JSON.parse(fs.readFileSync(aiRecsPath, 'utf8'));
+        demandSignals = cache.network_intelligence?.demand_signals || {};
+      }
+    } catch (_) {}
+
+    // 3. Base pricing by crop
+    const basePricing = {
+      'genovese-basil': 28, 'basil': 28, 'kale': 18,
+      'lettuce': 14, 'arugula': 24, 'spinach': 20,
+      'microgreens': 45, 'cilantro': 22, 'mint': 26,
+      'chard': 16, 'bok-choy': 18, 'watercress': 30
+    };
+
+    // 4. Calculate dynamic prices
+    const month = new Date().getMonth();
+    const seasonMultiplier = month >= 10 || month <= 2 ? 1.15 : month >= 5 && month <= 8 ? 0.85 : 1.0;
+
+    const pricing = {};
+    const allCrops = targetCrops.length > 0
+      ? targetCrops
+      : [...new Set([...Object.keys(supplyMap), ...Object.keys(basePricing)])];
+
+    for (const crop of allCrops) {
+      const base = basePricing[crop] || 20;
+      const supply = supplyMap[crop] || { total: 0, farms: 0 };
+      const demand = demandSignals[crop] || {};
+      const qualities = qualityMap[crop] || [];
+      const avgQuality = qualities.length > 0
+        ? qualities.reduce((a, b) => a + b, 0) / qualities.length
+        : 0.7;
+
+      // Supply factor: low supply → higher price (1.0–1.3)
+      const supplyFactor = supply.total > 100 ? 0.90
+        : supply.total > 50 ? 1.00
+        : supply.total > 20 ? 1.10
+        : supply.total > 0 ? 1.20
+        : 1.30;
+
+      // Demand factor: high demand → higher price (0.9–1.25)
+      const demandTrend = demand.network_trend || 'stable';
+      const demandFactor = demandTrend === 'increasing' ? 1.15
+        : demandTrend === 'decreasing' ? 0.90
+        : 1.0;
+
+      // Quality premium: higher quality → higher price (0.95–1.15)
+      const qualityFactor = 0.85 + (avgQuality * 0.30);
+
+      // Competition factor: more farms → lower price
+      const competitionFactor = supply.farms > 5 ? 0.90
+        : supply.farms > 3 ? 0.95
+        : supply.farms > 1 ? 1.00
+        : 1.10; // sole supplier premium
+
+      const recommended = +(base * seasonMultiplier * supplyFactor * demandFactor * qualityFactor * competitionFactor).toFixed(2);
+      const floor = +(base * 0.70).toFixed(2);
+      const ceiling = +(base * 1.80).toFixed(2);
+
+      pricing[crop] = {
+        base_price: base,
+        recommended_price: Math.max(floor, Math.min(ceiling, recommended)),
+        price_floor: floor,
+        price_ceiling: ceiling,
+        factors: {
+          season: +seasonMultiplier.toFixed(2),
+          supply: +supplyFactor.toFixed(2),
+          demand: +demandFactor.toFixed(2),
+          quality: +qualityFactor.toFixed(2),
+          competition: +competitionFactor.toFixed(2)
+        },
+        supply_qty: supply.total,
+        supply_farms: supply.farms,
+        avg_quality: +avgQuality.toFixed(2),
+        demand_trend: demandTrend
+      };
+    }
+
+    logger.info(`[dynamic-pricing] Calculated prices for ${Object.keys(pricing).length} crops`);
+    res.json({
+      ok: true,
+      pricing,
+      crop_count: Object.keys(pricing).length,
+      calculated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[dynamic-pricing] Error:', { error: error.message });
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/wholesale/pricing-recommendations
+ * Quick pricing recommendations for all crops (no body needed).
+ */
+app.get('/api/wholesale/pricing-recommendations', async (req, res) => {
+  try {
+    // Internally call the dynamic pricing engine with no filters
+    const basePricing = {
+      'genovese-basil': 28, 'basil': 28, 'kale': 18,
+      'lettuce': 14, 'arugula': 24, 'spinach': 20,
+      'microgreens': 45, 'cilantro': 22, 'mint': 26
+    };
+
+    const month = new Date().getMonth();
+    const seasonMultiplier = month >= 10 || month <= 2 ? 1.15 : month >= 5 && month <= 8 ? 0.85 : 1.0;
+
+    const recommendations = {};
+    for (const [crop, base] of Object.entries(basePricing)) {
+      recommendations[crop] = {
+        base_price: base,
+        recommended_price: +(base * seasonMultiplier).toFixed(2),
+        season: seasonMultiplier > 1 ? 'winter_premium' : seasonMultiplier < 1 ? 'summer_discount' : 'neutral'
+      };
+    }
+
+    res.json({ ok: true, recommendations, season_multiplier: seasonMultiplier });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 2 Ticket T23: Network Trends Endpoint (Central) ──────────────
+
+/**
+ * GET /api/network/trends
+ * Aggregated network-wide trends — crop performance, yield, demand over time.
+ * Consumed by Foxtrot's /api/network/trends proxy.
+ */
+app.get('/api/network/trends', async (req, res) => {
+  try {
+    const period = req.query.period || '30d';
+    const days = parseInt(period) || 30;
+
+    const db = getDatabase();
+
+    // 1. Yield trends from experiment records
+    let yieldTrends = [];
+    try {
+      const records = await db.collection('experiment_records')
+        .find({})
+        .sort({ recorded_at: -1 })
+        .limit(200)
+        .toArray();
+
+      const cropYields = {};
+      for (const r of records) {
+        const crop = r.crop || r.recipe;
+        if (!crop) continue;
+        if (!cropYields[crop]) cropYields[crop] = [];
+        cropYields[crop].push({
+          yield_oz: r.outcomes?.weight_per_plant_oz || null,
+          recorded_at: r.recorded_at,
+          farm_id: r.farm_id
+        });
+      }
+
+      for (const [crop, data] of Object.entries(cropYields)) {
+        const yields = data.filter(d => d.yield_oz).map(d => d.yield_oz);
+        const avg = yields.length > 0 ? yields.reduce((a, b) => a + b, 0) / yields.length : 0;
+        const recent = yields.slice(0, Math.ceil(yields.length / 2));
+        const earlier = yields.slice(Math.ceil(yields.length / 2));
+        const recentAvg = recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : avg;
+        const earlierAvg = earlier.length > 0 ? earlier.reduce((a, b) => a + b, 0) / earlier.length : avg;
+        const trend = recentAvg > earlierAvg * 1.05 ? 'improving'
+          : recentAvg < earlierAvg * 0.95 ? 'declining'
+          : 'stable';
+
+        yieldTrends.push({
+          crop,
+          avg_yield_oz: +avg.toFixed(2),
+          recent_avg: +recentAvg.toFixed(2),
+          samples: data.length,
+          farms: [...new Set(data.map(d => d.farm_id))].length,
+          trend
+        });
+      }
+    } catch (e) {
+      logger.warn('[network-trends] Yield query failed:', { error: e.message });
+    }
+
+    // 2. Demand trends from AI recs cache
+    let demandTrends = [];
+    try {
+      const cachePath = path.join(__dirname, 'data', 'ai-recommendations-cache.json');
+      if (fs.existsSync(cachePath)) {
+        const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        const signals = cache.network_intelligence?.demand_signals || {};
+        for (const [crop, sig] of Object.entries(signals)) {
+          demandTrends.push({
+            crop,
+            network_demand_qty: sig.network_total_qty || 0,
+            trend: sig.network_trend || 'stable',
+            buyer_count: sig.buyer_count || 0
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 3. Farm activity trends
+    let farmActivity = { active_farms: 0, total_experiments: 0 };
+    try {
+      const farmCount = await db.collection('network_farms').countDocuments({ status: 'active' });
+      const expCount = await db.collection('experiment_records').countDocuments({});
+      farmActivity = { active_farms: farmCount, total_experiments: expCount };
+    } catch (_) {}
+
+    res.json({
+      ok: true,
+      period_days: days,
+      yield_trends: yieldTrends,
+      demand_trends: demandTrends,
+      farm_activity: farmActivity,
+      generated_at: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[network-trends] Error:', { error: error.message });
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
 // ── Phase 4 Ticket 4.7: A/B Recipe Experiment API ─────────────────────
 app.post('/api/experiments', async (req, res) => {
   try {

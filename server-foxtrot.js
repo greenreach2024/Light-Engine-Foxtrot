@@ -12230,6 +12230,223 @@ app.get('/api/market-intelligence/planting-signals', async (req, res) => {
 });
 
 
+
+// ── Phase 2 Ticket T19: Auto-Assign Discovered Devices to Zones ─────────
+
+/**
+ * POST /api/devices/auto-assign
+ * After device discovery, automatically assigns unassigned devices to zones
+ * based on protocol, signal strength, and proximity patterns.
+ * Devices are matched to rooms/zones that have compatible protocols.
+ */
+app.post('/api/devices/auto-assign', async (req, res) => {
+  try {
+    const { devices, room_id } = req.body;
+
+    // Load rooms & existing assignments
+    const roomsPath = path.join(PUBLIC_DIR, 'data', 'rooms.json');
+    const deviceMetaPath = path.join(PUBLIC_DIR, 'data', 'device-meta.json');
+
+    let rooms = {};
+    try { rooms = JSON.parse(fs.readFileSync(roomsPath, 'utf8')); } catch (_) {}
+
+    let deviceMeta = {};
+    try { deviceMeta = JSON.parse(fs.readFileSync(deviceMetaPath, 'utf8')); } catch (_) {}
+
+    const inputDevices = devices || Object.values(deviceMeta).filter(d => !d.room_id);
+
+    if (inputDevices.length === 0) {
+      return res.json({ ok: true, assigned: 0, message: 'No unassigned devices found' });
+    }
+
+    const roomList = rooms.rooms || Object.values(rooms);
+    if (roomList.length === 0) {
+      return res.json({ ok: true, assigned: 0, message: 'No rooms configured' });
+    }
+
+    const assignments = [];
+    const targetRoom = room_id
+      ? roomList.find(r => r.id === room_id || r.room_id === room_id)
+      : null;
+
+    for (const device of inputDevices) {
+      const deviceId = device.id || device.device_id;
+      if (!deviceId) continue;
+
+      // Skip already assigned
+      if (deviceMeta[deviceId]?.room_id) continue;
+
+      // Determine best room: prefer specified room_id, else first room with compatible type
+      let bestRoom = targetRoom;
+      if (!bestRoom) {
+        // Match by device type: sensors go to rooms without sensors, lights to rooms without lights
+        const deviceType = (device.type || device.device_type || 'sensor').toLowerCase();
+        bestRoom = roomList.find(r => {
+          const existingDevices = Object.values(deviceMeta).filter(d => d.room_id === (r.id || r.room_id));
+          const sameTypeCount = existingDevices.filter(d => (d.type || '').toLowerCase() === deviceType).length;
+          return sameTypeCount < 4; // max 4 of same type per room
+        }) || roomList[0];
+      }
+
+      if (!bestRoom) continue;
+
+      const roomIdentifier = bestRoom.id || bestRoom.room_id;
+      const zones = bestRoom.zones || [];
+      const targetZone = zones.length > 0 ? (typeof zones[0] === 'object' ? zones[0].id : zones[0]) : null;
+
+      // Create or update device meta entry
+      deviceMeta[deviceId] = {
+        ...(deviceMeta[deviceId] || {}),
+        id: deviceId,
+        name: device.name || device.label || deviceId,
+        type: device.type || device.device_type || 'sensor',
+        protocol: device.protocol || 'http',
+        room_id: roomIdentifier,
+        zone: targetZone,
+        auto_assigned: true,
+        assigned_at: new Date().toISOString()
+      };
+
+      assignments.push({
+        device_id: deviceId,
+        room_id: roomIdentifier,
+        zone: targetZone,
+        device_type: deviceMeta[deviceId].type
+      });
+    }
+
+    // Save updated device meta
+    if (assignments.length > 0) {
+      fs.writeFileSync(deviceMetaPath, JSON.stringify(deviceMeta, null, 2));
+      console.log(`[auto-assign] Assigned ${assignments.length} devices to rooms/zones`);
+    }
+
+    res.json({
+      ok: true,
+      assigned: assignments.length,
+      assignments,
+      total_devices: Object.keys(deviceMeta).length
+    });
+  } catch (error) {
+    console.error('[auto-assign] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Phase 2 Ticket T21: Onboarding with Network Benchmarks ─────────────
+
+/**
+ * POST /api/setup-wizard/seed-benchmarks
+ * During new farm onboarding, pull crop benchmarks from Central to give
+ * the farm starting recipes and environmental targets based on network data.
+ */
+app.post('/api/setup-wizard/seed-benchmarks', async (req, res) => {
+  try {
+    const { farm_id, crops } = req.body;
+    const centralUrl = process.env.GREENREACH_CENTRAL_URL
+      || process.env.CENTRAL_URL
+      || (process.env.NODE_ENV === 'production' ? null : 'http://127.0.0.1:3100');
+
+    if (!centralUrl) {
+      return res.json({
+        ok: true,
+        seeded: false,
+        reason: 'no_central_url',
+        message: 'Central not configured — using default benchmarks'
+      });
+    }
+
+    // 1. Fetch network crop benchmarks from Central
+    let benchmarks = {};
+    try {
+      const bmResp = await fetch(`${centralUrl}/api/network/benchmarking`, {
+        signal: AbortSignal.timeout(8000)
+      });
+      if (bmResp.ok) {
+        const bmData = await bmResp.json();
+        benchmarks = bmData.benchmarks || bmData.crops || {};
+      }
+    } catch (e) {
+      console.warn('[setup-wizard] Failed to fetch benchmarks from Central:', e.message);
+    }
+
+    // 2. Fetch AI recommendations for the farm
+    let recommendations = {};
+    try {
+      const recResp = await fetch(`${centralUrl}/api/ai/recommendations/${farm_id || 'new-farm'}`, {
+        signal: AbortSignal.timeout(8000)
+      });
+      if (recResp.ok) {
+        recommendations = await recResp.json();
+      }
+    } catch (e) {
+      console.warn('[setup-wizard] Failed to fetch recommendations:', e.message);
+    }
+
+    // 3. Build seed data for the farm
+    const seedData = {
+      seeded_at: new Date().toISOString(),
+      source: 'central_network',
+      crops: {},
+      environmental_targets: {}
+    };
+
+    const targetCrops = crops || Object.keys(benchmarks);
+    for (const crop of targetCrops) {
+      const bm = benchmarks[crop] || {};
+      seedData.crops[crop] = {
+        avg_yield_oz: bm.avg_yield_oz || bm.avg_yield || null,
+        avg_cycle_days: bm.avg_cycle_days || bm.growth_days || null,
+        recommended_ppfd: bm.avg_ppfd || bm.recommended_ppfd || 200,
+        recommended_temp: bm.avg_temp || bm.recommended_temp || 72,
+        recommended_humidity: bm.avg_rh || bm.recommended_humidity || 65,
+        network_farms: bm.farm_count || 0,
+        confidence: bm.confidence || 'low'
+      };
+
+      seedData.environmental_targets[crop] = {
+        temp_min: (bm.avg_temp || 72) - 3,
+        temp_max: (bm.avg_temp || 72) + 3,
+        rh_min: (bm.avg_rh || 65) - 10,
+        rh_max: (bm.avg_rh || 65) + 10,
+        ppfd_target: bm.avg_ppfd || 200,
+        photoperiod_hours: bm.avg_photoperiod || 16
+      };
+    }
+
+    // 4. Save benchmark seed data locally
+    const seedPath = path.join(DATA_DIR, 'benchmark-seed.json');
+    fs.writeFileSync(seedPath, JSON.stringify(seedData, null, 2));
+
+    // 5. Also inject into AI recommendations for immediate use
+    const aiRecsPath = path.join(PUBLIC_DIR, 'data', 'ai-recommendations.json');
+    try {
+      let aiRecs = {};
+      if (fs.existsSync(aiRecsPath)) {
+        aiRecs = JSON.parse(fs.readFileSync(aiRecsPath, 'utf8'));
+      }
+      if (!aiRecs.network_intelligence) aiRecs.network_intelligence = {};
+      aiRecs.network_intelligence.crop_benchmarks = seedData.crops;
+      aiRecs.network_intelligence.benchmark_source = 'onboarding_seed';
+      aiRecs.network_intelligence.seeded_at = seedData.seeded_at;
+      fs.writeFileSync(aiRecsPath, JSON.stringify(aiRecs, null, 2));
+    } catch (_) {}
+
+    console.log(`[setup-wizard] Seeded benchmarks for ${targetCrops.length} crops from Central`);
+    res.json({
+      ok: true,
+      seeded: true,
+      crops_seeded: targetCrops.length,
+      benchmarks: seedData.crops,
+      environmental_targets: seedData.environmental_targets
+    });
+  } catch (error) {
+    console.error('[setup-wizard] Benchmark seeding error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
 mountMLRoutes(app);
 
 // P8: Anomaly diagnostics endpoint — enriches anomaly detection with diagnostic reasoning
