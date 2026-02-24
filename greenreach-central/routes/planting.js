@@ -827,10 +827,8 @@ router.post('/assignments', requireAuth, checkFarmOwnership, async (req, res) =>
 /** GET /api/planting/assignments — Retrieve planting assignments for a farm */
 router.get('/assignments', requireAuth, checkFarmOwnership, async (req, res) => {
   if (!isDatabaseAvailable()) {
-    return res.status(503).json({ 
-      error: 'Database unavailable', 
-      detail: 'Planting assignments require database connection' 
-    });
+    // Graceful degradation: return empty results so frontend falls back to localStorage
+    return res.json({ success: true, assignments: [], count: 0, source: 'fallback' });
   }
 
   try {
