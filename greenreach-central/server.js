@@ -720,6 +720,13 @@ async function syncFarmData(options = {}) {
       logger.info(`[${syncLabel}] In-memory: room_map for ${[...aliasFarmIds].join(', ')}`);
     }
 
+    // Farm profile: store farm.json as farm_profile for admin API
+    if (farmData && (farmData.name || farmData.farmName || farmData.farmId)) {
+      if (!store.farm_profile) store.farm_profile = new Map();
+      for (const fid of aliasFarmIds) store.farm_profile.set(fid, farmData);
+      logger.info(`[${syncLabel}] In-memory: farm_profile for ${[...aliasFarmIds].join(', ')}`);
+    }
+
     // ── DB upsert (when available) ──
     try {
       const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');

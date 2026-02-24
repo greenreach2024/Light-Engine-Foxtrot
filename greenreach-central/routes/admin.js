@@ -1263,15 +1263,37 @@ router.get('/farms', async (req, res) => {
         // Check DB availability first
         const dbReady = await isDatabaseAvailable();
         if (!dbReady) {
-            console.warn('[Admin API] Database unavailable for /farms, using farm.json fallback');
-            const fj = await loadFarmJsonFallback();
-            if (!fj) return res.status(503).json({ success: false, error: 'Database not available and no fallback data' });
-            const farm = farmJsonToFarmObject(fj);
+            console.warn('[Admin API] Database unavailable for /farms, using in-memory sync store');
+            const store = getInMemoryStore();
+            const farms = [];
+            // Build farm list from in-memory sync store (populated by syncFarmData)
+            for (const [fid, roomsData] of (store.rooms || new Map())) {
+                const farmProfile = store.farm_profile?.get(fid) || store.config?.get(fid) || {};
+                farms.push({
+                    id: 1,
+                    farmId: fid,
+                    name: farmProfile.name || farmProfile.farmName || fid,
+                    status: 'online',
+                    lastUpdate: new Date().toISOString(),
+                    metadata: farmProfile,
+                    createdAt: farmProfile.created || farmProfile.registered || null,
+                    updatedAt: new Date().toISOString()
+                });
+            }
+            // If sync store is empty, fall back to farm.json file
+            if (farms.length === 0) {
+                const fj = await loadFarmJsonFallback();
+                if (fj) {
+                    const farm = farmJsonToFarmObject(fj);
+                    farms.push({ id: 1, farmId: farm.farmId, name: farm.name, status: farm.status, lastUpdate: farm.lastHeartbeat, metadata: farm.metadata, createdAt: farm.createdAt, updatedAt: farm.updatedAt });
+                }
+            }
+            if (farms.length === 0) return res.status(503).json({ success: false, error: 'Database not available and no fallback data' });
             return res.json({
                 success: true,
-                farms: [{ id: 1, farmId: farm.farmId, name: farm.name, status: farm.status, lastUpdate: farm.lastHeartbeat, metadata: farm.metadata, createdAt: farm.createdAt, updatedAt: farm.updatedAt }],
-                pagination: { page: 1, limit: 50, total: 1, pages: 1 },
-                source: 'fallback'
+                farms,
+                pagination: { page: 1, limit: 50, total: farms.length, pages: 1 },
+                source: 'memory'
             });
         }
 
@@ -1365,22 +1387,56 @@ router.get('/farms/:farmId', async (req, res) => {
         // Check DB availability — fall back to farm.json
         const dbReady = await isDatabaseAvailable();
         if (!dbReady) {
-            console.warn('[Admin API] Database unavailable for /farms/:farmId, using farm.json fallback');
-            const fj = await loadFarmJsonFallback();
-            if (!fj || (fj.farmId !== farmId && farmId !== 'current')) {
-                return res.status(404).json({ success: false, error: 'Farm not found', message: `No farm found with ID: ${farmId}` });
+            console.warn('[Admin API] Database unavailable for /farms/:farmId, using in-memory sync store');
+            const store = getInMemoryStore();
+            const roomsList = store.rooms?.get(farmId) || [];
+            const groupsList = store.groups?.get(farmId) || [];
+            const telemetryData = store.telemetry?.get(farmId) || {};
+            const farmProfile = store.farm_profile?.get(farmId) || store.config?.get(farmId) || {};
+            const zonesFromTelemetry = Array.isArray(telemetryData.zones) ? telemetryData.zones : [];
+            
+            // If nothing in sync store for this farmId, try farm.json fallback
+            if (roomsList.length === 0 && groupsList.length === 0 && !farmProfile.farmId) {
+                const fj = await loadFarmJsonFallback();
+                if (!fj || (fj.farmId !== farmId && farmId !== 'current')) {
+                    return res.status(404).json({ success: false, error: 'Farm not found', message: `No farm found with ID: ${farmId}` });
+                }
+                const farm = farmJsonToFarmObject(fj);
+                return res.json({ success: true, farm, source: 'fallback' });
             }
-            // Load groups from flat file for counts
-            let groupsList = [];
-            try {
-                const groupsRaw = await fs.readFile(path.join(__dirname, '../public/data/groups.json'), 'utf8');
-                const groupsData = JSON.parse(groupsRaw);
-                groupsList = Array.isArray(groupsData) ? groupsData : (groupsData?.groups || []);
-            } catch (e) { /* no groups file */ }
-            const farm = farmJsonToFarmObject(fj);
-            farm.groups = groupsList.length;
-            farm.groupsData = groupsList;
-            return res.json({ success: true, farm, source: 'fallback' });
+            
+            const envSummary = zonesFromTelemetry.length ? {
+                avgTemp: averageNumber(zonesFromTelemetry.map(z => z.sensors?.tempC?.current ?? z.temperature ?? z.tempC ?? null)),
+                avgHumidity: averageNumber(zonesFromTelemetry.map(z => z.sensors?.rh?.current ?? z.humidity ?? z.rh ?? null)),
+                avgVpd: averageNumber(zonesFromTelemetry.map(z => z.sensors?.vpd?.current ?? z.vpd ?? null))
+            } : null;
+            
+            const farm = {
+                farmId,
+                name: farmProfile.name || farmProfile.farmName || farmId,
+                status: 'online',
+                lastHeartbeat: new Date().toISOString(),
+                createdAt: farmProfile.created || farmProfile.registered || null,
+                updatedAt: new Date().toISOString(),
+                email: farmProfile.email || farmProfile.contact?.email || null,
+                contactName: farmProfile.contactName || farmProfile.contact?.name || null,
+                phone: farmProfile.phone || farmProfile.contact?.phone || null,
+                website: farmProfile.website || farmProfile.contact?.website || null,
+                address: farmProfile.address || null,
+                city: farmProfile.city || null,
+                state: farmProfile.state || null,
+                postalCode: farmProfile.postalCode || null,
+                location: farmProfile.location || null,
+                coordinates: farmProfile.coordinates || null,
+                apiUrl: farmProfile.url || null,
+                rooms: roomsList.length,
+                zones: zonesFromTelemetry.length || groupsList.length,
+                groups: groupsList.length,
+                roomsData: roomsList,
+                groupsData: groupsList,
+                environmental: { zones: zonesFromTelemetry, summary: envSummary }
+            };
+            return res.json({ success: true, farm, source: 'memory' });
         }
 
         // Query farm from database by farm_id
@@ -3038,27 +3094,22 @@ router.get('/farms/:farmId/inventory', async (req, res) => {
 
             // 2a. Try groups from farm_data table
             try {
-                const gResult = await query(
-                    `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
-                    [farmId]
-                );
-                if (gResult.rows.length > 0) {
-                    const raw = gResult.rows[0].data;
-                    groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+                if (await isDatabaseAvailable()) {
+                    const gResult = await query(
+                        `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = 'groups'`,
+                        [farmId]
+                    );
+                    if (gResult.rows.length > 0) {
+                        const raw = gResult.rows[0].data;
+                        groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+                    }
                 }
             } catch (_) { /* ignore */ }
 
-            // 2b. Fall back to static groups.json file
+            // 2b. Fall back to in-memory sync store
             if (groups.length === 0) {
-                try {
-                    const fs = await import('fs');
-                    const path = await import('path');
-                    const groupsPath = path.default.join(process.cwd(), 'public', 'data', 'groups.json');
-                    if (fs.default.existsSync(groupsPath)) {
-                        const raw = JSON.parse(fs.default.readFileSync(groupsPath, 'utf8'));
-                        groups = Array.isArray(raw) ? raw : (raw?.groups || []);
-                    }
-                } catch (_) { /* ignore */ }
+                const store = getInMemoryStore();
+                groups = store.groups?.get(farmId) || [];
             }
 
             if (groups.length > 0) {
