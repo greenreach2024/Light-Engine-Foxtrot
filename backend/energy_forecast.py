@@ -75,7 +75,7 @@ def load_environmental_data(data_dir):
         df = pd.DataFrame(records)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         
-        # Find outdoor sensor
+        # Find outdoor weather zone
         outdoor_zones = df[df['zone'].str.contains('outdoor', case=False, na=False)]
         if not outdoor_zones.empty:
             # Merge outdoor data as separate columns

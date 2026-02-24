@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Outdoor-Aware ML Anomaly Detector for Light Engine Charlie
-Uses sklearn (free) to detect unusual sensor readings while considering outdoor conditions
-Run this every 15 minutes to get free predictive alerts
+Weather-Aware ML Anomaly Detector for Light Engine Foxtrot
+Uses sklearn (free) to detect unusual sensor readings while considering
+outdoor weather conditions from the Open-Meteo weather API.
+Run this every 15 minutes to get free predictive alerts.
 
 SCOPE: Only analyzes sensors physically placed in Room Mapper (room-map.json)
 """
@@ -11,6 +12,7 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
+import requests
 from sklearn.ensemble import IsolationForest
 import numpy as np
 
@@ -30,7 +32,7 @@ DATA_PATH = Path(__file__).parent.parent / 'public/data/env.json'
 ROOM_MAP_PATH = Path(__file__).parent.parent / 'public/data/room-map.json'
 FARM_JSON_PATH = Path(__file__).parent.parent / 'public/data/farm.json'
 
-# Initialize outdoor sensor validator (used for weather API fallback/validation)
+# Initialize weather data validator (validates Open-Meteo weather API responses)
 outdoor_validator = OutdoorSensorValidator()
 
 def get_placed_sensor_ids():

@@ -59,7 +59,7 @@ function robustSensor(z, key, allZones, anomalies) {
  * @param {Array} options.groups - Growing groups
  * @param {Object} options.targets - Target ranges per zone
  * @param {Object} options.lastActions - Last action timestamps
- * @param {Object} options.outdoorContext - Outdoor sensor readings for monitoring
+ * @param {Object} options.outdoorContext - Outdoor weather data for monitoring
  */
 export async function checkAndControlEnvironment(allZones, iotDevices, options = {}) {
   const { coreAllocator, plugManager, groups, targets, lastActions, outdoorContext } = options;

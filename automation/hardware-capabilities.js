@@ -317,13 +317,13 @@ export default class HardwareCapabilities {
     // Ventilation control warnings
     if (devices.sensorsIndoor.length > 0 && devices.sensorsOutdoor.length === 0) {
       zoneCaps.recommendations.push(
-        'Add outdoor sensors to enable smart ventilation (free dehumidification when outdoor air is dry)'
+        'Configure outdoor weather source to enable smart ventilation (free dehumidification when outdoor air is dry)'
       );
     }
     
     if (devices.sensorsOutdoor.length > 0 && devices.ventilation.length === 0) {
       zoneCaps.warnings.push(
-        'Outdoor sensors detected but no ventilation actuators - cannot utilize outdoor air'
+        'Outdoor weather data available but no ventilation actuators - cannot utilize outdoor air'
       );
       zoneCaps.recommendations.push(
         'Add dampers or ventilation fans to enable free cooling/dehumidification'

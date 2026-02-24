@@ -41,7 +41,7 @@ export default class VentilationController {
    * 
    * @param {string} zoneId - Zone identifier
    * @param {object} indoorReading - Indoor sensor reading { tempC, rhPct, vpd }
-   * @param {object} outdoorReading - Outdoor sensor reading { tempC, rhPct }
+   * @param {object} outdoorReading - Outdoor weather data { tempC, rhPct }
    * @param {object} vpdBand - Target VPD band { min, max, target }
    * @param {object} devices - Available devices { dampers: [], fans: [], dehumidifiers: [] }
    * @param {object} deviceStates - Current device states { deviceId: { on, level } }

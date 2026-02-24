@@ -13,7 +13,7 @@
  * Example:
  * - Farm with only fans → VPD control (mixing only, no dehumidification)
  * - Farm with fans + dehus → Full VPD control
- * - Farm with fans + dehus + outdoor sensors → VPD control + smart ventilation
+ * - Farm with fans + dehus + outdoor weather data → VPD control + smart ventilation
  */
 
 import VpdController from './controllers/vpd-controller.js';
@@ -130,13 +130,13 @@ export default class ControllerOrchestrator {
       this.logger.warn('[orchestrator] VPD controller disabled - no zones with indoor sensors');
     }
     
-    // Ventilation Controller (if any zone has outdoor sensors + ventilation)
+    // Ventilation Controller (if any zone has outdoor weather data + ventilation)
     if (activeCaps.ventilationControl.length > 0) {
       this.ventilationController = new VentilationController({ logger: this.logger });
       this.activeControllers.add('ventilation');
       this.logger.info(`[orchestrator] Ventilation controller enabled for ${activeCaps.ventilationControl.length} zones`);
     } else {
-      this.logger.info('[orchestrator] Ventilation controller disabled - add outdoor sensors and dampers to enable');
+      this.logger.info('[orchestrator] Ventilation controller disabled - configure outdoor weather source and dampers to enable');
     }
     
     // Mixing Controller (if any zone has fans)
@@ -369,7 +369,7 @@ export default class ControllerOrchestrator {
      * Execute ventilation control for a zone
      */
     async _executeVentilationControl(zoneId, zoneCaps, sensorReading, envSnapshot, deviceStates) {
-      // Derive outdoor sensor reading from EnvStore snapshot when available
+      // Derive outdoor weather reading from EnvStore snapshot when available
       let outdoorReading = null;
       try {
         const scopes = envSnapshot?.scopes || {};
@@ -382,7 +382,7 @@ export default class ControllerOrchestrator {
             outdoorReading = { tempC: oTemp, rhPct: oRh, timestamp: outdoorScope.updatedAt };
           }
         }
-        // If zone has mapped outdoor sensors, try a per-zone alias like `${zoneId}-outdoor`
+        // If zone has mapped outdoor weather sources, try a per-zone alias like `${zoneId}-outdoor`
         if (!outdoorReading && zoneCaps?.devices?.sensorsOutdoor?.length) {
           const candidateScopeId = `${zoneId}-outdoor`;
           const zOut = scopes[candidateScopeId];

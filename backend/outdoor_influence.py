@@ -161,12 +161,12 @@ def get_time_lagged_outdoor_data(
     
     Args:
         env_history: List of environmental data snapshots with timestamps
-        outdoor_zone_id: Zone ID for outdoor sensor
+        outdoor_zone_id: Zone ID for outdoor weather data source
         lag_minutes: How many minutes back to look (15-60 typical)
         current_time: Reference time (defaults to now)
     
     Returns:
-        Dict with outdoor sensor data from lag_minutes ago, or None if not found
+        Dict with outdoor weather data from lag_minutes ago, or None if not found
     """
     if not env_history or not outdoor_zone_id:
         return None

@@ -131,7 +131,7 @@ def load_historical_data(hours_back: int = 72) -> pd.DataFrame:
         aggfunc='first'
     ).reset_index()
     
-    # Identify outdoor sensor by zone name containing "outdoor" or "outside"
+    # Identify outdoor weather zone by name containing "outdoor" or "outside"
     outdoor_mask = df_wide['zone'].str.lower().str.contains('outdoor|outside', case=False, na=False)
     outdoor_data = df_wide[outdoor_mask].copy()
     

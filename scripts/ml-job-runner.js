@@ -122,7 +122,7 @@ async function checkOutdoorSensorValidity() {
         valid: validation.isValid,
         validation,
         gate,
-        outdoor_sensor: {
+        outdoor_conditions: {
           zone: weatherData.zone,
           temp: weatherData.temp,
           rh: weatherData.rh,
@@ -251,20 +251,20 @@ async function cleanOldInsights() {
 async function runAnomalyDetection() {
   log.info('Running anomaly detection...');
   
-  // Check outdoor sensor validity first
+  // Check outdoor weather data validity first
   const sensorCheck = await checkOutdoorSensorValidity();
   const isDegraded = sensorCheck.gate.degraded === true;
   
   if (!sensorCheck.gate.allowed) {
-    const message = sensorCheck.gate.message || sensorCheck.reason || 'Outdoor sensor validation failed';
+    const message = sensorCheck.gate.message || sensorCheck.reason || 'Outdoor weather data validation failed';
     log.warn(`Skipping anomaly detection: ${message}`);
     
-    // Save error state with outdoor sensor status
+    // Save error state with outdoor weather status
     const errorData = {
-      error: 'Outdoor sensor validation failed',
+      error: 'Outdoor weather data validation failed',
       reason: sensorCheck.gate.reason || sensorCheck.reason,
       message,
-      outdoor_sensor: sensorCheck.outdoor_sensor || null,
+      outdoor_conditions: sensorCheck.outdoor_conditions || null,
       validation: sensorCheck.validation || null,
       timestamp: new Date().toISOString(),
       ml_gated: true
@@ -277,7 +277,7 @@ async function runAnomalyDetection() {
   if (isDegraded) {
     log.warn(`Anomaly detection running in DEGRADED mode (indoor-only features): ${sensorCheck.gate.message}`);
   } else {
-    log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+    log.info(`Outdoor weather data valid: ${sensorCheck.outdoor_conditions.zone} (${sensorCheck.outdoor_conditions.age_minutes} min old)`);
   }
   
   try {
@@ -354,19 +354,19 @@ async function runAnomalyDetection() {
 async function runForecast(zone, hours = CONFIG.forecastHours) {
   log.info(`Running forecast for zone: ${zone}, hours: ${hours}`);
   
-  // Check outdoor sensor validity first
+  // Check outdoor weather data validity first
   const sensorCheck = await checkOutdoorSensorValidity();
   const isDegraded = sensorCheck.gate.degraded === true;
   
   if (!sensorCheck.gate.allowed) {
     log.warn(`Skipping forecast for ${zone}: ${sensorCheck.gate.message}`);
     
-    // Save error state with outdoor sensor status
+    // Save error state with outdoor weather status
     const errorData = {
-      error: 'Outdoor sensor validation failed',
+      error: 'Outdoor weather data validation failed',
       reason: sensorCheck.gate.reason,
       message: sensorCheck.gate.message,
-      outdoor_sensor: sensorCheck.outdoor_sensor || null,
+      outdoor_conditions: sensorCheck.outdoor_conditions || null,
       zone,
       timestamp: new Date().toISOString(),
       ml_gated: true
@@ -379,7 +379,7 @@ async function runForecast(zone, hours = CONFIG.forecastHours) {
   if (isDegraded) {
     log.warn(`Forecast for ${zone} running in DEGRADED mode (indoor-only features): ${sensorCheck.gate.message}`);
   } else {
-    log.info(`Outdoor sensor valid: ${sensorCheck.outdoor_sensor.zone} (${sensorCheck.outdoor_sensor.age_minutes} min old)`);
+    log.info(`Outdoor weather data valid: ${sensorCheck.outdoor_conditions.zone} (${sensorCheck.outdoor_conditions.age_minutes} min old)`);
   }
   
   try {

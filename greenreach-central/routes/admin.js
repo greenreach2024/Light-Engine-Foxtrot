@@ -1996,7 +1996,7 @@ router.get('/anomalies', async (req, res) => {
         const anomalies = anomaliesResult.rows.flatMap(row => {
             const payload = row.data || {};
             
-            // Skip error states (ML gated, outdoor sensor validation failed, etc.)
+            // Skip error states (ML gated, outdoor weather data validation failed, etc.)
             if (payload.error || payload.ml_gated) {
                 console.log(`[Admin API] Skipping error state for farm ${row.farm_id}: ${payload.error || 'ML gated'}`);
                 return [];

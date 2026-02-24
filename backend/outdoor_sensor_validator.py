@@ -18,7 +18,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Valid ranges for outdoor sensor readings
+# Valid ranges for outdoor weather readings
 TEMP_MIN_C = -40.0
 TEMP_MAX_C = 50.0
 RH_MIN = 0.0
@@ -46,7 +46,7 @@ def load_farm_coordinates() -> Dict:
     return {'lat': 44.258679, 'lng': -76.372517}
 
 class OutdoorSensorValidator:
-    """Validates outdoor sensor data quality and manages fallback to weather API"""
+    """Validates outdoor weather data quality and manages fallback to weather API"""
     
     def __init__(self, weather_api_url: str = None, farm_coords: Dict = None):
         """
@@ -151,7 +151,7 @@ class OutdoorSensorValidator:
     
     def validate_outdoor_sensor(self, sensor_data: Dict) -> Dict[str, any]:
         """
-        Comprehensive validation of outdoor sensor data.
+        Comprehensive validation of outdoor weather data.
         
         Args:
             sensor_data: Dict with keys:
@@ -243,15 +243,15 @@ class OutdoorSensorValidator:
     
     def compare_with_weather_api(self, sensor_temp: float, sensor_rh: float) -> Dict[str, any]:
         """
-        Compare outdoor sensor reading with weather API as sanity check.
+        Compare outdoor weather reading with weather API as sanity check.
         
         Typical acceptable difference:
         - Temperature: ±5°C (local microclimates, sensor placement)
         - Humidity: ±15% (sensor accuracy, local conditions)
         
         Args:
-            sensor_temp: Temperature from outdoor sensor (°C)
-            sensor_rh: Humidity from outdoor sensor (%)
+            sensor_temp: Temperature from outdoor data source (°C)
+            sensor_rh: Humidity from outdoor data source (%)
         
         Returns:
             Dict with comparison results
@@ -308,7 +308,7 @@ class OutdoorSensorValidator:
         Main entry point for getting reliable outdoor conditions.
         
         Args:
-            sensor_data: Dict with outdoor sensor readings
+            sensor_data: Dict with outdoor weather readings
             use_fallback: Whether to fall back to weather API on sensor failure
         
         Returns:
@@ -320,14 +320,14 @@ class OutdoorSensorValidator:
             'valid': validation['is_valid'],
             'temp': sensor_data.get('temp'),
             'rh': sensor_data.get('rh'),
-            'source': 'outdoor_sensor',
+            'source': 'weather_data',
             'validation': validation,
             'used_fallback': False
         }
         
         # If sensor invalid and fallback enabled, use weather API
         if not validation['is_valid'] and use_fallback:
-            logger.warning(f"Outdoor sensor invalid: {validation['errors']}. Using weather API fallback.")
+            logger.warning(f"Outdoor weather data invalid: {validation['errors']}. Using weather API fallback.")
             
             weather_data = self.get_weather_api_fallback()
             if weather_data:
