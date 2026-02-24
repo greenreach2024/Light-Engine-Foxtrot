@@ -70,6 +70,11 @@ const EMPTY_DEFAULTS = {
  * Returns null if no valid token found (allows fallback to file serving).
  */
 function extractFarmId(req) {
+  // 0. req.farmId already resolved by upstream middleware (subdomain, JWT, API key)
+  if (req.farmId) {
+    return req.farmId;
+  }
+
   // 1. Authorization: Bearer <token>
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {

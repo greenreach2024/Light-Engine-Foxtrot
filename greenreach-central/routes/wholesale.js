@@ -1640,7 +1640,7 @@ router.patch('/admin/orders/:orderId/farms/:farmId/tracking', adminAuthMiddlewar
  */
 router.get('/inventory/check-overselling', async (req, res) => {
   try {
-    const farms = listNetworkFarms();
+    const farms = await listNetworkFarms();
     const oversellingItems = [];
     
     for (const farm of farms) {

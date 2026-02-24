@@ -1157,9 +1157,12 @@ router.get('/:farmId/telemetry', async (req, res) => {
     }
     
     if (!telemetryData) {
-      return res.status(404).json({ 
-        success: false,
-        error: 'No telemetry data found for this farm' 
+      return res.json({ 
+        success: true,
+        farmId,
+        telemetry: { zones: [] },
+        source: 'fallback',
+        timestamp: new Date().toISOString()
       });
     }
     
