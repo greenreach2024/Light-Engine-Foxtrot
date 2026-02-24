@@ -10739,6 +10739,272 @@ app.post('/api/recipe-modifiers/network/:crop/dismiss', async (req, res) => {
   res.json({ ok: true, crop, dismissed: true });
 });
 
+
+// ── Sprint 3 Ticket 3.4: Anomaly→Recipe Correlation ─────────────────────
+
+/**
+ * GET /api/anomaly-recipe-correlation
+ * Cross-reference recent anomalies with active recipe modifiers and harvest
+ * outcomes to identify whether recipe changes may be causing environmental
+ * deviations or whether anomalies correlate with loss events.
+ * ?crop=basil  ?since=2025-01-01  ?limit=100
+ */
+app.get('/api/anomaly-recipe-correlation', async (req, res) => {
+  try {
+    const since = req.query.since || new Date(Date.now() - 30 * 86400000).toISOString();
+    const limit = parseInt(req.query.limit) || 100;
+    const cropFilter = req.query.crop ? req.query.crop.toLowerCase().replace(/\s+/g, '-') : null;
+
+    // 1. Load recent anomalies
+    const anomalyPath = path.join(DATA_DIR, 'anomaly-history.json');
+    let anomalies = [];
+    try {
+      if (fs.existsSync(anomalyPath)) {
+        const raw = JSON.parse(fs.readFileSync(anomalyPath, 'utf8'));
+        anomalies = (Array.isArray(raw) ? raw : raw.anomalies || [])
+          .filter(a => (a.timestamp || a.detected_at) >= since)
+          .slice(-limit);
+      }
+    } catch (_) { /* best-effort */ }
+
+    // 2. Load current recipe modifiers (local + network)
+    const { loadModifiers } = await import('./lib/recipe-modifier.js');
+    const localMods = loadModifiers();
+
+    // 3. Load harvest outcomes in the same window
+    const harvestFilter = { recorded_at: { $gte: since } };
+    if (cropFilter) harvestFilter.crop = cropFilter;
+    const harvests = await harvestOutcomesDB.find(harvestFilter).sort({ recorded_at: -1 }).limit(limit);
+
+    // 4. Load loss events
+    const losses = await trayLossEventsDB.find({ created_at: { $gte: since } });
+
+    // 5. Build per-crop correlation analysis
+    const cropAnalysis = {};
+
+    // Group harvests by crop
+    for (const h of harvests) {
+      const crop = (h.crop || '').toLowerCase().replace(/\s+/g, '-');
+      if (!crop || (cropFilter && crop !== cropFilter)) continue;
+      if (!cropAnalysis[crop]) {
+        cropAnalysis[crop] = {
+          crop,
+          harvests: 0,
+          avg_yield: 0,
+          avg_loss_rate: 0,
+          yields: [],
+          modifier_active: false,
+          modifier_details: null,
+          anomaly_count: 0,
+          anomaly_types: {},
+          loss_events: 0,
+          loss_plants: 0,
+          correlation_flags: []
+        };
+      }
+      const ca = cropAnalysis[crop];
+      ca.harvests++;
+      if (h.outcomes?.weight_per_plant_oz != null) ca.yields.push(h.outcomes.weight_per_plant_oz);
+      if (h.outcomes?.loss_rate != null) ca.avg_loss_rate += h.outcomes.loss_rate;
+    }
+
+    // Add modifier info
+    for (const [crop, ca] of Object.entries(cropAnalysis)) {
+      if (ca.harvests > 0) {
+        ca.avg_yield = ca.yields.length > 0
+          ? +(ca.yields.reduce((a, b) => a + b, 0) / ca.yields.length).toFixed(3)
+          : null;
+        ca.avg_loss_rate = +(ca.avg_loss_rate / ca.harvests).toFixed(3);
+      }
+      const mod = localMods.modifiers?.[crop];
+      if (mod) {
+        ca.modifier_active = true;
+        ca.modifier_details = {
+          ppfd_offset_pct: mod.ppfd_offset_pct,
+          blue_pct_offset: mod.blue_pct_offset,
+          temp_offset_pct: mod.temp_offset_pct,
+          confidence: mod.confidence
+        };
+      }
+    }
+
+    // Count anomalies per zone/crop (best-effort zone-to-crop mapping)
+    for (const a of anomalies) {
+      const zone = (a.zone || a.zone_name || '').toLowerCase();
+      for (const [crop, ca] of Object.entries(cropAnalysis)) {
+        const matchesZone = harvests.some(h =>
+          (h.crop || '').toLowerCase().replace(/\s+/g, '-') === crop &&
+          (h.farm_context?.zone || '').toLowerCase().includes(zone.slice(0, 8))
+        );
+        if (matchesZone || Object.keys(cropAnalysis).length === 1) {
+          ca.anomaly_count++;
+          const aType = a.category || a.type || 'unknown';
+          ca.anomaly_types[aType] = (ca.anomaly_types[aType] || 0) + 1;
+        }
+      }
+    }
+
+    // Loss events
+    for (const l of losses) {
+      for (const [crop, ca] of Object.entries(cropAnalysis)) {
+        if ((l.crop || '').toLowerCase().replace(/\s+/g, '-') === crop) {
+          ca.loss_events++;
+          ca.loss_plants += l.quantity || 0;
+        }
+      }
+    }
+
+    // Generate correlation flags
+    for (const [crop, ca] of Object.entries(cropAnalysis)) {
+      if (ca.modifier_active && ca.anomaly_count > 2) {
+        ca.correlation_flags.push({
+          flag: 'modifier_anomaly_overlap',
+          message: `${ca.anomaly_count} anomalies detected while recipe modifier is active for ${crop}`,
+          severity: 'warning',
+          recommendation: 'Review modifier offsets - environmental anomalies may indicate recipe parameters are too aggressive'
+        });
+      }
+      if (ca.modifier_active && ca.avg_loss_rate > 0.1) {
+        ca.correlation_flags.push({
+          flag: 'modifier_high_loss',
+          message: `Loss rate ${(ca.avg_loss_rate * 100).toFixed(1)}% while modifier active for ${crop}`,
+          severity: 'warning',
+          recommendation: 'Consider reverting recipe modifier - high loss rate may be modifier-related'
+        });
+      }
+      if (ca.anomaly_count > 5 && ca.loss_events > 0) {
+        ca.correlation_flags.push({
+          flag: 'anomaly_loss_correlation',
+          message: `${ca.anomaly_count} anomalies coincide with ${ca.loss_events} loss events (${ca.loss_plants} plants) for ${crop}`,
+          severity: 'critical',
+          recommendation: 'Investigate environmental conditions - anomalies appear to be driving losses'
+        });
+      }
+      delete ca.yields;
+    }
+
+    res.json({
+      ok: true,
+      period_since: since,
+      total_anomalies: anomalies.length,
+      total_harvests: harvests.length,
+      total_loss_events: losses.length,
+      crops: cropAnalysis
+    });
+  } catch (error) {
+    console.error('[anomaly-recipe] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Sprint 3 Ticket 3.5b: Demand→Succession Auto-Plan ──────────────────
+
+/**
+ * Event bus listener: when demand signals are refreshed (via AI push from
+ * Central), automatically regenerate succession plan suggestions.
+ * The listener is fire-and-forget - never blocks the request path.
+ */
+(function wireDemandSuccessionLoop() {
+  eventBus.on('demand_signal_refresh', async (payload) => {
+    try {
+      const demandSignals = payload?.demand_signals;
+      if (!demandSignals || typeof demandSignals !== 'object') return;
+
+      const demandForecast = Object.entries(demandSignals)
+        .filter(([, sig]) => sig.network_total_qty > 0)
+        .map(([crop, sig]) => ({
+          crop: crop.toLowerCase().replace(/\s+/g, '-'),
+          quantity: Math.ceil((sig.network_total_qty || 0) / 4),
+          targetDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+          duration: 12,
+          priority: sig.network_trend === 'increasing' ? 'high' : 'medium'
+        }));
+
+      if (demandForecast.length === 0) return;
+
+      console.log(`[demand-succession] Auto-generating succession suggestions for ${demandForecast.length} crops from demand signals`);
+
+      const farmId = process.env.FARM_ID || 'local';
+      const result = await successionPlanner.suggestFromDemand({
+        farmId,
+        demandForecast,
+        facility: { rooms: loadGroupsFile().length > 0 ? 1 : 0 }
+      });
+
+      if (result.ok) {
+        const suggestionsPath = path.join(DATA_DIR, 'demand-succession-suggestions.json');
+        fs.writeFileSync(suggestionsPath, JSON.stringify({
+          generated_at: new Date().toISOString(),
+          trigger: 'demand_signal_auto',
+          demand_source: 'central_ai_push',
+          suggestions: result.suggestions,
+          totalCrops: result.totalCrops
+        }, null, 2));
+        console.log(`[demand-succession] Generated ${result.totalCrops} succession suggestions from demand`);
+      }
+    } catch (err) {
+      console.warn('[demand-succession] Auto-plan failed (non-fatal):', err?.message);
+    }
+  });
+  console.log('[demand-succession] Event listener wired for demand_signal_refresh');
+})();
+
+/**
+ * GET /api/succession/demand-suggestions
+ * Return the latest demand-driven succession suggestions (auto-generated).
+ */
+app.get('/api/succession/demand-suggestions', (req, res) => {
+  try {
+    const suggestionsPath = path.join(DATA_DIR, 'demand-succession-suggestions.json');
+    if (!fs.existsSync(suggestionsPath)) {
+      return res.json({ ok: true, suggestions: [], note: 'No demand-driven suggestions yet. Waiting for Central demand signal push.' });
+    }
+    const data = JSON.parse(fs.readFileSync(suggestionsPath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/ai/recommendations/receive
+ * Called when Central pushes AI recommendations (demand signals, modifiers).
+ * Emits demand_signal_refresh to trigger succession auto-plan.
+ */
+app.post('/api/ai/recommendations/receive', async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data) return res.status(400).json({ ok: false, error: 'No data' });
+
+    const aiRecsPath = path.join(PUBLIC_DIR, 'data', 'ai-recommendations.json');
+    fs.writeFileSync(aiRecsPath, JSON.stringify({
+      ...data,
+      received_at: new Date().toISOString()
+    }, null, 2));
+
+    if (data.network_intelligence?.demand_signals) {
+      eventBus.emitEvent('demand_signal_refresh', {
+        demand_signals: data.network_intelligence.demand_signals,
+        source: 'central_ai_push'
+      });
+    }
+
+    if (data.network_intelligence?.recipe_modifiers) {
+      const netModPath = path.join(DATA_DIR, 'network-recipe-modifiers.json');
+      fs.writeFileSync(netModPath, JSON.stringify({
+        modifiers: data.network_intelligence.recipe_modifiers,
+        received_at: new Date().toISOString()
+      }, null, 2));
+    }
+
+    console.log('[AI Recs] Received and stored AI recommendations from Central');
+    res.json({ ok: true, received_at: new Date().toISOString() });
+  } catch (error) {
+    console.error('[AI Recs] Error receiving recommendations:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ── Phase 3 Ticket 3.4: Manual retrain trigger ──────────────────────────
 
 /**

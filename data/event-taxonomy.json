@@ -198,6 +198,19 @@
         "timestamp": "ISO8601"
       },
       "status": "active"
+    },
+    "demand_signal_refresh": {
+      "name": "demand_signal_refresh",
+      "category": "ai",
+      "description": "Demand signals received from GreenReach Central. Triggers automatic succession plan generation.",
+      "emitted_by": ["server-foxtrot.js:POST /api/ai/recommendations/receive"],
+      "payload": {
+        "event_type": "demand_signal_refresh",
+        "demand_signals": "object",
+        "source": "string",
+        "timestamp": "ISO8601"
+      },
+      "status": "active"
     }
   },
   "categories": {
