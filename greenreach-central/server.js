@@ -2886,7 +2886,109 @@ async function startServer() {
         logger.warn('A/B experiment table init failed (non-fatal)', { error: expErr.message });
       }
 
-      // Grant wizard (enabled by default)
+
+// ── Sprint 5 Ticket S5.4: Weekly Production Plan Auto-Scheduler ─────────
+
+/**
+ * Automatically runs the production planner weekly.
+ * Distributes plans to all active network farms.
+ */
+(function wireProductionPlanScheduler() {
+  async function runWeeklyProductionPlan() {
+    try {
+      console.log('[production-planner] Running weekly auto-plan...');
+      const result = await generateAndDistributePlan({ forecastWeeks: 4 });
+      console.log(`[production-planner] Weekly plan generated: ${result?.plan?.length || 0} items, distributed to ${result?.distributed_to?.length || 0} farms`);
+    } catch (err) {
+      console.warn('[production-planner] Weekly auto-plan failed (non-fatal):', err?.message);
+    }
+  }
+
+  // Run weekly (every 7 days), first run after 10 minutes of boot
+  setTimeout(runWeeklyProductionPlan, 10 * 60 * 1000);
+  setInterval(runWeeklyProductionPlan, 7 * 24 * 60 * 60 * 1000);
+  console.log('[production-planner] Weekly auto-scheduler wired');
+})();
+
+// ── Sprint 5 Ticket S5.5: Network Recipe Version Tracking ───────────────
+
+/**
+ * GET /api/network/recipe-versions
+ * Returns recipe versions across the network (which farms have adopted which versions).
+ *
+ * POST /api/network/recipe-versions/push
+ * Pushes a recipe version update to all active farms in the network.
+ */
+app.get('/api/network/recipe-versions', async (req, res) => {
+  try {
+    const versionsPath = path.join(__dirname, 'data', 'network-recipe-versions.json');
+    if (!fs.existsSync(versionsPath)) {
+      return res.json({ ok: true, versions: {}, farms: [] });
+    }
+    const data = JSON.parse(fs.readFileSync(versionsPath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/network/recipe-versions/push', async (req, res) => {
+  try {
+    const { crop, modifiers, version, push_mode } = req.body;
+    if (!crop || !modifiers) {
+      return res.status(400).json({ ok: false, error: 'crop and modifiers required' });
+    }
+
+    const ver = version || Date.now();
+    const mode = push_mode || 'suggest'; // 'suggest' or 'auto_adopt'
+
+    // Get active network farms
+    const farms = await db.collection('network_farms').find({ status: 'active' }).toArray().catch(() => []);
+
+    const results = [];
+    for (const farm of farms) {
+      if (!farm.api_url) continue;
+      try {
+        const endpoint = mode === 'auto_adopt'
+          ? `${farm.api_url}/api/recipe-modifiers/network/auto-adopt`
+          : `${farm.api_url}/api/ai/recommendations/receive`;
+
+        const pushResp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop, modifiers, version: ver, source: 'central_push' }),
+          signal: AbortSignal.timeout(5000)
+        });
+        results.push({ farm_id: farm.farm_id, status: pushResp.ok ? 'pushed' : 'failed' });
+      } catch (e) {
+        results.push({ farm_id: farm.farm_id, status: 'unreachable' });
+      }
+    }
+
+    // Track versions
+    const versionsPath = path.join(__dirname, 'data', 'network-recipe-versions.json');
+    let versionData = {};
+    try { versionData = JSON.parse(fs.readFileSync(versionsPath, 'utf8')); } catch (_) {}
+    if (!versionData.recipes) versionData.recipes = {};
+    versionData.recipes[crop] = {
+      version: ver,
+      modifiers,
+      pushed_at: new Date().toISOString(),
+      mode,
+      farm_results: results
+    };
+    fs.writeFileSync(versionsPath, JSON.stringify(versionData, null, 2));
+
+    console.log(`[recipe-versions] Pushed ${crop} v${ver} to ${results.length} farms (${results.filter(r => r.status === 'pushed').length} ok)`);
+    res.json({ ok: true, crop, version: ver, results });
+  } catch (error) {
+    console.error('[recipe-versions] Push error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
+            // Grant wizard (enabled by default)
       if (seedGrantPrograms) {
         const grantPool = getDatabase();
         await seedGrantPrograms(grantPool).catch(e => logger.warn('Grant seed skipped', { error: e.message }));

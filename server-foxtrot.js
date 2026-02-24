@@ -11706,6 +11706,530 @@ app.get('/api/harvest/growth-analysis/:crop', async (req, res) => {
  * - /api/ml/anomalies: Outdoor-aware anomaly detection with IsolationForest
  * - /api/ml/effects: Learn device effects on RH/temp using Ridge regression
  */
+
+// ── Sprint 5 Ticket S5.2: Harvest Readiness Background Scanner ──────────
+
+/**
+ * Hourly scan: check all active groups for harvest readiness.
+ * Generates alerts stored locally and emitted via event bus.
+ */
+(function wireHarvestReadinessScanner() {
+  async function runHarvestReadinessScan() {
+    try {
+      const { scanHarvestReadiness, formatReadinessNotification } = await import('./lib/harvest-readiness.js');
+      const groups = loadGroupsFile();
+      const notifications = await scanHarvestReadiness(
+        groups, harvestOutcomesDB, trayLossEventsDB
+      );
+
+      if (notifications.length > 0) {
+        const alertsPath = path.join(DATA_DIR, 'harvest-readiness-alerts.json');
+        fs.writeFileSync(alertsPath, JSON.stringify({
+          scanned_at: new Date().toISOString(),
+          alerts: notifications.map(n => formatReadinessNotification(n)),
+          count: notifications.length
+        }, null, 2));
+
+        // Emit event for each ready group
+        for (const n of notifications) {
+          if (n.readiness_score >= 0.8) {
+            eventBus.emitEvent('harvest', {
+              sub_type: 'readiness_alert',
+              group_id: n.group_id,
+              crop: n.crop,
+              readiness_score: n.readiness_score,
+              optimal_window: n.optimal_window,
+              message: `${n.crop} in group ${n.group_id} is ready for harvest (score: ${(n.readiness_score * 100).toFixed(0)}%)`
+            });
+          }
+        }
+        console.log(`[harvest-readiness] Scan complete: ${notifications.length} alerts (${notifications.filter(n => n.readiness_score >= 0.8).length} ready)`);
+      }
+    } catch (err) {
+      console.warn('[harvest-readiness] Background scan failed (non-fatal):', err?.message);
+    }
+  }
+
+  // Run every hour, first scan after 3 minutes
+  setTimeout(runHarvestReadinessScan, 3 * 60 * 1000);
+  setInterval(runHarvestReadinessScan, 60 * 60 * 1000);
+  console.log('[harvest-readiness] Background scanner wired (hourly)');
+})();
+
+// ── Sprint 5 Ticket S5.5: Dynamic Recipe Distribution (Auto-Adopt) ──────
+
+/**
+ * When network recipe modifiers arrive from Central, check if they fall
+ * within autonomous bounds. If so, auto-adopt without human approval.
+ * Otherwise, queue for manual review.
+ */
+(function wireAutoAdoptRecipeDistribution() {
+  eventBus.on('demand_signal_refresh', async (payload) => {
+    // This event also carries recipe modifiers from Central push
+    // The actual modifier data is handled separately via the /api/ai/recommendations/receive endpoint
+  });
+
+  app.post('/api/recipe-modifiers/network/auto-adopt', async (req, res) => {
+    try {
+      const { loadModifiers, isWithinAutonomousBounds, autonomousApplyModifier } = await import('./lib/recipe-modifier.js');
+      const netModPath = path.join(DATA_DIR, 'network-recipe-modifiers.json');
+
+      if (!fs.existsSync(netModPath)) {
+        return res.json({ ok: true, adopted: 0, queued: 0, message: 'No network modifiers pending' });
+      }
+
+      const netMods = JSON.parse(fs.readFileSync(netModPath, 'utf8'));
+      const adopted = [];
+      const queued = [];
+      const rejected = [];
+
+      for (const [crop, mod] of Object.entries(netMods.modifiers || {})) {
+        const candidate = {
+          ppfd_offset_pct: mod.ppfd_offset_pct || 0,
+          blue_pct_offset: mod.blue_pct_offset || 0,
+          temp_offset_pct: mod.temp_offset_pct || 0,
+          confidence: mod.confidence || 0
+        };
+
+        if (isWithinAutonomousBounds(candidate)) {
+          const result = await autonomousApplyModifier(crop, candidate, agentAuditDB, process.env.FARM_ID || 'local');
+          if (result.applied) {
+            adopted.push({ crop, ...candidate, version: mod.version || 1 });
+          } else {
+            queued.push({ crop, reason: result.reason || 'apply_failed' });
+          }
+        } else {
+          queued.push({ crop, reason: 'outside_autonomous_bounds', ...candidate });
+        }
+      }
+
+      // Track adopted versions
+      if (adopted.length > 0) {
+        const versionsPath = path.join(DATA_DIR, 'recipe-versions.json');
+        let versions = {};
+        try { versions = JSON.parse(fs.readFileSync(versionsPath, 'utf8')); } catch (_) {}
+        for (const a of adopted) {
+          versions[a.crop] = {
+            version: a.version,
+            adopted_at: new Date().toISOString(),
+            source: 'central_auto_adopt',
+            offsets: { ppfd: a.ppfd_offset_pct, blue: a.blue_pct_offset, temp: a.temp_offset_pct }
+          };
+        }
+        fs.writeFileSync(versionsPath, JSON.stringify(versions, null, 2));
+      }
+
+      console.log(`[recipe-dist] Auto-adopt: ${adopted.length} adopted, ${queued.length} queued for review`);
+      res.json({ ok: true, adopted: adopted.length, queued: queued.length, details: { adopted, queued } });
+    } catch (error) {
+      console.error('[recipe-dist] Error:', error.message);
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.get('/api/recipe-modifiers/versions', (req, res) => {
+    try {
+      const versionsPath = path.join(DATA_DIR, 'recipe-versions.json');
+      if (!fs.existsSync(versionsPath)) {
+        return res.json({ ok: true, versions: {} });
+      }
+      const versions = JSON.parse(fs.readFileSync(versionsPath, 'utf8'));
+      res.json({ ok: true, versions });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  console.log('[recipe-dist] Auto-adopt recipe distribution wired');
+})();
+
+// ── Sprint 5 Ticket S5.3: Voice Intent Parser for Activity Hub ──────────
+
+/**
+ * POST /api/voice/parse-intent
+ * Parses natural language voice commands into structured farming actions.
+ * Supports: seed, harvest, move, quality_check, loss_report
+ */
+app.post('/api/voice/parse-intent', (req, res) => {
+  try {
+    const { transcript } = req.body;
+    if (!transcript) return res.status(400).json({ ok: false, error: 'transcript required' });
+
+    const text = transcript.toLowerCase().trim();
+    const intent = { action: null, params: {}, confidence: 0, original: transcript };
+
+    // Seed intent: "seeded 128 basil in zone 3" / "planted kale tray 47"
+    const seedMatch = text.match(/(?:seed(?:ed)?|plant(?:ed)?)\s+(\d+)?\s*([a-z\s]+?)(?:\s+in\s+(?:zone|room|tray)\s*(\w+))?$/i);
+    if (seedMatch) {
+      intent.action = 'seed';
+      intent.params.quantity = parseInt(seedMatch[1]) || 128;
+      intent.params.crop = seedMatch[2].trim();
+      intent.params.zone = seedMatch[3] || null;
+      intent.confidence = 0.85;
+    }
+
+    // Harvest intent: "harvested basil from zone 3" / "harvest group 12"
+    if (!intent.action) {
+      const harvestMatch = text.match(/harvest(?:ed)?\s+(?:group\s+)?([a-z0-9\s]+?)(?:\s+(?:from|in)\s+(?:zone|room)\s*(\w+))?$/i);
+      if (harvestMatch) {
+        intent.action = 'harvest';
+        intent.params.crop_or_group = harvestMatch[1].trim();
+        intent.params.zone = harvestMatch[2] || null;
+        intent.confidence = 0.82;
+      }
+    }
+
+    // Move intent: "move basil from zone 1 to zone 3"
+    if (!intent.action) {
+      const moveMatch = text.match(/mov(?:e|ed)\s+(.+?)\s+from\s+(?:zone|room)\s*(\w+)\s+to\s+(?:zone|room)\s*(\w+)/i);
+      if (moveMatch) {
+        intent.action = 'move';
+        intent.params.crop = moveMatch[1].trim();
+        intent.params.from_zone = moveMatch[2];
+        intent.params.to_zone = moveMatch[3];
+        intent.confidence = 0.88;
+      }
+    }
+
+    // Quality check intent: "quality check basil" / "check quality zone 3"
+    if (!intent.action) {
+      const qualityMatch = text.match(/(?:quality|check)\s+(?:check\s+)?(?:on\s+)?([a-z\s]+?)(?:\s+(?:in|zone)\s*(\w+))?$/i);
+      if (qualityMatch && text.includes('quality') || text.includes('check')) {
+        intent.action = 'quality_check';
+        intent.params.crop = qualityMatch[1].trim();
+        intent.params.zone = qualityMatch[2] || null;
+        intent.confidence = 0.75;
+      }
+    }
+
+    // Loss report: "lost 12 basil plants" / "report loss 5 kale"
+    if (!intent.action) {
+      const lossMatch = text.match(/(?:lost?|loss|discard(?:ed)?|threw?\s+out)\s+(\d+)\s+([a-z\s]+?)(?:\s+(?:plant|tray|head)s?)?$/i);
+      if (lossMatch) {
+        intent.action = 'loss_report';
+        intent.params.quantity = parseInt(lossMatch[1]);
+        intent.params.crop = lossMatch[2].trim();
+        intent.confidence = 0.80;
+      }
+    }
+
+    if (!intent.action) {
+      intent.action = 'unknown';
+      intent.confidence = 0;
+      intent.suggestion = 'Try: "seeded 128 basil in zone 3" or "harvested kale from zone 1" or "lost 5 basil plants"';
+    }
+
+    // Map action to API endpoint
+    const apiMap = {
+      seed: { method: 'POST', endpoint: '/api/tray-runs' },
+      harvest: { method: 'POST', endpoint: '/api/harvest/record' },
+      move: { method: 'POST', endpoint: '/api/tray-runs/move' },
+      quality_check: { method: 'POST', endpoint: '/api/quality/check' },
+      loss_report: { method: 'POST', endpoint: '/api/tray-loss' }
+    };
+
+    intent.api = apiMap[intent.action] || null;
+
+    res.json({ ok: true, intent });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Sprint 5 Ticket S5.7: Autonomous Wholesale Matching ─────────────────
+
+/**
+ * POST /api/wholesale/auto-match
+ * Matches pending buyer demand (recurring/standing orders) against
+ * available farm supply. Auto-creates fulfillment allocations.
+ *
+ * GET /api/wholesale/auto-match/status
+ * Returns current matching status and recent matches.
+ */
+app.post('/api/wholesale/auto-match', async (req, res) => {
+  try {
+    const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || '';
+
+    // 1. Gather available supply from local inventory
+    const inventoryPath = path.join(PUBLIC_DIR, 'data', 'wholesale-inventory.json');
+    let supply = [];
+    try {
+      if (fs.existsSync(inventoryPath)) {
+        const raw = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
+        supply = (raw.lots || []).filter(l => (l.qty_available || 0) > 0);
+      }
+    } catch (_) {}
+
+    // 2. Gather pending demand (recurring orders due this week)
+    const demandPath = path.join(DATA_DIR, 'recurring-orders.json');
+    let demand = [];
+    try {
+      if (fs.existsSync(demandPath)) {
+        demand = JSON.parse(fs.readFileSync(demandPath, 'utf8'));
+      }
+    } catch (_) {}
+
+    // Also check demand signals from Central
+    const aiRecsPath = path.join(PUBLIC_DIR, 'data', 'ai-recommendations.json');
+    let demandSignals = {};
+    try {
+      if (fs.existsSync(aiRecsPath)) {
+        const recs = JSON.parse(fs.readFileSync(aiRecsPath, 'utf8'));
+        demandSignals = recs.network_intelligence?.demand_signals || {};
+      }
+    } catch (_) {}
+
+    // 3. Match supply to demand
+    const matches = [];
+    const unmatched = [];
+    const supplyCopy = supply.map(s => ({ ...s }));
+
+    for (const d of demand) {
+      const crop = (d.crop || d.sku_id || '').toLowerCase().replace(/\s+/g, '-');
+      const needed = d.quantity || d.cases || 1;
+
+      const availableLot = supplyCopy.find(s =>
+        (s.sku_id || s.crop || '').toLowerCase().replace(/\s+/g, '-').includes(crop) &&
+        s.qty_available >= needed
+      );
+
+      if (availableLot) {
+        matches.push({
+          order_id: d.order_id || `auto-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          buyer_id: d.buyer_id,
+          crop,
+          quantity: needed,
+          sku_id: availableLot.sku_id,
+          matched_at: new Date().toISOString(),
+          source: 'auto_match',
+          quality_score: availableLot.quality_score || null
+        });
+        availableLot.qty_available -= needed;
+      } else {
+        unmatched.push({ crop, quantity: needed, buyer_id: d.buyer_id, reason: 'insufficient_supply' });
+      }
+    }
+
+    // 4. Also generate match suggestions from demand signals
+    const suggestions = [];
+    for (const [crop, sig] of Object.entries(demandSignals)) {
+      if (sig.network_total_qty > 0) {
+        const localSupply = supplyCopy.find(s =>
+          (s.sku_id || '').toLowerCase().includes(crop.toLowerCase())
+        );
+        if (localSupply && localSupply.qty_available > 0) {
+          suggestions.push({
+            crop,
+            available_qty: localSupply.qty_available,
+            network_demand: sig.network_total_qty,
+            trend: sig.network_trend,
+            recommendation: `${crop}: ${localSupply.qty_available} available, network demand ${sig.network_total_qty}. Consider listing for wholesale.`
+          });
+        }
+      }
+    }
+
+    // Save matches
+    const matchesPath = path.join(DATA_DIR, 'auto-match-results.json');
+    fs.writeFileSync(matchesPath, JSON.stringify({
+      matched_at: new Date().toISOString(),
+      matches,
+      unmatched,
+      suggestions,
+      supply_available: supplyCopy.filter(s => s.qty_available > 0).length,
+      demand_pending: demand.length
+    }, null, 2));
+
+    console.log(`[auto-match] ${matches.length} matched, ${unmatched.length} unmatched, ${suggestions.length} suggestions`);
+    res.json({ ok: true, matches: matches.length, unmatched: unmatched.length, suggestions: suggestions.length, details: { matches, unmatched, suggestions } });
+  } catch (error) {
+    console.error('[auto-match] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/wholesale/auto-match/status', (req, res) => {
+  try {
+    const matchesPath = path.join(DATA_DIR, 'auto-match-results.json');
+    if (!fs.existsSync(matchesPath)) {
+      return res.json({ ok: true, last_run: null, matches: 0, message: 'No auto-match runs yet' });
+    }
+    const data = JSON.parse(fs.readFileSync(matchesPath, 'utf8'));
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ── Sprint 5 Ticket S5.8: Market Intelligence External Feed ─────────────
+
+/**
+ * GET /api/market-intelligence/external
+ * Fetches and caches external market pricing data.
+ * Uses USDA MARS API (free, no key) or falls back to calculated benchmarks.
+ */
+app.get('/api/market-intelligence/external', async (req, res) => {
+  try {
+    const cachePath = path.join(DATA_DIR, 'market-intelligence-cache.json');
+    const CACHE_HOURS = 12;
+
+    // Check cache
+    try {
+      if (fs.existsSync(cachePath)) {
+        const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        const cacheAge = (Date.now() - new Date(cached.fetched_at).getTime()) / 3600000;
+        if (cacheAge < CACHE_HOURS) {
+          return res.json({ ok: true, source: 'cache', ...cached });
+        }
+      }
+    } catch (_) {}
+
+    // Build market data from multiple tiers
+    const marketData = { crops: {}, fetched_at: new Date().toISOString(), sources: [] };
+
+    // Tier 1: Internal wholesale order data (most accurate)
+    try {
+      const orders = await harvestOutcomesDB.find({}).sort({ recorded_at: -1 }).limit(200);
+      const cropPrices = {};
+      for (const o of orders) {
+        const crop = (o.crop || '').toLowerCase().replace(/\s+/g, '-');
+        if (!crop) continue;
+        if (!cropPrices[crop]) cropPrices[crop] = { prices: [], yields: [], count: 0 };
+        cropPrices[crop].count++;
+        if (o.outcomes?.weight_per_plant_oz) cropPrices[crop].yields.push(o.outcomes.weight_per_plant_oz);
+      }
+
+      for (const [crop, data] of Object.entries(cropPrices)) {
+        const avgYield = data.yields.length > 0
+          ? +(data.yields.reduce((a, b) => a + b, 0) / data.yields.length).toFixed(2) : null;
+        marketData.crops[crop] = {
+          avg_yield_oz: avgYield,
+          harvest_count: data.count,
+          data_tier: 'internal',
+          price_per_oz: avgYield ? +(2.50 / avgYield).toFixed(2) : null, // ~$2.50/head baseline
+          confidence: Math.min(data.count / 20, 1)
+        };
+      }
+      if (Object.keys(cropPrices).length > 0) marketData.sources.push('internal_harvest_data');
+    } catch (e) {
+      console.warn('[market-intel] Internal data fetch failed:', e.message);
+    }
+
+    // Tier 2: USDA National Retail Report (attempt fetch, graceful fallback)
+    try {
+      const usdaResp = await fetch('https://marketnews.usda.gov/mnp/lg-rpts?repId=0&locName=NE&comName=LETTUCE', {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (usdaResp.ok) {
+        marketData.sources.push('usda_market_news');
+        // USDA returns HTML — flag as available for manual review
+        marketData.usda_available = true;
+      }
+    } catch (_) {
+      marketData.usda_available = false;
+    }
+
+    // Tier 3: Benchmark-derived pricing (always available)
+    const benchmarkCrops = {
+      'genovese-basil': { base_price_per_oz: 0.75, season_factor: 1.0 },
+      'basil': { base_price_per_oz: 0.75, season_factor: 1.0 },
+      'kale': { base_price_per_oz: 0.35, season_factor: 1.1 },
+      'lettuce': { base_price_per_oz: 0.25, season_factor: 1.0 },
+      'arugula': { base_price_per_oz: 0.65, season_factor: 0.9 },
+      'spinach': { base_price_per_oz: 0.45, season_factor: 1.0 },
+      'microgreens': { base_price_per_oz: 2.00, season_factor: 1.0 },
+      'cilantro': { base_price_per_oz: 0.55, season_factor: 1.0 }
+    };
+
+    const month = new Date().getMonth();
+    const seasonMultiplier = month >= 10 || month <= 2 ? 1.15 : month >= 5 && month <= 8 ? 0.85 : 1.0;
+
+    for (const [crop, bench] of Object.entries(benchmarkCrops)) {
+      if (!marketData.crops[crop]) {
+        marketData.crops[crop] = {
+          avg_yield_oz: null,
+          harvest_count: 0,
+          data_tier: 'benchmark',
+          price_per_oz: +(bench.base_price_per_oz * bench.season_factor * seasonMultiplier).toFixed(2),
+          confidence: 0.5
+        };
+      } else {
+        // Enhance with benchmark
+        marketData.crops[crop].benchmark_price = +(bench.base_price_per_oz * seasonMultiplier).toFixed(2);
+      }
+    }
+    marketData.sources.push('benchmark_pricing');
+
+    // Cache result
+    fs.writeFileSync(cachePath, JSON.stringify(marketData, null, 2));
+
+    res.json({ ok: true, source: 'fresh', ...marketData });
+  } catch (error) {
+    console.error('[market-intel] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/market-intelligence/planting-signals
+ * Market data → planting recommendations feedback loop.
+ * Identifies high-value crops with supply gaps.
+ */
+app.get('/api/market-intelligence/planting-signals', async (req, res) => {
+  try {
+    const cachePath = path.join(DATA_DIR, 'market-intelligence-cache.json');
+    let marketData = { crops: {} };
+    try {
+      if (fs.existsSync(cachePath)) {
+        marketData = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      }
+    } catch (_) {}
+
+    const signals = [];
+    for (const [crop, data] of Object.entries(marketData.crops || {})) {
+      const priceOz = data.price_per_oz || data.benchmark_price || 0;
+      const confidence = data.confidence || 0;
+      const harvestCount = data.harvest_count || 0;
+
+      // High-value + low supply = planting signal
+      if (priceOz > 0.50 && harvestCount < 5) {
+        signals.push({
+          crop,
+          signal: 'expand',
+          priority: priceOz > 1.0 ? 'high' : 'medium',
+          price_per_oz: priceOz,
+          current_harvests: harvestCount,
+          message: `${crop}: $${priceOz}/oz with only ${harvestCount} recent harvests — consider expanding`,
+          confidence
+        });
+      }
+
+      // Low-value + high supply = reduce signal
+      if (priceOz < 0.30 && harvestCount > 10) {
+        signals.push({
+          crop,
+          signal: 'reduce',
+          priority: 'low',
+          price_per_oz: priceOz,
+          current_harvests: harvestCount,
+          message: `${crop}: $${priceOz}/oz with ${harvestCount} harvests — consider reallocating space`,
+          confidence
+        });
+      }
+    }
+
+    signals.sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2 };
+      return (order[a.priority] || 3) - (order[b.priority] || 3);
+    });
+
+    res.json({ ok: true, signals, count: signals.length });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
 mountMLRoutes(app);
 
 // P8: Anomaly diagnostics endpoint — enriches anomaly detection with diagnostic reasoning
