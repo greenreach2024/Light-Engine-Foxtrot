@@ -2326,6 +2326,202 @@ app.get('/api/network/risk-alerts', async (req, res) => {
   }
 });
 
+
+// ── Sprint 4 Central additions: S4.1 + S4.2 receive + S4.8 ──────────────
+
+// S4.2: Receive farm-reported harvest projections
+app.post('/api/network/harvest-projections', async (req, res) => {
+  try {
+    const { farm_id, projections, reported_at } = req.body;
+    if (!farm_id || !projections) {
+      return res.status(400).json({ ok: false, error: 'farm_id and projections required' });
+    }
+
+    // Store in DB
+    const db = getDatabase();
+    if (db) {
+      await query(`
+        INSERT INTO farm_data (farm_id, data_type, data, timestamp)
+        VALUES ($1, 'harvest_projections', $2, NOW())
+        ON CONFLICT (farm_id, data_type)
+        DO UPDATE SET data = $2, timestamp = NOW()
+      `, [farm_id, JSON.stringify({ projections, reported_at })]);
+    }
+
+    console.log(`[harvest-projections] Received ${projections.length} projections from ${farm_id}`);
+    res.json({ ok: true, received: projections.length });
+  } catch (error) {
+    console.error('[harvest-projections] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// S4.1: Generate planting suggestions for farms based on supply/demand analysis
+app.get('/api/network/planting-suggestions', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id || null;
+
+    // Get supply/demand analysis
+    const analysis = await analyzeSupplyDemand(30);
+
+    // Generate per-farm suggestions from gaps
+    const suggestions = [];
+    for (const gap of analysis.gaps) {
+      const additionalFarms = Math.ceil(gap.shortfall / 2);
+      suggestions.push({
+        crop: gap.crop,
+        action: 'plant',
+        urgency: gap.severity === 'critical' ? 'high' : 'medium',
+        message: `Network needs more ${gap.crop}: demand ${gap.monthly_demand}/mo, supply ${gap.projected_supply}/mo. Seed ${Math.max(2, Math.ceil(gap.shortfall / 4))} trays this week.`,
+        recommended_trays: Math.max(2, Math.ceil(gap.shortfall / 4)),
+        shortfall: gap.shortfall,
+        current_farms: gap.active_farms,
+        target_farms: gap.active_farms + additionalFarms
+      });
+    }
+
+    for (const surplus of analysis.surpluses) {
+      if (surplus.excess > 3) {
+        suggestions.push({
+          crop: surplus.crop,
+          action: 'reduce',
+          urgency: 'low',
+          message: `${surplus.crop} oversupplied: supply ${surplus.projected_supply}/mo vs demand ${surplus.monthly_demand}/mo. Consider reallocating ${Math.ceil(surplus.excess / 2)} groups.`,
+          excess: surplus.excess,
+          current_farms: surplus.active_farms
+        });
+      }
+    }
+
+    // Sort by urgency
+    suggestions.sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2 };
+      return (order[a.urgency] || 3) - (order[b.urgency] || 3);
+    });
+
+    res.json({
+      ok: true,
+      farm_id: farmId,
+      suggestions,
+      count: suggestions.length,
+      supply_demand_summary: {
+        gaps: analysis.gaps.length,
+        surpluses: analysis.surpluses.length,
+        analyzed_at: analysis.analyzed_at
+      }
+    });
+  } catch (error) {
+    console.error('[planting-suggestions] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// S4.8: Unified Multi-Farm Benchmarking Dashboard API
+app.get('/api/network/benchmarking', async (req, res) => {
+  try {
+    const db = getDatabase();
+    if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
+
+    // 1. Yield rankings
+    const yieldResult = await query(`
+      SELECT
+        er.farm_id,
+        f.name AS farm_name,
+        er.crop,
+        COUNT(*) AS harvest_count,
+        AVG((er.outcomes->>'weight_per_plant_oz')::float) AS avg_yield,
+        AVG(COALESCE((er.outcomes->>'loss_rate')::float, 0)) AS avg_loss,
+        AVG(COALESCE((er.outcomes->>'quality_score')::float, 0)) AS avg_quality,
+        STDDEV((er.outcomes->>'weight_per_plant_oz')::float) AS yield_stddev
+      FROM experiment_records er
+      JOIN farms f ON f.farm_id = er.farm_id
+      WHERE er.recorded_at > NOW() - INTERVAL '90 days'
+        AND (er.outcomes->>'weight_per_plant_oz')::float > 0
+      GROUP BY er.farm_id, f.name, er.crop
+      HAVING COUNT(*) >= 2
+      ORDER BY avg_yield DESC
+    `);
+
+    // 2. Build per-farm composite scores
+    const farmScores = {};
+    for (const row of yieldResult.rows) {
+      if (!farmScores[row.farm_id]) {
+        farmScores[row.farm_id] = {
+          farm_id: row.farm_id,
+          farm_name: row.farm_name,
+          crops: [],
+          total_harvests: 0,
+          avg_yield: 0,
+          avg_loss: 0,
+          avg_quality: 0,
+          consistency: 0,
+          composite_score: 0
+        };
+      }
+      const fs = farmScores[row.farm_id];
+      fs.crops.push({
+        crop: row.crop,
+        harvest_count: parseInt(row.harvest_count),
+        avg_yield: +parseFloat(row.avg_yield).toFixed(2),
+        avg_loss: +parseFloat(row.avg_loss).toFixed(3),
+        avg_quality: +parseFloat(row.avg_quality || 0).toFixed(2),
+        consistency: row.yield_stddev ? +(1 - Math.min(parseFloat(row.yield_stddev) / parseFloat(row.avg_yield), 1)).toFixed(2) : null
+      });
+      fs.total_harvests += parseInt(row.harvest_count);
+    }
+
+    // Compute composite score per farm: yield 40%, low-loss 30%, consistency 30%
+    const rankings = Object.values(farmScores).map(fs => {
+      const avgYield = fs.crops.reduce((s, c) => s + c.avg_yield * c.harvest_count, 0) / Math.max(fs.total_harvests, 1);
+      const avgLoss = fs.crops.reduce((s, c) => s + c.avg_loss * c.harvest_count, 0) / Math.max(fs.total_harvests, 1);
+      const avgConsistency = fs.crops.filter(c => c.consistency != null).reduce((s, c) => s + c.consistency, 0)
+        / Math.max(fs.crops.filter(c => c.consistency != null).length, 1);
+
+      fs.avg_yield = +avgYield.toFixed(2);
+      fs.avg_loss = +avgLoss.toFixed(3);
+      fs.consistency = +avgConsistency.toFixed(2);
+
+      // Normalize: yield (0-5oz range), loss (invert, 0-0.5 range), consistency (0-1)
+      const yieldScore = Math.min(avgYield / 5, 1) * 40;
+      const lossScore = Math.max(1 - avgLoss * 2, 0) * 30;
+      const consistencyScore = avgConsistency * 30;
+      fs.composite_score = +(yieldScore + lossScore + consistencyScore).toFixed(1);
+
+      return fs;
+    });
+
+    // Sort by composite score
+    rankings.sort((a, b) => b.composite_score - a.composite_score);
+
+    // 3. Network-level aggregates
+    const networkAvgYield = rankings.length > 0
+      ? +(rankings.reduce((s, r) => s + r.avg_yield, 0) / rankings.length).toFixed(2) : 0;
+    const networkAvgLoss = rankings.length > 0
+      ? +(rankings.reduce((s, r) => s + r.avg_loss, 0) / rankings.length).toFixed(3) : 0;
+
+    res.json({
+      ok: true,
+      generated_at: new Date().toISOString(),
+      network_summary: {
+        total_farms: rankings.length,
+        total_harvests_90d: rankings.reduce((s, r) => s + r.total_harvests, 0),
+        avg_yield_oz: networkAvgYield,
+        avg_loss_rate: networkAvgLoss,
+        top_crop: yieldResult.rows[0]?.crop || null
+      },
+      rankings,
+      scoring_weights: {
+        yield_efficiency: '40%',
+        low_loss_rate: '30%',
+        consistency: '30%'
+      }
+    });
+  } catch (error) {
+    console.error('[benchmarking] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ── Phase 4 Ticket 4.7: A/B Recipe Experiment API ─────────────────────
 app.post('/api/experiments', async (req, res) => {
   try {

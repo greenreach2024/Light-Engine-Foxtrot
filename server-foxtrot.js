@@ -11005,6 +11005,118 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
   }
 });
 
+
+// ── Sprint 4 Ticket S4.2: Report Harvest Schedule to Central ────────────
+
+/**
+ * Computes projected harvest dates from active groups and sends them to Central.
+ * Runs on startup (after 2 min) and daily. Also callable via POST endpoint.
+ */
+(function wireHarvestScheduleReporter() {
+  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || 'https://greenreach-central.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com';
+  const EDGE_API_KEY = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
+  const FARM_ID = process.env.FARM_ID || 'light-engine-demo';
+
+  async function computeProjectedHarvests() {
+    const groups = loadGroupsFile();
+    const projections = [];
+
+    for (const group of groups) {
+      if (!group.seedDate && !group.seed_date) continue;
+      const crop = group.crop || group.recipe || group.name || 'unknown';
+      const seedDate = group.seedDate || group.seed_date;
+      const growDays = group.growDays || group.grow_days || group.duration || 28;
+      const harvestDate = new Date(new Date(seedDate).getTime() + growDays * 86400000);
+      if (harvestDate < new Date()) continue; // skip past harvests
+
+      projections.push({
+        group_id: group.id || group.group_id,
+        crop: crop.toLowerCase().replace(/\s+/g, '-'),
+        seed_date: seedDate,
+        projected_harvest: harvestDate.toISOString().slice(0, 10),
+        grow_days: growDays,
+        zone: group.zone || group.room || null,
+        tray_count: group.trayCount || group.trays || 1,
+        estimated_plants: (group.trayCount || group.trays || 1) * (group.plantsPerTray || 128)
+      });
+    }
+
+    return projections;
+  }
+
+  async function reportHarvestSchedule() {
+    try {
+      const projections = await computeProjectedHarvests();
+      if (projections.length === 0) {
+        console.log('[harvest-report] No upcoming harvests to report');
+        return { ok: true, reported: 0 };
+      }
+
+      const payload = {
+        farm_id: FARM_ID,
+        reported_at: new Date().toISOString(),
+        projections,
+        total_crops: [...new Set(projections.map(p => p.crop))].length
+      };
+
+      // Try pushing to Central 
+      try {
+        const resp = await fetch(`${CENTRAL_URL}/api/network/harvest-projections`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': EDGE_API_KEY,
+            'X-Farm-ID': FARM_ID
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (resp.ok) {
+          console.log(`[harvest-report] Reported ${projections.length} projected harvests to Central`);
+        } else {
+          console.warn(`[harvest-report] Central returned ${resp.status}`);
+        }
+      } catch (pushErr) {
+        console.warn('[harvest-report] Push to Central failed (non-fatal):', pushErr?.message);
+      }
+
+      // Also persist locally
+      const reportPath = path.join(DATA_DIR, 'harvest-schedule-report.json');
+      fs.writeFileSync(reportPath, JSON.stringify(payload, null, 2));
+
+      return { ok: true, reported: projections.length };
+    } catch (err) {
+      console.error('[harvest-report] Error:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  // Expose endpoint for on-demand reporting
+  app.post('/api/harvest-schedule/report', async (req, res) => {
+    const result = await reportHarvestSchedule();
+    res.json(result);
+  });
+
+  app.get('/api/harvest-schedule/projections', async (req, res) => {
+    try {
+      const projections = await computeProjectedHarvests();
+      res.json({ ok: true, farm_id: FARM_ID, projections, count: projections.length });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // Auto-report: 2 min after startup, then every 24 hours
+  setTimeout(() => {
+    reportHarvestSchedule().catch(e => console.warn('[harvest-report] Initial report failed:', e.message));
+  }, 2 * 60 * 1000);
+  setInterval(() => {
+    reportHarvestSchedule().catch(e => console.warn('[harvest-report] Daily report failed:', e.message));
+  }, 24 * 60 * 60 * 1000);
+  console.log('[harvest-report] Harvest schedule reporter wired (daily + initial 2min)');
+})();
+
 // ── Phase 3 Ticket 3.4: Manual retrain trigger ──────────────────────────
 
 /**
