@@ -57,6 +57,8 @@
       
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
+      this.selectedTimeSlot = 'flexible';
+      this.toggleDeliveryFields();
 
       this.setupSourcingControls();
       await this.loadNetworkFarms();
@@ -127,12 +129,43 @@
         if (this.currentView === 'checkout') this.previewAllocation();
       });
 
-      ['fulfillment-method', 'delivery-time-slot', 'delivery-address', 'delivery-city', 'delivery-province', 'delivery-postal']
+      // Fulfillment method radio cards
+      document.querySelectorAll('input[name="fulfillment"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+          this.toggleDeliveryFields();
+          if (this.currentView === 'checkout') this.previewAllocation();
+        });
+      });
+
+      // Delivery address fields trigger re-quote
+      ['delivery-address', 'delivery-city', 'delivery-province']
         .forEach((fieldId) => {
           document.getElementById(fieldId)?.addEventListener('change', () => {
             if (this.currentView === 'checkout') this.previewAllocation();
           });
         });
+
+      // Postal code: debounced input for real-time zone lookup
+      const postalInput = document.getElementById('delivery-postal');
+      if (postalInput) {
+        let postalTimer = null;
+        postalInput.addEventListener('input', () => {
+          clearTimeout(postalTimer);
+          postalTimer = setTimeout(() => {
+            if (this.currentView === 'checkout') this.previewAllocation();
+          }, 600);
+        });
+      }
+
+      // Time slot buttons
+      document.getElementById('time-slots')?.addEventListener('click', (event) => {
+        const btn = event.target.closest('.time-slot-btn');
+        if (!btn || btn.disabled) return;
+        document.querySelectorAll('.time-slot-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.selectedTimeSlot = btn.dataset.slot;
+        if (this.currentView === 'checkout') this.previewAllocation();
+      });
 
       document.getElementById('sort-by')?.addEventListener('change', () => {
         this.renderCatalog();
@@ -962,7 +995,29 @@
     },
 
     getFulfillmentMethod() {
-      return document.getElementById('fulfillment-method')?.value || 'delivery';
+      const checked = document.querySelector('input[name="fulfillment"]:checked');
+      return checked?.value || 'delivery';
+    },
+
+    getSelectedTimeSlot() {
+      const selected = document.querySelector('.time-slot-btn.selected');
+      return selected?.dataset?.slot || this.selectedTimeSlot || 'flexible';
+    },
+
+    toggleDeliveryFields() {
+      const method = this.getFulfillmentMethod();
+      const deliveryFields = document.getElementById('delivery-fields');
+      const pickupInfo = document.getElementById('pickup-info');
+      const feeDisplay = document.getElementById('delivery-fee-display');
+
+      if (method === 'pickup') {
+        deliveryFields?.classList.add('hidden');
+        pickupInfo?.classList.remove('hidden');
+        if (feeDisplay) feeDisplay.textContent = '—';
+      } else {
+        deliveryFields?.classList.remove('hidden');
+        pickupInfo?.classList.add('hidden');
+      }
     },
 
     getCartSubtotal() {
@@ -980,7 +1035,8 @@
 
     async refreshDeliveryQuote(allocation) {
       const quoteEl = document.getElementById('delivery-quote-status');
-      if (!quoteEl) return;
+      const zoneResultEl = document.getElementById('zone-result');
+      const feeDisplay = document.getElementById('delivery-fee-display');
 
       const method = this.getFulfillmentMethod();
       if (method === 'pickup') {
@@ -990,19 +1046,41 @@
           minimum_order: 0,
           reason: 'pickup_selected'
         };
-        quoteEl.textContent = 'Pickup selected. No delivery fee will be applied.';
-        quoteEl.style.color = 'var(--text-secondary)';
+        if (quoteEl) {
+          quoteEl.textContent = 'Pickup selected. No delivery fee will be applied.';
+          quoteEl.style.color = 'var(--text-secondary)';
+        }
+        if (zoneResultEl) { zoneResultEl.classList.add('hidden'); }
         return;
       }
 
-      quoteEl.textContent = 'Calculating delivery quote...';
-      quoteEl.style.color = 'var(--text-secondary)';
+      if (quoteEl) {
+        quoteEl.textContent = 'Calculating delivery quote...';
+        quoteEl.style.color = 'var(--text-secondary)';
+      }
+      if (zoneResultEl) {
+        zoneResultEl.textContent = 'Looking up your delivery zone...';
+        zoneResultEl.className = 'zone-result zone-loading';
+      }
 
       try {
         const postalCode = document.getElementById('delivery-postal')?.value || '';
         const zone = this.getDeliveryZoneFromPostal(postalCode);
-        const requestedWindow = document.getElementById('delivery-time-slot')?.value || null;
+        const requestedWindow = this.getSelectedTimeSlot();
         const subtotal = Number(allocation?.subtotal || this.getCartSubtotal() || 0);
+
+        if (!postalCode || postalCode.length < 3) {
+          if (zoneResultEl) {
+            zoneResultEl.textContent = 'Enter your postal code to see delivery availability.';
+            zoneResultEl.className = 'zone-result zone-loading';
+          }
+          if (quoteEl) {
+            quoteEl.textContent = 'Enter postal code for delivery quote.';
+            quoteEl.style.color = 'var(--text-secondary)';
+          }
+          this.deliveryQuote = null;
+          return;
+        }
 
         const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
           method: 'POST',
@@ -1017,27 +1095,91 @@
         if (response.ok && json?.status === 'ok' && json?.data) {
           this.deliveryQuote = json.data;
           if (json.data.eligible) {
-            quoteEl.textContent = `Delivery available. Estimated delivery fee: $${Number(json.data.fee || 0).toFixed(2)}.`;
-            quoteEl.style.color = 'var(--success)';
+            const fee = Number(json.data.fee || 0);
+            if (zoneResultEl) {
+              zoneResultEl.innerHTML = `<strong>${json.data.zone_name || zone}</strong> — Delivery fee: <strong>$${fee.toFixed(2)}</strong>`;
+              zoneResultEl.className = 'zone-result zone-success';
+            }
+            if (feeDisplay) feeDisplay.textContent = fee > 0 ? `$${fee.toFixed(2)}` : 'Free';
+            if (quoteEl) {
+              quoteEl.textContent = `Delivery available. Estimated fee: $${fee.toFixed(2)}.`;
+              quoteEl.style.color = 'var(--success)';
+            }
+
+            // Update time slot availability from quote windows
+            if (json.data.windows && json.data.windows.length > 0) {
+              this.renderTimeSlots(json.data.windows);
+            }
           } else {
             const min = Number(json.data.minimum_order || 0).toFixed(2);
             const reason = json.data.reason === 'below_minimum_order'
-              ? `Minimum order for delivery is $${min}.`
-              : 'Delivery is not available for the selected options.';
-            quoteEl.textContent = reason;
-            quoteEl.style.color = 'var(--error)';
+              ? `Minimum order for delivery is $${min}. Add more to your cart.`
+              : 'Delivery is not available for this postal code.';
+            if (zoneResultEl) {
+              zoneResultEl.textContent = reason;
+              zoneResultEl.className = 'zone-result zone-error';
+            }
+            if (feeDisplay) feeDisplay.textContent = '—';
+            if (quoteEl) {
+              quoteEl.textContent = reason;
+              quoteEl.style.color = 'var(--error)';
+            }
           }
           return;
         }
 
         this.deliveryQuote = null;
-        quoteEl.textContent = 'Unable to load delivery quote right now.';
-        quoteEl.style.color = 'var(--text-secondary)';
+        if (zoneResultEl) {
+          zoneResultEl.textContent = 'Unable to check delivery zone right now.';
+          zoneResultEl.className = 'zone-result zone-loading';
+        }
+        if (quoteEl) {
+          quoteEl.textContent = 'Unable to load delivery quote right now.';
+          quoteEl.style.color = 'var(--text-secondary)';
+        }
       } catch (error) {
         console.error('Delivery quote error:', error);
         this.deliveryQuote = null;
-        quoteEl.textContent = 'Unable to load delivery quote right now.';
-        quoteEl.style.color = 'var(--text-secondary)';
+        if (zoneResultEl) { zoneResultEl.classList.add('hidden'); }
+        if (quoteEl) {
+          quoteEl.textContent = 'Unable to load delivery quote right now.';
+          quoteEl.style.color = 'var(--text-secondary)';
+        }
+      }
+    },
+
+    renderTimeSlots(windows) {
+      const container = document.getElementById('time-slots');
+      if (!container) return;
+      const currentSlot = this.getSelectedTimeSlot();
+
+      container.innerHTML = windows.map(w => {
+        const isSelected = w.id === currentSlot;
+        const isFull = w.available === false;
+        return `
+          <button type="button" class="time-slot-btn${isSelected ? ' selected' : ''}${isFull ? '' : ''}" data-slot="${w.id}" ${isFull ? 'disabled' : ''}>
+            <span class="slot-label">${w.label || w.id}</span>
+            <span class="slot-time">${w.start || ''} – ${w.end || ''}</span>
+            ${isFull ? '<span class="slot-full">Full</span>' : ''}
+          </button>
+        `;
+      }).join('');
+
+      // Add flexible option if not in windows
+      if (!windows.find(w => w.id === 'flexible')) {
+        const isFlexSelected = currentSlot === 'flexible';
+        container.innerHTML += `
+          <button type="button" class="time-slot-btn${isFlexSelected ? ' selected' : ''}" data-slot="flexible">
+            <span class="slot-label">Flexible</span>
+            <span class="slot-time">Any time</span>
+          </button>
+        `;
+      }
+
+      // Ensure something is selected
+      if (!container.querySelector('.time-slot-btn.selected')) {
+        const first = container.querySelector('.time-slot-btn:not(:disabled)');
+        if (first) first.classList.add('selected');
       }
     },
 
@@ -2071,6 +2213,14 @@
           throw new Error('Delivery is not eligible for this order. Adjust your cart or switch to pickup.');
         }
 
+        if (fulfillmentMethod === 'delivery') {
+          const street = document.getElementById('delivery-address')?.value?.trim();
+          const postal = document.getElementById('delivery-postal')?.value?.trim();
+          if (!street || !postal) {
+            throw new Error('Delivery address and postal code are required for delivery orders.');
+          }
+        }
+
         const cartItems = this.cart.map(item => ({
           sku_id: item.sku_id,
           quantity: item.quantity
@@ -2106,7 +2256,7 @@
             recurrence: { cadence },
             fulfillment: {
               method: fulfillmentMethod,
-              requested_window: document.getElementById('delivery-time-slot')?.value || null
+              requested_window: this.getSelectedTimeSlot()
             },
             cart: cartItems,
             payment_provider: paymentProvider,
