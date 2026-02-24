@@ -11350,8 +11350,8 @@ app.get('/api/ml/diagnostics', async (req, res) => {
       proc.stderr.on('data', d => stderr += d);
       proc.on('close', code => {
         if (code !== 0) {
-          if (/ModuleNotFoundError|sklearn/i.test(stderr)) {
-            return reject(new Error('ML dependencies not installed (scikit-learn required)'));
+          if (/ModuleNotFoundError|ImportError/i.test(stderr)) {
+            return reject(new Error(`ML dependency missing: ${stderr.trim().split("\n").pop() || stderr.slice(0, 200)}`));
           }
           return reject(new Error(`Anomaly script exited with code ${code}: ${stderr.slice(0, 200)}`));
         }
