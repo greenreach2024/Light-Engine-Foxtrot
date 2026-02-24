@@ -6,6 +6,7 @@
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
+import { query, isDatabaseEnabled } from '../../lib/database.js';
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ const DELIVERY_ZONES = {
   ZONE_C: { id: 'zone_c', name: 'Rural', fee: 10, min_order: 50 }
 };
 
-// Farm-scoped MVP settings (in-memory for now; persistence in follow-up slice)
+// Farm-scoped MVP settings (in-memory fallback; PostgreSQL primary when DB_ENABLED)
 const deliverySettingsByFarm = new Map();
 const deliveryWindowsByFarm = new Map();
 
@@ -63,11 +64,63 @@ function getDefaultDeliverySettings() {
   };
 }
 
-function getFarmDeliverySettings(farmId) {
+/**
+ * Get delivery settings for a farm (DB-first, in-memory fallback)
+ */
+async function getFarmDeliverySettings(farmId) {
+  if (isDatabaseEnabled()) {
+    try {
+      const result = await query(
+        'SELECT * FROM farm_delivery_settings WHERE farm_id = $1',
+        [farmId]
+      );
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return {
+          enabled: row.enabled,
+          base_fee: Number(row.base_fee),
+          min_order: Number(row.min_order),
+          lead_time_hours: row.lead_time_hours,
+          max_deliveries_per_window: row.max_deliveries_per_window,
+          updated_at: row.updated_at?.toISOString() || new Date().toISOString()
+        };
+      }
+    } catch (err) {
+      console.warn('[farm-sales] DB settings read failed, using in-memory:', err.message);
+    }
+  }
+  // Fallback to in-memory
   if (!deliverySettingsByFarm.has(farmId)) {
     deliverySettingsByFarm.set(farmId, getDefaultDeliverySettings());
   }
   return deliverySettingsByFarm.get(farmId);
+}
+
+/**
+ * Save delivery settings for a farm (upsert to DB + update in-memory)
+ */
+async function saveFarmDeliverySettings(farmId, settings) {
+  // Always update in-memory
+  deliverySettingsByFarm.set(farmId, settings);
+
+  if (isDatabaseEnabled()) {
+    try {
+      await query(
+        `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET
+           enabled = EXCLUDED.enabled,
+           base_fee = EXCLUDED.base_fee,
+           min_order = EXCLUDED.min_order,
+           lead_time_hours = EXCLUDED.lead_time_hours,
+           max_deliveries_per_window = EXCLUDED.max_deliveries_per_window,
+           updated_at = NOW()`,
+        [farmId, settings.enabled, settings.base_fee, settings.min_order, settings.lead_time_hours, settings.max_deliveries_per_window]
+      );
+    } catch (err) {
+      console.warn('[farm-sales] DB settings write failed, in-memory only:', err.message);
+    }
+  }
 }
 
 function getDefaultDeliveryWindows() {
@@ -77,11 +130,62 @@ function getDefaultDeliveryWindows() {
   }));
 }
 
-function getFarmDeliveryWindows(farmId) {
+/**
+ * Get delivery windows for a farm (DB-first, in-memory fallback)
+ */
+async function getFarmDeliveryWindows(farmId) {
+  if (isDatabaseEnabled()) {
+    try {
+      const result = await query(
+        'SELECT * FROM farm_delivery_windows WHERE farm_id = $1 ORDER BY window_id',
+        [farmId]
+      );
+      if (result.rows.length > 0) {
+        return result.rows.map(row => ({
+          id: row.window_id,
+          label: row.label,
+          start: row.start_time,
+          end: row.end_time,
+          active: row.active
+        }));
+      }
+    } catch (err) {
+      console.warn('[farm-sales] DB windows read failed, using in-memory:', err.message);
+    }
+  }
+  // Fallback to in-memory
   if (!deliveryWindowsByFarm.has(farmId)) {
     deliveryWindowsByFarm.set(farmId, getDefaultDeliveryWindows());
   }
   return deliveryWindowsByFarm.get(farmId);
+}
+
+/**
+ * Save delivery windows for a farm (upsert to DB + update in-memory)
+ */
+async function saveFarmDeliveryWindows(farmId, windows) {
+  // Always update in-memory
+  deliveryWindowsByFarm.set(farmId, windows);
+
+  if (isDatabaseEnabled()) {
+    try {
+      for (const w of windows) {
+        await query(
+          `INSERT INTO farm_delivery_windows (farm_id, window_id, label, start_time, end_time, active, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (farm_id, window_id) DO UPDATE SET
+             label = EXCLUDED.label,
+             start_time = EXCLUDED.start_time,
+             end_time = EXCLUDED.end_time,
+             active = EXCLUDED.active,
+             updated_at = NOW()`,
+          [farmId, w.id, w.label, w.start, w.end, w.active]
+        );
+      }
+    } catch (err) {
+      console.warn('[farm-sales] DB windows write failed, in-memory only:', err.message);
+    }
+  }
 }
 
 function normalizeWindowsInput(input = []) {
@@ -114,7 +218,7 @@ function normalizeWindowsInput(input = []) {
  * @param {string} [zone] - optional zone ID
  * @returns {{ ok: boolean, windows: Array, error?: string }}
  */
-function getWindowAvailability(farmId, date, zone) {
+async function getWindowAvailability(farmId, date, zone) {
   const deliveryDate = new Date(date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -123,8 +227,8 @@ function getWindowAvailability(farmId, date, zone) {
     return { ok: false, windows: [], error: 'invalid_date' };
   }
 
-  const settings = getFarmDeliverySettings(farmId);
-  const configuredWindows = getFarmDeliveryWindows(farmId);
+  const settings = await getFarmDeliverySettings(farmId);
+  const configuredWindows = await getFarmDeliveryWindows(farmId);
   const activeWindows = configuredWindows.filter((w) => w.active);
   const effectiveWindowTemplates = activeWindows.length
     ? activeWindows
@@ -163,7 +267,7 @@ function getWindowAvailability(farmId, date, zone) {
  * - date: YYYY-MM-DD
  * - zone: Delivery zone ID
  */
-router.get('/windows', (req, res) => {
+router.get('/windows', async (req, res) => {
   try {
     const { date, zone } = req.query;
     const farmId = req.farm_id;
@@ -173,11 +277,11 @@ router.get('/windows', (req, res) => {
       return res.json({
         ok: true,
         farm_id: farmId,
-        windows: getFarmDeliveryWindows(farmId)
+        windows: await getFarmDeliveryWindows(farmId)
       });
     }
 
-    const result = getWindowAvailability(farmId, date, zone);
+    const result = await getWindowAvailability(farmId, date, zone);
     if (!result.ok) {
       return res.status(400).json({
         ok: false,
@@ -202,7 +306,7 @@ router.get('/windows', (req, res) => {
  * PUT /api/farm-sales/delivery/windows
  * Update active delivery windows for farm
  */
-router.put('/windows', (req, res) => {
+router.put('/windows', async (req, res) => {
   try {
     const farmId = req.farm_id;
     const normalized = normalizeWindowsInput(req.body?.windows);
@@ -215,7 +319,7 @@ router.put('/windows', (req, res) => {
       });
     }
 
-    deliveryWindowsByFarm.set(farmId, normalized);
+    await saveFarmDeliveryWindows(farmId, normalized);
 
     return res.json({
       ok: true,
@@ -237,13 +341,13 @@ router.put('/windows', (req, res) => {
  * GET /api/farm-sales/delivery/settings
  * Get farm-scoped delivery settings
  */
-router.get('/settings', (req, res) => {
+router.get('/settings', async (req, res) => {
   try {
     const farmId = req.farm_id;
     return res.json({
       ok: true,
       farm_id: farmId,
-      settings: getFarmDeliverySettings(farmId)
+      settings: await getFarmDeliverySettings(farmId)
     });
   } catch (error) {
     console.error('[farm-sales] Delivery settings get failed:', error);
@@ -259,10 +363,10 @@ router.get('/settings', (req, res) => {
  * PUT /api/farm-sales/delivery/settings
  * Update farm-scoped delivery settings
  */
-router.put('/settings', (req, res) => {
+router.put('/settings', async (req, res) => {
   try {
     const farmId = req.farm_id;
-    const current = getFarmDeliverySettings(farmId);
+    const current = await getFarmDeliverySettings(farmId);
     const incoming = req.body || {};
 
     const next = {
@@ -278,7 +382,7 @@ router.put('/settings', (req, res) => {
       updated_at: new Date().toISOString()
     };
 
-    deliverySettingsByFarm.set(farmId, next);
+    await saveFarmDeliverySettings(farmId, next);
 
     return res.json({
       ok: true,
@@ -292,6 +396,215 @@ router.put('/settings', (req, res) => {
       error: 'settings_update_failed',
       message: error.message
     });
+  }
+});
+
+// ─── Zone Configuration API (MVP — postal_prefix only, no PostGIS) ─────────
+
+/**
+ * Get farm delivery zones from DB, falling back to hardcoded DELIVERY_ZONES
+ */
+async function getFarmDeliveryZones(farmId) {
+  if (isDatabaseEnabled()) {
+    try {
+      const result = await query(
+        "SELECT * FROM farm_delivery_zones WHERE farm_id = $1 AND status = 'active' ORDER BY zone_id",
+        [farmId]
+      );
+      if (result.rows.length > 0) {
+        return result.rows.map(row => ({
+          id: row.zone_id,
+          name: row.name,
+          description: row.description || '',
+          fee: Number(row.fee),
+          min_order: Number(row.min_order),
+          postal_prefix: row.postal_prefix,
+          status: row.status
+        }));
+      }
+    } catch (err) {
+      console.warn('[farm-sales] DB zones read failed, using defaults:', err.message);
+    }
+  }
+  // Fallback to hardcoded defaults
+  return Object.values(DELIVERY_ZONES);
+}
+
+/**
+ * Find matching zone by postal code (longest prefix match)
+ */
+async function findMatchingZone(farmId, postalCode) {
+  if (!postalCode) return null;
+  const cleanPostal = postalCode.toUpperCase().replace(/\s/g, '');
+
+  if (isDatabaseEnabled()) {
+    try {
+      const result = await query(
+        `SELECT zone_id, name, fee, min_order, postal_prefix
+         FROM farm_delivery_zones
+         WHERE farm_id = $1
+           AND status = 'active'
+           AND postal_prefix IS NOT NULL
+           AND $2 LIKE postal_prefix || '%'
+         ORDER BY LENGTH(postal_prefix) DESC
+         LIMIT 1`,
+        [farmId, cleanPostal]
+      );
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return { id: row.zone_id, name: row.name, fee: Number(row.fee), min_order: Number(row.min_order) };
+      }
+    } catch (err) {
+      console.warn('[farm-sales] DB zone match failed:', err.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * GET /api/farm-sales/delivery/zones
+ * List farm's delivery zones
+ */
+router.get('/zones', async (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const zones = await getFarmDeliveryZones(farmId);
+    return res.json({ ok: true, farm_id: farmId, zones });
+  } catch (error) {
+    console.error('[farm-sales] Delivery zones list failed:', error);
+    return res.status(500).json({ ok: false, error: 'zones_list_failed', message: error.message });
+  }
+});
+
+/**
+ * POST /api/farm-sales/delivery/zones
+ * Create a delivery zone for this farm
+ */
+router.post('/zones', async (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { zone_id, name, description, fee, min_order, postal_prefix } = req.body || {};
+
+    if (!zone_id || !name) {
+      return res.status(400).json({ ok: false, error: 'zone_id and name are required' });
+    }
+
+    const zone = {
+      id: zone_id,
+      name,
+      description: description || '',
+      fee: Math.max(0, Number(fee) || 0),
+      min_order: Math.max(0, Number(min_order) || 25),
+      postal_prefix: postal_prefix || null,
+      status: 'active'
+    };
+
+    if (isDatabaseEnabled()) {
+      try {
+        await query(
+          `INSERT INTO farm_delivery_zones (farm_id, zone_id, name, description, fee, min_order, postal_prefix, status, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW())
+           ON CONFLICT (farm_id, zone_id) DO UPDATE SET
+             name = EXCLUDED.name,
+             description = EXCLUDED.description,
+             fee = EXCLUDED.fee,
+             min_order = EXCLUDED.min_order,
+             postal_prefix = EXCLUDED.postal_prefix,
+             status = 'active',
+             updated_at = NOW()`,
+          [farmId, zone.id, zone.name, zone.description, zone.fee, zone.min_order, zone.postal_prefix]
+        );
+      } catch (err) {
+        console.error('[farm-sales] DB zone create failed:', err.message);
+        return res.status(500).json({ ok: false, error: 'zone_create_failed', message: err.message });
+      }
+    }
+
+    return res.status(201).json({ ok: true, zone });
+  } catch (error) {
+    console.error('[farm-sales] Zone creation failed:', error);
+    return res.status(500).json({ ok: false, error: 'zone_create_failed', message: error.message });
+  }
+});
+
+/**
+ * PATCH /api/farm-sales/delivery/zones/:zoneId
+ * Update a delivery zone
+ */
+router.patch('/zones/:zoneId', async (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { zoneId } = req.params;
+    const { name, description, fee, min_order, postal_prefix } = req.body || {};
+
+    if (isDatabaseEnabled()) {
+      try {
+        const existing = await query(
+          'SELECT * FROM farm_delivery_zones WHERE farm_id = $1 AND zone_id = $2',
+          [farmId, zoneId]
+        );
+        if (existing.rows.length === 0) {
+          return res.status(404).json({ ok: false, error: 'zone_not_found' });
+        }
+
+        const row = existing.rows[0];
+        await query(
+          `UPDATE farm_delivery_zones SET
+            name = $3, description = $4, fee = $5, min_order = $6, postal_prefix = $7, updated_at = NOW()
+           WHERE farm_id = $1 AND zone_id = $2`,
+          [
+            farmId, zoneId,
+            name !== undefined ? name : row.name,
+            description !== undefined ? description : row.description,
+            fee !== undefined ? Math.max(0, Number(fee) || 0) : row.fee,
+            min_order !== undefined ? Math.max(0, Number(min_order) || 0) : row.min_order,
+            postal_prefix !== undefined ? postal_prefix : row.postal_prefix
+          ]
+        );
+
+        return res.json({ ok: true, zone_id: zoneId, updated: true });
+      } catch (err) {
+        console.error('[farm-sales] DB zone update failed:', err.message);
+        return res.status(500).json({ ok: false, error: 'zone_update_failed', message: err.message });
+      }
+    }
+
+    return res.status(503).json({ ok: false, error: 'database_required', message: 'Zone updates require database' });
+  } catch (error) {
+    console.error('[farm-sales] Zone update failed:', error);
+    return res.status(500).json({ ok: false, error: 'zone_update_failed', message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/farm-sales/delivery/zones/:zoneId
+ * Soft-deactivate a delivery zone (status = 'inactive')
+ */
+router.delete('/zones/:zoneId', async (req, res) => {
+  try {
+    const farmId = req.farm_id;
+    const { zoneId } = req.params;
+
+    if (isDatabaseEnabled()) {
+      try {
+        const result = await query(
+          "UPDATE farm_delivery_zones SET status = 'inactive', updated_at = NOW() WHERE farm_id = $1 AND zone_id = $2 RETURNING zone_id",
+          [farmId, zoneId]
+        );
+        if (result.rows.length === 0) {
+          return res.status(404).json({ ok: false, error: 'zone_not_found' });
+        }
+        return res.json({ ok: true, zone_id: zoneId, deactivated: true });
+      } catch (err) {
+        console.error('[farm-sales] DB zone delete failed:', err.message);
+        return res.status(500).json({ ok: false, error: 'zone_delete_failed', message: err.message });
+      }
+    }
+
+    return res.status(503).json({ ok: false, error: 'database_required', message: 'Zone deletion requires database' });
+  } catch (error) {
+    console.error('[farm-sales] Zone deletion failed:', error);
+    return res.status(500).json({ ok: false, error: 'zone_delete_failed', message: error.message });
   }
 });
 
@@ -310,16 +623,35 @@ router.put('/settings', (req, res) => {
  *     3. subtotal >= max(settings.min_order, zone.min_order)
  *   Future (Phase 2): add km/min logging for distance-based pricing.
  */
-router.post('/quote', (req, res) => {
+router.post('/quote', async (req, res) => {
   try {
     const farmId = req.farm_id;
     const { subtotal = 0, zone, requested_window } = req.body || {};
-    const settings = getFarmDeliverySettings(farmId);
-    const configuredWindows = getFarmDeliveryWindows(farmId);
+    const settings = await getFarmDeliverySettings(farmId);
+    const configuredWindows = await getFarmDeliveryWindows(farmId);
     const activeWindows = configuredWindows.filter((w) => w.active).map((w) => w.id);
 
     const requestedZone = String(zone || '').trim().toUpperCase();
-    const zoneConfig = DELIVERY_ZONES[requestedZone] || null;
+    // Try DB zones first (by zone_id or postal_prefix), then hardcoded fallback
+    let zoneConfig = null;
+    if (isDatabaseEnabled()) {
+      try {
+        // Try exact zone_id match from DB
+        const dbResult = await query(
+          "SELECT zone_id, name, fee, min_order FROM farm_delivery_zones WHERE farm_id = $1 AND zone_id = $2 AND status = 'active'",
+          [farmId, requestedZone]
+        );
+        if (dbResult.rows.length > 0) {
+          const row = dbResult.rows[0];
+          zoneConfig = { id: row.zone_id, name: row.name, fee: Number(row.fee), min_order: Number(row.min_order) };
+        }
+      } catch (err) {
+        console.warn('[farm-sales] DB zone lookup failed, using hardcoded:', err.message);
+      }
+    }
+    if (!zoneConfig) {
+      zoneConfig = DELIVERY_ZONES[requestedZone] || null;
+    }
     const effectiveMinOrder = Math.max(
       Number(settings.min_order || 0),
       Number(zoneConfig?.min_order || 0)
@@ -406,7 +738,7 @@ router.get('/zones', (req, res) => {
  *   contact: { name, phone }
  * }
  */
-router.post('/schedule', (req, res) => {
+router.post('/schedule', async (req, res) => {
   try {
     const { order_id, delivery_date, time_slot, address, zone, instructions, contact } = req.body;
     const farmId = req.farm_id;
@@ -440,7 +772,7 @@ router.post('/schedule', (req, res) => {
     }
 
     // Check window availability (direct call — replaces self-fetch anti-pattern F-9)
-    const windowData = getWindowAvailability(farmId, delivery_date, zone);
+    const windowData = await getWindowAvailability(farmId, delivery_date, zone);
     const selectedWindow = windowData.windows?.find(w => w.id === time_slot);
 
     if (!selectedWindow?.available) {

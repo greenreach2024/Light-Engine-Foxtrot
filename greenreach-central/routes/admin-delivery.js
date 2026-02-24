@@ -17,6 +17,7 @@
 
 import express from 'express';
 import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
@@ -24,16 +25,8 @@ const router = express.Router();
 router.use(adminAuthMiddleware);
 router.use(requireAdminRole('admin', 'operations'));
 
-// In-memory store (will be replaced with database in Phase 0.3 migration)
+// In-memory fallback for non-DB fields (drivers, fees, stats not yet in DB)
 const deliveryConfig = {
-  enabled: true,
-  base_fee: 0,
-  min_order: 25,
-  zones: [
-    { id: 'ZONE_A', name: 'Zone A — Local', description: '0-10 km from farm', fee: 0, min_order: 25, windows: ['morning', 'afternoon', 'evening'], status: 'active' },
-    { id: 'ZONE_B', name: 'Zone B — Regional', description: '10-25 km from farm', fee: 5, min_order: 35, windows: ['morning', 'afternoon'], status: 'active' },
-    { id: 'ZONE_C', name: 'Zone C — Extended', description: '25-50 km from farm', fee: 10, min_order: 50, windows: ['morning'], status: 'active' }
-  ],
   drivers: [],
   recent_fees: [],
   stats: {
@@ -46,108 +39,230 @@ const deliveryConfig = {
 };
 
 /**
- * GET /config - Get full delivery configuration
+ * GET /config - Get full delivery configuration for a farm
+ * Query: ?farm_id=XXX (required)
  */
-router.get('/config', (req, res) => {
-  res.json({
-    success: true,
-    config: deliveryConfig
-  });
+router.get('/config', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id query parameter is required' });
+    }
+
+    let settings = { enabled: false, base_fee: 0, min_order: 25 };
+    let zones = [];
+
+    if (isDatabaseAvailable()) {
+      const settingsResult = await query(
+        'SELECT * FROM farm_delivery_settings WHERE farm_id = $1', [farmId]
+      );
+      if (settingsResult.rows.length > 0) {
+        const row = settingsResult.rows[0];
+        settings = { enabled: row.enabled, base_fee: Number(row.base_fee), min_order: Number(row.min_order) };
+      }
+
+      const zonesResult = await query(
+        'SELECT * FROM farm_delivery_zones WHERE farm_id = $1 ORDER BY zone_id', [farmId]
+      );
+      zones = zonesResult.rows.map(r => ({
+        id: r.zone_id, name: r.name, description: r.description || '',
+        fee: Number(r.fee), min_order: Number(r.min_order),
+        postal_prefix: r.postal_prefix, status: r.status
+      }));
+    }
+
+    res.json({
+      success: true,
+      config: { ...settings, zones, drivers: deliveryConfig.drivers, stats: deliveryConfig.stats }
+    });
+  } catch (error) {
+    console.error('[Admin Delivery] Config get failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
- * PUT /config - Update global delivery settings
+ * PUT /config - Update delivery settings for a farm
+ * Body: { farm_id, base_fee?, min_order?, enabled? }
  */
-router.put('/config', (req, res) => {
-  const { base_fee, min_order, enabled } = req.body;
-  
-  if (base_fee !== undefined) deliveryConfig.base_fee = parseFloat(base_fee);
-  if (min_order !== undefined) deliveryConfig.min_order = parseFloat(min_order);
-  if (enabled !== undefined) deliveryConfig.enabled = enabled;
-  
-  console.log('[Admin Delivery] Config updated:', { base_fee: deliveryConfig.base_fee, min_order: deliveryConfig.min_order, enabled: deliveryConfig.enabled });
-  
-  res.json({
-    success: true,
-    config: deliveryConfig
-  });
+router.put('/config', async (req, res) => {
+  try {
+    const { farm_id, base_fee, min_order, enabled } = req.body;
+    if (!farm_id) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET
+           enabled = COALESCE($2, farm_delivery_settings.enabled),
+           base_fee = COALESCE($3, farm_delivery_settings.base_fee),
+           min_order = COALESCE($4, farm_delivery_settings.min_order),
+           updated_at = NOW()`,
+        [farm_id, enabled ?? null, base_fee != null ? parseFloat(base_fee) : null, min_order != null ? parseFloat(min_order) : null]
+      );
+
+      const result = await query('SELECT * FROM farm_delivery_settings WHERE farm_id = $1', [farm_id]);
+      const row = result.rows[0];
+      console.log('[Admin Delivery] Config updated for farm:', farm_id);
+      return res.json({
+        success: true,
+        config: { enabled: row.enabled, base_fee: Number(row.base_fee), min_order: Number(row.min_order) }
+      });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Admin Delivery] Config update failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
- * GET /zones - List delivery zones
+ * GET /zones - List delivery zones for a farm
+ * Query: ?farm_id=XXX (required)
  */
-router.get('/zones', (req, res) => {
-  res.json({
-    success: true,
-    zones: deliveryConfig.zones
-  });
+router.get('/zones', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id query parameter is required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      const result = await query(
+        'SELECT * FROM farm_delivery_zones WHERE farm_id = $1 ORDER BY zone_id', [farmId]
+      );
+      const zones = result.rows.map(r => ({
+        id: r.zone_id, name: r.name, description: r.description || '',
+        fee: Number(r.fee), min_order: Number(r.min_order),
+        postal_prefix: r.postal_prefix, status: r.status,
+        created_at: r.created_at, updated_at: r.updated_at
+      }));
+      return res.json({ success: true, zones });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Admin Delivery] Zones list failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
  * POST /zones - Create a new delivery zone
+ * Body: { farm_id, id, name, description?, fee?, min_order?, postal_prefix? }
  */
-router.post('/zones', (req, res) => {
-  const { id, name, description, fee, min_order, windows, status } = req.body;
-  
-  if (!id || !name) {
-    return res.status(400).json({ success: false, error: 'Zone id and name are required' });
+router.post('/zones', async (req, res) => {
+  try {
+    const { farm_id, id, name, description, fee, min_order, postal_prefix } = req.body;
+    if (!farm_id || !id || !name) {
+      return res.status(400).json({ success: false, error: 'farm_id, zone id and name are required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      const existing = await query(
+        'SELECT 1 FROM farm_delivery_zones WHERE farm_id = $1 AND zone_id = $2', [farm_id, id]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ success: false, error: `Zone ${id} already exists for farm ${farm_id}` });
+      }
+
+      await query(
+        `INSERT INTO farm_delivery_zones (farm_id, zone_id, name, description, fee, min_order, postal_prefix, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')`,
+        [farm_id, id, name, description || '', parseFloat(fee || 0), parseFloat(min_order || 25), postal_prefix || null]
+      );
+
+      console.log('[Admin Delivery] Zone created:', id, 'for farm:', farm_id);
+      return res.json({ success: true, zone: { id, name, description: description || '', fee: parseFloat(fee || 0), min_order: parseFloat(min_order || 25), postal_prefix: postal_prefix || null, status: 'active' } });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Admin Delivery] Zone create failed:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-  
-  if (deliveryConfig.zones.find(z => z.id === id)) {
-    return res.status(409).json({ success: false, error: `Zone ${id} already exists` });
-  }
-  
-  const zone = {
-    id,
-    name,
-    description: description || '',
-    fee: parseFloat(fee || 0),
-    min_order: parseFloat(min_order || 25),
-    windows: windows || ['morning', 'afternoon', 'evening'],
-    status: status || 'active',
-    created_at: new Date().toISOString()
-  };
-  
-  deliveryConfig.zones.push(zone);
-  console.log('[Admin Delivery] Zone created:', zone.id);
-  
-  res.json({ success: true, zone });
 });
 
 /**
  * PUT /zones/:id - Update a delivery zone
+ * Body: { farm_id, name?, description?, fee?, min_order?, postal_prefix?, status? }
  */
-router.put('/zones/:id', (req, res) => {
-  const zone = deliveryConfig.zones.find(z => z.id === req.params.id);
-  if (!zone) {
-    return res.status(404).json({ success: false, error: 'Zone not found' });
+router.put('/zones/:id', async (req, res) => {
+  try {
+    const zoneId = req.params.id;
+    const { farm_id, name, description, fee, min_order, postal_prefix, status } = req.body;
+    if (!farm_id) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      const existing = await query(
+        'SELECT * FROM farm_delivery_zones WHERE farm_id = $1 AND zone_id = $2', [farm_id, zoneId]
+      );
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Zone not found' });
+      }
+
+      const row = existing.rows[0];
+      await query(
+        `UPDATE farm_delivery_zones SET
+          name = $3, description = $4, fee = $5, min_order = $6, postal_prefix = $7, status = $8, updated_at = NOW()
+         WHERE farm_id = $1 AND zone_id = $2`,
+        [
+          farm_id, zoneId,
+          name !== undefined ? name : row.name,
+          description !== undefined ? description : row.description,
+          fee !== undefined ? parseFloat(fee) : row.fee,
+          min_order !== undefined ? parseFloat(min_order) : row.min_order,
+          postal_prefix !== undefined ? postal_prefix : row.postal_prefix,
+          status !== undefined ? status : row.status
+        ]
+      );
+
+      console.log('[Admin Delivery] Zone updated:', zoneId, 'for farm:', farm_id);
+      return res.json({ success: true, zone_id: zoneId, updated: true });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Admin Delivery] Zone update failed:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-  
-  const { name, description, fee, min_order, windows, status } = req.body;
-  if (name !== undefined) zone.name = name;
-  if (description !== undefined) zone.description = description;
-  if (fee !== undefined) zone.fee = parseFloat(fee);
-  if (min_order !== undefined) zone.min_order = parseFloat(min_order);
-  if (windows !== undefined) zone.windows = windows;
-  if (status !== undefined) zone.status = status;
-  zone.updated_at = new Date().toISOString();
-  
-  console.log('[Admin Delivery] Zone updated:', zone.id);
-  res.json({ success: true, zone });
 });
 
 /**
- * DELETE /zones/:id - Remove a delivery zone
+ * DELETE /zones/:id - Soft-deactivate a delivery zone
+ * Query: ?farm_id=XXX (required)
  */
-router.delete('/zones/:id', (req, res) => {
-  const idx = deliveryConfig.zones.findIndex(z => z.id === req.params.id);
-  if (idx === -1) {
-    return res.status(404).json({ success: false, error: 'Zone not found' });
+router.delete('/zones/:id', async (req, res) => {
+  try {
+    const zoneId = req.params.id;
+    const farmId = req.query.farm_id || req.body?.farm_id;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+
+    if (isDatabaseAvailable()) {
+      const result = await query(
+        "UPDATE farm_delivery_zones SET status = 'inactive', updated_at = NOW() WHERE farm_id = $1 AND zone_id = $2 RETURNING zone_id",
+        [farmId, zoneId]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Zone not found' });
+      }
+      console.log('[Admin Delivery] Zone deactivated:', zoneId, 'for farm:', farmId);
+      return res.json({ success: true, deleted: zoneId });
+    }
+
+    res.status(503).json({ success: false, error: 'Database unavailable' });
+  } catch (error) {
+    console.error('[Admin Delivery] Zone delete failed:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-  
-  const removed = deliveryConfig.zones.splice(idx, 1)[0];
-  console.log('[Admin Delivery] Zone deleted:', removed.id);
-  res.json({ success: true, deleted: removed.id });
 });
 
 /**
