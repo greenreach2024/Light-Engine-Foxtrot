@@ -1559,9 +1559,11 @@
                 </div>
 
                 <div id="detail-recipes" class="tab-content">
-                    <div class="card">
+                    <!-- Active Recipes on This Farm -->
+                    <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
-                            <div class="card-title">Active Grow Recipes</div>
+                            <div class="card-title">Active Recipes on This Farm</div>
+                            <span id="farm-active-recipes-count" style="color: var(--text-secondary); font-size: 0.9rem;"></span>
                         </div>
                         <div class="card-body">
                             <div class="table-container">
@@ -1582,6 +1584,85 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Full Recipe Library (Read-Only) -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div class="card-title">GreenReach Recipe Library</div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select id="farm-recipe-category-filter" onchange="filterFarmRecipeLibrary()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem;">
+                                    <option value="">All Categories</option>
+                                    <option value="Leafy Greens">Leafy Greens</option>
+                                    <option value="Herbs">Herbs</option>
+                                    <option value="Fruiting Crops">Fruiting Crops</option>
+                                </select>
+                                <input type="text" id="farm-recipe-library-search" placeholder="Search recipes..." onkeyup="filterFarmRecipeLibrary()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 200px; font-size: 0.85rem;">
+                                <span id="farm-recipe-library-count" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding: 0;">
+                            <p style="padding: 12px 16px; margin: 0; color: var(--text-secondary); font-size: 0.85rem; border-bottom: 1px solid var(--border);">
+                                All recipes are managed by GreenReach Central. Contact your account manager or submit a request below to add new recipes.
+                            </p>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 25%;">Recipe Name</th>
+                                        <th style="width: 15%;">Category</th>
+                                        <th style="width: 10%;">Days</th>
+                                        <th style="width: 10%;">Stages</th>
+                                        <th style="width: 12%;">Avg Temp</th>
+                                        <th style="width: 12%;">Status</th>
+                                        <th style="width: 16%;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="farm-recipe-library-tbody">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading recipe library...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Request New Recipe -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Request a New Recipe</div>
+                        </div>
+                        <div class="card-body">
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                                Don't see the crop or variety you need? Submit a request and GreenReach Central's recipe team will review it. New recipes are developed with AI-assisted optimization and validated before release.
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 700px;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Crop / Variety Name *</label>
+                                    <input type="text" id="recipe-request-crop" placeholder="e.g. Red Romaine Lettuce" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Category</label>
+                                    <select id="recipe-request-category" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                        <option value="Leafy Greens">Leafy Greens</option>
+                                        <option value="Herbs">Herbs</option>
+                                        <option value="Fruiting Crops">Fruiting Crops</option>
+                                        <option value="Microgreens">Microgreens</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div style="grid-column: 1 / -1;">
+                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Notes (optional)</label>
+                                    <textarea id="recipe-request-notes" rows="3" placeholder="Any specific requirements, target yield, preferred growing conditions, etc." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); resize: vertical;"></textarea>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                                <button class="btn btn-primary" onclick="submitRecipeRequest()" style="padding: 8px 20px;">Submit Request</button>
+                                <span id="recipe-request-status" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <!-- Previous Requests -->
+                            <div id="recipe-requests-list" style="margin-top: 20px; display: none;">
+                                <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 8px;">Your Previous Requests</h4>
+                                <div id="recipe-requests-tbody" style="font-size: 0.85rem;"></div>
                             </div>
                         </div>
                     </div>

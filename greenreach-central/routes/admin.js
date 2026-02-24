@@ -3764,4 +3764,101 @@ router.get('/harvest/forecast', async (req, res) => {
     }
 });
 
+// ── Recipe Requests (in-memory store, DB when available) ──
+
+/** In-memory recipe requests store (persisted to DB when available) */
+const recipeRequests = [];
+
+/**
+ * POST /api/admin/recipe-requests
+ * Submit a recipe request from a farm grower
+ */
+router.post('/recipe-requests', async (req, res) => {
+    try {
+        const { farmId, crop, category, notes } = req.body;
+        if (!crop || !crop.trim()) {
+            return res.status(400).json({ success: false, error: 'Crop name is required' });
+        }
+
+        const request = {
+            id: `RR-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            farmId: farmId || 'unknown',
+            crop: crop.trim(),
+            category: category || 'Other',
+            notes: (notes || '').trim(),
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Try DB first
+        try {
+            if (await isDatabaseAvailable()) {
+                await query(
+                    `INSERT INTO recipe_requests (id, farm_id, crop, category, notes, status, created_at, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [request.id, request.farmId, request.crop, request.category, request.notes, request.status, request.createdAt, request.updatedAt]
+                );
+            }
+        } catch (dbErr) {
+            console.warn('[RecipeRequests] DB insert failed, using in-memory only:', dbErr.message);
+        }
+
+        recipeRequests.push(request);
+        console.log(`[RecipeRequests] New request from ${request.farmId}: ${request.crop} (${request.category})`);
+
+        res.json({ success: true, request });
+    } catch (error) {
+        console.error('[RecipeRequests] Error:', error);
+        res.status(500).json({ success: false, error: 'Failed to submit recipe request' });
+    }
+});
+
+/**
+ * GET /api/admin/recipe-requests
+ * List recipe requests, optionally filtered by farmId
+ */
+router.get('/recipe-requests', async (req, res) => {
+    try {
+        const { farmId } = req.query;
+
+        // Try DB first
+        try {
+            if (await isDatabaseAvailable()) {
+                const sql = farmId
+                    ? 'SELECT * FROM recipe_requests WHERE farm_id = $1 ORDER BY created_at DESC'
+                    : 'SELECT * FROM recipe_requests ORDER BY created_at DESC';
+                const params = farmId ? [farmId] : [];
+                const result = await query(sql, params);
+                if (result.rows.length > 0) {
+                    return res.json({
+                        success: true,
+                        requests: result.rows.map(r => ({
+                            id: r.id,
+                            farmId: r.farm_id,
+                            crop: r.crop,
+                            category: r.category,
+                            notes: r.notes,
+                            status: r.status,
+                            createdAt: r.created_at,
+                            updatedAt: r.updated_at
+                        })),
+                        source: 'database'
+                    });
+                }
+            }
+        } catch (_) { /* ignore DB errors */ }
+
+        // Fall back to in-memory
+        let filtered = recipeRequests;
+        if (farmId) filtered = recipeRequests.filter(r => r.farmId === farmId);
+        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, requests: filtered, source: 'memory' });
+    } catch (error) {
+        console.error('[RecipeRequests] Error:', error);
+        res.status(500).json({ success: false, error: 'Failed to load recipe requests' });
+    }
+});
+
 export default router;

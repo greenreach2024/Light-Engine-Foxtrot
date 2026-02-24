@@ -2198,6 +2198,11 @@ async function loadFarmDetails(farmId, farmData) {
         await loadFarmRecipes(farmId);
         console.log('[loadFarmDetails] loadFarmRecipes complete');
         
+        // Load full recipe library for this farm's recipes tab (read-only)
+        console.log('[loadFarmDetails] Calling loadFarmRecipeLibrary...');
+        await loadFarmRecipeLibrary();
+        console.log('[loadFarmDetails] loadFarmRecipeLibrary complete');
+        
         // Load environmental data for the farm detail environmental tab
         console.log('[loadFarmDetails] Calling loadFarmEnvironmentalData...');
         await loadFarmEnvironmentalData(farmId, farm);
@@ -4738,6 +4743,230 @@ Description: ${recipe.description || 'No description'}
     `.trim();
     
     alert(details);
+}
+
+// ── Farm-level Recipe Library (read-only) + Recipe Requests ──
+
+/** Cache of full recipe library loaded for farm recipes tab */
+let _farmRecipeLibrary = [];
+
+/**
+ * Load the full GreenReach recipe library into the farm recipes tab
+ * Called after loadFarmRecipes() finishes populating the active recipes table.
+ */
+async function loadFarmRecipeLibrary() {
+    const tbody = document.getElementById('farm-recipe-library-tbody');
+    if (!tbody) return;
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes?limit=200`);
+        if (!response || !response.ok) throw new Error('Failed to load recipe library');
+        const data = await response.json();
+        _farmRecipeLibrary = data.recipes || [];
+
+        // Build set of recipe names currently active on this farm
+        const activeNames = new Set(
+            (recipesData || []).map(r => (r.name || '').toLowerCase().trim())
+        );
+
+        renderFarmRecipeLibrary(_farmRecipeLibrary, activeNames);
+        // Also load any previous recipe requests
+        await loadRecipeRequests();
+    } catch (err) {
+        console.error('[FarmRecipeLibrary]', err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--accent-red);">Error loading recipe library: ${err.message}</td></tr>`;
+    }
+}
+
+function renderFarmRecipeLibrary(recipes, activeNames) {
+    const tbody = document.getElementById('farm-recipe-library-tbody');
+    const countEl = document.getElementById('farm-recipe-library-count');
+    if (!tbody) return;
+
+    // Apply category and search filters
+    const categoryFilter = document.getElementById('farm-recipe-category-filter')?.value || '';
+    const searchFilter = (document.getElementById('farm-recipe-library-search')?.value || '').toLowerCase();
+
+    let filtered = recipes;
+    if (categoryFilter) filtered = filtered.filter(r => r.category === categoryFilter);
+    if (searchFilter) filtered = filtered.filter(r =>
+        (r.name || '').toLowerCase().includes(searchFilter) ||
+        (r.category || '').toLowerCase().includes(searchFilter) ||
+        (r.description || '').toLowerCase().includes(searchFilter)
+    );
+
+    if (countEl) countEl.textContent = `${filtered.length} of ${recipes.length} recipes`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-secondary);">No recipes match your search</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(recipe => {
+        const isActive = activeNames && activeNames.has((recipe.name || '').toLowerCase().trim());
+        const schedule = normalizeRecipeSchedule(recipe);
+        const stages = recipe.schedule_length || schedule.length || 0;
+
+        let avgTemp = 'N/A';
+        if (schedule.length > 0) {
+            const temps = schedule
+                .map(d => { const t = d.temperature || d.tempC || d.afternoon_temp; return typeof t === 'string' ? parseFloat(t) : t; })
+                .filter(t => !isNaN(t) && t > 0);
+            if (temps.length) avgTemp = `${(temps.reduce((a,b) => a+b, 0) / temps.length).toFixed(1)}°C`;
+        }
+
+        const statusBadge = isActive
+            ? '<span style="background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;font-weight:500;">In Use</span>'
+            : '<span style="background:var(--bg-secondary);color:var(--text-secondary);padding:3px 8px;border-radius:4px;font-size:0.8rem;">Available</span>';
+
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight:500;">${recipe.name}</div>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;">${recipe.description}</div>` : ''}
+                </td>
+                <td><span style="background:${getCategoryColor(recipe.category)};color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;">${recipe.category || 'Other'}</span></td>
+                <td>${stages}</td>
+                <td>${countStages(schedule)}</td>
+                <td>${avgTemp}</td>
+                <td>${statusBadge}</td>
+                <td><button onclick="showRecipeLibraryDetail('${(recipe.id || recipe.name || '').replace(/'/g, "\\'")}')" class="btn" style="padding:4px 10px;font-size:0.8rem;">View Schedule</button></td>
+            </tr>`;
+    }).join('');
+}
+
+/** Count unique growth stages in a recipe schedule */
+function countStages(schedule) {
+    if (!schedule || !schedule.length) return '—';
+    const stages = new Set(schedule.map(d => d.stage || d.growth_stage || 'Unknown'));
+    return stages.size;
+}
+
+function filterFarmRecipeLibrary() {
+    const activeNames = new Set(
+        (recipesData || []).map(r => (r.name || '').toLowerCase().trim())
+    );
+    renderFarmRecipeLibrary(_farmRecipeLibrary, activeNames);
+}
+
+/**
+ * Show recipe schedule detail in a read-only modal/alert
+ */
+async function showRecipeLibraryDetail(recipeId) {
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes/${encodeURIComponent(recipeId)}`);
+        if (!response || !response.ok) throw new Error('Failed to load recipe');
+        const data = await response.json();
+        const recipe = data.recipe || {};
+        const schedule = normalizeRecipeSchedule(recipe);
+
+        let info = `Recipe: ${recipe.name}\nCategory: ${recipe.category || 'Unknown'}\nTotal Days: ${schedule.length}\nDescription: ${recipe.description || 'N/A'}\n\n`;
+        if (schedule.length > 0) {
+            info += 'Day | Stage | Temp(°C) | PPFD | DLI | VPD\n';
+            info += '─'.repeat(50) + '\n';
+            const step = Math.max(1, Math.floor(schedule.length / 15));
+            for (let i = 0; i < schedule.length; i += step) {
+                const d = schedule[i];
+                const day = d.day || i+1;
+                const stage = (d.stage || '').substring(0, 12);
+                const temp = (d.temperature || d.tempC || '—');
+                const ppfd = (d.ppfd || d.ppfd_target || '—');
+                const dli = (d.dli || d.dli_target || '—');
+                const vpd = (d.vpd || d.vpd_target || '—');
+                info += `${String(day).padStart(3)} | ${stage.padEnd(12)} | ${String(temp).padStart(6)} | ${String(ppfd).padStart(5)} | ${String(dli).padStart(4)} | ${vpd}\n`;
+            }
+            if (step > 1) info += `\n(Showing every ${step} days — ${schedule.length} days total)`;
+        }
+        alert(info);
+    } catch (err) {
+        alert('Error loading recipe: ' + err.message);
+    }
+}
+
+/**
+ * Submit a recipe request from the farm grower
+ */
+async function submitRecipeRequest() {
+    const crop = document.getElementById('recipe-request-crop')?.value?.trim();
+    const category = document.getElementById('recipe-request-category')?.value || 'Other';
+    const notes = document.getElementById('recipe-request-notes')?.value?.trim() || '';
+    const statusEl = document.getElementById('recipe-request-status');
+
+    if (!crop) {
+        if (statusEl) statusEl.textContent = 'Please enter a crop/variety name.';
+        return;
+    }
+
+    try {
+        if (statusEl) statusEl.textContent = 'Submitting...';
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipe-requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                farmId: currentFarmId,
+                crop,
+                category,
+                notes
+            })
+        });
+        if (!response || !response.ok) {
+            const errData = await response?.json().catch(() => ({}));
+            throw new Error(errData.error || 'Request failed');
+        }
+        const result = await response.json();
+        if (statusEl) {
+            statusEl.style.color = '#10b981';
+            statusEl.textContent = '✓ Request submitted! GreenReach Central will review it.';
+        }
+        // Clear form
+        document.getElementById('recipe-request-crop').value = '';
+        document.getElementById('recipe-request-notes').value = '';
+        // Refresh requests list
+        await loadRecipeRequests();
+    } catch (err) {
+        console.error('[RecipeRequest]', err);
+        if (statusEl) {
+            statusEl.style.color = 'var(--accent-red)';
+            statusEl.textContent = 'Error: ' + err.message;
+        }
+    }
+}
+
+/**
+ * Load previous recipe requests for this farm
+ */
+async function loadRecipeRequests() {
+    const listContainer = document.getElementById('recipe-requests-list');
+    const listBody = document.getElementById('recipe-requests-tbody');
+    if (!listContainer || !listBody || !currentFarmId) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipe-requests?farmId=${currentFarmId}`);
+        if (!response || !response.ok) return;
+        const data = await response.json();
+        const requests = data.requests || [];
+
+        if (requests.length === 0) {
+            listContainer.style.display = 'none';
+            return;
+        }
+
+        listContainer.style.display = 'block';
+        listBody.innerHTML = requests.map(req => {
+            const statusColor = req.status === 'approved' ? '#10b981' : req.status === 'declined' ? '#ef4444' : '#f59e0b';
+            const statusLabel = req.status || 'pending';
+            const date = req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '';
+            return `
+                <div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+                    <span style="font-weight:500;min-width:140px;">${req.crop}</span>
+                    <span style="background:${getCategoryColor(req.category)};color:#fff;padding:2px 6px;border-radius:4px;font-size:0.8rem;">${req.category}</span>
+                    <span style="color:${statusColor};font-weight:500;font-size:0.85rem;text-transform:capitalize;">${statusLabel}</span>
+                    <span style="color:var(--text-secondary);font-size:0.8rem;">${date}</span>
+                    ${req.notes ? `<span style="color:var(--text-secondary);font-size:0.8rem;flex:1;">— ${req.notes}</span>` : ''}
+                </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[RecipeRequests]', err);
+    }
 }
 
 /**
