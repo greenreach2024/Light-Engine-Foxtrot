@@ -733,6 +733,62 @@ async function runMigrations(client) {
     } catch (err) {
       logger.warn('Farm users migration warning:', err.message);
     }
+
+    // Migration 018: Delivery service tables (farm-scoped, no FK constraints — app-level enforcement)
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS farm_delivery_settings (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          enabled BOOLEAN DEFAULT FALSE,
+          base_fee NUMERIC(10,2) DEFAULT 0,
+          min_order NUMERIC(10,2) DEFAULT 25,
+          lead_time_hours INTEGER DEFAULT 24,
+          max_deliveries_per_window INTEGER DEFAULT 20,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_farm_delivery_settings_farm ON farm_delivery_settings(farm_id);
+
+        CREATE TABLE IF NOT EXISTS farm_delivery_windows (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          window_id VARCHAR(50) NOT NULL,
+          label VARCHAR(255),
+          start_time VARCHAR(10),
+          end_time VARCHAR(10),
+          active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, window_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_farm_delivery_windows_farm ON farm_delivery_windows(farm_id);
+
+        CREATE TABLE IF NOT EXISTS farm_delivery_zones (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          zone_id VARCHAR(50) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          description TEXT DEFAULT '',
+          fee NUMERIC(10,2) DEFAULT 0,
+          min_order NUMERIC(10,2) DEFAULT 25,
+          postal_prefix VARCHAR(10),
+          status VARCHAR(50) DEFAULT 'active',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, zone_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_farm_delivery_zones_farm ON farm_delivery_zones(farm_id);
+        CREATE INDEX IF NOT EXISTS idx_farm_delivery_zones_status ON farm_delivery_zones(status);
+      `);
+      logger.info('Delivery service tables ready (migration 018)');
+    } catch (err) {
+      logger.warn('Delivery tables migration warning:', err.message);
+    }
   }
 
   logger.info('Database migrations completed');

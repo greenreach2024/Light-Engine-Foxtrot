@@ -16,10 +16,15 @@
  */
 
 import express from 'express';
+import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
-// In-memory store (will be replaced with database in production)
+// Protect all admin delivery routes: require authenticated admin with 'admin' or 'operations' role
+router.use(adminAuthMiddleware);
+router.use(requireAdminRole('admin', 'operations'));
+
+// In-memory store (will be replaced with database in Phase 0.3 migration)
 const deliveryConfig = {
   enabled: true,
   base_fee: 0,

@@ -25,6 +25,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
 import adminRecipesRoutes from './routes/admin-recipes.js';
+import adminDeliveryRoutes from './routes/admin-delivery.js';
 import networkDevicesRoutes from './routes/network-devices.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
@@ -2152,6 +2153,7 @@ app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to f
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API
 app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
+app.use('/api/admin/delivery', adminDeliveryRoutes); // Admin delivery zone/driver/fee management
 app.use('/api/admin/network-devices', networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights

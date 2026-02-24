@@ -9,10 +9,24 @@ import { farmStores } from '../../lib/farm-store.js';
 
 const router = express.Router();
 
+// ─── Feature Flag: DELIVERY_ENABLED ────────────────────────────────────
+// Set DELIVERY_ENABLED=false to disable all delivery endpoints.
+// Default: true (enabled). When disabled, all routes return 503.
+router.use((req, res, next) => {
+  if (process.env.DELIVERY_ENABLED === 'false') {
+    return res.status(503).json({
+      ok: false,
+      error: 'delivery_disabled',
+      message: 'Delivery service is not enabled for this environment'
+    });
+  }
+  next();
+});
+
 // Apply authentication to all routes
 router.use(farmAuthMiddleware);
 
-// In-memory route storage (shared across farms for optimization)
+// In-memory route storage (shared Map, tenant-isolated via farm_id on each record)
 const routes = new Map();
 const routeSequence = { current: 100 };
 
@@ -91,6 +105,57 @@ function normalizeWindowsInput(input = []) {
 }
 
 /**
+ * Compute window availability for a given farm/date/zone.
+ * Extracted from the GET /windows handler so it can be called directly
+ * (eliminates the self-fetch anti-pattern identified in audit F-9).
+ *
+ * @param {string} farmId
+ * @param {string} date  - YYYY-MM-DD
+ * @param {string} [zone] - optional zone ID
+ * @returns {{ ok: boolean, windows: Array, error?: string }}
+ */
+function getWindowAvailability(farmId, date, zone) {
+  const deliveryDate = new Date(date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (deliveryDate < today) {
+    return { ok: false, windows: [], error: 'invalid_date' };
+  }
+
+  const settings = getFarmDeliverySettings(farmId);
+  const configuredWindows = getFarmDeliveryWindows(farmId);
+  const activeWindows = configuredWindows.filter((w) => w.active);
+  const effectiveWindowTemplates = activeWindows.length
+    ? activeWindows
+    : configuredWindows;
+
+  const existingDeliveries = farmStores.deliveries.getAllForFarm(farmId)
+    .filter(d => d.delivery_date === date);
+
+  const windows = effectiveWindowTemplates.map(window => {
+    const windowDeliveries = existingDeliveries.filter(d => d.time_slot === window.id);
+    const capacity = Number(settings.max_deliveries_per_window || 20);
+    const available = capacity - windowDeliveries.length;
+
+    return {
+      ...window,
+      available: available > 0,
+      slots_remaining: available,
+      total_capacity: capacity
+    };
+  });
+
+  return {
+    ok: true,
+    farm_id: farmId,
+    date,
+    zone: zone ? DELIVERY_ZONES[zone.toUpperCase()] : null,
+    windows
+  };
+}
+
+/**
  * GET /api/farm-sales/delivery/windows
  * Get available delivery windows for a date
  * 
@@ -112,50 +177,16 @@ router.get('/windows', (req, res) => {
       });
     }
 
-    const deliveryDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const settings = getFarmDeliverySettings(farmId);
-    const configuredWindows = getFarmDeliveryWindows(farmId);
-    const activeWindows = configuredWindows.filter((w) => w.active);
-    const effectiveWindowTemplates = activeWindows.length
-      ? activeWindows
-      : configuredWindows;
-
-    // Can't deliver in the past
-    if (deliveryDate < today) {
+    const result = getWindowAvailability(farmId, date, zone);
+    if (!result.ok) {
       return res.status(400).json({
         ok: false,
-        error: 'invalid_date',
-        message: 'Cannot schedule delivery in the past'
+        error: result.error,
+        message: result.error === 'invalid_date' ? 'Cannot schedule delivery in the past' : result.error
       });
     }
 
-    // Get existing deliveries for this date to check capacity (farm-scoped)
-    const existingDeliveries = farmStores.deliveries.getAllForFarm(farmId)
-      .filter(d => d.delivery_date === date);
-
-    const windows = effectiveWindowTemplates.map(window => {
-      const windowDeliveries = existingDeliveries.filter(d => d.time_slot === window.id);
-      const capacity = Number(settings.max_deliveries_per_window || 20);
-      const available = capacity - windowDeliveries.length;
-
-      return {
-        ...window,
-        available: available > 0,
-        slots_remaining: available,
-        total_capacity: capacity
-      };
-    });
-
-    res.json({
-      ok: true,
-      farm_id: farmId,
-      date,
-      zone: zone ? DELIVERY_ZONES[zone.toUpperCase()] : null,
-      windows
-    });
+    res.json(result);
 
   } catch (error) {
     console.error('[farm-sales] Delivery windows failed:', error);
@@ -267,6 +298,17 @@ router.put('/settings', (req, res) => {
 /**
  * POST /api/farm-sales/delivery/quote
  * Compute a simple delivery quote for current farm
+ *
+ * CANONICAL FEE MODEL (MVP v2.1.0)
+ * ──────────────────────────────────
+ *   fee = max(base_fee, zone_fee)
+ *     • base_fee  — farm-level default from deliverySettingsByFarm
+ *     • zone_fee  — zone-specific fee from DELIVERY_ZONES config
+ *   Eligibility checks (in order):
+ *     1. settings.enabled must be true
+ *     2. requested_window must belong to farm's active windows
+ *     3. subtotal >= max(settings.min_order, zone.min_order)
+ *   Future (Phase 2): add km/min logging for distance-based pricing.
  */
 router.post('/quote', (req, res) => {
   try {
@@ -364,7 +406,7 @@ router.get('/zones', (req, res) => {
  *   contact: { name, phone }
  * }
  */
-router.post('/schedule', async (req, res) => {
+router.post('/schedule', (req, res) => {
   try {
     const { order_id, delivery_date, time_slot, address, zone, instructions, contact } = req.body;
     const farmId = req.farm_id;
@@ -397,11 +439,8 @@ router.post('/schedule', async (req, res) => {
       });
     }
 
-    // Check window availability
-    const windowCheck = await fetch(
-      `http://localhost:8091/api/farm-sales/delivery/windows?date=${delivery_date}&zone=${zone}`
-    );
-    const windowData = await windowCheck.json();
+    // Check window availability (direct call — replaces self-fetch anti-pattern F-9)
+    const windowData = getWindowAvailability(farmId, delivery_date, zone);
     const selectedWindow = windowData.windows?.find(w => w.id === time_slot);
 
     if (!selectedWindow?.available) {
@@ -622,6 +661,7 @@ router.post('/routes/optimize', (req, res) => {
 
         const route = {
           route_id: routeId,
+          farm_id: farmId,
           date,
           time_slot,
           zone,
@@ -683,8 +723,10 @@ router.post('/routes/optimize', (req, res) => {
 router.get('/routes', (req, res) => {
   try {
     const { date, time_slot, status } = req.query;
+    const farmId = req.farm_id;
     
-    let filtered = Array.from(routes.values());
+    // Tenant isolation: only return routes belonging to this farm
+    let filtered = Array.from(routes.values()).filter(r => r.farm_id === farmId);
 
     if (date) {
       filtered = filtered.filter(r => r.date === date);
