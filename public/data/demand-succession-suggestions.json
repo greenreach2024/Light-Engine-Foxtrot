@@ -1,0 +1,371 @@
+{
+  "generated_at": "2026-02-24T00:29:17.680Z",
+  "trigger": "demand_signal_auto",
+  "demand_source": "central_ai_push",
+  "suggestions": [
+    {
+      "crop": "basil",
+      "schedule": [
+        {
+          "week": 1,
+          "crop": "basil",
+          "seedDate": "2026-02-06",
+          "harvestDate": "2026-03-10",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 1,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2026-03-10",
+              "2026-03-24",
+              "2026-04-07",
+              "2026-04-21"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 2,
+          "crop": "basil",
+          "seedDate": "2026-04-21",
+          "harvestDate": "2026-05-23",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 2,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2026-05-23",
+              "2026-06-06",
+              "2026-06-20",
+              "2026-07-04"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 3,
+          "crop": "basil",
+          "seedDate": "2026-07-04",
+          "harvestDate": "2026-08-05",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 3,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2026-08-05",
+              "2026-08-19",
+              "2026-09-02",
+              "2026-09-16"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 4,
+          "crop": "basil",
+          "seedDate": "2026-09-16",
+          "harvestDate": "2026-10-18",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 4,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2026-10-18",
+              "2026-11-01",
+              "2026-11-15",
+              "2026-11-29"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 5,
+          "crop": "basil",
+          "seedDate": "2026-11-29",
+          "harvestDate": "2026-12-31",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 5,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2026-12-31",
+              "2027-01-14",
+              "2027-01-28",
+              "2027-02-11"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 6,
+          "crop": "basil",
+          "seedDate": "2027-02-11",
+          "harvestDate": "2027-03-15",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 6,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2027-03-15",
+              "2027-03-29",
+              "2027-04-12",
+              "2027-04-26"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 7,
+          "crop": "basil",
+          "seedDate": "2027-04-26",
+          "harvestDate": "2027-05-28",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 7,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2027-05-28",
+              "2027-06-11",
+              "2027-06-25",
+              "2027-07-09"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 8,
+          "crop": "basil",
+          "seedDate": "2027-07-09",
+          "harvestDate": "2027-08-10",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 8,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2027-08-10",
+              "2027-08-24",
+              "2027-09-07",
+              "2027-09-21"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 9,
+          "crop": "basil",
+          "seedDate": "2027-09-21",
+          "harvestDate": "2027-10-23",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 9,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2027-10-23",
+              "2027-11-06",
+              "2027-11-20",
+              "2027-12-04"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 10,
+          "crop": "basil",
+          "seedDate": "2027-12-04",
+          "harvestDate": "2028-01-05",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 10,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2028-01-05",
+              "2028-01-19",
+              "2028-02-02",
+              "2028-02-16"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 11,
+          "crop": "basil",
+          "seedDate": "2028-02-16",
+          "harvestDate": "2028-03-19",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 11,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2028-03-19",
+              "2028-04-02",
+              "2028-04-16",
+              "2028-04-30"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        },
+        {
+          "week": 12,
+          "crop": "basil",
+          "seedDate": "2028-04-30",
+          "harvestDate": "2028-06-01",
+          "traysNeeded": 1,
+          "plantsPerTray": 128,
+          "totalPlants": 128,
+          "trayFormat": "nft-channel-128",
+          "growthDays": 32,
+          "successionGap": 74,
+          "capacityAvailable": 999,
+          "capacityUsed": 12,
+          "conflicts": [],
+          "reason": "Meet weekly demand of 25 heads",
+          "harvestStrategy": "cut_and_come_again",
+          "ccaInfo": {
+            "maxHarvests": 4,
+            "regrowthDays": 14,
+            "regrowthYieldFactor": 0.9,
+            "harvestDates": [
+              "2028-06-01",
+              "2028-06-15",
+              "2028-06-29",
+              "2028-07-13"
+            ],
+            "totalYieldMultiplier": 3.439
+          }
+        }
+      ],
+      "gaps": [],
+      "summary": {
+        "totalWeeks": 12,
+        "totalTrays": 12,
+        "totalPlants": 1536,
+        "avgTraysPerWeek": 1,
+        "gapCount": 0,
+        "capacityUtilization": 0
+      },
+      "priority": "high"
+    }
+  ],
+  "totalCrops": 1
+}

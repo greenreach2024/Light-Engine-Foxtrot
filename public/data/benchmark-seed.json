@@ -1,0 +1,42 @@
+{
+  "seeded_at": "2026-02-24T01:04:46.606Z",
+  "source": "central_network",
+  "crops": {
+    "basil": {
+      "avg_yield_oz": null,
+      "avg_cycle_days": null,
+      "recommended_ppfd": 200,
+      "recommended_temp": 72,
+      "recommended_humidity": 65,
+      "network_farms": 0,
+      "confidence": "low"
+    },
+    "kale": {
+      "avg_yield_oz": null,
+      "avg_cycle_days": null,
+      "recommended_ppfd": 200,
+      "recommended_temp": 72,
+      "recommended_humidity": 65,
+      "network_farms": 0,
+      "confidence": "low"
+    }
+  },
+  "environmental_targets": {
+    "basil": {
+      "temp_min": 69,
+      "temp_max": 75,
+      "rh_min": 55,
+      "rh_max": 75,
+      "ppfd_target": 200,
+      "photoperiod_hours": 16
+    },
+    "kale": {
+      "temp_min": 69,
+      "temp_max": 75,
+      "rh_min": 55,
+      "rh_max": 75,
+      "ppfd_target": 200,
+      "photoperiod_hours": 16
+    }
+  }
+}

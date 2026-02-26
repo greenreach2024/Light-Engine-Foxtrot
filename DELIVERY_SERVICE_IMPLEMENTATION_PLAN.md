@@ -1,10 +1,10 @@
 # Delivery Service Implementation Plan
 
-**Version**: 2.0.0  
-**Date**: February 22, 2026 (updated from v1.0.0)  
+**Version**: 2.1.0  
+**Date**: February 23, 2026 (post-review corrections applied)  
 **Review Agent**: Implementation Proposal  
-**Status**: REVISED — Post-Audit Remediation  
-**Supersedes**: v1.0.0 (same date)  
+**Status**: REVISED — Post-Review Corrections Applied  
+**Supersedes**: v2.0.0 (2026-02-22), v1.0.0 (2026-02-22)  
 **Authoritative Scope Reference**: `DELIVERY_SERVICE_ARCHITECTURE_PLAN.md` (approved with constraints)
 
 ---
@@ -15,6 +15,7 @@
 |---------|------|----------------|
 | 1.0.0 | 2026-02-22 | Original 6-phase plan (28 days) |
 | 2.0.0 | 2026-02-22 | Post-audit remediation rewrite. Reconciled with Architecture Plan. Added Phase 0 (compliance/persistence). Removed PostGIS from MVP. Added regulatory sections (DPWRA, CRA). Consolidated fee model. Added mandatory test gate. |
+| 2.1.0 | 2026-02-23 | Post-review corrections. Resolved FE-1 (`delivery-platform.html` archived), FE-2 (`cost-allocator.ts` gone), FE-3 (line ref). Added rollback strategy + feature flag. Removed `radius_km` from MVP. Fixed auth middleware refs to `adminAuthMiddleware` + `requireAdminRole`. Aligned migration to `database.js runMigrations()` pattern. Updated effort to 9–14 days. |
 
 ---
 
@@ -47,9 +48,9 @@ Key structural changes from v1.0.0:
 | Wholesale checkout form | `GR-wholesale.html` delivery address fields | Partial |
 | Farm Sales D2C delivery | `farm-sales-shop.html` delivery fields | Complete |
 | Farm POS deliveries tab | `farm-sales-pos.html` delivery tab | Stub only |
-| Marketing landing page | `delivery-platform.html` (1,076 lines) | **CRITICAL** — overpromises vs reality (F-1) |
+| Marketing landing page | `delivery-platform.html` (1,076 lines) | **RESOLVED** — file archived to `origin/archive/b2b-delivery-platform`, not on active branch or in production |
 | Central admin delivery API | `admin-delivery.js` (221 lines) | **DEAD CODE** — not mounted in server.js (F-2) |
-| Pricing module | `cost-allocator.ts` (93 lines) | **DEAD CODE** — never imported (F-4) |
+| Pricing module | `cost-allocator.ts` (93 lines) | **RESOLVED** — file no longer exists on disk (already removed) |
 | Three referenced assets | `driver-apply.html`, `driver-portal.html`, `css/gr-delivery.css` | **DO NOT EXIST** (F-5) |
 | Tenant isolation | Shared `routes` Map, no farm_id filter | **BROKEN** — cross-farm data exposure (F-8) |
 | Admin auth | `admin-delivery.js` has no auth middleware | **MISSING** (F-7) |
@@ -96,11 +97,17 @@ The `DELIVERY_SERVICE_ARCHITECTURE_PLAN.md` is the single source of truth for MV
 
 This phase has no customer-visible output. It exists solely to establish the safety, compliance, and integrity baseline that the rest of the plan depends on.
 
-#### 0.1 Marketing Compliance — Landing Page (Audit F-1, F-5)
+#### 0.1 Marketing Compliance — Landing Page (Audit F-1, F-5) — ✅ RESOLVED
 
-**Regulatory context**: Under the Canadian Competition Act, it is illegal to advertise or market in a way that is false or misleading. Both the "general impression" and literal meaning matter (Competition Bureau Canada guidance). The current `delivery-platform.html` describes 24+ database tables, 40+ API endpoints, GPS tracking, Stripe Connect payouts, and CRA compliance — none of which exist in code. This creates legal exposure.
+**Status**: `delivery-platform.html` has been **archived** to git branch `origin/archive/b2b-delivery-platform` (tag `backup-main-20260222-131558`). It does not exist on the active working branch (`recovery/feb11-clean`) or `main`, and is not deployed to production.
 
-**Actions:**
+**Verification**: Confirm the file is not served by either EB environment:
+```
+curl -sS -o /dev/null -w "%{http_code}" https://production-url/delivery-platform.html
+# Expected: 404
+```
+
+**If the file is ever restored**, the following actions apply:
 
 | # | Action | Detail |
 |---|--------|--------|
@@ -108,6 +115,8 @@ This phase has no customer-visible output. It exists solely to establish the saf
 | 0.1.2 | Remove broken links | Remove or disable all links to `driver-apply.html`, `driver-portal.html`, and the `css/gr-delivery.css` import. These files do not exist. |
 | 0.1.3 | Split into "Available" vs "Planned" | If the page remains public, restructure content into two clearly labeled sections: **"Available in MVP"** (only features verifiably implemented end-to-end) and **"Planned"** (everything else). |
 | 0.1.4 | Remove volume/capability claims | Remove or qualify claims about specific table counts, endpoint counts, event topics, and compliance features (DPWRA, CRA) that are not yet implemented. |
+
+**Remaining Phase 0.1 risk**: If any other marketing page (e.g., `wholesale-about.html`, `farm-sales-landing.html`) references delivery capabilities that don't exist yet, those must also be audited in Phase 6.
 
 #### 0.2 Mount Admin Delivery Routes + Add Auth (Audit F-2, F-7)
 
@@ -124,13 +133,15 @@ This phase has no customer-visible output. It exists solely to establish the saf
 ```javascript
 // greenreach-central/server.js — mount with auth
 import adminDeliveryRouter from './routes/admin-delivery.js';
-app.use('/api/admin/delivery', requireAdmin, adminDeliveryRouter);
+import { adminAuthMiddleware, requireAdminRole } from './middleware/adminAuth.js';
+app.use('/api/admin/delivery', adminAuthMiddleware, requireAdminRole('admin', 'operations'), adminDeliveryRouter);
 ```
 
 ```javascript
 // routes/admin-delivery.js — add at top of router
-import { requireAdmin } from '../middleware/auth.js';
-router.use(requireAdmin);
+import { adminAuthMiddleware, requireAdminRole } from '../middleware/adminAuth.js';
+router.use(adminAuthMiddleware);
+router.use(requireAdminRole('admin', 'operations'));
 ```
 
 #### 0.3 Establish MVP Database Persistence (Audit F-3)
@@ -145,7 +156,7 @@ Create additive-only migration. Backfill defaults with delivery disabled. No des
 -- Migration: 001_delivery_mvp_tables.sql
 
 CREATE TABLE IF NOT EXISTS farm_delivery_settings (
-  farm_id VARCHAR(255) PRIMARY KEY REFERENCES farms(farm_id),
+  farm_id VARCHAR(255) PRIMARY KEY,
   enabled BOOLEAN DEFAULT false,
   base_fee DECIMAL(10,2) DEFAULT 0,
   min_order DECIMAL(10,2) DEFAULT 0,
@@ -157,7 +168,7 @@ CREATE TABLE IF NOT EXISTS farm_delivery_settings (
 
 CREATE TABLE IF NOT EXISTS farm_delivery_windows (
   id SERIAL PRIMARY KEY,
-  farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id),
+  farm_id VARCHAR(255) NOT NULL,
   day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
@@ -168,9 +179,9 @@ CREATE TABLE IF NOT EXISTS farm_delivery_windows (
 
 CREATE TABLE IF NOT EXISTS farm_delivery_zones (
   id SERIAL PRIMARY KEY,
-  farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id),
+  farm_id VARCHAR(255) NOT NULL,
   zone_name VARCHAR(100) NOT NULL,
-  zone_mode VARCHAR(20) NOT NULL CHECK (zone_mode IN ('postal_prefix', 'radius_km')),
+  zone_mode VARCHAR(20) NOT NULL CHECK (zone_mode IN ('postal_prefix')),
   zone_value VARCHAR(255) NOT NULL,
   fee_override DECIMAL(10,2),
   min_order_override DECIMAL(10,2),
@@ -202,7 +213,7 @@ const upsertSettings = `
 `;
 ```
 
-**Constraint**: `zone_mode` is restricted to `postal_prefix` or `radius_km` for MVP. No `polygon` mode until Phase 2 PostGIS ADR is accepted (Architecture Plan AD-02).
+**Constraint**: `zone_mode` is restricted to `postal_prefix` for MVP. `radius_km` requires lat/lng distance calculation that approaches geospatial complexity — deferred with `polygon` to Phase 2 PostGIS ADR (Architecture Plan AD-02). The CHECK constraint can be altered via migration when `radius_km` is implemented.
 
 #### 0.4 Fix Tenant Isolation (Audit F-8)
 
@@ -238,8 +249,8 @@ auth → farm-scope resolution → input validation → handler
 
 | # | Action | Detail |
 |---|--------|--------|
-| 0.5.1 | Archive `cost-allocator.ts` | Move to `src/modules/pricing/_archived/cost-allocator.ts` or delete. Do not leave dead exports in the active module tree. |
-| 0.5.2 | Remove advertised formula from landing page | The per-km/per-min/per-stop formula is not implemented. Remove it from `delivery-platform.html` or move to "Planned" section. |
+| 0.5.1 | ~~Archive `cost-allocator.ts`~~ | ✅ **RESOLVED** — File no longer exists on disk. Already removed or was never created on this branch. No action required. |
+| 0.5.2 | ~~Remove advertised formula from landing page~~ | ✅ **RESOLVED** — `delivery-platform.html` archived (see Phase 0.1). Per-km/per-min/per-stop formula is not deployed. |
 | 0.5.3 | Document canonical model | Add a comment block to the quote endpoint identifying it as the single source of pricing truth for MVP. |
 | 0.5.4 | Log estimated km/min | If routing data becomes available, log estimated distance and time alongside the zone-based fee so the platform can transition to a distance-based model in Phase 2 without losing historical data. |
 
@@ -247,7 +258,7 @@ auth → farm-scope resolution → input validation → handler
 
 #### 0.6 Eliminate Self-Fetch Anti-Pattern (Audit F-9)
 
-**Problem**: `delivery.js` line 411 `POST /schedule` calls itself via `fetch('http://localhost:8091/...')` to check window availability. This fails if the port changes, round-trips through the HTTP stack unnecessarily, and auth middleware may block the internal request.
+**Problem**: `delivery.js` line 403 `POST /schedule` calls itself via `fetch('http://localhost:8091/...')` to check window availability. This fails if the port changes, round-trips through the HTTP stack unnecessarily, and auth middleware may block the internal request.
 
 **Action**: Extract window availability logic into a shared function. Call it directly from both the `/windows` endpoint and the `/schedule` handler.
 
@@ -358,7 +369,7 @@ All writes use `INSERT ... ON CONFLICT DO UPDATE` for idempotency.
 
 #### 2.2 Zone Configuration API (MVP — No Geospatial)
 
-**Zone model (MVP)**: `zone_mode` is either `postal_prefix` or `radius_km`. No polygon, no `ST_Contains`, no PostGIS dependency (Architecture Plan AD-01, AD-02).
+**Zone model (MVP)**: `zone_mode` is `postal_prefix` only. No `radius_km` (requires distance calculation), no polygon, no `ST_Contains`, no PostGIS dependency (Architecture Plan AD-01, AD-02). `radius_km` deferred to Phase 2.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -515,7 +526,7 @@ Mount in `greenreach-central/server.js`:
 
 ```javascript
 // Read-only network visibility — admin auth required
-router.get('/api/admin/delivery/readiness', requireAdmin, async (req, res) => {
+router.get('/api/admin/delivery/readiness', adminAuthMiddleware, requireAdminRole('admin', 'operations'), async (req, res) => {
   const readiness = await pool.query(`
     SELECT
       f.name AS farm_name,
@@ -680,11 +691,63 @@ If live tracking is a Phase 2 requirement, implement SSE (Server-Sent Events) co
 
 ---
 
+## Rollback Strategy
+
+### Database Migration Rollback
+
+The `CREATE TABLE IF NOT EXISTS` migration pattern is safe — it is idempotent and does not modify existing tables. Rolling back the EB deployment to pre-delivery code will not break the database (tables remain but are unused).
+
+If tables must be dropped:
+```sql
+-- Down migration (manual — run only if rollback required)
+DROP TABLE IF EXISTS farm_delivery_zones;
+DROP TABLE IF EXISTS farm_delivery_windows;
+DROP TABLE IF EXISTS farm_delivery_settings;
+```
+
+Order matters: `zones` and `windows` reference `farm_delivery_settings.farm_id` via FK, so they must be dropped first.
+
+### Feature Flag — Global Kill Switch
+
+Architecture Plan §9 requires "feature flag for rapid rollback." The per-farm `farm_delivery_settings.enabled` flag controls individual farm opt-in, but a **global** kill switch is needed for network-wide disable.
+
+**Implementation**: Add a `delivery_global_enabled` row to the existing platform-level config, or use an environment variable:
+
+```
+# Environment variable — fastest to deploy, no migration needed
+DELIVERY_ENABLED=true   # Set to false to disable delivery network-wide
+```
+
+**Behavior when flag is off:**
+- Quote endpoint returns `{ eligible: false, reason: "Delivery service temporarily unavailable" }`
+- Checkout UI hides delivery fulfillment option (falls back to pickup-only)
+- Farm admin delivery settings section shows "Delivery is currently disabled network-wide"
+- No data is deleted — settings, zones, and windows persist for re-enable
+
+```javascript
+// Guard at top of delivery routes
+router.use((req, res, next) => {
+  if (process.env.DELIVERY_ENABLED === 'false') {
+    return res.json({ ok: true, eligible: false, reason: 'Delivery service temporarily unavailable' });
+  }
+  next();
+});
+```
+
+### EB Deployment Rollback
+
+If a rollback to a pre-delivery application version is needed:
+1. Run `eb deploy` with the previous version label — this removes delivery code but leaves tables intact
+2. Tables remain but are unused (no queries hit them)
+3. On re-deploy with delivery code, tables are already present (`IF NOT EXISTS` is a no-op)
+
+---
+
 ## Implementation Timeline (Revised)
 
 | Phase | Description | Effort | Dependencies | Audit Findings Addressed |
 |-------|-------------|--------|--------------|--------------------------|
-| **0** | **Pre-Launch Remediation** | **3–4d** | None (blocking) | F-1, F-2, F-3, F-4, F-5, F-7, F-8, F-9 |
+| **0** | **Pre-Launch Remediation** | **2–3d** | None (blocking) | F-1 ✅, F-2, F-3, F-4 ✅, F-5 ✅, F-7, F-8, F-9 |
 | 1 | Service Introduction Banner | 1–2d | Phase 0 | — |
 | 2 | Delivery Settings Persistence + Zones | 2–3d | Phase 0 | F-3, F-6 (document reconciliation) |
 | 3 | Buyer Delivery Experience | 2–3d | Phase 2 | F-4 (canonical fee), F-6 (no PostGIS) |
@@ -693,9 +756,11 @@ If live tracking is a Phase 2 requirement, implement SSE (Server-Sent Events) co
 | 6 | Marketing Pages Update | 1d | Phase 3 | F-1 (claims match reality) |
 | — | **Mandatory Test Gate** | included | All phases | F-10 |
 
-**Total Estimated MVP Effort**: ~11–16 engineering days  
+**Total Estimated MVP Effort**: ~9–14 engineering days  
 **Architecture Plan Estimate**: 6–9 engineering days (backend + UI + QA)  
-**Reconciliation note**: The Architecture Plan's 6–9 day estimate covers workstreams A–E (backend, farm UI, buyer checkout, central visibility, QA). This plan adds Phase 0 remediation (3–4 days) and regulatory compliance research, bringing the total to 11–16 days. The v1.0.0 estimate of 28 days included Phase 2+ scope (PostGIS, driver dashboard, network coordination) that is now explicitly out of MVP.
+**Reconciliation note**: The Architecture Plan's 6–9 day estimate covers workstreams A–E (backend, farm UI, buyer checkout, central visibility, QA). This plan adds Phase 0 remediation (~2–3 days after resolved items removed) and regulatory compliance research, bringing the total to 9–14 days. The v1.0.0 estimate of 28 days included Phase 2+ scope (PostGIS, driver dashboard, network coordination) that is now explicitly out of MVP.
+
+**Post-review adjustment**: Phase 0.1 (landing page) and Phase 0.5.1–0.5.2 (cost allocator / advertised formula) are resolved — `delivery-platform.html` archived, `cost-allocator.ts` doesn't exist. This reduces Phase 0 from 3–4 days to ~2–3 days.
 
 ---
 
@@ -705,29 +770,31 @@ If live tracking is a Phase 2 requirement, implement SSE (Server-Sent Events) co
 
 | File | Purpose | Phase |
 |------|---------|-------|
-| `migrations/001_delivery_mvp_tables.sql` | MVP persistence tables | 0.3 |
+| ~~`migrations/001_delivery_mvp_tables.sql`~~ | ~~Standalone SQL file~~ — see note below | ~~0.3~~ |
 | `greenreach-central/public/js/components/service-intro-banner.js` | Reusable banner component | 1 |
 | `greenreach-central/public/css/service-intro-banner.css` | Banner styles (theme-compliant) | 1 |
+
+> **Migration pattern note**: The Central codebase uses `CREATE TABLE IF NOT EXISTS` statements inside `runMigrations()` in `greenreach-central/config/database.js` (25 tables already follow this pattern). There is no separate migration file runner. Delivery tables must be added to `runMigrations()` following the same pattern. The SQL in Phase 0.3 above shows the schema; it should be added as template literal blocks inside `database.js`, not as a standalone `.sql` file.
 
 ### Existing Files to Modify
 
 | File | Changes | Phase |
 |------|---------|-------|
-| `delivery-platform.html` | Gate/label as preview, remove broken links, split Available/Planned | 0.1 |
+| ~~`delivery-platform.html`~~ | ✅ **RESOLVED** — archived to `origin/archive/b2b-delivery-platform`, not on active branch | ~~0.1~~ |
 | `greenreach-central/server.js` | Mount `admin-delivery.js` with admin auth | 0.2 |
 | `greenreach-central/routes/admin-delivery.js` | Add auth middleware, input sanitization | 0.2 |
 | `routes/farm-sales/delivery.js` | Replace in-memory Maps with DB queries, fix tenant isolation, extract window function, remove self-fetch | 0.3, 0.4, 0.6 |
-| `src/modules/pricing/cost-allocator.ts` | Archive or delete (dead code) | 0.5 |
+| ~~`src/modules/pricing/cost-allocator.ts`~~ | ✅ **RESOLVED** — file doesn't exist on disk | ~~0.5~~ |
 | `GR-wholesale.html` | Add banner, enhance delivery checkout with postal code + quote | 1, 3 |
 | `LE-farm-admin.html` | Add banner, add delivery settings form | 1, 4 |
 | `GR-central-admin.html` | Add banner, add readiness table | 1, 5 |
-| `greenreach-central/config/database.js` | Run delivery migration | 0.3 |
+| `greenreach-central/config/database.js` | Add delivery table `CREATE TABLE IF NOT EXISTS` statements to `runMigrations()` | 0.3 |
 
 ### Files to Remove or Archive
 
 | File | Action | Reason | Phase |
 |------|--------|--------|-------|
-| `src/modules/pricing/cost-allocator.ts` | Archive to `_archived/` or delete | Dead code — never imported (F-4) | 0.5 |
+| ~~`src/modules/pricing/cost-allocator.ts`~~ | ✅ **RESOLVED** — file doesn't exist on disk | Already removed or never created on this branch | ~~0.5~~ |
 
 ### Files That Must NOT Be Created Yet (Phase 2+)
 
@@ -745,14 +812,14 @@ If live tracking is a Phase 2 requirement, implement SSE (Server-Sent Events) co
 
 | # | Risk | Severity | Mitigation | Audit Finding |
 |---|------|----------|------------|---------------|
-| R-1 | Landing page claims trigger Competition Act review | **Critical** | Phase 0.1 — gate page or add disclaimer immediately | F-1 |
+| R-1 | ~~Landing page claims trigger Competition Act review~~ | ~~Critical~~ | ✅ **RESOLVED** — `delivery-platform.html` archived, not deployed | F-1 |
 | R-2 | Data loss on EB deploy / process restart | **Critical** | Phase 0.3 — migrate to PostgreSQL before launch | F-3 |
 | R-3 | Cross-farm route/address data exposure | **High** | Phase 0.4 — farm_id scoping on all reads/writes | F-8 |
 | R-4 | Admin endpoints accessible without auth | **High** | Phase 0.2 — add admin middleware before mounting | F-2, F-7 |
-| R-5 | Pricing disputes from inconsistent fee models | **High** | Phase 0.5 — choose one canonical model | F-4 |
+| R-5 | ~~Pricing disputes from inconsistent fee models~~ | ~~High~~ | ✅ **RESOLVED** — `cost-allocator.ts` doesn't exist; `delivery-platform.html` archived. Zone-based fee is sole model | F-4 |
 | R-6 | DPWRA non-compliance if drivers onboarded in Ontario | **High** | Do not onboard contractors until pay disclosure implemented | RC-1 |
 | R-7 | CRA reporting gap for contractor payments | **Medium** | Build ledger before >5 drivers at >$500/year | RC-2 |
-| R-8 | Broken 404 links reduce trust | **Medium** | Phase 0.1 — remove links to non-existent files | F-5 |
+| R-8 | ~~Broken 404 links reduce trust~~ | ~~Medium~~ | ✅ **RESOLVED** — landing page archived, broken links not served | F-5 |
 | R-9 | Self-fetch on localhost fails on different port | **Medium** | Phase 0.6 — replace with direct function call | F-9 |
 | R-10 | No regression safety net | **Medium** | Mandatory test gate — 3 suites before merge | F-10 |
 | R-11 | Document contradictions cause team confusion | **Medium** | This v2.0.0 supersedes v1.0.0; Architecture Plan is authoritative | F-6 |

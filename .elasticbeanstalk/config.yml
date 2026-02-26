@@ -1,6 +1,6 @@
 branch-defaults:
   recovery/feb11-clean:
-    environment: null
+    environment: light-engine-foxtrot-prod-v3
   wip/remove-debug-and-data-edits:
     environment: light-engine-foxtrot-prod-v2
 environment-defaults:

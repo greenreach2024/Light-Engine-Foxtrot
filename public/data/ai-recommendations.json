@@ -1,0 +1,38 @@
+{
+  "network_intelligence": {
+    "demand_signals": {
+      "basil": {
+        "network_total_qty": 100,
+        "network_trend": "increasing"
+      }
+    },
+    "recipe_modifiers": {
+      "basil": {
+        "ppfd_offset_pct": 0.02
+      }
+    },
+    "crop_benchmarks": {
+      "basil": {
+        "avg_yield_oz": null,
+        "avg_cycle_days": null,
+        "recommended_ppfd": 200,
+        "recommended_temp": 72,
+        "recommended_humidity": 65,
+        "network_farms": 0,
+        "confidence": "low"
+      },
+      "kale": {
+        "avg_yield_oz": null,
+        "avg_cycle_days": null,
+        "recommended_ppfd": 200,
+        "recommended_temp": 72,
+        "recommended_humidity": 65,
+        "network_farms": 0,
+        "confidence": "low"
+      }
+    },
+    "benchmark_source": "onboarding_seed",
+    "seeded_at": "2026-02-24T01:04:46.606Z"
+  },
+  "received_at": "2026-02-24T00:29:17.675Z"
+}

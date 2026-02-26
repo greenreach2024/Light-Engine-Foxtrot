@@ -1,0 +1,67 @@
+{
+  "crops": {
+    "genovese-basil": {
+      "avg_yield_oz": 1.54,
+      "harvest_count": 3,
+      "data_tier": "internal",
+      "price_per_oz": 1.62,
+      "confidence": 0.15,
+      "benchmark_price": 0.86
+    },
+    "basil": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.86,
+      "confidence": 0.5
+    },
+    "kale": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.44,
+      "confidence": 0.5
+    },
+    "lettuce": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.29,
+      "confidence": 0.5
+    },
+    "arugula": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.67,
+      "confidence": 0.5
+    },
+    "spinach": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.52,
+      "confidence": 0.5
+    },
+    "microgreens": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 2.3,
+      "confidence": 0.5
+    },
+    "cilantro": {
+      "avg_yield_oz": null,
+      "harvest_count": 0,
+      "data_tier": "benchmark",
+      "price_per_oz": 0.63,
+      "confidence": 0.5
+    }
+  },
+  "fetched_at": "2026-02-24T00:47:33.872Z",
+  "sources": [
+    "internal_harvest_data",
+    "benchmark_pricing"
+  ],
+  "usda_available": false
+}
