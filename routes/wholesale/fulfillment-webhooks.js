@@ -2,18 +2,19 @@
  * GreenReach Wholesale - Fulfillment Webhooks
  * 
  * Receives status updates from Light Engine farms about order fulfillment
- * Updates centralized FarmSubOrder records with fulfillment progress
+ * Updates persistent FarmSubOrder records with fulfillment progress
  * Sends notifications to buyers about order status changes
  */
 
 import express from 'express';
+import crypto from 'crypto';
+import { getSubOrder, saveSubOrder, getOrder } from '../../lib/wholesale/order-store.js';
 
 const router = express.Router();
 
-// In-memory storage (TODO: migrate to database)
-if (!global.farmSubOrders) {
-  global.farmSubOrders = new Map();
-}
+// Idempotency set — prevents duplicate webhook processing (in-memory, cleared on restart)
+const processedEventIds = new Set();
+const MAX_PROCESSED = 10000;
 
 /**
  * POST /api/wholesale/webhooks/fulfillment
@@ -41,6 +42,7 @@ router.post('/', async (req, res) => {
   try {
     const {
       event_type,
+      event_id,
       sub_order_id,
       farm_id,
       old_status,
@@ -54,56 +56,76 @@ router.post('/', async (req, res) => {
       updated_at
     } = req.body;
     
-    // Validate webhook signature (TODO: implement HMAC verification)
-    // const signature = req.headers['x-farm-signature'];
-    // if (!verifyFarmSignature(signature, req.body)) {
-    //   return res.status(401).json({ status: 'error', message: 'Invalid signature' });
-    // }
+    // ── HMAC signature verification ──────────────────────────────────
+    const signature = req.headers['x-farm-signature'];
+    const timestamp = req.headers['x-farm-timestamp'];
+    if (!verifyFarmSignature(req.body, signature, timestamp)) {
+      return res.status(401).json({ status: 'error', message: 'Invalid or missing webhook signature' });
+    }
     
-    console.log(` Fulfillment webhook received: ${event_type}`);
+    // ── Idempotency check ────────────────────────────────────────────
+    const dedupKey = event_id || `${sub_order_id}_${new_status}_${updated_at}`;
+    if (processedEventIds.has(dedupKey)) {
+      console.log(`[Fulfillment] Duplicate event skipped: ${dedupKey}`);
+      return res.json({ status: 'ok', message: 'Already processed (idempotent)', sub_order_id });
+    }
+    
+    console.log(`[Fulfillment] Webhook received: ${event_type}`);
     console.log(`  Sub-Order: ${sub_order_id}`);
     console.log(`  Farm: ${farm_id}`);
     console.log(`  Status: ${old_status} → ${new_status}`);
     
-    // Get sub-order record
-    const subOrder = global.farmSubOrders.get(sub_order_id);
+    // ── Look up sub-order from persistent store ──────────────────────
+    const subOrder = await getSubOrder(sub_order_id);
     if (!subOrder) {
-      console.warn(`Sub-order not found: ${sub_order_id}`);
+      console.warn(`[Fulfillment] Sub-order not found: ${sub_order_id}`);
       return res.status(404).json({
         status: 'error',
         message: 'Sub-order not found'
       });
     }
     
-    // Update sub-order
+    // ── Status transition validation ─────────────────────────────────
+    const validTransitions = {
+      'pending_verification': ['verified', 'declined'],
+      'verified':             ['picked', 'cancelled'],
+      'confirmed':            ['picked', 'cancelled'],
+      'pending':              ['picked', 'cancelled'],
+      'picked':               ['packed', 'cancelled'],
+      'packed':               ['shipped', 'cancelled'],
+      'shipped':              ['delivered'],
+      'delivered':            [] // terminal
+    };
+    const currentStatus = subOrder.fulfillment_status || subOrder.status || 'pending';
+    const allowed = validTransitions[currentStatus];
+    if (allowed && allowed.length > 0 && !allowed.includes(new_status)) {
+      console.warn(`[Fulfillment] Invalid transition: ${currentStatus} → ${new_status}`);
+      return res.status(409).json({
+        status: 'error',
+        message: `Invalid status transition: ${currentStatus} → ${new_status}`,
+        allowed_transitions: allowed
+      });
+    }
+    
+    // ── Update sub-order ─────────────────────────────────────────────
     subOrder.fulfillment_status = new_status;
-    subOrder.fulfillment_updated_at = updated_at;
+    subOrder.fulfillment_updated_at = updated_at || new Date().toISOString();
     subOrder.fulfillment_location = location;
     
-    if (tracking_number) {
-      subOrder.tracking_number = tracking_number;
-    }
-    if (carrier) {
-      subOrder.carrier = carrier;
-    }
-    if (estimated_delivery) {
-      subOrder.estimated_delivery = estimated_delivery;
-    }
-    if (new_status === 'shipped') {
-      subOrder.shipped_at = updated_at;
-    }
+    if (tracking_number) subOrder.tracking_number = tracking_number;
+    if (carrier) subOrder.carrier = carrier;
+    if (estimated_delivery) subOrder.estimated_delivery = estimated_delivery;
+    if (new_status === 'shipped') subOrder.shipped_at = updated_at;
     if (new_status === 'delivered') {
       subOrder.delivered_at = updated_at;
-      subOrder.status = 'completed'; // Update SubOrderStatus
+      subOrder.status = 'completed';
     }
     
-    // Store fulfillment history
-    if (!subOrder.fulfillment_history) {
-      subOrder.fulfillment_history = [];
-    }
+    // Append fulfillment history
+    if (!subOrder.fulfillment_history) subOrder.fulfillment_history = [];
     subOrder.fulfillment_history.push({
       status: new_status,
-      timestamp: updated_at,
+      timestamp: updated_at || new Date().toISOString(),
       notes,
       location,
       updated_by,
@@ -111,7 +133,15 @@ router.post('/', async (req, res) => {
       carrier
     });
     
-    global.farmSubOrders.set(sub_order_id, subOrder);
+    // Persist to NeDB
+    await saveSubOrder(subOrder);
+    
+    // Mark event as processed
+    processedEventIds.add(dedupKey);
+    if (processedEventIds.size > MAX_PROCESSED) {
+      const first = processedEventIds.values().next().value;
+      processedEventIds.delete(first);
+    }
     
     // Check for SLA violations
     if (new_status === 'delivered' || new_status === 'shipped') {
@@ -121,7 +151,7 @@ router.post('/', async (req, res) => {
     // Send buyer notification
     await notifyBuyer(subOrder, new_status, notes);
     
-    console.log(` Sub-order updated: ${sub_order_id}`);
+    console.log(`[Fulfillment] Sub-order updated: ${sub_order_id}`);
     
     res.json({
       status: 'ok',
@@ -134,7 +164,7 @@ router.post('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Fulfillment webhook error:', error);
+    console.error('[Fulfillment] Webhook error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Failed to process fulfillment webhook',
@@ -142,6 +172,53 @@ router.post('/', async (req, res) => {
     });
   }
 });
+
+/**
+ * Verify HMAC-SHA256 webhook signature from farm
+ * Uses the same pattern as edge-wholesale-webhook.js
+ * Secret: WEBHOOK_SECRET env var or farm API key
+ */
+function verifyFarmSignature(payload, signature, timestamp) {
+  // Skip verification in development / when no signature provided
+  if (process.env.NODE_ENV === 'development' || (!signature && !process.env.WEBHOOK_SECRET)) {
+    return true;
+  }
+
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn('[Fulfillment] No WEBHOOK_SECRET configured, skipping verification');
+    return true;
+  }
+
+  if (!signature || !timestamp) {
+    console.warn('[Fulfillment] Missing signature or timestamp header');
+    return false;
+  }
+
+  try {
+    // Verify timestamp is recent (within 5 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    const requestTime = parseInt(timestamp);
+    if (Math.abs(now - requestTime) > 300) {
+      console.error('[Fulfillment] Webhook timestamp too old');
+      return false;
+    }
+
+    const payloadString = JSON.stringify(payload);
+    const computedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${timestamp}.${payloadString}`)
+      .digest('hex');
+
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(computedSignature)
+    );
+  } catch (error) {
+    console.error('[Fulfillment] Signature verification error:', error.message);
+    return false;
+  }
+}
 
 /**
  * Check for SLA violations based on delivery timing
@@ -192,16 +269,13 @@ async function checkSLAViolation(subOrder, actualDeliveryTime) {
 
 /**
  * Send buyer notification about status change
+ * Resolves buyer_id from the master order via order-store
  */
 async function notifyBuyer(subOrder, newStatus, notes) {
   try {
-    // In production, would:
-    // 1. Fetch buyer contact details from database
-    // 2. Send email/SMS notification
-    // 3. Log notification in audit system
-    
     const statusMessages = {
       'pending': 'Your order has been received by the farm',
+      'verified': 'Your order has been verified by the farm',
       'picked': 'Your order has been harvested and is being prepared',
       'packed': 'Your order has been packed and is ready for shipment',
       'shipped': 'Your order is on its way',
@@ -210,23 +284,35 @@ async function notifyBuyer(subOrder, newStatus, notes) {
     
     const message = statusMessages[newStatus] || `Order status: ${newStatus}`;
     
-    console.log(`📧 Buyer notification: ${message}`);
-    console.log(`  Sub-Order: ${subOrder.id}`);
+    // Resolve buyer from master order
+    let buyerId = subOrder.buyer_id || null;
+    if (!buyerId && subOrder.master_order_id) {
+      try {
+        const masterOrder = await getOrder(subOrder.master_order_id);
+        buyerId = masterOrder?.buyer_id || masterOrder?.buyer_account?.email || null;
+      } catch (err) {
+        console.warn('[Fulfillment] Could not resolve buyer from master order:', err.message);
+      }
+    }
+    
+    console.log(`[Fulfillment] Buyer notification: ${message}`);
+    console.log(`  Sub-Order: ${subOrder.sub_order_id || subOrder.id}`);
+    console.log(`  Buyer: ${buyerId || 'unknown'}`);
     console.log(`  Notes: ${notes || 'N/A'}`);
     
     if (subOrder.tracking_number) {
       console.log(`  Tracking: ${subOrder.tracking_number}`);
     }
     
-    // Store notification (in-memory for now)
+    // Store notification for retrieval via GET /notifications
     if (!global.buyerNotifications) {
       global.buyerNotifications = [];
     }
     
     global.buyerNotifications.push({
       notification_id: `notif_${Date.now()}`,
-      sub_order_id: subOrder.id,
-      buyer_id: 'buyer_placeholder', // Would fetch from master order
+      sub_order_id: subOrder.sub_order_id || subOrder.id,
+      buyer_id: buyerId,
       type: 'fulfillment_update',
       message,
       status: newStatus,
@@ -236,7 +322,7 @@ async function notifyBuyer(subOrder, newStatus, notes) {
     });
     
   } catch (error) {
-    console.error('Buyer notification error:', error);
+    console.error('[Fulfillment] Buyer notification error:', error);
   }
 }
 

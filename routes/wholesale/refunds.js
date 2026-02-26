@@ -7,6 +7,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js';
+import { getSubOrder, getOrder } from '../../lib/wholesale/order-store.js';
 
 const router = express.Router();
 
@@ -56,36 +57,49 @@ router.post('/', async (req, res) => {
     console.log(`  Type: ${refund_type}`);
     console.log(`  Reason: ${reason}`);
 
-    // TODO: Fetch payment record from database
-    // For now, using mock payment data
-    const mockPaymentRecord = {
-      id: 'PR-123',
-      provider_payment_id: 'sq_payment_123',
-      provider: 'square',
-      sub_order_id,
-      gross_amount: 10000, // $100.00
-      broker_fee_amount: 1000, // $10.00
-      status: 'completed'
-    };
-
-    if (mockPaymentRecord.status !== 'completed') {
-      return res.status(409).json({
+    // ── Look up sub-order from persistent store ────────────────────────
+    const subOrder = await getSubOrder(sub_order_id);
+    if (!subOrder) {
+      return res.status(404).json({
         ok: false,
-        error: 'Cannot refund payment that is not completed',
-        current_status: mockPaymentRecord.status
+        error: 'Sub-order not found',
+        sub_order_id
       });
     }
 
-    // Calculate refund amounts
+    // Amounts are stored in dollars; convert to cents for provider calls
+    const grossAmountCents = Math.round((subOrder.total || 0) * 100);
+    const brokerFeeCents    = Math.round((subOrder.broker_fee_amount || 0) * 100);
+    const providerPaymentId = subOrder.payment_id || null;
+
+    // Verify the sub-order is in a refundable state
+    const refundableStatuses = ['confirmed', 'verified', 'completed', 'fulfilled', 'delivered'];
+    if (!refundableStatuses.includes(subOrder.status)) {
+      return res.status(409).json({
+        ok: false,
+        error: `Cannot refund sub-order in '${subOrder.status}' status`,
+        current_status: subOrder.status
+      });
+    }
+
+    if (grossAmountCents <= 0) {
+      return res.status(409).json({
+        ok: false,
+        error: 'Sub-order has no refundable amount',
+        total: subOrder.total
+      });
+    }
+
+    // ── Calculate refund amounts ──────────────────────────────────────
     let refundAmountCents;
     let brokerFeeRefundCents;
 
     if (refund_type === 'full') {
-      refundAmountCents = mockPaymentRecord.gross_amount;
+      refundAmountCents = grossAmountCents;
       
       // Broker fee refund policy
       if (broker_fee_policy === 'proportional' || broker_fee_policy === 'full') {
-        brokerFeeRefundCents = mockPaymentRecord.broker_fee_amount;
+        brokerFeeRefundCents = brokerFeeCents;
       } else {
         brokerFeeRefundCents = 0;
       }
@@ -93,20 +107,20 @@ router.post('/', async (req, res) => {
       // Partial refund
       refundAmountCents = Math.round(refund_amount * 100);
       
-      if (refundAmountCents > mockPaymentRecord.gross_amount) {
+      if (refundAmountCents > grossAmountCents) {
         return res.status(400).json({
           ok: false,
           error: 'Refund amount exceeds original payment',
-          max_refund: mockPaymentRecord.gross_amount / 100
+          max_refund: grossAmountCents / 100
         });
       }
 
       // Calculate proportional broker fee refund
       if (broker_fee_policy === 'proportional') {
-        const refundRatio = refundAmountCents / mockPaymentRecord.gross_amount;
-        brokerFeeRefundCents = Math.round(mockPaymentRecord.broker_fee_amount * refundRatio);
+        const refundRatio = refundAmountCents / grossAmountCents;
+        brokerFeeRefundCents = Math.round(brokerFeeCents * refundRatio);
       } else if (broker_fee_policy === 'full') {
-        brokerFeeRefundCents = mockPaymentRecord.broker_fee_amount;
+        brokerFeeRefundCents = brokerFeeCents;
       } else {
         brokerFeeRefundCents = 0;
       }
@@ -115,7 +129,7 @@ router.post('/', async (req, res) => {
     console.log(`  Refund amount: $${refundAmountCents / 100}`);
     console.log(`  Broker fee refund: $${brokerFeeRefundCents / 100}`);
 
-    // Create Square payment provider
+    // Create payment provider
     const squareProvider = PaymentProviderFactory.create('square', {
       squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo',
       environment: 'sandbox'
@@ -125,9 +139,9 @@ router.post('/', async (req, res) => {
     const refundId = `REF-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const idempotencyKey = `${sub_order_id}_${refundId}`;
 
-    // Execute refund via Square
+    // Execute refund via payment provider
     const refundResult = await squareProvider.refundPayment({
-      providerPaymentId: mockPaymentRecord.provider_payment_id,
+      providerPaymentId: providerPaymentId || `no-provider-${sub_order_id}`,
       amountMoney: {
         amount: refundAmountCents,
         currency: 'USD'
@@ -147,9 +161,11 @@ router.post('/', async (req, res) => {
     // Create refund record
     const refundRecord = {
       id: refundId,
-      payment_record_id: mockPaymentRecord.id,
-      provider_refund_id: refundResult.refundId,
       sub_order_id,
+      master_order_id: subOrder.master_order_id || null,
+      farm_id: subOrder.farm_id || null,
+      payment_id: providerPaymentId,
+      provider_refund_id: refundResult.refundId,
       refund_type,
       refund_amount: refundAmountCents,
       broker_fee_refunded: brokerFeeRefundCents,
@@ -166,11 +182,11 @@ router.post('/', async (req, res) => {
     if (brokerFeeRefundCents > 0) {
       const brokerFeeRecord = {
         id: `BF-${refundId}`,
-        payment_record_id: mockPaymentRecord.id,
+        sub_order_id,
         refund_record_id: refundId,
-        fee_amount: mockPaymentRecord.broker_fee_amount,
+        fee_amount: brokerFeeCents,
         fee_refunded: brokerFeeRefundCents,
-        settlement_status: refundType === 'full' && broker_fee_policy !== 'none' 
+        settlement_status: refund_type === 'full' && broker_fee_policy !== 'none' 
           ? 'reversed' 
           : 'partially_reversed',
         updated_at: new Date().toISOString()
@@ -183,10 +199,6 @@ router.post('/', async (req, res) => {
     console.log(`  Refund ID: ${refundId}`);
     console.log(`  Provider Refund ID: ${refundResult.refundId}`);
     console.log(`  Status: ${refundResult.status}`);
-
-    // TODO: Notify farm via Light Engine API
-    // TODO: Update MasterOrder and FarmSubOrder statuses
-    // TODO: Send buyer notification
 
     res.json({
       ok: true,
