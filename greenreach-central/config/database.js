@@ -12,7 +12,7 @@ let db = null;
 
 /**
  * Initialize PostgreSQL connection pool
- * Supports DATABASE_URL (connection string) OR individual RDS_*/DB_* env vars.
+ * Supports DATABASE_URL (connection string) OR individual RDS / DB env vars.
  * Retries up to 3 times with exponential backoff on initial connection failure.
  */
 export async function initDatabase() {
