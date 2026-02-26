@@ -77,60 +77,56 @@ router.get('/:farm_id', async (req, res) => {
     const { farm_id } = req.params;
     const { timeframe = '30d' } = req.query;
     
-    // TODO: Query database for farm-specific metrics
+    // Return empty/zero performance structure until order data is populated
+    // TODO: Query database for farm-specific metrics when order volume justifies it
     
     const performance = {
       farm_id,
-      farm_name: 'Demo Farm',
+      farm_name: '',
       period: timeframe,
       metrics: {
-        orders_received: 45,
-        orders_accepted: 40,
-        orders_declined: 3,
-        orders_modified: 2,
+        orders_received: 0,
+        orders_accepted: 0,
+        orders_declined: 0,
+        orders_modified: 0,
         orders_expired: 0,
         
-        acceptance_rate: 88.9,
-        decline_rate: 6.7,
-        modification_rate: 4.4,
+        acceptance_rate: 0,
+        decline_rate: 0,
+        modification_rate: 0,
         expiration_rate: 0,
         
-        avg_response_time_hours: 4.2,
-        median_response_time_hours: 3.5,
-        fastest_response_minutes: 15,
-        slowest_response_hours: 20,
+        avg_response_time_hours: 0,
+        median_response_time_hours: 0,
+        fastest_response_minutes: 0,
+        slowest_response_hours: 0,
         
-        buyer_acceptances: 41,
-        buyer_rejections: 1,
-        buyer_rejection_rate: 2.4,
+        buyer_acceptances: 0,
+        buyer_rejections: 0,
+        buyer_rejection_rate: 0,
         
         missed_deadlines: 0,
-        late_responses: 2,
+        late_responses: 0,
         
-        total_revenue: 12450.00,
-        avg_order_value: 276.67
+        total_revenue: 0,
+        avg_order_value: 0
       },
       
       response_time_distribution: {
-        under_1h: 5,
-        '1-4h': 20,
-        '4-8h': 12,
-        '8-12h': 5,
-        '12-24h': 3,
+        under_1h: 0,
+        '1-4h': 0,
+        '4-8h': 0,
+        '8-12h': 0,
+        '12-24h': 0,
         over_24h: 0
       },
       
-      decline_reasons: [
-        { reason: 'Insufficient inventory', count: 2 },
-        { reason: 'Quality concerns', count: 1 }
-      ],
+      decline_reasons: [],
       
-      modification_reasons: [
-        { reason: 'Lower quantity available', count: 2 }
-      ],
+      modification_reasons: [],
       
-      quality_score: 92.5,
-      reliability_rating: 'A',
+      quality_score: 0,
+      reliability_rating: 'N/A',
       
       flags: {
         slow_responder: false,

@@ -515,6 +515,48 @@ function closeInfoCard() {
 window.closeInfoCard = closeInfoCard;
 
 /**
+ * Show a reusable detail modal (overlay + card) with key/value rows.
+ * Uses the same visual pattern as the info-card system.
+ *
+ * @param {string} title - Modal title
+ * @param {Array<{label: string, value: any}>} fields - Key/value pairs to display
+ */
+function showDetailModal(title, fields) {
+    // Remove any existing detail modal
+    const prev = document.getElementById('detailModal');
+    const prevOv = document.getElementById('detailModalOverlay');
+    if (prev) prev.remove();
+    if (prevOv) prevOv.remove();
+
+    const rows = fields.map(f =>
+        `<tr><td style="padding:6px 12px 6px 0;font-weight:600;white-space:nowrap;color:#a0aec0;">${f.label}</td>` +
+        `<td style="padding:6px 0;color:#e2e8f0;">${f.value ?? '-'}</td></tr>`
+    ).join('');
+
+    const html = `
+        <div id="detailModalOverlay" onclick="closeDetailModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;"></div>
+        <div id="detailModal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a202c;border:1px solid #2d3748;border-radius:12px;padding:24px 28px;z-index:9999;min-width:340px;max-width:520px;box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;color:#63b3ed;font-size:1.1rem;">${title}</h3>
+                <button onclick="closeDetailModal()" style="background:none;border:none;color:#a0aec0;font-size:1.3rem;cursor:pointer;padding:0 4px;">&times;</button>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">${rows}</table>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeDetailModal() {
+    const m = document.getElementById('detailModal');
+    const o = document.getElementById('detailModalOverlay');
+    if (m) m.remove();
+    if (o) o.remove();
+}
+
+window.showDetailModal = showDetailModal;
+window.closeDetailModal = closeDetailModal;
+
+/**
  * Data Normalization Functions
  * 
  * These functions handle field variations in zone and group data to ensure
@@ -5351,16 +5393,54 @@ function exportReport() {
 }
 
 /**
- * Export farm data
+ * Export farm data — generates and downloads a CSV of all farm KPIs
  */
 function exportFarmData() {
     if (!currentFarmId) return;
     
     console.log(`Exporting data for ${currentFarmId}...`);
     
-    // In production, fetch all farm data and export
     const farm = farmsData.find(f => f.farmId === currentFarmId);
-    alert(`Export data for ${farm.name}\n\nIn production, this would generate a comprehensive report including:\n- Environmental history\n- Energy consumption\n- Harvest data\n- Device logs\n- Anomaly reports`);
+    if (!farm) {
+        console.warn('[Export] No farm data found for', currentFarmId);
+        return;
+    }
+
+    // Build CSV with all available data sections
+    const lines = [];
+    lines.push('Section,Field,Value');
+
+    // Farm overview
+    lines.push(`Farm,Name,"${farm.name || ''}"`);
+    lines.push(`Farm,ID,${farm.farmId || ''}`);
+    lines.push(`Farm,Status,${farm.status || ''}`);
+    lines.push(`Farm,Rooms,${farm.rooms ?? ''}`);
+    lines.push(`Farm,Zones,${farm.zones ?? ''}`);
+    lines.push(`Farm,Devices,${farm.devices ?? ''}`);
+    lines.push(`Farm,Trays,${farm.trays ?? ''}`);
+    lines.push(`Farm,Energy (kWh),${farm.energy ?? ''}`);
+    lines.push(`Farm,Alerts,${farm.alerts ?? ''}`);
+    lines.push(`Farm,Last Update,${farm.lastUpdate || ''}`);
+
+    // Rooms
+    roomsData.forEach(r => {
+        lines.push(`Room,"${r.name}",Status: ${r.status} | Zones: ${r.zones} | Devices: ${r.devices} | Temp: ${r.temp} | RH: ${r.humidity} | CO2: ${r.co2}`);
+    });
+
+    // Devices
+    devicesData.forEach(d => {
+        lines.push(`Device,"${d.name} (${d.deviceId})",Type: ${d.type} | Status: ${d.status} | Location: ${d.location} | Firmware: ${d.firmware}`);
+    });
+
+    // Inventory / Trays
+    inventoryData.forEach(t => {
+        lines.push(`Tray,"${t.trayId}",Recipe: ${t.recipe} | Location: ${t.location} | Age: ${t.age}d | Harvest: ${t.harvestEst} | Status: ${t.status}`);
+    });
+
+    const csv = lines.join('\n');
+    const ts = new Date().toISOString().slice(0, 10);
+    downloadCSV(csv, `${farm.name || currentFarmId}-export-${ts}.csv`);
+    console.log(`[Export] Downloaded ${lines.length} rows for ${farm.name}`);
 }
 
 /**
@@ -5422,27 +5502,74 @@ async function refreshData() {
 }
 
 /**
- * View room detail (stub - legacy)
+ * View room detail (legacy entry point — delegates to real drill-down)
  */
 function viewRoomDetailStub(roomName) {
-    console.log(`View room: ${roomName}`);
-    alert(`Room Detail: ${roomName}\n\nIn production, this would drill down to:\n- Zone-level environmental data\n- Device status per zone\n- Active trays in this room\n- Energy consumption\n- Historical trends`);
+    console.log(`[viewRoomDetailStub] Delegating to viewRoomDetail for: ${roomName}`);
+    const room = roomsData.find(r => r.name === roomName || r.roomId === roomName);
+    if (room && currentFarmId) {
+        viewRoomDetail(currentFarmId, room.roomId || room.name);
+    } else {
+        // Fallback: show available room data in a detail panel
+        const r = room || { name: roomName, status: '-', zones: '-', devices: '-', temp: '-', humidity: '-', co2: '-' };
+        showDetailModal('Room Detail', [
+            { label: 'Room', value: r.name },
+            { label: 'Status', value: r.status },
+            { label: 'Zones', value: r.zones },
+            { label: 'Devices', value: r.devices },
+            { label: 'Temperature', value: r.temp !== '-' ? `${r.temp} °C` : 'No data' },
+            { label: 'Humidity', value: r.humidity !== '-' ? `${r.humidity}%` : 'No data' },
+            { label: 'CO₂', value: r.co2 !== '-' ? `${r.co2} ppm` : 'No data' }
+        ]);
+    }
 }
 
 /**
- * View device detail
+ * View device detail — shows available device metadata in a modal
  */
 function viewDeviceDetail(deviceId) {
-    console.log(`View device: ${deviceId}`);
-    alert(`Device Detail: ${deviceId}\n\nIn production, this would show:\n- Real-time status\n- Configuration\n- Firmware version\n- Performance metrics\n- Error logs\n- Control interface`);
+    console.log(`[viewDeviceDetail] ${deviceId}`);
+    const device = devicesData.find(d => d.deviceId === deviceId);
+    if (!device) {
+        showDetailModal('Device Detail', [
+            { label: 'Device ID', value: deviceId },
+            { label: 'Status', value: 'Device data not loaded. Navigate to the farm detail view to see full device information.' }
+        ]);
+        return;
+    }
+    showDetailModal('Device Detail', [
+        { label: 'Device ID', value: device.deviceId },
+        { label: 'Name', value: device.name },
+        { label: 'Type', value: device.type },
+        { label: 'Location', value: device.location },
+        { label: 'Status', value: device.status },
+        { label: 'Last Seen', value: device.lastSeen },
+        { label: 'Firmware', value: device.firmware }
+    ]);
 }
 
 /**
- * View tray detail
+ * View tray detail — shows available tray/inventory data in a modal
  */
 function viewTrayDetail(trayId) {
-    console.log(`View tray: ${trayId}`);
-    alert(`Tray Detail: ${trayId}\n\nIn production, this would show:\n- Recipe details\n- Growth timeline\n- Environmental exposure\n- Plant health metrics\n- Expected vs actual harvest\n- Photos/imaging data`);
+    console.log(`[viewTrayDetail] ${trayId}`);
+    const tray = inventoryData.find(t => t.trayId === trayId);
+    if (!tray) {
+        showDetailModal('Tray Detail', [
+            { label: 'Tray ID', value: trayId },
+            { label: 'Status', value: 'Tray data not loaded. Navigate to the farm detail view to see full inventory.' }
+        ]);
+        return;
+    }
+    showDetailModal('Tray Detail', [
+        { label: 'Tray ID', value: tray.trayId },
+        { label: 'Recipe', value: tray.recipe },
+        { label: 'Location', value: tray.location },
+        { label: 'Plant Count', value: tray.plantCount },
+        { label: 'Age', value: `${tray.age} days` },
+        { label: 'Harvest Estimate', value: tray.harvestEst },
+        { label: 'Status', value: tray.status }
+    ]);
 }
 
 /**
