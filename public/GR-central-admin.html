@@ -1032,6 +1032,14 @@
                     </div>
                 </div>
 
+                <div class="tab-nav" style="display:flex;gap:0.25rem;padding:0 1.5rem;margin-bottom:1rem;border-bottom:1px solid #334155;">
+                    <button class="tab-btn active" onclick="switchDetailTab('detail-overview',this)" style="background:none;border:none;color:#e2e8f0;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid #3b82f6;font-size:0.85rem;">Overview</button>
+                    <button class="tab-btn" onclick="switchDetailTab('detail-environmental',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Environmental</button>
+                    <button class="tab-btn" onclick="switchDetailTab('detail-energy',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Energy</button>
+                    <button class="tab-btn" onclick="switchDetailTab('detail-recipes',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Recipes</button>
+                    <button class="tab-btn" onclick="switchDetailTab('detail-experiments',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">A/B Experiments</button>
+                </div>
+
                 <div id="detail-overview" class="tab-content active">
                     <div class="grid-2col">
                         <div class="card">
@@ -1306,6 +1314,37 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- A/B Experiments Tab (S4.6) -->
+                <div id="detail-experiments" class="tab-content" style="display:none;">
+                    <div class="card">
+                        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                            <div class="card-title">A/B Recipe Experiments</div>
+                            <button class="btn btn-primary" onclick="showCreateExperiment()">+ New Experiment</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="experiments-list">
+                                <div class="loading">Loading experiments...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Create experiment form (hidden by default) -->
+                    <div id="create-experiment-form" class="card" style="display:none;">
+                        <div class="card-header"><div class="card-title">Create New Experiment</div></div>
+                        <div class="card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                                <div><label style="color:#94a3b8;font-size:0.85rem;">Experiment Name</label><input id="exp-name" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. Basil Blue Light Test"></div>
+                                <div><label style="color:#94a3b8;font-size:0.85rem;">Crop</label><input id="exp-crop" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. basil"></div>
+                                <div><label style="color:#94a3b8;font-size:0.85rem;">Parameter</label><input id="exp-param" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. blue_spectrum_pct"></div>
+                                <div><label style="color:#94a3b8;font-size:0.85rem;">Variant Value</label><input id="exp-value" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. 25"></div>
+                            </div>
+                            <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+                                <button class="btn btn-primary" onclick="submitCreateExperiment()">Create</button>
+                                <button class="btn" onclick="document.getElementById('create-experiment-form').style.display='none'">Cancel</button>
                             </div>
                         </div>
                     </div>
@@ -4021,6 +4060,61 @@ API URL: ${farm.api_url || 'Not configured'}
                 console.log('Revoke invitation:', invitationId);
                 alert(`Revoke invitation: ${invitationId}`);
             }
+        }
+
+        // ═══════════ Farm Detail Tab Switching (S4.6) ═══════════
+        function switchDetailTab(tabId, btn) {
+            document.querySelectorAll('#farm-detail-view .tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('#farm-detail-view .tab-content').forEach(el => el.classList.remove('active'));
+            const target = document.getElementById(tabId);
+            if (target) { target.style.display = ''; target.classList.add('active'); }
+            document.querySelectorAll('#farm-detail-view .tab-nav .tab-btn').forEach(b => { b.style.color = '#94a3b8'; b.style.borderBottom = '2px solid transparent'; });
+            if (btn) { btn.style.color = '#e2e8f0'; btn.style.borderBottom = '2px solid #3b82f6'; }
+            if (tabId === 'detail-experiments') loadExperiments();
+        }
+
+        // ═══════════ A/B Experiments (S4.6) ═══════════
+        async function loadExperiments() {
+            const el = document.getElementById('experiments-list');
+            if (!el) return;
+            try {
+                const resp = await fetch('/api/admin/experiments?t=' + Date.now(), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } });
+                if (!resp.ok) { el.innerHTML = '<div style="color:#94a3b8;padding:1rem;">Could not load experiments</div>'; return; }
+                const data = await resp.json();
+                const exps = data.experiments || [];
+                if (exps.length === 0) { el.innerHTML = '<div style="color:#94a3b8;padding:1rem;">No experiments yet. Click "+ New Experiment" to create one.</div>'; return; }
+                el.innerHTML = '<table style="width:100%;"><thead><tr><th>Name</th><th>Crop</th><th>Parameter</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>' +
+                    exps.map(e => `<tr>
+                        <td>${e.name || e.experiment_name || ''}</td>
+                        <td>${e.crop || ''}</td>
+                        <td>${e.parameter || ''}</td>
+                        <td><span style="background:${e.status === 'active' ? '#22c55e' : e.status === 'completed' ? '#3b82f6' : '#f59e0b'};color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.75rem;">${e.status || 'draft'}</span></td>
+                        <td>${e.created_at ? new Date(e.created_at).toLocaleDateString() : ''}</td>
+                        <td>${e.status === 'draft' ? '<button class="btn" onclick="activateExperiment(\'' + e.id + '\')">Activate</button>' : e.status === 'active' ? '<button class="btn" onclick="analyzeExperiment(\'' + e.id + '\')">Analyze</button>' : ''}</td>
+                    </tr>`).join('') + '</tbody></table>';
+            } catch (err) { el.innerHTML = '<div style="color:#ef4444;padding:1rem;">Error: ' + err.message + '</div>'; }
+        }
+
+        function showCreateExperiment() { document.getElementById('create-experiment-form').style.display = ''; }
+
+        async function submitCreateExperiment() {
+            const body = { name: document.getElementById('exp-name').value, crop: document.getElementById('exp-crop').value, parameter: document.getElementById('exp-param').value, variant_value: document.getElementById('exp-value').value };
+            try {
+                const resp = await fetch('/api/admin/experiments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') }, body: JSON.stringify(body) });
+                if (resp.ok) { document.getElementById('create-experiment-form').style.display = 'none'; loadExperiments(); } else { alert('Failed to create experiment'); }
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        async function activateExperiment(id) {
+            try { await fetch(`/api/admin/experiments/${id}/activate`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } }); loadExperiments(); } catch (err) { alert(err.message); }
+        }
+
+        async function analyzeExperiment(id) {
+            try {
+                const resp = await fetch(`/api/admin/experiments/${id}/analyze`, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } });
+                const data = await resp.json();
+                alert(JSON.stringify(data.analysis || data, null, 2));
+            } catch (err) { alert(err.message); }
         }
 
         // Load network dashboard when view becomes active

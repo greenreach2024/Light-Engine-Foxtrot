@@ -330,19 +330,58 @@ async function incrementFailedAttempts(db, adminUserId, currentAttempts) {
 }
 
 /**
- * Helper: Verify 2FA code
- * In production, use speakeasy or similar TOTP library
+ * Helper: Verify 2FA code using HMAC-based TOTP (RFC 6238)
+ * No external dependency — uses Node.js built-in crypto (already imported at top).
  */
 function verify2FACode(secret, code) {
-  // Simplified verification - in production use proper TOTP
-  // For now, accept any 6-digit code if 2FA is enabled but no secret set
-  if (!secret) return true;
-  
-  // TODO: Implement proper TOTP verification using speakeasy
-  // import speakeasy from 'speakeasy';
-  // return speakeasy.totp.verify({ secret, encoding: 'base32', token: code });
-  
-  return /^\d{6}$/.test(code);
+  if (!secret) return true; // 2FA not configured for this user
+  if (!code || !/^\d{6}$/.test(code)) return false;
+
+  try {
+    const step = 30; // seconds per TOTP window
+    const now = Math.floor(Date.now() / 1000);
+    const secretBytes = base32Decode(secret);
+
+    // Check current window and ±1 window for clock drift tolerance
+    for (const offset of [-1, 0, 1]) {
+      const counter = Math.floor((now + offset * step) / step);
+      const buf = Buffer.alloc(8);
+      buf.writeUInt32BE(0, 0);
+      buf.writeUInt32BE(counter, 4);
+
+      const hmac = crypto.createHmac('sha1', secretBytes).update(buf).digest();
+      const offsetByte = hmac[hmac.length - 1] & 0x0f;
+      const truncated = ((hmac[offsetByte] & 0x7f) << 24) |
+                        ((hmac[offsetByte + 1] & 0xff) << 16) |
+                        ((hmac[offsetByte + 2] & 0xff) << 8) |
+                        (hmac[offsetByte + 3] & 0xff);
+      const otp = (truncated % 1000000).toString().padStart(6, '0');
+      if (otp === code) return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('[2FA] TOTP verification error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Base32 decode helper (RFC 4648) — no external dependency
+ */
+function base32Decode(str) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const cleaned = str.replace(/[=\s]/g, '').toUpperCase();
+  let bits = '';
+  for (const c of cleaned) {
+    const val = alphabet.indexOf(c);
+    if (val < 0) continue;
+    bits += val.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  }
+  return Buffer.from(bytes);
 }
 
 export default router;

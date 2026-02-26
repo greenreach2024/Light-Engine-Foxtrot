@@ -14,6 +14,7 @@ import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js'; // Ensure Square provider is registered
 import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is registered
 import auditLogger from '../../lib/wholesale/audit-logger.js';
+import orderStore from '../../lib/wholesale/order-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -327,6 +328,24 @@ router.post('/execute', async (req, res) => {
     };
 
     orders.set(masterOrderId, masterOrder);
+    await orderStore.saveOrder(masterOrder);
+    for (const subOrder of allocation.sub_orders) {
+      const subOrderId = `SO-${masterOrderId}-${subOrder.farm_id}`;
+      await orderStore.saveSubOrder({
+        sub_order_id: subOrderId,
+        master_order_id: masterOrderId,
+        farm_id: subOrder.farm_id,
+        farm_name: subOrder.farm_name,
+        status: 'pending_verification',
+        line_items: subOrder.line_items,
+        subtotal: subOrder.subtotal,
+        broker_fee_amount: subOrder.broker_fee_amount,
+        tax_amount: subOrder.tax_amount || 0,
+        total: subOrder.total,
+        verification_deadline: new Date(Date.now() + 24 * 3600000).toISOString(),
+        payment_id: paymentResults.find(p => p.farm_id === subOrder.farm_id)?.payment_id
+      });
+    }
 
     console.log('[Checkout] Checkout complete!');
     console.log(`  Master Order: ${masterOrderId}`);

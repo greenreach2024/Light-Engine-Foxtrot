@@ -29,35 +29,40 @@ import { farmStore } from '../lib/farm-data-store.js';
 
 const router = Router();
 
-// ═══════════ Quality Tests ═══════════
-router.get('/api/quality/tests/:farmId', (req, res) => {
-  res.json({
-    ok: true,
-    farmId: req.params.farmId,
-    tests: [],
-    total: 0,
-    message: 'No quality tests recorded yet',
-  });
+// ═══════════ Quality Tests (persisted via farmStore) ═══════════
+router.get('/api/quality/tests/:farmId', async (req, res) => {
+  try {
+    const tests = await farmStore.get(req.params.farmId, 'quality_tests') || [];
+    const list = Array.isArray(tests) ? tests : (tests.tests || []);
+    res.json({ ok: true, farmId: req.params.farmId, tests: list, total: list.length });
+  } catch {
+    res.json({ ok: true, farmId: req.params.farmId, tests: [], total: 0 });
+  }
 });
 
-router.post('/api/quality/tests', (req, res) => {
+router.post('/api/quality/tests', async (req, res) => {
   const { farmId, testType, results } = req.body;
-  res.json({
-    ok: true,
-    id: `QT-${Date.now()}`,
-    farmId,
-    testType,
-    results,
-    recordedAt: new Date().toISOString(),
-  });
+  const entry = { id: `QT-${Date.now()}`, farmId, testType, results, recordedAt: new Date().toISOString() };
+  try {
+    const fid = farmId || farmStore.farmIdFromReq(req);
+    const existing = await farmStore.get(fid, 'quality_tests') || [];
+    const list = Array.isArray(existing) ? existing : (existing.tests || []);
+    list.push(entry);
+    await farmStore.set(fid, 'quality_tests', list);
+  } catch (e) { console.warn('[Quality] Could not persist test:', e.message); }
+  res.json({ ok: true, ...entry });
 });
 
-// ═══════════ Room Mapper ═══════════
-router.post('/api/room-mapper/save', (req, res) => {
+// ═══════════ Room Mapper (persisted via farmStore) ═══════════
+router.post('/api/room-mapper/save', async (req, res) => {
   const { roomId, layout } = req.body;
-  // In edge mode this writes to local storage;
-  // in SaaS mode we'd persist to farm_data
   console.log(`[Room Mapper] Save request: room=${roomId}, elements=${Array.isArray(layout) ? layout.length : 'N/A'}`);
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const existing = await farmStore.get(fid, 'room_layouts') || {};
+    existing[roomId] = { layout, updatedAt: new Date().toISOString() };
+    await farmStore.set(fid, 'room_layouts', existing);
+  } catch (e) { console.warn('[Room Mapper] Could not persist layout:', e.message); }
   res.json({ ok: true, roomId, saved: true });
 });
 
@@ -91,15 +96,18 @@ router.get('/api/harvest/predictions', async (req, res) => {
   }
 });
 
-router.post('/api/harvest', (req, res) => {
-  const entry = req.body;
-  console.log(`[Harvest] Recorded: crop=${entry.crop}, qty=${entry.quantity}, date=${entry.date || new Date().toISOString()}`);
-  res.json({
-    ok: true,
-    id: `H-${Date.now()}`,
-    ...entry,
-    recordedAt: new Date().toISOString(),
-  });
+router.post('/api/harvest', async (req, res) => {
+  const entry = { id: `H-${Date.now()}`, ...req.body, recordedAt: new Date().toISOString() };
+  console.log(`[Harvest] Recorded: crop=${entry.crop}, qty=${entry.quantity}, date=${entry.date || entry.recordedAt}`);
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const existing = await farmStore.get(fid, 'harvest_records') || [];
+    const list = Array.isArray(existing) ? existing : (existing.records || []);
+    list.push(entry);
+    if (list.length > 500) list.splice(0, list.length - 500); // Keep last 500
+    await farmStore.set(fid, 'harvest_records', list);
+  } catch (e) { console.warn('[Harvest] Could not persist record:', e.message); }
+  res.json({ ok: true, ...entry });
 });
 
 // ═══════════ Dedicated Crops ═══════════
@@ -179,18 +187,20 @@ router.get('/api/health/ai-character', (req, res) => {
   });
 });
 
-// ═══════════ AI Decision Recording ═══════════
-router.post('/api/ai/record-decision', (req, res) => {
+// ═══════════ AI Decision Recording (persisted — training signal per Rule 8.1) ═══════════
+router.post('/api/ai/record-decision', async (req, res) => {
   const { decision, context, outcome } = req.body;
+  const entry = { id: `AI-${Date.now()}`, decision, context, outcome, recordedAt: new Date().toISOString() };
   console.log(`[AI] Decision recorded: ${decision} context=${JSON.stringify(context || {}).slice(0, 100)}`);
-  res.json({
-    ok: true,
-    id: `AI-${Date.now()}`,
-    decision,
-    context,
-    outcome,
-    recordedAt: new Date().toISOString(),
-  });
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const existing = await farmStore.get(fid, 'ai_decisions') || [];
+    const list = Array.isArray(existing) ? existing : (existing.decisions || []);
+    list.push(entry);
+    if (list.length > 1000) list.splice(0, list.length - 1000); // Keep last 1000
+    await farmStore.set(fid, 'ai_decisions', list);
+  } catch (e) { console.warn('[AI] Could not persist decision:', e.message); }
+  res.json({ ok: true, ...entry });
 });
 
 // ═══════════ Path Mismatch Aliases ═══════════

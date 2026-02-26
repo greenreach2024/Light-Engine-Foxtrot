@@ -5,6 +5,7 @@
 
 import alternativeFarmService from '../services/alternative-farm-service.js';
 import notificationService from '../services/wholesale-notification-service.js';
+import * as orderStore from '../lib/wholesale/order-store.js';
 
 class DeadlineMonitor {
   /**
@@ -48,18 +49,14 @@ class DeadlineMonitor {
     
     try {
       // Mark as expired
-      // TODO: UPDATE farm_sub_orders SET status = 'expired', is_expired = true
+      await orderStore.updateSubOrderStatus(subOrder.sub_order_id, 'expired', { is_expired: true });
       
       // Get main order details
-      // TODO: SELECT from wholesale_orders WHERE id = subOrder.wholesale_order_id
-      const mainOrder = {
-        id: subOrder.wholesale_order_id,
-        buyer_email: 'buyer@example.com', // Get from database
-        buyer_name: 'Test Buyer',
-        total_amount: 500,
-        delivery_city: 'Kingston',
-        delivery_province: 'ON'
-      };
+      const mainOrder = await orderStore.getOrder(subOrder.master_order_id);
+      if (!mainOrder) {
+        console.error(`[Deadline Monitor] Main order ${subOrder.master_order_id} not found for sub-order #${subOrder.id}`);
+        return;
+      }
       
       // CRITICAL: Release inventory reservation when order expires
       console.log(`[Deadline Monitor] Releasing inventory reservation for expired sub-order #${subOrder.id}`);
@@ -95,18 +92,18 @@ class DeadlineMonitor {
       
       // Track performance event (farm missed deadline)
       console.log(`[Performance] Farm ${subOrder.farm_id} missed deadline for sub-order #${subOrder.id}`);
-      // TODO: INSERT INTO farm_performance_events (farm_id, event_type='missed_deadline', ...)
+      await orderStore.recordPerfEvent({ farm_id: subOrder.farm_id, event_type: 'missed_deadline', sub_order_id: subOrder.sub_order_id, master_order_id: subOrder.master_order_id });
       
       // Trigger alternative farm search
       const result = await alternativeFarmService.findAlternatives(subOrder, mainOrder);
       
       if (result.success) {
         console.log(`[Deadline Monitor] ${result.alternatives_notified} alternatives notified`);
-        // TODO: UPDATE wholesale_orders SET status = 'seeking_alternatives'
+        await orderStore.updateOrderStatus(mainOrder.master_order_id, 'seeking_alternatives');
       } else if (result.refund_required) {
         console.log(`[Deadline Monitor] No alternatives found - processing refund`);
         await alternativeFarmService.processPartialRefund(mainOrder, subOrder);
-        // TODO: UPDATE wholesale_orders SET status = 'partial_refund'
+        await orderStore.updateOrderStatus(mainOrder.master_order_id, 'partial_refund');
       }
       
     } catch (error) {
@@ -118,35 +115,7 @@ class DeadlineMonitor {
    * Get sub-orders that have expired
    */
   async getExpiredSubOrders() {
-    // TODO: Replace with actual database query
-    // This is mock data for development
-    
-    const now = new Date();
-    
-    // In production, query database:
-    // SELECT fso.*, f.farm_name, f.email
-    // FROM farm_sub_orders fso
-    // JOIN farms f ON fso.farm_id = f.id
-    // WHERE fso.status = 'pending_verification'
-    // AND fso.verification_deadline < NOW()
-    // AND fso.is_expired = false
-    
-    return [
-      // Mock expired sub-order
-      // {
-      //   id: 123,
-      //   wholesale_order_id: 456,
-      //   farm_id: 'GR-00001',
-      //   farm_name: 'Test Farm',
-      //   status: 'pending_verification',
-      //   verification_deadline: new Date(now - 60 * 60 * 1000), // 1 hour ago
-      //   sub_total: 150.00,
-      //   items: [
-      //     { product_name: 'Lettuce', quantity: 10, unit: 'heads' },
-      //     { product_name: 'Tomatoes', quantity: 5, unit: 'lbs' }
-      //   ]
-      // }
-    ];
+    return await orderStore.getExpiredSubOrders();
   }
 
   /**
@@ -184,7 +153,7 @@ class DeadlineMonitor {
         
         await notificationService.sendDeadlineReminder(farmContact, subOrder, hoursLeft);
         
-        // TODO: UPDATE farm_sub_orders SET reminder_sent = true WHERE id = subOrder.id
+        await orderStore.updateSubOrderStatus(subOrder.sub_order_id, subOrder.status, { reminder_sent: true });
       }
       
       console.log('[Deadline Monitor] Finished sending reminders');
@@ -198,8 +167,7 @@ class DeadlineMonitor {
    * Get sub-orders with upcoming deadlines (6-7 hours away)
    */
   async getUpcomingDeadlines() {
-    // TODO: Replace with actual database query
-    return [];
+    return await orderStore.getUpcomingDeadlineSubOrders();
   }
 
   /**

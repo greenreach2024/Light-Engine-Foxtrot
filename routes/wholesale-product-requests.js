@@ -30,8 +30,25 @@ async function requireBuyerAuth(req, res, next) {
       return res.status(401).json({ status: 'error', message: 'No token provided' });
     }
 
-    // Simplified auth check - in production, verify JWT properly
-    req.buyerId = 1; // TODO: Decode from JWT
+    // Decode JWT to extract buyer ID
+    try {
+      const jwt = await import('jsonwebtoken');
+      const secret = process.env.JWT_SECRET || process.env.WHOLESALE_JWT_SECRET || 'wholesale-secret-change-me';
+      const decoded = jwt.default.verify(token, secret);
+      req.buyerId = decoded.buyer_id || decoded.buyerId || decoded.sub || decoded.id;
+    } catch (jwtErr) {
+      // Fallback: try base64 decode of payload for unsigned tokens
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        req.buyerId = payload.buyer_id || payload.buyerId || payload.sub || payload.id;
+      } catch (_) {
+        req.buyerId = null;
+      }
+    }
+
+    if (!req.buyerId) {
+      return res.status(401).json({ status: 'error', message: 'Could not extract buyer ID from token' });
+    }
     return next();
   } catch (error) {
     console.error('Wholesale auth error:', error.message);

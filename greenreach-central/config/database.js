@@ -12,6 +12,8 @@ let db = null;
 
 /**
  * Initialize PostgreSQL connection pool
+ * Supports DATABASE_URL (connection string) OR individual RDS_*/DB_* env vars.
+ * Retries up to 3 times with exponential backoff on initial connection failure.
  */
 export async function initDatabase() {
   if (pool) {
@@ -19,41 +21,73 @@ export async function initDatabase() {
     return;
   }
 
-  const dbConfig = {
-    host: process.env.RDS_HOSTNAME || process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.RDS_PORT || process.env.DB_PORT) || 5432,
-    database: process.env.RDS_DB_NAME || process.env.DB_NAME || 'greenreach_central',
-    user: process.env.RDS_USERNAME || process.env.DB_USER || 'postgres',
-    password: process.env.RDS_PASSWORD || process.env.DB_PASSWORD,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-    max: parseInt(process.env.DB_POOL_MAX) || 20,
-    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
-  };
+  let poolConfig;
 
-  logger.info(`Connecting to PostgreSQL at ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
-  
-  pool = new Pool(dbConfig);
-
-  // Test connection
-  try {
-    const client = await pool.connect();
-    logger.info('Database connection established');
-    
-    // Run migrations
-    await runMigrations(client);
-    
-    client.release();
-  } catch (error) {
-    logger.error('Database connection failed:', error);
-    pool = null; // Mark pool as unavailable so isDatabaseAvailable() returns false
-    throw error;
+  // Support DATABASE_URL connection string (common in Heroku, Railway, manual configs)
+  if (process.env.DATABASE_URL) {
+    logger.info('Using DATABASE_URL connection string');
+    poolConfig = {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DB_SSL !== 'false' ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.DB_POOL_MAX) || 20,
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
+    };
+  } else {
+    // Individual env vars (EB RDS auto-inject pattern)
+    poolConfig = {
+      host: process.env.RDS_HOSTNAME || process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.RDS_PORT || process.env.DB_PORT) || 5432,
+      database: process.env.RDS_DB_NAME || process.env.DB_NAME || 'greenreach_central',
+      user: process.env.RDS_USERNAME || process.env.DB_USER || 'postgres',
+      password: process.env.RDS_PASSWORD || process.env.DB_PASSWORD,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.DB_POOL_MAX) || 20,
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
+    };
+    logger.info(`Connecting to PostgreSQL at ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`);
   }
 
-  // Handle pool errors
-  pool.on('error', (err) => {
-    logger.error('Unexpected database pool error:', err);
-  });
+  // Retry logic: 3 attempts with exponential backoff (2s, 4s, 8s)
+  const MAX_RETRIES = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      pool = new Pool(poolConfig);
+
+      const client = await pool.connect();
+      logger.info(`Database connection established (attempt ${attempt}/${MAX_RETRIES})`);
+
+      // Run migrations
+      await runMigrations(client);
+      client.release();
+
+      // Handle pool errors (reconnect-safe logging)
+      pool.on('error', (err) => {
+        logger.error('Unexpected database pool error:', err);
+      });
+
+      return; // Success — exit
+    } catch (error) {
+      lastError = error;
+      logger.warn(`Database connection attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
+      if (pool) { try { await pool.end(); } catch (_) { /* ignore */ } }
+      pool = null;
+
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        logger.info(`Retrying in ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // All retries exhausted
+  logger.error('Database connection failed after all retries:', lastError);
+  pool = null;
+  throw lastError;
 }
 
 /**

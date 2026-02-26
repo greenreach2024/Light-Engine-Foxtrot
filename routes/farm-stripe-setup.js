@@ -13,11 +13,39 @@
 import express from 'express';
 import crypto from 'crypto';
 
+import Datastore from 'nedb-promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename_stripe = fileURLToPath(import.meta.url);
+const __dirname_stripe = path.dirname(__filename_stripe);
+const DB_DIR_STRIPE = path.join(__dirname_stripe, '..', 'data');
+
 const router = express.Router();
 
-// In-memory storage (TODO: migrate to database)
-const farmStripeAccounts = new Map(); // farm_id -> stripe config
-const oauthStates = new Map(); // state_token -> { farm_id, timestamp }
+// NeDB-backed persistent storage (S6.4 — survives restart)
+const stripeAccountsDB = Datastore.create({ filename: path.join(DB_DIR_STRIPE, 'stripe-accounts.db'), autoload: true });
+const oauthStatesDB = Datastore.create({ filename: path.join(DB_DIR_STRIPE, 'stripe-oauth-states.db'), autoload: true });
+
+// Helper: get Stripe account for farm
+async function getStripeAccount(farmId) {
+  return stripeAccountsDB.findOne({ farm_id: farmId });
+}
+async function saveStripeAccount(farmId, data) {
+  const existing = await stripeAccountsDB.findOne({ farm_id: farmId });
+  if (existing) {
+    await stripeAccountsDB.update({ farm_id: farmId }, { $set: { ...data, updated_at: new Date().toISOString() } });
+  } else {
+    await stripeAccountsDB.insert({ farm_id: farmId, ...data, created_at: new Date().toISOString() });
+  }
+  return stripeAccountsDB.findOne({ farm_id: farmId });
+}
+async function getOAuthState(stateToken) {
+  return oauthStatesDB.findOne({ state_token: stateToken });
+}
+async function saveOAuthState(stateToken, data) {
+  await oauthStatesDB.insert({ state_token: stateToken, ...data, created_at: new Date().toISOString() });
+}
 
 // Stripe configuration
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -44,7 +72,7 @@ router.get('/status', async (req, res) => {
   try {
     const farmId = req.headers['x-farm-id'] || 'FARM-001';
 
-    const account = farmStripeAccounts.get(farmId);
+    const account = await getStripeAccount(farmId);
 
     if (!account) {
       return res.json({
@@ -110,18 +138,14 @@ router.post('/authorize', async (req, res) => {
 
     // Generate state token for CSRF protection
     const stateToken = crypto.randomBytes(32).toString('hex');
-    oauthStates.set(stateToken, {
+    await saveOAuthState(stateToken, {
       farm_id: farmId,
       farm_name: farmName,
       timestamp: Date.now()
     });
 
-    // Clean up old state tokens (>10 minutes old)
-    for (const [token, data] of oauthStates.entries()) {
-      if (Date.now() - data.timestamp > 600000) {
-        oauthStates.delete(token);
-      }
-    }
+    // Clean up old state tokens (>30 minutes old)
+    await oauthStatesDB.remove({ timestamp: { $lt: Date.now() - 30 * 60 * 1000 } }, { multi: true });
 
     // Build Stripe Connect OAuth URL
     const authUrl = 'https://connect.stripe.com/oauth/authorize?' + new URLSearchParams({
@@ -184,7 +208,7 @@ router.get('/callback', async (req, res) => {
     }
 
     // Validate state token
-    const stateData = oauthStates.get(state);
+    const stateData = await getOAuthState(state);
     if (!stateData) {
       return res.status(400).send(`
         <html>
@@ -199,7 +223,7 @@ router.get('/callback', async (req, res) => {
     }
 
     const { farm_id, farm_name } = stateData;
-    oauthStates.delete(state); // One-time use
+    await oauthStatesDB.remove({ state_token: state }); // One-time use
 
     let accountData;
 
@@ -247,7 +271,7 @@ router.get('/callback', async (req, res) => {
       };
     }
 
-    farmStripeAccounts.set(farm_id, accountData);
+    await saveStripeAccount(farm_id, accountData);
 
     res.send(`
       <html>
@@ -303,7 +327,7 @@ router.post('/settings', async (req, res) => {
     const farmId = req.headers['x-farm-id'] || req.body.farmId || 'FARM-001';
     const settings = req.body;
 
-    const account = farmStripeAccounts.get(farmId);
+    const account = await getStripeAccount(farmId);
     if (!account) {
       return res.status(404).json({
         ok: false,
@@ -320,7 +344,7 @@ router.post('/settings', async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    farmStripeAccounts.set(farmId, account);
+    await saveStripeAccount(farmId, account);
 
     res.json({
       ok: true,
@@ -346,7 +370,7 @@ router.post('/disconnect', async (req, res) => {
   try {
     const farmId = req.headers['x-farm-id'] || req.body.farmId || 'FARM-001';
 
-    if (!farmStripeAccounts.has(farmId)) {
+    if (!(await getStripeAccount(farmId))) {
       return res.status(404).json({
         ok: false,
         error: 'No Stripe account connected'
@@ -356,7 +380,7 @@ router.post('/disconnect', async (req, res) => {
     // In production, deauthorize via Stripe Connect API
     if (STRIPE_SECRET_KEY && STRIPE_CONNECT_CLIENT_ID) {
       try {
-        const account = farmStripeAccounts.get(farmId);
+        const account = await getStripeAccount(farmId);
         const Stripe = (await import('stripe')).default;
         const stripeInstance = new Stripe(STRIPE_SECRET_KEY);
         await stripeInstance.oauth.deauthorize({
@@ -368,7 +392,7 @@ router.post('/disconnect', async (req, res) => {
       }
     }
 
-    farmStripeAccounts.delete(farmId);
+    await stripeAccountsDB.remove({ farm_id: farmId });
 
     res.json({
       ok: true,
@@ -394,7 +418,7 @@ router.post('/test-payment', async (req, res) => {
     const farmId = req.headers['x-farm-id'] || req.body.farmId || 'FARM-001';
     const { amount } = req.body;
 
-    const account = farmStripeAccounts.get(farmId);
+    const account = await getStripeAccount(farmId);
     if (!account) {
       return res.status(404).json({
         ok: false,
@@ -504,12 +528,13 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         const account = event.data.object;
         console.log(`[farm-stripe] Account updated: ${account.id}, charges_enabled=${account.charges_enabled}`);
         // Update stored account status
-        for (const [farmId, acct] of farmStripeAccounts.entries()) {
+        const allAccounts = await stripeAccountsDB.find({});
+        for (const acct of allAccounts) {
           if (acct.accountId === account.id) {
             acct.chargesEnabled = account.charges_enabled;
             acct.payoutsEnabled = account.payouts_enabled;
             acct.status = account.charges_enabled ? 'active' : 'pending';
-            farmStripeAccounts.set(farmId, acct);
+            await saveStripeAccount(acct.farm_id, acct);
             break;
           }
         }
@@ -530,8 +555,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
  * Exported helper: get Stripe account for a farm
  * Used by checkout routing to determine provider config
  */
-export function getFarmStripeAccount(farmId) {
-  return farmStripeAccounts.get(farmId) || null;
+export async function getFarmStripeAccount(farmId) {
+  return await getStripeAccount(farmId);
 }
 
 export default router;

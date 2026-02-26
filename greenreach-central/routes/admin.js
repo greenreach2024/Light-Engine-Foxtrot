@@ -3459,47 +3459,65 @@ router.get('/farms/:farmId/recipes', async (req, res) => {
 router.get('/energy/dashboard', async (req, res) => {
     try {
         console.log('[Admin API] Fetching energy dashboard data');
-        
-        // Return mock data structure for now
-        // TODO: Implement real energy monitoring when available
         const now = new Date();
-        const mockData = {
-            summary: {
-                totalConsumption: 1250.5, // kWh
-                cost: 187.58, // USD
-                peakDemand: 45.2, // kW
-                avgDemand: 28.3, // kW
-                period: '30 days'
-            },
-            byFarm: [
-                {
-                    farmId: 'GR-00001',
-                    farmName: 'Farm Alpha',
-                    consumption: 850.3,
-                    cost: 127.54,
-                    percentOfTotal: 68
-                },
-                {
-                    farmId: 'GR-00002',
-                    farmName: 'Farm Beta',
-                    consumption: 400.2,
-                    cost: 60.04,
-                    percentOfTotal: 32
-                }
-            ],
-            hourly: Array.from({ length: 24 }, (_, i) => ({
-                hour: i,
-                consumption: 25 + Math.random() * 20,
-                timestamp: new Date(now.getTime() - (24 - i) * 3600000).toISOString()
-            })),
-            alerts: []
+
+        // Try to compute from real farm data
+        let byFarm = [];
+        const dbAvailable = await isDatabaseAvailable();
+        if (dbAvailable) {
+          try {
+            const result = await query(
+              `SELECT f.farm_id, f.name,
+                      COUNT(DISTINCT r.id) AS room_count,
+                      COALESCE(f.metadata->>'wattage_per_room', '600') AS wattage
+               FROM farms f
+               LEFT JOIN rooms r ON r.farm_id = f.farm_id
+               WHERE f.status IN ('active','online')
+               GROUP BY f.farm_id, f.name, f.metadata`
+            );
+            for (const row of result.rows) {
+              const rooms = parseInt(row.room_count) || 1;
+              const wattPerRoom = parseFloat(row.wattage) || 600;
+              const hoursPerDay = 16; // typical light schedule
+              const days = 30;
+              const consumption = (rooms * wattPerRoom * hoursPerDay * days) / 1000; // kWh
+              const cost = consumption * 0.15; // $0.15/kWh estimate
+              byFarm.push({ farmId: row.farm_id, farmName: row.name || row.farm_id, consumption: Math.round(consumption * 10) / 10, cost: Math.round(cost * 100) / 100, rooms, estimated: true });
+            }
+          } catch (dbErr) {
+            console.warn('[Admin API] Energy DB query failed:', dbErr.message);
+          }
+        }
+
+        // If no DB data, provide single-farm estimate
+        if (byFarm.length === 0) {
+          byFarm = [{ farmId: 'estimate', farmName: 'Estimated (no farm data)', consumption: 288, cost: 43.20, rooms: 1, estimated: true }];
+        }
+
+        const totalConsumption = byFarm.reduce((s, f) => s + f.consumption, 0);
+        const totalCost = byFarm.reduce((s, f) => s + f.cost, 0);
+        byFarm = byFarm.map(f => ({ ...f, percentOfTotal: totalConsumption > 0 ? Math.round((f.consumption / totalConsumption) * 100) : 0 }));
+
+        const summary = {
+          totalConsumption: Math.round(totalConsumption * 10) / 10,
+          cost: Math.round(totalCost * 100) / 100,
+          peakDemand: Math.round(totalConsumption / 720 * 1.4 * 10) / 10, // avg * 1.4 peak factor
+          avgDemand: Math.round(totalConsumption / 720 * 10) / 10, // 30d × 24h = 720h
+          period: '30 days'
         };
-        
+
+        const hourly = Array.from({ length: 24 }, (_, i) => {
+          // Simulate day/night pattern: lights on 6am-10pm
+          const isLightHour = i >= 6 && i < 22;
+          const baseLoad = summary.avgDemand * (isLightHour ? 1.2 : 0.3);
+          return { hour: i, consumption: Math.round(baseLoad * 100) / 100, timestamp: new Date(now.getTime() - (24 - i) * 3600000).toISOString() };
+        });
+
         res.json({
             success: true,
-            data: mockData,
+            data: { summary, byFarm, hourly, alerts: [] },
             timestamp: now.toISOString(),
-            demo: true
+            estimated: true
         });
         
     } catch (error) {
@@ -3859,6 +3877,66 @@ router.get('/recipe-requests', async (req, res) => {
         console.error('[RecipeRequests] Error:', error);
         res.status(500).json({ success: false, error: 'Failed to load recipe requests' });
     }
+});
+
+// ═══════════ A/B Experiment Admin Routes (S4.6) ═══════════
+let experimentOrchestrator = null;
+async function getOrchestrator() {
+  if (!experimentOrchestrator) {
+    try {
+      const mod = await import('../jobs/experiment-orchestrator.js');
+      experimentOrchestrator = mod.default || mod;
+      // Ensure tables exist
+      if (experimentOrchestrator.initExperimentTables) await experimentOrchestrator.initExperimentTables();
+    } catch (e) { console.warn('[Admin] Experiment orchestrator unavailable:', e.message); }
+  }
+  return experimentOrchestrator;
+}
+
+router.get('/experiments', async (req, res) => {
+  try {
+    const orch = await getOrchestrator();
+    if (!orch) return res.json({ success: true, experiments: [] });
+    const experiments = await orch.listExperiments();
+    res.json({ success: true, experiments });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+router.post('/experiments', async (req, res) => {
+  try {
+    const orch = await getOrchestrator();
+    if (!orch) return res.status(503).json({ success: false, error: 'Experiment orchestrator unavailable' });
+    const { name, crop, parameter, variant_value } = req.body;
+    const exp = await orch.createExperiment({ experiment_name: name, crop, parameter, variant_value, control_value: null });
+    res.json({ success: true, experiment: exp });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+router.post('/experiments/:id/activate', async (req, res) => {
+  try {
+    const orch = await getOrchestrator();
+    if (!orch) return res.status(503).json({ success: false, error: 'Unavailable' });
+    await orch.activateExperiment(req.params.id);
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+router.get('/experiments/:id/analyze', async (req, res) => {
+  try {
+    const orch = await getOrchestrator();
+    if (!orch) return res.status(503).json({ success: false, error: 'Unavailable' });
+    const analysis = await orch.analyzeExperiment(req.params.id);
+    res.json({ success: true, analysis });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+router.get('/experiments/:id', async (req, res) => {
+  try {
+    const orch = await getOrchestrator();
+    if (!orch) return res.status(503).json({ success: false, error: 'Unavailable' });
+    const exp = await orch.getExperiment(req.params.id);
+    res.json({ success: true, experiment: exp });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 export default router;
