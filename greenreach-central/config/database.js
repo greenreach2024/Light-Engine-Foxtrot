@@ -49,7 +49,7 @@ export async function initDatabase() {
     logger.info(`Connecting to PostgreSQL at ${poolConfig.host}:${poolConfig.port}/${poolConfig.database}`);
   }
 
-  // Retry logic: 3 attempts with exponential backoff (2s, 4s, 8s)
+  // Retry logic: 3 attempts with exponential backoff (1s, 2s)
   const MAX_RETRIES = 3;
   let lastError;
 
@@ -60,8 +60,12 @@ export async function initDatabase() {
       const client = await pool.connect();
       logger.info(`Database connection established (attempt ${attempt}/${MAX_RETRIES})`);
 
-      // Run migrations
-      await runMigrations(client);
+      // Run migrations (non-fatal — partial migration failures should not kill the pool)
+      try {
+        await runMigrations(client);
+      } catch (migrationError) {
+        logger.warn(`Database migrations incomplete (non-fatal): ${migrationError.message}`);
+      }
       client.release();
 
       // Handle pool errors (reconnect-safe logging)
@@ -69,7 +73,7 @@ export async function initDatabase() {
         logger.error('Unexpected database pool error:', err);
       });
 
-      return; // Success — exit
+      return; // Success — pool is active even if some migrations failed
     } catch (error) {
       lastError = error;
       logger.warn(`Database connection attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
@@ -77,7 +81,7 @@ export async function initDatabase() {
       pool = null;
 
       if (attempt < MAX_RETRIES) {
-        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        const delay = Math.min(attempt * 1000, 2000); // 1s, 2s (fast retries)
         logger.info(`Retrying in ${delay / 1000}s...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -222,6 +226,23 @@ async function runMigrations(client) {
   } catch (err) {
     logger.warn('Could not alter column constraints:', err.message);
   }
+
+  // Add missing timestamp columns to tables from older schemas
+  const tablesNeedingTimestamps = [
+    'farms', 'farm_data', 'planting_assignments', 'products',
+    'wholesale_buyers', 'wholesale_orders', 'device_integrations'
+  ];
+  for (const tbl of tablesNeedingTimestamps) {
+    try {
+      await client.query(`
+        ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+        ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      `);
+    } catch (err) {
+      // Table may not exist yet — that's fine, CREATE TABLE will handle it
+    }
+  }
+
   // Create farm_heartbeats table
   await client.query(`
     CREATE TABLE IF NOT EXISTS farm_heartbeats (
