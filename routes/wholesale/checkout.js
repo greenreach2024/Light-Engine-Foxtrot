@@ -22,6 +22,19 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 /**
+ * Get Foxtrot API base URL with production fail-fast pattern
+ * Production must have FOXTROT_API_URL env var set to HTTPS endpoint (e.g., CloudFront)
+ * Development defaults to localhost:8091
+ */
+function getFoxtrotApiUrl() {
+  const configured = process.env.FOXTROT_API_URL;
+  if (!configured && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
+    throw new Error('FOXTROT_API_URL environment variable is required in production');
+  }
+  return configured || 'http://127.0.0.1:8091';
+}
+
+/**
  * Load tax configuration from farm.json
  * Returns { rate: number, label: string, business_number: string }
  */
@@ -70,8 +83,9 @@ router.post('/preview', async (req, res) => {
       });
     }
 
-    // Fetch current catalog
-    const catalogUrl = 'http://localhost:8091/api/wholesale/catalog';
+    // Fetch current catalog from Foxtrot edge server
+    const foxtrotApi = getFoxtrotApiUrl();
+    const catalogUrl = `${foxtrotApi}/api/wholesale/catalog`;
     const catalogResponse = await fetch(catalogUrl);
     
     if (!catalogResponse.ok) {
@@ -159,7 +173,8 @@ router.post('/execute', async (req, res) => {
 
     // Step 1: Fetch catalog
     console.log('[Checkout] Step 1: Fetching catalog...');
-    const catalogUrl = 'http://localhost:8091/api/wholesale/catalog';
+    const foxtrotApi = getFoxtrotApiUrl();
+    const catalogUrl = `${foxtrotApi}/api/wholesale/catalog`;
     const catalogResponse = await fetch(catalogUrl);
     
     if (!catalogResponse.ok) {
