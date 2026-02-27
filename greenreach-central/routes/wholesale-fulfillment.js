@@ -6,23 +6,24 @@
  * These supplement the existing wholesale.js buyer-facing routes.
  *
  * Endpoints mounted at /api/wholesale/:
- *   POST /order-statuses         - Bulk update order statuses
- *   POST /tracking-numbers       - Add tracking numbers to orders
- *   POST /order-tracking         - Add tracking event
+ *   POST /order-statuses         - Bulk update order statuses (requires webhook signature)
+ *   POST /tracking-numbers       - Add tracking numbers to orders (requires webhook signature)
+ *   POST /order-tracking         - Add tracking event (requires webhook signature)
  *   GET  /order-events           - List order events for this farm
  *   GET  /farm-performance/alerts - Farm performance alerts
  *   GET  /orders/pending-verification/:farmId - Orders needing verification
- *   POST /orders/farm-verify     - Farm verifies an order
- *   POST /orders/:orderId/verify - Verify specific order
+ *   POST /orders/farm-verify     - Farm verifies an order (requires webhook signature)
+ *   POST /orders/:orderId/verify - Verify specific order (requires webhook signature)
  *   GET  /orders/pending         - Pending orders for farm
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { verifyWebhookSignature } from '../middleware/webhook-signature.js';
 
 const router = Router();
 
 // POST /order-statuses — Bulk status update
-router.post('/order-statuses', async (req, res) => {
+router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
   try {
     const { updates } = req.body; // [{order_id, status}]
     if (!Array.isArray(updates)) {
@@ -54,7 +55,7 @@ router.post('/order-statuses', async (req, res) => {
 });
 
 // POST /tracking-numbers — Add tracking info
-router.post('/tracking-numbers', async (req, res) => {
+router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
   try {
     const { updates } = req.body; // [{order_id, tracking_number, carrier}]
     if (!Array.isArray(updates)) {
@@ -82,7 +83,7 @@ router.post('/tracking-numbers', async (req, res) => {
 });
 
 // POST /order-tracking — Add a tracking event
-router.post('/order-tracking', async (req, res) => {
+router.post('/order-tracking', verifyWebhookSignature, async (req, res) => {
   try {
     const { order_id, event, location, timestamp } = req.body;
     // Store tracking event (in production would go to a tracking_events table)
@@ -168,7 +169,7 @@ router.get('/orders/pending-verification/:farmId', async (req, res) => {
 });
 
 // POST /orders/farm-verify — Verify an order (farm side)
-router.post('/orders/farm-verify', async (req, res) => {
+router.post('/orders/farm-verify', verifyWebhookSignature, async (req, res) => {
   try {
     const { order_id, verified, notes } = req.body;
     if (await isDatabaseAvailable()) {
@@ -186,7 +187,7 @@ router.post('/orders/farm-verify', async (req, res) => {
 });
 
 // POST /orders/:orderId/verify — Verify specific order
-router.post('/orders/:orderId/verify', async (req, res) => {
+router.post('/orders/:orderId/verify', verifyWebhookSignature, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { verified = true, notes } = req.body;
