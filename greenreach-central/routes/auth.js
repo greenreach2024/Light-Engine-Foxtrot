@@ -6,11 +6,28 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const router = express.Router();
 
 // JWT Configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+const isProductionRuntime =
+  process.env.NODE_ENV === 'production' ||
+  String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
+
+const JWT_SECRET = (() => {
+  const configured = process.env.JWT_SECRET;
+  if (configured) {
+    return configured;
+  }
+
+  if (isProductionRuntime) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+
+  console.warn('[Auth] JWT_SECRET not set; using ephemeral development secret');
+  return crypto.randomBytes(32).toString('hex');
+})();
 const JWT_EXPIRES_IN = '24h';
 
 // Farm roles
@@ -54,7 +71,14 @@ router.post('/login', async (req, res) => {
 
     // Fallback credentials for non-database mode
     // Matches server-foxtrot.js edge auth: farm_id + password, email optional
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      return res.status(503).json({
+        success: false,
+        error: 'Authentication not configured',
+        message: 'ADMIN_PASSWORD is required when fallback credentials mode is active'
+      });
+    }
     const FALLBACK_FARM = {
       farm_id: farm_id || process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039',
       email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,

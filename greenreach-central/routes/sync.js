@@ -8,12 +8,17 @@
 
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // In-memory storage for farms without database
 const inMemoryStore = {
@@ -104,45 +109,115 @@ export function getInMemoryStore() {
   return inMemoryStore;
 }
 
+function loadFarmApiKeys() {
+  const candidatePaths = [
+    path.join(__dirname, '..', 'public', 'data', 'farm-api-keys.json'),
+    path.join(__dirname, '..', '..', 'public', 'data', 'farm-api-keys.json')
+  ];
+
+  for (const filePath of candidatePaths) {
+    if (!fs.existsSync(filePath)) continue;
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return parsed;
+    } catch (error) {
+      logger.warn(`[Sync] Failed to parse farm API keys at ${filePath}:`, error.message);
+    }
+  }
+
+  return null;
+}
+
+async function isValidFarmApiKey(farmId, apiKey) {
+  if (await isDatabaseAvailable()) {
+    try {
+      const dbResult = await query(
+        `SELECT farm_id FROM farms WHERE farm_id = $1 AND api_key = $2 LIMIT 1`,
+        [farmId, apiKey]
+      );
+
+      if (dbResult.rows.length > 0) {
+        return true;
+      }
+    } catch (error) {
+      logger.warn(`[Sync] Database API key validation failed for farm ${farmId}:`, error.message);
+    }
+  }
+
+  const keyFile = loadFarmApiKeys();
+  if (!keyFile || typeof keyFile !== 'object') {
+    return false;
+  }
+
+  const entry = keyFile[farmId];
+  if (!entry || typeof entry !== 'object') {
+    return false;
+  }
+
+  return entry.api_key === apiKey && (entry.status || 'active') === 'active';
+}
+
 /**
  * Middleware: Authenticate farm device via API key
  */
-function authenticateFarm(req, res, next) {
-  const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
-  const farmId = req.headers['x-farm-id'] || req.body?.farmId;
-  
-  if (!apiKey) {
-    return res.status(401).json({ 
+async function authenticateFarm(req, res, next) {
+  try {
+    const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    const farmId = req.headers['x-farm-id'] || req.body?.farmId || req.params?.farmId;
+
+    if (!apiKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'API key required',
+        message: 'Include X-API-Key header or Authorization: Bearer <key>'
+      });
+    }
+
+    if (!farmId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Farm ID required',
+        message: 'Include X-Farm-ID header, farmId in request body, or :farmId in route path'
+      });
+    }
+
+    if (req.params?.farmId && req.params.farmId !== farmId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Farm ID mismatch'
+      });
+    }
+
+    // Validate API key format (64-char hex)
+    if (!/^[a-f0-9]{64}$/.test(apiKey)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid API key format'
+      });
+    }
+
+    const validApiKey = await isValidFarmApiKey(farmId, apiKey);
+    if (!validApiKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid API key'
+      });
+    }
+
+    req.farmId = farmId;
+    req.apiKey = apiKey;
+    req.authenticated = true;
+
+    logger.info(`[Sync] Authenticated farm: ${farmId}`);
+    next();
+  } catch (error) {
+    logger.error('[Sync] Authentication middleware failed:', error.message);
+    return res.status(500).json({
       success: false,
-      error: 'API key required',
-      message: 'Include X-API-Key header or Authorization: Bearer <key>' 
+      error: 'Authentication failure'
     });
   }
-  
-  if (!farmId) {
-    return res.status(400).json({ 
-      success: false,
-      error: 'Farm ID required',
-      message: 'Include X-Farm-ID header or farmId in request body' 
-    });
-  }
-  
-  // Validate API key format (64-char hex)
-  if (!/^[a-f0-9]{64}$/.test(apiKey)) {
-    return res.status(401).json({ 
-      success: false,
-      error: 'Invalid API key format' 
-    });
-  }
-  
-  // In production, validate against database
-  // For now, accept valid-format keys
-  req.farmId = farmId;
-  req.apiKey = apiKey;
-  req.authenticated = true;
-  
-  logger.info(`[Sync] Authenticated farm: ${farmId}`);
-  next();
 }
 
 /**
@@ -769,7 +844,7 @@ router.post('/farm-registration', authenticateFarm, async (req, res) => {
  * GET /api/sync/:farmId/rooms
  * Retrieve rooms data for a farm (public read access)
  */
-router.get('/:farmId/rooms', async (req, res) => {
+router.get('/:farmId/rooms', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -819,7 +894,7 @@ router.get('/:farmId/rooms', async (req, res) => {
  * GET /api/sync/:farmId/groups
  * Retrieve groups (recipes) data for a farm (public read access)
  */
-router.get('/:farmId/groups', async (req, res) => {
+router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -927,7 +1002,7 @@ function buildSyntheticTraysFromGroups(groups) {
  * Falls back to building synthetic trays from groups data when
  * no explicit inventory records exist.
  */
-router.get('/:farmId/inventory', async (req, res) => {
+router.get('/:farmId/inventory', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -1082,7 +1157,7 @@ router.post('/telemetry', authenticateFarm, async (req, res) => {
  * GET /api/sync/:farmId/devices
  * Retrieve IoT device list for a farm
  */
-router.get('/:farmId/devices', async (req, res) => {
+router.get('/:farmId/devices', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     let devices = [];
@@ -1137,7 +1212,7 @@ router.get('/:farmId/devices', async (req, res) => {
  * GET /api/sync/:farmId/telemetry
  * Retrieve latest telemetry data for a farm
  */
-router.get('/:farmId/telemetry', async (req, res) => {
+router.get('/:farmId/telemetry', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     
@@ -1255,7 +1330,7 @@ router.post('/restore', authenticateFarm, async (req, res) => {
  * GET /api/sync/data/:farmId
  * Retrieve synced data for a farm (for recovery/debugging)
  */
-router.get('/data/:farmId', async (req, res) => {
+router.get('/data/:farmId', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req.params;
     

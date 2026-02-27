@@ -11,13 +11,25 @@ import { generateFarmToken, verifyFarmToken, FARM_ROLES } from '../lib/farm-auth
 const router = express.Router();
 const { Client } = pg;
 
+const isProductionRuntime =
+  process.env.NODE_ENV === 'production' ||
+  String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
+
+function requireEnvVar(name) {
+  const value = process.env[name];
+  if (!value && isProductionRuntime) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 // PostgreSQL connection configuration
 const createDbClient = () => new Client({
-  host: process.env.RDS_HOSTNAME || 'light-engine-db.c8rq44ew6swb.us-east-1.rds.amazonaws.com',
+  host: process.env.RDS_HOSTNAME || requireEnvVar('RDS_HOSTNAME'),
   port: parseInt(process.env.RDS_PORT || '5432'),
   database: process.env.RDS_DB_NAME || 'lightengine',
   user: process.env.RDS_USERNAME || 'lightengine',
-  password: process.env.RDS_PASSWORD || 'LePphcacxDs35ciLLhnkhaXr7',
+  password: process.env.RDS_PASSWORD || requireEnvVar('RDS_PASSWORD'),
   ssl: { rejectUnauthorized: false }
 });
 
@@ -114,7 +126,7 @@ router.post('/validate-device-token', async (req, res) => {
  * Returns: { success: true, token, role, farm_id, email }
  */
 router.post('/login', async (req, res) => {
-  const client = createDbClient();
+  let client = null;
   
   try {
     const { farm_id, email, password } = req.body;
@@ -132,7 +144,13 @@ router.post('/login', async (req, res) => {
       }
       
       // Validate password matches ADMIN_PASSWORD
-      const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!adminPassword) {
+        return res.status(503).json({
+          error: 'Authentication not configured',
+          message: 'ADMIN_PASSWORD is required for edge authentication'
+        });
+      }
       const edgeFarmId = process.env.FARM_ID || 'edge-device';
       
       // Check farm_id and password match
@@ -178,12 +196,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'farm_id is required for cloud authentication' });
     }
 
-    // Demo credentials for testing
-    const isDemoLogin = farm_id === 'demo-farm-001' && 
-                       email === 'admin@demo.farm' && 
-                       password === 'demo123';
+    const isDemoMode = String(process.env.DEMO_MODE || 'false').toLowerCase() === 'true';
+    const isDemoLogin = farm_id === 'demo-farm-001' &&
+      email === 'admin@demo.farm' &&
+      password === 'demo123';
 
-    if (isDemoLogin) {
+    if (isDemoLogin && isDemoMode) {
       // Generate JWT token for demo login
       const token = generateFarmToken({
         farm_id,
@@ -205,6 +223,7 @@ router.post('/login', async (req, res) => {
 
     // Real database authentication
     console.log(`[Auth] Login attempt for ${email} at farm ${farm_id}`);
+  client = createDbClient();
     
     await client.connect();
     
@@ -278,7 +297,9 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   } finally {
     try {
-      await client.end();
+      if (client) {
+        await client.end();
+      }
     } catch (err) {
       console.error('[Auth] Error closing database connection:', err);
     }
