@@ -980,7 +980,13 @@ app.use((req, res, next) => {
 // to every request from JWT token, API key header, subdomain, or env default.
 // This enables all compatibility routes to use req.farmId for scoped queries.
 import _jwtLib from 'jsonwebtoken';
-const _JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+function get_JWT_SECRET() {
+  if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+}
+const _JWT_SECRET = get_JWT_SECRET();
 
 // Cache: slug → farm_id (populated lazily, cleared on farm upsert)
 const _slugCache = new Map();

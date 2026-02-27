@@ -16,7 +16,13 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 import { getInMemoryGroups } from './sync.js';
 import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+function getJwtSecret() {
+  if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+}
+const JWT_SECRET = getJwtSecret();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';

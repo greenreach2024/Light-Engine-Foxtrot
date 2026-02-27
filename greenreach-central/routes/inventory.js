@@ -20,7 +20,13 @@ try {
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+function getJwtSecret() {
+  if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+}
+const JWT_SECRET = getJwtSecret();
 
 function resolveFarmId(req) {
   const authHeader = req.headers.authorization;
