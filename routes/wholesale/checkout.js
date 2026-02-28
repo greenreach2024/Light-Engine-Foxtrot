@@ -22,6 +22,12 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+function shouldReadFromDb() {
+  const raw = String(process.env.WHOLESALE_READ_FROM_DB || '').trim().toLowerCase();
+  if (!raw) return true;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
 function getBuyerIdFromRequest(req) {
   const directBuyerId = req.buyer?.id || req.wholesaleBuyer?.id || req.body?.buyer_id || null;
   if (directBuyerId) return String(directBuyerId);
@@ -438,9 +444,16 @@ router.post('/execute', async (req, res) => {
 router.get('/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
+    const readFromDb = shouldReadFromDb();
+    let order = null;
 
-    const persistedOrder = await orderStore.getOrder(orderId);
-    const order = persistedOrder || orders.get(orderId);
+    if (readFromDb) {
+      order = await orderStore.getOrder(orderId);
+      if (!order) order = orders.get(orderId);
+    } else {
+      order = orders.get(orderId);
+      if (!order) order = await orderStore.getOrder(orderId);
+    }
 
     if (!order) {
       return res.status(404).json({
@@ -452,7 +465,8 @@ router.get('/:orderId', async (req, res) => {
 
     res.json({
       ok: true,
-      order
+      order,
+      read_source: readFromDb ? 'db_primary' : 'map_primary'
     });
 
   } catch (error) {

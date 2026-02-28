@@ -15,6 +15,12 @@ import orderStore from '../lib/wholesale/order-store.js';
 
 const router = express.Router();
 
+function shouldReadFromDb() {
+  const raw = String(process.env.WHOLESALE_READ_FROM_DB || '').trim().toLowerCase();
+  if (!raw) return true;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
 function getBuyerIdFromRequest(req) {
   const directBuyerId = req.buyer?.id || req.wholesaleBuyer?.id || req.query.buyer_id || null;
   if (directBuyerId) return String(directBuyerId);
@@ -834,8 +840,9 @@ router.get('/', async (req, res) => {
       return res.status(401).json({ status: 'error', message: 'Missing or invalid bearer token' });
     }
 
+    const readFromDb = shouldReadFromDb();
     const directMatches = await orderStore.listBuyerOrders(buyer_id, 200);
-    const allRecentOrders = await orderStore.listOrders(500);
+    const allRecentOrders = readFromDb ? [] : await orderStore.listOrders(500);
 
     const normalizedBuyerId = String(buyer_id);
     const mergedById = new Map();
@@ -874,7 +881,8 @@ router.get('/', async (req, res) => {
       status: 'ok',
       data: {
         orders: parsedOrders,
-        count: parsedOrders.length
+        count: parsedOrders.length,
+        read_source: readFromDb ? 'db_primary' : 'legacy_fallback'
       }
     });
 
@@ -892,13 +900,14 @@ router.get('/:order_id/invoice', async (req, res) => {
   try {
     const buyerId = getBuyerIdFromRequest(req);
     const orderId = req.params.order_id;
+    const readFromDb = shouldReadFromDb();
 
     if (!buyerId) {
       return res.status(401).json({ status: 'error', message: 'Missing or invalid bearer token' });
     }
 
     let order = await orderStore.getOrder(orderId);
-    if (!order) {
+    if (!order && !readFromDb) {
       const fallbackOrders = await orderStore.listOrders(500);
       order = fallbackOrders.find((entry) => String(entry.master_order_id || entry.id) === String(orderId)) || null;
     }
@@ -918,7 +927,8 @@ router.get('/:order_id/invoice', async (req, res) => {
         generated_at: new Date().toISOString(),
         order,
         farm_sub_orders: subOrders,
-        totals: order.totals || null
+        totals: order.totals || null,
+        read_source: readFromDb ? 'db_primary' : 'legacy_fallback'
       }
     });
   } catch (error) {
