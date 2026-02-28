@@ -87,11 +87,47 @@ export async function listNetworkFarms() {
 
 export async function upsertNetworkFarm(farmId, farmData) {
   await seedFromDatabase();
-  networkFarms.set(farmId, normalizeNetworkFarm(farmId, {
+  const normalizedFarm = normalizeNetworkFarm(farmId, {
     ...farmData,
     updated_at: new Date().toISOString()
-  }));
-  return networkFarms.get(farmId);
+  });
+  networkFarms.set(farmId, normalizedFarm);
+
+  try {
+    if (await isDatabaseAvailable()) {
+      const metadata = {
+        api_url: normalizedFarm.api_url,
+        url: normalizedFarm.url,
+        auth_farm_id: normalizedFarm.auth_farm_id,
+        contact: normalizedFarm.contact || {},
+        location: normalizedFarm.location || {},
+        certifications: Array.isArray(normalizedFarm.certifications) ? normalizedFarm.certifications : [],
+        practices: Array.isArray(normalizedFarm.practices) ? normalizedFarm.practices : []
+      };
+
+      await query(
+        `INSERT INTO farms (farm_id, name, api_url, status, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET
+           name = COALESCE(NULLIF($2, ''), farms.name),
+           api_url = COALESCE(NULLIF($3, ''), farms.api_url),
+           status = COALESCE(NULLIF($4, ''), farms.status),
+           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $5::jsonb,
+           updated_at = NOW()`,
+        [
+          normalizedFarm.farm_id,
+          normalizedFarm.farm_name || normalizedFarm.farm_id,
+          normalizedFarm.api_url,
+          normalizedFarm.status || 'active',
+          JSON.stringify(metadata)
+        ]
+      );
+    }
+  } catch (err) {
+    console.warn(`[NetworkFarmsStore] Failed to persist farm ${farmId} to DB:`, err.message);
+  }
+
+  return normalizedFarm;
 }
 
 export async function removeNetworkFarm(farmId) {

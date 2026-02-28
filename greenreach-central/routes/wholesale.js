@@ -1528,7 +1528,7 @@ router.get('/network/snapshots', (req, res) => {
 
 router.get('/network/aggregate', async (req, res) => {
   const agg = await buildAggregateCatalog();
-  return res.json({ status: 'ok', data: { catalog: agg } });
+  return res.json({ status: 'ok', data: { catalog: agg, diagnostics: agg.diagnostics || {} } });
 });
 
 router.get('/network/trends', (req, res) => {

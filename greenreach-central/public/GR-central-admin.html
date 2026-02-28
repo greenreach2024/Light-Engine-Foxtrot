@@ -1592,19 +1592,19 @@
                     <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
                             <div class="card-title">GreenReach Recipe Library</div>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <select id="farm-recipe-category-filter" onchange="filterFarmRecipeLibrary()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-size: 0.85rem;">
+                            <div class="gr-u-flex-center-gap-sm">
+                                <select id="farm-recipe-category-filter" onchange="filterFarmRecipeLibrary()" class="gr-u-control-compact">
                                     <option value="">All Categories</option>
                                     <option value="Leafy Greens">Leafy Greens</option>
                                     <option value="Herbs">Herbs</option>
                                     <option value="Fruiting Crops">Fruiting Crops</option>
                                 </select>
-                                <input type="text" id="farm-recipe-library-search" placeholder="Search recipes..." onkeyup="filterFarmRecipeLibrary()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); width: 200px; font-size: 0.85rem;">
-                                <span id="farm-recipe-library-count" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                                <input type="text" id="farm-recipe-library-search" placeholder="Search recipes..." onkeyup="filterFarmRecipeLibrary()" class="gr-u-control-compact gr-u-control-compact-search">
+                                <span id="farm-recipe-library-count" class="gr-u-text-secondary-sm"></span>
                             </div>
                         </div>
-                        <div class="card-body" style="padding: 0;">
-                            <p style="padding: 12px 16px; margin: 0; color: var(--text-secondary); font-size: 0.85rem; border-bottom: 1px solid var(--border);">
+                        <div class="card-body gr-u-card-body-flush">
+                            <p class="gr-u-note-strip">
                                 All recipes are managed by GreenReach Central. Contact your account manager or submit a request below to add new recipes.
                             </p>
                             <table class="data-table">
@@ -1620,7 +1620,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="farm-recipe-library-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading recipe library...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center">Loading recipe library...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1632,17 +1632,17 @@
                             <div class="card-title">Request a New Recipe</div>
                         </div>
                         <div class="card-body">
-                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                            <p class="gr-u-text-secondary-md">
                                 Don't see the crop or variety you need? Submit a request and GreenReach Central's recipe team will review it. New recipes are developed with AI-assisted optimization and validated before release.
                             </p>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 700px;">
+                            <div class="gr-u-grid-2-max">
                                 <div>
-                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Crop / Variety Name *</label>
-                                    <input type="text" id="recipe-request-crop" placeholder="e.g. Red Romaine Lettuce" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <label class="gr-u-label-compact">Crop / Variety Name *</label>
+                                    <input type="text" id="recipe-request-crop" placeholder="e.g. Red Romaine Lettuce" class="gr-u-field-standard">
                                 </div>
                                 <div>
-                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Category</label>
-                                    <select id="recipe-request-category" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <label class="gr-u-label-compact">Category</label>
+                                    <select id="recipe-request-category" class="gr-u-field-standard">
                                         <option value="Leafy Greens">Leafy Greens</option>
                                         <option value="Herbs">Herbs</option>
                                         <option value="Fruiting Crops">Fruiting Crops</option>
@@ -1650,19 +1650,19 @@
                                         <option value="Other">Other</option>
                                     </select>
                                 </div>
-                                <div style="grid-column: 1 / -1;">
-                                    <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Notes (optional)</label>
-                                    <textarea id="recipe-request-notes" rows="3" placeholder="Any specific requirements, target yield, preferred growing conditions, etc." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); resize: vertical;"></textarea>
+                                <div class="gr-u-grid-span-full">
+                                    <label class="gr-u-label-compact">Notes (optional)</label>
+                                    <textarea id="recipe-request-notes" rows="3" placeholder="Any specific requirements, target yield, preferred growing conditions, etc." class="gr-u-field-standard gr-u-field-resize-vertical"></textarea>
                                 </div>
                             </div>
-                            <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                                <button class="btn btn-primary" onclick="submitRecipeRequest()" style="padding: 8px 20px;">Submit Request</button>
-                                <span id="recipe-request-status" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                            <div class="gr-u-actions-row">
+                                <button class="btn btn-primary gr-u-btn-pad" onclick="submitRecipeRequest()">Submit Request</button>
+                                <span id="recipe-request-status" class="gr-u-text-secondary-sm"></span>
                             </div>
                             <!-- Previous Requests -->
-                            <div id="recipe-requests-list" style="margin-top: 20px; display: none;">
-                                <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 8px;">Your Previous Requests</h4>
-                                <div id="recipe-requests-tbody" style="font-size: 0.85rem;"></div>
+                            <div id="recipe-requests-list" class="gr-u-mt-20-hidden">
+                                <h4 class="gr-u-heading-secondary">Your Previous Requests</h4>
+                                <div id="recipe-requests-tbody" class="gr-u-text-secondary-sm"></div>
                             </div>
                         </div>
                     </div>
@@ -2936,7 +2936,7 @@
                     <div class="card-header">
                         <div class="card-title">All Light Engine Farms</div>
                         <div class="filter-bar">
-                            <input type="text" id="farm-search" placeholder="Search farms..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterFarmManagement()">
+                            <input type="text" id="farm-search" placeholder="Search farms..." class="gr-u-filter-control-card gr-u-filter-search-250" onkeyup="filterFarmManagement()">
                             <select id="farm-status-filter" onchange="filterFarmManagement()">
                                 <option value="">All Status</option>
                                 <option value="active">Active</option>
@@ -2982,7 +2982,7 @@
                     <div class="card-header">
                         <div class="card-title">All Farm Users</div>
                         <div class="filter-bar">
-                            <input type="text" id="user-search" placeholder="Search users..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterUserManagement()">
+                            <input type="text" id="user-search" placeholder="Search users..." class="gr-u-filter-control-card gr-u-filter-search-250" onkeyup="filterUserManagement()">
                             <select id="user-role-filter" onchange="filterUserManagement()">
                                 <option value="">All Roles</option>
                                 <option value="admin">Admin</option>
@@ -3033,7 +3033,7 @@
                 <div class="header">
                     <h1>Multi-Farm Network Dashboard</h1>
                     <div class="header-actions">
-                        <select id="network-timeframe" onchange="loadNetworkDashboard()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                        <select id="network-timeframe" onchange="loadNetworkDashboard()" class="gr-u-filter-control-card">
                             <option value="7">Last 7 Days</option>
                             <option value="30" selected>Last 30 Days</option>
                             <option value="90">Last 90 Days</option>
@@ -3130,13 +3130,13 @@
             </div>
 
             <!-- Farm Detail Modal -->
-            <div id="farmDetailModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; padding: 20px;">
-                <div class="card" style="max-width: 900px; margin: 40px auto; background: var(--bg-card);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border);">
-                        <h2 id="farmDetailName" style="font-size: 20px; color: var(--text-primary);">Farm Details</h2>
-                        <button onclick="closeFarmDetail()" style="background: none; border: none; font-size: 28px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+            <div id="farmDetailModal" class="gr-u-modal-overlay">
+                <div class="card gr-u-modal-card-900">
+                    <div class="gr-u-modal-head-row">
+                        <h2 id="farmDetailName" class="gr-u-heading-20">Farm Details</h2>
+                        <button onclick="closeFarmDetail()" class="gr-u-icon-close">&times;</button>
                     </div>
-                    <div style="padding: 20px;">
+                    <div class="gr-u-pad-20">
                         <div id="farmDetailContent">
                             <!-- Farm detail content will be inserted here -->
                         </div>
@@ -3146,26 +3146,26 @@
 
             <!-- Grant User Delete Modal -->
             <div id="grantUserDeleteModal" class="modal">
-                <div class="modal-content" style="max-width: 520px; width: 100%;">
+                <div class="modal-content gr-u-modal-content-520">
                     <div class="modal-header">
                         <h2>Delete Grant User</h2>
                         <button class="modal-close" onclick="closeGrantUserDeleteModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <div class="alert alert-danger" style="margin-bottom: 16px;">
+                        <div class="alert alert-danger gr-u-mb-16">
                             <strong>Warning:</strong> This will soft-delete the user and remove their access. Their applications will be marked deleted.
                         </div>
-                        <p id="grantUserDeleteText" style="color: var(--text-secondary); margin-bottom: 20px;">Are you sure you want to delete this user?</p>
-                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <p id="grantUserDeleteText" class="gr-u-text-secondary-mb20">Are you sure you want to delete this user?</p>
+                        <div class="gr-u-actions-end-gap12">
                             <button class="btn" onclick="closeGrantUserDeleteModal()">Cancel</button>
-                            <button class="btn" style="background: #ef4444; border-color: #ef4444; color: white;" onclick="confirmDeleteGrantUser()">Delete User</button>
+                            <button class="btn gr-u-btn-danger-solid" onclick="confirmDeleteGrantUser()">Delete User</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Environmental Dashboard View -->
-            <div id="environmental-view" class="view" style="display: none;">
+            <div id="environmental-view" class="view gr-u-view-hidden">
                 <div class="breadcrumb">
                     <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
                     <span>/</span>
@@ -3347,15 +3347,15 @@
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Growers</div>
-                            <div style="display: flex; gap: 10px;">
-                                <select id="grower-status-filter" onchange="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                            <div class="gr-u-flex-gap-10">
+                                <select id="grower-status-filter" onchange="loadGrowerList()" class="gr-u-filter-control-dark">
                                     <option value="">All Status</option>
                                     <option value="active">Active</option>
                                     <option value="pending">Pending</option>
                                     <option value="suspended">Suspended</option>
                                     <option value="inactive">Inactive</option>
                                 </select>
-                                <input type="text" id="grower-search" placeholder="Search growers..." onkeyup="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); min-width: 250px;">
+                                <input type="text" id="grower-search" placeholder="Search growers..." onkeyup="loadGrowerList()" class="gr-u-filter-control-dark gr-u-filter-min-250">
                             </div>
                         </div>
                         <div class="card-body">
@@ -3372,7 +3372,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="grower-list-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading growers...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading growers...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3402,7 +3402,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="farm-assignments-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading farm assignments...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading farm assignments...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3433,7 +3433,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="contracts-tbody">
-                                    <tr><td colspan="8" style="text-align: center; padding: 20px;">Loading contracts...</td></tr>
+                                    <tr><td colspan="8" class="gr-u-empty-center-sm">Loading contracts...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3461,7 +3461,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="leaderboard-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading leaderboard...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading leaderboard...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3471,12 +3471,12 @@
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Performance Details</div>
-                            <select id="performance-grower-select" onchange="loadGrowerPerformance()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                            <select id="performance-grower-select" onchange="loadGrowerPerformance()" class="gr-u-filter-control-dark">
                                 <option value="">Select a grower...</option>
                             </select>
                         </div>
                         <div class="card-body" id="performance-details">
-                            <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <div class="gr-u-empty-center">
                                 Select a grower to view detailed performance metrics
                             </div>
                         </div>
@@ -3506,7 +3506,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="invitations-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading invitations...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading invitations...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3551,11 +3551,11 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">Product Catalog</div>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="catalog-category-filter" onchange="loadProcurementCatalog()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                        <div class="gr-u-flex-gap-10">
+                            <select id="catalog-category-filter" onchange="loadProcurementCatalog()" class="gr-u-filter-control-dark">
                                 <option value="">All Categories</option>
                             </select>
-                            <input type="text" id="catalog-search" placeholder="Search products..." onkeyup="loadProcurementCatalog()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); min-width: 250px;">
+                            <input type="text" id="catalog-search" placeholder="Search products..." onkeyup="loadProcurementCatalog()" class="gr-u-filter-control-dark gr-u-filter-min-250">
                         </div>
                     </div>
                     <div class="card-body">
@@ -3573,7 +3573,7 @@
                                 </tr>
                             </thead>
                             <tbody id="catalog-products-tbody">
-                                <tr><td colspan="8" style="text-align: center; padding: 20px;">Loading catalog...</td></tr>
+                                <tr><td colspan="8" class="gr-u-empty-center-sm">Loading catalog...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -3632,7 +3632,7 @@
                                 </tr>
                             </thead>
                             <tbody id="suppliers-list-tbody">
-                                <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading suppliers...</td></tr>
+                                <tr><td colspan="7" class="gr-u-empty-center-sm">Loading suppliers...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -3651,11 +3651,11 @@
 
                 <div class="header">
                     <h1>Procurement Revenue</h1>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <label style="color: var(--text-secondary);">Period:</label>
-                        <input type="date" id="revenue-from" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                        <span style="color: var(--text-secondary);">to</span>
-                        <input type="date" id="revenue-to" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <div class="gr-u-flex-gap-10-center">
+                        <label class="gr-u-text-secondary-sm">Period:</label>
+                        <input type="date" id="revenue-from" class="gr-u-filter-control-dark">
+                        <span class="gr-u-text-secondary-sm">to</span>
+                        <input type="date" id="revenue-to" class="gr-u-filter-control-dark">
                         <button class="btn-primary" onclick="loadProcurementRevenue()">Apply</button>
                     </div>
                 </div>

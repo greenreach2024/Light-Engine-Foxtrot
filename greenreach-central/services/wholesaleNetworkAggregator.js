@@ -58,16 +58,36 @@ export async function refreshNetworkInventory() {
 
   logger.info(`[NetworkAgg] Refreshing inventory from ${farms.length} farms...`);
 
-  const results = await Promise.allSettled(farms.map(f => fetchFarmInventory(f)));
+  const farmsWithUrl = farms.filter((farm) => Boolean(farm?.api_url || farm?.url));
+  const farmsMissingUrl = farms.filter((farm) => !(farm?.api_url || farm?.url));
+
+  if (farmsMissingUrl.length > 0) {
+    logger.warn(`[NetworkAgg] ${farmsMissingUrl.length} farms skipped: missing api_url/url`);
+  }
+
+  const results = await Promise.allSettled(farmsWithUrl.map(f => fetchFarmInventory(f)));
   const farmInventories = [];
-  const errors = [];
+  const errors = farmsMissingUrl.map((farm) => ({
+    farm_id: farm.farm_id,
+    farm_name: farm.farm_name || farm.name || farm.farm_id,
+    type: 'missing_api_url',
+    error: 'Farm missing api_url/url'
+  }));
 
   results.forEach((result, idx) => {
     if (result.status === 'fulfilled' && result.value) {
       farmInventories.push(result.value);
     } else {
-      const farmId = farms[idx]?.farm_id || `farm-${idx}`;
-      errors.push({ farm_id: farmId, error: result.reason?.message || 'null response' });
+      const farm = farmsWithUrl[idx];
+      const farmId = farm?.farm_id || `farm-${idx}`;
+      errors.push({
+        farm_id: farmId,
+        farm_name: farm?.farm_name || farm?.name || farmId,
+        type: 'fetch_failed',
+        error: result.status === 'rejected'
+          ? (result.reason?.message || 'request rejected')
+          : 'null response'
+      });
     }
   });
 
@@ -111,6 +131,9 @@ export async function refreshNetworkInventory() {
     errors
   };
 
+  if (errors.length > 0) {
+    logger.warn(`[NetworkAgg] Refresh completed with ${errors.length} farm diagnostics`);
+  }
   logger.info(`[NetworkAgg] Aggregated ${inventoryCache.skus.length} SKUs from ${farmInventories.length} farms`);
   return inventoryCache;
 }
@@ -307,7 +330,17 @@ export async function buildAggregateCatalog() {
       lot_count: f.lots.length,
       timestamp: f.timestamp
     })),
-    lastRefresh: inventoryCache.lastRefresh
+    lastRefresh: inventoryCache.lastRefresh,
+    diagnostics: {
+      error_count: inventoryCache.errors.length,
+      missing_api_url_farms: inventoryCache.errors
+        .filter((entry) => entry.type === 'missing_api_url')
+        .map((entry) => ({ farm_id: entry.farm_id, farm_name: entry.farm_name })),
+      fetch_failures: inventoryCache.errors
+        .filter((entry) => entry.type === 'fetch_failed')
+        .map((entry) => ({ farm_id: entry.farm_id, farm_name: entry.farm_name, error: entry.error })),
+      inventory_errors: inventoryCache.errors
+    }
   };
 }
 
