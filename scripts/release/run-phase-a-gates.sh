@@ -4,6 +4,17 @@ set -euo pipefail
 CANONICAL_ROOT="/Volumes/CodeVault/Projects/Light-Engine-Foxtrot"
 cd "$CANONICAL_ROOT"
 
+RESTORE_FILES=(
+  "public/data/env.json"
+  "public/data/farm-api-keys.json"
+)
+
+restore_runtime_mutations() {
+  git restore --worktree --source=HEAD -- "${RESTORE_FILES[@]}" >/dev/null 2>&1 || true
+}
+
+trap restore_runtime_mutations EXIT
+
 PASS_COUNT=0
 
 run_gate() {
