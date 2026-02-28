@@ -912,6 +912,66 @@ async function runMigrations(client) {
       logger.warn('Farm users migration warning:', err.message);
     }
 
+    // Migration 019: Admin auth tables (admin_users, admin_sessions, admin_audit_log)
+    // Required by admin-auth.js and adminAuth.js middleware when DB_ENABLED=true
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS admin_users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          name VARCHAR(255),
+          role VARCHAR(50) DEFAULT 'admin',
+          active BOOLEAN DEFAULT TRUE,
+          mfa_enabled BOOLEAN DEFAULT FALSE,
+          mfa_secret VARCHAR(255),
+          permissions JSONB DEFAULT '{}',
+          failed_attempts INTEGER DEFAULT 0,
+          locked_until TIMESTAMPTZ,
+          last_login TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+        CREATE INDEX IF NOT EXISTS idx_admin_users_active ON admin_users(active);
+
+        CREATE TABLE IF NOT EXISTS admin_sessions (
+          id SERIAL PRIMARY KEY,
+          admin_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+          token_hash VARCHAR(255) NOT NULL,
+          ip_address VARCHAR(45),
+          user_agent TEXT,
+          expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_admin_sessions_token ON admin_sessions(token_hash);
+        CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin ON admin_sessions(admin_id);
+        CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+
+        CREATE TABLE IF NOT EXISTS admin_audit_log (
+          id SERIAL PRIMARY KEY,
+          admin_id INTEGER REFERENCES admin_users(id) ON DELETE SET NULL,
+          action VARCHAR(100) NOT NULL,
+          resource_type VARCHAR(50),
+          resource_id VARCHAR(255),
+          details JSONB DEFAULT '{}',
+          ip_address VARCHAR(45),
+          user_agent TEXT,
+          success BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_log(admin_id);
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
+        CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at);
+      `);
+      logger.info('Admin auth tables ready (migration 019)');
+    } catch (err) {
+      logger.warn('Admin auth tables migration warning:', err.message);
+    }
+
     // Migration 018: Delivery service tables (farm-scoped, no FK constraints — app-level enforcement)
     try {
       await client.query(`

@@ -42,7 +42,7 @@ export async function generateAdminToken(admin) {
     {
       adminId: admin.id,
       email: admin.email,
-      role: admin.permissions ? 'super_admin' : 'admin', // Derive from permissions
+      role: admin.role || 'viewer', // Use stored role; default to least-privilege
       name: admin.name
     },
     secret,
@@ -113,6 +113,7 @@ export async function adminAuthMiddleware(req, res, next) {
           s.expires_at,
           u.email,
           u.name,
+          u.role,
           u.active
         FROM admin_sessions s
         JOIN admin_users u ON s.admin_id = u.id
@@ -154,7 +155,7 @@ export async function adminAuthMiddleware(req, res, next) {
         id: session.admin_id,
         email: session.email,
         name: session.name,
-        role: 'admin',
+        role: session.role || 'viewer',
         session_id: session.session_id
       };
     } else {
@@ -163,7 +164,7 @@ export async function adminAuthMiddleware(req, res, next) {
         id: decoded.adminId,
         email: decoded.email,
         name: decoded.name,
-        role: decoded.role || 'admin'
+        role: decoded.role || 'viewer'
       };
     }
 

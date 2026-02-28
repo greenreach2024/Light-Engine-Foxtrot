@@ -8,15 +8,22 @@ const { Client } = pg;
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-// Use AWS production database directly
-const client = new Client({
-  host: 'light-engine-db.c8rq44ew6swb.us-east-1.rds.amazonaws.com',
-  port: 5432,
-  database: 'lightengine',
-  user: 'lightengine',
-  password: 'LePphcacxDs35ciLLhnkhaXr7',
-  ssl: { rejectUnauthorized: false }
-});
+// Use database connection from env vars (never hardcode credentials)
+if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
+  console.error('ERROR: Set DATABASE_URL or DB_HOST/DB_PASSWORD/DB_USER/DB_NAME env vars');
+  process.exit(1);
+}
+
+const client = process.env.DATABASE_URL
+  ? new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : new Client({
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'lightengine',
+      user: process.env.DB_USER || 'lightengine',
+      password: process.env.DB_PASSWORD,
+      ssl: { rejectUnauthorized: false }
+    });
 
 // Farm details
 const FARM_DATA = {

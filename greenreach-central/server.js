@@ -27,6 +27,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 import adminRoutes from './routes/admin.js';
 import adminRecipesRoutes from './routes/admin-recipes.js';
 import adminDeliveryRoutes from './routes/admin-delivery.js';
+import { adminAuthMiddleware } from './middleware/adminAuth.js';
 import networkDevicesRoutes from './routes/network-devices.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
@@ -1139,7 +1140,7 @@ app.get('/api/saas/status', async (req, res) => {
 // ── Farm slug management (Phase 4: Cloud SaaS subdomain routing) ─────────
 // GET  /api/admin/farms/:farmId/slug — read current slug
 // PUT  /api/admin/farms/:farmId/slug — set/update slug (body: { slug })
-app.get('/api/admin/farms/:farmId/slug', async (req, res) => {
+app.get('/api/admin/farms/:farmId/slug', adminAuthMiddleware, async (req, res) => {
   try {
     if (!(await isDatabaseAvailable())) return res.status(503).json({ error: 'Database unavailable' });
     const { rows } = await query('SELECT slug FROM farms WHERE farm_id = $1', [req.params.farmId]);
@@ -1150,7 +1151,7 @@ app.get('/api/admin/farms/:farmId/slug', async (req, res) => {
   }
 });
 
-app.put('/api/admin/farms/:farmId/slug', async (req, res) => {
+app.put('/api/admin/farms/:farmId/slug', adminAuthMiddleware, async (req, res) => {
   try {
     if (!(await isDatabaseAvailable())) return res.status(503).json({ error: 'Database unavailable' });
     const rawSlug = (req.body?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/(^-|-$)/g, '');
@@ -1470,7 +1471,7 @@ app.get('/forwarder/network/scan', (_req, res) => {
   });
 });
 
-app.get('/api/admin/farms/:farmId/devices', async (req, res) => {
+app.get('/api/admin/farms/:farmId/devices', adminAuthMiddleware, async (req, res) => {
   try {
     const fid = req.params.farmId || farmStore.farmIdFromReq(req);
     const devices = await farmStore.get(fid, 'devices') || [];
@@ -3396,6 +3397,19 @@ async function startServer() {
       if (process.env.NODE_ENV !== 'production') {
         await seedDemoFarm();
       }
+
+      // Start periodic admin session cleanup (every 30 minutes)
+      setInterval(async () => {
+        try {
+          const { query: dbQuery } = await import('./config/database.js');
+          const result = await dbQuery('DELETE FROM admin_sessions WHERE expires_at < NOW()');
+          if (result.rowCount > 0) {
+            logger.info(`[Admin Sessions] Cleaned up ${result.rowCount} expired session(s)`);
+          }
+        } catch (err) {
+          // Table may not exist yet or DB temporarily unavailable — silently skip
+        }
+      }, 30 * 60 * 1000); // 30 minutes
     } catch (error) {
       app.locals.databaseReady = false;
       logger.warn('Database unavailable; starting in limited mode', {

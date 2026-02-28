@@ -30,16 +30,21 @@ router.post('/login', async (req, res) => {
     }
 
     const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
+    const isProductionRuntime =
+      process.env.NODE_ENV === 'production' ||
+      String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
 
-    // Define fallback admin credentials for non-database mode
-    const FALLBACK_ADMIN = {
+    // Fallback credentials are BLOCKED in production — DB auth is mandatory
+    const fallbackPassword = process.env.ADMIN_FALLBACK_PASSWORD || null;
+    const FALLBACK_ADMIN = fallbackPassword ? {
       id: 1,
-      email: 'info@greenreachfarms.com',
-      password: 'Admin2025!', // Plain text for comparison
-      name: 'GreenReach Admin',
+      email: process.env.ADMIN_FALLBACK_EMAIL || 'admin@greenreach.local',
+      password: fallbackPassword,
+      name: 'Local Admin',
       active: true,
-      mfa_enabled: false
-    };
+      mfa_enabled: false,
+      role: 'admin'
+    } : null;
 
     let user = null;
 
@@ -130,10 +135,27 @@ router.post('/login', async (req, res) => {
         }
       }
     } else {
-      // Fallback mode — allowed when DB is unavailable (single-tenant edge/EB deployments)
-      console.warn('[Admin Auth] Database unavailable — using fallback credentials');
+      // Fallback mode — BLOCKED in production (DB auth required)
+      if (isProductionRuntime) {
+        console.error('[Admin Auth] BLOCKED: fallback login attempt in production mode');
+        return res.status(503).json({
+          success: false,
+          error: 'Database required',
+          message: 'Admin authentication requires database in production mode'
+        });
+      }
 
-      // Fallback credentials
+      if (!FALLBACK_ADMIN) {
+        console.error('[Admin Auth] No fallback credentials configured (set ADMIN_FALLBACK_PASSWORD)');
+        return res.status(503).json({
+          success: false,
+          error: 'Auth unavailable',
+          message: 'No authentication backend available'
+        });
+      }
+
+      console.warn('[Admin Auth] Database unavailable — using env-configured fallback credentials (dev only)');
+
       if (email.toLowerCase() !== FALLBACK_ADMIN.email.toLowerCase() || password !== FALLBACK_ADMIN.password) {
         return res.status(401).json({
           success: false,
@@ -142,7 +164,6 @@ router.post('/login', async (req, res) => {
         });
       }
 
-      // Use fallback admin user
       user = FALLBACK_ADMIN;
     }
 
@@ -251,33 +272,36 @@ router.get('/verify', adminAuthMiddleware, async (req, res) => {
  */
 router.post('/logout', adminAuthMiddleware, async (req, res) => {
   try {
-    // Revoke session
-    // Delete session
-    await req.db.query(`
-      DELETE FROM admin_sessions
-      WHERE id = $1
-    `, [req.admin.session_id]);
+    const dbEnabled = String(process.env.DB_ENABLED || 'false').toLowerCase() === 'true';
 
-    // Log logout
-    await req.db.query(`
-      INSERT INTO admin_audit_log (
-        admin_id,
-        action,
-        resource_type,
-        details,
-        ip_address,
-        user_agent,
-        success
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [
-      req.admin.id,
-      'LOGOUT',
-      'session',
-      JSON.stringify({ session_id: req.admin.session_id }),
-      req.ip,
-      req.headers['user-agent'],
-      true
-    ]);
+    if (dbEnabled && req.db && req.admin.session_id) {
+      // DB mode: revoke session and audit-log
+      await req.db.query(`
+        DELETE FROM admin_sessions
+        WHERE id = $1
+      `, [req.admin.session_id]);
+
+      await req.db.query(`
+        INSERT INTO admin_audit_log (
+          admin_id,
+          action,
+          resource_type,
+          details,
+          ip_address,
+          user_agent,
+          success
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        req.admin.id,
+        'LOGOUT',
+        'session',
+        JSON.stringify({ session_id: req.admin.session_id }),
+        req.ip,
+        req.headers['user-agent'],
+        true
+      ]);
+    }
+    // Non-DB mode: token is self-contained, nothing to revoke server-side
 
     return res.json({
       success: true,

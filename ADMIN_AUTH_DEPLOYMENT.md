@@ -36,10 +36,10 @@ Expected output:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 # Add to .env file
-echo "ADMIN_JWT_SECRET=<generated-secret>" >> .env
+echo "JWT_SECRET=<generated-secret>" >> .env
 
 # Or set in production environment variables
-export ADMIN_JWT_SECRET=<generated-secret>
+export JWT_SECRET=<generated-secret>
 ```
 
 ## Step 3: Install Dependencies (if needed) (1 minute)
@@ -147,7 +147,7 @@ cd /var/www/light-engine-foxtrot
 git pull
 
 # 5. Set environment variables (if not already set)
-export ADMIN_JWT_SECRET=<production-secret>
+export JWT_SECRET=<production-secret>
 export DATABASE_URL=<production-db-url>
 
 # 6. Run migration on production database
@@ -171,7 +171,7 @@ curl https://your-domain.com/api/admin/farms
 ```bash
 # 1. Set environment variables in EB console
 # AWS Console > Elastic Beanstalk > Environment > Configuration > Software
-# Add: ADMIN_JWT_SECRET=<secret>
+# Add: JWT_SECRET=<secret>
 
 # 2. Commit and deploy
 git add -A
@@ -198,7 +198,7 @@ curl https://your-eb-url.com/api/admin/farms
 **Solution:** Run database migration (Step 1)
 
 ### Problem: "Invalid token" on all requests
-**Solution:** Check ADMIN_JWT_SECRET is set correctly in environment
+**Solution:** Check JWT_SECRET is set correctly in environment
 
 ### Problem: "Database connection failed"
 **Solution:** Verify DATABASE_URL is correct and database is accessible
@@ -251,7 +251,7 @@ admin_audit_log  - Audit trail of admin actions
 
 ### Environment Variables
 ```
-ADMIN_JWT_SECRET  - JWT signing secret (REQUIRED)
+JWT_SECRET  - JWT signing secret (REQUIRED)
 DATABASE_URL      - PostgreSQL connection string
 NODE_ENV          - production/development
 PORT              - Server port (default: 8091)
@@ -260,7 +260,7 @@ PORT              - Server port (default: 8091)
 ## Security Checklist
 
 - [ ] Database migration run successfully
-- [ ] ADMIN_JWT_SECRET set to secure random string (32+ bytes)
+- [ ] JWT_SECRET set to secure random string (32+ bytes)
 - [ ] First admin user created with strong password
 - [ ] Cannot access admin dashboard without login
 - [ ] All /api/admin/* endpoints return 401 without token

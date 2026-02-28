@@ -1,20 +1,28 @@
 const pg = require('pg');
 const bcrypt = require('bcrypt');
 
-const pool = new pg.Pool({
-  host: 'light-engine-db.c8rq44ew6swb.us-east-1.rds.amazonaws.com',
-  database: 'lightengine',
-  user: 'lightengine',
-  password: 'LePphcacxDs35ciLLhnkhaXr7',
-  port: 5432,
-  ssl: { rejectUnauthorized: false }
-});
+if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
+  console.error('ERROR: Set DATABASE_URL or DB_HOST/DB_PASSWORD/DB_USER/DB_NAME env vars');
+  process.exit(1);
+}
+
+const pool = process.env.DATABASE_URL
+  ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : new pg.Pool({
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME || 'lightengine',
+      user: process.env.DB_USER || 'lightengine',
+      password: process.env.DB_PASSWORD,
+      port: parseInt(process.env.DB_PORT || '5432'),
+      ssl: { rejectUnauthorized: false }
+    });
 
 (async () => {
   try {
     const farmId = 'FARM-BC134E8B-F371';
-    const email = '1681south@gmail.com';
-    const password = 'BigGreen020f9e42';
+    const email = process.env.BG_USER_EMAIL || '1681south@gmail.com';
+    const password = process.env.BG_USER_PASSWORD;
+    if (!password) { console.error('ERROR: Set BG_USER_PASSWORD env var'); process.exit(1); }
     const contactName = 'Peter Gilbert';
     
     console.log('Creating user record for Big Green Farm...');
