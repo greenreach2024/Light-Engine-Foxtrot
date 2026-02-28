@@ -117,22 +117,93 @@ router.get('/farm-auth/demo-tokens', (req, res) => {
 });
 
 // ─── Farm Sales Orders ─────────────────────────────────────
-router.get('/farm-sales/orders', (req, res) => {
-  res.json({
-    success: true,
-    orders: [],
-    pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
-    summary: { total: 0, pending: 0, completed: 0, revenue: 0 },
-  });
+router.get('/farm-sales/orders', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+
+    // Try DB first for direct-sale orders
+    if (isDatabaseAvailable()) {
+      try {
+        const farmRow = farmId ? await query('SELECT id FROM farms WHERE farm_id = $1', [farmId]) : { rows: [] };
+        const farmDbId = farmRow.rows[0]?.id;
+        if (farmDbId) {
+          const result = await query(
+            `SELECT * FROM wholesale_orders WHERE order_data->>'farm_id' = $1
+             OR order_data->'farmSubOrders' @> $2::jsonb
+             ORDER BY created_at DESC LIMIT $3 OFFSET $4`,
+            [farmId, JSON.stringify([{ farm_id: farmId }]), limit, (page - 1) * limit]
+          );
+          const orders = result.rows.map(r => ({ ...r.order_data, id: r.master_order_id || r.id, created_at: r.created_at }));
+          const countRes = await query(
+            `SELECT COUNT(*) FROM wholesale_orders WHERE order_data->>'farm_id' = $1
+             OR order_data->'farmSubOrders' @> $2::jsonb`,
+            [farmId, JSON.stringify([{ farm_id: farmId }])]
+          );
+          const total = parseInt(countRes.rows[0]?.count || 0);
+          return res.json({
+            success: true, orders,
+            pagination: { page, pageSize: limit, totalItems: total, totalPages: Math.ceil(total / limit) },
+            summary: { total, pending: orders.filter(o => (o.status || '').includes('pending')).length, completed: orders.filter(o => o.status === 'delivered' || o.status === 'completed').length, revenue: orders.reduce((s, o) => s + (o.totals?.total || 0), 0) },
+          });
+        }
+      } catch { /* fall through to empty */ }
+    }
+
+    // Fallback: farmStore-based lookup or empty
+    const storeOrders = req.farmStore ? (await req.farmStore.get(farmId, 'orders') || []) : [];
+    const arr = Array.isArray(storeOrders) ? storeOrders : [];
+    res.json({
+      success: true, orders: arr.slice((page - 1) * limit, page * limit),
+      pagination: { page, pageSize: limit, totalItems: arr.length, totalPages: Math.ceil(arr.length / limit) },
+      summary: { total: arr.length, pending: arr.filter(o => (o.status || '').includes('pending')).length, completed: arr.filter(o => o.status === 'completed').length, revenue: arr.reduce((s, o) => s + (o.total || 0), 0) },
+    });
+  } catch (err) {
+    console.error('[FarmSales] Orders error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to load orders' });
+  }
 });
 
 // ─── Farm Sales Inventory ──────────────────────────────────
-router.get('/farm-sales/inventory', (req, res) => {
-  res.json({
-    success: true,
-    inventory: [],
-    summary: { totalProducts: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
-  });
+router.get('/farm-sales/inventory', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    let inventory = [];
+
+    // Try DB
+    if (isDatabaseAvailable() && farmId) {
+      try {
+        const result = await query(
+          'SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY sku',
+          [farmId]
+        );
+        if (result.rows.length) inventory = result.rows;
+      } catch { /* table may not exist — fall through */ }
+    }
+
+    // Fallback to farmStore
+    if (!inventory.length && req.farmStore && farmId) {
+      const stored = await req.farmStore.get(farmId, 'inventory');
+      if (Array.isArray(stored)) inventory = stored;
+    }
+
+    const inStock = inventory.filter(i => (i.quantity || i.qty_available || 0) > 0).length;
+    const lowStock = inventory.filter(i => {
+      const q = i.quantity || i.qty_available || 0;
+      return q > 0 && q <= (i.low_stock_threshold || 5);
+    }).length;
+    const outOfStock = inventory.filter(i => (i.quantity || i.qty_available || 0) <= 0).length;
+
+    res.json({
+      success: true,
+      inventory,
+      summary: { totalProducts: inventory.length, inStock, lowStock, outOfStock },
+    });
+  } catch (err) {
+    console.error('[FarmSales] Inventory error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to load inventory' });
+  }
 });
 
 // ─── Subscription Plans ────────────────────────────────────
