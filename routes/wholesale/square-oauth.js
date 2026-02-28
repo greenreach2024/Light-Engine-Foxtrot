@@ -26,59 +26,111 @@
 import express from 'express';
 import crypto from 'crypto';
 import { Client as SquareClient } from 'square';
+import * as oauthStore from '../../lib/wholesale/oauth-store.js';
 
 const router = express.Router();
 
-// In-memory storage (TODO: migrate to database)
-const farmOAuthStates = new Map(); // state_token -> { farm_id, created_at }
-const farmTokens = new Map(); // farm_id -> { encrypted_token, merchant_id, location_id, expires_at, refresh_token }
+const farmOAuthStates = new Map();
+const farmTokens = new Map();
 
-// Square OAuth configuration
-const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'; // 'sandbox' or 'production'
+const WHOLESALE_READ_FROM_DB = process.env.WHOLESALE_READ_FROM_DB === 'true';
+
+const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox';
 const SQUARE_APPLICATION_ID = process.env.SQUARE_APPLICATION_ID;
 const SQUARE_APPLICATION_SECRET = process.env.SQUARE_APPLICATION_SECRET;
 const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || 'http://localhost:8091/api/wholesale/oauth/square/callback';
 const OAUTH_SCOPES = ['PAYMENTS_WRITE', 'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS', 'MERCHANT_PROFILE_READ'];
 
-// Token encryption key (32 bytes for AES-256)
+const IS_PROD_LIKE = process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'edge' || process.env.DEPLOYMENT_MODE === 'cloud';
+if (IS_PROD_LIKE && !process.env.TOKEN_ENCRYPTION_KEY) {
+  throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required in production-like environments');
+}
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY || crypto.randomBytes(32);
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
-/**
- * Encrypt sensitive token data
- */
 function encryptToken(token) {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, ENCRYPTION_KEY, iv);
-  
+
   let encrypted = cipher.update(token, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  
+
   const authTag = cipher.getAuthTag();
-  
+
   return {
-    encrypted: encrypted,
+    encrypted,
     iv: iv.toString('hex'),
     authTag: authTag.toString('hex')
   };
 }
 
-/**
- * Decrypt token data
- */
 function decryptToken(encryptedData) {
   const decipher = crypto.createDecipheriv(
     ENCRYPTION_ALGORITHM,
     ENCRYPTION_KEY,
     Buffer.from(encryptedData.iv, 'hex')
   );
-  
+
   decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
-  
+
   let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  
+
   return decrypted;
+}
+
+function toMapToken(dbToken) {
+  if (!dbToken) return null;
+  return {
+    merchant_id: dbToken.merchant_id,
+    location_id: dbToken.location_id,
+    location_name: dbToken.location_name,
+    access_token: dbToken.encrypted_token,
+    refresh_token: dbToken.refresh_token,
+    expires_at: dbToken.expires_at,
+    status: dbToken.status || 'active',
+    onboarded_at: dbToken.created_at,
+    last_refresh_at: dbToken.updated_at
+  };
+}
+
+async function getState(state) {
+  const inMemory = farmOAuthStates.get(state);
+  if (inMemory) return inMemory;
+
+  if (!WHOLESALE_READ_FROM_DB) return null;
+
+  const dbState = await oauthStore.getOAuthState(state);
+  if (!dbState) return null;
+
+  return {
+    farm_id: dbState.farm_id,
+    farm_name: dbState.farm_name,
+    created_at: new Date(dbState.created_at).getTime()
+  };
+}
+
+async function getFarmToken(farmId) {
+  const inMemory = farmTokens.get(farmId);
+  if (inMemory) return inMemory;
+
+  if (!WHOLESALE_READ_FROM_DB) return null;
+
+  const dbToken = await oauthStore.getFarmToken(farmId);
+  return toMapToken(dbToken);
+}
+
+async function saveFarmTokenDualWrite(farmId, tokenData) {
+  farmTokens.set(farmId, tokenData);
+  await oauthStore.saveFarmToken(farmId, {
+    merchant_id: tokenData.merchant_id,
+    location_id: tokenData.location_id,
+    location_name: tokenData.location_name,
+    encrypted_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    expires_at: tokenData.expires_at,
+    status: tokenData.status
+  });
 }
 
 /**
@@ -100,7 +152,7 @@ function decryptToken(encryptedData) {
  *   }
  * }
  */
-router.get('/authorize', (req, res) => {
+router.get('/authorize', async (req, res) => {
   try {
     const { farm_id, farm_name } = req.query;
     
@@ -136,6 +188,12 @@ router.get('/authorize', (req, res) => {
       }
     }
     
+    await oauthStore.saveOAuthState(state, {
+      farm_id,
+      farm_name,
+      created_at: new Date().toISOString()
+    });
+
     // Build Square OAuth URL
     const baseUrl = SQUARE_ENVIRONMENT === 'production' 
       ? 'https://connect.squareup.com'
@@ -201,7 +259,8 @@ router.get('/callback', async (req, res) => {
     }
     
     // Validate state token (CSRF protection)
-    const stateData = farmOAuthStates.get(state);
+    const stateData = await getState(state);
+    
     if (!stateData) {
       return res.status(400).send(`
         <html>
@@ -219,6 +278,7 @@ router.get('/callback', async (req, res) => {
     
     // Delete state token (one-time use)
     farmOAuthStates.delete(state);
+    await oauthStore.deleteOAuthState(state);
     
     // Initialize Square OAuth client
     const squareClient = new SquareClient({
@@ -258,8 +318,7 @@ router.get('/callback', async (req, res) => {
     const encryptedAccessToken = encryptToken(accessToken);
     const encryptedRefreshToken = encryptToken(refreshToken);
     
-    // Store farm tokens
-    farmTokens.set(farm_id, {
+    await saveFarmTokenDualWrite(farm_id, {
       merchant_id: merchantId,
       location_id: locationId,
       location_name: locationName,
@@ -363,7 +422,8 @@ router.post('/refresh', async (req, res) => {
       });
     }
     
-    const farmTokenData = farmTokens.get(farm_id);
+    const farmTokenData = await getFarmToken(farm_id);
+    
     if (!farmTokenData) {
       return res.status(404).json({
         status: 'error',
@@ -400,7 +460,7 @@ router.post('/refresh', async (req, res) => {
     farmTokenData.expires_at = newExpiresAt;
     farmTokenData.last_refresh_at = new Date().toISOString();
     
-    farmTokens.set(farm_id, farmTokenData);
+    await saveFarmTokenDualWrite(farm_id, farmTokenData);
     
     console.log(` Refreshed token for farm ${farm_id}, expires ${newExpiresAt}`);
     
@@ -444,11 +504,27 @@ router.post('/refresh', async (req, res) => {
  *   }
  * }
  */
-router.get('/status/:farm_id', (req, res) => {
+router.get('/status/:farm_id', async (req, res) => {
   try {
     const { farm_id } = req.params;
     
-    const farmTokenData = farmTokens.get(farm_id);
+    let farmTokenData = farmTokens.get(farm_id);
+    
+    // DUAL-READ: Fall back to NeDB if not in Map
+    if (!farmTokenData && WHOLESALE_READ_FROM_DB) {
+      const dbToken = await oauthStore.getFarmToken(farm_id);
+      if (dbToken) {
+        farmTokenData = {
+          merchant_id: dbToken.merchant_id,
+          location_id: dbToken.location_id,
+          access_token: dbToken.encrypted_token,
+          refresh_token: dbToken.refresh_token,
+          expires_at: dbToken.expires_at,
+          status: 'active'
+        };
+      }
+    }
+    
     if (!farmTokenData) {
       return res.status(404).json({
         status: 'error',
@@ -512,11 +588,29 @@ router.get('/status/:farm_id', (req, res) => {
  *   }
  * }
  */
-router.get('/farms', (req, res) => {
+router.get('/farms', async (req, res) => {
   try {
     const farms = [];
     
-    for (const [farm_id, tokenData] of farmTokens.entries()) {
+    // DUAL-READ: Get from Map or NeDB based on feature flag
+    let farmTokenEntries = [];
+    if (WHOLESALE_READ_FROM_DB) {
+      const dbTokens = await oauthStore.getAllFarmTokens();
+      farmTokenEntries = dbTokens.map(t => [t.farm_id, {
+        merchant_id: t.merchant_id,
+        location_id: t.location_id,
+        access_token: t.encrypted_token,
+        refresh_token: t.refresh_token,
+        expires_at: t.expires_at,
+        status: 'active',
+        onboarded_at: t.created_at,
+        last_refresh_at: t.updated_at
+      }]);
+    } else {
+      farmTokenEntries = Array.from(farmTokens.entries());
+    }
+    
+    for (const [farm_id, tokenData] of farmTokenEntries) {
       const expiresAt = new Date(tokenData.expires_at);
       const now = new Date();
       const hoursUntilExpiry = (expiresAt - now) / (1000 * 60 * 60);
@@ -571,7 +665,7 @@ router.delete('/disconnect/:farm_id', async (req, res) => {
   try {
     const { farm_id } = req.params;
     
-    const farmTokenData = farmTokens.get(farm_id);
+    const farmTokenData = await getFarmToken(farm_id);
     if (!farmTokenData) {
       return res.status(404).json({
         status: 'error',
@@ -602,6 +696,7 @@ router.delete('/disconnect/:farm_id', async (req, res) => {
     
     // Delete local token data
     farmTokens.delete(farm_id);
+    await oauthStore.deleteFarmToken(farm_id);
     
     res.json({
       status: 'ok',
@@ -623,22 +718,26 @@ router.delete('/disconnect/:farm_id', async (req, res) => {
  * Used by other wholesale modules (checkout, webhooks)
  */
 export function getFarmAccessToken(farm_id) {
-  const farmTokenData = farmTokens.get(farm_id);
+  throw new Error('getFarmAccessToken is async; use await getFarmAccessTokenAsync');
+}
+
+export async function getFarmAccessTokenAsync(farm_id) {
+  const farmTokenData = await getFarmToken(farm_id);
+
   if (!farmTokenData) {
     throw new Error(`Farm ${farm_id} not onboarded`);
   }
-  
+
   if (farmTokenData.status !== 'active') {
     throw new Error(`Farm ${farm_id} OAuth status: ${farmTokenData.status}`);
   }
-  
-  // Check if token expired
+
   const expiresAt = new Date(farmTokenData.expires_at);
   const now = new Date();
   if (expiresAt <= now) {
     throw new Error(`Farm ${farm_id} token expired at ${expiresAt.toISOString()}`);
   }
-  
+
   return decryptToken(farmTokenData.access_token);
 }
 
@@ -646,11 +745,16 @@ export function getFarmAccessToken(farm_id) {
  * Helper: Get farm merchant and location IDs
  */
 export function getFarmSquareIds(farm_id) {
-  const farmTokenData = farmTokens.get(farm_id);
+  throw new Error('getFarmSquareIds is async; use await getFarmSquareIdsAsync');
+}
+
+export async function getFarmSquareIdsAsync(farm_id) {
+  const farmTokenData = await getFarmToken(farm_id);
+
   if (!farmTokenData) {
     throw new Error(`Farm ${farm_id} not onboarded`);
   }
-  
+
   return {
     merchant_id: farmTokenData.merchant_id,
     location_id: farmTokenData.location_id,
@@ -664,10 +768,10 @@ export function getFarmSquareIds(farm_id) {
  * Get Square merchant and location IDs for a farm
  * Used by Central to fetch payment credentials
  */
-router.get('/ids/:farmId', (req, res) => {
+router.get('/ids/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
-    const ids = getFarmSquareIds(farmId);
+    const ids = await getFarmSquareIdsAsync(farmId);
     
     return res.json({
       status: 'ok',
@@ -689,14 +793,14 @@ router.get('/ids/:farmId', (req, res) => {
  * IMPORTANT: Only expose this to trusted Central server
  * In production, use mutual TLS or other secure authentication
  */
-router.get('/token/:farmId', (req, res) => {
+router.get('/token/:farmId', async (req, res) => {
   try {
     const { farmId } = req.params;
     
     // TODO: Add authentication check to ensure this is Central server calling
     // For now, relying on internal network security
     
-    const accessToken = getFarmAccessToken(farmId);
+    const accessToken = await getFarmAccessTokenAsync(farmId);
     
     return res.json({
       status: 'ok',
@@ -718,11 +822,17 @@ router.get('/token/:farmId', (req, res) => {
  * 
  * Check if this farm has Square connected
  */
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     // For now, check if any farm has tokens
     // In multi-tenant setup, would check specific farm
-    const hasFarms = farmTokens.size > 0;
+    let hasFarms = farmTokens.size > 0;
+    
+    // DUAL-READ: Check NeDB if Map is empty
+    if (!hasFarms && WHOLESALE_READ_FROM_DB) {
+      const dbTokens = await oauthStore.getAllFarmTokens();
+      hasFarms = dbTokens.length > 0;
+    }
     
     if (!hasFarms) {
       return res.json({
@@ -733,7 +843,24 @@ router.get('/status', (req, res) => {
     }
     
     // Get first farm's data (single-tenant mode)
-    const [farmId, tokenData] = Array.from(farmTokens.entries())[0];
+    let farmId, tokenData;
+    
+    if (WHOLESALE_READ_FROM_DB) {
+      const dbTokens = await oauthStore.getAllFarmTokens();
+      if (dbTokens.length > 0) {
+        const firstToken = dbTokens[0];
+        farmId = firstToken.farm_id;
+        tokenData = {
+          merchant_id: firstToken.merchant_id,
+          location_id: firstToken.location_id,
+          expires_at: firstToken.expires_at,
+          status: 'active',
+          onboarded_at: firstToken.created_at
+        };
+      }
+    } else {
+      [farmId, tokenData] = Array.from(farmTokens.entries())[0];
+    }
     
     return res.json({
       status: 'ok',
@@ -755,12 +882,27 @@ router.get('/status', (req, res) => {
   }
 });
 
-// Auto-refresh tokens on startup
-setInterval(() => {
+// Auto-refresh tokens every hour
+setInterval(async () => {
   const now = new Date();
   const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   
-  for (const [farm_id, tokenData] of farmTokens.entries()) {
+  // DUAL-READ: Get all farm tokens from Map or NeDB
+  let farmTokenEntries = [];
+  if (WHOLESALE_READ_FROM_DB) {
+    const dbTokens = await oauthStore.getAllFarmTokens();
+    farmTokenEntries = dbTokens.map(t => [t.farm_id, {
+      merchant_id: t.merchant_id,
+      location_id: t.location_id,
+      access_token: t.encrypted_token,
+      refresh_token: t.refresh_token,
+      expires_at: t.expires_at
+    }]);
+  } else {
+    farmTokenEntries = Array.from(farmTokens.entries());
+  }
+  
+  for (const [farm_id, tokenData] of farmTokenEntries) {
     const expiresAt = new Date(tokenData.expires_at);
     
     // Refresh if expires in less than 24 hours and hasn't been refreshed in last hour

@@ -17,6 +17,7 @@ import {
   validateOrderEvent,
   handleValidationErrors
 } from '../lib/input-validation.js';
+import * as reservationStore from '../lib/wholesale/reservation-store.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -69,6 +70,122 @@ function saveWholesaleStatus(status) {
   fs.writeFileSync(WHOLESALE_STATUS_FILE, JSON.stringify(payload, null, 2), 'utf8');
 }
 
+async function getActiveReservationsLive() {
+  try {
+    return await reservationStore.getActiveReservations();
+  } catch {
+    return [];
+  }
+}
+
+async function getTotalReservedBySkuLive() {
+  const activeReservations = await getActiveReservationsLive();
+  const bySku = new Map();
+  for (const reservation of activeReservations) {
+    const current = bySku.get(reservation.sku_id) || 0;
+    bySku.set(reservation.sku_id, current + Number(reservation.qty || reservation.quantity || 0));
+  }
+  return bySku;
+}
+
+function buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedBySku) {
+  let recipes = {};
+  try {
+    const recipesData = JSON.parse(fs.readFileSync(RECIPES_FILE, 'utf8'));
+    recipes = recipesData.recipes || {};
+  } catch {
+    recipes = {};
+  }
+
+  const lots = [];
+
+  groups.forEach((group) => {
+    const cropName = (group.crop || group.recipe || '').trim();
+    if (!cropName) return;
+
+    const recipe = recipes[cropName];
+    let growDays = 35;
+    if (recipe && recipe.day_by_day && Array.isArray(recipe.day_by_day)) {
+      growDays = recipe.day_by_day.length;
+    }
+
+    let daysOld = 0;
+    if (group.planConfig?.anchor?.seedDate) {
+      const seedDate = new Date(group.planConfig.anchor.seedDate);
+      daysOld = Math.floor((today - seedDate) / (1000 * 60 * 60 * 24));
+    }
+
+    const daysUntilHarvest = Math.max(0, growDays - daysOld);
+    const harvestStart = new Date(today.getTime() + daysUntilHarvest * 24 * 60 * 60 * 1000);
+    const harvestEnd = new Date(harvestStart.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    const trayCount = group.trays || 4;
+    const plantsPerTray = (group.plants || 48) / trayCount;
+    const lbsPerPlant = 0.125;
+    const totalLbs = Math.round(trayCount * plantsPerTray * lbsPerPlant);
+    const qtyAvailableBase = Math.ceil(totalLbs / 5);
+
+    const farmIdForQr = farmInfo.farmId || 'light-engine-demo';
+    const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
+    const reservedQty = reservedBySku.get(skuId) || 0;
+    const deductedQty = deductedBySku.get(skuId) || 0;
+    const actualAvailable = Math.max(0, qtyAvailableBase - reservedQty - deductedQty);
+
+    lots.push({
+      lot_id: `LOT-${group.id}`,
+      qr_payload: `GRTRACE|${farmIdForQr}|LOT-${group.id}|${skuId}|${harvestStart.toISOString()}`,
+      label_text: `${cropName} LOT-${group.id}`,
+      sku_id: skuId,
+      sku_name: `${cropName}, 5lb case`,
+      qty_available: actualAvailable,
+      qty_reserved: reservedQty,
+      qty_deducted: deductedQty,
+      unit: 'case',
+      pack_size: 5,
+      price_per_unit: 12.50,
+      harvest_date_start: harvestStart.toISOString(),
+      harvest_date_end: harvestEnd.toISOString(),
+      quality_flags: ['local', 'vertical_farm', 'pesticide_free'],
+      location: group.zone || group.roomId || 'Unknown',
+      crop_type: cropName,
+      days_to_harvest: daysUntilHarvest
+    });
+  });
+
+  const allowDeterministicFallbackLot = process.env.ENABLE_DETERMINISTIC_WHOLESALE_LOT === 'true' || process.env.NODE_ENV !== 'production';
+  if (lots.length === 0 && allowDeterministicFallbackLot) {
+    const harvestStart = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const harvestEnd = new Date(harvestStart.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const fallbackSkuId = 'SKU-AUDIT-GENOVESE-BASIL-5LB';
+    const reservedQty = reservedBySku.get(fallbackSkuId) || 0;
+    const deductedQty = deductedBySku.get(fallbackSkuId) || 0;
+    const baseQty = 4;
+    const actualAvailable = Math.max(0, baseQty - reservedQty - deductedQty);
+
+    lots.push({
+      lot_id: 'LOT-AUDIT-FALLBACK-001',
+      qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-AUDIT-FALLBACK-001|${fallbackSkuId}|${harvestStart.toISOString()}`,
+      label_text: 'Genovese Basil LOT-AUDIT-FALLBACK-001',
+      sku_id: fallbackSkuId,
+      sku_name: 'Genovese Basil, 5lb case (fallback)',
+      qty_available: actualAvailable,
+      qty_reserved: reservedQty,
+      qty_deducted: deductedQty,
+      unit: 'case',
+      pack_size: 5,
+      price_per_unit: 12.5,
+      harvest_date_start: harvestStart.toISOString(),
+      harvest_date_end: harvestEnd.toISOString(),
+      quality_flags: ['local', 'vertical_farm', 'fallback_seeded'],
+      location: 'Fallback-Zone',
+      crop_type: 'genovese-basil',
+      days_to_harvest: 1
+    });
+  }
+
+  return lots;
+}
+
 /**
  * GET /api/wholesale/status
  * Return wholesale integration status and sync metadata
@@ -77,7 +194,7 @@ router.get('/status', async (_req, res) => {
   try {
     const farmInfo = readFarmInfo();
     const status = loadWholesaleStatus();
-    const reservedBySku = getTotalReservedBySku();
+    const reservedBySku = await getTotalReservedBySkuLive();
     const reservedItems = Array.from(reservedBySku.values()).reduce((sum, qty) => sum + Number(qty || 0), 0);
 
     return res.json({
@@ -194,10 +311,6 @@ router.get('/inventory', async (req, res) => {
     const groupsData = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
     const groups = groupsData.groups || [];
 
-    // Load recipes for grow cycle information
-    const recipesData = JSON.parse(fs.readFileSync(RECIPES_FILE, 'utf8'));
-    const recipes = recipesData.recipes || {};
-
     // Load farm identity from farm.json for consistent naming (and traceability labels)
     const farmPath = path.join(PUBLIC_DIR, 'data', 'farm.json');
     let farmInfo = { farmId: 'light-engine-demo', name: 'GreenReach Demo Farm' };
@@ -209,120 +322,13 @@ router.get('/inventory', async (req, res) => {
       console.log('[Wholesale Sync] Using default farm identity');
     }
 
-    // Build lots from real groups
-    const lots = [];
+    // Build lots from real groups using shared derivation helper
     const today = new Date();
 
     // Load active reservations to subtract from available quantities
-    const reservedBySku = getTotalReservedBySku();
+    const reservedBySku = await getTotalReservedBySkuLive();
     const deductedBySku = getTotalDeductedBySku();
-
-    groups.forEach((group) => {
-      const cropName = (group.crop || group.recipe || '').trim();
-      
-      // Skip groups without a crop/recipe assigned
-      if (!cropName) {
-        console.log(`[Wholesale Sync] Skipping group ${group.id || 'unknown'} - no crop/recipe assigned`);
-        return;
-      }
-      
-      const recipe = recipes[cropName];
-      
-      // Get grow days from recipe or use default
-      let growDays = 35;
-      if (recipe && recipe.day_by_day && Array.isArray(recipe.day_by_day)) {
-        growDays = recipe.day_by_day.length;
-      }
-
-      // Calculate days since seed
-      let daysOld = 0;
-      if (group.planConfig?.anchor?.seedDate) {
-        const seedDate = new Date(group.planConfig.anchor.seedDate);
-        daysOld = Math.floor((today - seedDate) / (1000 * 60 * 60 * 24));
-      }
-
-      // Calculate harvest dates
-      const daysUntilHarvest = Math.max(0, growDays - daysOld);
-      const harvestStart = new Date(today.getTime() + daysUntilHarvest * 24 * 60 * 60 * 1000);
-      const harvestEnd = new Date(harvestStart.getTime() + 2 * 24 * 60 * 60 * 1000); // 2-day harvest window
-
-      // Calculate available quantity
-      const trayCount = group.trays || 4;
-      const plantsPerTray = (group.plants || 48) / trayCount;
-      const lbsPerPlant = 0.125; // ~2oz per plant average
-      const totalLbs = Math.round(trayCount * plantsPerTray * lbsPerPlant);
-      const qtyAvailable = Math.ceil(totalLbs / 5); // Convert to 5lb cases
-
-      // Create wholesale lot
-      const farmIdForQr = farmInfo.farmId || 'light-engine-demo';
-      const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
-      const trace = {
-        farm_id: farmIdForQr,
-        lot_id: `LOT-${group.id}`,
-        sku_id: skuId,
-        harvest_date_start: harvestStart.toISOString(),
-        harvest_date_end: harvestEnd.toISOString()
-      };
-
-      // Apply reservations AND deductions to available quantity
-      const reservedQty = reservedBySku.get(skuId) || 0;
-      const deductedQty = deductedBySku.get(skuId) || 0;
-      const actualAvailable = Math.max(0, qtyAvailable - reservedQty - deductedQty);
-
-      const lot = {
-        lot_id: `LOT-${group.id}`,
-        qr_payload: `GRTRACE|${trace.farm_id}|${trace.lot_id}|${trace.sku_id}|${trace.harvest_date_start}`,
-        label_text: `${cropName} ${trace.lot_id}`,
-        sku_id: skuId,
-        sku_name: `${cropName}, 5lb case`,
-        qty_available: actualAvailable,
-        qty_reserved: reservedQty,
-        qty_deducted: deductedQty,
-        unit: 'case',
-        pack_size: 5, // 5 lbs per case
-        price_per_unit: 12.50, // Default wholesale price
-        harvest_date_start: harvestStart.toISOString(),
-        harvest_date_end: harvestEnd.toISOString(),
-        quality_flags: ['local', 'vertical_farm', 'pesticide_free'],
-        location: group.zone || group.roomId || 'Unknown',
-        crop_type: cropName,
-        days_to_harvest: daysUntilHarvest
-      };
-
-      lots.push(lot);
-    });
-
-    const allowDeterministicFallbackLot = process.env.ENABLE_DETERMINISTIC_WHOLESALE_LOT === 'true' || process.env.NODE_ENV !== 'production';
-    if (lots.length === 0 && allowDeterministicFallbackLot) {
-      const harvestStart = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-      const harvestEnd = new Date(harvestStart.getTime() + 2 * 24 * 60 * 60 * 1000);
-      const fallbackSkuId = 'SKU-AUDIT-GENOVESE-BASIL-5LB';
-      const reservedQty = reservedBySku.get(fallbackSkuId) || 0;
-      const deductedQty = deductedBySku.get(fallbackSkuId) || 0;
-      const baseQty = 4;
-      const actualAvailable = Math.max(0, baseQty - reservedQty - deductedQty);
-
-      lots.push({
-        lot_id: 'LOT-AUDIT-FALLBACK-001',
-        qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-AUDIT-FALLBACK-001|${fallbackSkuId}|${harvestStart.toISOString()}`,
-        label_text: 'Genovese Basil LOT-AUDIT-FALLBACK-001',
-        sku_id: fallbackSkuId,
-        sku_name: 'Genovese Basil, 5lb case (fallback)',
-        qty_available: actualAvailable,
-        qty_reserved: reservedQty,
-        qty_deducted: deductedQty,
-        unit: 'case',
-        pack_size: 5,
-        price_per_unit: 12.5,
-        harvest_date_start: harvestStart.toISOString(),
-        harvest_date_end: harvestEnd.toISOString(),
-        quality_flags: ['local', 'vertical_farm', 'fallback_seeded'],
-        location: 'Fallback-Zone',
-        crop_type: 'genovese-basil',
-        days_to_harvest: 1
-      });
-      console.log('[Wholesale Sync] No sellable lots found; emitted deterministic fallback lot for non-production environment');
-    }
+    const lots = buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedBySku);
 
     const farmInventory = {
       farm_id: farmInfo.farmId,
@@ -493,7 +499,7 @@ function getTotalDeductedBySku() {
  */
 router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit: '128kb' }), validateReservation, handleValidationErrors, async (req, res) => {
   try {
-    const { order_id, items } = req.body || {};
+    const { order_id, items, buyer_id } = req.body || {};
     if (!order_id) {
       return res.status(400).json({ ok: false, error: 'order_id is required' });
     }
@@ -501,49 +507,43 @@ router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit:
       return res.status(400).json({ ok: false, error: 'items array is required' });
     }
 
-    const reservations = loadReservations();
-    const active = cleanupExpiredReservations(reservations);
-
-    // Check if order already reserved
-    const existing = active.find((r) => r.order_id === order_id);
-    if (existing) {
+    const existing = await reservationStore.getOrderReservations(order_id);
+    if (existing.length > 0) {
       return res.json({ ok: true, message: 'Order already reserved', order_id });
     }
 
-    // CRITICAL: Validate inventory availability before reserving
-    const reservedBySku = getTotalReservedBySku();
+    // Validate inventory availability before reserving using the same source as /inventory
+    const reservedBySku = await getTotalReservedBySkuLive();
     const deductedBySku = getTotalDeductedBySku();
-    
-    // Load current inventory to check availability
     const groupsData = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
     const groups = groupsData.groups || [];
-    
-    const inventoryBySku = new Map();
-    groups.forEach((group) => {
-      const cropName = group.crop || group.recipe;
-      const trayCount = group.trays || 4;
-      const plantsPerTray = (group.plants || 48) / trayCount;
-      const lbsPerPlant = 0.125;
-      const totalLbs = Math.round(trayCount * plantsPerTray * lbsPerPlant);
-      const qtyAvailable = Math.ceil(totalLbs / 5);
-      const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-5LB`;
-      inventoryBySku.set(skuId, qtyAvailable);
-    });
+    const farmInfo = readFarmInfo();
+    const inventoryLots = buildLotsFromFarmData(groups, farmInfo, new Date(), reservedBySku, deductedBySku);
 
-    // Validate each item
-    const insufficientItems = [];
+    const inventoryBySku = new Map();
+    for (const lot of inventoryLots) {
+      const current = inventoryBySku.get(lot.sku_id) || 0;
+      inventoryBySku.set(lot.sku_id, current + Number(lot.qty_available || 0));
+    }
+
+    const requestedBySku = new Map();
     for (const item of items) {
       if (!item.sku_id || !item.quantity) continue;
-      
-      const totalInventory = inventoryBySku.get(item.sku_id) || 0;
-      const alreadyReserved = reservedBySku.get(item.sku_id) || 0;
-      const alreadyDeducted = deductedBySku.get(item.sku_id) || 0;
-      const availableNow = totalInventory - alreadyReserved - alreadyDeducted;
-      
-      if (item.quantity > availableNow) {
+      const current = requestedBySku.get(item.sku_id) || 0;
+      requestedBySku.set(item.sku_id, current + Number(item.quantity || 0));
+    }
+
+    const insufficientItems = [];
+    for (const [skuId, requestedQty] of requestedBySku.entries()) {
+      const availableNow = inventoryBySku.get(skuId) || 0;
+      const alreadyReserved = reservedBySku.get(skuId) || 0;
+      const alreadyDeducted = deductedBySku.get(skuId) || 0;
+      const totalInventory = availableNow + alreadyReserved + alreadyDeducted;
+
+      if (requestedQty > availableNow) {
         insufficientItems.push({
-          sku_id: item.sku_id,
-          requested: item.quantity,
+          sku_id: skuId,
+          requested: requestedQty,
           available: availableNow,
           total_inventory: totalInventory,
           already_reserved: alreadyReserved,
@@ -562,20 +562,20 @@ router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit:
       });
     }
 
-    // Add new reservations
-    const reserved_at = new Date().toISOString();
+    // Persist reservations in NeDB (active path)
     for (const item of items) {
       if (!item.sku_id || !item.quantity) continue;
-      active.push({
-        order_id,
+      const lot = inventoryLots.find((l) => l.sku_id === item.sku_id);
+      await reservationStore.createReservation({
+        lot_id: lot?.lot_id || `LOT-${item.sku_id}`,
         sku_id: String(item.sku_id),
-        quantity: Number(item.quantity),
-        reserved_at,
-        status: 'pending' // pending, confirmed, released
+        qty: Number(item.quantity),
+        order_id,
+        buyer_id: buyer_id || req.headers['x-farm-id'] || 'unknown',
+        ttl_minutes: 15
       });
     }
 
-    saveReservations(active);
     console.log(`[Wholesale Sync] Reserved inventory for order ${order_id}:`, items);
     return res.json({ ok: true, order_id, reserved: items.length });
   } catch (error) {
@@ -601,11 +601,7 @@ router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit:
       return res.status(400).json({ ok: false, error: 'order_id is required' });
     }
 
-    const reservations = loadReservations();
-    const active = cleanupExpiredReservations(reservations);
-    
-    // Find reservations for this order
-    const orderReservations = active.filter((r) => r.order_id === order_id);
+    const orderReservations = await reservationStore.getOrderReservations(order_id);
     if (orderReservations.length === 0) {
       return res.status(404).json({
         ok: false,
@@ -618,31 +614,28 @@ router.post('/inventory/confirm', wholesaleAuthMiddleware, express.json({ limit:
     const deductions = loadDeductions();
     const confirmed_at = new Date().toISOString();
 
-    // Move reservations to deductions (permanent inventory reduction)
+    // Move reservations to deductions (permanent inventory reduction/audit)
     for (const reservation of orderReservations) {
       deductions.push({
-        order_id: reservation.order_id,
+        order_id,
         sku_id: reservation.sku_id,
-        quantity: reservation.quantity,
-        reserved_at: reservation.reserved_at,
+        quantity: Number(reservation.qty || reservation.quantity || 0),
+        reserved_at: reservation.created_at || new Date().toISOString(),
         confirmed_at,
         payment_id: payment_id || null,
         status: 'confirmed'
       });
     }
-
-    // Remove confirmed reservations
-    const remaining = active.filter((r) => r.order_id !== order_id);
     
     saveDeductions(deductions);
-    saveReservations(remaining);
+    await reservationStore.confirmOrderReservations(order_id);
     
     console.log(`[Wholesale Sync] Confirmed and deducted inventory for order ${order_id}:`, orderReservations.length, 'items');
     return res.json({
       ok: true,
       order_id,
       deducted: orderReservations.length,
-      items: orderReservations.map(r => ({ sku_id: r.sku_id, quantity: r.quantity }))
+      items: orderReservations.map(r => ({ sku_id: r.sku_id, quantity: Number(r.qty || r.quantity || 0) }))
     });
   } catch (error) {
     console.error('[Wholesale Sync] Failed to confirm inventory:', error);
@@ -667,13 +660,10 @@ router.post('/inventory/release', wholesaleAuthMiddleware, express.json({ limit:
       return res.status(400).json({ ok: false, error: 'order_id is required' });
     }
 
-    const reservations = loadReservations();
-    const active = cleanupExpiredReservations(reservations);
-    const orderReservations = active.filter((r) => r.order_id === order_id);
-    const filtered = active.filter((r) => r.order_id !== order_id);
+    const orderReservations = await reservationStore.getOrderReservations(order_id);
     const releasedCount = orderReservations.length;
 
-    saveReservations(filtered);
+    await reservationStore.releaseOrderReservations(order_id);
     console.log(`[Wholesale Sync] Released ${releasedCount} reservations for order ${order_id}`, reason ? `(${reason})` : '');
     return res.json({
       ok: true,
@@ -749,9 +739,7 @@ router.post('/inventory/rollback', wholesaleAuthMiddleware, express.json({ limit
  */
 router.get('/inventory/reservations', async (_req, res) => {
   try {
-    const reservations = loadReservations();
-    const active = cleanupExpiredReservations(reservations);
-    saveReservations(active); // Cleanup on read
+    const active = await reservationStore.getActiveReservations();
     return res.json({ ok: true, reservations: active });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message });

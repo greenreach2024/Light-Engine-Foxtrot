@@ -5,10 +5,28 @@
  */
 
 import express from 'express';
+import fs from 'fs';
+import * as reservationStore from '../lib/wholesale/reservation-store.js';
+
 const router = express.Router();
 
-// In-memory reservation store (in production, use database with TTL)
+// In-memory reservation store (DEPRECATED: Dual-write to NeDB)
 const reservations = new Map();
+
+// Feature flags
+const WHOLESALE_READ_FROM_DB = process.env.WHOLESALE_READ_FROM_DB === 'true';
+
+function getCatalogAvailableQty(skuId) {
+  try {
+    const raw = fs.readFileSync('public/data/wholesale-products.json', 'utf8');
+    const parsed = JSON.parse(raw);
+    const products = Array.isArray(parsed?.products) ? parsed.products : [];
+    const match = products.find((p) => p?.sku_id === skuId);
+    return Number(match?.quantity_available || 0);
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * POST /api/wholesale/reserve
@@ -52,10 +70,13 @@ router.post('/reserve', async (req, res) => {
       });
     }
 
-    // TODO: Check actual farm inventory availability
-    // For now, simulate availability check
-    const available = 100; // Mock available quantity
-    const currentReserved = 0; // Mock current reservations
+    // Real availability check: catalog qty - active reservations
+    const available = getCatalogAvailableQty(sku_id);
+    const currentReserved = WHOLESALE_READ_FROM_DB
+      ? await reservationStore.getReservedQty(sku_id)
+      : Array.from(reservations.values())
+          .filter((r) => r.status === 'active' && r.sku_id === sku_id)
+          .reduce((sum, r) => sum + Number(r.qty || 0), 0);
 
     if (qty > (available - currentReserved)) {
       return res.status(409).json({
@@ -67,33 +88,22 @@ router.post('/reserve', async (req, res) => {
     }
 
     // Create reservation
-    const reservation_id = `RES-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const expires_at = new Date(Date.now() + ttl_minutes * 60 * 1000);
-
-    const reservation = {
-      reservation_id,
+    // DUAL-WRITE: Create in NeDB (generates reservation_id)
+    const reservation = await reservationStore.createReservation({
       lot_id,
       sku_id,
       qty,
       order_id,
       buyer_id,
-      status: 'active',
-      created_at: new Date().toISOString(),
-      expires_at: expires_at.toISOString()
-    };
+      ttl_minutes
+    });
+    
+    const { reservation_id, expires_at } = reservation;
 
     reservations.set(reservation_id, reservation);
-
-    // Set TTL cleanup
-    setTimeout(() => {
-      const res = reservations.get(reservation_id);
-      if (res && res.status === 'active') {
-        console.log(`[Reservation] Auto-releasing expired reservation ${reservation_id}`);
-        res.status = 'expired';
-        reservations.delete(reservation_id);
-        // TODO: Release inventory hold in database
-      }
-    }, ttl_minutes * 60 * 1000);
+    
+    // NOTE: TTL cleanup now handled by periodic cleanup job (see reservation-store.js)
+    // No more setTimeout() pattern that breaks on server restart
 
     console.log(`[Reservation] Created: ${reservation_id} for lot ${lot_id}, qty ${qty}, expires in ${ttl_minutes} min`);
 
@@ -103,7 +113,7 @@ router.post('/reserve', async (req, res) => {
       lot_id,
       sku_id,
       qty_reserved: qty,
-      expires_at: reservation.expires_at
+      expires_at
     });
 
   } catch (error) {
@@ -136,7 +146,12 @@ router.post('/release', async (req, res) => {
       });
     }
 
-    const reservation = reservations.get(reservation_id);
+    let reservation = reservations.get(reservation_id);
+    
+    // DUAL-READ: Fall back to NeDB if not in Map
+    if (!reservation && WHOLESALE_READ_FROM_DB) {
+      reservation = await reservationStore.getReservation(reservation_id);
+    }
     
     if (!reservation) {
       return res.status(404).json({
@@ -156,6 +171,9 @@ router.post('/release', async (req, res) => {
     reservation.status = 'released';
     reservation.released_at = new Date().toISOString();
     reservations.delete(reservation_id);
+
+    // DUAL-WRITE: Update status in NeDB
+    await reservationStore.releaseReservation(reservation_id);
 
     console.log(`[Reservation] Released: ${reservation_id} for lot ${reservation.lot_id}`);
 
@@ -199,7 +217,12 @@ router.post('/confirm', async (req, res) => {
       });
     }
 
-    const reservation = reservations.get(reservation_id);
+    let reservation = reservations.get(reservation_id);
+    
+    // DUAL-READ: Fall back to NeDB if not in Map
+    if (!reservation && WHOLESALE_READ_FROM_DB) {
+      reservation = await reservationStore.getReservation(reservation_id);
+    }
     
     if (!reservation) {
       return res.status(404).json({
@@ -216,18 +239,19 @@ router.post('/confirm', async (req, res) => {
     }
 
     // Confirm reservation and decrement inventory
+    const confirmed_at = new Date().toISOString();
+    
+    // Update in Map
     reservation.status = 'confirmed';
-    reservation.confirmed_at = new Date().toISOString();
+    reservation.confirmed_at = confirmed_at;
     reservation.sub_order_id = sub_order_id;
+    reservations.set(reservation_id, reservation);
+    
+    // DUAL-WRITE: Update in NeDB
+    await reservationStore.confirmReservation(reservation_id);
 
     console.log(`[Reservation] Confirmed: ${reservation_id} for sub-order ${sub_order_id}`);
     console.log(`  Lot: ${reservation.lot_id}, Qty: ${reservation.qty}`);
-
-    // TODO: Permanently decrement inventory in database
-    // TODO: Create audit trail entry
-
-    // Keep reservation record for audit trail (don't delete)
-    reservations.set(reservation_id, reservation);
 
     res.json({
       ok: true,
@@ -236,7 +260,7 @@ router.post('/confirm', async (req, res) => {
       status: 'confirmed',
       lot_id: reservation.lot_id,
       qty_confirmed: reservation.qty,
-      confirmed_at: reservation.confirmed_at
+      confirmed_at
     });
 
   } catch (error) {
@@ -255,9 +279,11 @@ router.post('/confirm', async (req, res) => {
  */
 router.get('/reservations', async (req, res) => {
   try {
-    const activeReservations = Array.from(reservations.values())
-      .filter(r => r.status === 'active')
-      .map(r => ({
+    let activeReservations = [];
+
+    if (WHOLESALE_READ_FROM_DB) {
+      const dbReservations = await reservationStore.getActiveReservations();
+      activeReservations = dbReservations.map((r) => ({
         reservation_id: r.reservation_id,
         lot_id: r.lot_id,
         sku_id: r.sku_id,
@@ -266,6 +292,19 @@ router.get('/reservations', async (req, res) => {
         expires_at: r.expires_at,
         time_remaining_minutes: Math.max(0, Math.floor((new Date(r.expires_at) - new Date()) / 60000))
       }));
+    } else {
+      activeReservations = Array.from(reservations.values())
+        .filter(r => r.status === 'active')
+        .map(r => ({
+          reservation_id: r.reservation_id,
+          lot_id: r.lot_id,
+          sku_id: r.sku_id,
+          qty: r.qty,
+          order_id: r.order_id,
+          expires_at: r.expires_at,
+          time_remaining_minutes: Math.max(0, Math.floor((new Date(r.expires_at) - new Date()) / 60000))
+        }));
+    }
 
     res.json({
       ok: true,
@@ -287,7 +326,11 @@ router.get('/reservations', async (req, res) => {
  * Cleanup expired reservations
  * Called by periodic job in server-foxtrot.js
  */
-export function cleanupExpiredReservations() {
+export async function cleanupExpiredReservations() {
+  // Cleanup NeDB (primary source of truth)
+  const dbCleaned = await reservationStore.cleanupExpiredReservations();
+  
+  // Also cleanup Map (for backward compatibility during dual-write phase)
   const now = new Date();
   let cleaned = 0;
   
@@ -301,10 +344,13 @@ export function cleanupExpiredReservations() {
   }
   
   if (cleaned > 0) {
-    console.log(`✓ [Cleanup] Released ${cleaned} expired reservation(s)`);
+    console.log(`✓ [Cleanup] Released ${cleaned} expired reservation(s) from Map`);
   }
   
-  return { cleaned, active: Array.from(reservations.values()).filter(r => r.status === 'active').length };
+  return { 
+    cleaned: cleaned + dbCleaned, 
+    active: Array.from(reservations.values()).filter(r => r.status === 'active').length 
+  };
 }
 
 export default router;
