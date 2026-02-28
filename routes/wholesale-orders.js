@@ -7,12 +7,53 @@ import express from 'express';
 import { PaymentProviderFactory } from '../lib/payment-providers/base.js';
 import '../lib/payment-providers/square.js'; // Ensure Square provider is registered
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
 import farmSelectionOptimizer from '../services/farm-selection-optimizer.js';
 import orderStore from '../lib/wholesale/order-store.js';
 
 const router = express.Router();
+
+function getBuyerIdFromRequest(req) {
+  const directBuyerId = req.buyer?.id || req.wholesaleBuyer?.id || req.query.buyer_id || null;
+  if (directBuyerId) return String(directBuyerId);
+
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) return null;
+
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  if (!secret) return null;
+
+  try {
+    const payload = jwt.verify(token, secret);
+    const buyerId = payload?.buyerId || payload?.sub || null;
+    return buyerId ? String(buyerId) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getOrderBuyerId(order) {
+  if (!order || typeof order !== 'object') return null;
+
+  const direct = order.buyer_id ?? order.buyerId ?? order.buyer?.id ?? order.buyer ?? null;
+  if (direct != null) return String(direct);
+
+  const paymentRecords = Array.isArray(order.payments) ? order.payments : [];
+  for (const payment of paymentRecords) {
+    const candidate =
+      payment?.buyer_id ??
+      payment?.buyerId ??
+      payment?.metadata?.buyer_id ??
+      payment?.metadata?.buyerId ??
+      null;
+    if (candidate != null) return String(candidate);
+  }
+
+  return null;
+}
 
 /**
  * Calculate weighted average pricing for multi-farm orders
@@ -786,59 +827,48 @@ router.post('/confirm-pickup', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
-    const db = req.app.locals.db;
-    
-    if (!db) {
-      return res.status(500).json({ 
-        status: 'error', 
-        error: 'Database connection error' 
-      });
-    }
-
     // Get buyer_id from auth token (if available) or query params
-    const buyer_id = req.buyer?.id || req.query.buyer_id;
+    const buyer_id = getBuyerIdFromRequest(req);
     
     if (!buyer_id) {
-      // If no buyer authenticated, return empty list
-      return res.json({
-        status: 'ok',
-        data: {
-          orders: [],
-          count: 0
-        }
-      });
+      return res.status(401).json({ status: 'error', message: 'Missing or invalid bearer token' });
     }
 
-    // Query all orders for this buyer
-    const orders = await db.all(`
-      SELECT 
-        o.*,
-        json_group_array(
-          json_object(
-            'id', so.id,
-            'farm_id', so.farm_id,
-            'status', so.status,
-            'line_items', so.line_items,
-            'subtotal', so.subtotal,
-            'broker_fee_amount', so.broker_fee_amount,
-            'tax_amount', so.tax_amount,
-            'total', so.total
-          )
-        ) as sub_orders
-      FROM master_orders o
-      LEFT JOIN farm_sub_orders so ON o.id = so.master_order_id
-      WHERE o.buyer_id = ?
-      GROUP BY o.id
-      ORDER BY o.created_at DESC
-    `, [buyer_id]);
+    const directMatches = await orderStore.listBuyerOrders(buyer_id, 200);
+    const allRecentOrders = await orderStore.listOrders(500);
 
-    // Parse JSON fields
-    const parsedOrders = orders.map(order => ({
-      ...order,
-      sub_orders: JSON.parse(order.sub_orders || '[]'),
-      delivery_address: order.delivery_address ? JSON.parse(order.delivery_address) : null,
-      logistics_plan: order.logistics_plan ? JSON.parse(order.logistics_plan) : null
-    }));
+    const normalizedBuyerId = String(buyer_id);
+    const mergedById = new Map();
+
+    for (const order of directMatches) {
+      const key = String(order.master_order_id || order.id || order._id || crypto.randomUUID());
+      mergedById.set(key, order);
+    }
+
+    for (const order of allRecentOrders) {
+      const owner = getOrderBuyerId(order);
+      if (owner !== normalizedBuyerId) continue;
+      const key = String(order.master_order_id || order.id || order._id || crypto.randomUUID());
+      if (!mergedById.has(key)) mergedById.set(key, order);
+    }
+
+    const parsedOrders = await Promise.all(
+      Array.from(mergedById.values()).map(async (order) => {
+        const masterOrderId = order.master_order_id || order.id;
+        const subOrders = masterOrderId ? await orderStore.listSubOrders(masterOrderId) : [];
+        return {
+          ...order,
+          master_order_id: masterOrderId,
+          sub_orders: subOrders
+        };
+      })
+    );
+
+    parsedOrders.sort((a, b) => {
+      const aTime = Date.parse(a.created_at || 0) || 0;
+      const bTime = Date.parse(b.created_at || 0) || 0;
+      return bTime - aTime;
+    });
 
     res.json({
       status: 'ok',
@@ -855,6 +885,45 @@ router.get('/', async (req, res) => {
       error: 'Failed to fetch orders',
       details: error.message
     });
+  }
+});
+
+router.get('/:order_id/invoice', async (req, res) => {
+  try {
+    const buyerId = getBuyerIdFromRequest(req);
+    const orderId = req.params.order_id;
+
+    if (!buyerId) {
+      return res.status(401).json({ status: 'error', message: 'Missing or invalid bearer token' });
+    }
+
+    let order = await orderStore.getOrder(orderId);
+    if (!order) {
+      const fallbackOrders = await orderStore.listOrders(500);
+      order = fallbackOrders.find((entry) => String(entry.master_order_id || entry.id) === String(orderId)) || null;
+    }
+
+    const owner = getOrderBuyerId(order);
+
+    if (!order || owner == null || String(owner) !== String(buyerId)) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    const subOrders = await orderStore.listSubOrders(order.master_order_id || order.id || orderId);
+
+    return res.json({
+      status: 'ok',
+      data: {
+        invoice_id: `INV-${order.master_order_id || order.id || orderId}`,
+        generated_at: new Date().toISOString(),
+        order,
+        farm_sub_orders: subOrders,
+        totals: order.totals || null
+      }
+    });
+  } catch (error) {
+    console.error('[Wholesale Orders] Invoice error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch invoice' });
   }
 });
 

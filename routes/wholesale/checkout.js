@@ -13,6 +13,7 @@ import { createReservations, releaseReservations, confirmReservations } from '..
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js'; // Ensure Square provider is registered
 import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is registered
+import jwt from 'jsonwebtoken';
 import auditLogger from '../../lib/wholesale/audit-logger.js';
 import orderStore from '../../lib/wholesale/order-store.js';
 
@@ -20,6 +21,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+function getBuyerIdFromRequest(req) {
+  const directBuyerId = req.buyer?.id || req.wholesaleBuyer?.id || req.body?.buyer_id || null;
+  if (directBuyerId) return String(directBuyerId);
+
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) return null;
+
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  if (!secret) return null;
+
+  try {
+    const payload = jwt.verify(token, secret);
+    const buyerId = payload?.buyerId || payload?.sub || null;
+    return buyerId ? String(buyerId) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Get Foxtrot API base URL with production fail-fast pattern
@@ -146,8 +167,17 @@ router.post('/execute', async (req, res) => {
       allocation_strategy = 'closest'
     } = req.body;
 
+    const resolvedBuyerId = getBuyerIdFromRequest(req);
+    if (!resolvedBuyerId) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Buyer authentication required',
+        message: 'Provide bearer token or buyer_id'
+      });
+    }
+
     console.log('[Checkout] Starting checkout execution');
-    console.log(`  Buyer: ${buyer_id}`);
+    console.log(`  Buyer: ${resolvedBuyerId}`);
     console.log(`  Cart items: ${cart.items.length}`);
 
     // Validate cart
@@ -274,7 +304,7 @@ router.post('/execute', async (req, res) => {
           idempotencyKey,
           metadata: {
             sourceId: payment_source.source_id,
-            buyerId: buyer_id,
+            buyerId: resolvedBuyerId,
             masterOrderId,
             subOrderId
           }
@@ -331,7 +361,7 @@ router.post('/execute', async (req, res) => {
     // Step 6: Create order record
     const masterOrder = {
       id: masterOrderId,
-      buyer_id,
+      buyer_id: resolvedBuyerId,
       status: 'confirmed',
       created_at: new Date().toISOString(),
       cart,
