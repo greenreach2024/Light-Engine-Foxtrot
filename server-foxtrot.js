@@ -8100,6 +8100,82 @@ app.get('/health', asyncHandler(async (req, res) => {
   
   res.status(statusCode).json(health);
 }));
+// Lightweight /api/status endpoint — always returns 200 with key metrics
+app.get('/api/status', asyncHandler(async (req, res) => {
+  const dbHealth = await checkDatabaseHealth().catch(() => ({ enabled: true, connected: false, mode: 'postgresql' }));
+  const memUsage = process.memoryUsage();
+  const memUsedMB = Math.round(memUsage.rss / 1024 / 1024);
+  const memTotalMB = Math.max(Math.round(os.totalmem() / 1024 / 1024), memUsedMB || 1);
+  const memPercent = Math.round((memUsedMB / memTotalMB) * 100);
+
+  res.status(200).json({
+    ok: true,
+    status: dbHealth.enabled && !dbHealth.connected ? 'degraded' : 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: APP_VERSION,
+    buildTime: BUILD_TIME,
+    checks: {
+      database: {
+        mode: dbHealth.mode,
+        enabled: dbHealth.enabled,
+        connected: dbHealth.connected,
+        latencyMs: dbHealth.latencyMs || 0
+      },
+      memory: {
+        usedMB: memUsedMB,
+        totalMB: memTotalMB,
+        percentUsed: memPercent
+      }
+    }
+  });
+}));
+
+// /api/health alias — mirrors /health for callers that prefix /api
+app.get('/api/health', asyncHandler(async (req, res) => {
+  const started = Date.now();
+  const dbHealth = await Promise.race([
+    checkDatabaseHealth(),
+    new Promise(resolve => setTimeout(() => resolve({ enabled: true, connected: false, error: 'timeout', mode: 'postgresql' }), 3000))
+  ]).catch(() => ({ enabled: false, connected: false, mode: 'nedb' }));
+
+  const memUsage = process.memoryUsage();
+  const memUsedMB = Math.round(memUsage.rss / 1024 / 1024);
+  const memTotalMB = Math.max(Math.round(os.totalmem() / 1024 / 1024), memUsedMB || 1);
+  const memPercent = Math.round((memUsedMB / memTotalMB) * 100);
+
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: APP_VERSION,
+    buildTime: BUILD_TIME,
+    checks: {
+      database: {
+        status: dbHealth.connected ? 'healthy' : (dbHealth.enabled ? 'unhealthy' : 'disabled'),
+        mode: dbHealth.mode,
+        enabled: dbHealth.enabled,
+        connected: dbHealth.connected,
+        latencyMs: dbHealth.latencyMs || 0
+      },
+      memory: {
+        status: memPercent < 90 ? 'healthy' : memPercent < 95 ? 'degraded' : 'unhealthy',
+        usedMB: memUsedMB,
+        totalMB: memTotalMB,
+        percentUsed: Math.round(memPercent)
+      }
+    },
+    responseTimeMs: 0
+  };
+
+  if (dbHealth.enabled && !dbHealth.connected) health.status = 'degraded';
+  if (health.checks.memory.status === 'unhealthy') health.status = 'unhealthy';
+  else if (health.checks.memory.status === 'degraded' && health.status === 'healthy') health.status = 'degraded';
+
+  health.responseTimeMs = Date.now() - started;
+  const sc = health.checks.memory.status === 'unhealthy' ? 503 : 200;
+  res.status(sc).json(health);
+}));
 
 // =====================================================
 // DIAGNOSTICS + LOGS (for remote support from Central)
@@ -22278,7 +22354,7 @@ if (!isControllerDisabled) {
         '/device/',
         '/notifications',
         '/ml/',
-        '/health/',
+        '/health',
         '/admin/',
         '/demo-farm',
         '/inventory/',
