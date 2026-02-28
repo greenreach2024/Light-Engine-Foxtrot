@@ -28,6 +28,40 @@ import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = Router();
+async function ensureDeliveryTables() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS farm_delivery_settings (
+      id SERIAL PRIMARY KEY,
+      farm_id VARCHAR(255) NOT NULL,
+      enabled BOOLEAN DEFAULT FALSE,
+      base_fee NUMERIC(10,2) DEFAULT 0,
+      min_order NUMERIC(10,2) DEFAULT 25,
+      lead_time_hours INTEGER DEFAULT 24,
+      max_deliveries_per_window INTEGER DEFAULT 20,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(farm_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_farm_delivery_settings_farm ON farm_delivery_settings(farm_id);
+
+    CREATE TABLE IF NOT EXISTS farm_delivery_windows (
+      id SERIAL PRIMARY KEY,
+      farm_id VARCHAR(255) NOT NULL,
+      window_id VARCHAR(50) NOT NULL,
+      label VARCHAR(255),
+      start_time VARCHAR(10),
+      end_time VARCHAR(10),
+      active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(farm_id, window_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_farm_delivery_windows_farm ON farm_delivery_windows(farm_id);
+  `);
+}
+
 function getJwtSecret() {
   if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
     throw new Error('JWT_SECRET environment variable is required in production');
@@ -172,6 +206,7 @@ router.get('/farm-sales/delivery/config', async (req, res) => {
     let windows = [];
 
     if (isDatabaseAvailable()) {
+      await ensureDeliveryTables();
       const settingsResult = await query(
         'SELECT * FROM farm_delivery_settings WHERE farm_id = $1', [farmId]
       );
@@ -225,6 +260,7 @@ router.put('/farm-sales/delivery/config', async (req, res) => {
     const { enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window } = req.body;
 
     if (isDatabaseAvailable()) {
+      await ensureDeliveryTables();
       await query(
         `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, NOW())
@@ -281,6 +317,7 @@ router.put('/farm-sales/delivery/windows', async (req, res) => {
     }
 
     if (isDatabaseAvailable()) {
+      await ensureDeliveryTables();
       for (const w of windows) {
         if (!w.window_id) continue;
         await query(

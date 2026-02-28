@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
+import { wholesaleAuthMiddleware } from '../../lib/wholesale-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
 import { query, isDatabaseEnabled } from '../../lib/database.js';
 
@@ -24,8 +25,26 @@ router.use((req, res, next) => {
   next();
 });
 
+function deliveryAuthMiddleware(req, res, next) {
+  const farmIdHeader = req.headers['x-farm-id'];
+  let apiKeyHeader = req.headers['x-api-key'];
+
+  if (!apiKeyHeader && farmIdHeader && typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ')) {
+    apiKeyHeader = req.headers.authorization.slice('Bearer '.length).trim();
+    if (apiKeyHeader) {
+      req.headers['x-api-key'] = apiKeyHeader;
+    }
+  }
+
+  if (farmIdHeader && apiKeyHeader) {
+    return wholesaleAuthMiddleware(req, res, next);
+  }
+
+  return farmAuthMiddleware(req, res, next);
+}
+
 // Apply authentication to all routes
-router.use(farmAuthMiddleware);
+router.use(deliveryAuthMiddleware);
 
 // In-memory route storage (shared Map, tenant-isolated via farm_id on each record)
 const routes = new Map();
