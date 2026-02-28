@@ -21969,6 +21969,7 @@ app.get('/api/losses/predict', async (req, res) => {
     if (isDemoMode()) {
       return res.json({ alerts: [], status: 'demo_mode' });
     }
+    const envState = readEnv();
     const { buildLossRiskProfiles, predictLossRisk } = await import('./lib/loss-predictor.js');
     const lossEvents = await trayLossEventsDB.find({});
     const mapped = lossEvents.map(e => ({
@@ -21981,11 +21982,17 @@ app.get('/api/losses/predict', async (req, res) => {
     }));
     const profiles = buildLossRiskProfiles(mapped);
     const alerts = [];
-    if (envState.zones) {
+    if (envState?.zones) {
       for (const [zoneId, zone] of Object.entries(envState.zones)) {
-        const r = zone.sensors?.[0]?.readings;
-        if (!r) continue;
-        const currentEnv = { tempC: r.temperature_c ?? r.temp, rh: r.humidity ?? r.humidity_pct, vpd: r.vpd ?? null };
+        const readings = Array.isArray(zone?.sensors)
+          ? zone.sensors?.[0]?.readings
+          : (zone?.sensors || zone || null);
+        if (!readings) continue;
+        const currentEnv = {
+          tempC: readings.temperature_c ?? readings.temp ?? readings.tempC ?? null,
+          rh: readings.humidity ?? readings.humidity_pct ?? readings.rh ?? null,
+          vpd: readings.vpd ?? readings.vpd_kpa ?? null
+        };
         const zoneAlerts = predictLossRisk(currentEnv, profiles);
         zoneAlerts.forEach(a => { a.zone = zoneId; a.zone_name = zone.name || zone.zone_name; });
         alerts.push(...zoneAlerts);
