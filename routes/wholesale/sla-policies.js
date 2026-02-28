@@ -10,14 +10,25 @@
  */
 
 import express from 'express';
+import {
+  seedDefaultSlaRules,
+  seedDefaultSubstitutionPolicies,
+  saveSlaRule,
+  listSlaRules,
+  getSlaRule,
+  saveSubstitutionPolicy,
+  listSubstitutionPolicies,
+  getSubstitutionPolicy,
+  saveBuyerPreferences,
+  getBuyerPreferences,
+  saveSlaViolation,
+  listSlaViolations,
+  saveSubstitutionApproval,
+  getSubstitutionApproval,
+  updateSubstitutionApproval
+} from '../../lib/wholesale/sla-store.js';
 
 const router = express.Router();
-
-// In-memory storage (TODO: migrate to database)
-const slaRules = new Map(); // rule_id -> SLA rule
-const substitutionPolicies = new Map(); // policy_id -> substitution policy
-const buyerPreferences = new Map(); // buyer_id -> preferences
-const slaViolations = new Map(); // violation_id -> violation record
 
 /**
  * Default SLA Rules
@@ -54,9 +65,6 @@ const DEFAULT_SLA_RULES = [
     priority: 3
   }
 ];
-
-// Initialize default rules
-DEFAULT_SLA_RULES.forEach(rule => slaRules.set(rule.rule_id, rule));
 
 /**
  * Default Substitution Policies
@@ -98,9 +106,12 @@ const DEFAULT_SUBSTITUTION_POLICIES = [
   }
 ];
 
-DEFAULT_SUBSTITUTION_POLICIES.forEach(policy => 
-  substitutionPolicies.set(policy.policy_id, policy)
-);
+const seedPromise = Promise.all([
+  seedDefaultSlaRules(DEFAULT_SLA_RULES),
+  seedDefaultSubstitutionPolicies(DEFAULT_SUBSTITUTION_POLICIES)
+]).catch((error) => {
+  console.error('[SLA] Failed to seed defaults:', error);
+});
 
 /**
  * POST /api/wholesale/sla/rules
@@ -118,8 +129,10 @@ DEFAULT_SUBSTITUTION_POLICIES.forEach(policy =>
  *   priority: 1
  * }
  */
-router.post('/rules', (req, res) => {
+router.post('/rules', async (req, res) => {
   try {
+    await seedPromise;
+
     const {
       name,
       delivery_window_hours,
@@ -160,7 +173,7 @@ router.post('/rules', (req, res) => {
       active: true
     };
     
-    slaRules.set(ruleId, rule);
+    await saveSlaRule(rule);
     
     res.json({
       status: 'ok',
@@ -183,19 +196,13 @@ router.post('/rules', (req, res) => {
  * 
  * List all SLA rules
  */
-router.get('/rules', (req, res) => {
+router.get('/rules', async (req, res) => {
   try {
+    await seedPromise;
+
     const { buyer_id } = req.query;
-    
-    let rules = Array.from(slaRules.values());
-    
-    // Filter by buyer if specified
-    if (buyer_id) {
-      rules = rules.filter(r => r.applies_to === 'all' || r.applies_to === buyer_id);
-    }
-    
-    // Sort by priority
-    rules.sort((a, b) => a.priority - b.priority);
+
+    const rules = await listSlaRules({ buyer_id });
     
     res.json({
       status: 'ok',
@@ -233,6 +240,8 @@ router.get('/rules', (req, res) => {
  */
 router.post('/violations', async (req, res) => {
   try {
+    await seedPromise;
+
     const {
       sub_order_id,
       rule_id,
@@ -244,7 +253,7 @@ router.post('/violations', async (req, res) => {
     } = req.body;
     
     // Get SLA rule
-    const rule = slaRules.get(rule_id);
+    const rule = await getSlaRule(rule_id);
     if (!rule) {
       return res.status(404).json({
         status: 'error',
@@ -280,7 +289,7 @@ router.post('/violations', async (req, res) => {
       created_at: new Date().toISOString()
     };
     
-    slaViolations.set(violationId, violation);
+    await saveSlaViolation(violation);
     
     // Send notification to farm
     console.log(` SLA Violation recorded: ${rule.name}`);
@@ -316,27 +325,18 @@ router.post('/violations', async (req, res) => {
  * 
  * List SLA violations with filters
  */
-router.get('/violations', (req, res) => {
+router.get('/violations', async (req, res) => {
   try {
+    await seedPromise;
+
     const { farm_id, status, from_date, to_date } = req.query;
-    
-    let violations = Array.from(slaViolations.values());
-    
-    // Apply filters
-    if (farm_id) {
-      violations = violations.filter(v => v.farm_id === farm_id);
-    }
-    if (status) {
-      violations = violations.filter(v => v.status === status);
-    }
-    if (from_date) {
-      const fromTime = new Date(from_date).getTime();
-      violations = violations.filter(v => new Date(v.created_at).getTime() >= fromTime);
-    }
-    if (to_date) {
-      const toTime = new Date(to_date).getTime();
-      violations = violations.filter(v => new Date(v.created_at).getTime() <= toTime);
-    }
+
+    const violations = await listSlaViolations({
+      farm_id,
+      status,
+      from_date,
+      to_date
+    });
     
     // Calculate totals
     const totalPenalties = violations.reduce((sum, v) => sum + v.penalty_amount, 0);
@@ -374,8 +374,10 @@ router.get('/violations', (req, res) => {
  * 
  * Create custom substitution policy
  */
-router.post('/policies', (req, res) => {
+router.post('/policies', async (req, res) => {
   try {
+    await seedPromise;
+
     const {
       name,
       description,
@@ -405,7 +407,7 @@ router.post('/policies', (req, res) => {
       active: true
     };
     
-    substitutionPolicies.set(policyId, policy);
+    await saveSubstitutionPolicy(policy);
     
     res.json({
       status: 'ok',
@@ -428,9 +430,11 @@ router.post('/policies', (req, res) => {
  * 
  * List substitution policies
  */
-router.get('/policies', (req, res) => {
+router.get('/policies', async (req, res) => {
   try {
-    const policies = Array.from(substitutionPolicies.values());
+    await seedPromise;
+
+    const policies = await listSubstitutionPolicies();
     
     res.json({
       status: 'ok',
@@ -483,6 +487,8 @@ router.get('/policies', (req, res) => {
  */
 router.post('/find', async (req, res) => {
   try {
+    await seedPromise;
+
     const { original_sku_id, policy_id, quantity_needed, buyer_id } = req.body;
     
     if (!original_sku_id || !policy_id) {
@@ -492,7 +498,7 @@ router.post('/find', async (req, res) => {
       });
     }
     
-    const policy = substitutionPolicies.get(policy_id);
+    const policy = await getSubstitutionPolicy(policy_id);
     if (!policy) {
       return res.status(404).json({
         status: 'error',
@@ -573,6 +579,8 @@ router.post('/find', async (req, res) => {
  */
 router.post('/request-approval', async (req, res) => {
   try {
+    await seedPromise;
+
     const { order_id, original_sku, substitute_sku, reason, buyer_id } = req.body;
     
     const approvalId = `approval_${Date.now()}`;
@@ -588,11 +596,7 @@ router.post('/request-approval', async (req, res) => {
       expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 min expiry
     };
     
-    // Store approval request
-    if (!global.substitutionApprovals) {
-      global.substitutionApprovals = new Map();
-    }
-    global.substitutionApprovals.set(approvalId, approval);
+    await saveSubstitutionApproval(approval);
     
     console.log(`📧 Substitution approval requested: ${approvalId}`);
     console.log(`  Buyer: ${buyer_id}`);
@@ -631,19 +635,14 @@ router.post('/request-approval', async (req, res) => {
  *   notes: 'Green leaf is acceptable'
  * }
  */
-router.post('/respond/:approval_id', (req, res) => {
+router.post('/respond/:approval_id', async (req, res) => {
   try {
+    await seedPromise;
+
     const { approval_id } = req.params;
     const { approved, notes } = req.body;
-    
-    if (!global.substitutionApprovals) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Approval request not found'
-      });
-    }
-    
-    const approval = global.substitutionApprovals.get(approval_id);
+
+    const approval = await getSubstitutionApproval(approval_id);
     if (!approval) {
       return res.status(404).json({
         status: 'error',
@@ -661,11 +660,14 @@ router.post('/respond/:approval_id', (req, res) => {
     }
     
     // Update approval
-    approval.status = approved ? 'approved' : 'rejected';
-    approval.response_notes = notes;
-    approval.responded_at = new Date().toISOString();
+    const nextStatus = approved ? 'approved' : 'rejected';
+    const nextApproval = await updateSubstitutionApproval(approval_id, {
+      status: nextStatus,
+      response_notes: notes,
+      responded_at: new Date().toISOString()
+    });
     
-    console.log(` Substitution ${approval.status}: ${approval_id}`);
+    console.log(` Substitution ${nextApproval.status}: ${approval_id}`);
     
     // In production, would:
     // 1. Update order with substitution
@@ -674,8 +676,8 @@ router.post('/respond/:approval_id', (req, res) => {
     
     res.json({
       status: 'ok',
-      data: approval,
-      message: `Substitution ${approval.status}`
+      data: nextApproval,
+      message: `Substitution ${nextApproval.status}`
     });
     
   } catch (error) {
@@ -704,8 +706,10 @@ router.post('/respond/:approval_id', (req, res) => {
  *   }
  * }
  */
-router.post('/buyer/preferences', (req, res) => {
+router.post('/buyer/preferences', async (req, res) => {
   try {
+    await seedPromise;
+
     const {
       buyer_id,
       default_policy_id,
@@ -730,7 +734,7 @@ router.post('/buyer/preferences', (req, res) => {
       updated_at: new Date().toISOString()
     };
     
-    buyerPreferences.set(buyer_id, preferences);
+    await saveBuyerPreferences(preferences);
     
     console.log(` Updated buyer preferences: ${buyer_id}`);
     console.log(`  Default Policy: ${default_policy_id}`);
@@ -757,11 +761,13 @@ router.post('/buyer/preferences', (req, res) => {
  * 
  * Get buyer substitution preferences
  */
-router.get('/buyer/preferences/:buyer_id', (req, res) => {
+router.get('/buyer/preferences/:buyer_id', async (req, res) => {
   try {
+    await seedPromise;
+
     const { buyer_id } = req.params;
-    
-    const preferences = buyerPreferences.get(buyer_id);
+
+    const preferences = await getBuyerPreferences(buyer_id);
     if (!preferences) {
       // Return defaults if none set
       return res.json({
