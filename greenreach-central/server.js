@@ -9,6 +9,7 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pathToFileURL } from 'url';
+import { randomBytes } from 'crypto';
 
 // Import routes
 import farmRoutes from './routes/farms.js';
@@ -36,6 +37,7 @@ import discoveryProxyRoutes from './routes/discovery-proxy.js';
 import mlForecastRoutes from './routes/ml-forecast.js';
 import billingRoutes from './routes/billing.js';
 import procurementAdminRoutes from './routes/procurement-admin.js';
+import accountingRoutes from './routes/accounting.js';
 import remoteSupportRoutes from './routes/remote-support.js';
 import plantingRoutes from './routes/planting.js';
 import planningRoutes from './routes/planning.js';
@@ -79,6 +81,7 @@ import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
+import { startAwsCostExplorerScheduler } from './services/awsCostExplorerSync.js';
 import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
 import { initExperimentTables, createExperiment, activateExperiment, recordObservation, analyzeExperiment, completeExperiment, listExperiments, getExperiment, getExperimentsForFarm } from './jobs/experiment-orchestrator.js';
 import { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } from './jobs/production-planner.js';
@@ -984,7 +987,7 @@ function get_JWT_SECRET() {
   if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
     throw new Error('JWT_SECRET environment variable is required in production');
   }
-  return process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+  return process.env.JWT_SECRET || randomBytes(32).toString('hex');
 }
 const _JWT_SECRET = get_JWT_SECRET();
 
@@ -2308,6 +2311,7 @@ app.use('/discovery/devices', discoveryProxyRoutes); // Device discovery proxy t
 app.use('/api/discovery/devices', discoveryProxyRoutes); // API alias for discovery proxy
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
+app.use('/api/accounting', authMiddleware, accountingRoutes); // Canonical accounting ledger + close controls
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
@@ -3461,6 +3465,7 @@ async function startServer() {
       startHealthCheckService(app);
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
+      startAwsCostExplorerScheduler(); // Optional AWS Cost Explorer accounting sync
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
 
       // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)

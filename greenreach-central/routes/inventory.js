@@ -5,6 +5,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { createRequire } from 'module';
+import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 // Load crop utilities (Phase 2b)
@@ -24,7 +25,7 @@ function getJwtSecret() {
   if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
     throw new Error('JWT_SECRET environment variable is required in production');
   }
-  return process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+  return process.env.JWT_SECRET || randomBytes(32).toString('hex');
 }
 const JWT_SECRET = getJwtSecret();
 

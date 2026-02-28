@@ -5,6 +5,7 @@
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
 
@@ -38,7 +39,7 @@ function authenticateToken(req, res, next) {
     if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
       throw new Error('JWT_SECRET environment variable is required in production');
     }
-    const jwtSecret = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+    const jwtSecret = process.env.JWT_SECRET || randomBytes(32).toString('hex');
     const decoded = jwt.verify(token, jwtSecret, {
       issuer: 'greenreach-central',
       audience: 'greenreach-farms'

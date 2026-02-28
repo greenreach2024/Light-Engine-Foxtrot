@@ -1494,7 +1494,7 @@ router.post('/device-integrations', authenticateFarm, async (req, res) => {
     
     // Validate we have a hash (privacy requirement)
     const hashToUse = farm_id_hash || (farmId ? 
-      require('crypto').createHash('sha256').update(farmId).digest('hex') : null);
+      crypto.createHash('sha256').update(farmId).digest('hex') : null);
     
     if (!hashToUse) {
       return res.status(400).json({
