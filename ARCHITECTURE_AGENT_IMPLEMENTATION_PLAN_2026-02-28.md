@@ -189,6 +189,24 @@ For each phase:
 
 ---
 
+## 7.1) Deployment Warnings Log (Review at End of Phase E)
+
+**Purpose:** Preserve non-blocking deployment warnings for final architecture/reliability review after all phases complete.
+
+### Phase C Deployment (2026-02-28)
+
+1. **Elastic Beanstalk platform version warning**
+   - Message: environment platform version is not the recommended patch level in the same branch.
+   - Review action (Phase E): assess upgrade risk, perform staged platform patch test, and capture rollback steps.
+
+2. **Node runtime selection warning**
+   - Message: deploy used default Node.js runtime for platform instead of package-declared runtime.
+   - Review action (Phase E): verify EB runtime alignment with `package.json` engines and deployment config; add explicit runtime pinning evidence in certification package.
+
+**Status:** Non-blocking for Phase C functional rollout; mandatory review during Phase E revenue readiness certification.
+
+---
+
 ## 8) Immediate Next Action
 
 Start **Phase A** with a scoped release-baseline PR and checklist enforcement, then proceed directly into **Phase B** hardening.
