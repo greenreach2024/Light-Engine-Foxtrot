@@ -1,7 +1,19 @@
 #!/bin/bash
 set -e
 
-cd /Users/petergilbert/Light-Engine-Foxtrot
+ROOT_DIR="/Volumes/CodeVault/Projects/Light-Engine-Foxtrot"
+cd "$ROOT_DIR"
+
+RELEASE_SHA="${RELEASE_SHA:-$(git rev-parse HEAD)}"
+
+echo "Running release preflight..."
+bash scripts/release/preflight-clean-tree.sh --sha "$RELEASE_SHA"
+
+if [[ "${LEGACY_BUNDLE:-false}" != "true" ]]; then
+	echo "Creating deterministic release candidate from commit $RELEASE_SHA"
+	bash scripts/release/create-release-candidate.sh --sha "$RELEASE_SHA"
+	exit 0
+fi
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 TEMP_DIR="/tmp/foxtrot-build-${TIMESTAMP}"
@@ -37,3 +49,4 @@ echo ""
 echo "TIMESTAMP=$TIMESTAMP"
 echo ""
 echo "To upload: aws s3 cp /tmp/foxtrot-source-$TIMESTAMP.zip s3://foxtrot-test-builds-634419072974/ --region us-east-1"
+

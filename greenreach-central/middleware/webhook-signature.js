@@ -4,9 +4,9 @@
  * Validates webhook requests using HMAC-SHA256 signatures to prevent
  * unauthorized/spoofed webhook events from external sources.
  * 
- * Expects webhook requests to include one of:
- * - X-Webhook-Signature + X-Timestamp
- * - X-Farm-Signature + X-Farm-Timestamp (legacy compatibility)
+ * Expects webhook requests to include:
+ * - X-Webhook-Signature: HMAC-SHA256 hex digest of signed payload
+ * - X-Timestamp: ISO 8601 timestamp of signature creation
  * - Request body: JSON payload to verify
  * 
  * Production: Fails if WEBHOOK_SECRET not configured or signature invalid
@@ -30,20 +30,12 @@ function formatWebhookMessage(timestamp, body) {
  * Returns true if signature valid or verification skipped (dev mode)
  */
 export function verifyWebhookSignature(req, res, next) {
-  const signature = req.headers['x-webhook-signature'] || req.headers['x-farm-signature'];
-  const timestamp = req.headers['x-timestamp'] || req.headers['x-farm-timestamp'];
+  const signature = req.headers['x-webhook-signature'];
+  const timestamp = req.headers['x-timestamp'];
   const webhookSecret = process.env.WEBHOOK_SECRET;
-  const authorization = req.headers.authorization;
-  const hasBearerAuth = typeof authorization === 'string' && authorization.toLowerCase().startsWith('bearer ');
-  const hasSignatureHeaders = Boolean(signature && timestamp);
   
-  // Production: enforce signature for webhook-style requests.
-  // Allow authenticated first-party UI/API traffic that does not use webhook headers.
+  // Production: must have both signature and secret
   if (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud') {
-    if (!hasSignatureHeaders && hasBearerAuth) {
-      return next();
-    }
-
     if (!webhookSecret) {
       logger.error('[Webhook] WEBHOOK_SECRET not configured in production');
       return res.status(503).json({
@@ -52,7 +44,7 @@ export function verifyWebhookSignature(req, res, next) {
       });
     }
     
-    if (!hasSignatureHeaders) {
+    if (!signature || !timestamp) {
       logger.warn('[Webhook] Missing signature or timestamp headers');
       return res.status(401).json({
         success: false,
@@ -67,7 +59,7 @@ export function verifyWebhookSignature(req, res, next) {
     }
     
     // Development: warn if missing headers
-    if (!hasSignatureHeaders) {
+    if (!signature || !timestamp) {
       logger.warn('[Webhook] Missing signature or timestamp (dev mode)');
       return next(); // Allow in dev
     }

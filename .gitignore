@@ -41,6 +41,10 @@ nohup.out
 # Runtime state
 data/automation/
 
+# Phase A release artifacts
+tmp/release-candidate-*
+tmp/release-evidence-*
+
 # Runtime cache files (don't commit)
 public/data/env-cache.json
 public/data/devices.cache.json

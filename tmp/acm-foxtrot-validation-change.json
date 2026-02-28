@@ -1,0 +1,18 @@
+{
+  "Comment": "ACM DNS validation for foxtrot.greenreachgreens.com",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "_07fab891197283955e22c22e10a83833.foxtrot.greenreachgreens.com.",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "_023475b3f88b8b7ffcf6c27a7ec9cd75.jkddzztszm.acm-validations.aws."
+          }
+        ]
+      }
+    }
+  ]
+}

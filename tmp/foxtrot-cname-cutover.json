@@ -1,0 +1,18 @@
+{
+  "Comment": "Create explicit foxtrot CNAME to Foxtrot CloudFront",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "foxtrot.greenreachgreens.com.",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "d3e7615ari4o4o.cloudfront.net"
+          }
+        ]
+      }
+    }
+  ]
+}
