@@ -53,7 +53,7 @@ function loadFarmTaxConfig() {
   return { rate: 0, label: 'TAX', business_number: '' };
 }
 
-// In-memory order storage (use database in production)
+// In-memory fallback for same-process reads; persisted store is source of truth
 const orders = new Map();
 
 /**
@@ -409,7 +409,8 @@ router.get('/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = orders.get(orderId);
+    const persistedOrder = await orderStore.getOrder(orderId);
+    const order = persistedOrder || orders.get(orderId);
 
     if (!order) {
       return res.status(404).json({

@@ -7,11 +7,13 @@
 import express from 'express';
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js';
+import {
+  getPaymentRecord,
+  savePaymentRecord,
+  listPaymentRecords
+} from '../../lib/wholesale/payment-store.js';
 
 const router = express.Router();
-
-// In-memory payment records (use database in production)
-const paymentRecords = new Map();
 
 // Payment state machine transitions
 const VALID_STATE_TRANSITIONS = {
@@ -23,6 +25,20 @@ const VALID_STATE_TRANSITIONS = {
   'partially_refunded': ['refunded', 'disputed'],
   'disputed': ['completed', 'refunded']
 };
+
+function getWebhookEventKey(event, payload) {
+  const raw = payload || event.raw || {};
+  const explicitEventId = raw.event_id || raw.eventId || raw.id;
+  if (explicitEventId) return `square:${explicitEventId}`;
+
+  return [
+    event.type || 'unknown',
+    event.paymentId || 'no_payment',
+    event.status || 'no_status',
+    event.amount || 0,
+    event.timestamp || 'no_ts'
+  ].join(':');
+}
 
 /**
  * POST /api/wholesale/webhooks/square
@@ -74,9 +90,9 @@ router.post('/square', async (req, res) => {
     let processResult;
     
     if (event.type.startsWith('payment.')) {
-      processResult = await processPaymentEvent(event);
+      processResult = await processPaymentEvent(event, req.body);
     } else if (event.type.startsWith('refund.')) {
-      processResult = await processRefundEvent(event);
+      processResult = await processRefundEvent(event, req.body);
     } else {
       console.warn('[Webhook] Unhandled event type:', event.type);
       processResult = { ok: true, action: 'ignored', reason: 'Unsupported event type' };
@@ -102,11 +118,12 @@ router.post('/square', async (req, res) => {
 /**
  * Process payment webhook events
  */
-async function processPaymentEvent(event) {
+async function processPaymentEvent(event, payload) {
   const { paymentId, status, type } = event;
+  const eventKey = getWebhookEventKey(event, payload);
 
   // Find payment record
-  let paymentRecord = paymentRecords.get(paymentId);
+  let paymentRecord = await getPaymentRecord(paymentId);
 
   if (!paymentRecord) {
     console.warn(`[Webhook] Payment record not found for ${paymentId}, creating new record`);
@@ -116,9 +133,20 @@ async function processPaymentEvent(event) {
       provider: 'square',
       status: 'created',
       events: [],
+      processed_event_keys: [],
       created_at: new Date().toISOString()
     };
-    paymentRecords.set(paymentId, paymentRecord);
+    await savePaymentRecord(paymentRecord);
+  }
+
+  if ((paymentRecord.processed_event_keys || []).includes(eventKey)) {
+    console.log(`[Webhook] Duplicate payment event skipped: ${eventKey}`);
+    return {
+      ok: true,
+      action: 'duplicate_ignored',
+      payment_record_id: paymentRecord.id,
+      event_key: eventKey
+    };
   }
 
   // Validate state transition
@@ -140,12 +168,20 @@ async function processPaymentEvent(event) {
   paymentRecord.updated_at = new Date().toISOString();
   
   // Add event to history
-  paymentRecord.events.push({
+  const nextEvents = paymentRecord.events || [];
+  nextEvents.push({
     type,
     status,
     timestamp: event.timestamp,
     raw: event.raw
   });
+  paymentRecord.events = nextEvents;
+
+  const processedKeys = paymentRecord.processed_event_keys || [];
+  processedKeys.push(eventKey);
+  paymentRecord.processed_event_keys = processedKeys;
+
+  await savePaymentRecord(paymentRecord);
 
   console.log(`[Webhook] Payment ${paymentId}: ${previousStatus} → ${status}`);
 
@@ -174,10 +210,11 @@ async function processPaymentEvent(event) {
 /**
  * Process refund webhook events
  */
-async function processRefundEvent(event) {
+async function processRefundEvent(event, payload) {
   const { paymentId, status, type, amount } = event;
+  const eventKey = getWebhookEventKey(event, payload);
 
-  let paymentRecord = paymentRecords.get(paymentId);
+  let paymentRecord = await getPaymentRecord(paymentId);
 
   if (!paymentRecord) {
     console.error(`[Webhook] Cannot process refund: Payment record ${paymentId} not found`);
@@ -190,6 +227,17 @@ async function processRefundEvent(event) {
 
   const previousStatus = paymentRecord.status;
 
+  if ((paymentRecord.processed_event_keys || []).includes(eventKey)) {
+    console.log(`[Webhook] Duplicate refund event skipped: ${eventKey}`);
+    return {
+      ok: true,
+      action: 'duplicate_ignored',
+      previous_status: previousStatus,
+      new_status: paymentRecord.status,
+      event_key: eventKey
+    };
+  }
+
   // Update refund status
   if (status === 'completed') {
     // Determine if full or partial refund
@@ -201,13 +249,21 @@ async function processRefundEvent(event) {
   paymentRecord.updated_at = new Date().toISOString();
 
   // Add refund event to history
-  paymentRecord.events.push({
+  const nextEvents = paymentRecord.events || [];
+  nextEvents.push({
     type,
     status,
     amount,
     timestamp: event.timestamp,
     raw: event.raw
   });
+  paymentRecord.events = nextEvents;
+
+  const processedKeys = paymentRecord.processed_event_keys || [];
+  processedKeys.push(eventKey);
+  paymentRecord.processed_event_keys = processedKeys;
+
+  await savePaymentRecord(paymentRecord);
 
   console.log(`[Webhook] Refund processed for ${paymentId}: $${amount / 100} refunded`);
   console.log(`  Payment status: ${previousStatus} → ${paymentRecord.status}`);
@@ -243,18 +299,21 @@ router.get('/payments/:paymentId/status', async (req, res) => {
     const status = await squareProvider.getPaymentStatus(paymentId);
 
     // Update local payment record
-    let paymentRecord = paymentRecords.get(paymentId);
+    let paymentRecord = await getPaymentRecord(paymentId);
     if (paymentRecord) {
       if (paymentRecord.status !== status.status) {
         console.log(`[Webhook] Status change detected via polling: ${paymentRecord.status} → ${status.status}`);
         paymentRecord.status = status.status;
         paymentRecord.updated_at = new Date().toISOString();
-        paymentRecord.events.push({
+        const nextEvents = paymentRecord.events || [];
+        nextEvents.push({
           type: 'polling_update',
           status: status.status,
           timestamp: new Date().toISOString(),
           source: 'polling_fallback'
         });
+        paymentRecord.events = nextEvents;
+        await savePaymentRecord(paymentRecord);
       }
     }
 
@@ -286,26 +345,7 @@ router.get('/payments', async (req, res) => {
   try {
     const { status, from_date, to_date } = req.query;
 
-    let records = Array.from(paymentRecords.values());
-
-    // Filter by status
-    if (status) {
-      records = records.filter(r => r.status === status);
-    }
-
-    // Filter by date range
-    if (from_date) {
-      const fromTime = new Date(from_date).getTime();
-      records = records.filter(r => new Date(r.created_at).getTime() >= fromTime);
-    }
-
-    if (to_date) {
-      const toTime = new Date(to_date).getTime();
-      records = records.filter(r => new Date(r.created_at).getTime() <= toTime);
-    }
-
-    // Sort by created date descending
-    records.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const records = await listPaymentRecords({ status, from_date, to_date });
 
     // Summary statistics
     const summary = {
@@ -362,13 +402,14 @@ router.post('/reconcile', async (req, res) => {
     });
 
     const reconciliationResults = [];
-    const paymentIdsToReconcile = payment_ids || Array.from(paymentRecords.keys());
+    const currentRecords = await listPaymentRecords();
+    const paymentIdsToReconcile = payment_ids || currentRecords.map(record => record.provider_payment_id).filter(Boolean);
 
     for (const paymentId of paymentIdsToReconcile) {
       try {
         const status = await squareProvider.getPaymentStatus(paymentId);
         
-        const paymentRecord = paymentRecords.get(paymentId);
+        const paymentRecord = await getPaymentRecord(paymentId);
         if (!paymentRecord) continue;
 
         const statusChanged = paymentRecord.status !== status.status;
@@ -377,12 +418,15 @@ router.post('/reconcile', async (req, res) => {
           console.log(`[Webhook] Reconciliation update: ${paymentId} ${paymentRecord.status} → ${status.status}`);
           paymentRecord.status = status.status;
           paymentRecord.updated_at = new Date().toISOString();
-          paymentRecord.events.push({
+          const nextEvents = paymentRecord.events || [];
+          nextEvents.push({
             type: 'reconciliation_update',
             status: status.status,
             timestamp: new Date().toISOString(),
             source: 'manual_reconciliation'
           });
+          paymentRecord.events = nextEvents;
+          await savePaymentRecord(paymentRecord);
         }
 
         reconciliationResults.push({

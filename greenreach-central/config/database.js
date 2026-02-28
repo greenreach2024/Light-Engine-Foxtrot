@@ -467,6 +467,129 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_payment_records_created ON payment_records(created_at);
   `);
 
+  // Canonical accounting ledger foundation
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS accounting_sources (
+      id SERIAL PRIMARY KEY,
+      source_key VARCHAR(100) UNIQUE NOT NULL,
+      source_name VARCHAR(255) NOT NULL,
+      source_type VARCHAR(50) NOT NULL,
+      active BOOLEAN DEFAULT TRUE,
+      config JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_accounts (
+      id SERIAL PRIMARY KEY,
+      account_code VARCHAR(20) UNIQUE NOT NULL,
+      account_name VARCHAR(255) NOT NULL,
+      account_class VARCHAR(50) NOT NULL,
+      account_type VARCHAR(50) NOT NULL,
+      parent_account_code VARCHAR(20),
+      is_active BOOLEAN DEFAULT TRUE,
+      metadata JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_transactions (
+      id BIGSERIAL PRIMARY KEY,
+      source_id INTEGER REFERENCES accounting_sources(id) ON DELETE SET NULL,
+      source_txn_id VARCHAR(255),
+      idempotency_key VARCHAR(255) UNIQUE NOT NULL,
+      txn_date DATE NOT NULL,
+      description TEXT,
+      currency VARCHAR(3) DEFAULT 'CAD',
+      total_amount NUMERIC(12,2) DEFAULT 0,
+      status VARCHAR(30) DEFAULT 'posted',
+      raw_payload JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_entries (
+      id BIGSERIAL PRIMARY KEY,
+      transaction_id BIGINT NOT NULL REFERENCES accounting_transactions(id) ON DELETE CASCADE,
+      line_number INTEGER NOT NULL,
+      account_code VARCHAR(20) NOT NULL REFERENCES accounting_accounts(account_code),
+      debit NUMERIC(12,2) DEFAULT 0 CHECK (debit >= 0),
+      credit NUMERIC(12,2) DEFAULT 0 CHECK (credit >= 0),
+      memo TEXT,
+      metadata JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (transaction_id, line_number),
+      CHECK (NOT (debit > 0 AND credit > 0))
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_classifications (
+      id BIGSERIAL PRIMARY KEY,
+      transaction_id BIGINT REFERENCES accounting_transactions(id) ON DELETE CASCADE,
+      entry_id BIGINT REFERENCES accounting_entries(id) ON DELETE CASCADE,
+      suggested_category VARCHAR(100),
+      confidence NUMERIC(5,4) DEFAULT 0,
+      rule_applied VARCHAR(255),
+      status VARCHAR(30) DEFAULT 'pending',
+      reviewer VARCHAR(255),
+      review_note TEXT,
+      approved_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_period_closes (
+      id SERIAL PRIMARY KEY,
+      period_key VARCHAR(7) UNIQUE NOT NULL,
+      status VARCHAR(20) DEFAULT 'open',
+      opened_at TIMESTAMP DEFAULT NOW(),
+      locked_at TIMESTAMP,
+      locked_by VARCHAR(255),
+      snapshot JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS valuation_snapshots (
+      id SERIAL PRIMARY KEY,
+      snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      method VARCHAR(50) NOT NULL,
+      valuation_low NUMERIC(14,2),
+      valuation_base NUMERIC(14,2),
+      valuation_high NUMERIC(14,2),
+      confidence_score NUMERIC(5,4),
+      assumptions JSONB DEFAULT '{}',
+      notes TEXT,
+      created_by VARCHAR(255),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_accounting_sources_key ON accounting_sources(source_key);
+    CREATE INDEX IF NOT EXISTS idx_accounting_transactions_date ON accounting_transactions(txn_date);
+    CREATE INDEX IF NOT EXISTS idx_accounting_transactions_source ON accounting_transactions(source_id, source_txn_id);
+    CREATE INDEX IF NOT EXISTS idx_accounting_entries_txn ON accounting_entries(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_accounting_entries_account ON accounting_entries(account_code);
+    CREATE INDEX IF NOT EXISTS idx_accounting_classifications_txn ON accounting_classifications(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_accounting_period_closes_key ON accounting_period_closes(period_key);
+    CREATE INDEX IF NOT EXISTS idx_valuation_snapshots_date ON valuation_snapshots(snapshot_date);
+  `);
+
+  // Seed minimal chart of accounts (pre-revenue baseline)
+  await client.query(`
+    INSERT INTO accounting_accounts (account_code, account_name, account_class, account_type)
+    VALUES
+      ('100000', 'Cash', 'asset', 'current_asset'),
+      ('120000', 'Accounts Receivable', 'asset', 'current_asset'),
+      ('200000', 'Accounts Payable', 'liability', 'current_liability'),
+      ('300000', 'Owner Equity', 'equity', 'equity'),
+      ('400000', 'Revenue', 'income', 'operating_income'),
+      ('500000', 'Cost of Goods Sold', 'expense', 'cogs'),
+      ('610000', 'Cloud Infrastructure', 'expense', 'operating_expense'),
+      ('620000', 'Developer Tools', 'expense', 'operating_expense'),
+      ('630000', 'Payment Processing Fees', 'expense', 'operating_expense'),
+      ('710000', 'R&D Expense', 'expense', 'research_development')
+    ON CONFLICT (account_code) DO NOTHING;
+  `);
+
   // Create audit_log table for persistent audit trail
   await client.query(`
     CREATE TABLE IF NOT EXISTS audit_log (

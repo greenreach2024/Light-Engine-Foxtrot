@@ -7,13 +7,15 @@ import express from 'express';
 import crypto from 'crypto';
 import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
 import '../../lib/payment-providers/square.js';
-import { getSubOrder, getOrder } from '../../lib/wholesale/order-store.js';
+import { getSubOrder } from '../../lib/wholesale/order-store.js';
+import {
+  saveRefundRecord,
+  getRefundRecord,
+  listRefundRecords,
+  saveBrokerFeeReversal
+} from '../../lib/wholesale/refund-store.js';
 
 const router = express.Router();
-
-// In-memory stores (use database in production)
-const refundRecords = new Map();
-const brokerFeeRecords = new Map();
 
 /**
  * POST /api/wholesale/refunds
@@ -176,7 +178,7 @@ router.post('/', async (req, res) => {
       provider_response: refundResult.providerResponse
     };
 
-    refundRecords.set(refundId, refundRecord);
+    await saveRefundRecord(refundRecord);
 
     // Update broker fee settlement status
     if (brokerFeeRefundCents > 0) {
@@ -192,7 +194,7 @@ router.post('/', async (req, res) => {
         updated_at: new Date().toISOString()
       };
 
-      brokerFeeRecords.set(brokerFeeRecord.id, brokerFeeRecord);
+      await saveBrokerFeeReversal(brokerFeeRecord);
     }
 
     console.log('[Refunds] Refund completed successfully');
@@ -229,7 +231,7 @@ router.get('/:refundId', async (req, res) => {
   try {
     const { refundId } = req.params;
 
-    const refundRecord = refundRecords.get(refundId);
+    const refundRecord = await getRefundRecord(refundId);
 
     if (!refundRecord) {
       return res.status(404).json({
@@ -262,31 +264,12 @@ router.get('/', async (req, res) => {
   try {
     const { sub_order_id, status, from_date, to_date } = req.query;
 
-    let refunds = Array.from(refundRecords.values());
-
-    // Filter by sub_order_id
-    if (sub_order_id) {
-      refunds = refunds.filter(r => r.sub_order_id === sub_order_id);
-    }
-
-    // Filter by status
-    if (status) {
-      refunds = refunds.filter(r => r.status === status);
-    }
-
-    // Filter by date range
-    if (from_date) {
-      const fromTime = new Date(from_date).getTime();
-      refunds = refunds.filter(r => new Date(r.created_at).getTime() >= fromTime);
-    }
-
-    if (to_date) {
-      const toTime = new Date(to_date).getTime();
-      refunds = refunds.filter(r => new Date(r.created_at).getTime() <= toTime);
-    }
-
-    // Sort by created date descending
-    refunds.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const refunds = await listRefundRecords({
+      sub_order_id,
+      status,
+      from_date,
+      to_date
+    });
 
     // Summary statistics
     const summary = {
@@ -333,7 +316,7 @@ router.post('/:refundId/notify-farm', async (req, res) => {
   try {
     const { refundId } = req.params;
 
-    const refundRecord = refundRecords.get(refundId);
+    const refundRecord = await getRefundRecord(refundId);
 
     if (!refundRecord) {
       return res.status(404).json({
