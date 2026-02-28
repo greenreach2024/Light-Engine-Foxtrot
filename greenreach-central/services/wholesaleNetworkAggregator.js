@@ -18,21 +18,38 @@ let inventoryCache = {
  */
 async function fetchFarmInventory(farm) {
   const baseUrl = farm.api_url || farm.url;
-  if (!baseUrl) return null;
+  if (!baseUrl) {
+    return {
+      farm_id: farm.farm_id,
+      farm_name: farm.farm_name || farm.name || farm.farm_id,
+      error: 'missing api_url/url'
+    };
+  }
 
   try {
+    const headers = { 'Accept': 'application/json' };
+    if (farm.auth_farm_id && farm.api_key) {
+      headers['X-Farm-ID'] = farm.auth_farm_id;
+      headers['X-API-Key'] = farm.api_key;
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(`${baseUrl}/api/wholesale/inventory`, {
       signal: controller.signal,
-      headers: { 'Accept': 'application/json' }
+      headers
     });
     clearTimeout(timeout);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
+
     const data = await response.json();
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid JSON payload');
+    }
+
     return {
       farm_id: farm.farm_id,
       inventory_farm_id: data.farm_id || farm.farm_id,
@@ -41,8 +58,13 @@ async function fetchFarmInventory(farm) {
       timestamp: data.inventory_timestamp || new Date().toISOString()
     };
   } catch (err) {
-    logger.warn(`[NetworkAgg] Failed to fetch from farm ${farm.farm_id}: ${err.message}`);
-    return null;
+    const diagnostic = `${err?.name === 'AbortError' ? 'timeout' : (err.message || 'request failed')} | url=${baseUrl} | auth_headers=${farm.auth_farm_id && farm.api_key ? 'present' : 'missing'}`;
+    logger.warn(`[NetworkAgg] Failed to fetch from farm ${farm.farm_id}: ${diagnostic}`);
+    return {
+      farm_id: farm.farm_id,
+      farm_name: farm.farm_name || farm.name || farm.farm_id,
+      error: diagnostic
+    };
   }
 }
 
@@ -75,18 +97,19 @@ export async function refreshNetworkInventory() {
   }));
 
   results.forEach((result, idx) => {
-    if (result.status === 'fulfilled' && result.value) {
+    if (result.status === 'fulfilled' && result.value && !result.value.error) {
       farmInventories.push(result.value);
     } else {
       const farm = farmsWithUrl[idx];
       const farmId = farm?.farm_id || `farm-${idx}`;
+      const errorMessage = result.status === 'rejected'
+        ? (result.reason?.message || 'request rejected')
+        : (result.value?.error || 'request failed');
       errors.push({
         farm_id: farmId,
         farm_name: farm?.farm_name || farm?.name || farmId,
         type: 'fetch_failed',
-        error: result.status === 'rejected'
-          ? (result.reason?.message || 'request rejected')
-          : 'null response'
+        error: errorMessage
       });
     }
   });
