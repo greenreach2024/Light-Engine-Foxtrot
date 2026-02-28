@@ -34,6 +34,81 @@ function colorize(text, color) {
   return `${colors[color]}${text}${colors.reset}`;
 }
 
+function sanitizeId(value, fallback = 'zone') {
+  const raw = String(value || '').trim().toLowerCase();
+  const cleaned = raw.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return cleaned || fallback;
+}
+
+function normalizeGroupsForValidation(data) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.groups)) return data;
+
+  const allowedStatuses = new Set(['active', 'planned', 'completed', 'archived', 'deployed', 'growing']);
+  const statusMap = {
+    draft: 'planned',
+    inactive: 'archived',
+    complete: 'completed'
+  };
+
+  return {
+    ...data,
+    groups: data.groups.map((group, index) => {
+      const crop = String(group?.crop || '').trim() || String(group?.recipe || '').trim() || String(group?.plan || '').trim() || `crop-${index + 1}`;
+      const plan = String(group?.plan || '').trim() || String(group?.crop || '').trim() || String(group?.recipe || '').trim() || `plan-${sanitizeId(group?.id || group?.name || index + 1, `group-${index + 1}`)}`;
+      const rawStatus = String(group?.status || '').trim().toLowerCase();
+      const status = allowedStatuses.has(rawStatus) ? rawStatus : (statusMap[rawStatus] || 'planned');
+      const planConfig = (group?.planConfig && typeof group.planConfig === 'object' && !Array.isArray(group.planConfig)) ? group.planConfig : {};
+
+      return {
+        ...group,
+        crop,
+        plan,
+        status,
+        planConfig
+      };
+    })
+  };
+}
+
+function normalizeRoomsForValidation(data) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.rooms)) return data;
+
+  return {
+    ...data,
+    rooms: data.rooms.map((room) => {
+      if (!Array.isArray(room?.zones)) return room;
+
+      const zones = room.zones.map((zone, index) => {
+        if (zone && typeof zone === 'object' && !Array.isArray(zone)) {
+          const zoneName = String(zone.name || zone.id || `Zone ${index + 1}`);
+          return {
+            ...zone,
+            id: String(zone.id || sanitizeId(zoneName, `zone-${index + 1}`)),
+            name: zoneName
+          };
+        }
+
+        const zoneName = String(zone || `Zone ${index + 1}`);
+        return {
+          id: sanitizeId(zoneName, `zone-${index + 1}`),
+          name: zoneName
+        };
+      });
+
+      return {
+        ...room,
+        zones
+      };
+    })
+  };
+}
+
+function normalizeForValidation(data, dataType) {
+  if (dataType === 'groups') return normalizeGroupsForValidation(data);
+  if (dataType === 'rooms') return normalizeRoomsForValidation(data);
+  return data;
+}
+
 /**
  * Validate a single file
  */
@@ -47,7 +122,8 @@ function validateFile(filePath, validator, dataType) {
   
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    const data = JSON.parse(content);
+    const parsed = JSON.parse(content);
+    const data = normalizeForValidation(parsed, dataType);
     
     const result = validateWithErrors(validator, data, dataType);
     
