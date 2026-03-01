@@ -399,8 +399,18 @@ async function authenticatedFetch(url, options = {}) {
             response.ok ? null : `HTTP ${response.status}`
         );
         
-        // Handle 401 Unauthorized - session expired
+        // Handle 401 Unauthorized - session expired.
+        // Do NOT force logout for sync endpoints, which use farm API-key auth
+        // and may legitimately return 401 for admin JWT requests.
         if (response.status === 401) {
+            const isSyncEndpoint = typeof url === 'string' && url.includes('/api/sync/');
+            if (isSyncEndpoint) {
+                DEBUG_TRACKING.trackError('SYNC_AUTH_MISMATCH', '401 from sync endpoint under admin JWT (non-fatal)', {
+                    url,
+                    status: response.status
+                });
+                return response;
+            }
             DEBUG_TRACKING.trackError('AUTH_ERROR', 'Token expired or invalid (401)', { 
                 url, 
                 status: response.status 
@@ -2038,10 +2048,10 @@ async function resolveFarmDevices(farmId, farm) {
     try {
         let response;
         try {
-            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
-            if (!response.ok) throw new Error('No public devices endpoint');
-        } catch (err) {
             response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+            if (!response || !response.ok) throw new Error('No admin devices endpoint');
+        } catch (err) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
         }
         if (!response || !response.ok) return [];
         const data = await response.json();
@@ -2479,10 +2489,10 @@ async function viewRoomDetail(farmId, roomId) {
     try {
         let devResponse;
         try {
-            devResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
-            if (!devResponse.ok) throw new Error('No public devices endpoint');
-        } catch (e) {
             devResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+            if (!devResponse || !devResponse.ok) throw new Error('No admin devices endpoint');
+        } catch (e) {
+            devResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
         }
         if (devResponse && devResponse.ok) {
             const devData = await devResponse.json();
@@ -2694,10 +2704,10 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
         try {
             let response;
             try {
-                response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
-                if (!response.ok) throw new Error('No public devices endpoint');
-            } catch (e) {
                 response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+                if (!response || !response.ok) throw new Error('No admin devices endpoint');
+            } catch (e) {
+                response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
             }
             if (response && response.ok) {
                 const data = await response.json();
@@ -4473,23 +4483,22 @@ function renderRoomsTable() {
  */
 async function loadFarmDevices(farmId, count) {
     try {
-        // Try public endpoint first, fall back to authenticated if needed
+        // Try admin endpoint first; sync endpoint requires farm API-key auth.
         let response;
         try {
-            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
-            if (!response.ok) throw new Error('No public devices endpoint');
-        } catch (e) {
-            // Fall back to authenticated endpoint
             response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response || !response.ok) throw new Error('No admin devices endpoint');
+        } catch (e) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : 'no-response'}`);
         }
         const data = await response.json();
         
         if (data.success && data.devices) {
             devicesData = data.devices.map(device => ({
-                deviceId: device.device_code,
-                name: device.device_name || 'Unnamed Device',
-                type: device.device_type,
+                deviceId: device.device_code || device.deviceId || device.device_id || device.id,
+                name: device.device_name || device.deviceName || device.name || 'Unnamed Device',
+                type: device.device_type || device.type || 'unknown',
                 location: device.location || 'Unknown',
                 status: device.status || 'offline',
                 lastSeen: device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never',

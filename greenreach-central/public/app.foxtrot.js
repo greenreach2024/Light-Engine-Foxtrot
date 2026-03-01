@@ -1300,12 +1300,35 @@ function deriveDeviceId(device, fallbackIndex = 0) {
   return `device-${fallbackIndex + 1}`;
 }
 
+function inferDeviceNameFromIdentifier(deviceId, typeHint = '') {
+  const id = String(deviceId || '').trim();
+  const typeText = String(typeHint || '').trim().toLowerCase();
+  if (!id) return '';
+
+  const compact = id.replace(/[_:]+/g, '-');
+  const parts = compact.split('-').filter(Boolean);
+  const indexText = parts.length ? parts[parts.length - 1] : '';
+  const parsedIndex = Number.parseInt(indexText, 10);
+  const countLabel = Number.isFinite(parsedIndex) ? ` ${parsedIndex + 1}` : '';
+
+  if (compact.includes('mini') && compact.includes('split')) return `Mini-Split${countLabel}`;
+  if (compact.includes('dehumid')) return `Dehumidifier${countLabel}`;
+  if (compact.includes('controller')) return `Controller${countLabel}`;
+  if (compact.includes('fan') || typeText.includes('fan')) return `Fan${countLabel}`;
+  if (compact.includes('vent') || typeText.includes('vent')) return `Vent${countLabel}`;
+  if (compact.includes('sensor') || typeText.includes('sensor')) return `Sensor${countLabel}`;
+  if (compact.includes('light') || compact.includes('fixture') || typeText.includes('light')) return `Light${countLabel}`;
+
+  return '';
+}
+
 function deriveDeviceName(device, fallbackId = '') {
   if (!device || typeof device !== 'object') {
     return fallbackId || 'Unknown device';
   }
   const candidates = [
     device.deviceName,
+    device.device_name,
     device.name,
     device.label,
     device.alias,
@@ -1320,6 +1343,8 @@ function deriveDeviceName(device, fallbackId = '') {
   const model = typeof device.model === 'string' ? device.model.trim() : '';
   const combined = [vendor, model].filter(Boolean).join(' ').trim();
   if (combined) return combined;
+  const inferred = inferDeviceNameFromIdentifier(device.id || device.deviceId || device.device_id || fallbackId, device.type || device.category);
+  if (inferred) return inferred;
   return fallbackId || 'Unknown device';
 }
 
@@ -1336,6 +1361,148 @@ function formatVendorModel(vendor, model) {
   const vendorText = typeof vendor === 'string' ? vendor.trim() : '';
   const modelText = typeof model === 'string' ? model.trim() : '';
   return [vendorText, modelText].filter(Boolean).join(' ').trim();
+}
+
+function normalizeRoomMapDeviceEntry(entry, index = 0, rooms = []) {
+  const snapshot = entry && typeof entry === 'object' && entry.snapshot && typeof entry.snapshot === 'object'
+    ? entry.snapshot
+    : {};
+  const id = deriveDeviceId(entry, index);
+
+  const roomCandidate = firstNonEmptyString(snapshot.room, entry?.roomName, entry?.room, entry?.roomId);
+  const matchedRoom = (Array.isArray(rooms) ? rooms : []).find((room) => {
+    const roomId = String(room?.id || '').trim().toLowerCase();
+    const roomName = String(room?.name || '').trim().toLowerCase();
+    const lookup = String(roomCandidate || '').trim().toLowerCase();
+    if (!lookup) return false;
+    return lookup === roomId || lookup === roomName;
+  });
+
+  const roomId = firstNonEmptyString(matchedRoom?.id, entry?.roomId, snapshot.roomId, snapshot.room, entry?.room, 'Unassigned');
+  const roomName = firstNonEmptyString(matchedRoom?.name, snapshot.room, entry?.roomName, entry?.room, roomId);
+  const zone = firstNonEmptyString(snapshot.zone, entry?.zone, entry?.zoneId, 'Unassigned');
+  const category = firstNonEmptyString(snapshot.category, entry?.category, snapshot.type, entry?.type, 'other').toLowerCase();
+  const vendor = firstNonEmptyString(snapshot.vendor, entry?.vendor, 'Unknown');
+  const model = firstNonEmptyString(snapshot.model, entry?.model, category || 'Unknown');
+
+  const snapshotName = firstNonEmptyString(snapshot.name, snapshot.deviceName, snapshot.device_name, entry?.deviceName, entry?.name);
+  const isUnknownSnapshotName = !snapshotName || /^unknown(\s+device)?$/i.test(snapshotName);
+  const inferredName = inferDeviceNameFromIdentifier(id, category);
+  const deviceName = isUnknownSnapshotName
+    ? (inferredName || model || id)
+    : snapshotName;
+
+  return {
+    id,
+    deviceId: id,
+    device_id: id,
+    name: deviceName,
+    deviceName,
+    device_name: deviceName,
+    category,
+    type: firstNonEmptyString(entry?.type, snapshot.type, category, 'device'),
+    vendor,
+    model,
+    room: roomName,
+    roomId,
+    location: roomName,
+    zone,
+    source: 'room-map'
+  };
+}
+
+function buildRoomMapByRoom(roomMapDoc, rooms = [], roomMapDevices = []) {
+  const byRoom = {};
+  const zones = Array.isArray(roomMapDoc?.zones) ? roomMapDoc.zones : [];
+
+  zones.forEach((zone) => {
+    const roomName = firstNonEmptyString(zone?.room, zone?.roomName, 'Unassigned');
+    const zoneName = firstNonEmptyString(zone?.name, zone?.zone_name, zone?.zone != null ? `Zone ${zone.zone}` : '', zone?.id);
+    if (!byRoom[roomName]) byRoom[roomName] = { zones: [] };
+    if (zoneName && !byRoom[roomName].zones.includes(zoneName)) {
+      byRoom[roomName].zones.push(zoneName);
+    }
+  });
+
+  (Array.isArray(roomMapDevices) ? roomMapDevices : []).forEach((device) => {
+    const roomName = firstNonEmptyString(device?.room, 'Unassigned');
+    const zoneName = firstNonEmptyString(device?.zone);
+    if (!byRoom[roomName]) byRoom[roomName] = { zones: [] };
+    if (zoneName && !byRoom[roomName].zones.includes(zoneName)) {
+      byRoom[roomName].zones.push(zoneName);
+    }
+  });
+
+  (Array.isArray(rooms) ? rooms : []).forEach((room) => {
+    const roomName = firstNonEmptyString(room?.name, room?.id);
+    if (!roomName) return;
+    if (!byRoom[roomName]) byRoom[roomName] = { zones: [] };
+    const roomZones = Array.isArray(room?.zones) ? room.zones : [];
+    roomZones.forEach((zoneName) => {
+      const text = firstNonEmptyString(zoneName);
+      if (text && !byRoom[roomName].zones.includes(text)) {
+        byRoom[roomName].zones.push(text);
+      }
+    });
+  });
+
+  return byRoom;
+}
+
+function hydrateRoomsFromRoomMap(rooms = [], roomMapDevices = []) {
+  if (!Array.isArray(rooms) || !Array.isArray(roomMapDevices) || roomMapDevices.length === 0) return;
+
+  rooms.forEach((room) => {
+    const roomId = firstNonEmptyString(room?.id);
+    const roomName = firstNonEmptyString(room?.name, roomId);
+    const matches = roomMapDevices.filter((device) => {
+      const deviceRoomId = firstNonEmptyString(device?.roomId).toLowerCase();
+      const deviceRoomName = firstNonEmptyString(device?.room).toLowerCase();
+      return (roomId && deviceRoomId === roomId.toLowerCase()) || (roomName && deviceRoomName === roomName.toLowerCase());
+    });
+    if (!matches.length) return;
+
+    if (!Array.isArray(room.zones) || room.zones.length === 0) {
+      const zoneNames = [...new Set(matches.map((device) => firstNonEmptyString(device.zone)).filter(Boolean))];
+      if (zoneNames.length) room.zones = zoneNames;
+    }
+
+    if (!Array.isArray(room.devices) || room.devices.length === 0) {
+      room.devices = matches.map((device) => ({
+        id: device.id,
+        deviceId: device.deviceId,
+        name: device.deviceName,
+        deviceName: device.deviceName,
+        vendor: device.vendor,
+        model: device.model,
+        category: device.category,
+        room: roomName,
+        zone: device.zone
+      }));
+    }
+
+    const hasCategoryProgress = !!(room._categoryProgress || room.categoryProgress || room.category || room.equipment);
+    if (!hasCategoryProgress) {
+      const counts = new Map();
+      matches.forEach((device) => {
+        const key = firstNonEmptyString(device.category, 'other').toLowerCase();
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      if (counts.size) {
+        room.categoryProgress = room.categoryProgress || {};
+        room._categoryProgress = room._categoryProgress || room.categoryProgress;
+        counts.forEach((count, key) => {
+          room.categoryProgress[key] = {
+            count,
+            model: key,
+            manufacturer: 'Unknown',
+            status: 'complete'
+          };
+        });
+        room._categoryProgress = room.categoryProgress;
+      }
+    }
+  });
 }
 
 function resolveLightNameFromState(id, source) {
@@ -12732,7 +12899,7 @@ async function loadAllData() {
     });
     
     // Load static data files — use authenticated API endpoints for tenant-scoped data
-     const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata] = await Promise.all([
+    const [groups, schedules, plans, environment, calibrations, spdLibrary, deviceMeta, deviceKB, equipmentKB, equipmentCatalog, deviceManufacturers, farm, rooms, switchbotDevices, storedIotDevices, equipmentMetadata, roomMapData] = await Promise.all([
       // Use /api/groups (authenticated, tenant-scoped) with fallback to static file
       loadJSON('/api/groups', []).then(data => ({ groups: Array.isArray(data) ? data : (data?.groups || []) })),
       fetchSchedulesDocument(),
@@ -12752,7 +12919,8 @@ async function loadAllData() {
       loadJSON('/api/rooms', []).then(data => ({ rooms: Array.isArray(data) ? data : (data?.rooms || []) })),
       loadJSON('./data/switchbot-devices.json', { devices: [], summary: null }),
       loadJSON('/data/iot-devices.json', []),
-      loadJSON('/data/equipment-metadata.json', {})
+      loadJSON('/data/equipment-metadata.json', {}),
+      loadJSON('/data/room-map.json', { zones: [], devices: [] })
     ]);
 
     console.log('[loadAllData] Raw groups response:', groups);
@@ -12914,6 +13082,21 @@ async function loadAllData() {
           name: fallbackName
         };
       });
+
+    const roomMapDevices = (Array.isArray(roomMapData?.devices) ? roomMapData.devices : [])
+      .map((entry, index) => normalizeRoomMapDeviceEntry(entry, index, STATE.rooms));
+    STATE.roomMapDevices = roomMapDevices;
+    STATE.roomMap = buildRoomMapByRoom(roomMapData, STATE.rooms, roomMapDevices);
+
+    if ((!STATE.devices || STATE.devices.length === 0) && roomMapDevices.length > 0) {
+      STATE.devices = roomMapDevices.map((device) => ({
+        ...device,
+        online: true
+      }));
+      console.log(' [loadAllData] Backfilled STATE.devices from room-map:', STATE.devices.length);
+    }
+
+    hydrateRoomsFromRoomMap(STATE.rooms, roomMapDevices);
 
     STATE.equipmentMetadata = equipmentMetadata || {};
     console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
@@ -13381,6 +13564,27 @@ function extractRoomEquipment(room) {
   if (Array.isArray(room.equipment)) {
     equipment.push(...room.equipment);
   }
+
+  if (equipment.length === 0 && Array.isArray(STATE?.roomMapDevices)) {
+    const roomId = firstNonEmptyString(room?.id).toLowerCase();
+    const roomName = firstNonEmptyString(room?.name, room?.id).toLowerCase();
+    const fallback = STATE.roomMapDevices
+      .filter((device) => {
+        const deviceRoomId = firstNonEmptyString(device?.roomId).toLowerCase();
+        const deviceRoomName = firstNonEmptyString(device?.room).toLowerCase();
+        return (roomId && deviceRoomId === roomId) || (roomName && deviceRoomName === roomName);
+      })
+      .map((device) => ({
+        id: device.id,
+        category: device.category || 'other',
+        vendor: device.vendor || 'Unknown',
+        model: device.model || device.deviceName || 'Unknown',
+        count: 1,
+        control: null
+      }));
+    equipment.push(...fallback);
+  }
+
   return equipment;
 }
 
