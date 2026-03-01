@@ -137,25 +137,8 @@ function initLogin() {
         }
     }
     
-    // Check for remembered credentials
-    const remembered = JSON.parse(localStorage.getItem(STORAGE_KEY_REMEMBER) || '{}');
-    if (remembered.farmId) {
-        document.getElementById('farmId').value = remembered.farmId;
-    }
-    if (remembered.email) {
-        document.getElementById('email').value = remembered.email;
-        document.getElementById('remember').checked = true;
-    }
-    
-    // Pre-fill farm ID from current session if available
-    const farmIdInput = document.getElementById('farmId');
-    if (farmIdInput && !farmIdInput.value) {
-        const storedFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') ||
-                             sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId');
-        if (storedFarmId && storedFarmId !== 'LOCAL-FARM') {
-            farmIdInput.value = storedFarmId;
-        }
-    }
+    // SECURITY: Do NOT pre-fill farm ID on login page - users must enter manually
+    // Removed auto-fill logic to prevent farm ID exposure in shared/public browsers
     
     // Setup form handler
     const form = document.getElementById('loginForm');

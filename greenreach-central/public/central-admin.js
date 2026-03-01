@@ -2032,7 +2032,7 @@ async function resolveFarmDevices(farmId, farm) {
     try {
         let response;
         try {
-            response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
             if (!response.ok) throw new Error('No public devices endpoint');
         } catch (err) {
             response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
@@ -2044,7 +2044,7 @@ async function resolveFarmDevices(farmId, farm) {
 
         // Fallback: derive sensor devices from telemetry when devices are not synced
         try {
-            const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
             if (telemetryRes.ok) {
                 const telemetry = await telemetryRes.json();
                 const zones = telemetry?.telemetry?.zones || [];
@@ -2268,7 +2268,7 @@ async function loadFarmDetails(farmId, farmData) {
 async function loadFarmEnvironmentalTrends(farmId) {
     try {
         // Fetch telemetry data with history
-        const response = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        const response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
         if (!response.ok) {
             console.warn('[Farm Trends] No telemetry data available');
             return;
@@ -2395,7 +2395,7 @@ async function viewRoomDetail(farmId, roomId) {
     
     // Step 2: ALWAYS fetch zone telemetry for environmental data
     try {
-        const zonesRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        const zonesRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
         if (zonesRes.ok) {
             const zonesData = await zonesRes.json();
             console.log('[room-detail] Zones telemetry data:', zonesData);
@@ -2473,7 +2473,7 @@ async function viewRoomDetail(farmId, roomId) {
     try {
         let devResponse;
         try {
-            devResponse = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            devResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
             if (!devResponse.ok) throw new Error('No public devices endpoint');
         } catch (e) {
             devResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
@@ -2688,7 +2688,7 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
         try {
             let response;
             try {
-                response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+                response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
                 if (!response.ok) throw new Error('No public devices endpoint');
             } catch (e) {
                 response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
@@ -4347,7 +4347,7 @@ async function loadFarmRooms(farmId, count) {
     try {
         const url = `${API_BASE}/api/sync/${farmId}/rooms`;
         console.log('[FarmRooms] Fetching:', url);
-        const response = await fetch(url);
+        const response = await authenticatedFetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -4359,7 +4359,7 @@ async function loadFarmRooms(farmId, count) {
         // Fetch telemetry data to get environmental readings
         let telemetryZones = [];
         try {
-            const telemetryRes = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
             if (telemetryRes.ok) {
                 const zonesData = await telemetryRes.json();
                 telemetryZones = zonesData.telemetry?.zones || zonesData.zones || [];
@@ -4470,7 +4470,7 @@ async function loadFarmDevices(farmId, count) {
         // Try public endpoint first, fall back to authenticated if needed
         let response;
         try {
-            response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
             if (!response.ok) throw new Error('No public devices endpoint');
         } catch (e) {
             // Fall back to authenticated endpoint
@@ -4557,7 +4557,7 @@ function filterDevices() {
  */
 async function loadFarmInventory(farmId, trayCount) {
     try {
-        const response = await fetch(`${API_BASE}/api/sync/${farmId}/inventory`);
+        const response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/inventory`);
         const data = await response.json();
         
         if (data.success && (data.inventory || data.trays)) {
@@ -7633,7 +7633,7 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         // Fetch zone telemetry data from API
         let zones = [];
         try {
-            const zonesResponse = await fetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            const zonesResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
             if (zonesResponse.ok) {
                 const zonesData = await zonesResponse.json();
                 zones = zonesData.telemetry?.zones || zonesData.zones || [];
