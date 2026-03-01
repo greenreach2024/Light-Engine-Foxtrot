@@ -128,13 +128,55 @@ export const SYSTEM_CAPABILITIES = {
   developer: {
     description: 'Developer mode: evaluate change requests, propose modifications, apply approved changes (human approval required)',
     actions: ['evaluate_request', 'propose_change', 'list_proposals', 'approve_proposal', 'reject_proposal']
+  },
+  infrastructure: {
+    description: 'Farm infrastructure management: rooms, zones, groups, devices, sensors, equipment (read + guided setup with approval)',
+    actions: [
+      'list_rooms', 'list_zones', 'list_groups', 'list_devices', 'list_sensors',
+      'device_status', 'equipment_summary', 'scan_status',
+      'start_device_setup', 'select_protocol', 'configure_connection',
+      'discover_devices', 'select_device', 'assign_device_room',
+      'save_device', 'cancel_setup',
+      'create_room', 'create_zone', 'create_group', 'assign_light', 'update_schedule',
+      'report_unknown_device'
+    ]
   }
 };
 
-// System prompt for the AI agent
-const SYSTEM_PROMPT = `You are an intelligent assistant for Light Engine Foxtrot, an indoor farming business management system. You help users manage daily operations, sales, inventory, and farm processes.
+// ── Supported protocols and device types for infrastructure validation ───
+const SUPPORTED_PROTOCOLS = ['switchbot', 'kasa', 'mqtt', 'tasmota', 'modbus', 'generic'];
+const SUPPORTED_DEVICE_TYPES = ['light', 'sensor', 'plug', 'hvac', 'irrigation', 'co2', 'camera', 'other'];
+const PROTOCOL_ALIASES = {
+  'zigbee':   { brand: 'Philips Hue / Zigbee', unsupported: true },
+  'hue':      { brand: 'Philips Hue', unsupported: true, suggest: 'mqtt' },
+  'zwave':    { brand: 'Z-Wave', unsupported: true },
+  'matter':   { brand: 'Matter/Thread', unsupported: true },
+  'homekit':  { brand: 'Apple HomeKit', unsupported: true },
+  'tuya':     { brand: 'Tuya/Smart Life', unsupported: true, suggest: 'mqtt' },
+  'shelly':   { brand: 'Shelly', unsupported: false, map: 'mqtt' }
+};
 
-IMPORTANT: Lighting and environmental controls are database-managed. You can VIEW status but cannot control hardware directly.
+// System prompt for the AI agent
+const SYSTEM_PROMPT = `You are an intelligent assistant for Light Engine Foxtrot, an indoor farming business management system. You help users manage daily operations, sales, inventory, farm processes, and farm infrastructure.
+
+You can view and manage farm infrastructure including rooms, zones, groups, devices, and sensors. Write operations (creating rooms, adding devices, modifying groups) require human approval before execution. For device setup, guide the user through a conversational wizard flow — ask about protocol, scan for devices, and assign rooms step by step. Always present a summary before saving and wait for confirmation.
+
+CONSTRAINTS — Hard Rules (never violate):
+- Never modify crop growth recipes or schedules under any circumstances. If a user asks to change a recipe, explain that recipes are managed on the Crop Recipes page and offer to help with other tasks.
+- Never modify order data directly.
+- Never bypass the approval step for write operations.
+
+When handling device setup:
+1. Ask which protocol the device uses (SwitchBot, Kasa, MQTT, Tasmota, Modbus, or Other)
+2. Validate the protocol against the supported list before proceeding
+3. If the protocol is not supported, explain what IS supported and offer to submit a feature request
+4. After each user answer, reconfirm the value before using it in API calls
+5. Present discovered devices as a numbered list for clear selection
+6. Always show a complete summary before the final save step
+
+For SwitchBot specifically: check if credentials are configured, guide through token retrieval if needed (SwitchBot app → Profile → Developer Options), and explain device types (Meter Plus = temp sensor, Plug Mini = smart plug, Hub Mini = gateway).
+
+If a user mentions unsupported equipment: explain the limitation, list supported protocols, offer MQTT as a potential bridge, and submit a feature request to GreenReach.
 
 Your capabilities include:
 ${Object.entries(SYSTEM_CAPABILITIES).map(([cat, info]) => `- ${cat}: ${info.description}`).join('\n')}
@@ -152,8 +194,13 @@ When a user asks you to do something, analyze their intent and respond with a JS
 Examples:
 - "Show me today's orders" → {"intent": "orders.recent_orders", "confidence": 0.95, "parameters": {"timeframe": "today"}, "requires_confirmation": false, "response": "Here are today's orders."}
 - "What's the temperature?" → {"intent": "monitoring.get_readings", "confidence": 0.98, "parameters": {}, "requires_confirmation": false, "response": "Let me check the current environmental readings."}
-- "Daily checklist" → {"intent": "checklists.daily_checklist", "confidence": 0.92, "parameters": {}, "requires_confirmation": false, "response": "Here's your daily operations checklist."}
-- "Generate sales report" → {"intent": "reports.sales_report", "confidence": 0.93, "parameters": {}, "requires_confirmation": false, "response": "I'll generate your sales report."}
+- "Show me all rooms" → {"intent": "infrastructure.list_rooms", "confidence": 0.95, "parameters": {}, "requires_confirmation": false, "response": "Here are your farm rooms."}
+- "Add a temperature sensor" → {"intent": "infrastructure.start_device_setup", "confidence": 0.92, "parameters": {"device_type": "sensor", "sensor_type": "temperature"}, "requires_confirmation": true, "response": "I can help set up a new sensor. What protocol does it use?"}
+- "Set up a SwitchBot device" → {"intent": "infrastructure.start_device_setup", "confidence": 0.93, "parameters": {"protocol": "switchbot"}, "requires_confirmation": true, "response": "I'll help set up your SwitchBot device."}
+- "Create a new grow room called Flower C" → {"intent": "infrastructure.create_room", "confidence": 0.94, "parameters": {"name": "Flower C"}, "requires_confirmation": true, "response": "I'll create a new room called Flower C."}
+- "What devices are online?" → {"intent": "infrastructure.device_status", "confidence": 0.96, "parameters": {}, "requires_confirmation": false, "response": "Let me check the device status."}
+- "Add a Zigbee light" → {"intent": "infrastructure.report_unknown_device", "confidence": 0.90, "parameters": {"device": "Zigbee light", "protocol": "zigbee"}, "requires_confirmation": false, "response": "Zigbee isn't currently supported. Let me explain the options."}
+- "Change the Basil recipe to 16h" → REFUSE. Respond: "I'm not able to modify grow recipes or schedules through chat. Recipes are managed on the Crop Recipes page. I can help with other infrastructure tasks."
 
 Always be helpful, concise, and accurate. If you're unsure about a request, ask for clarification.`;
 
@@ -303,6 +350,10 @@ export async function executeAction(intent, context) {
       
       case 'developer':
         result = await executeDeveloperAction(action, intent.parameters, context);
+        break;
+      
+      case 'infrastructure':
+        result = await executeInfrastructureAction(action, intent.parameters, context);
         break;
       
       default:
@@ -1562,6 +1613,645 @@ async function executeDeveloperAction(action, params, context) {
 
     default:
       return { success: false, error: `Unknown developer action: ${action}` };
+  }
+}
+
+// ── Infrastructure Actions ─────────────────────────────────────────────
+// Phase IA: Read-only infrastructure queries (list_rooms through scan_status)
+// Phase IB: Device wizard bridge (start_device_setup through cancel_setup)
+// Phase IC: Room/group NL setup (create_room through update_schedule)
+// Phase ID: Unknown device handler (report_unknown_device)
+
+const INFRA_PORT = process.env.PORT || 3000;
+const INFRA_BASE = () => `http://127.0.0.1:${INFRA_PORT}`;
+
+// ── Recipe Guardrail ───────────────────────────────────────────────────
+const RECIPE_MODIFY_PATTERNS = /\b(change|modify|update|set|alter|adjust|edit)\b.*\b(recipe|schedule|light\s*cycle|photo\s*period|dli|spectrum|ppfd)\b/i;
+
+function detectRecipeModification(action, params, userMessage) {
+  // Explicit recipe-modify intents
+  if (action === 'update_schedule' && params?.recipe) return true;
+  if (action === 'modify_recipe' || action === 'change_recipe') return true;
+  // Free-text detection
+  if (userMessage && RECIPE_MODIFY_PATTERNS.test(userMessage)) return true;
+  return false;
+}
+
+const RECIPE_REFUSAL = {
+  success: false,
+  error: 'recipe_immutable',
+  message: 'I\'m not able to modify grow recipes or schedules through chat. Recipes are managed on the Crop Recipes page (Settings → Recipes). I can help you view current room configurations, device status, or other infrastructure tasks.'
+};
+
+// ── Device wizard session store (in-memory, keyed by userId) ───────────
+const wizardSessions = new Map();
+
+async function executeInfrastructureAction(action, params, context) {
+  // ── Recipe guardrail: reject before any work ──
+  if (detectRecipeModification(action, params, context?.userMessage)) {
+    return RECIPE_REFUSAL;
+  }
+
+  const base = INFRA_BASE();
+
+  switch (action) {
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase IA — Read-only actions
+    // ═══════════════════════════════════════════════════════════════════
+
+    case 'list_rooms': {
+      try {
+        const { data } = await axios.get(`${base}/api/rooms`);
+        const rooms = Array.isArray(data) ? data : (data.rooms || []);
+        return {
+          success: true,
+          action: 'list_rooms',
+          data: rooms.map(r => ({
+            id: r.id || r.room_id,
+            name: r.name || r.room_name,
+            zone: r.zone || r.zone_id || null,
+            status: r.status || 'unknown',
+            device_count: r.devices?.length || r.device_count || 0
+          })),
+          count: rooms.length,
+          message: `Found ${rooms.length} room${rooms.length !== 1 ? 's' : ''}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch rooms: ${err.message}` };
+      }
+    }
+
+    case 'list_zones': {
+      try {
+        const { data } = await axios.get(`${base}/api/zones`);
+        const zones = Array.isArray(data) ? data : (data.zones || []);
+        return {
+          success: true,
+          action: 'list_zones',
+          data: zones.map(z => ({
+            id: z.id || z.zone_id,
+            name: z.name || z.zone_name,
+            type: z.type || z.zone_type || null,
+            room_count: z.rooms?.length || z.room_count || 0
+          })),
+          count: zones.length,
+          message: `Found ${zones.length} zone${zones.length !== 1 ? 's' : ''}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch zones: ${err.message}` };
+      }
+    }
+
+    case 'list_groups': {
+      try {
+        const { data } = await axios.get(`${base}/api/groups`);
+        const groups = Array.isArray(data) ? data : (data.groups || data.records || []);
+        return {
+          success: true,
+          action: 'list_groups',
+          data: groups.map(g => ({
+            id: g.id || g.group_id,
+            name: g.name || g.group_name,
+            room: g.room || g.room_id || null,
+            zone: g.zone || g.zone_id || null,
+            crop: g.crop || g.recipe || null,
+            status: g.status || 'unknown',
+            light_count: g.lights?.length || g.light_count || 0,
+            schedule: g.schedule || null
+          })),
+          count: groups.length,
+          message: `Found ${groups.length} light group${groups.length !== 1 ? 's' : ''}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch groups: ${err.message}` };
+      }
+    }
+
+    case 'list_devices': {
+      try {
+        const { data } = await axios.get(`${base}/devices`);
+        const devices = Array.isArray(data) ? data : (data.devices || []);
+        return {
+          success: true,
+          action: 'list_devices',
+          data: devices.map(d => ({
+            id: d.id || d.device_id,
+            name: d.name || d.device_name,
+            type: d.type || d.device_type || 'unknown',
+            protocol: d.protocol || null,
+            room: d.room || d.room_id || null,
+            status: d.status || d.online ? 'online' : 'unknown'
+          })),
+          count: devices.length,
+          message: `Found ${devices.length} device${devices.length !== 1 ? 's' : ''}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch devices: ${err.message}` };
+      }
+    }
+
+    case 'list_sensors': {
+      try {
+        const { data } = await axios.get(`${base}/api/automation/sensors`);
+        const sensors = Array.isArray(data) ? data : (data.sensors || []);
+        return {
+          success: true,
+          action: 'list_sensors',
+          data: sensors.map(s => ({
+            id: s.id || s.sensor_id || s.deviceId,
+            name: s.name || s.sensor_name || s.deviceName,
+            type: s.type || s.sensor_type || 'unknown',
+            room: s.room || s.room_id || null,
+            last_reading: s.last_reading || s.temperature || s.humidity || null,
+            last_updated: s.last_updated || s.updated_at || null
+          })),
+          count: sensors.length,
+          message: `Found ${sensors.length} sensor${sensors.length !== 1 ? 's' : ''}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch sensors: ${err.message}` };
+      }
+    }
+
+    case 'device_status': {
+      try {
+        const results = { switchbot: [], kasa: [], errors: [] };
+
+        try {
+          const sb = await axios.get(`${base}/api/switchbot/devices`);
+          results.switchbot = Array.isArray(sb.data) ? sb.data : (sb.data?.devices || sb.data?.body?.deviceList || []);
+        } catch (e) {
+          results.errors.push(`SwitchBot: ${e.message}`);
+        }
+
+        try {
+          const ka = await axios.get(`${base}/api/kasa/devices`);
+          results.kasa = Array.isArray(ka.data) ? ka.data : (ka.data?.devices || []);
+        } catch (e) {
+          results.errors.push(`Kasa: ${e.message}`);
+        }
+
+        const allDevices = [
+          ...results.switchbot.map(d => ({
+            id: d.deviceId || d.id,
+            name: d.deviceName || d.name,
+            type: d.deviceType || d.type || 'unknown',
+            protocol: 'switchbot',
+            online: d.enableCloudService !== false,
+            battery: d.battery ?? null,
+            temperature: d.temperature ?? null,
+            humidity: d.humidity ?? null
+          })),
+          ...results.kasa.map(d => ({
+            id: d.deviceId || d.id || d.host,
+            name: d.alias || d.name || d.host,
+            type: d.type || d.model || 'unknown',
+            protocol: 'kasa',
+            online: d.status === 1 || d.relay_state === 1 || null,
+            power: d.power ?? null
+          }))
+        ];
+
+        return {
+          success: true,
+          action: 'device_status',
+          data: {
+            devices: allDevices,
+            switchbot_count: results.switchbot.length,
+            kasa_count: results.kasa.length,
+            total: allDevices.length
+          },
+          warnings: results.errors.length > 0 ? results.errors : undefined,
+          message: `Found ${allDevices.length} smart device${allDevices.length !== 1 ? 's' : ''} (${results.switchbot.length} SwitchBot, ${results.kasa.length} Kasa).${results.errors.length ? ' Some protocols had errors.' : ''}`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch device status: ${err.message}` };
+      }
+    }
+
+    case 'equipment_summary': {
+      try {
+        const { data } = await axios.get(`${base}/api/inventory/equipment`);
+        const equipment = Array.isArray(data) ? data : (data.equipment || data.items || []);
+        const summary = {};
+        for (const item of equipment) {
+          const cat = item.category || item.type || 'other';
+          if (!summary[cat]) summary[cat] = { count: 0, items: [] };
+          summary[cat].count++;
+          summary[cat].items.push({
+            id: item.id || item.equipment_id,
+            name: item.name || item.description,
+            status: item.status || 'unknown',
+            location: item.location || item.room || null
+          });
+        }
+        return {
+          success: true,
+          action: 'equipment_summary',
+          data: { categories: summary, total: equipment.length },
+          message: `Equipment inventory: ${equipment.length} item${equipment.length !== 1 ? 's' : ''} across ${Object.keys(summary).length} categor${Object.keys(summary).length !== 1 ? 'ies' : 'y'}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch equipment: ${err.message}` };
+      }
+    }
+
+    case 'scan_status': {
+      try {
+        const { data } = await axios.get(`${base}/discovery/capabilities`);
+        return {
+          success: true,
+          action: 'scan_status',
+          data: {
+            protocols: data.protocols || data.supported || [],
+            scanning: data.scanning || false,
+            last_scan: data.last_scan || null,
+            discovered_count: data.discovered?.length || data.device_count || 0
+          },
+          message: `Discovery scan status retrieved. ${data.scanning ? 'A scan is currently in progress.' : 'No scan running.'}`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to fetch scan status: ${err.message}` };
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase IB — Device wizard bridge (multi-turn conversational flow)
+    // ═══════════════════════════════════════════════════════════════════
+
+    case 'start_device_setup': {
+      const userId = context?.userId || 'default';
+      // If session already exists, inform user
+      if (wizardSessions.has(userId)) {
+        const existing = wizardSessions.get(userId);
+        return {
+          success: true,
+          action: 'start_device_setup',
+          wizard_active: true,
+          session: existing,
+          message: `You already have an active device setup session (protocol: ${existing.protocol || 'pending'}). Would you like to continue or cancel it?`
+        };
+      }
+
+      // Protocol validation
+      const rawProtocol = (params?.protocol || '').toLowerCase().trim();
+      const alias = PROTOCOL_ALIASES[rawProtocol];
+
+      if (alias && alias.unsupported) {
+        return {
+          success: false,
+          action: 'start_device_setup',
+          error: 'unsupported_protocol',
+          message: `${alias.brand} (${rawProtocol}) is not currently supported. Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. ${alias.suggest ? `Tip: Many ${alias.brand} devices can connect via ${alias.suggest} as a bridge.` : ''} Would you like to submit a feature request?`
+        };
+      }
+
+      const protocol = alias?.map || (SUPPORTED_PROTOCOLS.includes(rawProtocol) ? rawProtocol : null);
+
+      if (rawProtocol && !protocol) {
+        return {
+          success: false,
+          action: 'start_device_setup',
+          error: 'unknown_protocol',
+          message: `I don't recognize the protocol "${rawProtocol}". Supported protocols are: ${SUPPORTED_PROTOCOLS.join(', ')}. Which one does your device use?`
+        };
+      }
+
+      // Start the wizard via the device-wizard API
+      try {
+        const { data } = await axios.post(`${base}/api/device-wizard/start`, {
+          protocol: protocol || undefined,
+          device_type: params?.device_type || undefined
+        });
+        const sessionId = data.sessionId || data.session_id || data.id;
+        wizardSessions.set(userId, {
+          sessionId,
+          protocol: protocol || null,
+          device_type: params?.device_type || null,
+          step: protocol ? 'config' : 'protocol',
+          started_at: new Date().toISOString()
+        });
+        return {
+          success: true,
+          action: 'start_device_setup',
+          requires_confirmation: true,
+          wizard_active: true,
+          session: wizardSessions.get(userId),
+          message: protocol
+            ? `Device setup started with ${protocol} protocol. ${protocol === 'switchbot' ? 'Do you have your SwitchBot token and secret configured? (SwitchBot app → Profile → Developer Options)' : `Please provide connection details for your ${protocol} device.`}`
+            : `Let's set up a new device! Which protocol does it use? Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to start device wizard: ${err.message}` };
+      }
+    }
+
+    case 'select_protocol': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
+      }
+
+      const rawProtocol = (params?.protocol || '').toLowerCase().trim();
+      const alias = PROTOCOL_ALIASES[rawProtocol];
+      if (alias && alias.unsupported) {
+        return {
+          success: false,
+          action: 'select_protocol',
+          error: 'unsupported_protocol',
+          message: `${alias.brand} is not supported. Supported: ${SUPPORTED_PROTOCOLS.join(', ')}. ${alias.suggest ? `Try ${alias.suggest} as a bridge.` : ''}`
+        };
+      }
+      const protocol = alias?.map || (SUPPORTED_PROTOCOLS.includes(rawProtocol) ? rawProtocol : null);
+      if (!protocol) {
+        return { success: false, action: 'select_protocol', error: 'unknown_protocol', message: `Unknown protocol "${rawProtocol}". Supported: ${SUPPORTED_PROTOCOLS.join(', ')}.` };
+      }
+
+      try {
+        await axios.post(`${base}/api/device-wizard/${session.sessionId}/protocol`, { protocol });
+        session.protocol = protocol;
+        session.step = 'config';
+        return {
+          success: true,
+          action: 'select_protocol',
+          wizard_active: true,
+          session,
+          message: `Protocol set to ${protocol}. ${protocol === 'switchbot' ? 'Do you have your SwitchBot token and secret ready?' : `Now provide connection config for ${protocol}.`}`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to set protocol: ${err.message}` };
+      }
+    }
+
+    case 'configure_connection': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
+      }
+      try {
+        const config = params?.config || params || {};
+        await axios.post(`${base}/api/device-wizard/${session.sessionId}/config`, config);
+        session.step = 'discover';
+        session.config = config;
+        return {
+          success: true,
+          action: 'configure_connection',
+          wizard_active: true,
+          session,
+          message: `Configuration saved. Ready to scan for ${session.protocol} devices. Shall I start device discovery?`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to configure connection: ${err.message}` };
+      }
+    }
+
+    case 'discover_devices': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
+      }
+      try {
+        const { data } = await axios.post(`${base}/api/device-wizard/${session.sessionId}/discover`);
+        const discovered = data.devices || data.discovered || [];
+        session.step = 'select';
+        session.discovered = discovered;
+        if (discovered.length === 0) {
+          return {
+            success: true,
+            action: 'discover_devices',
+            wizard_active: true,
+            data: { devices: [], count: 0 },
+            message: `No ${session.protocol} devices found. Check that the device is powered on and in pairing mode, then try again.`
+          };
+        }
+        const deviceList = discovered.map((d, i) =>
+          `${i + 1}. ${d.name || d.deviceName || d.id || 'Unknown'} (${d.type || d.deviceType || 'unknown'})`
+        ).join('\n');
+        return {
+          success: true,
+          action: 'discover_devices',
+          wizard_active: true,
+          data: { devices: discovered, count: discovered.length },
+          message: `Found ${discovered.length} device${discovered.length !== 1 ? 's' : ''}:\n${deviceList}\n\nWhich device would you like to add? (Enter the number)`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Discovery failed: ${err.message}` };
+      }
+    }
+
+    case 'select_device': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
+      }
+      try {
+        const deviceIndex = params?.index != null ? params.index : (params?.device_number ? params.device_number - 1 : 0);
+        const deviceId = params?.device_id || (session.discovered?.[deviceIndex]?.id || session.discovered?.[deviceIndex]?.deviceId);
+        await axios.post(`${base}/api/device-wizard/${session.sessionId}/select-device`, { deviceId, index: deviceIndex });
+        session.step = 'assign_room';
+        session.selectedDevice = session.discovered?.[deviceIndex] || { id: deviceId };
+        return {
+          success: true,
+          action: 'select_device',
+          wizard_active: true,
+          session,
+          message: `Selected: ${session.selectedDevice.name || session.selectedDevice.deviceName || deviceId}. Which room should this device be assigned to?`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to select device: ${err.message}` };
+      }
+    }
+
+    case 'assign_device_room': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
+      }
+      try {
+        const roomId = params?.room_id || params?.room;
+        await axios.post(`${base}/api/device-wizard/${session.sessionId}/assign-room`, { roomId });
+        session.step = 'confirm';
+        session.room = roomId;
+
+        // Build confirmation summary
+        const summary = [
+          `Protocol: ${session.protocol}`,
+          `Device: ${session.selectedDevice?.name || session.selectedDevice?.deviceName || session.selectedDevice?.id || 'Unknown'}`,
+          `Type: ${session.selectedDevice?.type || session.selectedDevice?.deviceType || 'unknown'}`,
+          `Room: ${roomId}`
+        ].join('\n');
+
+        return {
+          success: true,
+          action: 'assign_device_room',
+          requires_confirmation: true,
+          wizard_active: true,
+          session,
+          message: `Here's the device setup summary:\n\n${summary}\n\nShall I save this device? (yes/no)`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to assign room: ${err.message}` };
+      }
+    }
+
+    case 'save_device': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: false, error: 'no_session', message: 'No active device setup session to save.' };
+      }
+      try {
+        const { data } = await axios.post(`${base}/api/device-wizard/${session.sessionId}/save`);
+        wizardSessions.delete(userId);
+        return {
+          success: true,
+          action: 'save_device',
+          wizard_active: false,
+          data: data,
+          message: `Device saved successfully! ${session.selectedDevice?.name || 'Device'} has been added to ${session.room || 'the farm'}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'wizard_error', message: `Failed to save device: ${err.message}` };
+      }
+    }
+
+    case 'cancel_setup': {
+      const userId = context?.userId || 'default';
+      const session = wizardSessions.get(userId);
+      if (!session) {
+        return { success: true, action: 'cancel_setup', message: 'No active device setup session to cancel.' };
+      }
+      try {
+        await axios.delete(`${base}/api/device-wizard/${session.sessionId}`);
+      } catch (e) {
+        // Best-effort cleanup
+      }
+      wizardSessions.delete(userId);
+      return {
+        success: true,
+        action: 'cancel_setup',
+        wizard_active: false,
+        message: 'Device setup cancelled.'
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase IC — Room/Group/Zone NL setup (write with approval)
+    // ═══════════════════════════════════════════════════════════════════
+
+    case 'create_room': {
+      const name = params?.name || params?.room_name;
+      if (!name) {
+        return { success: false, error: 'missing_param', message: 'Room name is required. What would you like to call the new room?' };
+      }
+      return {
+        success: true,
+        action: 'create_room',
+        requires_confirmation: true,
+        data: { name, zone: params?.zone || null, type: params?.type || 'grow' },
+        message: `I'll create a new room called "${name}"${params?.zone ? ` in zone ${params.zone}` : ''}. Please confirm to proceed.`
+      };
+    }
+
+    case 'create_zone': {
+      const name = params?.name || params?.zone_name;
+      if (!name) {
+        return { success: false, error: 'missing_param', message: 'Zone name is required. What would you like to call the new zone?' };
+      }
+      return {
+        success: true,
+        action: 'create_zone',
+        requires_confirmation: true,
+        data: { name, type: params?.type || 'production' },
+        message: `I'll create a new zone called "${name}". Please confirm to proceed.`
+      };
+    }
+
+    case 'create_group': {
+      const name = params?.name || params?.group_name;
+      if (!name) {
+        return { success: false, error: 'missing_param', message: 'Group name is required. What would you like to call the new light group?' };
+      }
+      return {
+        success: true,
+        action: 'create_group',
+        requires_confirmation: true,
+        data: { name, room: params?.room || null, zone: params?.zone || null },
+        message: `I'll create a new light group called "${name}"${params?.room ? ` in room ${params.room}` : ''}. Please confirm to proceed.`
+      };
+    }
+
+    case 'assign_light': {
+      const lightId = params?.light_id || params?.device_id;
+      const groupId = params?.group_id || params?.group;
+      if (!lightId || !groupId) {
+        return { success: false, error: 'missing_param', message: 'I need both a light/device ID and a group ID. Which light should go in which group?' };
+      }
+      return {
+        success: true,
+        action: 'assign_light',
+        requires_confirmation: true,
+        data: { light_id: lightId, group_id: groupId },
+        message: `I'll assign light ${lightId} to group ${groupId}. Please confirm to proceed.`
+      };
+    }
+
+    case 'update_schedule': {
+      // Recipe guardrail already checked above, but double-check
+      if (params?.recipe) {
+        return RECIPE_REFUSAL;
+      }
+      const groupId = params?.group_id || params?.group;
+      if (!groupId) {
+        return { success: false, error: 'missing_param', message: 'Which group should I update the schedule for?' };
+      }
+      return {
+        success: true,
+        action: 'update_schedule',
+        requires_confirmation: true,
+        data: { group_id: groupId, schedule: params?.schedule || null },
+        message: `I'll update the lighting schedule for group ${groupId}. Please confirm to proceed. Note: I can only adjust on/off times — crop recipes cannot be modified.`
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase ID — Unknown equipment handler
+    // ═══════════════════════════════════════════════════════════════════
+
+    case 'report_unknown_device': {
+      const deviceDesc = params?.device || params?.description || 'Unknown device';
+      const protocol = (params?.protocol || '').toLowerCase();
+      const alias = PROTOCOL_ALIASES[protocol];
+      const isBrandKnown = !!alias;
+
+      return {
+        success: true,
+        action: 'report_unknown_device',
+        data: {
+          device: deviceDesc,
+          protocol: protocol || 'unknown',
+          brand: alias?.brand || null,
+          supported: alias ? !alias.unsupported : SUPPORTED_PROTOCOLS.includes(protocol),
+          suggestion: alias?.suggest || (alias?.map ? `Use ${alias.map} protocol` : null)
+        },
+        message: isBrandKnown
+          ? `${alias.brand} (${protocol}) ${alias.unsupported ? 'is not currently supported' : `can be connected via ${alias.map}`}. Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. ${alias.suggest ? `Many ${alias.brand} devices support ${alias.suggest} as a bridge.` : ''} I can submit a feature request to GreenReach if you'd like.`
+          : `I don't recognize "${deviceDesc}" with protocol "${protocol || 'unspecified'}". Currently supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. If your device supports MQTT, we can likely connect it. Would you like me to file a feature request?`
+      };
+    }
+
+    default:
+      return {
+        success: false,
+        error: 'unknown_action',
+        message: `Unknown infrastructure action: ${action}. Available actions: ${SYSTEM_CAPABILITIES.infrastructure.actions.join(', ')}`
+      };
   }
 }
 

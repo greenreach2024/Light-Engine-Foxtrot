@@ -53,6 +53,30 @@
           "status":           { "tier": "auto" },
           "health_check":     { "tier": "auto" },
           "recent_activity":  { "tier": "auto" }
+        },
+        "infrastructure": {
+          "list_rooms":          { "tier": "auto" },
+          "list_zones":          { "tier": "auto" },
+          "list_groups":         { "tier": "auto" },
+          "list_devices":        { "tier": "auto" },
+          "list_sensors":        { "tier": "auto" },
+          "device_status":       { "tier": "auto" },
+          "equipment_summary":   { "tier": "auto" },
+          "scan_status":         { "tier": "auto" },
+          "start_device_setup":  { "tier": "recommend" },
+          "select_protocol":     { "tier": "auto" },
+          "configure_connection":{ "tier": "auto" },
+          "discover_devices":    { "tier": "auto" },
+          "select_device":       { "tier": "auto" },
+          "assign_device_room":  { "tier": "recommend" },
+          "save_device":         { "tier": "require-approval" },
+          "cancel_setup":        { "tier": "auto" },
+          "create_room":         { "tier": "require-approval" },
+          "create_zone":         { "tier": "require-approval" },
+          "create_group":        { "tier": "require-approval" },
+          "assign_light":        { "tier": "require-approval" },
+          "update_schedule":     { "tier": "require-approval" },
+          "report_unknown_device": { "tier": "auto" }
         }
       }
     },
@@ -109,6 +133,30 @@
           "alert_triage":        { "tier": "auto" },
           "reassign_resources":  { "tier": "require-approval" },
           "override_schedule":   { "tier": "require-approval" }
+        },
+        "infrastructure": {
+          "list_rooms":          { "tier": "auto" },
+          "list_zones":          { "tier": "auto" },
+          "list_groups":         { "tier": "auto" },
+          "list_devices":        { "tier": "auto" },
+          "list_sensors":        { "tier": "auto" },
+          "device_status":       { "tier": "auto" },
+          "equipment_summary":   { "tier": "auto" },
+          "scan_status":         { "tier": "auto" },
+          "start_device_setup":  { "tier": "recommend" },
+          "select_protocol":     { "tier": "auto" },
+          "configure_connection":{ "tier": "auto" },
+          "discover_devices":    { "tier": "auto" },
+          "select_device":       { "tier": "auto" },
+          "assign_device_room":  { "tier": "recommend" },
+          "save_device":         { "tier": "require-approval" },
+          "cancel_setup":        { "tier": "auto" },
+          "create_room":         { "tier": "require-approval" },
+          "create_zone":         { "tier": "require-approval" },
+          "create_group":        { "tier": "require-approval" },
+          "assign_light":        { "tier": "require-approval" },
+          "update_schedule":     { "tier": "require-approval" },
+          "report_unknown_device": { "tier": "auto" }
         }
       }
     },
@@ -173,6 +221,17 @@
           "harvest_checklist":{ "tier": "auto" },
           "quality_check":    { "tier": "auto" }
         },
+        "infrastructure": {
+          "list_rooms":          { "tier": "auto" },
+          "list_zones":          { "tier": "auto" },
+          "list_groups":         { "tier": "auto" },
+          "list_devices":        { "tier": "auto" },
+          "list_sensors":        { "tier": "auto" },
+          "device_status":       { "tier": "auto" },
+          "equipment_summary":   { "tier": "auto" },
+          "scan_status":         { "tier": "auto" },
+          "report_unknown_device": { "tier": "auto" }
+        },
         "grow": {
           "analyze_experiments":       { "tier": "auto" },
           "recommend_recipe":          { "tier": "recommend" },
@@ -207,6 +266,19 @@
           "generate_plan":       { "tier": "recommend" },
           "compliance_baseline": { "tier": "auto" },
           "network_topology":    { "tier": "auto" }
+        },
+        "infrastructure": {
+          "list_rooms":          { "tier": "auto" },
+          "list_zones":          { "tier": "auto" },
+          "list_groups":         { "tier": "auto" },
+          "list_devices":        { "tier": "auto" },
+          "list_sensors":        { "tier": "auto" },
+          "device_status":       { "tier": "auto" },
+          "equipment_summary":   { "tier": "auto" },
+          "scan_status":         { "tier": "auto" },
+          "start_device_setup":  { "tier": "recommend" },
+          "discover_devices":    { "tier": "auto" },
+          "report_unknown_device": { "tier": "auto" }
         }
       }
     },
@@ -241,6 +313,30 @@
         "system": {
           "status":            { "tier": "auto" },
           "health_check":      { "tier": "auto" }
+        },
+        "infrastructure": {
+          "list_rooms":          { "tier": "auto" },
+          "list_zones":          { "tier": "auto" },
+          "list_groups":         { "tier": "auto" },
+          "list_devices":        { "tier": "auto" },
+          "list_sensors":        { "tier": "auto" },
+          "device_status":       { "tier": "auto" },
+          "equipment_summary":   { "tier": "auto" },
+          "scan_status":         { "tier": "auto" },
+          "start_device_setup":  { "tier": "auto" },
+          "select_protocol":     { "tier": "auto" },
+          "configure_connection":{ "tier": "auto" },
+          "discover_devices":    { "tier": "auto" },
+          "select_device":       { "tier": "auto" },
+          "assign_device_room":  { "tier": "auto" },
+          "save_device":         { "tier": "require-approval" },
+          "cancel_setup":        { "tier": "auto" },
+          "create_room":         { "tier": "require-approval" },
+          "create_zone":         { "tier": "require-approval" },
+          "create_group":        { "tier": "require-approval" },
+          "assign_light":        { "tier": "require-approval" },
+          "update_schedule":     { "tier": "require-approval" },
+          "report_unknown_device": { "tier": "auto" }
         }
       }
     }
