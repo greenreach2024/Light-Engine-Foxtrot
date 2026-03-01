@@ -482,3 +482,27 @@ requireBuyerAuth middleware:
 **Data Path:** `login.html` → `POST /api/farm/auth/login` → `routes/auth.js` → `farm_users` table JOIN `farms` → bcrypt compare → JWT
 
 **Lesson:** Always verify both the data path AND the stored data when debugging auth issues. The code path may be correct but the data may be stale or incorrect.
+
+### 2026-03-01: Central Farm Detail Loaded Only Registration Info (401 on rooms/inventory/telemetry)
+
+**Problem:** In GreenReach Central, farm detail pages showed basic registration metadata but failed to load operational sections (Rooms, Inventory, Environmental), with browser errors showing `HTTP 401` on `rooms`, `inventory`, and `telemetry` requests.
+
+**Root Cause:** `greenreach-central/public/central-admin.js` still called sync-auth endpoints (`/api/sync/:farmId/rooms`, `/api/sync/:farmId/inventory`, `/api/sync/:farmId/telemetry`) from admin views. Those endpoints are designed for farm API-key auth (`X-API-Key`/`X-Farm-ID`) and can return 401 for admin JWT sessions.
+
+**Fix Applied:**
+1. Updated Central admin UI data loaders to use admin endpoints first:
+  - `/api/admin/farms/:farmId/rooms`
+  - `/api/admin/farms/:farmId/inventory`
+  - `/api/admin/farms/:farmId/zones` (for telemetry/environmental data)
+2. Kept sync endpoints as fallback only when admin endpoint is unavailable.
+3. Deployed to production (`greenreach-central-prod-v4`) and verified admin endpoints return `200`.
+
+**Data Path (Correct for Admin UI):**
+`GR-central-admin.html`/`central-admin.js` → `authenticatedFetch` (admin JWT) → `/api/admin/farms/:farmId/*` → `farm_data` (`rooms`, `groups`, `telemetry`, `inventory`) and/or `farm_inventory`
+
+**Verification Snapshot (FARM-MLTP9LVH-B0B85039):**
+- `GET /api/admin/farms/:farmId/rooms` → `200`, count `1`
+- `GET /api/admin/farms/:farmId/zones` → `200`, count `1`
+- `GET /api/admin/farms/:farmId/inventory` → `200`, count `1170`
+
+**Lesson:** Do not use `/api/sync/*` endpoints for Central admin UX flows. Sync routes are integration transport paths (edge/cloud sync auth), while admin dashboards must use `/api/admin/*` routes with admin JWT.

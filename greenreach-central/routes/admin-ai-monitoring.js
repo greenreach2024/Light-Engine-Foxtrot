@@ -8,6 +8,7 @@
  */
 
 import express from 'express';
+import { getAIPusherRuntimeStatus } from '../services/ai-recommendations-pusher.js';
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ export function logAiActivity(event) {
 router.get('/monitoring', async (req, res) => {
   try {
     const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+    const pusher = getAIPusherRuntimeStatus();
     
     // Count farms with URLs (those that receive recommendations)
     let farmsCovered = 0;
@@ -73,24 +75,35 @@ router.get('/monitoring', async (req, res) => {
     const apiCalls30d = recent30d.filter(a => a.type === 'recommendation' || a.type === 'chat').length;
     const estimatedCost = apiCalls30d * 0.03;
     
+    const pusherStatus = pusher?.last_run_status || 'idle';
+    const pusherEnabled = Boolean(pusher?.enabled && hasOpenAIKey);
+    const disabledReason = hasOpenAIKey
+      ? (pusher?.last_error || null)
+      : 'OPENAI_API_KEY missing';
+
     res.json({
       success: true,
-      pusher_status: hasOpenAIKey ? 'active' : 'inactive',
+      pusher_status: pusherEnabled ? 'active' : (hasOpenAIKey ? pusherStatus : 'disabled'),
       openai_configured: hasOpenAIKey,
-      model: 'GPT-4',
-      push_interval: '30 minutes',
+      model: pusher?.model || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      push_interval: `${pusher?.push_interval_minutes || 30} minutes`,
+      disabled_reason: disabledReason,
+      runtime_status: pusherStatus,
       recommendations_24h: recs24h,
       chat_sessions_total: chatSessions,
       api_cost_30d: estimatedCost,
       farms_covered: farmsCovered,
       rules_count: rulesCount,
-      total_pushes: totalPushes,
-      success_pushes: successPushes,
-      failed_pushes: failedPushes,
+      total_pushes: Math.max(totalPushes, Number(pusher?.totals?.runs || 0)),
+      success_pushes: Math.max(successPushes, Number(pusher?.totals?.pushed_farms || 0)),
+      failed_pushes: Math.max(failedPushes, Number(pusher?.totals?.failed_runs || 0)),
       avg_recs_per_farm: farmsCovered > 0 ? totalPushes / farmsCovered : 0,
-      last_run: aiActivityLog.find(a => a.type === 'recommendation')?.timestamp || null,
-      next_run: null, // Approximated by client
-      activity: aiActivityLog.slice(0, 50) // Last 50 events
+      last_run: pusher?.last_run_completed_at || aiActivityLog.find(a => a.type === 'recommendation')?.timestamp || null,
+      next_run: pusher?.next_run_at || null,
+      activity: aiActivityLog.slice(0, 50), // Last 50 events
+      message: hasOpenAIKey
+        ? null
+        : 'AI recommendations are disabled by configuration. Core dashboard and manual workflows remain available.'
     });
   } catch (error) {
     console.error('[Admin AI Monitoring] Error:', error);

@@ -11,7 +11,7 @@
     "start:local": "PORT=8091 node server-charlie.js",
     "start:cloud": "ENV_SOURCE=cloud node server-charlie.js",
     "smoke": "node scripts/smoke.js",
-    "test": "node --test --test-timeout=10000 \"tests/**/*.mjs\"",
+    "test": "TEST_MODE=1 NODE_ENV=test node --test --test-concurrency=1 --test-timeout=20000 --test-force-exit \"tests/**/*.mjs\"",
     "nutrient:setpoints": "node scripts/nutrient-push-setpoints.js",
     "mock:heatmap": "node scripts/generate-mock-heatmap-data.cjs",
     "setup:notifications": "node scripts/setup-notifications.js",

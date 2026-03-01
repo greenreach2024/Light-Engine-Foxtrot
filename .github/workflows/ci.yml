@@ -32,21 +32,9 @@ jobs:
       - name: Run test suite
         run: |
           npm test
-      - name: Start Foxtrot server and run smoke check
+      - name: Run deterministic wholesale smoke suite
         run: |
-          PORT=8091 node server-foxtrot.js &
-          SERVER_PID=$!
-          # wait for server to be ready
-          n=0
-          until curl -sS "http://localhost:8091/healthz" || [ $n -ge 15 ]; do
-            n=$((n+1))
-            sleep 1
-          done
-          # Basic smoke: health endpoint returns 200
-          curl -f "http://localhost:8091/healthz" || exit 1
-          # Inventory endpoint returns valid JSON
-          curl -sS "http://localhost:8091/api/wholesale/inventory" | jq -e '.lots' || exit 1
-          kill $SERVER_PID || true
+          bash scripts/ci/run-wholesale-smokes.sh
 
   python-tests:
     runs-on: ubuntu-latest

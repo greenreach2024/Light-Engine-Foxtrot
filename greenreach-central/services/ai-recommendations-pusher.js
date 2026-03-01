@@ -13,6 +13,61 @@ import { getNetworkModifiers } from '../jobs/yield-regression.js';
 import { generateNetworkRiskAlerts } from '../jobs/supply-demand-balancer.js';
 import { getExperimentsForFarm } from '../jobs/experiment-orchestrator.js';
 
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const PUSH_INTERVAL_MS = 30 * 60 * 1000;
+
+const runtimeStatus = {
+  configured: !!process.env.OPENAI_API_KEY,
+  enabled: false,
+  model: OPENAI_MODEL,
+  push_interval_minutes: PUSH_INTERVAL_MS / 60000,
+  started_at: null,
+  last_run_started_at: null,
+  last_run_completed_at: null,
+  last_run_status: 'idle',
+  last_error: null,
+  next_run_at: null,
+  totals: {
+    runs: 0,
+    analyzed_farms: 0,
+    pushed_farms: 0,
+    failed_runs: 0
+  },
+  last_result: null
+};
+
+function snapshotRuntimeStatus() {
+  return {
+    ...runtimeStatus,
+    totals: { ...runtimeStatus.totals },
+    last_result: runtimeStatus.last_result ? { ...runtimeStatus.last_result } : null
+  };
+}
+
+function markRunStart() {
+  runtimeStatus.last_run_started_at = new Date().toISOString();
+  runtimeStatus.last_run_status = 'running';
+  runtimeStatus.last_error = null;
+  runtimeStatus.totals.runs += 1;
+}
+
+function markRunComplete(status, result = null, errorMessage = null) {
+  runtimeStatus.last_run_completed_at = new Date().toISOString();
+  runtimeStatus.last_run_status = status;
+  runtimeStatus.last_error = errorMessage;
+  runtimeStatus.last_result = result;
+  if (status === 'error') {
+    runtimeStatus.totals.failed_runs += 1;
+  }
+  runtimeStatus.next_run_at = runtimeStatus.enabled
+    ? new Date(Date.now() + PUSH_INTERVAL_MS).toISOString()
+    : null;
+}
+
+export function getAIPusherRuntimeStatus() {
+  return snapshotRuntimeStatus();
+}
+
 let openai = null;
 try {
   if (process.env.OPENAI_API_KEY) {
@@ -297,9 +352,19 @@ async function pushToFarm(farm, recommendations, networkIntelligence) {
  * Analyze all farms and push recommendations
  */
 export async function analyzeAndPushToAllFarms() {
+  markRunStart();
+
   if (!openai) {
     console.log('[AI Pusher] Service disabled (no OpenAI API key)');
-    return { analyzed: 0, pushed: 0 };
+    const result = {
+      analyzed: 0,
+      pushed: 0,
+      total: 0,
+      disabled: true,
+      reason: 'OPENAI_API_KEY missing'
+    };
+    markRunComplete('disabled', result, result.reason);
+    return result;
   }
 
   console.log('[AI Pusher] Starting farm analysis cycle...');
@@ -414,11 +479,17 @@ export async function analyzeAndPushToAllFarms() {
     }
 
     console.log(`[AI Pusher] Cycle complete: ${analyzed} analyzed, ${pushed} pushed`);
-    return { analyzed, pushed, total: farms.length };
+    runtimeStatus.totals.analyzed_farms += analyzed;
+    runtimeStatus.totals.pushed_farms += pushed;
+    const result = { analyzed, pushed, total: farms.length, disabled: false };
+    markRunComplete('ok', result, null);
+    return result;
 
   } catch (error) {
     console.error('[AI Pusher] Error in cycle:', error);
-    return { error: error.message };
+    const result = { error: error.message, analyzed: 0, pushed: 0, total: 0 };
+    markRunComplete('error', result, error.message);
+    return result;
   }
 }
 
@@ -428,16 +499,24 @@ export async function analyzeAndPushToAllFarms() {
 export function startAIPusher() {
   if (!openai) {
     console.log('[AI Pusher] Service disabled');
+    runtimeStatus.enabled = false;
+    runtimeStatus.last_run_status = 'disabled';
+    runtimeStatus.last_error = 'OPENAI_API_KEY missing';
+    runtimeStatus.next_run_at = null;
     return null;
   }
 
   console.log('[AI Pusher] Starting periodic service (30 min intervals)');
+  runtimeStatus.enabled = true;
+  runtimeStatus.started_at = runtimeStatus.started_at || new Date().toISOString();
+  runtimeStatus.last_run_status = 'running';
+  runtimeStatus.next_run_at = new Date(Date.now() + PUSH_INTERVAL_MS).toISOString();
   
   // Run immediately on start
   analyzeAndPushToAllFarms();
   
   // Then run every 30 minutes
-  const interval = setInterval(analyzeAndPushToAllFarms, 30 * 60 * 1000);
+  const interval = setInterval(analyzeAndPushToAllFarms, PUSH_INTERVAL_MS);
   
   return interval;
 }

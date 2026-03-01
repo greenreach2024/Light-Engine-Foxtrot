@@ -1223,6 +1223,7 @@ function renderContextualSidebar() {
                     title: 'Analytics',
                     items: [
                         { label: 'AI Insights', view: 'analytics' },
+                        { label: 'Market Intelligence', view: 'market-intelligence' },
                         { label: 'Energy', view: 'energy' },
                         { label: 'Harvest Forecast', view: 'harvest' }
                     ]
@@ -1237,8 +1238,7 @@ function renderContextualSidebar() {
                 {
                     title: 'Finance',
                     items: [
-                        { label: 'Network Accounting', view: 'accounting' },
-                        { label: 'Procurement Revenue', view: 'procurement-revenue' }
+                        { label: 'Network Accounting', view: 'accounting' }
                     ]
                 },
                 {
@@ -2060,10 +2060,16 @@ async function resolveFarmDevices(farmId, farm) {
 
         // Fallback: derive sensor devices from telemetry when devices are not synced
         try {
-            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            let telemetryRes;
+            try {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!telemetryRes || !telemetryRes.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
             if (telemetryRes.ok) {
                 const telemetry = await telemetryRes.json();
-                const zones = telemetry?.telemetry?.zones || [];
+                const zones = telemetry?.zones || telemetry?.telemetry?.zones || [];
                 const derived = zones.map((zone, index) => ({
                     id: zone.id || `zone-${index + 1}`,
                     device_id: zone.id || `zone-${index + 1}`,
@@ -2283,15 +2289,21 @@ async function loadFarmDetails(farmId, farmData) {
  */
 async function loadFarmEnvironmentalTrends(farmId) {
     try {
-        // Fetch telemetry data with history
-        const response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        // Fetch telemetry data with history (admin endpoint first)
+        let response;
+        try {
+            response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            if (!response || !response.ok) throw new Error('No admin zones endpoint');
+        } catch (zoneErr) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        }
         if (!response.ok) {
             console.warn('[Farm Trends] No telemetry data available');
             return;
         }
         
         const data = await response.json();
-        const zones = data.telemetry?.zones || [];
+        const zones = data.zones || data.telemetry?.zones || [];
         
         if (zones.length === 0) {
             console.warn('[Farm Trends] No zones in telemetry');
@@ -2411,11 +2423,17 @@ async function viewRoomDetail(farmId, roomId) {
     
     // Step 2: ALWAYS fetch zone telemetry for environmental data
     try {
-        const zonesRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        let zonesRes;
+        try {
+            zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            if (!zonesRes || !zonesRes.ok) throw new Error('No admin zones endpoint');
+        } catch (zoneErr) {
+            zonesRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        }
         if (zonesRes.ok) {
             const zonesData = await zonesRes.json();
             console.log('[room-detail] Zones telemetry data:', zonesData);
-            const zones = zonesData.telemetry?.zones || zonesData.zones || [];
+            const zones = zonesData.zones || zonesData.telemetry?.zones || [];
             console.log('[room-detail] Environmental zones:', zones);
             
             // Use telemetry data for environmental readings
@@ -4361,9 +4379,17 @@ async function loadFarmRooms(farmId, count) {
     roomsData = [];
 
     try {
-        const url = `${API_BASE}/api/sync/${farmId}/rooms`;
-        console.log('[FarmRooms] Fetching:', url);
-        const response = await authenticatedFetch(url);
+        const adminUrl = `${API_BASE}/api/admin/farms/${farmId}/rooms`;
+        const syncUrl = `${API_BASE}/api/sync/${farmId}/rooms`;
+        console.log('[FarmRooms] Fetching (admin first):', adminUrl);
+        let response;
+        try {
+            response = await authenticatedFetch(adminUrl);
+            if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : 'no-response'}`);
+        } catch (adminErr) {
+            console.warn('[FarmRooms] Admin rooms failed, trying sync fallback:', adminErr.message || adminErr);
+            response = await authenticatedFetch(syncUrl);
+        }
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -4375,10 +4401,16 @@ async function loadFarmRooms(farmId, count) {
         // Fetch telemetry data to get environmental readings
         let telemetryZones = [];
         try {
-            const telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            let telemetryRes;
+            try {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!telemetryRes || !telemetryRes.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
             if (telemetryRes.ok) {
                 const zonesData = await telemetryRes.json();
-                telemetryZones = zonesData.telemetry?.zones || zonesData.zones || [];
+                telemetryZones = zonesData.zones || zonesData.telemetry?.zones || [];
                 console.log('[FarmRooms] Telemetry zones:', telemetryZones.length);
             }
         } catch (err) {
@@ -4572,7 +4604,13 @@ function filterDevices() {
  */
 async function loadFarmInventory(farmId, trayCount) {
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/inventory`);
+        let response;
+        try {
+            response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/inventory`);
+            if (!response || !response.ok) throw new Error('No admin inventory endpoint');
+        } catch (adminErr) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/inventory`);
+        }
         const data = await response.json();
         
         if (data.success && (data.inventory || data.trays)) {
@@ -5344,8 +5382,8 @@ async function navigate(view, element) {
             await loadProcurementSuppliers();
             break;
         case 'procurement-revenue':
-            document.getElementById('procurement-revenue-view').style.display = 'block';
-            await loadProcurementRevenue();
+            document.getElementById('accounting-view').style.display = 'block';
+            await loadCentralAccounting();
             break;
 
         case 'pricing-management':
@@ -5361,6 +5399,11 @@ async function navigate(view, element) {
         case 'ai-monitoring':
             document.getElementById('ai-monitoring-view').style.display = 'block';
             await loadAiMonitoring();
+            break;
+
+        case 'market-intelligence':
+            document.getElementById('market-intelligence-view').style.display = 'block';
+            await loadMarketIntelligenceView();
             break;
 
         case 'accounting':
@@ -6838,11 +6881,11 @@ async function loadEnvironmentalView() {
         // Fetch environmental data from all farms or specific farm if context exists
         const farmId = currentFarmId || navigationContext?.farmId;
         const url = farmId 
-            ? `${API_BASE}/api/sync/${farmId}/telemetry`
+            ? `${API_BASE}/api/admin/farms/${farmId}/zones`
             : `${API_BASE}/api/admin/zones`;
         
         console.log('[Environmental] Fetching from:', url);
-        const response = farmId ? await fetch(url) : await authenticatedFetch(url);
+        const response = await authenticatedFetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -6851,7 +6894,7 @@ async function loadEnvironmentalView() {
         const data = await response.json();
         console.log('[Environmental] Response:', data);
         
-        const zones = data.telemetry?.zones || data.zones || [];
+        const zones = data.zones || data.telemetry?.zones || [];
         
         // Calculate averages from real data
         let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0, totalPressure = 0, totalGas = 0;
@@ -7653,10 +7696,16 @@ async function loadFarmEnvironmentalData(farmId, farmData) {
         // Fetch zone telemetry data from API
         let zones = [];
         try {
-            const zonesResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            let zonesResponse;
+            try {
+                zonesResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!zonesResponse || !zonesResponse.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                zonesResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
             if (zonesResponse.ok) {
                 const zonesData = await zonesResponse.json();
-                zones = zonesData.telemetry?.zones || zonesData.zones || [];
+                zones = zonesData.zones || zonesData.telemetry?.zones || [];
                 console.log('[loadFarmEnvironmentalData] Fetched zones from API:', zones.length);
             } else {
                 console.warn('[loadFarmEnvironmentalData] Zones API returned:', zonesResponse.status);
@@ -10349,6 +10398,8 @@ async function loadAiMonitoring() {
         
         if (monitorData && monitorData.success) {
             const m = monitorData;
+            const aiConfigured = !!m.openai_configured;
+            const disabledReason = m.disabled_reason || 'OPENAI_API_KEY missing';
             
             // Update KPIs
             document.getElementById('ai-pusher-status').textContent = m.pusher_status || 'Unknown';
@@ -10363,9 +10414,9 @@ async function loadAiMonitoring() {
             // Config details
             document.getElementById('ai-model-name').textContent = m.model || 'GPT-4';
             document.getElementById('ai-push-interval').textContent = m.push_interval || '30 minutes';
-            document.getElementById('ai-key-status').textContent = m.openai_configured ? 'Configured' : 'Not Set';
-            document.getElementById('ai-key-status').style.color = m.openai_configured ? 'var(--accent-green)' : '#ef4444';
-            document.getElementById('ai-last-run').textContent = m.last_run ? new Date(m.last_run).toLocaleString() : 'Never';
+            document.getElementById('ai-key-status').textContent = aiConfigured ? 'Configured' : `Not Set (${disabledReason})`;
+            document.getElementById('ai-key-status').style.color = aiConfigured ? 'var(--accent-green)' : '#ef4444';
+            document.getElementById('ai-last-run').textContent = m.last_run ? new Date(m.last_run).toLocaleString() : (aiConfigured ? 'Never' : 'Disabled by config');
             document.getElementById('ai-next-run').textContent = m.next_run ? new Date(m.next_run).toLocaleString() : '—';
             
             // Push stats
@@ -10375,10 +10426,15 @@ async function loadAiMonitoring() {
             document.getElementById('ai-avg-recs').textContent = m.avg_recs_per_farm ? m.avg_recs_per_farm.toFixed(1) : '—';
             
             // Activity log
-            renderAiActivity(m.activity || []);
+            renderAiActivity(m.activity || [], {
+                openai_configured: aiConfigured,
+                disabled_reason: disabledReason,
+                message: m.message || null
+            });
         } else {
             // Populate with status from agent endpoint
             const hasKey = !!statusData.enabled;
+            const disabledReason = statusData.disabled_reason || 'OPENAI_API_KEY missing';
             document.getElementById('ai-pusher-status').textContent = hasKey ? 'Active' : 'Inactive';
             document.getElementById('ai-pusher-status').style.color = hasKey ? 'var(--accent-green)' : 'var(--text-secondary)';
             document.getElementById('ai-recs-24h').textContent = '0';
@@ -10389,9 +10445,9 @@ async function loadAiMonitoring() {
             
             document.getElementById('ai-model-name').textContent = statusData.model || 'GPT-4';
             document.getElementById('ai-push-interval').textContent = '30 minutes';
-            document.getElementById('ai-key-status').textContent = hasKey ? 'Configured' : 'Not Set';
+            document.getElementById('ai-key-status').textContent = hasKey ? 'Configured' : `Not Set (${disabledReason})`;
             document.getElementById('ai-key-status').style.color = hasKey ? 'var(--accent-green)' : '#ef4444';
-            document.getElementById('ai-last-run').textContent = 'Service starting...';
+            document.getElementById('ai-last-run').textContent = hasKey ? 'Service starting...' : 'Disabled by config';
             document.getElementById('ai-next-run').textContent = '—';
             
             document.getElementById('ai-total-pushes').textContent = '0';
@@ -10399,7 +10455,10 @@ async function loadAiMonitoring() {
             document.getElementById('ai-failed-pushes').textContent = '0';
             document.getElementById('ai-avg-recs').textContent = '—';
             
-            renderAiActivity([]);
+            renderAiActivity([], {
+                openai_configured: hasKey,
+                disabled_reason: disabledReason
+            });
         }
     } catch (error) {
         console.error('[AI Monitoring] Load error:', error);
@@ -10408,9 +10467,16 @@ async function loadAiMonitoring() {
     }
 }
 
-function renderAiActivity(activities) {
+function renderAiActivity(activities, context = {}) {
     const tbody = document.getElementById('ai-activity-tbody');
     if (!activities || activities.length === 0) {
+        if (context && context.openai_configured === false) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                AI recommendations are currently disabled (${context.disabled_reason || 'OPENAI_API_KEY missing'}). 
+                You can continue using manual dashboard workflows while AI is offline.
+            </td></tr>`;
+            return;
+        }
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
             No AI activity recorded yet. Activity will appear once the AI Recommendations Pusher runs its first cycle 
             (every 30 minutes when OPENAI_API_KEY is configured).
@@ -10455,6 +10521,83 @@ function filterAiActivity(filter) {
 // ==================== CENTRAL ACCOUNTING ====================
 
 /**
+ * Load Market Intelligence view
+ * Read-only analytics from market-intelligence endpoints
+ */
+async function loadMarketIntelligenceView() {
+    const threshold = document.getElementById('market-alert-threshold')?.value || '7';
+    console.log('[Market Intelligence] Loading with threshold:', threshold);
+
+    try {
+        const [alertsRes, overviewRes] = await Promise.all([
+            authenticatedFetch(`${API_BASE}/api/market-intelligence/price-alerts?threshold=${encodeURIComponent(threshold)}`),
+            authenticatedFetch(`${API_BASE}/api/market-intelligence/market-overview`)
+        ]);
+
+        const alertsData = alertsRes?.ok ? await alertsRes.json() : { ok: false, alerts: [] };
+        const overviewData = overviewRes?.ok ? await overviewRes.json() : { ok: false, products: [], summary: {} };
+
+        const alerts = Array.isArray(alertsData.alerts) ? alertsData.alerts : [];
+        const products = Array.isArray(overviewData.products) ? overviewData.products : [];
+        const summary = overviewData.summary || {};
+
+        document.getElementById('market-products-monitored').textContent = summary.totalProducts || products.length || 0;
+        document.getElementById('market-alert-count').textContent = alertsData.alertsGenerated ?? alerts.length;
+        document.getElementById('market-increasing-count').textContent = summary.increasing || 0;
+        document.getElementById('market-decreasing-count').textContent = summary.decreasing || 0;
+        document.getElementById('market-stable-count').textContent = summary.stable || 0;
+
+        const updatedAt = alertsData.timestamp || overviewData.timestamp;
+        document.getElementById('market-last-updated').textContent =
+            updatedAt ? new Date(updatedAt).toLocaleString() : '—';
+
+        const alertsTbody = document.getElementById('market-alerts-tbody');
+        if (alerts.length === 0) {
+            alertsTbody.innerHTML = '<tr><td colspan="6" class="loading">No active market alerts at this threshold</td></tr>';
+        } else {
+            alertsTbody.innerHTML = alerts.map(alert => {
+                const type = (alert.type || '').toLowerCase();
+                const badgeClass = type === 'increase' ? 'warning' : (type === 'decrease' ? 'success' : 'neutral');
+                const confidence = (alert.confidence || 'medium').toString();
+                const confidenceClass = confidence === 'high' ? 'success' : (confidence === 'medium' ? 'warning' : 'neutral');
+                return `<tr>
+                    <td><strong>${alert.product || 'Unknown'}</strong></td>
+                    <td><span class="badge badge-${badgeClass}">${alert.change || '0%'}</span></td>
+                    <td>$${Number(alert.currentPrice || 0).toFixed(2)}</td>
+                    <td>$${Number(alert.previousPrice || 0).toFixed(2)}</td>
+                    <td>${Array.isArray(alert.retailers) ? alert.retailers.length : 0}</td>
+                    <td><span class="badge badge-${confidenceClass}">${confidence}</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        const overviewTbody = document.getElementById('market-overview-tbody');
+        if (products.length === 0) {
+            overviewTbody.innerHTML = '<tr><td colspan="6" class="loading">No market overview data available</td></tr>';
+        } else {
+            overviewTbody.innerHTML = products.map(item => {
+                const trend = (item.trend || 'stable').toString().toLowerCase();
+                const trendClass = trend === 'increasing' ? 'warning' : (trend === 'decreasing' ? 'success' : 'neutral');
+                return `<tr>
+                    <td><strong>${item.product || 'Unknown'}</strong></td>
+                    <td>$${Number(item.currentPrice || 0).toFixed(2)}</td>
+                    <td><span class="badge badge-${trendClass}">${trend}</span></td>
+                    <td>${Number(item.trendPercent || 0).toFixed(1)}%</td>
+                    <td>${Array.isArray(item.retailers) ? item.retailers.length : 0}</td>
+                    <td>${Number(item.articlesCount || 0)}</td>
+                </tr>`;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('[Market Intelligence] Load error:', error);
+        const alertsTbody = document.getElementById('market-alerts-tbody');
+        const overviewTbody = document.getElementById('market-overview-tbody');
+        if (alertsTbody) alertsTbody.innerHTML = '<tr><td colspan="6" class="loading">Failed to load market alerts</td></tr>';
+        if (overviewTbody) overviewTbody.innerHTML = '<tr><td colspan="6" class="loading">Failed to load market overview</td></tr>';
+    }
+}
+
+/**
  * Load Central Accounting Dashboard
  * Aggregates revenue and expenses from all network farms
  */
@@ -10474,6 +10617,15 @@ async function loadCentralAccounting() {
             case 'year':  startDate = new Date(now.getFullYear(), 0, 1); break;
         }
 
+        const fromDateStr = startDate.toISOString().split('T')[0];
+        const toDateStr = now.toISOString().split('T')[0];
+        const procurementFromEl = document.getElementById('central-procurement-from');
+        const procurementToEl = document.getElementById('central-procurement-to');
+        if (procurementFromEl && !procurementFromEl.value) procurementFromEl.value = fromDateStr;
+        if (procurementToEl && !procurementToEl.value) procurementToEl.value = toDateStr;
+        const procurementFrom = procurementFromEl?.value || fromDateStr;
+        const procurementTo = procurementToEl?.value || toDateStr;
+
         // Fetch network-wide revenue summary
         const revenueRes = await authenticatedFetch(
             `${API_BASE}/api/reports/revenue-summary?period=all`
@@ -10482,9 +10634,23 @@ async function loadCentralAccounting() {
 
         // Fetch accounting transactions for expenses
         const txnRes = await authenticatedFetch(
-            `${API_BASE}/api/accounting/transactions?from=${startDate.toISOString().split('T')[0]}&limit=500`
+            `${API_BASE}/api/accounting/transactions?from=${fromDateStr}&limit=500`
         );
         const txnData = txnRes?.ok ? await txnRes.json() : null;
+
+        // Fetch procurement revenue summary and breakdown
+        let procurementData = null;
+        try {
+            const procurementRes = await authenticatedFetch(
+                `${API_BASE}/api/procurement/revenue?from=${procurementFrom}&to=${procurementTo}`
+            );
+            procurementData = procurementRes?.ok ? await procurementRes.json() : null;
+            if (procurementData?.ok === false || procurementData?.success === false) {
+                procurementData = null;
+            }
+        } catch (procurementError) {
+            console.warn('[Central Accounting] Procurement revenue unavailable:', procurementError);
+        }
 
         // Fetch admin farms list
         const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
@@ -10556,6 +10722,59 @@ async function loadCentralAccounting() {
 
         // Outstanding balance
         document.getElementById('central-outstanding').textContent = `$${outstanding.toFixed(2)}`;
+
+        // Procurement summary
+        const procurementSummary = procurementData?.summary || procurementData?.data?.summary || {};
+        const procurementTotalRevenue = Number(procurementSummary.totalRevenue || 0);
+        const procurementTotalCommission = Number(procurementSummary.totalCommission || 0);
+        const procurementTotalOrders = Number(procurementSummary.totalOrders || 0);
+        const procurementAvgOrder = Number(procurementSummary.avgOrderValue || 0);
+
+        const procurementTotalEl = document.getElementById('central-procurement-total');
+        const procurementCommissionEl = document.getElementById('central-procurement-commission');
+        const procurementOrdersEl = document.getElementById('central-procurement-orders');
+        const procurementAvgEl = document.getElementById('central-procurement-avg-order');
+
+        if (procurementTotalEl) procurementTotalEl.textContent = `$${procurementTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (procurementCommissionEl) procurementCommissionEl.textContent = `$${procurementTotalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (procurementOrdersEl) procurementOrdersEl.textContent = procurementTotalOrders.toLocaleString();
+        if (procurementAvgEl) procurementAvgEl.textContent = `$${procurementAvgOrder.toFixed(2)}`;
+
+        // Procurement by supplier table
+        const supplierTbody = document.getElementById('central-procurement-by-supplier-tbody');
+        const bySupplier = procurementData?.bySupplier || procurementData?.data?.bySupplier || [];
+        if (supplierTbody) {
+            if (Array.isArray(bySupplier) && bySupplier.length > 0) {
+                supplierTbody.innerHTML = bySupplier.map(supplier => `
+                    <tr>
+                        <td>${supplier.name || supplier.supplierId || 'Unknown'}</td>
+                        <td>${Number(supplier.orderCount || 0).toLocaleString()}</td>
+                        <td>$${Number(supplier.revenue || 0).toFixed(2)}</td>
+                        <td>$${Number(supplier.commission || 0).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                supplierTbody.innerHTML = '<tr><td colspan="4" class="loading">No procurement supplier revenue in selected range</td></tr>';
+            }
+        }
+
+        // Procurement by month table
+        const monthTbody = document.getElementById('central-procurement-by-month-tbody');
+        const byMonth = procurementData?.byMonth || procurementData?.data?.byMonth || [];
+        if (monthTbody) {
+            if (Array.isArray(byMonth) && byMonth.length > 0) {
+                monthTbody.innerHTML = byMonth.map(month => `
+                    <tr>
+                        <td>${month.month || '—'}</td>
+                        <td>${Number(month.orderCount || 0).toLocaleString()}</td>
+                        <td>$${Number(month.revenue || 0).toFixed(2)}</td>
+                        <td>$${Number(month.commission || 0).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                monthTbody.innerHTML = '<tr><td colspan="4" class="loading">No procurement monthly revenue in selected range</td></tr>';
+            }
+        }
 
     } catch (error) {
         console.error('[Central Accounting] Load error:', error);

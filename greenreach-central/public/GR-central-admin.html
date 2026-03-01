@@ -4469,6 +4469,113 @@
                 </div>
             </div>
 
+            <!-- Market Intelligence View -->
+            <div id="market-intelligence-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Analytics</span>
+                    <span>/</span>
+                    <span>Market Intelligence</span>
+                </div>
+
+                <div class="header">
+                    <h1>Market Intelligence</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="market-alert-threshold" onchange="loadMarketIntelligenceView()" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+                            <option value="5">Alert Threshold: 5%</option>
+                            <option value="7" selected>Alert Threshold: 7%</option>
+                            <option value="10">Alert Threshold: 10%</option>
+                            <option value="15">Alert Threshold: 15%</option>
+                        </select>
+                        <button class="btn" onclick="loadMarketIntelligenceView()" style="padding: 8px 16px;">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Products Monitored</div>
+                        <div class="kpi-value" id="market-products-monitored">0</div>
+                        <div class="kpi-change neutral"><span>Network market feed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Price Alerts</div>
+                        <div class="kpi-value" id="market-alert-count">0</div>
+                        <div class="kpi-change neutral"><span>Above threshold</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Increasing</div>
+                        <div class="kpi-value" id="market-increasing-count">0</div>
+                        <div class="kpi-change neutral"><span>Products trending up</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Decreasing</div>
+                        <div class="kpi-value" id="market-decreasing-count">0</div>
+                        <div class="kpi-change neutral"><span>Products trending down</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Stable</div>
+                        <div class="kpi-value" id="market-stable-count">0</div>
+                        <div class="kpi-change neutral"><span>Products near flat</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Last Updated</div>
+                        <div class="kpi-value" id="market-last-updated" style="font-size: 18px;">—</div>
+                        <div class="kpi-change neutral"><span>Market snapshot</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Price Alerts</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Change</th>
+                                        <th>Current Price</th>
+                                        <th>Previous Price</th>
+                                        <th>Retailers</th>
+                                        <th>Confidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="market-alerts-tbody">
+                                    <tr><td colspan="6" class="loading">Loading market alerts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Market Overview</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Current Price (CAD/oz)</th>
+                                        <th>Trend</th>
+                                        <th>Trend %</th>
+                                        <th>Retailers Tracked</th>
+                                        <th>Articles</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="market-overview-tbody">
+                                    <tr><td colspan="6" class="loading">Loading market overview...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Central Accounting View -->
             <div id="accounting-view" class="view" style="display: none;">
                 <div class="breadcrumb">
@@ -4570,6 +4677,71 @@
                                 </thead>
                                 <tbody id="central-expenses-tbody">
                                     <tr><td colspan="3" class="loading">Loading expenses...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Procurement Revenue</div>
+                        <div class="gr-u-flex-gap-10-center">
+                            <label class="gr-u-text-secondary-sm">From:</label>
+                            <input type="date" id="central-procurement-from" class="gr-u-filter-control-dark">
+                            <label class="gr-u-text-secondary-sm">To:</label>
+                            <input type="date" id="central-procurement-to" class="gr-u-filter-control-dark">
+                            <button class="btn" onclick="loadCentralAccounting()">Apply</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Procurement Revenue</div>
+                                <div class="kpi-value" id="central-procurement-total">$0.00</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">GreenReach Commission</div>
+                                <div class="kpi-value" id="central-procurement-commission">$0.00</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Procurement Orders</div>
+                                <div class="kpi-value" id="central-procurement-orders">0</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Avg Procurement Order</div>
+                                <div class="kpi-value" id="central-procurement-avg-order">$0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="margin-top: 20px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Supplier</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-procurement-by-supplier-tbody">
+                                    <tr><td colspan="4" class="loading">Loading procurement supplier revenue...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-container" style="margin-top: 20px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-procurement-by-month-tbody">
+                                    <tr><td colspan="4" class="loading">Loading procurement monthly revenue...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -5005,49 +5177,67 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/farms/${farmId}`);
                 const data = await response.json();
                 
-                if (data.ok) {
-                    const farm = data.farm;
-                    document.getElementById('farmDetailName').textContent = farm.farm_name;
-                    
-                    const summary = data.summary;
+                const isSuccess = Boolean(data?.ok || data?.success);
+                if (!response.ok || !isSuccess || !data?.farm) {
+                    throw new Error('Failed to load farm detail');
+                }
+
+                const farm = data.farm;
+                const summary = data.summary || {};
+                const farmName = farm.farm_name || farm.name || farm.farmId || farm.farm_id || farmId;
+                const farmIdentifier = farm.farm_id || farm.farmId || farmId;
+                const farmLocation = farm.location || farm.metadata?.location || 'N/A';
+                const farmType = farm.farm_type || farm.type || farm.metadata?.farmType || 'N/A';
+                const operatorName = farm.operator_name || farm.operator || farm.metadata?.operatorName || 'N/A';
+                const farmStatus = (farm.status || 'unknown').toString();
+                const isOnlineStatus = ['online', 'active'].includes(farmStatus.toLowerCase());
+                const farmCapacity = farm.capacity ?? farm.metadata?.capacity ?? 'N/A';
+
+                const totalProduction = Number(summary.total_production ?? summary.totalProduction ?? 0);
+                const totalRevenue = Number(summary.total_revenue ?? summary.totalRevenue ?? 0);
+                const avgQaScore = Number(summary.avg_qa_score ?? summary.avgQaScore ?? 0);
+                const activeBatches = Number(summary.active_batches ?? summary.activeBatches ?? 0);
+                const ordersFulfilled = Number(summary.orders_fulfilled ?? summary.ordersFulfilled ?? 0);
+
+                document.getElementById('farmDetailName').textContent = farmName;
+
                     document.getElementById('farmDetailContent').innerHTML = `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
                             <div class="kpi-card">
                                 <div class="kpi-label">Production (30d)</div>
-                                <div class="kpi-value">${summary.total_production.toFixed(1)} kg</div>
+                                <div class="kpi-value">${totalProduction.toFixed(1)} kg</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Revenue (30d)</div>
-                                <div class="kpi-value">$${summary.total_revenue.toFixed(0)}</div>
+                                <div class="kpi-value">$${totalRevenue.toFixed(0)}</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Avg QA Score</div>
-                                <div class="kpi-value">${summary.avg_qa_score.toFixed(1)}%</div>
+                                <div class="kpi-value">${avgQaScore.toFixed(1)}%</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Capacity</div>
-                                <div class="kpi-value">${farm.capacity} cells</div>
+                                <div class="kpi-value">${farmCapacity} cells</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Active Batches</div>
-                                <div class="kpi-value">${summary.active_batches}</div>
+                                <div class="kpi-value">${activeBatches}</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Orders Fulfilled</div>
-                                <div class="kpi-value">${summary.orders_fulfilled}</div>
+                                <div class="kpi-value">${ordersFulfilled}</div>
                             </div>
                         </div>
                         <div style="color: var(--text-secondary); font-size: 14px;">
-                            <p><strong>Farm ID:</strong> ${farm.farm_id}</p>
-                            <p><strong>Location:</strong> ${farm.location}</p>
-                            <p><strong>Type:</strong> ${farm.farm_type}</p>
-                            <p><strong>Status:</strong> <span style="color: ${farm.status === 'ONLINE' ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farm.status}</span></p>
-                            <p><strong>Operator:</strong> ${farm.operator_name}</p>
+                            <p><strong>Farm ID:</strong> ${farmIdentifier}</p>
+                            <p><strong>Location:</strong> ${farmLocation}</p>
+                            <p><strong>Type:</strong> ${farmType}</p>
+                            <p><strong>Status:</strong> <span style="color: ${isOnlineStatus ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farmStatus}</span></p>
+                            <p><strong>Operator:</strong> ${operatorName}</p>
                         </div>
                     `;
                     
                     document.getElementById('farmDetailModal').style.display = 'block';
-                }
             } catch (error) {
                 console.error('Error loading farm detail:', error);
             }
@@ -5444,31 +5634,42 @@
                 
                 const data = await response.json();
                 
-                if (data.ok && data.farm) {
+                const isSuccess = Boolean(data?.ok || data?.success);
+                if (isSuccess && data.farm) {
                     const farm = data.farm;
                     const summary = data.summary || {};
+                    const farmName = farm.farm_name || farm.name || farm.farmId || farm.farm_id || farmId;
+                    const farmLocation = farm.location || farm.metadata?.location || 'N/A';
+                    const farmCapacity = farm.capacity ?? farm.metadata?.capacity ?? 'N/A';
+                    const farmStatus = farm.status || 'unknown';
+                    const certifications = farm.certifications || farm.metadata?.certifications || [];
+                    const totalProduction = Number(summary.total_production ?? summary.totalProduction ?? 0);
+                    const totalRevenue = Number(summary.total_revenue ?? summary.totalRevenue ?? 0);
+                    const activeBatches = Number(summary.active_batches ?? summary.activeBatches ?? 0);
+                    const avgQaScore = Number(summary.avg_qa_score ?? summary.avgQaScore ?? 0);
+                    const apiUrl = farm.api_url || farm.apiUrl || 'Not configured';
                     
                     // Show farm details in a modal or alert
                     const detailsHTML = `
-Farm: ${farm.farm_name}
-Location: ${farm.location || 'N/A'}
-Capacity: ${farm.capacity || 'N/A'} cells
-Status: ${farm.status || 'unknown'}
-Certifications: ${farm.certifications?.join(', ') || 'None'}
+Farm: ${farmName}
+Location: ${farmLocation}
+Capacity: ${farmCapacity} cells
+Status: ${farmStatus}
+Certifications: ${certifications.join(', ') || 'None'}
 
 Recent Performance:
-• Production (30d): ${summary.total_production?.toFixed(1) || 0} kg
-• Revenue (30d): $${summary.total_revenue?.toFixed(0) || 0}
-• Active Batches: ${summary.active_batches || 0}
-• QA Score: ${summary.avg_qa_score?.toFixed(1) || 0}%
+• Production (30d): ${totalProduction.toFixed(1)} kg
+• Revenue (30d): $${totalRevenue.toFixed(0)}
+• Active Batches: ${activeBatches}
+• QA Score: ${avgQaScore.toFixed(1)}%
 
-API URL: ${farm.api_url || 'Not configured'}
+API URL: ${apiUrl}
                     `.trim();
                     
                     if (confirm(`${detailsHTML}\n\nOpen farm dashboard in new window?`)) {
                         // If farm has an API URL, open it
-                        if (farm.api_url) {
-                            window.open(farm.api_url + '/farm-admin.html', '_blank');
+                        if (farm.api_url || farm.apiUrl) {
+                            window.open((farm.api_url || farm.apiUrl) + '/farm-admin.html', '_blank');
                         } else {
                             alert('Farm dashboard URL not configured. Please configure the farm API URL first.');
                         }
