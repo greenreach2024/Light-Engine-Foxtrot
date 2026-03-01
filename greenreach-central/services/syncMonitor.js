@@ -10,6 +10,8 @@
 
 import logger from '../utils/logger.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const STALE_AFTER_MS = 15 * 60 * 1000;
 const PRUNE_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -24,6 +26,7 @@ const ALERT_SEVERITY = {
 };
 const DEGRADED_MIN_OPERATIONS = 3;
 const RECENT_ALERT_EVENTS_LIMIT = 50;
+const SNAPSHOT_FILE_NAME = 'sync-monitor-snapshot.json';
 
 function isoNow() {
   return new Date().toISOString();
@@ -39,6 +42,8 @@ export function createSyncMonitor(options = {}) {
   const staleAfterMs = clampNonNegative(options.staleAfterMs) || STALE_AFTER_MS;
   const pruneAfterMs = clampNonNegative(options.pruneAfterMs) || PRUNE_AFTER_MS;
   const sampleIntervalMs = clampNonNegative(options.sampleIntervalMs) || DEFAULT_SAMPLE_INTERVAL_MS;
+  const persistenceEnabled = options.persistenceEnabled !== false;
+  const snapshotFilePath = options.snapshotFilePath || path.resolve('data', SNAPSHOT_FILE_NAME);
 
   const state = {
     started_at: isoNow(),
@@ -70,11 +75,127 @@ export function createSyncMonitor(options = {}) {
       resolved: 0,
       last_transition_at: null,
       last_transition: null
-    }
+    },
+    last_persisted_at: null
   };
 
   let sampler = null;
   let alertTransitionQueue = Promise.resolve();
+
+  function mergeCounterObject(target, source) {
+    if (!source || typeof source !== 'object') return target;
+    for (const [key, value] of Object.entries(source)) {
+      target[key] = clampNonNegative(value);
+    }
+    return target;
+  }
+
+  function hydrateFromSnapshot(snapshotData) {
+    if (!snapshotData || typeof snapshotData !== 'object') return false;
+
+    state.started_at = snapshotData.started_at || state.started_at;
+    state.last_sampled_at = snapshotData.last_sampled_at || state.last_sampled_at;
+    state.last_success_at = snapshotData.last_success_at || snapshotData.health?.last_success_at || state.last_success_at;
+    state.last_failure_at = snapshotData.last_failure_at || snapshotData.health?.last_failure_at || state.last_failure_at;
+
+    mergeCounterObject(state.totals, snapshotData.totals);
+    mergeCounterObject(state.queue_depth, snapshotData.queue_depth);
+
+    state.operations_by_type = {};
+    if (snapshotData.operations_by_type && typeof snapshotData.operations_by_type === 'object') {
+      for (const [type, bucket] of Object.entries(snapshotData.operations_by_type)) {
+        state.operations_by_type[type] = {
+          total: clampNonNegative(bucket?.total),
+          success: clampNonNegative(bucket?.success),
+          failure: clampNonNegative(bucket?.failure)
+        };
+      }
+    }
+
+    state.farms.clear();
+    state.farm_status.clear();
+    for (const farm of snapshotData.farms || []) {
+      if (!farm || typeof farm !== 'object') continue;
+      const farmId = String(farm.farm_id || 'unknown');
+      state.farms.set(farmId, {
+        farm_id: farmId,
+        first_seen_at: farm.first_seen_at || isoNow(),
+        last_seen_at: farm.last_seen_at || null,
+        last_success_at: farm.last_success_at || null,
+        last_failure_at: farm.last_failure_at || null,
+        operations: clampNonNegative(farm.operations),
+        success: clampNonNegative(farm.success),
+        failure: clampNonNegative(farm.failure),
+        queue_depth: clampNonNegative(farm.queue_depth),
+        lag_ms: farm.lag_ms != null ? clampNonNegative(farm.lag_ms) : null,
+        last_operation: farm.last_operation || null,
+        last_error: farm.last_error || null
+      });
+      const status = farm.status || computeFarmStatus(state.farms.get(farmId)).status;
+      state.farm_status.set(farmId, status);
+    }
+
+    const alerts = snapshotData.alerts || {};
+    state.alerts.transitions = clampNonNegative(alerts.transitions);
+    state.alerts.raised = clampNonNegative(alerts.raised);
+    state.alerts.resolved = clampNonNegative(alerts.resolved);
+    state.alerts.last_transition_at = alerts.last_transition_at || null;
+    state.alerts.last_transition = alerts.last_transition || null;
+    state.alert_events = Array.isArray(alerts.recent)
+      ? alerts.recent.slice(-RECENT_ALERT_EVENTS_LIMIT)
+      : [];
+
+    state.last_persisted_at = snapshotData.persisted_at || snapshotData.last_persisted_at || null;
+    return true;
+  }
+
+  function loadSnapshotFromDisk() {
+    if (!persistenceEnabled) return;
+    try {
+      if (!fs.existsSync(snapshotFilePath)) return;
+      const raw = fs.readFileSync(snapshotFilePath, 'utf8');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (hydrateFromSnapshot(parsed)) {
+        logger.info('[SyncMonitor] Restored snapshot from disk', {
+          file: snapshotFilePath,
+          farms_count: state.farms.size,
+          last_success_at: state.last_success_at,
+          last_persisted_at: state.last_persisted_at
+        });
+      }
+    } catch (error) {
+      logger.warn('[SyncMonitor] Failed to restore snapshot from disk', {
+        file: snapshotFilePath,
+        error: String(error?.message || error)
+      });
+    }
+  }
+
+  function persistSnapshot(reason = 'sample') {
+    if (!persistenceEnabled) return;
+    try {
+      const dir = path.dirname(snapshotFilePath);
+      fs.mkdirSync(dir, { recursive: true });
+
+      const payload = snapshot();
+      payload.persisted_at = isoNow();
+      payload.persist_reason = reason;
+      payload.last_success_at = state.last_success_at;
+      payload.last_failure_at = state.last_failure_at;
+
+      const tempPath = `${snapshotFilePath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf8');
+      fs.renameSync(tempPath, snapshotFilePath);
+      state.last_persisted_at = payload.persisted_at;
+    } catch (error) {
+      logger.warn('[SyncMonitor] Failed to persist snapshot', {
+        file: snapshotFilePath,
+        reason,
+        error: String(error?.message || error)
+      });
+    }
+  }
 
   function appendAlertEvent(event) {
     state.alert_events.push(event);
@@ -291,6 +412,7 @@ export function createSyncMonitor(options = {}) {
     pruneInactiveFarms();
     recomputeDerivedQueueDepth();
     processFarmStatusTransitions();
+    persistSnapshot('sample');
   }
 
   function incrementTypeCounter(type) {
@@ -389,6 +511,7 @@ export function createSyncMonitor(options = {}) {
     return {
       started_at: state.started_at,
       last_sampled_at: state.last_sampled_at,
+      last_persisted_at: state.last_persisted_at,
       health: getHealth(),
       totals: { ...state.totals },
       alerts: {
@@ -404,12 +527,15 @@ export function createSyncMonitor(options = {}) {
 
   function start() {
     if (sampler) return sampler;
+    loadSnapshotFromDisk();
     sample();
     sampler = setInterval(sample, sampleIntervalMs);
     logger.info('[SyncMonitor] Started', {
       stale_after_ms: staleAfterMs,
       sample_interval_ms: sampleIntervalMs,
-      prune_after_ms: pruneAfterMs
+      prune_after_ms: pruneAfterMs,
+      snapshot_file: snapshotFilePath,
+      persistence_enabled: persistenceEnabled
     });
     return sampler;
   }
@@ -418,6 +544,7 @@ export function createSyncMonitor(options = {}) {
     if (!sampler) return;
     clearInterval(sampler);
     sampler = null;
+    persistSnapshot('stop');
     logger.info('[SyncMonitor] Stopped');
   }
 

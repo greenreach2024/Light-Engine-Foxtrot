@@ -566,6 +566,85 @@ function closeDetailModal() {
 window.showDetailModal = showDetailModal;
 window.closeDetailModal = closeDetailModal;
 
+function showConfirmModal(options = {}) {
+    const {
+        title = 'Confirm Action',
+        message = 'Are you sure you want to continue?',
+        submessage = '',
+        confirmText = 'Confirm',
+        tone = 'danger'
+    } = options;
+
+    const modal = document.getElementById('confirm-action-modal');
+    const titleEl = document.getElementById('confirm-action-title');
+    const messageEl = document.getElementById('confirm-action-message');
+    const submessageEl = document.getElementById('confirm-action-submessage');
+    const confirmBtn = document.getElementById('confirm-action-confirm-btn');
+
+    if (!modal || !titleEl || !messageEl || !submessageEl || !confirmBtn) {
+        return Promise.resolve(window.confirm(message));
+    }
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+
+    if (submessage) {
+        submessageEl.textContent = submessage;
+        submessageEl.style.display = 'block';
+    } else {
+        submessageEl.textContent = '';
+        submessageEl.style.display = 'none';
+    }
+
+    confirmBtn.classList.remove('btn-danger', 'btn-primary');
+    confirmBtn.classList.add(tone === 'primary' ? 'btn-primary' : 'btn-danger');
+
+    modal.style.display = 'flex';
+
+    return new Promise((resolve) => {
+        confirmModalResolver = resolve;
+    });
+}
+
+function closeConfirmActionModal() {
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    if (confirmModalResolver) {
+        const resolve = confirmModalResolver;
+        confirmModalResolver = null;
+        resolve(false);
+    }
+}
+
+function confirmActionModalApproved() {
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    if (confirmModalResolver) {
+        const resolve = confirmModalResolver;
+        confirmModalResolver = null;
+        resolve(true);
+    }
+}
+
+window.showConfirmModal = showConfirmModal;
+window.closeConfirmActionModal = closeConfirmActionModal;
+window.confirmActionModalApproved = confirmActionModalApproved;
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal && modal.style.display === 'flex') {
+        closeConfirmActionModal();
+    }
+});
+
 /**
  * Data Normalization Functions
  * 
@@ -1003,6 +1082,7 @@ let roomsData = [];
 let devicesData = [];
 let inventoryData = [];
 let recipesData = [];
+let confirmModalResolver = null;
 
 // Navigation context state
 let navigationContext = {
@@ -1040,8 +1120,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userInfoEl = document.getElementById('admin-user-info');
     if (userInfoEl && (adminName || adminEmail)) {
         userInfoEl.innerHTML = `
-            <div style="font-weight: 500; color: #e5e7eb;">${adminName || 'Admin'}</div>
-            <div style="font-size: 0.75rem; color: #9ca3af;">${adminEmail || ''}</div>
+            <div class="admin-user-name">${adminName || 'Admin'}</div>
+            <div class="admin-user-email">${adminEmail || ''}</div>
         `;
         console.log(`Logged in as: ${adminName || adminEmail}`);
     }
@@ -1817,7 +1897,7 @@ function renderFarmsTable(farms) {
                 <button class="btn" onclick="drillToFarm('${farmId}')">View</button>
             </td>
             <td>
-                <button class="btn" style="background: var(--accent-red);" onclick="deleteFarm('${farmId}', '${farm.name}')">Delete</button>
+                <button class="btn btn-danger" onclick="deleteFarm('${farmId}', '${farm.name}')">Delete</button>
             </td>
         </tr>
         `;
@@ -1828,7 +1908,13 @@ function renderFarmsTable(farms) {
  * Delete a farm by farm ID (requires admin password)
  */
 async function deleteFarm(farmId, farmName) {
-    if (!confirm(`⚠️ Delete farm ${farmId}?\n\nFarm: ${farmName}\n\nThis action cannot be undone!`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Farm',
+        message: `Delete farm ${farmId}?`,
+        submessage: `Farm: ${farmName}\n\nThis action cannot be undone.`,
+        confirmText: 'Delete Farm'
+    });
+    if (!confirmed) {
         return;
     }
 
@@ -6491,7 +6577,13 @@ async function editCatalogProduct(sku) {
  * Delete a catalog product
  */
 async function deleteCatalogProduct(sku) {
-    if (!confirm(`Delete product ${sku}?`)) return;
+    const confirmed = await showConfirmModal({
+        title: 'Delete Product',
+        message: `Delete product ${sku}?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Product'
+    });
+    if (!confirmed) return;
     try {
         const resp = await fetch(`${API_BASE}/api/procurement/catalog/product/${sku}`, { method: 'DELETE' });
         const data = await resp.json();
@@ -8763,7 +8855,13 @@ async function saveRecipe(event) {
  * Delete recipe
  */
 async function deleteRecipe(recipeId, recipeName) {
-    if (!confirm(`Are you sure you want to delete the recipe "${recipeName}"? This action cannot be undone.`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Recipe',
+        message: `Delete recipe "${recipeName}"?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Recipe'
+    });
+    if (!confirmed) {
         return;
     }
     
@@ -9131,7 +9229,14 @@ async function saveUser(event) {
  * Reset user password (Light Engine farm users)
  */
 async function resetUserPassword(userId, userEmail) {
-    if (!confirm(`Reset password for ${userEmail}?\n\nA new temporary password will be generated.`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Reset Password',
+        message: `Reset password for ${userEmail}?`,
+        submessage: 'A new temporary password will be generated.',
+        confirmText: 'Reset Password',
+        tone: 'primary'
+    });
+    if (!confirmed) {
         return;
     }
     
@@ -9395,7 +9500,13 @@ async function deleteAiRule() {
     const targetRule = aiRules.find(rule => rule.id === activeAiRuleId);
     if (!targetRule) return;
 
-    if (!confirm(`Delete rule "${targetRule.title}"? This cannot be undone.`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete AI Rule',
+        message: `Delete rule "${targetRule.title}"?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Rule'
+    });
+    if (!confirmed) {
         return;
     }
 
@@ -9796,7 +9907,13 @@ async function addAiReferenceSite() {
 }
 
 async function deleteAiReferenceSite(siteId) {
-    if (!confirm('Delete this reference site?')) return;
+    const confirmed = await showConfirmModal({
+        title: 'Delete Reference Site',
+        message: 'Delete this reference site?',
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Site'
+    });
+    if (!confirmed) return;
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites/${siteId}`, {
             method: 'DELETE'
@@ -10148,7 +10265,13 @@ async function submitWholesalePrice(event) {
 }
 
 async function cancelPriceOffer(offerId) {
-    if (!confirm(`Cancel price offer ${offerId}?`)) return;
+    const confirmed = await showConfirmModal({
+        title: 'Cancel Price Offer',
+        message: `Cancel price offer ${offerId}?`,
+        submessage: 'The offer will no longer be available to farms.',
+        confirmText: 'Cancel Offer'
+    });
+    if (!confirmed) return;
     try {
         const res = await fetch(`/api/admin/pricing/offers/${offerId}/cancel`, {
             method: 'PUT',

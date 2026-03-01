@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { createSyncMonitor } from '../greenreach-central/services/syncMonitor.js';
 
 test('sync monitor tracks operation totals and per-farm metrics', () => {
-  const monitor = createSyncMonitor({ sampleIntervalMs: 1000 });
+  const monitor = createSyncMonitor({ sampleIntervalMs: 1000, persistenceEnabled: false });
   monitor.start();
 
   monitor.recordOperation({ farmId: 'FARM-1', type: 'sync-groups', success: true, records: 3, lagMs: 120 });
@@ -34,7 +37,7 @@ test('sync monitor tracks operation totals and per-farm metrics', () => {
 });
 
 test('sync monitor reports stale health when no recent success exists', async () => {
-  const monitor = createSyncMonitor({ staleAfterMs: 1, sampleIntervalMs: 1000 });
+  const monitor = createSyncMonitor({ staleAfterMs: 1, sampleIntervalMs: 1000, persistenceEnabled: false });
   monitor.start();
 
   await new Promise((resolve) => setTimeout(resolve, 5));
@@ -47,7 +50,7 @@ test('sync monitor reports stale health when no recent success exists', async ()
 });
 
 test('sync monitor emits transition events for degraded and recovery states', () => {
-  const monitor = createSyncMonitor({ sampleIntervalMs: 1000, staleAfterMs: 60000 });
+  const monitor = createSyncMonitor({ sampleIntervalMs: 1000, staleAfterMs: 60000, persistenceEnabled: false });
   monitor.start();
 
   monitor.recordOperation({ farmId: 'FARM-ALERT', type: 'sync-groups', success: false, error: 'timeout-1' });
@@ -76,4 +79,39 @@ test('sync monitor emits transition events for degraded and recovery states', ()
   assert.ok(recoveryEvent);
 
   monitor.stop();
+});
+
+test('sync monitor restores persisted snapshot state on restart', () => {
+  const snapshotFilePath = path.join(os.tmpdir(), `sync-monitor-test-${Date.now()}.json`);
+
+  const first = createSyncMonitor({
+    sampleIntervalMs: 1000,
+    staleAfterMs: 60000,
+    snapshotFilePath,
+    persistenceEnabled: true
+  });
+  first.start();
+  first.recordOperation({ farmId: 'FARM-PERSIST', type: 'sync-groups', success: true, records: 2 });
+  first.recordOperation({ farmId: 'FARM-PERSIST', type: 'sync-rooms', success: false, error: 'persist-test' });
+  first.stop();
+
+  assert.equal(fs.existsSync(snapshotFilePath), true);
+
+  const second = createSyncMonitor({
+    sampleIntervalMs: 1000,
+    staleAfterMs: 60000,
+    snapshotFilePath,
+    persistenceEnabled: true
+  });
+  second.start();
+
+  const snapshot = second.snapshot();
+  assert.equal(snapshot.totals.operations >= 2, true);
+  assert.equal(snapshot.totals.success >= 1, true);
+  assert.equal(snapshot.totals.failure >= 1, true);
+  assert.equal(snapshot.farms.some((farm) => farm.farm_id === 'FARM-PERSIST'), true);
+  assert.ok(snapshot.last_persisted_at);
+
+  second.stop();
+  fs.rmSync(snapshotFilePath, { force: true });
 });
