@@ -1206,8 +1206,7 @@ function renderContextualSidebar() {
                     title: 'Procurement',
                     items: [
                         { label: 'Catalog Management', view: 'procurement-catalog' },
-                        { label: 'Supplier Management', view: 'procurement-suppliers' },
-                        { label: 'Procurement Revenue', view: 'procurement-revenue' }
+                        { label: 'Supplier Management', view: 'procurement-suppliers' }
                     ]
                 },
                 {
@@ -1223,6 +1222,13 @@ function renderContextualSidebar() {
                     items: [
                         { label: 'Grant Summary', view: 'grant-summary' },
                         { label: 'Grant Users', view: 'grant-users' }
+                    ]
+                },
+                {
+                    title: 'Finance',
+                    items: [
+                        { label: 'Network Accounting', view: 'accounting' },
+                        { label: 'Procurement Revenue', view: 'procurement-revenue' }
                     ]
                 },
                 {
@@ -5346,6 +5352,11 @@ async function navigate(view, element) {
         case 'ai-monitoring':
             document.getElementById('ai-monitoring-view').style.display = 'block';
             await loadAiMonitoring();
+            break;
+
+        case 'accounting':
+            document.getElementById('accounting-view').style.display = 'block';
+            await loadCentralAccounting();
             break;
             
         default:
@@ -10430,6 +10441,164 @@ function filterAiActivity(filter) {
             }
         }
     });
+}
+
+// ==================== CENTRAL ACCOUNTING ====================
+
+/**
+ * Load Central Accounting Dashboard
+ * Aggregates revenue and expenses from all network farms
+ */
+async function loadCentralAccounting() {
+    const period = document.getElementById('central-accounting-period')?.value || 'month';
+    console.log('[Central Accounting] Loading for period:', period);
+
+    try {
+        // Calculate date range
+        const now = new Date();
+        let startDate = new Date();
+        switch (period) {
+            case 'today': startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
+            case 'week':  startDate = new Date(Date.now() - 7 * 86400000); break;
+            case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'quarter': startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1); break;
+            case 'year':  startDate = new Date(now.getFullYear(), 0, 1); break;
+        }
+
+        // Fetch network-wide revenue summary
+        const revenueRes = await authenticatedFetch(
+            `${API_BASE}/api/reports/revenue-summary?period=all`
+        );
+        const revenueData = revenueRes?.ok ? await revenueRes.json() : null;
+
+        // Fetch accounting transactions for expenses
+        const txnRes = await authenticatedFetch(
+            `${API_BASE}/api/accounting/transactions?from=${startDate.toISOString().split('T')[0]}&limit=500`
+        );
+        const txnData = txnRes?.ok ? await txnRes.json() : null;
+
+        // Fetch admin farms list
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        const farmsData = farmsRes?.ok ? await farmsRes.json() : { farms: [] };
+        const farms = farmsData.farms || farmsData || [];
+
+        // Revenue numbers
+        const totalRevenue = revenueData?.data?.totalRevenue || 0;
+        const orderCount = revenueData?.data?.orderCount || 0;
+        const avgOrderValue = revenueData?.data?.avgOrderValue || 0;
+        const outstanding = revenueData?.data?.outstanding || 0;
+
+        // Expense numbers from accounting transactions
+        let totalExpenses = 0;
+        const expenseCategories = {};
+        if (txnData?.ok && Array.isArray(txnData.transactions)) {
+            for (const txn of txnData.transactions) {
+                totalExpenses += Number(txn.total_amount || 0);
+                const cat = txn.source_key || 'uncategorized';
+                expenseCategories[cat] = (expenseCategories[cat] || 0) + Number(txn.total_amount || 0);
+            }
+        }
+
+        // Update KPIs
+        document.getElementById('central-total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        document.getElementById('central-wholesale-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        document.getElementById('central-order-count').textContent = orderCount;
+        document.getElementById('central-avg-order').textContent = `$${avgOrderValue.toFixed(2)}`;
+        document.getElementById('central-total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
+
+        const margin = totalRevenue > 0
+            ? ((totalRevenue - totalExpenses) / totalRevenue * 100).toFixed(1)
+            : '0.0';
+        document.getElementById('central-net-margin').textContent = `${margin}%`;
+
+        // Revenue by Farm table
+        const farmTbody = document.getElementById('central-revenue-by-farm-tbody');
+        if (Array.isArray(farms) && farms.length > 0) {
+            farmTbody.innerHTML = farms.map(farm => {
+                const name = farm.name || farm.farm_name || farm.farmId || farm.farm_id || 'Unknown';
+                const status = farm.status || farm.sync_status || 'active';
+                return `<tr>
+                    <td><strong>${name}</strong></td>
+                    <td><span class="badge badge-${status === 'active' || status === 'ONLINE' ? 'success' : 'neutral'}">${status}</span></td>
+                    <td>${farm.rooms || farm.room_count || '—'}</td>
+                    <td>${farm.capacity || '—'}</td>
+                    <td style="font-size: 12px; color: var(--text-secondary);">${farm.farmId || farm.farm_id || '—'}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            farmTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">No farm data available</td></tr>';
+        }
+
+        // Expense categories table
+        const expensesTbody = document.getElementById('central-expenses-tbody');
+        const catEntries = Object.entries(expenseCategories);
+        if (catEntries.length > 0) {
+            expensesTbody.innerHTML = catEntries.map(([cat, amount]) => {
+                const pct = totalExpenses > 0 ? ((amount / totalExpenses) * 100).toFixed(1) : '0.0';
+                return `<tr>
+                    <td>${cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+                    <td>$${amount.toFixed(2)}</td>
+                    <td>${pct}%</td>
+                </tr>`;
+            }).join('');
+        } else {
+            expensesTbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: var(--text-secondary);">No expense data for this period</td></tr>';
+        }
+
+        // Outstanding balance
+        document.getElementById('central-outstanding').textContent = `$${outstanding.toFixed(2)}`;
+
+    } catch (error) {
+        console.error('[Central Accounting] Load error:', error);
+        document.getElementById('central-total-revenue').textContent = 'Error';
+    }
+}
+
+/**
+ * Export fleet financial report as CSV
+ */
+function exportFleetReport() {
+    const period = document.getElementById('central-accounting-period')?.value || 'month';
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    let csv = 'GreenReach Network Financial Report\n';
+    csv += `Period,${period}\n`;
+    csv += `Generated,${new Date().toLocaleString()}\n\n`;
+    csv += `Metric,Value\n`;
+    csv += `Total Revenue,${document.getElementById('central-total-revenue').textContent}\n`;
+    csv += `Total Expenses,${document.getElementById('central-total-expenses').textContent}\n`;
+    csv += `Net Margin,${document.getElementById('central-net-margin').textContent}\n`;
+    csv += `Order Count,${document.getElementById('central-order-count').textContent}\n`;
+    csv += `Avg Order Value,${document.getElementById('central-avg-order').textContent}\n`;
+    csv += `Outstanding,${document.getElementById('central-outstanding').textContent}\n`;
+
+    // Farm breakdown
+    csv += '\nFarm,Status,Rooms,Capacity,Farm ID\n';
+    const farmRows = document.querySelectorAll('#central-revenue-by-farm-tbody tr');
+    farmRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 5) {
+            csv += Array.from(cells).map(c => c.textContent.trim()).join(',') + '\n';
+        }
+    });
+
+    // Expense breakdown
+    csv += '\nExpense Category,Amount,% of Total\n';
+    const expRows = document.querySelectorAll('#central-expenses-tbody tr');
+    expRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+            csv += Array.from(cells).map(c => c.textContent.trim()).join(',') + '\n';
+        }
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `greenreach-network-report-${timestamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
 console.log('  window.DEBUG.showPageViews() - Show all page views');

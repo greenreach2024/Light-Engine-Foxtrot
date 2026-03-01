@@ -4468,6 +4468,127 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Central Accounting View -->
+            <div id="accounting-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Finance</span>
+                    <span>/</span>
+                    <span>Network Accounting</span>
+                </div>
+
+                <div class="header">
+                    <h1>Network Revenue &amp; Expenses</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="central-accounting-period" onchange="loadCentralAccounting()" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month" selected>This Month</option>
+                            <option value="quarter">This Quarter</option>
+                            <option value="year">This Year</option>
+                        </select>
+                        <button class="btn" onclick="exportFleetReport()" style="padding: 8px 16px;">Export CSV</button>
+                    </div>
+                </div>
+
+                <!-- KPI Grid -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Revenue</div>
+                        <div class="kpi-value" id="central-total-revenue">$0.00</div>
+                        <div class="kpi-change neutral"><span>All wholesale orders</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Wholesale Revenue</div>
+                        <div class="kpi-value" id="central-wholesale-revenue">$0.00</div>
+                        <div class="kpi-change neutral"><span>B2B channel</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Orders</div>
+                        <div class="kpi-value" id="central-order-count">0</div>
+                        <div class="kpi-change neutral"><span>Total fulfilled</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Order Value</div>
+                        <div class="kpi-value" id="central-avg-order">$0.00</div>
+                        <div class="kpi-change neutral"><span>Per order</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Expenses</div>
+                        <div class="kpi-value" id="central-total-expenses">$0.00</div>
+                        <div class="kpi-change neutral"><span>Accounting ledger</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Net Margin</div>
+                        <div class="kpi-value" id="central-net-margin">&mdash;</div>
+                        <div class="kpi-change neutral"><span>Revenue &minus; Expenses</span></div>
+                    </div>
+                </div>
+
+                <!-- Revenue by Farm Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Network Farms</div>
+                        <button class="btn" onclick="loadCentralAccounting()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Farm Name</th>
+                                        <th>Status</th>
+                                        <th>Rooms</th>
+                                        <th>Capacity</th>
+                                        <th>Farm ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-revenue-by-farm-tbody">
+                                    <tr><td colspan="5" class="loading">Loading farm data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expense Categories Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Expense Breakdown</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Amount</th>
+                                        <th>% of Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-expenses-tbody">
+                                    <tr><td colspan="3" class="loading">Loading expenses...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Outstanding Balance -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Outstanding Balance</div>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="font-size: 32px; font-weight: 700; color: var(--accent-yellow);" id="central-outstanding">$0.00</div>
+                            <div style="font-size: 14px; color: var(--text-secondary);">Revenue billed but not yet collected</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
