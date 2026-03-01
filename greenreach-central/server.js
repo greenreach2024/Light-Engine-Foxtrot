@@ -147,7 +147,11 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
 // Configure CSP to allow inline scripts for public pages while maintaining security.
 const isProduction = process.env.NODE_ENV === 'production';
 app.use(helmet({
+  // Relax cross-origin headers for Safari private mode compatibility.
+  // Safari ITP + private browsing blocks same-origin fetch() when these
+  // are set to restrictive defaults.
   crossOriginResourcePolicy: { policy: 'same-site' },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -164,6 +168,48 @@ app.use(helmet({
     },
   },
 }));
+
+// =====================================================
+// CORS — MUST be mounted BEFORE farmDataMiddleware & express.static
+// so that ALL responses (including /data/*.json and static files)
+// include Access-Control-Allow-Origin headers.  Safari private mode
+// sends Origin headers on same-origin fetch() when custom headers
+// (Authorization) are present, and blocks responses lacking CORS headers.
+// =====================================================
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const requestHost = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
+    if (requestHost === serverHost || origin.includes('elasticbeanstalk.com')) {
+      return callback(null, true);
+    }
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:8091',
+      'https://greenreachgreens.com',
+      'http://greenreachgreens.com',
+      'https://www.greenreachgreens.com',
+      'http://www.greenreachgreens.com',
+      'https://urbanyeild.ca',
+      'http://urbanyeild.ca'
+    ];
+    const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+    if (host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca')) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('[CORS] Rejected origin:', origin);
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Farm-ID', 'X-API-Key', 'X-Farm-Slug']
+};
+app.use(cors(corsOptions));
 
 // =====================================================
 // MULTI-TENANT FARM DATA MIDDLEWARE
@@ -919,51 +965,9 @@ app.get('/api/sync/status', (req, res) => {
   });
 });
 
-// CORS configuration - Allow same-origin requests and configured origins
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow same-origin requests (no origin header)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Allow same-origin requests (when page and API are on same domain)
-    const requestHost = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-    const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
-    
-    if (requestHost === serverHost || origin.includes('elasticbeanstalk.com')) {
-      return callback(null, true);
-    }
-    
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:8091',
-      'https://greenreachgreens.com',
-      'http://greenreachgreens.com',
-      'https://www.greenreachgreens.com',
-      'http://www.greenreachgreens.com',
-      'https://urbanyeild.ca',
-      'http://urbanyeild.ca'
-    ];
-    // Allow *.greenreachgreens.com and *.urbanyeild.ca farm subdomains
-    const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-    if (host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca')) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn('[CORS] Rejected origin:', origin);
-      callback(null, false); // Reject but don't throw error
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Farm-ID', 'X-API-Key', 'X-Farm-Slug']
-};
-app.use(cors(corsOptions));
+// CORS is now mounted early (before farmDataMiddleware & express.static)
+// See the CORS section above helmet middleware for the corsOptions definition.
 
-// Body parsing middleware — already mounted earlier (before farmDataWriteMiddleware)\n// so req.body is available for POST/PUT /data/*.json writes.
 
 // Request logging
 app.use(requestLogger);
