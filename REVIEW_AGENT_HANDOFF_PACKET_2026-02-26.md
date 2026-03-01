@@ -32,43 +32,6 @@ Decision gate recommendation:
 
 ---
 
-## 0b) Phase 3B Functional Validation Update (2026-02-28)
-
-This packet is now supplemented with Phase 3B runtime validation evidence.
-
-Evidence document:
-- `PHASE_3B_FUNCTIONAL_VALIDATION_2026-02-28.md`
-
-Current verified state:
-- ✅ Refund persistence read/list behavior validated via runtime API checks.
-- ✅ Payment webhook replay idempotency validated (`updated` then `duplicate_ignored`).
-- ✅ Payment records remain durable with single-event count after replay.
-
-Known environment constraint:
-- ⏸️ Refund create-path provider authorization is deferred for real/sandbox Square environment validation.
-- Local runtime currently lacks valid Square credentials required for provider-authorized refund creation.
-
-Decision gate recommendation:
-- **Approved with conditions for Phase 3B closure in local scope** (persistence + idempotency).
-- **Deferred test item**: Execute end-to-end provider-authorized refund create test when real Square environment credentials are available.
-
----
-
-## 0c) Phase 3C Delta Proposal Ready (2026-02-28)
-
-Phase 3C implementation delta has been prepared for review:
-- `PHASE_3C_IMPLEMENTATION_DELTA_2026-02-28.md`
-
-Summary:
-- Targets migration of SLA/substitution state from volatile Maps to persistent NeDB stores.
-- Preserves existing endpoint contracts in `routes/wholesale/sla-policies.js`.
-- Includes route-by-route migration mapping, validation matrix, and rollback plan.
-
-Decision gate recommendation:
-- **Ready for Review Agent validation** before implementation.
-
----
-
 ## 1) Review Scope
 
 Validate the architecture implementation plan for production readiness remediation across all phases.

@@ -73,7 +73,7 @@ export function createRateLimiter(options = {}) {
  * Cleanup expired rate limit entries periodically
  */
 export function startRateLimitCleanup(intervalMs = 60000) {
-  setInterval(() => {
+  const timer = setInterval(() => {
     const now = Date.now();
     let cleaned = 0;
     
@@ -88,6 +88,12 @@ export function startRateLimitCleanup(intervalMs = 60000) {
       console.log(`[RateLimit] Cleaned ${cleaned} expired entries`);
     }
   }, intervalMs);
+
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+
+  return timer;
 }
 
 /**

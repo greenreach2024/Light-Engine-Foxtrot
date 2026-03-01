@@ -53,6 +53,21 @@ function rateLimiter(req, res, next) {
  */
 router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({
+        error: 'ai_not_configured',
+        message: 'AI assistant is not configured. Add OPENAI_API_KEY to enable chat assistance.',
+        fallback: {
+          available_endpoints: [
+            '/api/wholesale/inventory',
+            '/api/orders',
+            '/api/reports/daily-summary'
+          ],
+          hint: 'You can continue operating with standard dashboard and API workflows while AI is disabled.'
+        }
+      });
+    }
+
     const { message, history, confirm_action, agent_class } = req.body;
     
     if (!message || typeof message !== 'string') {
@@ -130,7 +145,11 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
     if (error.message.includes('OpenAI')) {
       return res.status(503).json({
         error: 'ai_unavailable',
-        message: 'AI assistant is temporarily unavailable. Please try again later.'
+        message: 'AI assistant is temporarily unavailable. Please try again later.',
+        fallback: {
+          mode: 'manual_workflow',
+          hint: 'Use dashboard workflows directly for inventory, orders, and reports until AI service recovers.'
+        }
       });
     }
     
@@ -164,11 +183,18 @@ router.get('/status', (req, res) => {
     status: apiKeyConfigured ? 'ready' : 'not_configured',
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     api_key_set: apiKeyConfigured,
+    mode: apiKeyConfigured ? 'llm_enabled' : 'fallback_only',
+    disabled_reason: apiKeyConfigured ? null : 'OPENAI_API_KEY missing',
     rate_limit: {
       max_requests: RATE_LIMIT_MAX,
       window_seconds: RATE_LIMIT_WINDOW / 1000
     },
-    email_configured: !!process.env.EMAIL_PROVIDER && (process.env.EMAIL_PROVIDER === 'ses' || !!process.env.SENDGRID_API_KEY)
+    email_configured: !!process.env.EMAIL_PROVIDER && (process.env.EMAIL_PROVIDER === 'ses' || !!process.env.SENDGRID_API_KEY),
+    fallback_capabilities: [
+      'dashboard_manual_operations',
+      'api_direct_workflows',
+      'audit_logging'
+    ]
   });
 });
 

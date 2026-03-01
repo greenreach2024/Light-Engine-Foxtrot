@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app, __resetWizardSystemForTests } from '../server-charlie.js';
+import { app, __resetWizardSystemForTests } from '../server-foxtrot.js';
 
 let server;
 let baseUrl;

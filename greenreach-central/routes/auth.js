@@ -69,24 +69,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Fallback credentials for non-database mode
-    // Matches server-foxtrot.js edge auth: farm_id + password, email optional
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    if (!adminPassword) {
-      return res.status(503).json({
-        success: false,
-        error: 'Authentication not configured',
-        message: 'ADMIN_PASSWORD is required when fallback credentials mode is active'
-      });
-    }
-    const FALLBACK_FARM = {
-      farm_id: farm_id || process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039',
-      email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,
-      password: adminPassword,
-      name: process.env.ADMIN_NAME || 'Farm Admin',
-      role: FARM_ROLES.ADMIN
-    };
-
     let user = null;
     let useDatabase = false;
 
@@ -201,6 +183,23 @@ router.post('/login', async (req, res) => {
       // Fallback mode — farm_id + password authentication (no database)
       // Matches server-foxtrot.js edge auth pattern: email is optional
       console.log(`[Auth] Fallback credentials mode for ${farm_id || 'default'}`);
+
+      // Build fallback credentials — requires ADMIN_PASSWORD env var
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!adminPassword) {
+        return res.status(503).json({
+          success: false,
+          error: 'Authentication not configured',
+          message: 'ADMIN_PASSWORD is required when fallback credentials mode is active'
+        });
+      }
+      const FALLBACK_FARM = {
+        farm_id: farm_id || process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039',
+        email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,
+        password: adminPassword,
+        name: process.env.ADMIN_NAME || 'Farm Admin',
+        role: FARM_ROLES.ADMIN
+      };
 
       // Only password must match; email is optional
       if (password !== FALLBACK_FARM.password) {

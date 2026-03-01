@@ -227,6 +227,34 @@ async function runMigrations(client) {
     logger.warn('Could not alter column constraints:', err.message);
   }
 
+  // Compatibility migration: older production schemas are missing columns used by sync/admin/accounting
+  try {
+    await client.query(`
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS last_sync TIMESTAMP;
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS farm_type VARCHAR(100);
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS city VARCHAR(120);
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS state VARCHAR(120);
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS certifications JSONB DEFAULT '[]';
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS practices JSONB DEFAULT '[]';
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '[]';
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS tier VARCHAR(50);
+      ALTER TABLE farms ADD COLUMN IF NOT EXISTS registration_code VARCHAR(255);
+
+      ALTER TABLE farms ALTER COLUMN contact_name DROP NOT NULL;
+      ALTER TABLE farms ALTER COLUMN email DROP NOT NULL;
+      ALTER TABLE farms ALTER COLUMN name DROP NOT NULL;
+
+      UPDATE farms
+         SET last_sync = COALESCE(last_sync, updated_at, NOW())
+       WHERE last_sync IS NULL;
+    `);
+    logger.info('Added farm compatibility columns (sync/admin/accounting)');
+  } catch (err) {
+    logger.warn('Farm compatibility migration warning:', err.message);
+  }
+
   // Add missing timestamp columns to tables from older schemas
   const tablesNeedingTimestamps = [
     'farms', 'farm_data', 'planting_assignments', 'products',
@@ -411,6 +439,72 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_products_sku_id ON products(sku_id);
     CREATE INDEX IF NOT EXISTS idx_products_updated ON products(updated_at);
   `);
+
+  // Compatibility migration: normalize farm_inventory schema expected by sync + admin routes
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS farm_inventory (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        product_id VARCHAR(255),
+        product_name VARCHAR(255),
+        sku VARCHAR(255),
+        quantity NUMERIC(12,3) DEFAULT 0,
+        quantity_available NUMERIC(12,3) DEFAULT 0,
+        quantity_unit VARCHAR(50) DEFAULT 'unit',
+        unit VARCHAR(50),
+        price NUMERIC(10,2) DEFAULT 0,
+        wholesale_price NUMERIC(10,2),
+        retail_price NUMERIC(10,2),
+        available_for_wholesale BOOLEAN DEFAULT TRUE,
+        status VARCHAR(50) DEFAULT 'active',
+        category VARCHAR(120),
+        variety VARCHAR(255),
+        source_data JSONB DEFAULT '{}',
+        synced_at TIMESTAMP DEFAULT NOW(),
+        last_updated TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+      );
+
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS product_id VARCHAR(255);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS sku VARCHAR(255);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS quantity NUMERIC(12,3) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS quantity_available NUMERIC(12,3) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS quantity_unit VARCHAR(50) DEFAULT 'unit';
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS unit VARCHAR(50);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS wholesale_price NUMERIC(10,2);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS retail_price NUMERIC(10,2);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS available_for_wholesale BOOLEAN DEFAULT TRUE;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active';
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS category VARCHAR(120);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS variety VARCHAR(255);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS source_data JSONB DEFAULT '{}';
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP DEFAULT NOW();
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+      UPDATE farm_inventory
+         SET product_id = COALESCE(product_id, sku)
+       WHERE product_id IS NULL;
+
+      UPDATE farm_inventory
+         SET quantity_available = COALESCE(quantity_available, quantity, 0)
+       WHERE quantity_available IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_farm_id ON farm_inventory(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_product_id ON farm_inventory(product_id);
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_sku ON farm_inventory(sku);
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_last_updated ON farm_inventory(last_updated DESC);
+    `);
+    logger.info('farm_inventory compatibility migration completed');
+  } catch (err) {
+    logger.warn('farm_inventory compatibility migration warning:', err.message);
+  }
 
   // Create wholesale_buyers table for wholesale admin + buyer auth
   await client.query(`

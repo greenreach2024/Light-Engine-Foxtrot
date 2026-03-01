@@ -34,6 +34,29 @@
       max-height: 90vh;
     }
 
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        border-radius: 12px;
+        max-height: 95vh;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .message {
+        max-width: 90%;
+      }
+      .examples {
+        flex-direction: column;
+      }
+      .example-btn {
+        width: 100%;
+        text-align: left;
+      }
+    }
+
     .header {
       background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
       color: white;
@@ -286,6 +309,53 @@
       40% { content: '..'; }
       60%, 100% { content: '...'; }
     }
+
+    .error-boundary {
+      margin: 20px;
+      padding: 20px;
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 12px;
+    }
+
+    .error-boundary h3 {
+      color: #856404;
+      margin-bottom: 10px;
+    }
+
+    .error-boundary ul {
+      margin-top: 12px;
+      padding-left: 20px;
+    }
+
+    .error-boundary .retry-btn {
+      margin-top: 16px;
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .error-boundary .retry-btn:hover {
+      background: #5568d3;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+      border-radius: 8px;
+      height: 60px;
+      margin: 10px 0;
+    }
+
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
   </style>
 </head>
 <body>
@@ -351,6 +421,8 @@
   <script>
     let conversationHistory = [];
     let isProcessing = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
@@ -377,20 +449,66 @@
         const statusText = document.getElementById('statusText');
         const modelInfo = document.getElementById('modelInfo');
         
+        retryCount = 0; // Reset on success
+        
         if (status.status === 'ready') {
           statusDot.classList.remove('error');
           statusText.textContent = 'AI Agent Ready';
-          modelInfo.textContent = `Model: ${status.model}`;
+          modelInfo.textContent = `Model: ${status.model} (${status.mode})`;
         } else {
           statusDot.classList.add('error');
           statusText.textContent = 'AI Not Configured';
-          modelInfo.textContent = 'OpenAI API key required';
+          modelInfo.textContent = status.disabled_reason || 'OpenAI API key required';
+          showFallbackUI(status);
         }
       } catch (error) {
         console.error('Status check failed:', error);
         document.getElementById('statusDot').classList.add('error');
         document.getElementById('statusText').textContent = 'Connection Error';
+        
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          setTimeout(() => checkAgentStatus(), 2000 * retryCount);
+        } else {
+          showConnectionError();
+        }
       }
+    }
+
+    function showFallbackUI(status) {
+      const chatArea = document.getElementById('chatArea');
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.className = 'error-boundary';
+      fallbackDiv.innerHTML = `
+        <h3>⚠️ AI Assistant Not Available</h3>
+        <p><strong>Reason:</strong> ${status.disabled_reason || 'AI features are currently disabled'}</p>
+        ${status.fallback_capabilities ? `
+          <p><strong>You can still use:</strong></p>
+          <ul>
+            ${status.fallback_capabilities.map(cap => `<li>${cap.replace(/_/g, ' ')}</li>`).join('')}
+          </ul>
+        ` : ''}
+        <button class="retry-btn" onclick="checkAgentStatus()">🔄 Retry Connection</button>
+      `;
+      chatArea.appendChild(fallbackDiv);
+    }
+
+    function showConnectionError() {
+      const chatArea = document.getElementById('chatArea');
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-boundary';
+      errorDiv.innerHTML = `
+        <h3>❌ Connection Failed</h3>
+        <p>Unable to connect to the AI service after ${MAX_RETRIES} attempts.</p>
+        <p>Please check:</p>
+        <ul>
+          <li>Server is running</li>
+          <li>Network connection is active</li>
+          <li>API endpoint is accessible</li>
+        </ul>
+        <button class="retry-btn" onclick="location.reload()">🔄 Reload Page</button>
+      `;
+      chatArea.appendChild(errorDiv);
     }
 
     function sendExample(text) {
@@ -412,6 +530,9 @@
       // Add user message to chat
       addMessage('user', message);
       
+      // Show skeleton loader
+      const loaderId = addSkeletonLoader();
+      
       try {
         const response = await fetch('/api/farm-sales/ai-agent/chat', {
           method: 'POST',
@@ -425,9 +546,18 @@
           })
         });
         
+        removeSkeletonLoader(loaderId);
+        
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.message || 'Request failed');
+          
+          // Show Phase B fallback messaging
+          if (error.error === 'ai_not_configured' && error.fallback) {
+            addMessage('system', `${error.message}<br><br><strong>Available alternatives:</strong><br>${error.fallback.available_endpoints.map(ep => `• ${ep}`).join('<br>')}<br><br><em>${error.fallback.hint}</em>`);
+          } else {
+            throw new Error(error.message || 'Request failed');
+          }
+          return;
         }
         
         const data = await response.json();
@@ -443,12 +573,29 @@
         
       } catch (error) {
         console.error('Chat error:', error);
-        addMessage('system', `Error: ${error.message}`);
+        removeSkeletonLoader(loaderId);
+        addMessage('system', `❌ Error: ${error.message}`);
       } finally {
         isProcessing = false;
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('loading').classList.remove('active');
       }
+    }
+
+    function addSkeletonLoader() {
+      const chatArea = document.getElementById('chatArea');
+      const skeleton = document.createElement('div');
+      const id = 'skeleton-' + Date.now();
+      skeleton.id = id;
+      skeleton.className = 'skeleton';
+      chatArea.appendChild(skeleton);
+      chatArea.scrollTop = chatArea.scrollHeight;
+      return id;
+    }
+
+    function removeSkeletonLoader(id) {
+      const skeleton = document.getElementById(id);
+      if (skeleton) skeleton.remove();
     }
 
     function addMessage(type, text, intent = null, result = null) {

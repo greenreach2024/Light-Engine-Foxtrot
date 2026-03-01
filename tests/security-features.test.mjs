@@ -40,7 +40,7 @@ describe('Secrets Manager Utility', () => {
   });
 
   it('should warn about default JWT_SECRET', async () => {
-    process.env.JWT_SECRET = 'CHANGE_ME_IN_PRODUCTION';
+    process.env.JWT_SECRET = 'your-secret-key-here-change-in-production';
     
     let warningLogged = false;
     const originalWarn = console.warn;
@@ -93,7 +93,11 @@ describe('Rate Limiter Middleware', () => {
   });
 
   it('should allow requests within limit', () => {
-    const limiter = createRateLimiter('test-allow', 5, 60000);
+    const limiter = createRateLimiter({
+      windowMs: 60000,
+      max: 5,
+      message: 'Rate limit hit'
+    });
     
     // Create mock request/response
     const req = { ip: '127.0.0.1', path: '/test' };
@@ -117,7 +121,11 @@ describe('Rate Limiter Middleware', () => {
   });
 
   it('should block requests over limit', () => {
-    const limiter = createRateLimiter('test-block', 2, 60000);
+    const limiter = createRateLimiter({
+      windowMs: 60000,
+      max: 2,
+      message: 'Rate limit hit'
+    });
     
     const req = { ip: '127.0.0.2', path: '/test' };
     const res = {
@@ -140,7 +148,7 @@ describe('Rate Limiter Middleware', () => {
     
     // Third request should be blocked
     assert.strictEqual(res.statusCode, 429, 'Should return 429 status code');
-    assert.ok(res.jsonData?.error?.includes('Too many requests'), 'Should return rate limit error');
+    assert.ok(String(res.jsonData?.error || '').includes('Too Many Requests'), 'Should return rate limit error');
   });
 });
 
@@ -158,15 +166,18 @@ describe('Audit Logger Middleware', () => {
     assert.ok(AuditEventType, 'AuditEventType should be exported');
     assert.ok(AuditEventType.LOGIN_SUCCESS, 'LOGIN_SUCCESS event type should exist');
     assert.ok(AuditEventType.LOGIN_FAILURE, 'LOGIN_FAILURE event type should exist');
-    assert.ok(AuditEventType.PASSWORD_RESET, 'PASSWORD_RESET event type should exist');
+    assert.ok(AuditEventType.PASSWORD_RESET_REQUESTED, 'PASSWORD_RESET_REQUESTED event type should exist');
+    assert.ok(AuditEventType.PASSWORD_RESET_COMPLETED, 'PASSWORD_RESET_COMPLETED event type should exist');
   });
 
   it('should log audit events with correct structure', () => {
+    let loggedPrefix = null;
     let loggedData = null;
     const originalLog = console.log;
-    console.log = (message) => {
-      if (message?.includes('AUDIT_LOG')) {
-        loggedData = message;
+    console.log = (message, payload) => {
+      if (message?.includes('[AUDIT]')) {
+        loggedPrefix = message;
+        loggedData = payload;
       }
     };
     
@@ -174,19 +185,22 @@ describe('Audit Logger Middleware', () => {
       ip: '127.0.0.1',
       headers: { 'user-agent': 'test-agent' },
       method: 'POST',
-      path: '/api/auth/login'
+      path: '/api/auth/login',
+      get(name) {
+        return this.headers?.[String(name).toLowerCase()];
+      }
     };
     
-    logAuditEvent(req, AuditEventType.LOGIN_SUCCESS, {
+    logAuditEvent(AuditEventType.LOGIN_SUCCESS, {
       userId: 'test-user-123',
       email: 'test@example.com'
-    });
+    }, req);
     
     console.log = originalLog;
     
-    assert.ok(loggedData, 'Audit event should be logged');
-    assert.ok(loggedData.includes('LOGIN_SUCCESS'), 'Should include event type');
-    assert.ok(loggedData.includes('test-user-123'), 'Should include user ID');
+    assert.ok(loggedPrefix, 'Audit event should be logged');
+    assert.ok(loggedData?.includes(AuditEventType.LOGIN_SUCCESS), 'Should include event type');
+    assert.ok(loggedData?.includes('test-user-123'), 'Should include user ID');
   });
 });
 
@@ -227,6 +241,9 @@ describe('CORS Configuration', () => {
   });
 
   it('should reject non-whitelisted origins', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
     const evilOrigin = 'https://evil.com';
     
     const req = {
@@ -235,8 +252,18 @@ describe('CORS Configuration', () => {
     };
     const res = {
       headers: {},
+      statusCode: 200,
+      body: null,
       setHeader: function(key, value) {
         this.headers[key] = value;
+      },
+      status: function(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json: function(data) {
+        this.body = data;
+        return this;
       }
     };
     let nextCalled = false;
@@ -244,9 +271,12 @@ describe('CORS Configuration', () => {
     
     setCorsHeaders(req, res, next);
     
-    assert.strictEqual(nextCalled, true, 'Should call next()');
+    assert.strictEqual(nextCalled, false, 'Should not call next() for blocked production origin');
+    assert.strictEqual(res.statusCode, 403, 'Should return 403 for blocked origin');
     assert.ok(!res.headers['Access-Control-Allow-Origin'], 
       'Should not set CORS header for non-whitelisted origin');
+
+    process.env.NODE_ENV = originalEnv;
   });
 });
 

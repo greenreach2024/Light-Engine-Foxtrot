@@ -72,6 +72,21 @@ export function checkPermission(agentClass, category, action) {
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
+if (OPENAI_API_KEY) {
+  console.log('[AI Agent] Startup diagnostics:', {
+    openaiConfigured: true,
+    model: OPENAI_MODEL,
+    mode: 'llm_enabled'
+  });
+} else {
+  console.warn('[AI Agent] Startup diagnostics:', {
+    openaiConfigured: false,
+    model: OPENAI_MODEL,
+    mode: 'fallback_only',
+    reason: 'OPENAI_API_KEY missing'
+  });
+}
+
 // System capabilities that the agent can perform
 // Note: Lighting and temperature control are database-managed and not user-controllable
 export const SYSTEM_CAPABILITIES = {

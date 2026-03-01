@@ -21,13 +21,15 @@ const router = Router();
 // Farms POST on harvest via syncExperimentToCenter()
 router.post('/sync/experiment-records', async (req, res) => {
   try {
-    const { farm_id, records } = req.body;
+    const { farm_id, records, loss_events } = req.body;
+    const recordsList = Array.isArray(records) ? records : [];
+    const lossEventsList = Array.isArray(loss_events) ? loss_events : [];
 
     if (!farm_id) {
       return res.status(400).json({ ok: false, error: 'farm_id required' });
     }
-    if (!Array.isArray(records) || records.length === 0) {
-      return res.status(400).json({ ok: false, error: 'records array required' });
+    if (recordsList.length === 0 && lossEventsList.length === 0) {
+      return res.status(400).json({ ok: false, error: 'records or loss_events array required' });
     }
 
     if (!(await isDatabaseAvailable())) {
@@ -70,7 +72,7 @@ router.post('/sync/experiment-records', async (req, res) => {
     let ingested = 0;
     let deduplicated = 0;
     let rejected = 0;
-    for (const record of records) {
+    for (const record of recordsList) {
       try {
         // Validate canonical schema fields (Rule 3.1)
         if (!record?.crop || typeof record.crop !== 'string') {
@@ -137,14 +139,76 @@ router.post('/sync/experiment-records', async (req, res) => {
       }
     }
 
-    console.log(`[ExperimentRecords] ✓ Ingested ${ingested}/${records.length} records from ${farm_id} (deduped=${deduplicated}, rejected=${rejected})`);
+    let lossIngested = 0;
+    let lossDeduplicated = 0;
+    let lossRejected = 0;
+    for (const event of lossEventsList) {
+      try {
+        const recordedAt = isValidIsoTimestamp(event?.created_at)
+          ? new Date(event.created_at).toISOString()
+          : isValidIsoTimestamp(event?.recorded_at)
+            ? new Date(event.recorded_at).toISOString()
+            : new Date().toISOString();
+
+        const crop = (event?.crop_id || event?.crop_name || event?.crop || '').toString().trim().toLowerCase() || null;
+        const trayRunId = (event?.tray_run_id || '').toString().trim() || null;
+        const lossReason = (event?.loss_reason || '').toString().trim() || null;
+        const lostQuantity = event?.lost_quantity != null ? parseInt(event.lost_quantity, 10) : null;
+
+        const duplicateLoss = await query(
+          `SELECT id
+             FROM loss_events
+            WHERE farm_id = $1
+              AND COALESCE(tray_run_id, '') = COALESCE($2, '')
+              AND COALESCE(crop, '') = COALESCE($3, '')
+              AND COALESCE(loss_reason, '') = COALESCE($4, '')
+              AND recorded_at = $5
+            LIMIT 1`,
+          [farm_id, trayRunId, crop, lossReason, recordedAt]
+        );
+
+        if (duplicateLoss.rows.length > 0) {
+          lossDeduplicated++;
+          continue;
+        }
+
+        await query(
+          `INSERT INTO loss_events
+           (farm_id, tray_run_id, crop, loss_reason, lost_quantity,
+            environment_snapshot, expected_conditions, notes, recorded_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            farm_id,
+            trayRunId,
+            crop,
+            lossReason,
+            Number.isNaN(lostQuantity) ? null : lostQuantity,
+            JSON.stringify(event?.environment_snapshot || {}),
+            JSON.stringify(event?.expected_conditions || {}),
+            event?.notes || null,
+            recordedAt
+          ]
+        );
+
+        lossIngested++;
+      } catch (lossErr) {
+        console.warn('[ExperimentRecords] Failed to insert loss event:', lossErr.message);
+        lossRejected++;
+      }
+    }
+
+    console.log(`[ExperimentRecords] ✓ Ingested records=${ingested}/${recordsList.length} (deduped=${deduplicated}, rejected=${rejected}), loss_events=${lossIngested}/${lossEventsList.length} (deduped=${lossDeduplicated}, rejected=${lossRejected}) from ${farm_id}`);
 
     res.json({
       ok: true,
       ingested,
       deduplicated,
       rejected,
-      total_submitted: records.length,
+      loss_ingested: lossIngested,
+      loss_deduplicated: lossDeduplicated,
+      loss_rejected: lossRejected,
+      total_submitted: recordsList.length,
+      total_loss_submitted: lossEventsList.length,
       farm_id
     });
   } catch (error) {

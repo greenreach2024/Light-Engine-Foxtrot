@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 
-import { app, __runDailyPlanResolverForTests, __testUtils } from '../server-charlie.js';
+import { app, __runDailyPlanResolverForTests, __testUtils } from '../server-foxtrot.js';
 
 const DATA_DIR = path.resolve('./public/data');
 const DATA_FILES = ['plans.json', 'groups.json', 'schedules.json', 'env.json'];

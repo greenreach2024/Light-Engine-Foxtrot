@@ -106,17 +106,18 @@ export async function upsertNetworkFarm(farmId, farmData) {
       };
 
       await query(
-        `INSERT INTO farms (farm_id, name, api_url, status, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, api_url, status, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), farms.name),
-           api_url = COALESCE(NULLIF($3, ''), farms.api_url),
-           status = COALESCE(NULLIF($4, ''), farms.status),
-           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $5::jsonb,
+           api_url = COALESCE(NULLIF($4, ''), farms.api_url),
+           status = COALESCE(NULLIF($5, ''), farms.status),
+           metadata = COALESCE(farms.metadata, '{}'::jsonb) || $6::jsonb,
            updated_at = NOW()`,
         [
           normalizedFarm.farm_id,
           normalizedFarm.farm_name || normalizedFarm.farm_id,
+          normalizedFarm.contact?.name || normalizedFarm.contact?.contactName || 'Farm Admin',
           normalizedFarm.api_url,
           normalizedFarm.status || 'active',
           JSON.stringify(metadata)

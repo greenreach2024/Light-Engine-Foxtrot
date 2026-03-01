@@ -1,7 +1,7 @@
 # Phase 3: Data Persistence Migration - Implementation Proposal
 
 **Date**: 2026-02-28  
-**Status**: PHASE 3A COMPLETE, PHASE 3B LOCAL VALIDATION COMPLETE (PROVIDER CREATE TEST DEFERRED TO REAL SQUARE ENVIRONMENT)  
+**Status**: PHASE 3A COMPLETE, PHASE 3B AWAITING REVIEW VALIDATION  
 **Estimated Effort**: 4-5 days  
 **Risk**: MEDIUM (touches order flow, requires dual-write validation)
 
@@ -28,25 +28,6 @@ Phase 3A close status:
 - ✅ Reservation persistence + TTL cleanup path in place
 - ✅ Dual-write compatibility maintained for staged cutover
 - ✅ Ready to begin Phase 3B (refund/payment persistence)
-
----
-
-## Phase 3B Validation Snapshot (2026-02-28)
-
-Validation evidence document:
-- `PHASE_3B_FUNCTIONAL_VALIDATION_2026-02-28.md`
-
-Current verified state:
-- ✅ Refund store persistence validated on read/list API paths.
-- ✅ Webhook replay idempotency validated (`updated` then `duplicate_ignored`).
-- ✅ Durable payment record behavior validated (`event_count: 1` after replay).
-
-Deferred item (intentional):
-- ⏸️ Provider-authorized refund create-path test is deferred until real/sandbox Square credentials are available.
-
-Phase 3B close recommendation:
-- Treat local Phase 3B persistence/idempotency objectives as complete.
-- Carry provider-authorized refund create as external-environment validation item.
 
 ---
 
@@ -197,9 +178,6 @@ Validated from investigation:
 ---
 
 ### Phase 3C: SLA & Policies (Priority 3 - 1 day)
-
-Detailed implementation delta prepared:
-- `PHASE_3C_IMPLEMENTATION_DELTA_2026-02-28.md`
 
 **1. SLA Store** (`lib/wholesale/sla-store.js`)
 - Create NeDB stores for `slaPoliciesDB`, `buyerPreferencesDB`, `slaViolationsDB`

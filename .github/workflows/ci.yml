@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  lint-and-smoke:
+  validate-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,16 +19,22 @@ jobs:
         run: |
           cd public
           npm ci
-      - name: Lint
+      - name: Lint frontend
         run: |
           cd public
           npm run lint
       - name: Install server dependencies
         run: |
           npm ci
-      - name: Start Charlie server (background) and run smoke
+      - name: Validate data schemas
         run: |
-          PORT=8091 node server-charlie.js &
+          npm run validate-schemas
+      - name: Run test suite
+        run: |
+          npm test
+      - name: Start Foxtrot server and run smoke check
+        run: |
+          PORT=8091 node server-foxtrot.js &
           SERVER_PID=$!
           # wait for server to be ready
           n=0
@@ -36,12 +42,15 @@ jobs:
             n=$((n+1))
             sleep 1
           done
-          node scripts/smoke.js
+          # Basic smoke: health endpoint returns 200
+          curl -f "http://localhost:8091/healthz" || exit 1
+          # Inventory endpoint returns valid JSON
+          curl -sS "http://localhost:8091/api/wholesale/inventory" | jq -e '.lots' || exit 1
           kill $SERVER_PID || true
 
   python-tests:
     runs-on: ubuntu-latest
-    needs: lint-and-smoke
+    needs: validate-and-test
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -56,17 +65,23 @@ jobs:
       - name: Run Python tests
         run: pytest -q
 
-  dom-cors-check:
+  security-checks:
     runs-on: ubuntu-latest
-    needs: lint-and-smoke
+    needs: validate-and-test
     steps:
       - uses: actions/checkout@v4
-      - name: DOM boot & CORS static checks
+      - name: Security and CORS static checks
         run: |
-          # Check DOM boot shape in public/app.charlie.js
-          if ! grep -q "document.addEventListener('DOMContentLoaded', async () =>" public/app.charlie.js; then
-            echo "ERROR: DOMContentLoaded async boot not found in public/app.charlie.js"; exit 1
+          # Verify CORS middleware exists
+          if ! grep -q "Access-Control-Allow-Origin" server/middleware/cors.js; then
+            echo "ERROR: CORS middleware missing expected headers"; exit 1
           fi
-          # Check server for dynamic CORS mention
-          if ! grep -q "Access-Control-Allow-Origin" server-charlie.js; then
-            echo "WARNING: server-charlie.js may not explicitly handle CORS preflight"; fi
+          # Verify rate limiting middleware exists
+          if ! grep -q "createRateLimiter" server/middleware/rate-limiter.js; then
+            echo "ERROR: Rate limiting middleware not found"; exit 1
+          fi
+          # Verify audit logging is present
+          if ! grep -q "logAuditEvent" server/middleware/audit-logger.js; then
+            echo "ERROR: Audit logging middleware not found"; exit 1
+          fi
+          echo "✅ Security checks passed"
