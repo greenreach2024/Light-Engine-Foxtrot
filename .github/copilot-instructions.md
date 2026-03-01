@@ -102,3 +102,26 @@ Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before execu
 **56+ consumers** depend on these formats. Changes require full impact analysis.
 
 See `.github/copilot-instructions-schema.md` for detailed guidance.
+
+## 🗺️ Data Mapping Reference (REQUIRED)
+
+**Before debugging ANY data loading, authentication, or sync issue**, agents MUST:
+
+1. Read `DATA_MAPPING_DOCUMENT.md` — the canonical reference for all data storage locations, API endpoint-to-storage mappings, and data flow paths
+2. Identify the **exact data resolution chain** for the affected feature (Section 10)
+3. Verify data exists at **each layer** of the chain before proposing code fixes
+4. Check the **Issue Log** (Section 12) for previously solved similar issues
+
+**Key Data Mapping Rules:**
+- ❌ DO NOT guess where data comes from — trace the documented path
+- ❌ DO NOT modify auth code without checking `farm_users`, `admin_users`, and `admin_sessions` tables first
+- ❌ DO NOT assume static JSON files are the source of truth — farmStore (farm_data table) overrides them
+- ✅ DO trace: API endpoint → handler code → storage layer → actual data
+- ✅ DO check all layers: PostgreSQL → In-Memory Map → JSON fallback → Default value
+- ✅ DO document new issues and resolutions in `DATA_MAPPING_DOCUMENT.md` Section 12
+
+**Resolution chains to check (from DATA_MAPPING_DOCUMENT.md):**
+- Farm login: `login.html` → `/api/farm/auth/login` → `farm_users` JOIN `farms` → bcrypt → JWT
+- Farm data: API → farmStore → `farm_data` table → in-memory Map → JSON file → default
+- Admin auth: `/api/admin/auth/login` → `admin_users` → `admin_sessions` → JWT
+- Sync: Edge → `POST /api/sync/*` → `farm_data` UPSERT → in-memory Map → file backup
