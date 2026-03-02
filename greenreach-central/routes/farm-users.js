@@ -102,6 +102,46 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// PATCH /update — Update a farm user's role or status
+router.patch('/update', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    const { email, role, status } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email required' });
+    }
+
+    const updates = [];
+    const params = [];
+    let paramIdx = 1;
+
+    if (role) { updates.push(`role = $${paramIdx++}`); params.push(role); }
+    if (status) { updates.push(`status = $${paramIdx++}`); params.push(status); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update (role or status required)' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    params.push(farmId, email.toLowerCase());
+
+    if (await isDatabaseAvailable()) {
+      const { rowCount } = await query(
+        `UPDATE farm_users SET ${updates.join(', ')} WHERE farm_id = $${paramIdx++} AND email = $${paramIdx}`,
+        params
+      );
+      if (rowCount === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+    }
+    res.json({ success: true, message: 'User updated' });
+  } catch (error) {
+    console.error('[FarmUsers] Update error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
 // POST /delete — Delete a farm user
 router.post('/delete', async (req, res) => {
   try {

@@ -3003,8 +3003,8 @@
                 <div class="header">
                     <h1>Users & Access Control</h1>
                     <div class="header-actions">
-                        <button class="btn" onclick="openInviteUserModal()">
-                            <span style="font-size: 18px; margin-right: 4px;">+</span> Invite User
+                        <button class="btn" onclick="openAddUserModal()">
+                            <span style="font-size: 18px; margin-right: 4px;">+</span> Add User
                         </button>
                     </div>
                 </div>
@@ -3014,7 +3014,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h2>Active Users</h2>
                         <div style="display: flex; gap: 12px; align-items: center;">
-                            <input type="text" id="user-search" placeholder="Search users..." style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); width: 250px;">
+                            <input type="text" id="user-search" placeholder="Search users..." oninput="filterUsers()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); width: 250px;">
                             <select id="role-filter" onchange="filterUsers()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 <option value="all">All Roles</option>
                                 <option value="admin">Admin</option>
@@ -3107,33 +3107,6 @@
                     </div>
                 </div>
 
-                <!-- Pending Invitations -->
-                <div class="card">
-                    <h2 style="margin-bottom: 20px;">Pending Invitations</h2>
-                    <div class="table-container">
-                        <table id="invitations-table">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Invited By</th>
-                                    <th>Sent</th>
-                                    <th>Expires</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Populated by JavaScript -->
-                                <tr>
-                                    <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">
-                                        No pending invitations
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
                 <!-- Access Activity Log -->
                 <div class="card">
                     <h2 style="margin-bottom: 20px;">Recent Access Activity</h2>
@@ -3161,45 +3134,49 @@
                 </div>
             </div>
 
-            <!-- Invite User Modal -->
-            <div id="inviteUserModal" class="modal" style="display: none;">
+            <!-- Add User Modal -->
+            <div id="addUserModal" class="modal" style="display: none;">
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
-                        <h2>Invite New User</h2>
-                        <button class="modal-close" onclick="closeInviteUserModal()">&times;</button>
+                        <h2>Add New User</h2>
+                        <button class="modal-close" onclick="closeAddUserModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <form id="invite-user-form" onsubmit="sendUserInvitation(event)">
+                        <div id="add-user-message" style="display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px;"></div>
+                        <form id="add-user-form" onsubmit="createUser(event)">
                             <div style="display: flex; flex-direction: column; gap: 20px;">
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Email Address *</label>
-                                    <input type="email" id="invite-email" required placeholder="user@example.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <input type="email" id="add-user-email" required placeholder="user@example.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">First Name *</label>
-                                    <input type="text" id="invite-first-name" required placeholder="John" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Last Name *</label>
-                                    <input type="text" id="invite-last-name" required placeholder="Doe" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <div style="display: flex; gap: 12px;">
+                                    <div style="flex: 1;">
+                                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">First Name *</label>
+                                        <input type="text" id="add-user-first-name" required placeholder="John" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Last Name</label>
+                                        <input type="text" id="add-user-last-name" placeholder="Doe" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Role *</label>
-                                    <select id="invite-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <select id="add-user-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                         <option value="">Select role...</option>
-                                        <option value="admin">Admin - Full system access</option>
-                                        <option value="manager">Manager - Operations & reporting</option>
-                                        <option value="operator">Operator - Daily operations</option>
-                                        <option value="viewer">Viewer - Read-only access</option>
+                                        <option value="admin">Admin — Full system access</option>
+                                        <option value="manager">Manager — Operations & reporting</option>
+                                        <option value="operator">Operator — Daily operations</option>
+                                        <option value="viewer">Viewer — Read-only access</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Personal Message (Optional)</label>
-                                    <textarea id="invite-message" rows="3" placeholder="Welcome to the team!" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); resize: vertical;"></textarea>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Temporary Password *</label>
+                                    <input type="password" id="add-user-password" required minlength="6" placeholder="Min 6 characters" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">The user can change this after first login.</p>
                                 </div>
                                 <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px;">
-                                    <button type="button" class="btn" onclick="closeInviteUserModal()" style="background: var(--bg-secondary); color: var(--text-primary);">Cancel</button>
-                                    <button type="submit" class="btn" style="background: var(--accent-green); color: white;">Send Invitation</button>
+                                    <button type="button" class="btn" onclick="closeAddUserModal()" style="background: var(--bg-secondary); color: var(--text-primary);">Cancel</button>
+                                    <button type="submit" class="btn" style="background: var(--accent-green); color: white;">Create User</button>
                                 </div>
                             </div>
                         </form>
@@ -3216,7 +3193,7 @@
                     </div>
                     <div class="modal-body">
                         <form id="edit-user-form" onsubmit="saveUserChanges(event)">
-                            <input type="hidden" id="edit-user-id">
+                            <input type="hidden" id="edit-user-email-key">
                             <div style="display: flex; flex-direction: column; gap: 20px;">
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Name</label>
@@ -3242,6 +3219,26 @@
                                         <option value="suspended">Suspended</option>
                                     </select>
                                 </div>
+
+                                <!-- Change Password Section -->
+                                <div>
+                                    <button type="button" onclick="toggleChangePassword()" style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 14px; padding: 0;">🔒 Change Password ▼</button>
+                                    <div id="edit-user-pw-section" style="display: none; margin-top: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);">
+                                        <div id="pw-change-message" style="display: none; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px;"></div>
+                                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                                            <div>
+                                                <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">New Password *</label>
+                                                <input type="password" id="edit-new-password" minlength="6" placeholder="Min 6 characters" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 14px;">
+                                            </div>
+                                            <div>
+                                                <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">Confirm Password *</label>
+                                                <input type="password" id="edit-confirm-password" minlength="6" placeholder="Confirm password" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 14px;">
+                                            </div>
+                                            <button type="button" onclick="changeUserPassword(event)" class="btn" style="background: var(--accent-blue); color: white; align-self: flex-end; padding: 8px 16px; font-size: 13px;">Update Password</button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 12px;">
                                     <button type="button" class="btn" onclick="removeUser()" style="background: var(--accent-red); color: white;">Remove User</button>
                                     <div style="display: flex; gap: 12px;">

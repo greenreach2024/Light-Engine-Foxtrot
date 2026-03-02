@@ -5761,41 +5761,39 @@ function renderUsersTable(users) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No users found</td></tr>';
         return;
     }
+
+    // Hex fallbacks for role/status badge colours (CSS vars can't go inside rgba())
+    const roleBadge = {
+        admin:    { bg: '#fde8e8', fg: '#dc2626', border: '#dc2626' },
+        manager:  { bg: '#dbeafe', fg: '#2563eb', border: '#2563eb' },
+        operator: { bg: '#d1fae5', fg: '#059669', border: '#059669' },
+        viewer:   { bg: '#f3f4f6', fg: '#6b7280', border: '#6b7280' }
+    };
+    const statusColor = { active: '#059669', suspended: '#d97706', inactive: '#6b7280' };
     
     tbody.innerHTML = users.map(user => {
-        const roleColors = {
-            admin: 'var(--accent-red)',
-            manager: 'var(--accent-blue)',
-            operator: 'var(--accent-green)',
-            viewer: 'var(--text-muted)'
-        };
-        
-        const statusColors = {
-            active: 'var(--accent-green)',
-            suspended: 'var(--accent-yellow)',
-            inactive: 'var(--text-muted)'
-        };
-        
-        const lastLogin = new Date(user.lastLogin);
-        const timeSince = formatTimeSince(lastLogin);
+        const rb = roleBadge[user.role] || roleBadge.viewer;
+        const sc = statusColor[user.status] || statusColor.inactive;
+        const lastLogin = user.lastLogin ? formatTimeSince(new Date(user.lastLogin)) : 'Never';
+        const safeEmail = escapeHtml(user.email);
         
         return `
             <tr>
                 <td style="font-weight: 500;">${escapeHtml(user.name)}</td>
-                <td>${escapeHtml(user.email)}</td>
+                <td>${safeEmail}</td>
                 <td>
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: rgba(${roleColors[user.role]}, 0.1); color: ${roleColors[user.role]}; border: 1px solid ${roleColors[user.role]};">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: ${rb.bg}; color: ${rb.fg}; border: 1px solid ${rb.border};">
                         ${user.role}
                     </span>
                 </td>
                 <td>
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; color: ${statusColors[user.status]};">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; color: ${sc};">
                         ● ${user.status}
                     </span>
                 </td>
-                <td style="color: var(--text-secondary);">${timeSince}</td>
+                <td style="color: var(--text-secondary);">${lastLogin}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;">Edit</button>
+                    <button class="btn btn-sm" onclick="openEditUserModal('${safeEmail}')" style="padding: 6px 12px; font-size: 13px;">Edit</button>
                 </td>
             </tr>
         `;
@@ -5828,103 +5826,97 @@ function filterUsers() {
 }
 
 /**
- * Open invite user modal
+ * Open add-user modal
  */
-function openInviteUserModal() {
-    document.getElementById('inviteUserModal').style.display = 'flex';
-    document.getElementById('invite-user-form').reset();
+function openAddUserModal() {
+    document.getElementById('addUserModal').style.display = 'flex';
+    document.getElementById('add-user-form').reset();
+    const msgEl = document.getElementById('add-user-message');
+    if (msgEl) msgEl.style.display = 'none';
 }
 
 /**
- * Close invite user modal
+ * Close add-user modal
  */
-function closeInviteUserModal() {
-    document.getElementById('inviteUserModal').style.display = 'none';
+function closeAddUserModal() {
+    document.getElementById('addUserModal').style.display = 'none';
 }
 
 /**
- * Send user invitation
+ * Create a new farm user via API
  */
-async function sendUserInvitation(event) {
+async function createUser(event) {
     event.preventDefault();
     
-    const email = document.getElementById('invite-email').value;
-    const firstName = document.getElementById('invite-first-name').value;
-    const lastName = document.getElementById('invite-last-name').value;
-    const role = document.getElementById('invite-role').value;
-    const message = document.getElementById('invite-message').value;
+    const email = document.getElementById('add-user-email').value;
+    const firstName = document.getElementById('add-user-first-name').value;
+    const lastName = document.getElementById('add-user-last-name').value;
+    const role = document.getElementById('add-user-role').value;
+    const password = document.getElementById('add-user-password').value;
+    const msgEl = document.getElementById('add-user-message');
     
     try {
-        // In production, would call API
-        // const response = await fetch('/api/users/invite', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //         'X-Farm-ID': localStorage.getItem('farm_id')
-        //     },
-        //     body: JSON.stringify({ email, firstName, lastName, role, message })
-        // });
-        
-        showToast(`Invitation sent to ${email}`, 'success');
-        closeInviteUserModal();
-        
-        // Add to pending invitations table
-        addPendingInvitation({
-            email,
-            role,
-            invitedBy: currentSession?.email || 'admin@greereachfarms.com',
-            sent: new Date().toISOString(),
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        const response = await fetch(`${API_BASE}/api/users/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                name: `${firstName} ${lastName}`.trim(),
+                first_name: firstName,
+                last_name: lastName,
+                role,
+                password,
+                farmId: currentSession.farmId
+            })
         });
-        
+
+        const data = await response.json();
+
+        if (response.ok) {
+            if (msgEl) {
+                msgEl.textContent = `User ${email} created. They can now log in.`;
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#d1fae5';
+                msgEl.style.color = '#065f46';
+            }
+            showToast(`User ${email} created`, 'success');
+            setTimeout(() => { closeAddUserModal(); loadUsers(); }, 1500);
+        } else {
+            throw new Error(data.message || data.error || 'Failed to create user');
+        }
     } catch (error) {
-        console.error('Error sending invitation:', error);
-        showToast('Error sending invitation', 'error');
+        console.error('Error creating user:', error);
+        if (msgEl) {
+            msgEl.textContent = error.message;
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fee2e2';
+            msgEl.style.color = '#991b1b';
+        }
+        showToast('Error creating user', 'error');
     }
 }
 
 /**
- * Add pending invitation to table
+ * Open edit user modal (identified by email)
  */
-function addPendingInvitation(invitation) {
-    const tbody = document.querySelector('#invitations-table tbody');
-    
-    // Remove "no invitations" message if present
-    if (tbody.querySelector('td[colspan]')) {
-        tbody.innerHTML = '';
-    }
-    
-    const sent = formatTimeSince(new Date(invitation.sent));
-    const expires = new Date(invitation.expires).toLocaleDateString();
-    
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>${escapeHtml(invitation.email)}</td>
-        <td style="text-transform: capitalize;">${invitation.role}</td>
-        <td>${escapeHtml(invitation.invitedBy)}</td>
-        <td>${sent}</td>
-        <td>${expires}</td>
-        <td>
-            <button class="btn btn-sm" onclick="resendInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px;">Resend</button>
-            <button class="btn btn-sm" onclick="cancelInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px; background: var(--accent-red);">Cancel</button>
-        </td>
-    `;
-    
-    tbody.appendChild(row);
-}
-
-/**
- * Open edit user modal
- */
-function openEditUserModal(userId) {
-    const user = window.allUsers.find(u => u.id === userId);
+function openEditUserModal(userEmail) {
+    const user = window.allUsers.find(u => u.email === userEmail);
     if (!user) return;
     
-    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('edit-user-email-key').value = user.email;
     document.getElementById('edit-user-name').value = user.name;
     document.getElementById('edit-user-email').value = user.email;
     document.getElementById('edit-user-role').value = user.role;
-    document.getElementById('edit-user-status').value = user.status;
+    document.getElementById('edit-user-status').value = user.status || 'active';
+
+    // Reset change-password section
+    const pwSection = document.getElementById('edit-user-pw-section');
+    if (pwSection) pwSection.style.display = 'none';
+    const pwMsg = document.getElementById('pw-change-message');
+    if (pwMsg) pwMsg.style.display = 'none';
     
     document.getElementById('editUserModal').style.display = 'flex';
 }
@@ -5937,28 +5929,30 @@ function closeEditUserModal() {
 }
 
 /**
- * Save user changes
+ * Save user changes via PATCH /api/users/update
  */
 async function saveUserChanges(event) {
     event.preventDefault();
     
-    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const email = document.getElementById('edit-user-email-key').value;
     const role = document.getElementById('edit-user-role').value;
     const status = document.getElementById('edit-user-status').value;
     
     try {
-        // In production, would call API
-        // const response = await fetch(`/api/users/${userId}`, {
-        //     method: 'PATCH',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //         'X-Farm-ID': localStorage.getItem('farm_id')
-        //     },
-        //     body: JSON.stringify({ role, status })
-        // });
+        const response = await fetch(`${API_BASE}/api/users/update`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({ email, role, status })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || data.error || 'Failed to update user');
         
         // Update local data
-        const user = window.allUsers.find(u => u.id === userId);
+        const user = window.allUsers.find(u => u.email === email);
         if (user) {
             user.role = role;
             user.status = status;
@@ -5970,68 +5964,92 @@ async function saveUserChanges(event) {
         
     } catch (error) {
         console.error('Error updating user:', error);
-        showToast('Error updating user', 'error');
+        showToast(error.message || 'Error updating user', 'error');
     }
 }
 
 /**
- * Remove user
+ * Remove user via POST /api/users/delete
  */
 async function removeUser() {
-    const userId = parseInt(document.getElementById('edit-user-id').value);
-    const user = window.allUsers.find(u => u.id === userId);
+    const email = document.getElementById('edit-user-email-key').value;
+    const user = window.allUsers.find(u => u.email === email);
     
-    if (!confirm(`Are you sure you want to remove ${user.name}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to remove ${user?.name || email}? This action cannot be undone.`)) {
         return;
     }
     
     try {
-        // In production, would call API
-        // await fetch(`/api/users/${userId}`, {
-        //     method: 'DELETE',
-        //     headers: { 'X-Farm-ID': localStorage.getItem('farm_id') }
-        // });
-        
-        window.allUsers = window.allUsers.filter(u => u.id !== userId);
+        const response = await fetch(`${API_BASE}/api/users/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({ email, farmId: currentSession.farmId })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || data.error || 'Failed to remove user');
         
         showToast('User removed successfully', 'success');
         closeEditUserModal();
-        renderUsersTable(window.allUsers);
+        loadUsers(); // Reload from server
         
     } catch (error) {
         console.error('Error removing user:', error);
-        showToast('Error removing user', 'error');
+        showToast(error.message || 'Error removing user', 'error');
     }
 }
 
 /**
- * Resend invitation
+ * Toggle change-password section in edit modal
  */
-function resendInvitation(email) {
-    showToast(`Invitation resent to ${email}`, 'success');
+function toggleChangePassword() {
+    const section = document.getElementById('edit-user-pw-section');
+    if (!section) return;
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
 }
 
 /**
- * Cancel invitation
+ * Handle password change from edit modal
  */
-function cancelInvitation(email) {
-    if (!confirm(`Cancel invitation for ${email}?`)) return;
-    
-    const tbody = document.querySelector('#invitations-table tbody');
-    const rows = tbody.querySelectorAll('tr');
-    
-    rows.forEach(row => {
-        if (row.cells[0].textContent === email) {
-            row.remove();
-        }
-    });
-    
-    // If no more rows, show "no invitations" message
-    if (tbody.children.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">No pending invitations</td></tr>';
+async function changeUserPassword(event) {
+    event.preventDefault();
+    const email = document.getElementById('edit-user-email-key').value;
+    const newPassword = document.getElementById('edit-new-password').value;
+    const confirmPassword = document.getElementById('edit-confirm-password').value;
+    const msgEl = document.getElementById('pw-change-message');
+
+    if (newPassword !== confirmPassword) {
+        if (msgEl) { msgEl.textContent = 'Passwords do not match'; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
+        return;
     }
-    
-    showToast('Invitation cancelled', 'info');
+    if (newPassword.length < 6) {
+        if (msgEl) { msgEl.textContent = 'Password must be at least 6 characters'; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/user/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({ email, newPassword })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || data.error || 'Failed to change password');
+
+        if (msgEl) { msgEl.textContent = 'Password updated successfully'; msgEl.style.display = 'block'; msgEl.style.background = '#d1fae5'; msgEl.style.color = '#065f46'; }
+        document.getElementById('edit-new-password').value = '';
+        document.getElementById('edit-confirm-password').value = '';
+        showToast('Password updated', 'success');
+    } catch (error) {
+        console.error('Error changing password:', error);
+        if (msgEl) { msgEl.textContent = error.message; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
+    }
 }
 
 /**
@@ -6459,199 +6477,9 @@ function showNotification(message, type = 'info') {
     alert(message);
 }
 // ========================================
-// USER MANAGEMENT FUNCTIONS
+// USER MANAGEMENT — System 2 removed.
+// All user CRUD now uses the System 1 functions above
+// (createUser, saveUserChanges, removeUser, changeUserPassword)
+// wired to /api/users/create, PATCH /api/users/update,
+// POST /api/users/delete, POST /api/user/change-password.
 // ========================================
-
-/**
- * Initialize user management section
- */
-async function initUserManagement() {
-    // Load current user info
-    if (currentSession && currentSession.email) {
-        const emailEl = document.getElementById('current-user-email');
-        const roleEl = document.getElementById('current-user-role');
-        if (emailEl) emailEl.value = currentSession.email || '';
-        if (roleEl) roleEl.value = currentSession.role || 'admin';
-    }
-
-    // Setup event listeners (with null guards for DOM elements)
-    const pwForm = document.getElementById('change-password-form');
-    if (pwForm) pwForm.addEventListener('submit', handlePasswordChange);
-
-    const addUserBtn = document.getElementById('add-user-btn');
-    if (addUserBtn) addUserBtn.addEventListener('click', () => {
-        const container = document.getElementById('add-user-form-container');
-        if (container) container.style.display = 'block';
-    });
-
-    const cancelBtn = document.getElementById('cancel-add-user-btn');
-    if (cancelBtn) cancelBtn.addEventListener('click', () => {
-        const container = document.getElementById('add-user-form-container');
-        if (container) container.style.display = 'none';
-        const form = document.getElementById('add-user-form');
-        if (form) form.reset();
-    });
-
-    const addUserForm = document.getElementById('add-user-form');
-    if (addUserForm) addUserForm.addEventListener('submit', handleAddUser);
-
-    // Load users list
-    await loadUsers();
-}
-
-/**
- * Handle password change
- */
-async function handlePasswordChange(event) {
-    event.preventDefault();
-    
-    const currentPassword = document.getElementById('current-password').value;
-    const newPassword = document.getElementById('new-password').value;
-    const confirmPassword = document.getElementById('confirm-password').value;
-    const messageEl = document.getElementById('password-change-message');
-
-    // Validate passwords match
-    if (newPassword !== confirmPassword) {
-        messageEl.textContent = 'New passwords do not match';
-        messageEl.style.display = 'block';
-        messageEl.style.background = '#fee';
-        messageEl.style.color = '#c33';
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/api/user/change-password`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({
-                currentPassword,
-                newPassword
-            })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            messageEl.textContent = 'Password updated successfully';
-            messageEl.style.display = 'block';
-            messageEl.style.background = '#efe';
-            messageEl.style.color = '#3a3';
-            document.getElementById('change-password-form').reset();
-        } else {
-            throw new Error(data.message || 'Failed to update password');
-        }
-    } catch (error) {
-        messageEl.textContent = error.message;
-        messageEl.style.display = 'block';
-        messageEl.style.background = '#fee';
-        messageEl.style.color = '#c33';
-    }
-}
-
-/**
- * Handle add new user
- */
-async function handleAddUser(event) {
-    event.preventDefault();
-    
-    const email = document.getElementById('new-user-email').value;
-    const name = document.getElementById('new-user-name').value;
-    const role = document.getElementById('new-user-role').value;
-    const password = document.getElementById('new-user-password').value;
-    const messageEl = document.getElementById('add-user-message');
-
-    try {
-        const response = await fetch(`${API_BASE}/api/users/create`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({
-                email,
-                name,
-                role,
-                password,
-                farmId: currentSession.farmId
-            })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            messageEl.textContent = 'User created successfully. They can now log in with the provided credentials.';
-            messageEl.style.display = 'block';
-            messageEl.style.background = '#efe';
-            messageEl.style.color = '#3a3';
-            document.getElementById('add-user-form').reset();
-            
-            // Reload users list
-            setTimeout(() => {
-                document.getElementById('add-user-form-container').style.display = 'none';
-                loadUsers();
-            }, 2000);
-        } else {
-            throw new Error(data.message || 'Failed to create user');
-        }
-    } catch (error) {
-        messageEl.textContent = error.message;
-        messageEl.style.display = 'block';
-        messageEl.style.background = '#fee';
-        messageEl.style.color = '#c33';
-    }
-}
-
-// NOTE: Duplicate loadUsers() removed — the authoritative version is in the
-// === USER MANAGEMENT === section above (uses /api/admin/farms/:farmId/users).
-
-/**
- * Delete user
- */
-async function deleteUser(email) {
-    if (!confirm(`Are you sure you want to remove ${email} from this farm?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/api/users/delete`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({
-                email,
-                farmId: currentSession.farmId
-            })
-        });
-
-        if (response.ok) {
-            showNotification('User removed successfully', 'success');
-            loadUsers();
-        } else {
-            const data = await response.json();
-            throw new Error(data.message || 'Failed to remove user');
-        }
-    } catch (error) {
-        showNotification(error.message, 'error');
-    }
-}
-
-// Initialize user management when the section is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if we're on the users section
-    const urlHash = window.location.hash;
-    if (urlHash === '#users') {
-        initUserManagement();
-    }
-    
-    // Also initialize when navigating to users section
-    document.addEventListener('click', (e) => {
-        if (e.target.matches('[data-section="users"]') || e.target.closest('[data-section="users"]')) {
-            setTimeout(() => initUserManagement(), 100);
-        }
-    });
-});
