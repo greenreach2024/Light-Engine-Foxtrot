@@ -574,6 +574,111 @@ router.get('/classifications/metrics', async (req, res) => {
   });
 });
 
+router.get('/classifications/trends', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const from = req.query.from;
+  const to = req.query.to;
+  const source = req.query.source;
+  const daysParam = req.query.days;
+
+  let days = 14;
+  if (daysParam != null) {
+    const parsed = Number(daysParam);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 90) {
+      return res.status(400).json({ ok: false, error: 'invalid_days', expected: 'integer between 1 and 90' });
+    }
+    days = parsed;
+  }
+
+  const trendRows = await query(
+    `WITH bounds AS (
+       SELECT
+         COALESCE($1::date, CURRENT_DATE - ($2::int - 1)) AS from_date,
+         COALESCE($3::date, CURRENT_DATE) AS to_date
+     ),
+     series AS (
+       SELECT generate_series(b.from_date, b.to_date, INTERVAL '1 day')::date AS day
+       FROM bounds b
+     ),
+     filtered AS (
+       SELECT
+         DATE(c.created_at) AS day,
+         c.status,
+         c.confidence
+       FROM accounting_classifications c
+       LEFT JOIN accounting_transactions t ON t.id = c.transaction_id
+       LEFT JOIN accounting_sources s ON s.id = t.source_id
+       CROSS JOIN bounds b
+       WHERE DATE(c.created_at) >= b.from_date
+         AND DATE(c.created_at) <= b.to_date
+         AND ($4::text IS NULL OR s.source_key = $4)
+     ),
+     aggregates AS (
+       SELECT
+         day,
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved_count,
+         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected_count,
+         ROUND(COALESCE(AVG(confidence), 0)::numeric, 4) AS avg_confidence
+       FROM filtered
+       GROUP BY day
+     )
+     SELECT
+       s.day,
+       COALESCE(a.total, 0)::int AS total,
+       COALESCE(a.pending_count, 0)::int AS pending_count,
+       COALESCE(a.approved_count, 0)::int AS approved_count,
+       COALESCE(a.rejected_count, 0)::int AS rejected_count,
+       COALESCE(a.avg_confidence, 0)::numeric AS avg_confidence
+     FROM series s
+     LEFT JOIN aggregates a ON a.day = s.day
+     ORDER BY s.day ASC`,
+    [from || null, days, to || null, source || null]
+  );
+
+  const trend = trendRows.rows.map(row => ({
+    date: row.day instanceof Date ? row.day.toISOString().slice(0, 10) : String(row.day).slice(0, 10),
+    total: Number(row.total || 0),
+    by_status: {
+      pending: Number(row.pending_count || 0),
+      approved: Number(row.approved_count || 0),
+      rejected: Number(row.rejected_count || 0)
+    },
+    avg_confidence: Number(row.avg_confidence || 0)
+  }));
+
+  const summary = trend.reduce((acc, point) => {
+    acc.total += point.total;
+    acc.by_status.pending += point.by_status.pending;
+    acc.by_status.approved += point.by_status.approved;
+    acc.by_status.rejected += point.by_status.rejected;
+    return acc;
+  }, {
+    total: 0,
+    by_status: {
+      pending: 0,
+      approved: 0,
+      rejected: 0
+    }
+  });
+
+  return res.json({
+    ok: true,
+    filters: {
+      from: from || null,
+      to: to || null,
+      source: source || null,
+      days
+    },
+    summary,
+    trend
+  });
+});
+
 router.patch('/classifications/:classificationId(\\d+)/review', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
