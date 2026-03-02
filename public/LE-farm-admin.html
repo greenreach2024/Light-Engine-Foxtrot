@@ -1922,173 +1922,252 @@
                 <div class="header">
                     <h1>Sustainability & ESG Dashboard</h1>
                     <div class="header-actions">
-                        <button onclick="exportESGReport()" style="padding: 8px 16px; background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer;">Export ESG Report</button>
+                        <button onclick="exportESGReport()" style="padding: 8px 16px; background: linear-gradient(135deg, #2196F3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Export ESG Report</button>
                     </div>
                 </div>
 
-                <!-- ESG Score Card -->
-                <div class="card" style="margin-bottom: 24px;">
-                    <div style="padding: 32px; text-align: center;">
-                        <div style="font-size: 48px; font-weight: bold; color: #4caf50; margin-bottom: 8px;" id="esgScore">-</div>
-                        <div style="font-size: 24px; color: var(--text-secondary); margin-bottom: 16px;" id="esgGrade">-</div>
-                        <div style="display: flex; justify-content: center; gap: 32px; margin-top: 24px;">
-                            <div>
-                                <div style="font-size: 14px; color: var(--text-secondary);">Energy</div>
-                                <div style="font-size: 20px; font-weight: bold;" id="energyScore">-</div>
+                <!-- Info Banner -->
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 1.2rem;">🌱</span>
+                    <div style="flex: 1;">
+                        <strong style="color: #10b981;">Data-Driven Sustainability</strong>
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;"> — Upload your utility bills to track energy, water, and carbon metrics. All values shown per kg harvested when harvest data is available.</span>
+                    </div>
+                </div>
+
+                <!-- Summary Stats Cards -->
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-value" id="sustEnergyKwh">--</div>
+                        <div class="stat-label">Energy (kWh)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="sustWaterL">--</div>
+                        <div class="stat-label">Water (L)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="sustCarbonKg">--</div>
+                        <div class="stat-label">Carbon (kg CO₂)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="sustFoodMiles">--</div>
+                        <div class="stat-label">Avg Food Miles</div>
+                    </div>
+                </div>
+
+                <!-- Tab bar -->
+                <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border);">
+                    <button id="sust-tab-metrics" onclick="switchSustainabilityTab('metrics')" style="padding: 10px 20px; background: none; border: none; border-bottom: 2px solid var(--accent-blue); margin-bottom: -2px; color: var(--accent-blue); font-weight: 600; cursor: pointer;">Environmental Metrics</button>
+                    <button id="sust-tab-bills" onclick="switchSustainabilityTab('bills')" style="padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-secondary); cursor: pointer;">Utility Bills</button>
+                    <button id="sust-tab-foodmiles" onclick="switchSustainabilityTab('foodmiles')" style="padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-secondary); cursor: pointer;">Food Miles</button>
+                </div>
+
+                <!-- Tab 1: Environmental Metrics -->
+                <div id="sust-panel-metrics">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px;">
+                        <!-- Energy Card -->
+                        <div class="card">
+                            <div class="card-header"><h3>Energy (30 days)</h3></div>
+                            <div style="padding: 16px;">
+                                <div style="font-size: 32px; font-weight: bold; margin-bottom: 4px;" id="totalEnergy">--</div>
+                                <div style="color: var(--text-secondary); margin-bottom: 12px;">Total kWh</div>
+                                <div style="display: flex; gap: 16px;">
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Carbon</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="energyCarbon">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Cost</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="energyCost">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Per kg</div>
+                                        <div style="font-size: 18px; font-weight: bold; color: #4caf50;" id="energyPerKg">--</div>
+                                    </div>
+                                </div>
+                                <canvas id="energyChart" style="margin-top: 16px; max-height: 200px;"></canvas>
                             </div>
-                            <div>
-                                <div style="font-size: 14px; color: var(--text-secondary);">Water</div>
-                                <div style="font-size: 20px; font-weight: bold;" id="waterScore">-</div>
+                        </div>
+
+                        <!-- Water Card -->
+                        <div class="card">
+                            <div class="card-header"><h3>Water (30 days)</h3></div>
+                            <div style="padding: 16px;">
+                                <div style="font-size: 32px; font-weight: bold; margin-bottom: 4px;" id="totalWater">--</div>
+                                <div style="color: var(--text-secondary); margin-bottom: 12px;">Total Liters</div>
+                                <div style="display: flex; gap: 16px;">
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Carbon</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="waterCarbon">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Cost</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="waterCost">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Per kg</div>
+                                        <div style="font-size: 18px; font-weight: bold; color: #2196f3;" id="waterPerKg">--</div>
+                                    </div>
+                                </div>
+                                <canvas id="waterChart" style="margin-top: 16px; max-height: 200px;"></canvas>
                             </div>
-                            <div>
-                                <div style="font-size: 14px; color: var(--text-secondary);">Nutrients</div>
-                                <div style="font-size: 20px; font-weight: bold;" id="nutrientsScore">-</div>
+                        </div>
+
+                        <!-- Carbon Card -->
+                        <div class="card">
+                            <div class="card-header"><h3>Carbon Footprint (30 days)</h3></div>
+                            <div style="padding: 16px;">
+                                <div style="font-size: 32px; font-weight: bold; margin-bottom: 4px;" id="totalCarbon">--</div>
+                                <div style="color: var(--text-secondary); margin-bottom: 12px;">Total kg CO₂</div>
+                                <div style="display: flex; gap: 16px;">
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Daily Avg</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="dailyCarbon">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Annual Est</div>
+                                        <div style="font-size: 18px; font-weight: bold;" id="annualCarbon">--</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">Per kg</div>
+                                        <div style="font-size: 18px; font-weight: bold; color: #ff9800;" id="carbonPerKg">--</div>
+                                    </div>
+                                </div>
+                                <canvas id="carbonChart" style="margin-top: 16px; max-height: 200px;"></canvas>
                             </div>
-                            <div>
-                                <div style="font-size: 14px; color: var(--text-secondary);">Waste</div>
-                                <div style="font-size: 20px; font-weight: bold;" id="wasteScore">-</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 14px; color: var(--text-secondary);">Carbon</div>
-                                <div style="font-size: 20px; font-weight: bold;" id="carbonScore">-</div>
+                        </div>
+
+                        <!-- Per-kg Summary Card -->
+                        <div class="card">
+                            <div class="card-header"><h3>Production Efficiency</h3></div>
+                            <div style="padding: 16px;">
+                                <div id="perKgSummary" style="text-align: center; padding: 20px;">
+                                    <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">Metrics per kg harvested</div>
+                                    <div id="perKgContent" style="color: var(--text-secondary);">Upload utility bills to see per-kg metrics</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Environmental Metrics Grid -->
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px;">
-                    <!-- Energy Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Energy Usage (30 days)</h3>
-                        </div>
-                        <div style="padding: 16px;">
-                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalEnergy">-</div>
-                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kWh</div>
-                            <div style="display: flex; gap: 16px;">
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Renewable</div>
-                                    <div style="font-size: 18px; font-weight: bold; color: #4caf50;" id="renewablePercent">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Carbon (kg)</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="energyCarbon">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Cost (CAD)</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="energyCost">-</div>
-                                </div>
-                            </div>
-                            <canvas id="energyChart" style="margin-top: 16px; max-height: 200px;"></canvas>
-                        </div>
+                <!-- Tab 2: Utility Bills -->
+                <div id="sust-panel-bills" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">Utility Bills</h3>
+                        <button onclick="openUtilityBillModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">+ Record Bill</button>
                     </div>
-
-                    <!-- Water Card -->
                     <div class="card">
-                        <div class="card-header">
-                            <h3>Water Usage (30 days)</h3>
-                        </div>
-                        <div style="padding: 16px;">
-                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalWater">-</div>
-                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total Liters</div>
-                            <div style="display: flex; gap: 16px;">
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Recycling</div>
-                                    <div style="font-size: 18px; font-weight: bold; color: #2196f3;" id="waterRecycling">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Savings (CAD)</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="waterSavings">-</div>
-                                </div>
-                            </div>
-                            <canvas id="waterChart" style="margin-top: 16px; max-height: 200px;"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Carbon Footprint Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Carbon Footprint (30 days)</h3>
-                        </div>
-                        <div style="padding: 16px;">
-                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalCarbon">-</div>
-                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kg CO2</div>
-                            <div style="display: flex; gap: 16px;">
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Daily Avg</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="dailyCarbon">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Annual Projection</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="annualCarbon">-</div>
-                                </div>
-                            </div>
-                            <canvas id="carbonChart" style="margin-top: 16px; max-height: 200px;"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Waste Management Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Waste Management (30 days)</h3>
-                        </div>
-                        <div style="padding: 16px;">
-                            <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="totalWaste">-</div>
-                            <div style="color: var(--text-secondary); margin-bottom: 16px;">Total kg</div>
-                            <div style="display: flex; gap: 16px;">
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Diversion Rate</div>
-                                    <div style="font-size: 18px; font-weight: bold; color: #4caf50;" id="diversionRate">-</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px; color: var(--text-secondary);">Landfill</div>
-                                    <div style="font-size: 18px; font-weight: bold;" id="landfillWaste">-</div>
-                                </div>
-                            </div>
-                            <canvas id="wasteChart" style="margin-top: 16px; max-height: 200px;"></canvas>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Period</th>
+                                        <th>Usage</th>
+                                        <th>Cost</th>
+                                        <th>Carbon (kg CO₂)</th>
+                                        <th>Recorded</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="utilityBillsList">
+                                    <tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No utility bills recorded yet. Click "Record Bill" to add your first.</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- Sustainability Goals -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Sustainability Goals</h2>
-                    </div>
-                    <div style="padding: 16px;">
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                            <div>
-                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                                    <span>Renewable Energy</span>
-                                    <span id="renewableProgress" style="font-weight: bold;">-</span>
-                                </div>
-                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
-                                    <div id="renewableBar" style="height: 100%; background: linear-gradient(90deg, #4caf50, #45a049); width: 0%; transition: width 0.3s;"></div>
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 40%</div>
-                            </div>
-                            <div>
-                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                                    <span>Water Recycling</span>
-                                    <span id="recyclingProgress" style="font-weight: bold;">-</span>
-                                </div>
-                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
-                                    <div id="recyclingBar" style="height: 100%; background: linear-gradient(90deg, #2196f3, #1976d2); width: 0%; transition: width 0.3s;"></div>
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 95%</div>
-                            </div>
-                            <div>
-                                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                                    <span>Waste Diversion</span>
-                                    <span id="diversionProgress" style="font-weight: bold;">-</span>
-                                </div>
-                                <div style="height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden;">
-                                    <div id="diversionBar" style="height: 100%; background: linear-gradient(90deg, #ff9800, #f57c00); width: 0%; transition: width 0.3s;"></div>
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Target: 90%</div>
+                <!-- Tab 3: Food Miles -->
+                <div id="sust-panel-foodmiles" style="display: none;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
+                        <div class="card">
+                            <div class="card-header"><h3>Your Food Miles</h3></div>
+                            <div style="padding: 24px; text-align: center;">
+                                <div style="font-size: 48px; font-weight: bold; color: #10b981;" id="foodMilesValue">--</div>
+                                <div style="color: var(--text-secondary); margin-bottom: 16px;">Average miles to buyers</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Based on <span id="foodMilesBuyerCount">0</span> buyer locations</div>
                             </div>
                         </div>
+                        <div class="card">
+                            <div class="card-header"><h3>vs. Conventional Supply Chain</h3></div>
+                            <div style="padding: 24px; text-align: center;">
+                                <div style="font-size: 48px; font-weight: bold; color: var(--text-secondary);">1,500</div>
+                                <div style="color: var(--text-secondary); margin-bottom: 16px;">Average conventional food miles (USDA)</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #10b981;" id="foodMilesReduction">--</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">reduction vs conventional</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Utility Bill Modal -->
+            <div id="utilityBillModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 550px;">
+                    <div class="modal-header">
+                        <h2>Record Utility Bill</h2>
+                        <button onclick="closeUtilityBillModal()" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="display: grid; gap: 16px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Bill Type *</label>
+                                <select id="billType" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <option value="electricity">Electricity</option>
+                                    <option value="natural_gas">Natural Gas</option>
+                                    <option value="propane">Propane</option>
+                                    <option value="water">Water</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Period Start</label>
+                                    <input type="date" id="billPeriodStart" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Period End</label>
+                                    <input type="date" id="billPeriodEnd" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Usage Amount *</label>
+                                    <input type="number" id="billUsageAmount" step="0.01" min="0" placeholder="e.g. 450" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Unit</label>
+                                    <select id="billUsageUnit" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="kWh">kWh</option>
+                                        <option value="m³">m³</option>
+                                        <option value="L">L</option>
+                                        <option value="gal">gal</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Cost</label>
+                                    <input type="number" id="billCost" step="0.01" min="0" placeholder="e.g. 85.50" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Currency</label>
+                                    <select id="billCurrency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <option value="CAD">CAD</option>
+                                        <option value="USD">USD</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px;">Notes</label>
+                                <textarea id="billNotes" rows="2" placeholder="Optional notes..." style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); resize: vertical;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px;">
+                        <button onclick="closeUtilityBillModal()" style="padding: 8px 16px; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancel</button>
+                        <button onclick="submitUtilityBill()" style="padding: 8px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Save Bill</button>
                     </div>
                 </div>
             </div>
@@ -4545,179 +4624,285 @@
         }
 
         // ===================================================================
+        // ===================================================================
         // SUSTAINABILITY DASHBOARD FUNCTIONS
         // ===================================================================
         
         const SUSTAINABILITY_API = (window.API_BASE || window.location.origin) + '/api/sustainability';
-        let energyChart, waterChart, carbonChart, wasteChart;
+        let energyChart, waterChart, carbonChart;
+        let utilityBills = [];
+        let sustainabilityMetrics = null;
 
         async function loadSustainabilityDashboard() {
             try {
-                const [esgRes, energyRes, waterRes, carbonRes, wasteRes, trendsRes] = await Promise.all([
-                    fetch(`${SUSTAINABILITY_API}/esg-report`),
-                    fetch(`${SUSTAINABILITY_API}/energy/usage?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/water/usage?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/carbon-footprint?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/waste/tracking?days=30`),
+                const [metricsRes, billsRes, foodRes, trendsRes] = await Promise.all([
+                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetch(`${SUSTAINABILITY_API}/food-miles`),
                     fetch(`${SUSTAINABILITY_API}/trends?days=30`)
                 ]);
                 
-                const esg = await esgRes.json();
-                const energy = await energyRes.json();
-                const water = await waterRes.json();
-                const carbon = await carbonRes.json();
-                const waste = await wasteRes.json();
+                const metrics = await metricsRes.json();
+                const billsData = await billsRes.json();
+                const food = await foodRes.json();
                 const trends = await trendsRes.json();
                 
-                if (esg.ok) {
-                    displayESGScore(esg);
-                    displayEnergyData(energy);
-                    displayWaterData(water);
-                    displayCarbonData(carbon);
-                    displayWasteData(waste);
-                    displaySustainabilityGoals(esg);
-                    
-                    if (trends.ok) {
-                        createSustainabilityCharts(trends.trends);
-                    }
+                if (metrics.ok) {
+                    sustainabilityMetrics = metrics;
+                    displaySustMetrics(metrics);
                 }
+                if (billsData.ok) {
+                    utilityBills = billsData.bills || [];
+                    renderUtilityBills();
+                }
+                if (food.ok) displayFoodMiles(food);
+                if (trends.ok) createSustainabilityCharts(trends.trends);
             } catch (error) {
                 console.error('Error loading sustainability dashboard:', error);
             }
         }
 
-        function displayESGScore(data) {
-            document.getElementById('esgScore').textContent = data.esg_score.total_score;
-            document.getElementById('esgGrade').textContent = `Grade: ${data.esg_score.grade}`;
-            document.getElementById('energyScore').textContent = data.esg_score.breakdown.energy;
-            document.getElementById('waterScore').textContent = data.esg_score.breakdown.water;
-            document.getElementById('nutrientsScore').textContent = data.esg_score.breakdown.nutrients;
-            document.getElementById('wasteScore').textContent = data.esg_score.breakdown.waste;
-            document.getElementById('carbonScore').textContent = data.esg_score.breakdown.carbon;
-        }
-
-        function displayEnergyData(data) {
-            if (!data.ok) return;
-            document.getElementById('totalEnergy').textContent = `${data.total_kwh.toLocaleString()} kWh`;
-            document.getElementById('renewablePercent').textContent = 
-                `${((data.by_source.solar?.kwh || 0) / data.total_kwh * 100).toFixed(1)}%`;
-            document.getElementById('energyCarbon').textContent = `${data.total_carbon_kg.toFixed(0)} kg`;
-            document.getElementById('energyCost').textContent = `$${data.total_cost_cad.toFixed(2)}`;
-        }
-
-        function displayWaterData(data) {
-            if (!data.ok) return;
-            document.getElementById('totalWater').textContent = `${data.total_liters_used.toLocaleString()} L`;
-            document.getElementById('waterRecycling').textContent = `${data.average_efficiency_percent.toFixed(1)}%`;
-            document.getElementById('waterSavings').textContent = 
-                `$${(data.total_liters_recycled * 0.003).toFixed(2)}`;
-        }
-
-        function displayCarbonData(data) {
-            if (!data.ok) return;
-            document.getElementById('totalCarbon').textContent = `${data.total_carbon_kg.toFixed(0)} kg`;
-            document.getElementById('dailyCarbon').textContent = `${data.daily_average_kg.toFixed(1)} kg/day`;
-            document.getElementById('annualCarbon').textContent = 
-                `${(data.daily_average_kg * 365).toFixed(0)} kg/year`;
-        }
-
-        function displayWasteData(data) {
-            if (!data.ok) return;
-            document.getElementById('totalWaste').textContent = `${data.total_waste_kg.toFixed(1)} kg`;
-            document.getElementById('diversionRate').textContent = `${data.diversion_rate_percent.toFixed(1)}%`;
-            document.getElementById('landfillWaste').textContent = 
-                `${(data.total_waste_kg - data.total_diverted_kg).toFixed(1)} kg`;
-        }
-
-        function displaySustainabilityGoals(data) {
-            const renewable = data.esg_score.metrics.renewable_energy_percent;
-            const recycling = data.esg_score.metrics.water_recycling_percent;
-            const diversion = data.esg_score.metrics.waste_diversion_percent;
+        function displaySustMetrics(m) {
+            // Stats cards
+            document.getElementById('sustEnergyKwh').textContent = m.energy.total_kwh ? m.energy.total_kwh.toLocaleString() : '0';
+            document.getElementById('sustWaterL').textContent = m.water.total_liters ? m.water.total_liters.toLocaleString() : '0';
+            document.getElementById('sustCarbonKg').textContent = m.carbon.total_kg ? m.carbon.total_kg.toFixed(1) : '0';
             
-            document.getElementById('renewableProgress').textContent = `${renewable.toFixed(1)}%`;
-            document.getElementById('renewableBar').style.width = `${(renewable / 40) * 100}%`;
+            // Energy card
+            document.getElementById('totalEnergy').textContent = m.energy.total_kwh ? `${m.energy.total_kwh.toLocaleString()}` : '0';
+            document.getElementById('energyCarbon').textContent = `${(m.energy.carbon_kg || 0).toFixed(1)} kg`;
+            document.getElementById('energyCost').textContent = `$${(m.energy.total_cost || 0).toFixed(2)}`;
+            document.getElementById('energyPerKg').textContent = m.per_kg_harvested ? `${m.per_kg_harvested.energy_kwh.toFixed(2)}` : 'N/A';
             
-            document.getElementById('recyclingProgress').textContent = `${recycling.toFixed(1)}%`;
-            document.getElementById('recyclingBar').style.width = `${(recycling / 95) * 100}%`;
+            // Water card
+            document.getElementById('totalWater').textContent = m.water.total_liters ? `${m.water.total_liters.toLocaleString()}` : '0';
+            document.getElementById('waterCarbon').textContent = `${(m.water.carbon_kg || 0).toFixed(3)} kg`;
+            document.getElementById('waterCost').textContent = `$${(m.water.total_cost || 0).toFixed(2)}`;
+            document.getElementById('waterPerKg').textContent = m.per_kg_harvested ? `${m.per_kg_harvested.water_l.toFixed(1)}` : 'N/A';
             
-            document.getElementById('diversionProgress').textContent = `${diversion.toFixed(1)}%`;
-            document.getElementById('diversionBar').style.width = `${(diversion / 90) * 100}%`;
+            // Carbon card
+            document.getElementById('totalCarbon').textContent = m.carbon.total_kg ? `${m.carbon.total_kg.toFixed(1)}` : '0';
+            document.getElementById('dailyCarbon').textContent = `${(m.carbon.daily_average_kg || 0).toFixed(2)} kg/day`;
+            document.getElementById('annualCarbon').textContent = `${((m.carbon.daily_average_kg || 0) * 365).toFixed(0)} kg/yr`;
+            document.getElementById('carbonPerKg').textContent = m.per_kg_harvested ? `${m.per_kg_harvested.carbon_kg.toFixed(3)}` : 'N/A';
+            
+            // Per-kg summary card
+            const perKgEl = document.getElementById('perKgContent');
+            if (m.per_kg_harvested) {
+                perKgEl.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center;">
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #4caf50;">${m.per_kg_harvested.energy_kwh.toFixed(2)}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">kWh / kg</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #2196f3;">${m.per_kg_harvested.water_l.toFixed(1)}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">L / kg</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #ff9800;">${m.per_kg_harvested.carbon_kg.toFixed(3)}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">kg CO₂ / kg</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);">Based on ${m.per_kg_harvested.harvest_kg.toFixed(1)} kg harvested</div>`;
+            } else {
+                perKgEl.textContent = 'No harvest data available for per-kg calculations';
+            }
+        }
+
+        function displayFoodMiles(data) {
+            document.getElementById('sustFoodMiles').textContent = data.avg_food_miles ? data.avg_food_miles.toFixed(0) : '--';
+            document.getElementById('foodMilesValue').textContent = data.avg_food_miles ? data.avg_food_miles.toFixed(1) : '--';
+            document.getElementById('foodMilesBuyerCount').textContent = data.buyer_count || 0;
+            document.getElementById('foodMilesReduction').textContent = data.reduction_percent ? `${data.reduction_percent}% less` : '--';
+        }
+
+        function switchSustainabilityTab(tab) {
+            ['metrics', 'bills', 'foodmiles'].forEach(t => {
+                const panel = document.getElementById(`sust-panel-${t}`);
+                const btn = document.getElementById(`sust-tab-${t}`);
+                if (panel) panel.style.display = t === tab ? '' : 'none';
+                if (btn) {
+                    btn.style.borderBottomColor = t === tab ? 'var(--accent-blue)' : 'transparent';
+                    btn.style.color = t === tab ? 'var(--accent-blue)' : 'var(--text-secondary)';
+                    btn.style.fontWeight = t === tab ? '600' : '400';
+                }
+            });
+        }
+
+        // Carbon emission factors for bill display
+        const CARBON_FACTORS = { electricity: 0.42, natural_gas: 1.89, propane: 1.51, water: 0.000298 };
+
+        function renderUtilityBills() {
+            const tbody = document.getElementById('utilityBillsList');
+            if (!tbody) return;
+            if (!utilityBills.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No utility bills recorded yet. Click "Record Bill" to add your first.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = utilityBills.map(b => {
+                const carbonKg = (b.usage_amount || 0) * (CARBON_FACTORS[b.bill_type] || 0);
+                const period = b.billing_period_start && b.billing_period_end
+                    ? `${new Date(b.billing_period_start).toLocaleDateString()} – ${new Date(b.billing_period_end).toLocaleDateString()}`
+                    : '—';
+                const typeLabel = { electricity: 'Electricity', natural_gas: 'Natural Gas', propane: 'Propane', water: 'Water', other: 'Other' }[b.bill_type] || b.bill_type;
+                return `<tr>
+                    <td><span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: rgba(33,150,243,0.1); color: #2196f3;">${typeLabel}</span></td>
+                    <td>${period}</td>
+                    <td>${b.usage_amount?.toLocaleString() || 0} ${b.usage_unit || ''}</td>
+                    <td>${b.cost != null ? `$${b.cost.toFixed(2)} ${b.currency || ''}` : '—'}</td>
+                    <td>${carbonKg.toFixed(2)}</td>
+                    <td>${new Date(b.created_at).toLocaleDateString()}</td>
+                    <td><button onclick="deleteUtilityBill('${b.id}')" style="padding: 4px 8px; background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); border-radius: 4px; cursor: pointer; font-size: 12px;">Delete</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function openUtilityBillModal() {
+            document.getElementById('utilityBillModal').style.display = 'flex';
+            // Reset form
+            document.getElementById('billType').value = 'electricity';
+            document.getElementById('billPeriodStart').value = '';
+            document.getElementById('billPeriodEnd').value = '';
+            document.getElementById('billUsageAmount').value = '';
+            document.getElementById('billUsageUnit').value = 'kWh';
+            document.getElementById('billCost').value = '';
+            document.getElementById('billCurrency').value = 'CAD';
+            document.getElementById('billNotes').value = '';
+        }
+
+        function closeUtilityBillModal() {
+            document.getElementById('utilityBillModal').style.display = 'none';
+        }
+
+        async function submitUtilityBill() {
+            const bill = {
+                bill_type: document.getElementById('billType').value,
+                billing_period_start: document.getElementById('billPeriodStart').value || null,
+                billing_period_end: document.getElementById('billPeriodEnd').value || null,
+                usage_amount: parseFloat(document.getElementById('billUsageAmount').value),
+                usage_unit: document.getElementById('billUsageUnit').value,
+                cost: document.getElementById('billCost').value ? parseFloat(document.getElementById('billCost').value) : null,
+                currency: document.getElementById('billCurrency').value,
+                notes: document.getElementById('billNotes').value
+            };
+            if (!bill.bill_type || isNaN(bill.usage_amount)) {
+                alert('Bill type and usage amount are required.');
+                return;
+            }
+            try {
+                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bill)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    closeUtilityBillModal();
+                    loadSustainabilityDashboard();
+                    if (typeof showNotification === 'function') showNotification('Utility bill saved', 'success');
+                } else {
+                    alert(data.error || 'Failed to save bill');
+                }
+            } catch (e) {
+                console.error('Submit bill error:', e);
+                alert('Error saving bill');
+            }
+        }
+
+        async function deleteUtilityBill(id) {
+            if (!confirm('Delete this utility bill?')) return;
+            try {
+                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.ok) {
+                    loadSustainabilityDashboard();
+                    if (typeof showNotification === 'function') showNotification('Bill deleted', 'success');
+                }
+            } catch (e) {
+                console.error('Delete bill error:', e);
+            }
         }
 
         function createSustainabilityCharts(trends) {
             const labels = trends.map(t => new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            const chartOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
             
-            // Energy Chart
             const energyCtx = document.getElementById('energyChart');
             if (energyChart) energyChart.destroy();
             energyChart = new Chart(energyCtx, {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Energy (kWh)',
-                        data: trends.map(t => t.energy_kwh),
-                        borderColor: '#4caf50',
-                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                data: { labels, datasets: [{ label: 'Energy (kWh)', data: trends.map(t => t.energy_kwh), borderColor: '#4caf50', backgroundColor: 'rgba(76,175,80,0.1)', tension: 0.4 }] },
+                options: chartOpts
             });
             
-            // Water Chart
             const waterCtx = document.getElementById('waterChart');
             if (waterChart) waterChart.destroy();
             waterChart = new Chart(waterCtx, {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Water (L)',
-                        data: trends.map(t => t.water_liters),
-                        borderColor: '#2196f3',
-                        backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                data: { labels, datasets: [{ label: 'Water (L)', data: trends.map(t => t.water_liters), borderColor: '#2196f3', backgroundColor: 'rgba(33,150,243,0.1)', tension: 0.4 }] },
+                options: chartOpts
             });
             
-            // Carbon Chart
             const carbonCtx = document.getElementById('carbonChart');
             if (carbonChart) carbonChart.destroy();
             carbonChart = new Chart(carbonCtx, {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Carbon (kg)',
-                        data: trends.map(t => t.carbon_kg),
-                        borderColor: '#ff9800',
-                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                data: { labels, datasets: [{ label: 'Carbon (kg)', data: trends.map(t => t.carbon_kg), borderColor: '#ff9800', backgroundColor: 'rgba(255,152,0,0.1)', tension: 0.4 }] },
+                options: chartOpts
             });
         }
 
         async function exportESGReport() {
             try {
-                const response = await fetch(`${SUSTAINABILITY_API}/esg-report`);
-                const data = await response.json();
-                
-                if (data.ok) {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `esg-report-${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                const [metricsRes, billsRes, foodRes] = await Promise.all([
+                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetch(`${SUSTAINABILITY_API}/food-miles`)
+                ]);
+                const metrics = await metricsRes.json();
+                const billsData = await billsRes.json();
+                const food = await foodRes.json();
+
+                // Build CSV
+                const rows = [['Sustainability & ESG Report', new Date().toISOString().split('T')[0]]];
+                rows.push([]);
+                rows.push(['ENVIRONMENTAL METRICS (30 days)']);
+                rows.push(['Metric', 'Value', 'Unit', 'Per kg Harvested']);
+                if (metrics.ok) {
+                    const pk = metrics.per_kg_harvested;
+                    rows.push(['Energy', metrics.energy.total_kwh, 'kWh', pk ? pk.energy_kwh.toFixed(2) : 'N/A']);
+                    rows.push(['Water', metrics.water.total_liters, 'L', pk ? pk.water_l.toFixed(1) : 'N/A']);
+                    rows.push(['Carbon', metrics.carbon.total_kg.toFixed(2), 'kg CO₂', pk ? pk.carbon_kg.toFixed(3) : 'N/A']);
+                    rows.push(['Energy Cost', metrics.energy.total_cost.toFixed(2), metrics.currency || 'CAD', '']);
+                    rows.push(['Water Cost', metrics.water.total_cost.toFixed(2), metrics.currency || 'CAD', '']);
                 }
+                rows.push([]);
+                rows.push(['FOOD MILES']);
+                if (food.ok) {
+                    rows.push(['Average Food Miles', food.avg_food_miles?.toFixed(1) || 0, 'miles', '']);
+                    rows.push(['Conventional Average', 1500, 'miles', '']);
+                    rows.push(['Reduction', food.reduction_percent || 'N/A', '%', '']);
+                }
+                rows.push([]);
+                rows.push(['UTILITY BILLS']);
+                rows.push(['Type', 'Period', 'Usage', 'Unit', 'Cost', 'Currency', 'Date']);
+                if (billsData.ok) {
+                    for (const b of (billsData.bills || [])) {
+                        rows.push([b.bill_type, `${b.billing_period_start || ''} to ${b.billing_period_end || ''}`, b.usage_amount, b.usage_unit, b.cost || '', b.currency || '', b.created_at?.split('T')[0] || '']);
+                    }
+                }
+
+                const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `esg-report-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             } catch (error) {
                 console.error('Error exporting ESG report:', error);
                 alert('Error exporting ESG report');

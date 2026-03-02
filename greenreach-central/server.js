@@ -45,6 +45,8 @@ import plantingRoutes from './routes/planting.js';
 import planningRoutes from './routes/planning.js';
 import marketIntelligenceRoutes from './routes/market-intelligence.js';
 import cropPricingRoutes from './routes/crop-pricing.js';
+import qualityReportsRoutes from './routes/quality-reports.js';
+import sustainabilityRoutes from './routes/sustainability.js';
 
 // Phase 2 — Cloud SaaS API gap routes
 import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
@@ -1555,37 +1557,7 @@ app.get('/api/traceability/sfcr-export', async (req, res) => {
   } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
 
-app.get('/api/sustainability/esg-report', (_req, res) => {
-  return res.json({
-    ok: true,
-    esg_score: {
-      total_score: 0,
-      grade: 'N/A',
-      breakdown: { energy: 0, water: 0, nutrients: 0, waste: 0, carbon: 0 },
-      metrics: { renewable_energy_percent: 0, water_recycling_percent: 0, waste_diversion_percent: 0 }
-    }
-  });
-});
-
-app.get('/api/sustainability/energy/usage', (_req, res) => {
-  return res.json({ ok: true, total_kwh: 0, by_source: {}, total_carbon_kg: 0, total_cost_cad: 0 });
-});
-
-app.get('/api/sustainability/water/usage', (_req, res) => {
-  return res.json({ ok: true, total_liters_used: 0, average_efficiency_percent: 0, total_liters_recycled: 0 });
-});
-
-app.get('/api/sustainability/carbon-footprint', (_req, res) => {
-  return res.json({ ok: true, total_carbon_kg: 0, daily_average_kg: 0 });
-});
-
-app.get('/api/sustainability/waste/tracking', (_req, res) => {
-  return res.json({ ok: true, total_waste_kg: 0, diversion_rate_percent: 0, total_diverted_kg: 0 });
-});
-
-app.get('/api/sustainability/trends', (_req, res) => {
-  return res.json({ ok: true, trends: [] });
-});
+// Sustainability stubs — MOVED to routes/sustainability.js
 
 app.get('/api/automation/rules', (_req, res) => {
   return res.json({ success: true, rules: [] });
@@ -2278,6 +2250,8 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
+app.use('/api/quality', qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
+app.use('/api/sustainability', sustainabilityRoutes);          // Sustainability & ESG dashboard
 
 // ─── Crop Weight Analytics (cross-farm aggregation) ────────────────────
 import { listNetworkFarms as listWeightNetworkFarms } from './services/networkFarmsStore.js';
