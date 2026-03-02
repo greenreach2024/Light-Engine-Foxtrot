@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { PaymentProviderFactory } from '../../lib/payment-providers/base.js';
-import '../../lib/payment-providers/square.js';
+import { PaymentProviderFactory } from '../lib/payment-providers/base.js';
+import '../lib/payment-providers/square.js';
 import { getBatchFarmSquareCredentials } from './squareCredentials.js';
 
 function toCents(value) {

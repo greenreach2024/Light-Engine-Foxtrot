@@ -1,0 +1,44 @@
+{
+  "started_at": "2026-03-02T01:28:13.724Z",
+  "last_sampled_at": "2026-03-02T17:08:45.913Z",
+  "last_persisted_at": "2026-03-02T16:59:40.101Z",
+  "health": {
+    "status": "stale",
+    "stale": true,
+    "stale_after_ms": 900000,
+    "lag_ms": null,
+    "lag_seconds": null,
+    "last_success_at": null,
+    "last_failure_at": null,
+    "sample_interval_ms": 30000
+  },
+  "totals": {
+    "operations": 0,
+    "success": 0,
+    "failure": 0,
+    "pull_runs": 0,
+    "pull_failures": 0,
+    "records_updated": 0,
+    "errors_reported": 0
+  },
+  "alerts": {
+    "transitions": 0,
+    "raised": 0,
+    "resolved": 0,
+    "last_transition_at": null,
+    "last_transition": null,
+    "recent": []
+  },
+  "queue_depth": {
+    "reported_total": 0,
+    "derived_total": 0,
+    "max_reported": 0
+  },
+  "operations_by_type": {},
+  "farms_count": 0,
+  "farms": [],
+  "persisted_at": "2026-03-02T17:08:45.913Z",
+  "persist_reason": "sample",
+  "last_success_at": null,
+  "last_failure_at": null
+}
