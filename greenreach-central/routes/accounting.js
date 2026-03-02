@@ -1,7 +1,8 @@
 import express from 'express';
 import crypto from 'crypto';
-import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
+import { query, isDatabaseAvailable, getDatabase, getAccountingReadiness } from '../config/database.js';
 import { syncAwsCostExplorer } from '../services/awsCostExplorerSync.js';
+import { syncGitHubBilling } from '../services/githubBillingSync.js';
 
 const router = express.Router();
 
@@ -10,8 +11,9 @@ function buildIdempotencyKey({ sourceKey, sourceTxnId, txnDate, amount }) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-async function ensureSource({ sourceKey, sourceName, sourceType = 'api' }) {
-  const upsert = await query(
+async function ensureSource({ sourceKey, sourceName, sourceType = 'api', dbClient = null }) {
+  const runner = dbClient || { query };
+  const upsert = await runner.query(
     `INSERT INTO accounting_sources (source_key, source_name, source_type, updated_at)
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (source_key) DO UPDATE SET
@@ -27,7 +29,33 @@ async function ensureSource({ sourceKey, sourceName, sourceType = 'api' }) {
 router.get('/health', async (_req, res) => {
   const dbReady = await isDatabaseAvailable();
   if (!dbReady) return res.status(503).json({ ok: false, error: 'database_unavailable' });
-  return res.json({ ok: true, service: 'accounting', db: 'available' });
+
+  try {
+    const readiness = await getAccountingReadiness();
+    if (!readiness.ready) {
+      return res.status(503).json({
+        ok: false,
+        service: 'accounting',
+        db: 'available',
+        error: 'accounting_schema_incomplete',
+        missing_tables: readiness.missing_tables,
+        chart_of_accounts_seeded: readiness.chart_of_accounts_seeded,
+        account_count: readiness.account_count
+      });
+    }
+
+    return res.json({
+      ok: true,
+      service: 'accounting',
+      db: 'available',
+      required_tables: readiness.required_tables,
+      missing_tables: readiness.missing_tables,
+      chart_of_accounts_seeded: readiness.chart_of_accounts_seeded,
+      account_count: readiness.account_count
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'health_check_failed', message: error.message });
+  }
 });
 
 router.get('/accounts', async (_req, res) => {
@@ -89,7 +117,8 @@ router.post('/transactions/ingest', async (req, res) => {
     const sourceId = await ensureSource({
       sourceKey: source_key,
       sourceName: source_name,
-      sourceType: source_type || 'api'
+      sourceType: source_type || 'api',
+      dbClient: client
     });
 
     const txnInsert = await client.query(
@@ -347,6 +376,36 @@ router.post('/connectors/aws-cost-explorer/sync', async (req, res) => {
     return res.json({ ok: true, connector: 'aws_cost_explorer', summary });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'aws_cost_sync_failed', message: error.message });
+  }
+});
+
+router.post('/connectors/github-billing/sync', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const {
+      org,
+      token,
+      from,
+      to,
+      as_of_date,
+      dry_run = false
+    } = req.body || {};
+
+    const summary = await syncGitHubBilling({
+      org,
+      token,
+      from,
+      to,
+      asOfDate: as_of_date,
+      dryRun: Boolean(dry_run)
+    });
+
+    return res.json({ ok: true, connector: 'github_billing', summary });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'github_billing_sync_failed', message: error.message });
   }
 });
 

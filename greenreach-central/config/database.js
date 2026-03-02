@@ -1143,6 +1143,54 @@ export function isDatabaseAvailable() {
   return pool !== null;
 }
 
+const ACCOUNTING_REQUIRED_TABLES = [
+  'accounting_sources',
+  'accounting_accounts',
+  'accounting_transactions',
+  'accounting_entries',
+  'accounting_classifications',
+  'accounting_period_closes',
+  'valuation_snapshots'
+];
+
+export async function getAccountingReadiness() {
+  if (!pool) {
+    return {
+      ready: false,
+      reason: 'database_unavailable',
+      required_tables: ACCOUNTING_REQUIRED_TABLES,
+      missing_tables: ACCOUNTING_REQUIRED_TABLES,
+      chart_of_accounts_seeded: false,
+      account_count: 0
+    };
+  }
+
+  const tableResult = await query(
+    `SELECT table_name
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])`,
+    [ACCOUNTING_REQUIRED_TABLES]
+  );
+
+  const present = new Set(tableResult.rows.map((row) => row.table_name));
+  const missing = ACCOUNTING_REQUIRED_TABLES.filter((name) => !present.has(name));
+
+  let accountCount = 0;
+  if (present.has('accounting_accounts')) {
+    const accountResult = await query('SELECT COUNT(*)::int AS count FROM accounting_accounts');
+    accountCount = Number(accountResult.rows[0]?.count || 0);
+  }
+
+  return {
+    ready: missing.length === 0,
+    required_tables: ACCOUNTING_REQUIRED_TABLES,
+    missing_tables: missing,
+    chart_of_accounts_seeded: accountCount > 0,
+    account_count: accountCount
+  };
+}
+
 /**
  * Execute a query with automatic connection management
  */
