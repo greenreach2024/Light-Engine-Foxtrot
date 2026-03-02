@@ -1371,6 +1371,56 @@ app.get('/api/farm/profile', async (req, res) => {
   }
 });
 
+// ── Credential Store (SwitchBot / Kasa integration credentials) ────────────
+app.get('/api/credential-store', (req, res) => {
+  try {
+    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+    const farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+    const integrations = farm.integrations || {};
+    return res.json({
+      ok: true,
+      switchbot: { configured: !!(integrations.switchbot && integrations.switchbot.token) },
+      kasa:      { configured: !!(integrations.kasa && integrations.kasa.email) }
+    });
+  } catch (err) {
+    logger.warn('[credential-store] GET error:', err.message);
+    return res.json({ ok: true, switchbot: { configured: false }, kasa: { configured: false } });
+  }
+});
+
+app.post('/api/credential-store', express.json(), (req, res) => {
+  try {
+    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+    let farm = {};
+    try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) { /* new file */ }
+    if (!farm.integrations) farm.integrations = {};
+    const body = req.body || {};
+    if (body.switchbot) {
+      farm.integrations.switchbot = {
+        token:  body.switchbot.token  || '',
+        secret: body.switchbot.secret || '',
+        region: body.switchbot.region || ''
+      };
+    }
+    if (body.kasa) {
+      farm.integrations.kasa = {
+        email:    body.kasa.email    || '',
+        password: body.kasa.password || ''
+      };
+    }
+    fs.writeFileSync(farmJsonPath, JSON.stringify(farm, null, 2));
+    const integrations = farm.integrations;
+    return res.json({
+      ok: true,
+      switchbot: { configured: !!(integrations.switchbot && integrations.switchbot.token) },
+      kasa:      { configured: !!(integrations.kasa && integrations.kasa.email) }
+    });
+  } catch (err) {
+    logger.error('[credential-store] POST error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/farm', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
