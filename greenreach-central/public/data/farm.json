@@ -12,7 +12,7 @@
   "postalCode": "",
   "timezone": "America/Toronto",
   "region": "Ontario, Canada",
-  "url": "http://100.65.187.59:8091",
+  "url": "http://127.0.0.1:8091",
   "mode": "edge",
   "coordinates": {
     "lat": 44.258779425589154,
@@ -43,7 +43,10 @@
     {
       "id": "room-3xxjln",
       "name": "Main Grow Room",
-      "zones": ["Zone 1", "Zone 2"]
+      "zones": [
+        "Zone 1",
+        "Zone 2"
+      ]
     }
   ],
   "locations": [

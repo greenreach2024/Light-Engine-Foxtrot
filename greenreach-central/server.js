@@ -2300,10 +2300,10 @@ function resolveEdgeUrlForProxy() {
     const farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
     if (farm.url) return farm.url.replace(/\/$/, '');
   } catch (_) { /* ignore */ }
-  return null;
+  return 'http://127.0.0.1:8091'; // Fallback: edge + cloud merged on same machine
 }
 
-async function edgeProxy(req, res, edgePath, method = 'GET', body = null) {
+async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeoutMs = 15000) {
   const edgeUrl = resolveEdgeUrlForProxy();
   if (!edgeUrl) {
     return res.status(503).json({
@@ -2316,7 +2316,7 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null) {
   const opts = {
     method,
     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(timeoutMs)
   };
   if (body && method !== 'GET') opts.body = JSON.stringify(body);
   try {
@@ -2335,7 +2335,7 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null) {
 
 // Discovery endpoints
 app.get('/discovery/capabilities', (req, res) => edgeProxy(req, res, '/discovery/capabilities'));
-app.post('/discovery/scan', express.json(), (req, res) => edgeProxy(req, res, '/discovery/scan', 'POST', req.body));
+app.post('/discovery/scan', express.json(), (req, res) => edgeProxy(req, res, '/discovery/scan', 'POST', req.body, 90000));
 
 // SwitchBot endpoints
 app.post('/api/switchbot/discover', express.json(), (req, res) => edgeProxy(req, res, '/api/switchbot/discover', 'POST', req.body));
