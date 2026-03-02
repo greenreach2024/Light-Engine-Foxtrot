@@ -497,6 +497,64 @@ router.get('/classifications/queue', async (req, res) => {
   return res.json({ ok: true, status, count: rows.rows.length, queue: rows.rows });
 });
 
+router.patch('/classifications/:classificationId(\\d+)/review', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const classificationId = Number(req.params.classificationId);
+  const {
+    action,
+    reviewer,
+    review_note,
+    suggested_category,
+    confidence
+  } = req.body || {};
+
+  if (!classificationId) {
+    return res.status(400).json({ ok: false, error: 'classification_id_required' });
+  }
+
+  if (!action || !['approve', 'reject'].includes(String(action))) {
+    return res.status(400).json({ ok: false, error: 'invalid_action', allowed: ['approve', 'reject'] });
+  }
+
+  const reviewerIdentity = reviewer || req.user?.email || req.user?.id || null;
+  if (!reviewerIdentity) {
+    return res.status(400).json({ ok: false, error: 'reviewer_required' });
+  }
+
+  const status = action === 'approve' ? 'approved' : 'rejected';
+
+  const result = await query(
+    `UPDATE accounting_classifications
+     SET
+       status = $1::varchar,
+       reviewer = $2,
+       review_note = $3,
+       suggested_category = COALESCE($4, suggested_category),
+       confidence = COALESCE($5, confidence),
+       approved_at = CASE WHEN $1::varchar = 'approved' THEN NOW() ELSE NULL END,
+       updated_at = NOW()
+     WHERE id = $6
+     RETURNING id, transaction_id, entry_id, suggested_category, confidence, rule_applied, status, reviewer, review_note, approved_at, updated_at, created_at`,
+    [
+      status,
+      reviewerIdentity,
+      review_note || null,
+      suggested_category || null,
+      confidence != null ? Number(confidence) : null,
+      classificationId
+    ]
+  );
+
+  if (!result.rows.length) {
+    return res.status(404).json({ ok: false, error: 'classification_not_found' });
+  }
+
+  return res.json({ ok: true, classification: result.rows[0] });
+});
+
 router.post('/periods/:periodKey/lock', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
