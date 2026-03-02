@@ -497,6 +497,83 @@ router.get('/classifications/queue', async (req, res) => {
   return res.json({ ok: true, status, count: rows.rows.length, queue: rows.rows });
 });
 
+router.get('/classifications/metrics', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const from = req.query.from;
+  const to = req.query.to;
+  const source = req.query.source;
+
+  const conditions = [];
+  const params = [];
+
+  if (from) {
+    params.push(from);
+    conditions.push(`t.txn_date >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    conditions.push(`t.txn_date <= $${params.length}::date`);
+  }
+  if (source) {
+    params.push(source);
+    conditions.push(`s.source_key = $${params.length}`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const metrics = await query(
+    `WITH filtered AS (
+       SELECT
+         c.id,
+         c.status,
+         c.confidence
+       FROM accounting_classifications c
+       LEFT JOIN accounting_transactions t ON t.id = c.transaction_id
+       LEFT JOIN accounting_sources s ON s.id = t.source_id
+       ${whereClause}
+     )
+     SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+       COUNT(*) FILTER (WHERE status = 'approved')::int AS approved_count,
+       COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected_count,
+       ROUND(COALESCE(AVG(confidence), 0)::numeric, 4) AS avg_confidence,
+       ROUND(COALESCE(AVG(confidence) FILTER (WHERE status = 'pending'), 0)::numeric, 4) AS pending_avg_confidence,
+       ROUND(COALESCE(AVG(confidence) FILTER (WHERE status = 'approved'), 0)::numeric, 4) AS approved_avg_confidence,
+       ROUND(COALESCE(AVG(confidence) FILTER (WHERE status = 'rejected'), 0)::numeric, 4) AS rejected_avg_confidence
+     FROM filtered`,
+    params
+  );
+
+  const row = metrics.rows[0] || {};
+
+  return res.json({
+    ok: true,
+    filters: {
+      from: from || null,
+      to: to || null,
+      source: source || null
+    },
+    metrics: {
+      total: Number(row.total || 0),
+      by_status: {
+        pending: Number(row.pending_count || 0),
+        approved: Number(row.approved_count || 0),
+        rejected: Number(row.rejected_count || 0)
+      },
+      avg_confidence: Number(row.avg_confidence || 0),
+      avg_confidence_by_status: {
+        pending: Number(row.pending_avg_confidence || 0),
+        approved: Number(row.approved_avg_confidence || 0),
+        rejected: Number(row.rejected_avg_confidence || 0)
+      }
+    }
+  });
+});
+
 router.patch('/classifications/:classificationId(\\d+)/review', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
