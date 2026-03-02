@@ -3379,6 +3379,9 @@ window.runUniversalScan = async function() {
     // Use universal scanner on Node.js (port 8091). Fallback to Python discovery if needed.
     const discoveryEndpoint = '/discovery/scan';
     const fallbackEndpoint = '/discovery/devices';
+    const currentHost = (window?.location?.hostname || '').toLowerCase();
+    const currentOrigin = window?.location?.origin || '';
+    const isCloudHost = currentHost.includes('greenreachgreens.com');
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
     console.log('[UniversalScan] Full URL:', window.location.origin + discoveryEndpoint);
     
@@ -3400,7 +3403,19 @@ window.runUniversalScan = async function() {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[UniversalScan] Error response:', errorText);
-      throw new Error(`Scan failed: ${response.statusText}`);
+      let parsedMessage = '';
+      try {
+        const parsed = JSON.parse(errorText || '{}');
+        parsedMessage = parsed?.message || parsed?.error || '';
+      } catch {}
+
+      if (isCloudHost && (response.status === 502 || response.status === 504)) {
+        throw new Error('Scanner must run from the Light Engine host URL. Open http://127.0.0.1:3100 (or http://<machine-ip>:3100) and run scan there.');
+      }
+
+      const statusPart = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+      const reasonPart = parsedMessage ? ` - ${parsedMessage}` : '';
+      throw new Error(`Scan failed (${statusPart})${reasonPart} [origin: ${currentOrigin}]`);
     }
     
     const data = await response.json();
