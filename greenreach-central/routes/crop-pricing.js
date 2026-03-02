@@ -182,6 +182,31 @@ router.get('/:cropName', async (req, res) => {
 });
 
 /**
+ * GET /api/crop-pricing/export
+ * Download pricing as CSV
+ */
+router.get('/export', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const data = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
+    const crops = data.crops || [];
+
+    const csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['Crop', 'Unit', 'Retail Price', 'WS1 Discount %', 'WS2 Discount %', 'WS3 Discount %', 'Taxable'].map(csvEscape).join(',');
+    const rows = crops.map(c =>
+      [c.crop, c.unit || 'lb', c.retailPrice || 0, c.ws1Discount || 0, c.ws2Discount || 0, c.ws3Discount || 0, c.isTaxable ? 'Yes' : 'No'].map(csvEscape).join(',')
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="crop-pricing-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send([header, ...rows].join('\n'));
+  } catch (error) {
+    console.error('[crop-pricing] CSV export failed:', error);
+    res.status(500).json({ ok: false, error: 'export_failed' });
+  }
+});
+
+/**
  * Export pricing data for internal use by other routes
  */
 export async function getCropPricing(farmId) {
