@@ -270,7 +270,7 @@ export async function parseCommand(userMessage, conversationHistory = []) {
  * @returns {Promise<object>} Action result
  */
 export async function executeAction(intent, context) {
-  const { farmStores, farmId, userId, agentClass } = context;
+  const { farmStores, farmId, userId, agentClass, confirmAction } = context;
   const [category, action] = intent.intent.split('.');
 
   // Verify capability exists
@@ -295,7 +295,7 @@ export async function executeAction(intent, context) {
     };
   }
 
-  if (perm.tier === 'require-approval') {
+  if (perm.tier === 'require-approval' && !confirmAction) {
     console.log(`[AI Agent] APPROVAL REQUIRED for ${intent.intent} (class="${agentClass}")`);
     return {
       success: false,
@@ -304,6 +304,10 @@ export async function executeAction(intent, context) {
       tier: 'require-approval',
       intent: intent
     };
+  }
+
+  if (perm.tier === 'require-approval' && confirmAction) {
+    console.log(`[AI Agent] APPROVED EXECUTION for ${intent.intent} (class="${agentClass}")`);
   }
 
   if (perm.tier === 'recommend') {
@@ -1493,6 +1497,7 @@ async function executeViabilityAction(action, params, context) {
 // logAgentAction() persists every recommendation / action for governance.
 
 let _auditDB = null;
+let _feedbackDB = null;
 
 /**
  * Inject the NeDB audit store (called once from server-foxtrot.js at startup).
@@ -1500,6 +1505,10 @@ let _auditDB = null;
  */
 export function setAuditStore(db) {
   _auditDB = db;
+}
+
+export function setFeedbackStore(db) {
+  _feedbackDB = db;
 }
 
 /**
@@ -1545,6 +1554,114 @@ export async function getAuditLog(opts = {}) {
   if (opts.farm_id) filter.farm_id = opts.farm_id;
   const limit = opts.limit || 50;
   return _auditDB.find(filter).sort({ logged_at: -1 }).limit(limit);
+}
+
+export async function getAuditMetrics(opts = {}) {
+  if (!_auditDB) {
+    return {
+      total_actions: 0,
+      by_tier: {},
+      by_human_decision: {},
+      acceptance_rate: null,
+      auto_rate: null
+    };
+  }
+
+  const filter = {};
+  if (opts.farm_id) filter.farm_id = opts.farm_id;
+  if (opts.days && Number.isFinite(opts.days)) {
+    const since = new Date(Date.now() - (opts.days * 24 * 60 * 60 * 1000)).toISOString();
+    filter.logged_at = { $gte: since };
+  }
+
+  const records = await _auditDB.find(filter);
+  const byTier = {};
+  const byDecision = {};
+
+  for (const record of records) {
+    const tier = record.tier || 'unknown';
+    const decision = record.human_decision || 'unknown';
+    byTier[tier] = (byTier[tier] || 0) + 1;
+    byDecision[decision] = (byDecision[decision] || 0) + 1;
+  }
+
+  const acceptedCount = byDecision.accepted || 0;
+  const rejectedCount = byDecision.rejected || 0;
+  const autoCount = byDecision.auto || 0;
+  const decisionDenominator = acceptedCount + rejectedCount;
+  const totalActions = records.length;
+
+  return {
+    total_actions: totalActions,
+    by_tier: byTier,
+    by_human_decision: byDecision,
+    acceptance_rate: decisionDenominator > 0 ? acceptedCount / decisionDenominator : null,
+    auto_rate: totalActions > 0 ? autoCount / totalActions : null
+  };
+}
+
+export async function logAgentFeedback(entry) {
+  if (!_feedbackDB) {
+    console.warn('[AI Agent Feedback] No feedback store configured — skipping log');
+    return null;
+  }
+  try {
+    const record = {
+      ...entry,
+      logged_at: new Date().toISOString()
+    };
+    const inserted = await _feedbackDB.insert(record);
+    return inserted._id;
+  } catch (err) {
+    console.error('[AI Agent Feedback] Failed to log feedback:', err.message);
+    return null;
+  }
+}
+
+export async function getFeedbackSummary(opts = {}) {
+  if (!_feedbackDB) {
+    return {
+      total_feedback: 0,
+      avg_rating: null,
+      rating_breakdown: {}
+    };
+  }
+
+  const filter = {};
+  if (opts.farm_id) filter.farm_id = opts.farm_id;
+  if (opts.days && Number.isFinite(opts.days)) {
+    const since = new Date(Date.now() - (opts.days * 24 * 60 * 60 * 1000)).toISOString();
+    filter.logged_at = { $gte: since };
+  }
+
+  const records = await _feedbackDB.find(filter);
+  if (!records.length) {
+    return {
+      total_feedback: 0,
+      avg_rating: null,
+      rating_breakdown: {}
+    };
+  }
+
+  const ratingBreakdown = {};
+  let ratingTotal = 0;
+  let ratingCount = 0;
+
+  for (const record of records) {
+    const rating = Number(record.rating);
+    if (!Number.isFinite(rating)) {
+      continue;
+    }
+    ratingBreakdown[rating] = (ratingBreakdown[rating] || 0) + 1;
+    ratingTotal += rating;
+    ratingCount += 1;
+  }
+
+  return {
+    total_feedback: records.length,
+    avg_rating: ratingCount > 0 ? Number((ratingTotal / ratingCount).toFixed(2)) : null,
+    rating_breakdown: ratingBreakdown
+  };
 }
 
 // ── Phase 4 Ticket 4.6: Developer mode action handler ──────────────────────
@@ -1660,6 +1777,29 @@ const RECIPE_REFUSAL = {
 
 // ── Device wizard session store (in-memory, keyed by userId) ───────────
 const wizardSessions = new Map();
+const WIZARD_TTL_MS = 15 * 60 * 1000;
+
+function getWizardSession(userId) {
+  const session = wizardSessions.get(userId);
+  if (!session) return null;
+  if (session.expiresAt && Date.now() > session.expiresAt) {
+    if (session.sessionId) {
+      axios.delete(`${INFRA_BASE()}/api/device-wizard/${session.sessionId}`).catch(() => {});
+    }
+    wizardSessions.delete(userId);
+    return null;
+  }
+  session.expiresAt = Date.now() + WIZARD_TTL_MS;
+  return session;
+}
+
+function setWizardSession(userId, session) {
+  wizardSessions.set(userId, {
+    ...session,
+    ttl_ms: WIZARD_TTL_MS,
+    expiresAt: Date.now() + WIZARD_TTL_MS
+  });
+}
 
 async function executeInfrastructureAction(action, params, context) {
   // ── Recipe guardrail: reject before any work ──
@@ -1898,8 +2038,8 @@ async function executeInfrastructureAction(action, params, context) {
     case 'start_device_setup': {
       const userId = context?.userId || 'default';
       // If session already exists, inform user
-      if (wizardSessions.has(userId)) {
-        const existing = wizardSessions.get(userId);
+      if (getWizardSession(userId)) {
+        const existing = getWizardSession(userId);
         return {
           success: true,
           action: 'start_device_setup',
@@ -1940,7 +2080,7 @@ async function executeInfrastructureAction(action, params, context) {
           device_type: params?.device_type || undefined
         });
         const sessionId = data.sessionId || data.session_id || data.id;
-        wizardSessions.set(userId, {
+        setWizardSession(userId, {
           sessionId,
           protocol: protocol || null,
           device_type: params?.device_type || null,
@@ -1952,7 +2092,7 @@ async function executeInfrastructureAction(action, params, context) {
           action: 'start_device_setup',
           requires_confirmation: true,
           wizard_active: true,
-          session: wizardSessions.get(userId),
+          session: getWizardSession(userId),
           message: protocol
             ? `Device setup started with ${protocol} protocol. ${protocol === 'switchbot' ? 'Do you have your SwitchBot token and secret configured? (SwitchBot app → Profile → Developer Options)' : `Please provide connection details for your ${protocol} device.`}`
             : `Let's set up a new device! Which protocol does it use? Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}.`
@@ -1964,7 +2104,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'select_protocol': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
       }
@@ -2002,7 +2142,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'configure_connection': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
       }
@@ -2025,7 +2165,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'discover_devices': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
       }
@@ -2060,7 +2200,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'select_device': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
       }
@@ -2084,12 +2224,26 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'assign_device_room': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session. Say "set up a device" to start.' };
       }
       try {
         const roomId = params?.room_id || params?.room;
+        const roomResp = await axios.get(`${base}/api/rooms`).catch(() => ({ data: [] }));
+        const rooms = Array.isArray(roomResp.data) ? roomResp.data : (roomResp.data?.rooms || []);
+        const hasRoom = rooms.some((r) => {
+          const id = String(r.id || r.room_id || r.name || '').toLowerCase();
+          return id === String(roomId || '').toLowerCase();
+        });
+        if (!hasRoom) {
+          const roomList = rooms.map(r => r.name || r.id || r.room_id).filter(Boolean).slice(0, 12).join(', ');
+          return {
+            success: false,
+            error: 'invalid_room',
+            message: `Room "${roomId}" was not found. Available rooms: ${roomList || 'none found'}.`
+          };
+        }
         await axios.post(`${base}/api/device-wizard/${session.sessionId}/assign-room`, { roomId });
         session.step = 'confirm';
         session.room = roomId;
@@ -2117,7 +2271,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'save_device': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: false, error: 'no_session', message: 'No active device setup session to save.' };
       }
@@ -2138,7 +2292,7 @@ async function executeInfrastructureAction(action, params, context) {
 
     case 'cancel_setup': {
       const userId = context?.userId || 'default';
-      const session = wizardSessions.get(userId);
+      const session = getWizardSession(userId);
       if (!session) {
         return { success: true, action: 'cancel_setup', message: 'No active device setup session to cancel.' };
       }
@@ -2165,13 +2319,34 @@ async function executeInfrastructureAction(action, params, context) {
       if (!name) {
         return { success: false, error: 'missing_param', message: 'Room name is required. What would you like to call the new room?' };
       }
-      return {
-        success: true,
-        action: 'create_room',
-        requires_confirmation: true,
-        data: { name, zone: params?.zone || null, type: params?.type || 'grow' },
-        message: `I'll create a new room called "${name}"${params?.zone ? ` in zone ${params.zone}` : ''}. Please confirm to proceed.`
-      };
+      try {
+        const currentRoomsResp = await axios.get(`${base}/api/rooms`).catch(() => ({ data: [] }));
+        const currentRooms = Array.isArray(currentRoomsResp.data) ? currentRoomsResp.data : (currentRoomsResp.data?.rooms || []);
+        const exists = currentRooms.some((room) => String(room.name || room.id || room.room_id || '').toLowerCase() === String(name).toLowerCase());
+        if (exists) {
+          return { success: false, error: 'duplicate_room', message: `Room "${name}" already exists.` };
+        }
+
+        const newRoom = {
+          id: params?.id || name,
+          room_id: params?.id || name,
+          name,
+          type: params?.type || 'grow',
+          zone: params?.zone || null,
+          status: 'active',
+          created_at: new Date().toISOString()
+        };
+        const rooms = [...currentRooms, newRoom];
+        await axios.post(`${base}/api/setup/save-rooms`, { rooms });
+        return {
+          success: true,
+          action: 'create_room',
+          data: { room: newRoom },
+          message: `Room "${name}" created successfully.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to create room: ${err.message}` };
+      }
     }
 
     case 'create_zone': {
@@ -2179,13 +2354,22 @@ async function executeInfrastructureAction(action, params, context) {
       if (!name) {
         return { success: false, error: 'missing_param', message: 'Zone name is required. What would you like to call the new zone?' };
       }
-      return {
-        success: true,
-        action: 'create_zone',
-        requires_confirmation: true,
-        data: { name, type: params?.type || 'production' },
-        message: `I'll create a new zone called "${name}". Please confirm to proceed.`
-      };
+      try {
+        const response = await axios.post(`${base}/api/setup-wizard/zones`, {
+          id: params?.id || name,
+          name,
+          type: params?.type || 'production',
+          room: params?.room || null
+        });
+        return {
+          success: true,
+          action: 'create_zone',
+          data: response.data,
+          message: `Zone "${name}" created successfully.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to create zone: ${err.message}` };
+      }
     }
 
     case 'create_group': {
@@ -2193,13 +2377,25 @@ async function executeInfrastructureAction(action, params, context) {
       if (!name) {
         return { success: false, error: 'missing_param', message: 'Group name is required. What would you like to call the new light group?' };
       }
-      return {
-        success: true,
-        action: 'create_group',
-        requires_confirmation: true,
-        data: { name, room: params?.room || null, zone: params?.zone || null },
-        message: `I'll create a new light group called "${name}"${params?.room ? ` in room ${params.room}` : ''}. Please confirm to proceed.`
-      };
+      try {
+        const response = await axios.post(`${base}/api/groups`, {
+          id: params?.id || name,
+          name,
+          room: params?.room || '',
+          zone: params?.zone || '',
+          schedule: params?.schedule || '12/12',
+          status: params?.status || 'draft',
+          lights: Array.isArray(params?.lights) ? params.lights : []
+        });
+        return {
+          success: true,
+          action: 'create_group',
+          data: response.data,
+          message: `Group "${name}" created successfully.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to create group: ${err.message}` };
+      }
     }
 
     case 'assign_light': {
@@ -2208,13 +2404,24 @@ async function executeInfrastructureAction(action, params, context) {
       if (!lightId || !groupId) {
         return { success: false, error: 'missing_param', message: 'I need both a light/device ID and a group ID. Which light should go in which group?' };
       }
-      return {
-        success: true,
-        action: 'assign_light',
-        requires_confirmation: true,
-        data: { light_id: lightId, group_id: groupId },
-        message: `I'll assign light ${lightId} to group ${groupId}. Please confirm to proceed.`
-      };
+      try {
+        const current = await axios.get(`${base}/api/groups`).catch(() => ({ data: [] }));
+        const groups = Array.isArray(current.data) ? current.data : (current.data?.groups || []);
+        const group = groups.find((item) => String(item.id || item.name) === String(groupId));
+        if (!group) {
+          return { success: false, error: 'group_not_found', message: `Group ${groupId} was not found.` };
+        }
+        const nextLights = Array.from(new Set([...(Array.isArray(group.lights) ? group.lights : []), lightId]));
+        const response = await axios.put(`${base}/api/groups/${encodeURIComponent(groupId)}`, { lights: nextLights });
+        return {
+          success: true,
+          action: 'assign_light',
+          data: response.data,
+          message: `Assigned light ${lightId} to group ${groupId}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to assign light: ${err.message}` };
+      }
     }
 
     case 'update_schedule': {
@@ -2226,13 +2433,21 @@ async function executeInfrastructureAction(action, params, context) {
       if (!groupId) {
         return { success: false, error: 'missing_param', message: 'Which group should I update the schedule for?' };
       }
-      return {
-        success: true,
-        action: 'update_schedule',
-        requires_confirmation: true,
-        data: { group_id: groupId, schedule: params?.schedule || null },
-        message: `I'll update the lighting schedule for group ${groupId}. Please confirm to proceed. Note: I can only adjust on/off times — crop recipes cannot be modified.`
-      };
+      try {
+        const response = await axios.put(`${base}/api/sched/${encodeURIComponent(groupId)}`, {
+          schedule: params?.schedule || null,
+          start_time: params?.start_time || params?.startTime || null,
+          photoperiod_hours: params?.photoperiod_hours || params?.hours || null
+        });
+        return {
+          success: true,
+          action: 'update_schedule',
+          data: response.data,
+          message: `Updated schedule for group ${groupId}.`
+        };
+      } catch (err) {
+        return { success: false, error: 'api_error', message: `Failed to update schedule: ${err.message}` };
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -2245,6 +2460,22 @@ async function executeInfrastructureAction(action, params, context) {
       const alias = PROTOCOL_ALIASES[protocol];
       const isBrandKnown = !!alias;
 
+      let requestLogged = false;
+      try {
+        await axios.post(`${base}/api/support/feature-requests`, {
+          farm_id: context?.farmId || null,
+          user_id: context?.userId || null,
+          source: 'ai-agent',
+          protocol: protocol || 'unknown',
+          device: deviceDesc,
+          brand: alias?.brand || null,
+          notes: params?.notes || null
+        });
+        requestLogged = true;
+      } catch (_err) {
+        requestLogged = false;
+      }
+
       return {
         success: true,
         action: 'report_unknown_device',
@@ -2256,8 +2487,8 @@ async function executeInfrastructureAction(action, params, context) {
           suggestion: alias?.suggest || (alias?.map ? `Use ${alias.map} protocol` : null)
         },
         message: isBrandKnown
-          ? `${alias.brand} (${protocol}) ${alias.unsupported ? 'is not currently supported' : `can be connected via ${alias.map}`}. Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. ${alias.suggest ? `Many ${alias.brand} devices support ${alias.suggest} as a bridge.` : ''} I can submit a feature request to GreenReach if you'd like.`
-          : `I don't recognize "${deviceDesc}" with protocol "${protocol || 'unspecified'}". Currently supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. If your device supports MQTT, we can likely connect it. Would you like me to file a feature request?`
+          ? `${alias.brand} (${protocol}) ${alias.unsupported ? 'is not currently supported' : `can be connected via ${alias.map}`}. Supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. ${alias.suggest ? `Many ${alias.brand} devices support ${alias.suggest} as a bridge.` : ''} ${requestLogged ? 'I logged a feature request with GreenReach.' : 'I could not log a feature request right now; please try again later.'}`
+          : `I don't recognize "${deviceDesc}" with protocol "${protocol || 'unspecified'}". Currently supported protocols: ${SUPPORTED_PROTOCOLS.join(', ')}. If your device supports MQTT, we can likely connect it. ${requestLogged ? 'I logged a feature request with GreenReach.' : 'I could not log a feature request right now; please try again later.'}`
       };
     }
 
@@ -2275,7 +2506,11 @@ export default {
   executeAction,
   checkPermission,
   setAuditStore,
+  setFeedbackStore,
   logAgentAction,
+  logAgentFeedback,
   getAuditLog,
+  getAuditMetrics,
+  getFeedbackSummary,
   SYSTEM_CAPABILITIES
 };

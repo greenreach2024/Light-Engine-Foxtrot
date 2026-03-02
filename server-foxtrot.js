@@ -4487,6 +4487,12 @@ const agentAuditDB = new Datastore({
   timestampData: true
 });
 
+const aiFeedbackDB = new Datastore({
+  filename: './data/ai-feedback.db',
+  autoload: true,
+  timestampData: true
+});
+
 // ─── AI Vision Phase 1: Experiment Data Stores ─────────────────────────
 // P0: Recipe parameters applied per group per day (Rule 9.1, Task 1.1)
 const appliedRecipesDB = new Datastore({
@@ -26537,8 +26543,9 @@ import { initHealthTracker } from './lib/device-health-tracker.js';
 initHealthTracker(deviceHealthDB);
 
 // Wire audit store into the AI agent service
-import { setAuditStore } from './services/ai-agent.js';
+import { setAuditStore, setFeedbackStore } from './services/ai-agent.js';
 setAuditStore(agentAuditDB);
+setFeedbackStore(aiFeedbackDB);
 
 // Load wizard states from database on startup
 async function loadWizardStates() {

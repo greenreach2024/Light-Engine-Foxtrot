@@ -4,10 +4,59 @@
  */
 
 import express from 'express';
-import { parseCommand, executeAction, checkPermission, logAgentAction, getAuditLog, SYSTEM_CAPABILITIES } from '../../services/ai-agent.js';
+import {
+  parseCommand,
+  executeAction,
+  checkPermission,
+  logAgentAction,
+  getAuditLog,
+  logAgentFeedback,
+  getFeedbackSummary,
+  getAuditMetrics,
+  SYSTEM_CAPABILITIES
+} from '../../services/ai-agent.js';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 
 const router = express.Router();
+
+// Pending approval state per user/farm to support two-step confirm flow
+const pendingApprovals = new Map();
+const APPROVAL_TTL_MS = 10 * 60 * 1000;
+
+function requestFarmId(req) {
+  return req.farm_id || req.farmId || req.user?.farmId || req.user?.farm_id || null;
+}
+
+function requestUserId(req) {
+  return req.user_id || req.userId || req.user?.id || req.user?.userId || null;
+}
+
+function pendingKey(req) {
+  return `${requestFarmId(req) || 'unknown'}:${requestUserId(req) || 'unknown'}`;
+}
+
+function setPendingApproval(req, intent, rawMessage) {
+  pendingApprovals.set(pendingKey(req), {
+    intent,
+    rawMessage,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + APPROVAL_TTL_MS
+  });
+}
+
+function getPendingApproval(req) {
+  const record = pendingApprovals.get(pendingKey(req));
+  if (!record) return null;
+  if (Date.now() > record.expiresAt) {
+    pendingApprovals.delete(pendingKey(req));
+    return null;
+  }
+  return record;
+}
+
+function clearPendingApproval(req) {
+  pendingApprovals.delete(pendingKey(req));
+}
 
 // Rate limiting state (simple in-memory counter)
 const rateLimitMap = new Map();
@@ -18,7 +67,7 @@ const RATE_LIMIT_MAX = 20; // Max 20 requests per minute per farm
  * Simple rate limiting middleware
  */
 function rateLimiter(req, res, next) {
-  const farmId = req.farmId;
+  const farmId = requestFarmId(req) || 'unknown';
   const now = Date.now();
   
   if (!rateLimitMap.has(farmId)) {
@@ -69,6 +118,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
     }
 
     const { message, history, confirm_action, agent_class } = req.body;
+    const farmId = requestFarmId(req);
+    const userId = requestUserId(req);
     
     if (!message || typeof message !== 'string') {
       return res.status(400).json({
@@ -79,11 +130,19 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
 
     const agentClass = agent_class || 'farm-operator';
     
-    // Parse user command
-    const intent = await parseCommand(message, history || []);
+    // Parse user command (or use pending intent when user confirms)
+    let intent;
+    const approvalRecord = confirm_action ? getPendingApproval(req) : null;
+    if (confirm_action && approvalRecord?.intent) {
+      intent = approvalRecord.intent;
+    } else {
+      intent = await parseCommand(message, history || []);
+    }
     
     // Check if action requires confirmation and wasn't confirmed yet
     if (intent.requires_confirmation && !confirm_action) {
+      setPendingApproval(req, intent, message);
+
       // Audit: log the recommendation even if user hasn't confirmed yet
       logAgentAction({
         agent_class: agentClass,
@@ -92,8 +151,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
         recommendation: intent.response,
         human_decision: 'pending',
         tier: 'recommend',
-        farm_id: req.farmId,
-        user_id: req.userId
+        farm_id: farmId,
+        user_id: userId
       });
 
       return res.json({
@@ -106,10 +165,16 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
     // Execute the action
     const result = await executeAction(intent, {
       farmStores: req.app.get('farmStores'),
-      farmId: req.farmId,
-      userId: req.userId,
-      agentClass
+      farmId,
+      userId,
+      agentClass,
+      confirmAction: !!confirm_action,
+      userMessage: message
     });
+
+    if (confirm_action || result.error !== 'approval_required') {
+      clearPendingApproval(req);
+    }
 
     // Audit: log completed action or permission denial
     const humanDecision = result.error === 'approval_required' ? 'pending'
@@ -124,8 +189,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
       recommendation: result.message || intent.response,
       human_decision: humanDecision,
       tier: result.tier || 'auto',
-      farm_id: req.farmId,
-      user_id: req.userId
+      farm_id: farmId,
+      user_id: userId
     });
     
     // Return combined response
@@ -176,8 +241,10 @@ router.get('/capabilities', (req, res) => {
  * GET /api/farm-sales/ai-agent/status
  * Check AI agent status and configuration (public endpoint)
  */
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   const apiKeyConfigured = !!process.env.OPENAI_API_KEY;
+  const recentActionMetrics = await getAuditMetrics({ days: 7 });
+  const recentFeedbackSummary = await getFeedbackSummary({ days: 30 });
   
   res.json({
     status: apiKeyConfigured ? 'ready' : 'not_configured',
@@ -190,12 +257,51 @@ router.get('/status', (req, res) => {
       window_seconds: RATE_LIMIT_WINDOW / 1000
     },
     email_configured: !!process.env.EMAIL_PROVIDER && (process.env.EMAIL_PROVIDER === 'ses' || !!process.env.SENDGRID_API_KEY),
+    telemetry: {
+      actions_last_7_days: recentActionMetrics.total_actions || 0,
+      recommendation_acceptance_rate: recentActionMetrics.acceptance_rate ?? null,
+      auto_execution_rate: recentActionMetrics.auto_rate ?? null,
+      avg_feedback_rating_30d: recentFeedbackSummary.avg_rating ?? null,
+      feedback_count_30d: recentFeedbackSummary.total_feedback || 0
+    },
     fallback_capabilities: [
       'dashboard_manual_operations',
       'api_direct_workflows',
       'audit_logging'
     ]
   });
+});
+
+router.get('/metrics', farmAuthMiddleware, async (req, res) => {
+  try {
+    const farmId = requestFarmId(req);
+    const actionMetrics = await getAuditMetrics({ farm_id: farmId, days: 30 });
+    const feedbackMetrics = await getFeedbackSummary({ farm_id: farmId, days: 30 });
+
+    return res.json({
+      ok: true,
+      window_days: 30,
+      farm_id: farmId,
+      actions: {
+        total: actionMetrics.total_actions || 0,
+        by_tier: actionMetrics.by_tier || {},
+        by_human_decision: actionMetrics.by_human_decision || {},
+        acceptance_rate: actionMetrics.acceptance_rate ?? null,
+        auto_rate: actionMetrics.auto_rate ?? null
+      },
+      feedback: {
+        total: feedbackMetrics.total_feedback || 0,
+        average_rating: feedbackMetrics.avg_rating ?? null,
+        rating_breakdown: feedbackMetrics.rating_breakdown || {}
+      }
+    });
+  } catch (error) {
+    console.error('[AI Agent] Metrics query error:', error);
+    return res.status(500).json({
+      error: 'internal_error',
+      message: error.message
+    });
+  }
 });
 
 /**
@@ -205,19 +311,28 @@ router.get('/status', (req, res) => {
 router.post('/feedback', farmAuthMiddleware, async (req, res) => {
   try {
     const { message_id, rating, comment } = req.body;
+    const farmId = requestFarmId(req);
+    const userId = requestUserId(req);
+
+    if (typeof rating !== 'number' || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        error: 'invalid_rating',
+        message: 'Rating must be a number from 1 to 5'
+      });
+    }
     
-    // Log feedback (could be stored in database for analysis)
-    console.log('[AI Agent] Feedback received:', {
-      farm_id: req.farmId,
-      message_id,
+    const feedbackId = await logAgentFeedback({
+      farm_id: farmId,
+      user_id: userId,
+      message_id: message_id || null,
       rating,
-      comment,
-      timestamp: new Date().toISOString()
+      comment: typeof comment === 'string' ? comment.slice(0, 1000) : null
     });
     
     res.json({
       success: true,
-      message: 'Thank you for your feedback!'
+      message: 'Thank you for your feedback!',
+      feedback_id: feedbackId || null
     });
     
   } catch (error) {
@@ -236,10 +351,11 @@ router.post('/feedback', farmAuthMiddleware, async (req, res) => {
  */
 router.get('/audit', farmAuthMiddleware, async (req, res) => {
   try {
+    const farmId = requestFarmId(req);
     const records = await getAuditLog({
       limit: parseInt(req.query.limit) || 50,
       agent_class: req.query.agent_class || undefined,
-      farm_id: req.farmId
+      farm_id: farmId
     });
     res.json({ ok: true, count: records.length, records });
   } catch (error) {
