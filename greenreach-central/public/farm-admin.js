@@ -6179,295 +6179,303 @@ document.addEventListener('DOMContentLoaded', () => {
 // Quality Control System
 // ============================================
 
-// Quality test data - loaded from API
-let qualityTests = [];
+// Quality control data — loaded from API
+let qualityCheckpoints = [];
+let labReports = [];
 
 async function loadQualityControl() {
     console.log('Loading Quality Control section...');
-    
-    // Fetch quality tests from API
+
+    // Fetch QA stats from proxy → Foxtrot
     try {
-        const resp = await fetch(`${API_BASE}/api/quality/tests/${currentSession.farmId}`, {
+        const statsResp = await fetch(`${API_BASE}/api/quality/stats`, {
             headers: { 'Authorization': `Bearer ${currentSession.token}` }
         });
-        if (resp.ok) {
-            const data = await resp.json();
-            qualityTests = data.tests || data || [];
+        if (statsResp.ok) {
+            const statsData = await statsResp.json();
+            const stats = statsData.stats || {};
+            const passRateEl = document.getElementById('quality-pass-rate');
+            if (passRateEl) passRateEl.textContent = stats.total_checkpoints > 0 ? `${stats.pass_rate}%` : '--';
+            const totalEl = document.getElementById('tests-completed');
+            if (totalEl) totalEl.textContent = stats.total_checkpoints || 0;
+            const pendingEl = document.getElementById('pending-review');
+            if (pendingEl) pendingEl.textContent = stats.pending_count || 0;
+            const failedEl = document.getElementById('failed-tests');
+            if (failedEl) failedEl.textContent = stats.fail_count || 0;
         }
     } catch (e) {
-        console.warn('Quality tests API not available:', e.message);
+        console.warn('Quality stats API not available:', e.message);
     }
-    
-    // Update metrics
-    updateQualityMetrics();
-    
-    // Load quality tests table
-    renderQualityTests();
+
+    // Fetch QA checkpoints from proxy → Foxtrot
+    try {
+        const cpResp = await fetch(`${API_BASE}/api/quality/checkpoints`, {
+            headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        });
+        if (cpResp.ok) {
+            const cpData = await cpResp.json();
+            qualityCheckpoints = (cpData.data && cpData.data.checkpoints) || [];
+        }
+    } catch (e) {
+        console.warn('Quality checkpoints API not available:', e.message);
+    }
+
+    renderQualityCheckpoints();
+
+    // Fetch lab reports from GRC
+    try {
+        const lrResp = await fetch(`${API_BASE}/api/quality/reports?farmId=${currentSession.farmId}`, {
+            headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        });
+        if (lrResp.ok) {
+            const lrData = await lrResp.json();
+            labReports = lrData.reports || [];
+        }
+    } catch (e) {
+        console.warn('Lab reports API not available:', e.message);
+    }
+
+    renderLabReports();
 }
 
-function updateQualityMetrics() {
-    // Calculate pass rate
-    const completedTests = qualityTests.filter(t => t.result !== 'pending');
-    const passedTests = qualityTests.filter(t => t.result === 'pass');
-    const passRate = completedTests.length > 0 
-        ? ((passedTests.length / completedTests.length) * 100).toFixed(1) 
-        : 0;
-    
-    // Update DOM
-    const passRateElem = document.getElementById('quality-pass-rate');
-    if (passRateElem) {
-        passRateElem.textContent = `${passRate}%`;
-    }
-    
-    const testsCompletedElem = document.getElementById('tests-completed');
-    if (testsCompletedElem) {
-        testsCompletedElem.textContent = qualityTests.length;
-    }
-    
-    const pendingReviewElem = document.getElementById('pending-review');
-    if (pendingReviewElem) {
-        const pendingCount = qualityTests.filter(t => t.result === 'pending').length;
-        pendingReviewElem.textContent = pendingCount;
-    }
-    
-    const failedTestsElem = document.getElementById('failed-tests');
-    if (failedTestsElem) {
-        const failedCount = qualityTests.filter(t => t.result === 'fail').length;
-        failedTestsElem.textContent = failedCount;
+// ─── Tab switching ───
+function switchQualityTab(tab) {
+    const inspPanel = document.getElementById('qa-panel-inspections');
+    const labPanel = document.getElementById('qa-panel-labreports');
+    const inspTab = document.getElementById('qa-tab-inspections');
+    const labTab = document.getElementById('qa-tab-labreports');
+
+    if (tab === 'inspections') {
+        if (inspPanel) inspPanel.style.display = '';
+        if (labPanel) labPanel.style.display = 'none';
+        if (inspTab) { inspTab.style.background = 'var(--accent-green)'; inspTab.style.color = 'white'; inspTab.style.borderColor = 'var(--accent-green)'; }
+        if (labTab) { labTab.style.background = 'var(--bg-card)'; labTab.style.color = 'var(--text-secondary)'; labTab.style.borderColor = 'var(--border)'; }
+    } else {
+        if (inspPanel) inspPanel.style.display = 'none';
+        if (labPanel) labPanel.style.display = '';
+        if (labTab) { labTab.style.background = 'var(--accent-blue)'; labTab.style.color = 'white'; labTab.style.borderColor = 'var(--accent-blue)'; }
+        if (inspTab) { inspTab.style.background = 'var(--bg-card)'; inspTab.style.color = 'var(--text-secondary)'; inspTab.style.borderColor = 'var(--border)'; }
     }
 }
 
-function renderQualityTests(filteredTests = null) {
+// ─── QA Checkpoints rendering ───
+function renderQualityCheckpoints(filtered) {
     const tbody = document.querySelector('#quality-tests-table tbody');
     if (!tbody) return;
-    
-    const testsToRender = filteredTests || qualityTests;
-    
-    if (testsToRender.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    No quality tests found
-                </td>
-            </tr>
-        `;
+
+    const items = filtered || qualityCheckpoints;
+
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">No QA inspections found. Inspections are recorded from the Activity Hub.</td></tr>`;
         return;
     }
-    
-    tbody.innerHTML = testsToRender.map(test => {
-        const testDate = new Date(test.date);
-        const dateStr = testDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const timeStr = testDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        
-        // Category labels
-        const categoryLabels = {
-            visual: 'Visual Inspection',
-            microbial: 'Microbial',
-            nutrient: 'Nutrient Analysis',
-            physical: 'Physical Metrics'
-        };
-        
-        // Result badge
-        let resultBadge = '';
-        if (test.result === 'pass') {
-            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-green); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">PASS</span>';
-        } else if (test.result === 'fail') {
-            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-red); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">FAIL</span>';
+
+    const typeLabels = {
+        pre_harvest: 'Pre-Harvest',
+        post_harvest: 'Post-Harvest',
+        packaging: 'Packaging',
+        storage: 'Storage',
+        visual: 'Visual',
+        incoming: 'Incoming'
+    };
+
+    tbody.innerHTML = items.map(cp => {
+        const d = new Date(cp.created_at);
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+        let badge = '';
+        if (cp.result === 'pass' || cp.result === 'pass_with_notes') {
+            badge = '<span style="padding:4px 12px;background:var(--accent-green);color:white;border-radius:12px;font-size:12px;font-weight:500;">PASS</span>';
+        } else if (cp.result === 'fail') {
+            badge = '<span style="padding:4px 12px;background:var(--accent-red);color:white;border-radius:12px;font-size:12px;font-weight:500;">FAIL</span>';
         } else {
-            resultBadge = '<span style="padding: 4px 12px; background: var(--accent-yellow); color: white; border-radius: 12px; font-size: 12px; font-weight: 500;">PENDING</span>';
+            badge = '<span style="padding:4px 12px;background:var(--accent-yellow);color:white;border-radius:12px;font-size:12px;font-weight:500;">PENDING</span>';
         }
-        
-        return `
-            <tr>
-                <td><span style="font-family: monospace; color: var(--accent-blue);">${test.id}</span></td>
-                <td>
-                    <div>${dateStr}</div>
-                    <small style="color: var(--text-muted);">${timeStr}</small>
-                </td>
-                <td><span style="font-family: monospace;">${test.batchId}</span></td>
-                <td>${test.crop}</td>
-                <td>${categoryLabels[test.category]}</td>
-                <td>${test.tester}</td>
-                <td>${resultBadge}</td>
-                <td>
-                    <button class="btn-icon" onclick="viewQualityTest('${test.id}')" title="View Details">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </button>
-                    <button class="btn-icon" onclick="deleteQualityTest('${test.id}')" title="Delete">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
-                </td>
-            </tr>
-        `;
+
+        const typeLabel = typeLabels[cp.checkpoint_type] || cp.checkpoint_type || 'Unknown';
+        const notes = cp.notes ? (cp.notes.length > 60 ? cp.notes.slice(0, 57) + '...' : cp.notes) : '—';
+
+        return `<tr>
+            <td><span style="font-family:monospace;color:var(--accent-blue);">${cp.id || '—'}</span></td>
+            <td><div>${dateStr}</div><small style="color:var(--text-muted);">${timeStr}</small></td>
+            <td><span style="font-family:monospace;">${cp.batch_id || '—'}</span></td>
+            <td>${typeLabel}</td>
+            <td>${cp.inspector || 'Unknown'}</td>
+            <td>${badge}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(cp.notes || '').replace(/"/g, '&quot;')}">${notes}</td>
+        </tr>`;
     }).join('');
 }
 
-function filterQualityTests() {
-    const categoryFilter = document.getElementById('quality-filter')?.value || 'all';
-    const statusFilter = document.getElementById('status-filter')?.value || 'all';
-    
-    let filtered = qualityTests;
-    
-    if (categoryFilter !== 'all') {
-        filtered = filtered.filter(t => t.category === categoryFilter);
-    }
-    
-    if (statusFilter !== 'all') {
-        filtered = filtered.filter(t => t.result === statusFilter);
-    }
-    
-    renderQualityTests(filtered);
+function filterQualityCheckpoints() {
+    const typeFilter = document.getElementById('quality-type-filter')?.value || 'all';
+    const resultFilter = document.getElementById('quality-result-filter')?.value || 'all';
+
+    let filtered = qualityCheckpoints;
+    if (typeFilter !== 'all') filtered = filtered.filter(c => c.checkpoint_type === typeFilter);
+    if (resultFilter !== 'all') filtered = filtered.filter(c => c.result === resultFilter || (resultFilter === 'pass' && c.result === 'pass_with_notes'));
+
+    renderQualityCheckpoints(filtered);
 }
 
-function showCategoryTests(category) {
-    // Set filter and trigger
-    const categoryFilter = document.getElementById('quality-filter');
-    if (categoryFilter) {
-        categoryFilter.value = category;
-        filterQualityTests();
-        
-        // Scroll to table
-        document.getElementById('quality-tests-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-}
+// ─── Lab Reports rendering ───
+function renderLabReports() {
+    const tbody = document.getElementById('lab-reports-tbody');
+    if (!tbody) return;
 
-function openQualityTestModal() {
-    const modal = document.getElementById('qualityTestModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        
-        // Reset form
-        document.getElementById('quality-test-form')?.reset();
-    }
-}
-
-function closeQualityTestModal() {
-    const modal = document.getElementById('qualityTestModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-function submitQualityTest(event) {
-    event.preventDefault();
-    
-    const batchId = document.getElementById('test-batch-id')?.value;
-    const crop = document.getElementById('test-crop')?.value;
-    const category = document.getElementById('test-category')?.value;
-    const sampleSize = document.getElementById('test-sample-size')?.value;
-    const results = document.getElementById('test-results')?.value;
-    const status = document.getElementById('test-status')?.value;
-    
-    // Generate test ID
-    const testNum = (qualityTests.length + 1).toString().padStart(3, '0');
-    const testId = `QT-2026-${testNum}`;
-    
-    // Get current user (from localStorage/session)
-    const currentUser = localStorage.getItem('userName') || 'Current User';
-    
-    // Create new test
-    const newTest = {
-        id: testId,
-        date: new Date().toISOString(),
-        batchId: batchId,
-        crop: crop.charAt(0).toUpperCase() + crop.slice(1),
-        category: category,
-        tester: currentUser,
-        result: status,
-        notes: results || 'No additional notes'
-    };
-    
-    // Add to tests array
-    qualityTests.unshift(newTest); // Add to beginning
-    
-    // Update display
-    updateQualityMetrics();
-    renderQualityTests();
-    
-    // Close modal
-    closeQualityTestModal();
-    
-    // Show success message
-    showNotification('Quality test recorded successfully', 'success');
-}
-
-function viewQualityTest(testId) {
-    const test = qualityTests.find(t => t.id === testId);
-    if (!test) return;
-    
-    const testDate = new Date(test.date);
-    const dateStr = testDate.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-    
-    const categoryLabels = {
-        visual: 'Visual Inspection',
-        microbial: 'Microbial Testing',
-        nutrient: 'Nutrient Analysis',
-        physical: 'Physical Metrics'
-    };
-    
-    const resultColors = {
-        pass: 'var(--accent-green)',
-        fail: 'var(--accent-red)',
-        pending: 'var(--accent-yellow)'
-    };
-    
-    alert(`Quality Test Details\n\n` +
-          `Test ID: ${test.id}\n` +
-          `Date: ${dateStr}\n` +
-          `Batch: ${test.batchId}\n` +
-          `Crop: ${test.crop}\n` +
-          `Category: ${categoryLabels[test.category]}\n` +
-          `Tested By: ${test.tester}\n` +
-          `Result: ${test.result.toUpperCase()}\n\n` +
-          `Notes:\n${test.notes}`);
-}
-
-function deleteQualityTest(testId) {
-    if (!confirm('Are you sure you want to delete this quality test? This action cannot be undone.')) {
+    if (!labReports.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">No lab reports recorded yet. Click "+ Record Lab Report" to add one.</td></tr>`;
         return;
     }
-    
-    qualityTests = qualityTests.filter(t => t.id !== testId);
-    
-    // Update display
-    updateQualityMetrics();
-    renderQualityTests();
-    
-    showNotification('Quality test deleted', 'success');
+
+    const typeLabels = {
+        microbial: 'Microbial',
+        gap_audit: 'GAP Audit',
+        nutrient: 'Nutrient Analysis',
+        pesticide: 'Pesticide Residue',
+        water: 'Water Quality',
+        other: 'Other'
+    };
+
+    tbody.innerHTML = labReports.map(r => {
+        let badge = '';
+        if (r.result === 'pass') {
+            badge = '<span style="padding:4px 10px;background:var(--accent-green);color:white;border-radius:12px;font-size:12px;">PASS</span>';
+        } else if (r.result === 'fail') {
+            badge = '<span style="padding:4px 10px;background:var(--accent-red);color:white;border-radius:12px;font-size:12px;">FAIL</span>';
+        } else {
+            badge = '<span style="padding:4px 10px;background:var(--accent-yellow);color:white;border-radius:12px;font-size:12px;">PENDING</span>';
+        }
+
+        const notes = r.notes ? (r.notes.length > 50 ? r.notes.slice(0, 47) + '...' : r.notes) : '—';
+
+        return `<tr>
+            <td><span style="font-family:monospace;color:var(--accent-blue);">${r.id}</span></td>
+            <td>${r.test_date || '—'}</td>
+            <td>${typeLabels[r.report_type] || r.report_type}</td>
+            <td>${r.lab_name || '—'}</td>
+            <td><span style="font-family:monospace;">${r.lot_code || '—'}</span></td>
+            <td>${badge}</td>
+            <td title="${(r.notes || '').replace(/"/g, '&quot;')}">${notes}</td>
+            <td>
+                <button class="btn-icon" onclick="deleteLabReport('${r.id}')" title="Delete">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ─── Lab Report modal ───
+function openLabReportModal() {
+    const modal = document.getElementById('labReportModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('lab-report-form')?.reset();
+        // Default date to today
+        const dateInput = document.getElementById('lr-test-date');
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function closeLabReportModal() {
+    const modal = document.getElementById('labReportModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitLabReport(event) {
+    event.preventDefault();
+
+    const body = {
+        report_type: document.getElementById('lr-report-type')?.value,
+        test_date: document.getElementById('lr-test-date')?.value,
+        lab_name: document.getElementById('lr-lab-name')?.value || '',
+        lot_code: document.getElementById('lr-lot-code')?.value || '',
+        result: document.getElementById('lr-result')?.value || 'pending',
+        notes: document.getElementById('lr-notes')?.value || ''
+    };
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/quality/reports`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`,
+                'X-Farm-ID': currentSession.farmId
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.ok && data.report) {
+            labReports.unshift(data.report);
+            renderLabReports();
+            closeLabReportModal();
+            showNotification('Lab report recorded successfully', 'success');
+        } else {
+            showNotification(data.error || 'Failed to save lab report', 'error');
+        }
+    } catch (e) {
+        console.error('submitLabReport error:', e);
+        showNotification('Network error saving lab report', 'error');
+    }
+}
+
+async function deleteLabReport(id) {
+    if (!confirm('Delete this lab report record?')) return;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/quality/reports/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentSession.token}`,
+                'X-Farm-ID': currentSession.farmId
+            }
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            labReports = labReports.filter(r => r.id !== id);
+            renderLabReports();
+            showNotification('Lab report deleted', 'success');
+        }
+    } catch (e) {
+        console.error('deleteLabReport error:', e);
+    }
 }
 
 function exportQualityReport() {
-    // Create CSV content
-    let csv = 'Test ID,Date/Time,Batch ID,Crop,Category,Tested By,Result,Notes\n';
-    
-    qualityTests.forEach(test => {
-        const row = [
-            test.id,
-            new Date(test.date).toLocaleString(),
-            test.batchId,
-            test.crop,
-            test.category,
-            test.tester,
-            test.result,
-            `"${test.notes.replace(/"/g, '""')}"` // Escape quotes in notes
-        ];
-        csv += row.join(',') + '\n';
+    // Export both inspections and lab reports as CSV
+    let csv = 'Source,ID,Date,Type,Inspector/Lab,Batch/Lot,Result,Notes\n';
+
+    qualityCheckpoints.forEach(cp => {
+        csv += [
+            'Inspection',
+            cp.id || '',
+            cp.created_at ? new Date(cp.created_at).toLocaleDateString() : '',
+            cp.checkpoint_type || '',
+            cp.inspector || '',
+            cp.batch_id || '',
+            cp.result || '',
+            `"${(cp.notes || '').replace(/"/g, '""')}"`
+        ].join(',') + '\n';
     });
-    
-    // Create download
+
+    labReports.forEach(r => {
+        csv += [
+            'Lab Report',
+            r.id || '',
+            r.test_date || '',
+            r.report_type || '',
+            r.lab_name || '',
+            r.lot_code || '',
+            r.result || '',
+            `"${(r.notes || '').replace(/"/g, '""')}"`
+        ].join(',') + '\n';
+    });
+
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -6477,30 +6485,7 @@ function exportQualityReport() {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    
-    showNotification('Quality report exported successfully', 'success');
-}
-
-function saveQualityStandards() {
-    const colorThreshold = document.getElementById('color-threshold')?.value;
-    const defectThreshold = document.getElementById('defect-threshold')?.value;
-    const tpcThreshold = document.getElementById('tpc-threshold')?.value;
-    const moistureThreshold = document.getElementById('moisture-threshold')?.value;
-    const weightThreshold = document.getElementById('weight-threshold')?.value;
-    
-    // Save to localStorage
-    const standards = {
-        colorThreshold,
-        defectThreshold,
-        tpcThreshold,
-        moistureThreshold,
-        weightThreshold,
-        updatedAt: new Date().toISOString()
-    };
-    
-    localStorage.setItem('qualityStandards', JSON.stringify(standards));
-    
-    showNotification('Quality standards saved successfully', 'success');
+    showNotification('Quality report exported', 'success');
 }
 
 function showNotification(message, type = 'info') {

@@ -26,32 +26,12 @@
  */
 import { Router } from 'express';
 import { farmStore } from '../lib/farm-data-store.js';
+import { query } from '../config/database.js';
 
 const router = Router();
 
-// ═══════════ Quality Tests (persisted via farmStore) ═══════════
-router.get('/api/quality/tests/:farmId', async (req, res) => {
-  try {
-    const tests = await farmStore.get(req.params.farmId, 'quality_tests') || [];
-    const list = Array.isArray(tests) ? tests : (tests.tests || []);
-    res.json({ ok: true, farmId: req.params.farmId, tests: list, total: list.length });
-  } catch {
-    res.json({ ok: true, farmId: req.params.farmId, tests: [], total: 0 });
-  }
-});
-
-router.post('/api/quality/tests', async (req, res) => {
-  const { farmId, testType, results } = req.body;
-  const entry = { id: `QT-${Date.now()}`, farmId, testType, results, recordedAt: new Date().toISOString() };
-  try {
-    const fid = farmId || farmStore.farmIdFromReq(req);
-    const existing = await farmStore.get(fid, 'quality_tests') || [];
-    const list = Array.isArray(existing) ? existing : (existing.tests || []);
-    list.push(entry);
-    await farmStore.set(fid, 'quality_tests', list);
-  } catch (e) { console.warn('[Quality] Could not persist test:', e.message); }
-  res.json({ ok: true, ...entry });
-});
+// ═══════════ Quality Tests — MOVED to routes/quality-reports.js ═══════════
+// Legacy stubs removed. Quality endpoints now served by /api/quality/* router.
 
 // ═══════════ Room Mapper (persisted via farmStore) ═══════════
 router.post('/api/room-mapper/save', async (req, res) => {
@@ -220,6 +200,80 @@ router.get('/api/farms/list', async (req, res) => {
 // Frontend calls /crop-pricing (no /api prefix)
 router.get('/crop-pricing', (req, res) => {
   res.redirect(307, '/api/crop-pricing');
+});
+
+router.get('/forwarder/devicedatas', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    let targetBase = process.env.FOXTROT_API_URL || '';
+
+    if (fid) {
+      try {
+        const farmResult = await query('SELECT api_url FROM farms WHERE farm_id = $1 LIMIT 1', [fid]);
+        const farmApiUrl = farmResult.rows?.[0]?.api_url;
+        if (farmApiUrl && String(farmApiUrl).trim()) {
+          targetBase = String(farmApiUrl).trim();
+        }
+      } catch (dbErr) {
+        console.warn('[Compat] /forwarder/devicedatas farm endpoint lookup failed:', dbErr.message);
+      }
+    }
+
+    if (!targetBase) {
+      return res.status(503).json({ ok: false, error: 'No farm endpoint configured' });
+    }
+
+    const normalizedBase = targetBase.replace(/\/$/, '');
+    const upstream = await fetch(`${normalizedBase}/forwarder/devicedatas`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    const body = await upstream.text();
+    return res.status(upstream.status).set('content-type', contentType).send(body);
+  } catch (error) {
+    console.warn('[Compat] /forwarder/devicedatas failed:', error.message);
+    return res.status(502).json({ ok: false, error: error.message });
+  }
+});
+
+router.get('/api/devicedatas', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    let targetBase = process.env.FOXTROT_API_URL || '';
+
+    if (fid) {
+      try {
+        const farmResult = await query('SELECT api_url FROM farms WHERE farm_id = $1 LIMIT 1', [fid]);
+        const farmApiUrl = farmResult.rows?.[0]?.api_url;
+        if (farmApiUrl && String(farmApiUrl).trim()) {
+          targetBase = String(farmApiUrl).trim();
+        }
+      } catch (dbErr) {
+        console.warn('[Compat] /api/devicedatas farm endpoint lookup failed:', dbErr.message);
+      }
+    }
+
+    if (!targetBase) {
+      return res.status(503).json({ ok: false, error: 'No farm endpoint configured' });
+    }
+
+    const normalizedBase = targetBase.replace(/\/$/, '');
+    const upstream = await fetch(`${normalizedBase}/api/devicedatas`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    const body = await upstream.text();
+    return res.status(upstream.status).set('content-type', contentType).send(body);
+  } catch (error) {
+    console.warn('[Compat] /api/devicedatas failed:', error.message);
+    return res.status(502).json({ ok: false, error: error.message });
+  }
 });
 
 // ═══════════ Admin Extended Operations ═══════════
