@@ -24,7 +24,19 @@ router.get('/catalog', async (req, res) => {
     if (!data || !data.products) return res.json({ ok: true, products: [], categories: [] });
 
     const products = data.products || [];
-    const categories = [...new Set(products.map(p => p.category))].sort();
+    const CATEGORY_META = {
+      seeds: { icon: '🌱', name: 'Seeds', sortOrder: 1 },
+      nutrients: { icon: '🧪', name: 'Nutrients', sortOrder: 2 },
+      packaging: { icon: '📦', name: 'Packaging', sortOrder: 3 },
+      equipment: { icon: '⚙️', name: 'Equipment', sortOrder: 4 },
+      media: { icon: '🪨', name: 'Grow Media', sortOrder: 5 },
+      lab: { icon: '🔬', name: 'Lab Supplies', sortOrder: 6 },
+    };
+    const catIds = [...new Set(products.map(p => p.category))].sort();
+    const categories = catIds.map(id => ({
+      id,
+      ...(CATEGORY_META[id] || { icon: '📋', name: id.charAt(0).toUpperCase() + id.slice(1), sortOrder: 99 })
+    }));
     const inStockCount = products.filter(p => p.inStock).length;
 
     res.json({
@@ -188,7 +200,14 @@ router.get('/orders', async (req, res) => {
     const { status, farm_id } = req.query;
     if (status) orders = orders.filter(o => o.status === status);
     if (farm_id) orders = orders.filter(o => o.farmId === farm_id);
-    res.json({ ok: true, orders, total: orders.length });
+    const enriched = orders.map(o => ({
+      ...o,
+      orderId: o.orderId || o.id,
+      itemCount: o.itemCount || (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
+      subtotal: o.subtotal || (o.items || []).reduce((s, i) => s + (i.total || (i.price || 0) * (i.quantity || 1) || 0), 0),
+      paymentStatus: o.paymentStatus || 'pending',
+    }));
+    res.json({ ok: true, orders: enriched, total: enriched.length });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'orders_list_error' });
   }
@@ -201,9 +220,29 @@ router.get('/orders/:orderId', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
-    const order = (ordersData.orders || []).find(o => o.id === req.params.orderId);
+    const order = (ordersData.orders || []).find(o => o.id === req.params.orderId || o.orderId === req.params.orderId);
     if (!order) return res.status(404).json({ ok: false, error: 'order_not_found' });
-    res.json({ ok: true, order });
+    // Enrich order items for frontend contract
+    const suppData = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
+    const enrichedItems = (order.items || []).map(item => ({
+      ...item,
+      unitPrice: item.unitPrice || item.price || 0,
+      lineTotal: item.lineTotal || item.total || (item.price || 0) * (item.quantity || 1),
+      saleUnit: item.saleUnit || item.unit || 'each',
+      status: item.status || order.status || 'pending',
+      supplierName: item.supplierName || (suppData.suppliers || []).find(s => s.id === item.supplierId)?.name || item.supplierId || '',
+      trackingNumber: item.trackingNumber || null,
+      carrier: item.carrier || null,
+    }));
+    const enrichedOrder = {
+      ...order,
+      orderId: order.orderId || order.id,
+      paymentMethod: order.paymentMethod || 'invoice',
+      paymentStatus: order.paymentStatus || 'pending',
+      shippingAddress: order.shippingAddress || null,
+      items: enrichedItems,
+    };
+    res.json({ ok: true, order: enrichedOrder });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'order_get_error' });
   }
@@ -216,7 +255,7 @@ router.post('/orders', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const ordersData = await farmStore.get(fid, 'procurement_orders') || { orders: [] };
-    const { items, supplierId, notes, farmId } = req.body;
+    const { items, supplierId, notes, farmId, shippingAddress, paymentMethod } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ ok: false, error: 'items required' });
     }
@@ -249,13 +288,19 @@ router.post('/orders', async (req, res) => {
       });
     }
 
+    const orderId = `PO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const order = {
-      id: `PO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      farmId: farmId || 'unknown',
+      id: orderId,
+      orderId,
+      farmId: farmId || fid || 'unknown',
       items: orderItems,
       supplierOrders,
       subtotal: Math.round(subtotal * 100) / 100,
+      itemCount: orderItems.reduce((s, i) => s + (i.quantity || 1), 0),
       status: 'pending',
+      paymentMethod: paymentMethod || 'invoice',
+      paymentStatus: 'pending',
+      shippingAddress: shippingAddress || null,
       notes: notes || '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -286,7 +331,8 @@ router.post('/orders/:orderId/receive', async (req, res) => {
     ordersData.orders[idx].updatedAt = new Date().toISOString();
     await farmStore.set(fid, 'procurement_orders', ordersData);
 
-    res.json({ ok: true, order: ordersData.orders[idx] });
+    const receivedCount = (ordersData.orders[idx].items || []).reduce((s, i) => s + (i.quantity || 1), 0);
+    res.json({ ok: true, order: ordersData.orders[idx], received: receivedCount });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'order_receive_error' });
   }
@@ -313,7 +359,15 @@ router.get('/inventory', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, inventory: Object.values(inventory), total: Object.keys(inventory).length });
+    const supplies = Object.values(inventory).map(item => ({
+      ...item,
+      category: item.category || 'uncategorized',
+      qtyOnHand: item.quantity || 0,
+      standardUnit: item.standardUnit || item.unit || 'each',
+      minStockLevel: item.minStockLevel || 0,
+      lastRestockedAt: item.lastReceived || null,
+    }));
+    res.json({ ok: true, supplies, inventory: supplies, total: supplies.length });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'inventory_error' });
   }
@@ -337,12 +391,37 @@ router.get('/commission-report', async (req, res) => {
       }
     }
 
+    // Per-supplier breakdown
+    const bySupplier = {};
+    const suppData = await farmStore.get(fid, 'procurement_suppliers') || { suppliers: [] };
+    for (const order of orders) {
+      for (const so of (order.supplierOrders || [])) {
+        const sid = so.supplierId || 'unknown';
+        if (!bySupplier[sid]) {
+          const sup = (suppData.suppliers || []).find(s => s.id === sid);
+          bySupplier[sid] = { supplierName: sup?.name || so.supplierName || sid, orderCount: 0, totalSales: 0, totalCommission: 0 };
+        }
+        bySupplier[sid].orderCount++;
+        bySupplier[sid].totalSales += so.subtotal || 0;
+        bySupplier[sid].totalCommission += so.commission || 0;
+      }
+    }
+    const suppliersArr = Object.values(bySupplier).map(s => ({
+      ...s,
+      totalSales: Math.round(s.totalSales * 100) / 100,
+      totalCommission: Math.round(s.totalCommission * 100) / 100,
+    }));
+
     res.json({
       ok: true,
       totalOrders: orders.length,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
       totalCommission: Math.round(totalCommission * 100) / 100,
       avgCommissionRate: totalRevenue > 0 ? Math.round((totalCommission / totalRevenue) * 10000) / 100 : 0,
+      grandTotal: Math.round(totalRevenue * 100) / 100,
+      grandCommission: Math.round(totalCommission * 100) / 100,
+      orderCount: orders.length,
+      suppliers: suppliersArr,
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'commission_report_error' });
