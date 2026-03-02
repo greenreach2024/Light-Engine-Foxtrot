@@ -16,6 +16,7 @@ import farmRoutes from './routes/farms.js';
 import authRoutes from './routes/auth.js';
 import monitoringRoutes from './routes/monitoring.js';
 import inventoryRoutes from './routes/inventory.js';
+import inventoryMgmtRoutes from './routes/inventory-mgmt.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
 import syncRoutes from './routes/sync.js';
@@ -1500,54 +1501,7 @@ app.get('/api/activity-hub/orders/pending', (_req, res) => {
   return res.json({ ok: true, orders: [] });
 });
 
-app.get('/api/inventory/dashboard', async (_req, res) => {
-  return res.json({
-    ok: true,
-    total_value: 0,
-    alerts_by_category: {
-      seeds: [],
-      nutrients: [],
-      packaging: [],
-      equipment: [],
-      supplies: []
-    }
-  });
-});
-
-app.get('/api/inventory/reorder-alerts', (_req, res) => {
-  return res.json({ ok: true, alerts: [] });
-});
-
-app.get('/api/inventory/usage/weekly-summary', (_req, res) => {
-  return res.json({
-    ok: true,
-    summary: {
-      seeds_used: {},
-      nutrients_used_ml: {},
-      grow_media_kg: 0
-    }
-  });
-});
-
-app.get('/api/inventory/seeds/list', (_req, res) => {
-  return res.json({ ok: true, seeds: [] });
-});
-
-app.get('/api/inventory/nutrients/list', (_req, res) => {
-  return res.json({ ok: true, nutrients: [] });
-});
-
-app.get('/api/inventory/packaging/list', (_req, res) => {
-  return res.json({ ok: true, packaging: [] });
-});
-
-app.get('/api/inventory/equipment/list', (_req, res) => {
-  return res.json({ ok: true, equipment: [] });
-});
-
-app.get('/api/inventory/supplies/list', (_req, res) => {
-  return res.json({ ok: true, supplies: [] });
-});
+// Inventory management stubs removed — now served by inventoryMgmtRoutes
 
 // ─── Traceability API proxy (routes requests to the farm's unified traceability API) ─────
 import { listNetworkFarms as listTraceFarms } from './services/networkFarmsStore.js';
@@ -2296,7 +2250,8 @@ app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 // Path alias: frontend calls /api/inventory/tray-formats but handler is at /api/tray-formats
 app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/tray-formats'); });
 
-app.use('/api/inventory', authMiddleware, inventoryRoutes);
+app.use('/api/inventory', authMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
+app.use('/api/inventory', authMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
