@@ -2231,6 +2231,11 @@
                         <div style="font-size: 32px; font-weight: bold; color: #f59e0b;" id="procurement-spending">$0.00</div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="procurement-order-count">0 orders</div>
                     </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.05) 100%); border-left: 4px solid #059669;">
+                        <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Net Profit</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #059669;" id="net-profit">$0.00</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="profit-margin">--</div>
+                    </div>
                 </div>
 
                 <!-- Operations Summary -->
@@ -3289,7 +3294,10 @@
 
                     <!-- Certifications & Practices -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Certifications & Practices</h2>
+                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="padding: 6px 14px; font-size: 12px;">Edit</button>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
@@ -3300,12 +3308,6 @@
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Growing Practices</h3>
                                 <div id="practices-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    <!-- Loaded from setup wizard -->
-                                </div>
-                            </div>
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Farm Attributes</h3>
-                                <div id="attributes-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
                                     <!-- Loaded from setup wizard -->
                                 </div>
                             </div>
@@ -3422,28 +3424,28 @@
                                 </label>
                                 <p style="color: var(--text-muted); font-size: 11px; margin: 0;">Opt-out to disable wholesale orders from GreenReach Central. All other services (monitoring, updates, support) remain active.</p>
                             </div>
-                            
-                            <!-- Device Pairing for Activity Hub Tablets -->
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Tablet Device Pairing</h3>
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
-                                    Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
-                                </p>
-                                <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
-                                    Generate Pairing QR Code
-                                </button>
-                                <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
-                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
-                                    <div id="pairingQRCode" style="display: inline-block;"></div>
-                                    <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
-                                        Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
-                                        Token expires in 24 hours
-                                    </p>
-                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tablet Device Pairing -->
+                    <div class="card" style="border: 1px solid var(--accent-blue); border-opacity: 0.3;">
+                        <h2 style="margin-bottom: 8px;">📱 Tablet Device Pairing</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                            Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
+                        </p>
+                        <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
+                            Generate Pairing QR Code
+                        </button>
+                        <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
+                            <div id="pairingQRCode" style="display: inline-block;"></div>
+                            <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
+                                Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
+                                Token expires in 24 hours
+                            </p>
+                            <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                Close
+                            </button>
                         </div>
                     </div>
 
@@ -3535,35 +3537,6 @@
                         </div>
                     </div>
 
-                    <!-- API & Webhooks -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">API & Webhooks</h2>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Webhook URL</label>
-                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                <small style="color: var(--text-muted);">Receive real-time event notifications</small>
-                            </div>
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Webhook Events</h3>
-                                <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-orders">
-                                        <span>Order events</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-inventory">
-                                        <span>Inventory updates</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="webhook-harvest">
-                                        <span>Harvest events</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Delivery Settings -->
                     <div class="card" id="delivery-settings-card">
                         <h2 style="margin-bottom: 20px;">🚚 Delivery Settings</h2>
@@ -3610,6 +3583,47 @@
                 <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Edit Certifications Modal -->
+            <div id="editCertificationsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; display: none; align-items: center; justify-content: center;">
+                <div style="background: var(--bg-card); border-radius: 12px; padding: 30px; max-width: 520px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">Edit Certifications & Practices</h2>
+                        <button onclick="closeEditCertificationsModal()" style="background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer;">&times;</button>
+                    </div>
+                    <form id="editCertificationsForm" onsubmit="saveEditCertifications(event)">
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary);">Certifications</h3>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="USDA Organic"> USDA Organic</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Canada Organic"> Canada Organic</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="CanadaGAP"> CanadaGAP</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="SFCR Compliant"> SFCR Compliant</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="GlobalG.A.P."> GlobalG.A.P.</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Non-GMO Project Verified"> Non-GMO Project Verified</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="B-Corp Certified"> B-Corp Certified</label>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary);">Growing Practices</h3>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Hydroponic"> Hydroponic</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aquaponic"> Aquaponic</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Vertical Farming"> Vertical Farming</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="LED Growing"> LED Growing</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="No Pesticides"> No Pesticides</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="IPM (Integrated Pest Management)"> IPM (Integrated Pest Management)</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Regenerative"> Regenerative</label>
+                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Soil-Based"> Soil-Based</label>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 16px;">
+                            <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()">Cancel</button>
+                            <button type="submit" class="btn-primary">Save Changes</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 

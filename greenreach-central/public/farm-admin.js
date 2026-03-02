@@ -3120,8 +3120,10 @@ async function loadAccountingData() {
         document.getElementById('total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
         
         // Update net profit
-        document.getElementById('net-profit').textContent = `$${netProfit.toFixed(2)}`;
-        document.getElementById('profit-margin').textContent = `${profitMargin}%`;
+        const netProfitEl = document.getElementById('net-profit');
+        const profitMarginEl = document.getElementById('profit-margin');
+        if (netProfitEl) netProfitEl.textContent = `$${netProfit.toFixed(2)}`;
+        if (profitMarginEl) profitMarginEl.textContent = `${profitMargin}% margin`;
         
         // Update expense breakdown
         document.getElementById('wholesale-fees').textContent = `$${wholesaleFees.toFixed(2)}`;
@@ -3326,8 +3328,8 @@ function exportFinancialReport() {
     // Gather data from UI
     const revenue = document.getElementById('total-revenue').textContent;
     const expenses = document.getElementById('total-expenses').textContent;
-    const profit = document.getElementById('net-profit').textContent;
-    const margin = document.getElementById('profit-margin').textContent;
+    const profit = document.getElementById('net-profit')?.textContent || '$0.00';
+    const margin = document.getElementById('profit-margin')?.textContent || '0%';
     
     // Create CSV content
     let csv = 'Light Engine Financial Report\n';
@@ -3393,13 +3395,19 @@ async function checkQuickBooksStatus() {
         const data = await response.json();
         
         if (data.connected) {
-            document.getElementById('quickbooks-not-connected').style.display = 'none';
-            document.getElementById('quickbooks-connected').style.display = 'block';
-            document.getElementById('qb-company-name').textContent = data.companyName || 'Connected';
-            document.getElementById('qb-last-sync').textContent = data.lastSync ? new Date(data.lastSync).toLocaleString() : 'Never';
+            const qbNotConn = document.getElementById('quickbooks-not-connected');
+            const qbConn = document.getElementById('quickbooks-connected');
+            if (qbNotConn) qbNotConn.style.display = 'none';
+            if (qbConn) qbConn.style.display = 'block';
+            const qbName = document.getElementById('qb-company-name');
+            const qbSync = document.getElementById('qb-last-sync');
+            if (qbName) qbName.textContent = data.companyName || 'Connected';
+            if (qbSync) qbSync.textContent = data.lastSync ? new Date(data.lastSync).toLocaleString() : 'Never';
         } else {
-            document.getElementById('quickbooks-not-connected').style.display = 'block';
-            document.getElementById('quickbooks-connected').style.display = 'none';
+            const qbNotConn = document.getElementById('quickbooks-not-connected');
+            const qbConn = document.getElementById('quickbooks-connected');
+            if (qbNotConn) qbNotConn.style.display = 'block';
+            if (qbConn) qbConn.style.display = 'none';
         }
     } catch (error) {
         console.error('Error checking QuickBooks status:', error);
@@ -3953,12 +3961,16 @@ async function loadSettings() {
         // If we have complete setup data, use it
         if (setupData.completed) {
             
-            // Load hardware info
+            // Load hardware info (null-guarded — hardware card removed from HTML)
             if (setupData.hardwareDetected) {
-                document.getElementById('hardware-lights').textContent = setupData.hardwareDetected.lights || 0;
-                document.getElementById('hardware-fans').textContent = setupData.hardwareDetected.fans || 0;
-                document.getElementById('hardware-sensors').textContent = setupData.hardwareDetected.sensors || 0;
-                document.getElementById('hardware-other').textContent = setupData.hardwareDetected.other || 0;
+                const hwLights = document.getElementById('hardware-lights');
+                const hwFans = document.getElementById('hardware-fans');
+                const hwSensors = document.getElementById('hardware-sensors');
+                const hwOther = document.getElementById('hardware-other');
+                if (hwLights) hwLights.textContent = setupData.hardwareDetected.lights || 0;
+                if (hwFans) hwFans.textContent = setupData.hardwareDetected.fans || 0;
+                if (hwSensors) hwSensors.textContent = setupData.hardwareDetected.sensors || 0;
+                if (hwOther) hwOther.textContent = setupData.hardwareDetected.other || 0;
             }
             
             // Load certifications
@@ -4016,13 +4028,13 @@ async function loadSettings() {
         document.getElementById('notif-ai-recommend').checked = settings.notifAiRecommend !== false;
         document.getElementById('settings-notif-email').value = settings.notifEmail || '';
         
-        // Integration Settings
-        document.getElementById('greenreach-sync-enabled').checked = settings.greenreachSync !== false;
-        document.getElementById('greenreach-endpoint').value = settings.greenreachEndpoint || 'https://central.greenreach.app';
-        document.getElementById('settings-api-key').value = settings.apiKey || '';
-        
-        // Check Square status
-        checkSquareStatus();
+        // Integration Settings (null-guarded — elements removed from HTML)
+        const syncEl = document.getElementById('greenreach-sync-enabled');
+        const endpointEl = document.getElementById('greenreach-endpoint');
+        const apiKeyEl = document.getElementById('settings-api-key');
+        if (syncEl) syncEl.checked = settings.greenreachSync !== false;
+        if (endpointEl) endpointEl.value = settings.greenreachEndpoint || 'https://central.greenreach.app';
+        if (apiKeyEl) apiKeyEl.value = settings.apiKey || '';
         
         // System Configuration
         document.getElementById('auto-backup').checked = settings.autoBackup !== false;
@@ -4037,11 +4049,15 @@ async function loadSettings() {
         document.getElementById('default-ws3-discount').value = settings.defaultWS3Discount || 35;
         document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
         
-        // API & Webhooks
-        document.getElementById('webhook-url').value = settings.webhookUrl || '';
-        document.getElementById('webhook-orders').checked = settings.webhookOrders || false;
-        document.getElementById('webhook-inventory').checked = settings.webhookInventory || false;
-        document.getElementById('webhook-harvest').checked = settings.webhookHarvest || false;
+        // API & Webhooks (null-guarded — card removed from HTML)
+        const webhookUrlEl = document.getElementById('webhook-url');
+        const webhookOrdersEl = document.getElementById('webhook-orders');
+        const webhookInventoryEl = document.getElementById('webhook-inventory');
+        const webhookHarvestEl = document.getElementById('webhook-harvest');
+        if (webhookUrlEl) webhookUrlEl.value = settings.webhookUrl || '';
+        if (webhookOrdersEl) webhookOrdersEl.checked = settings.webhookOrders || false;
+        if (webhookInventoryEl) webhookInventoryEl.checked = settings.webhookInventory || false;
+        if (webhookHarvestEl) webhookHarvestEl.checked = settings.webhookHarvest || false;
         
         // Delivery Settings (from API, not localStorage)
         loadDeliverySettings();
@@ -4088,28 +4104,7 @@ async function checkSquareStatus() {
 /**
  * Rescan hardware devices
  */
-async function scanHardware() {
-    showToast('Scanning for hardware devices...', 'info');
-    
-    try {
-        // In production, this would call the hardware scan API
-        const response = await fetch('/api/hardware/scan', {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById('hardware-lights').textContent = data.lights || 0;
-            document.getElementById('hardware-fans').textContent = data.fans || 0;
-            document.getElementById('hardware-sensors').textContent = data.sensors || 0;
-            document.getElementById('hardware-other').textContent = data.other || 0;
-            showToast('Hardware scan complete', 'success');
-        }
-    } catch (error) {
-        console.error('Error scanning hardware:', error);
-        showToast('Hardware scan unavailable', 'error');
-    }
-}
+// scanHardware() — removed: hardware card removed from Settings page
 
 /**
  * Save farm settings
@@ -4132,10 +4127,10 @@ async function saveSettings() {
             notifAiRecommend: document.getElementById('notif-ai-recommend').checked,
             notifEmail: document.getElementById('settings-notif-email').value,
             
-            // Integration Settings
-            greenreachSync: document.getElementById('greenreach-sync-enabled').checked,
-            greenreachEndpoint: document.getElementById('greenreach-endpoint').value,
-            apiKey: document.getElementById('settings-api-key').value,
+            // Integration Settings (null-guarded — elements removed from HTML)
+            greenreachSync: document.getElementById('greenreach-sync-enabled')?.checked ?? true,
+            greenreachEndpoint: document.getElementById('greenreach-endpoint')?.value || '',
+            apiKey: document.getElementById('settings-api-key')?.value || '',
             
             // System Configuration
             autoBackup: document.getElementById('auto-backup').checked,
@@ -4146,15 +4141,14 @@ async function saveSettings() {
             
             defaultWS1Discount: document.getElementById('default-ws1-discount').value,
             defaultWS2Discount: document.getElementById('default-ws2-discount').value,
-            defaultWS3Discount: document.getElementById('default-ws3-discountmarkup').value,
-            retailMarkup: document.getElementById('default-retail-markup').value,
+            defaultWS3Discount: document.getElementById('default-ws3-discount').value,
             lowStockThreshold: document.getElementById('low-stock-threshold').value,
             
-            // API & Webhooks
-            webhookUrl: document.getElementById('webhook-url').value,
-            webhookOrders: document.getElementById('webhook-orders').checked,
-            webhookInventory: document.getElementById('webhook-inventory').checked,
-            webhookHarvest: document.getElementById('webhook-harvest').checked,
+            // API & Webhooks (null-guarded — card removed from HTML)
+            webhookUrl: document.getElementById('webhook-url')?.value || '',
+            webhookOrders: document.getElementById('webhook-orders')?.checked || false,
+            webhookInventory: document.getElementById('webhook-inventory')?.checked || false,
+            webhookHarvest: document.getElementById('webhook-harvest')?.checked || false,
             
             lastUpdated: new Date().toISOString()
         };
@@ -4431,10 +4425,10 @@ async function saveEditCertifications(event) {
             headers['Authorization'] = `Bearer ${currentSession.token}`;
         }
         
-        const response = await fetch('/api/setup/certifications', {
+        const response = await fetch('/api/setup/farm-profile', {
             method: 'POST',
             headers,
-            body: JSON.stringify(updatedCertifications)
+            body: JSON.stringify({ certifications: updatedCertifications })
         });
         
         if (!response.ok) {

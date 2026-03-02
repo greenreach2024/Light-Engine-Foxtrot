@@ -335,15 +335,21 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
     if (!pool) {
       // No DB mode — save via farmStore (in-memory + flat file)
       const farmId = req.farmId;
+      // Merge with existing profile to preserve untouched fields
+      let existingProfile = {};
+      if (req.farmStore) {
+        try { existingProfile = await req.farmStore.get(farmId, 'farm_profile') || {}; } catch (e) { /* ignore */ }
+      }
       const profileData = {
+        ...existingProfile,
         farmId,
-        name: req.body.farmName,
-        timezone: req.body.timezone,
-        location: req.body.location,
-        farmSize: req.body.farmSize,
-        cropTypes: req.body.cropTypes,
-        business_hours: req.body.business_hours,
-        certifications: req.body.certifications
+        ...(req.body.farmName && { name: req.body.farmName }),
+        ...(req.body.timezone && { timezone: req.body.timezone }),
+        ...(req.body.location && { location: req.body.location }),
+        ...(req.body.farmSize && { farmSize: req.body.farmSize }),
+        ...(req.body.cropTypes && { cropTypes: req.body.cropTypes }),
+        ...(req.body.business_hours && { business_hours: req.body.business_hours }),
+        ...(req.body.certifications && { certifications: req.body.certifications })
       };
       if (req.farmStore) {
         await req.farmStore.set(farmId, 'farm_profile', profileData);
@@ -360,10 +366,12 @@ router.post('/farm-profile', authenticateToken, async (req, res) => {
     let { farmName, location, farmSize, timezone, cropTypes, dedicated_crops, business_hours, certifications } = req.body;
 
     // Validate and sanitize inputs
-    if (!timezone) {
+    // timezone is required for full profile setup, but optional for partial updates (e.g. cert-only)
+    const hasAnyUpdate = farmName || location || farmSize || timezone || cropTypes || dedicated_crops || business_hours || certifications;
+    if (!hasAnyUpdate) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Timezone is required' 
+        error: 'At least one field is required' 
       });
     }
 
