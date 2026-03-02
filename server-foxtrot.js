@@ -11120,7 +11120,7 @@ app.post('/api/ai/recommendations/receive', async (req, res) => {
  * Runs on startup (after 2 min) and daily. Also callable via POST endpoint.
  */
 (function wireHarvestScheduleReporter() {
-  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || 'https://greenreach-central.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com';
+  const CENTRAL_URL = process.env.CENTRAL_URL || process.env.GREENREACH_CENTRAL_URL || 'https://greenreachgreens.com';
   const EDGE_API_KEY = process.env.GREENREACH_API_KEY || process.env.EDGE_API_KEY || '';
   const FARM_ID = process.env.FARM_ID || 'light-engine-demo';
 
@@ -13314,6 +13314,70 @@ app.use('/api/farms', farmsRouter);
  */
 initIntegrationRoutes(integrationDB);
 app.use('/api/integrations', integrationsRouter);
+
+// ── Credential Store: Save/Load SwitchBot & Kasa credentials ──────────────
+app.get('/api/credential-store', (req, res) => {
+  try {
+    const integ = getFarmIntegrations();
+    res.json({
+      ok: true,
+      switchbot: { configured: Boolean(integ.switchbot.token && integ.switchbot.secret) },
+      kasa: { configured: Boolean(integ.kasa.email && integ.kasa.password) }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/credential-store', (req, res) => {
+  try {
+    const { switchbot, kasa } = req.body || {};
+    const farm = readFarmProfile() || {};
+    const existing = farm.integrations || {};
+
+    if (switchbot) {
+      existing.switchbot = existing.switchbot || {};
+      if (typeof switchbot.token === 'string') existing.switchbot.token = switchbot.token.trim();
+      if (typeof switchbot.secret === 'string') existing.switchbot.secret = switchbot.secret.trim();
+      if (typeof switchbot.region === 'string') existing.switchbot.region = switchbot.region.trim();
+    }
+    if (kasa) {
+      existing.kasa = existing.kasa || {};
+      if (typeof kasa.email === 'string') existing.kasa.email = kasa.email.trim();
+      if (typeof kasa.password === 'string') existing.kasa.password = kasa.password.trim();
+    }
+
+    farm.integrations = existing;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(FARM_PATH, JSON.stringify(farm, null, 2));
+
+    // Clear SwitchBot caches so new credentials take effect immediately
+    try {
+      switchBotDevicesCache.payload = null;
+      switchBotDevicesCache.fetchedAt = 0;
+      switchBotDevicesCache.inFlight = null;
+      switchBotDevicesCache.lastError = null;
+      for (const entry of switchBotStatusCache.values()) {
+        entry.payload = null;
+        entry.fetchedAt = 0;
+        entry.inFlight = null;
+        entry.lastError = null;
+      }
+      lastSwitchBotRequest = 0;
+    } catch {}
+
+    console.log('[integrations] Credentials saved to farm.json');
+    const integ = getFarmIntegrations();
+    res.json({
+      ok: true,
+      switchbot: { configured: Boolean(integ.switchbot.token && integ.switchbot.secret) },
+      kasa: { configured: Boolean(integ.kasa.email && integ.kasa.password) }
+    });
+  } catch (e) {
+    console.error('[integrations] Save error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 /**
  * Device Wizard API — Integration Assistant Phase 2 (Ticket I-2.10)
@@ -22329,6 +22393,57 @@ app.get('/api/farm/info', (req, res) => {
 // Market intelligence routes (/api/planning/demand-forecast, /capacity, /recommendations) live in
 // greenreach-central/routes/planning.js and are served by Central, not Foxtrot.
 
+const getCentralApiTarget = () =>
+  process.env.GREENREACH_CENTRAL_URL
+  || process.env.CENTRAL_URL
+  || 'https://greenreachgreens.com';
+
+app.use('/api/accounting', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 8000,
+  proxyTimeout: 8000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/accounting') ? path : `/api/accounting${path}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.url.startsWith('/api/accounting') ? req.url : `/api/accounting${req.url}`;
+    console.log(`[→ accounting] ${req.method} ${req.originalUrl} -> ${getCentralApiTarget()}${outgoingPath}`);
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+      const existingVary = proxyRes.headers['vary'];
+      if (existingVary) {
+        const varyParts = String(existingVary).split(/,\s*/);
+        if (!varyParts.includes('Origin')) {
+          proxyRes.headers['vary'] = `${existingVary}, Origin`;
+        }
+      } else {
+        proxyRes.headers['vary'] = 'Origin';
+      }
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    const requestedHeaders = req.headers?.['access-control-request-headers'];
+    if (requestedHeaders && typeof requestedHeaders === 'string') {
+      proxyRes.headers['access-control-allow-headers'] = requestedHeaders;
+    } else if (!proxyRes.headers['access-control-allow-headers']) {
+      proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/accounting] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-accounting', detail: String(err) }));
+  }
+}));
+
+
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
   console.log(`[API Middleware] path=${req.path}, originalUrl=${req.originalUrl}`);
@@ -22383,13 +22498,16 @@ if (!isControllerDisabled) {
         '/farm-auth/',
         '/farm/auth/',
         '/farm-sales/',
+        '/accounting/',
+        '/api/accounting/',
         '/wholesale/',
         '/rooms',
         '/groups',
         '/farm/info',
         '/bus-mappings',
         '/succession',     // P4: Succession planner endpoints
-        '/devices/scan'    // P1: Device scanner endpoint
+        '/devices/scan',   // P1: Device scanner endpoint
+        '/credential-store' // Integration credentials save/load
       ];
       
       // Strip /api prefix — http-proxy-middleware v2 passes full path including mount point

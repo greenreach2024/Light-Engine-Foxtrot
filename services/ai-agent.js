@@ -1507,6 +1507,10 @@ export function setAuditStore(db) {
   _auditDB = db;
 }
 
+/**
+ * Inject the NeDB feedback store (called once from server-foxtrot.js at startup).
+ * @param {object} db - nedb-promises Datastore instance
+ */
 export function setFeedbackStore(db) {
   _feedbackDB = db;
 }
@@ -1554,114 +1558,6 @@ export async function getAuditLog(opts = {}) {
   if (opts.farm_id) filter.farm_id = opts.farm_id;
   const limit = opts.limit || 50;
   return _auditDB.find(filter).sort({ logged_at: -1 }).limit(limit);
-}
-
-export async function getAuditMetrics(opts = {}) {
-  if (!_auditDB) {
-    return {
-      total_actions: 0,
-      by_tier: {},
-      by_human_decision: {},
-      acceptance_rate: null,
-      auto_rate: null
-    };
-  }
-
-  const filter = {};
-  if (opts.farm_id) filter.farm_id = opts.farm_id;
-  if (opts.days && Number.isFinite(opts.days)) {
-    const since = new Date(Date.now() - (opts.days * 24 * 60 * 60 * 1000)).toISOString();
-    filter.logged_at = { $gte: since };
-  }
-
-  const records = await _auditDB.find(filter);
-  const byTier = {};
-  const byDecision = {};
-
-  for (const record of records) {
-    const tier = record.tier || 'unknown';
-    const decision = record.human_decision || 'unknown';
-    byTier[tier] = (byTier[tier] || 0) + 1;
-    byDecision[decision] = (byDecision[decision] || 0) + 1;
-  }
-
-  const acceptedCount = byDecision.accepted || 0;
-  const rejectedCount = byDecision.rejected || 0;
-  const autoCount = byDecision.auto || 0;
-  const decisionDenominator = acceptedCount + rejectedCount;
-  const totalActions = records.length;
-
-  return {
-    total_actions: totalActions,
-    by_tier: byTier,
-    by_human_decision: byDecision,
-    acceptance_rate: decisionDenominator > 0 ? acceptedCount / decisionDenominator : null,
-    auto_rate: totalActions > 0 ? autoCount / totalActions : null
-  };
-}
-
-export async function logAgentFeedback(entry) {
-  if (!_feedbackDB) {
-    console.warn('[AI Agent Feedback] No feedback store configured — skipping log');
-    return null;
-  }
-  try {
-    const record = {
-      ...entry,
-      logged_at: new Date().toISOString()
-    };
-    const inserted = await _feedbackDB.insert(record);
-    return inserted._id;
-  } catch (err) {
-    console.error('[AI Agent Feedback] Failed to log feedback:', err.message);
-    return null;
-  }
-}
-
-export async function getFeedbackSummary(opts = {}) {
-  if (!_feedbackDB) {
-    return {
-      total_feedback: 0,
-      avg_rating: null,
-      rating_breakdown: {}
-    };
-  }
-
-  const filter = {};
-  if (opts.farm_id) filter.farm_id = opts.farm_id;
-  if (opts.days && Number.isFinite(opts.days)) {
-    const since = new Date(Date.now() - (opts.days * 24 * 60 * 60 * 1000)).toISOString();
-    filter.logged_at = { $gte: since };
-  }
-
-  const records = await _feedbackDB.find(filter);
-  if (!records.length) {
-    return {
-      total_feedback: 0,
-      avg_rating: null,
-      rating_breakdown: {}
-    };
-  }
-
-  const ratingBreakdown = {};
-  let ratingTotal = 0;
-  let ratingCount = 0;
-
-  for (const record of records) {
-    const rating = Number(record.rating);
-    if (!Number.isFinite(rating)) {
-      continue;
-    }
-    ratingBreakdown[rating] = (ratingBreakdown[rating] || 0) + 1;
-    ratingTotal += rating;
-    ratingCount += 1;
-  }
-
-  return {
-    total_feedback: records.length,
-    avg_rating: ratingCount > 0 ? Number((ratingTotal / ratingCount).toFixed(2)) : null,
-    rating_breakdown: ratingBreakdown
-  };
 }
 
 // ── Phase 4 Ticket 4.6: Developer mode action handler ──────────────────────
@@ -2506,11 +2402,7 @@ export default {
   executeAction,
   checkPermission,
   setAuditStore,
-  setFeedbackStore,
   logAgentAction,
-  logAgentFeedback,
   getAuditLog,
-  getAuditMetrics,
-  getFeedbackSummary,
   SYSTEM_CAPABILITIES
 };

@@ -22785,3 +22785,73 @@ document.addEventListener('DOMContentLoaded', () => {
     loadGroupsForBusMapping();
   }
 });
+
+// ── Save Integrations (SwitchBot / Kasa credentials) ──────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btnSaveIntegrations');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    const sbToken  = (document.getElementById('integSbToken')?.value || '').trim();
+    const sbSecret = (document.getElementById('integSbSecret')?.value || '').trim();
+    const kasaEmail = (document.getElementById('integKasaEmail')?.value || '').trim();
+    const kasaPwd  = (document.getElementById('integKasaPassword')?.value || '').trim();
+
+    if (!sbToken && !sbSecret && !kasaEmail && !kasaPwd) {
+      alert('Enter at least one integration credential before saving.');
+      return;
+    }
+
+    const body = {};
+    if (sbToken || sbSecret) {
+      body.switchbot = {};
+      if (sbToken) body.switchbot.token = sbToken;
+      if (sbSecret) body.switchbot.secret = sbSecret;
+    }
+    if (kasaEmail || kasaPwd) {
+      body.kasa = {};
+      if (kasaEmail) body.kasa.email = kasaEmail;
+      if (kasaPwd)  body.kasa.password = kasaPwd;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const resp = await fetch('/api/credential-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'Save failed');
+
+      // Update status text
+      const statusEl = document.getElementById('integrationsStatus');
+      const parts = [];
+      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
+      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
+
+      btn.textContent = 'Saved ✓';
+      setTimeout(() => { btn.textContent = 'Save Integrations'; btn.disabled = false; }, 2000);
+    } catch (err) {
+      console.error('[integrations] Save failed:', err);
+      alert('Failed to save integrations: ' + err.message);
+      btn.textContent = 'Save Integrations';
+      btn.disabled = false;
+    }
+  });
+
+  // Load current status on panel init
+  fetch('/api/credential-store')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) return;
+      const statusEl = document.getElementById('integrationsStatus');
+      const parts = [];
+      if (data.switchbot?.configured) parts.push('SwitchBot ✓');
+      if (data.kasa?.configured)      parts.push('Kasa ✓');
+      if (statusEl) statusEl.textContent = parts.length ? parts.join(' · ') : 'No integrations configured';
+    })
+    .catch(() => {});
+});
