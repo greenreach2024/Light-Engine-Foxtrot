@@ -3262,50 +3262,46 @@ async function loadOperationsData(startDate) {
             });
         }
         
-        // AI updates count - check for actual AI service data
-        let aiUpdates = 0;
-        let aiContext = 'AI is active and learning from your farm + network trends.';
-        try {
-            const aiResp = await fetch(`${API_BASE}/api/ai/insights/count`, {
-                headers: { 'Authorization': `Bearer ${currentSession.token}` }
-            });
-            if (aiResp.ok) {
-                const aiData = await aiResp.json();
-                aiUpdates = aiData.count || 0;
-            }
-        } catch (e) {
-            // AI service not available, show 0
-        }
+        // AI updates count — Phase 2 feature, show "Coming Soon" placeholder
+        let aiUpdates = '--';
+        let aiContext = 'AI insights coming soon — will learn from your farm + network trends.';
+        // Phase 2: uncomment when AI service is deployed
+        // try {
+        //     const aiResp = await fetch(`${API_BASE}/api/ai/insights/count`, {
+        //         headers: { 'Authorization': `Bearer ${currentSession.token}` }
+        //     });
+        //     if (aiResp.ok) {
+        //         const aiData = await aiResp.json();
+        //         aiUpdates = aiData.count || 0;
+        //     }
+        // } catch (e) { /* AI service not available */ }
 
-        // Enrich AI context with network intelligence + suggested crop (Phase 2 UX)
-        try {
-            const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
-            if (niResp.ok) {
-                const niData = await niResp.json();
-                const ni = niData.network_intelligence || {};
-                const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
-                const demandCount = Object.keys(ni.demand_signals || {}).length;
-                if (benchmarkCount > 0 || demandCount > 0) {
-                    aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
-                }
-            }
-        } catch (e) {
-            // non-fatal
-        }
+        // Phase 2: uncomment when network intelligence API is live
+        // try {
+        //     const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
+        //     if (niResp.ok) {
+        //         const niData = await niResp.json();
+        //         const ni = niData.network_intelligence || {};
+        //         const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
+        //         const demandCount = Object.keys(ni.demand_signals || {}).length;
+        //         if (benchmarkCount > 0 || demandCount > 0) {
+        //             aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
+        //         }
+        //     }
+        // } catch (e) { /* non-fatal */ }
 
-        try {
-            const suggestionResp = await fetch(`${API_BASE}/api/ai/suggested-crop`);
-            if (suggestionResp.ok) {
-                const suggestionData = await suggestionResp.json();
-                const suggestion = suggestionData?.suggestion;
-                if (suggestion?.cropName) {
-                    const confidencePct = Math.round((suggestion.confidence || 0) * 100);
-                    aiContext += ` Suggested next crop: ${suggestion.cropName} (${confidencePct}% confidence).`;
-                }
-            }
-        } catch (e) {
-            // non-fatal
-        }
+        // Phase 2: uncomment when suggested-crop API is live
+        // try {
+        //     const suggestionResp = await fetch(`${API_BASE}/api/ai/suggested-crop`);
+        //     if (suggestionResp.ok) {
+        //         const suggestionData = await suggestionResp.json();
+        //         const suggestion = suggestionData?.suggestion;
+        //         if (suggestion?.cropName) {
+        //             const confidencePct = Math.round((suggestion.confidence || 0) * 100);
+        //             aiContext += ` Suggested next crop: ${suggestion.cropName} (${confidencePct}% confidence).`;
+        //         }
+        //     }
+        // } catch (e) { /* non-fatal */ }
         
         // Calculate yield rate
         const yieldRate = plantsSeeded > 0 ? ((plantsHarvested / plantsSeeded) * 100).toFixed(1) : 0;

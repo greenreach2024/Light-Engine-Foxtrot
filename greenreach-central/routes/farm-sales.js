@@ -10,6 +10,9 @@
  *   GET  /api/farm-auth/demo-tokens            - Demo auth tokens for POS/store
  *   GET  /api/farm-sales/orders                - Farm direct-sales orders
  *   GET  /api/farm-sales/inventory             - Farm retail inventory
+ *   GET  /api/farm-sales/inventory/export       - Inventory CSV export
+ *   GET  /api/farm-sales/reports/sales-export   - Sales transaction CSV export
+ *   GET  /api/farm-sales/reports/quickbooks-daily-summary - QuickBooks daily CSV
  *   GET  /api/farm-sales/subscriptions/plans   - Subscription plans
  *   GET  /api/farm-sales/quickbooks/status     - QuickBooks integration status
  *   POST /api/farm-sales/quickbooks/auth       - QuickBooks OAuth start
@@ -419,6 +422,259 @@ router.put('/farm-sales/delivery/windows', async (req, res) => {
   } catch (error) {
     console.error('[Farm Delivery] Windows update failed:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── CSV Export Helpers ─────────────────────────────────────
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// ─── Inventory CSV Export ───────────────────────────────────
+// GET /api/farm-sales/inventory/export — CSV of current inventory
+router.get('/farm-sales/inventory/export', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const { category, available_only, include_valuation } = req.query;
+    let inventory = [];
+
+    if (isDatabaseAvailable() && farmId) {
+      try {
+        let sql = 'SELECT * FROM farm_inventory WHERE farm_id = $1';
+        const params = [farmId];
+        if (category) {
+          params.push(category);
+          sql += ` AND category = $${params.length}`;
+        }
+        sql += ' ORDER BY sku';
+        const result = await query(sql, params);
+        if (result.rows.length) inventory = result.rows;
+      } catch { /* table may not exist — fall through */ }
+    }
+
+    // Fallback to farmStore
+    if (!inventory.length && req.farmStore && farmId) {
+      const stored = await req.farmStore.get(farmId, 'inventory');
+      if (Array.isArray(stored)) {
+        inventory = stored;
+        if (category) inventory = inventory.filter(i => (i.category || '') === category);
+      }
+    }
+
+    if (available_only === 'true') {
+      inventory = inventory.filter(i => (i.quantity || i.qty_available || 0) > 0);
+    }
+
+    const showVal = include_valuation !== 'false';
+    const headerCols = ['SKU', 'Name', 'Category', 'Quantity', 'Unit', 'Low Stock Threshold'];
+    if (showVal) headerCols.push('Unit Price', 'Total Value');
+
+    const rows = inventory.map(item => {
+      const qty = item.quantity || item.qty_available || 0;
+      const price = item.unit_price || item.price || 0;
+      const cols = [
+        csvEscape(item.sku || item.sku_id || ''),
+        csvEscape(item.name || item.product_name || ''),
+        csvEscape(item.category || ''),
+        qty,
+        csvEscape(item.unit || 'each'),
+        item.low_stock_threshold || 5,
+      ];
+      if (showVal) {
+        cols.push(Number(price).toFixed(2), (qty * price).toFixed(2));
+      }
+      return cols.join(',');
+    });
+
+    const csv = [headerCols.join(','), ...rows].join('\n');
+    const filename = `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error('[FarmSales] Inventory export error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to export inventory' });
+  }
+});
+
+// ─── Sales Transaction CSV Export ───────────────────────────
+// GET /api/farm-sales/reports/sales-export — CSV of wholesale orders + POS txns
+router.get('/farm-sales/reports/sales-export', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const { start_date, end_date, channel, level } = req.query;
+    let orders = [];
+
+    if (isDatabaseAvailable() && farmId) {
+      try {
+        let sql = `SELECT master_order_id, buyer_id, buyer_email, status, order_data, created_at
+                    FROM wholesale_orders
+                    WHERE (order_data->>'farm_id' = $1
+                       OR order_data->'farmSubOrders' @> $2::jsonb)`;
+        const params = [farmId, JSON.stringify([{ farm_id: farmId }])];
+        if (start_date) { params.push(start_date); sql += ` AND created_at >= $${params.length}::date`; }
+        if (end_date)   { params.push(end_date + 'T23:59:59Z'); sql += ` AND created_at <= $${params.length}::timestamp`; }
+        sql += ' ORDER BY created_at DESC';
+        const result = await query(sql, params);
+        orders = result.rows.map(r => ({
+          ...r.order_data,
+          master_order_id: r.master_order_id,
+          buyer_email: r.buyer_email,
+          db_status: r.status,
+          created_at: r.created_at,
+        }));
+      } catch { /* fall through */ }
+    }
+
+    // Fallback to farmStore
+    if (!orders.length && req.farmStore && farmId) {
+      const stored = await req.farmStore.get(farmId, 'orders');
+      if (Array.isArray(stored)) orders = stored;
+    }
+
+    // Channel filter
+    if (channel && channel !== 'all') {
+      orders = orders.filter(o => (o.channel || 'wholesale').toLowerCase().includes(channel));
+    }
+
+    // Build CSV
+    const isDetail = level === 'detail';
+    if (isDetail) {
+      const header = ['Order ID', 'Date', 'Buyer', 'Channel', 'SKU', 'Product', 'Qty', 'Unit Price', 'Line Total', 'Status'].join(',');
+      const rows = [];
+      for (const o of orders) {
+        const items = o.items || o.farmSubOrders?.flatMap(s => s.items || []) || [];
+        const dateStr = o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : '';
+        for (const item of items) {
+          rows.push([
+            csvEscape(o.master_order_id || o.id || ''),
+            dateStr,
+            csvEscape(o.buyer_email || o.buyerName || ''),
+            csvEscape(o.channel || 'wholesale'),
+            csvEscape(item.sku_id || item.sku || ''),
+            csvEscape(item.name || item.product_name || ''),
+            item.quantity || 0,
+            Number(item.unit_price || item.price || 0).toFixed(2),
+            Number((item.quantity || 0) * (item.unit_price || item.price || 0)).toFixed(2),
+            csvEscape(o.db_status || o.status || ''),
+          ].join(','));
+        }
+        // If no items, still emit order-level row
+        if (!items.length) {
+          rows.push([
+            csvEscape(o.master_order_id || o.id || ''),
+            dateStr,
+            csvEscape(o.buyer_email || o.buyerName || ''),
+            csvEscape(o.channel || 'wholesale'),
+            '', '', 0, '0.00',
+            Number(o.totals?.total || o.total || 0).toFixed(2),
+            csvEscape(o.db_status || o.status || ''),
+          ].join(','));
+        }
+      }
+      const csv = [header, ...rows].join('\n');
+      const filename = `sales-detail-${start_date || 'all'}-to-${end_date || 'now'}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(csv);
+    }
+
+    // Summary level — one row per order
+    const header = ['Order ID', 'Date', 'Buyer', 'Channel', 'Items', 'Subtotal', 'Tax', 'Total', 'Status'].join(',');
+    const rows = orders.map(o => {
+      const items = o.items || o.farmSubOrders?.flatMap(s => s.items || []) || [];
+      return [
+        csvEscape(o.master_order_id || o.id || ''),
+        o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : '',
+        csvEscape(o.buyer_email || o.buyerName || ''),
+        csvEscape(o.channel || 'wholesale'),
+        items.length,
+        Number(o.totals?.subtotal || o.subtotal || 0).toFixed(2),
+        Number(o.totals?.tax || o.tax || 0).toFixed(2),
+        Number(o.totals?.total || o.total || 0).toFixed(2),
+        csvEscape(o.db_status || o.status || ''),
+      ].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const filename = `sales-summary-${start_date || 'all'}-to-${end_date || 'now'}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error('[FarmSales] Sales export error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to export sales data' });
+  }
+});
+
+// ─── QuickBooks Daily Summary CSV ───────────────────────────
+// GET /api/farm-sales/reports/quickbooks-daily-summary — aggregated daily summary
+router.get('/farm-sales/reports/quickbooks-daily-summary', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const nextDay = new Date(new Date(date).getTime() + 86400000).toISOString().slice(0, 10);
+
+    let orders = [];
+    if (isDatabaseAvailable() && farmId) {
+      try {
+        const result = await query(
+          `SELECT order_data, created_at FROM wholesale_orders
+           WHERE (order_data->>'farm_id' = $1
+              OR order_data->'farmSubOrders' @> $2::jsonb)
+             AND created_at >= $3::date AND created_at < $4::date
+           ORDER BY created_at`,
+          [farmId, JSON.stringify([{ farm_id: farmId }]), date, nextDay]
+        );
+        orders = result.rows.map(r => ({ ...r.order_data, created_at: r.created_at }));
+      } catch { /* fall through */ }
+    }
+
+    // Aggregate by channel
+    const channels = { wholesale: 0, pos: 0, online: 0 };
+    let totalTax = 0, totalTips = 0, totalCash = 0, totalCard = 0, totalRevenue = 0;
+
+    for (const o of orders) {
+      const ch = (o.channel || 'wholesale').toLowerCase();
+      const total = o.totals?.total || o.total || 0;
+      const tax = o.totals?.tax || o.tax || 0;
+      const tip = o.tip || 0;
+      totalRevenue += total;
+      totalTax += tax;
+      totalTips += tip;
+      if (ch.includes('pos')) { channels.pos += total; totalCash += total; }
+      else if (ch.includes('online')) { channels.online += total; totalCard += total; }
+      else { channels.wholesale += total; totalCard += total; }
+    }
+
+    const processingFee = totalCard * 0.029 + orders.length * 0.30;
+    const brokerFee = channels.wholesale * 0.15;
+
+    // QuickBooks IIF-style daily summary CSV
+    const header = ['Account', 'Description', 'Debit', 'Credit'].join(',');
+    const rows = [
+      ['Revenue - Wholesale', `Wholesale sales ${date}`, '', channels.wholesale.toFixed(2)],
+      ['Revenue - POS', `Point of sale ${date}`, '', channels.pos.toFixed(2)],
+      ['Revenue - Online', `Online orders ${date}`, '', channels.online.toFixed(2)],
+      ['Sales Tax Payable', `Tax collected ${date}`, '', totalTax.toFixed(2)],
+      ['Tips Income', `Tips received ${date}`, '', totalTips.toFixed(2)],
+      ['Cash on Hand', `Cash payments ${date}`, totalCash.toFixed(2), ''],
+      ['Accounts Receivable', `Card payments ${date}`, totalCard.toFixed(2), ''],
+      ['Merchant Processing Fees', `Card processing (2.9% + $0.30) ${date}`, processingFee.toFixed(2), ''],
+      ['Broker Fees', `GreenReach commission (15%) ${date}`, brokerFee.toFixed(2), ''],
+    ].map(cols => cols.map(csvEscape).join(','));
+
+    const csv = [header, ...rows].join('\n');
+    const filename = `quickbooks-daily-${date}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error('[FarmSales] QuickBooks export error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to export QuickBooks summary' });
   }
 });
 

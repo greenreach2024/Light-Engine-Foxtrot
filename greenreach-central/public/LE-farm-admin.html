@@ -2332,9 +2332,43 @@
                         </table>
                     </div>
                 </div>
-            </div>
 
-            <!-- Exports Section -->
+                <!-- QuickBooks Integration -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2 style="margin-bottom: 15px;">QuickBooks Integration</h2>
+                    <div id="quickbooks-not-connected" style="padding: 20px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">📊</div>
+                        <h3 style="margin-bottom: 8px; color: var(--text-primary);">Connect to QuickBooks</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+                            Automatically sync invoices, payments, and expenses with your QuickBooks account.
+                        </p>
+                        <div style="display: inline-block; padding: 8px 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); border-radius: 6px; color: var(--accent-blue); font-weight: 600; font-size: 13px;">
+                            Coming Soon
+                        </div>
+                    </div>
+                    <div id="quickbooks-connected" style="display: none; padding: 20px; background: var(--bg-secondary); border-radius: 8px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent-green);"></div>
+                            <span style="font-weight: 600; color: var(--text-primary);">Connected to QuickBooks</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                            <div>
+                                <span style="color: var(--text-secondary);">Company:</span>
+                                <span id="qb-company-name" style="font-weight: 500;">--</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Last Sync:</span>
+                                <span id="qb-last-sync" style="font-weight: 500;">Never</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="syncQuickBooksInvoices()" style="font-size: 13px;">Sync Invoices</button>
+                            <button class="btn" onclick="disconnectQuickBooks()" style="font-size: 13px;">Disconnect</button>
+                        </div>
+                        <div id="qb-sync-status" style="margin-top: 10px; font-size: 13px; color: var(--text-muted);"></div>
+                    </div>
+                </div>
+            </div>
             <div id="section-exports" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Data Exports</h1>
