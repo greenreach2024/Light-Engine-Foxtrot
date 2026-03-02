@@ -13,6 +13,28 @@ function resolveFarmBaseUrl(farm) {
   return (farm?.api_url || farm?.endpoint || farm?.url || '').replace(/\/$/, '');
 }
 
+function buildCandidateBaseUrls(targetFarm, farms = []) {
+  const candidates = [];
+  const push = (value) => {
+    const normalized = (value || '').replace(/\/$/, '');
+    if (!normalized) return;
+    if (candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  };
+
+  push(process.env.FARM_EDGE_URL);
+  push(process.env.EDGE_FARM_URL);
+  push('http://127.0.0.1:8091');
+  push('http://localhost:8091');
+
+  if (targetFarm) push(resolveFarmBaseUrl(targetFarm));
+  for (const farm of farms) {
+    push(resolveFarmBaseUrl(farm));
+  }
+
+  return candidates;
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const { farmId } = req.query;
@@ -32,43 +54,52 @@ router.get('/', async (req, res, next) => {
       targetFarm = farms.find(f => !!resolveFarmBaseUrl(f)) || farms[0] || null;
     }
 
-    const devFallbackUrl = (process.env.FARM_EDGE_URL || process.env.EDGE_FARM_URL || 'http://127.0.0.1:8091').replace(/\/$/, '');
-    const baseUrl = resolveFarmBaseUrl(targetFarm) || devFallbackUrl;
-    if (!baseUrl) {
+    const candidateBaseUrls = buildCandidateBaseUrls(targetFarm, farms);
+    if (!candidateBaseUrls.length) {
       return res.status(503).json({
         error: 'No farm endpoint available',
         message: 'No eligible farm API URL found for discovery proxy',
         timestamp: new Date().toISOString()
       });
     }
+    let lastError = null;
+    for (const baseUrl of candidateBaseUrls) {
+      const url = `${baseUrl}/discovery/devices`;
+      logger.info(`[Discovery Proxy] Fetching from ${url}`);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(90000)
+        });
 
-    const url = `${baseUrl}/discovery/devices`;
-    logger.info(`[Discovery Proxy] Fetching from ${url}`);
+        if (!response.ok) {
+          lastError = new Error(`Farm endpoint returned ${response.status}`);
+          logger.warn(`[Discovery Proxy] Upstream non-OK from ${url}: ${response.status}`);
+          continue;
+        }
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(12000)
-    });
+        const data = await response.json();
+        data._proxy = {
+          farmId: targetFarm?.farm_id || targetFarm?.id || null,
+          farmName: targetFarm?.name || null,
+          proxiedAt: new Date().toISOString(),
+          source: baseUrl
+        };
 
-    if (!response.ok) {
-      return res.status(502).json({
-        error: 'Farm request failed',
-        message: `Farm endpoint returned ${response.status}`,
-        farmId: targetFarm?.farm_id || targetFarm?.id || null,
-        timestamp: new Date().toISOString()
-      });
+        return res.json(data);
+      } catch (error) {
+        lastError = error;
+        logger.warn(`[Discovery Proxy] Failed ${url}: ${error?.message || 'unknown error'}`);
+      }
     }
 
-    const data = await response.json();
-    data._proxy = {
+    return res.status(502).json({
+      error: 'Discovery proxy failure',
+      message: lastError?.message || 'Failed to reach any discovery endpoint',
       farmId: targetFarm?.farm_id || targetFarm?.id || null,
-      farmName: targetFarm?.name || null,
-      proxiedAt: new Date().toISOString(),
-      source: baseUrl
-    };
-
-    return res.json(data);
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     if (error?.name === 'AbortError' || error?.name === 'TimeoutError' || error?.code === 'UND_ERR_CONNECT_TIMEOUT') {
       return res.status(504).json({
