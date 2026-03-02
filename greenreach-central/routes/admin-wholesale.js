@@ -175,7 +175,7 @@ router.post('/buyers/reset-password', async (req, res) => {
 
 /**
  * GET /api/admin/wholesale/orders
- * Get list of all wholesale orders (stub for now)
+ * Get list of all wholesale orders with pagination.
  */
 router.get('/orders', async (req, res) => {
     try {
@@ -208,7 +208,7 @@ router.get('/orders', async (req, res) => {
 
 /**
  * GET /api/admin/wholesale/dashboard
- * Get wholesale dashboard summary (stub for now)
+ * Get wholesale dashboard summary (buyers, orders, revenue, farms).
  */
 router.get('/dashboard', async (req, res) => {
     try {

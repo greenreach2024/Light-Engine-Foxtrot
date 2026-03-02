@@ -4,19 +4,64 @@
  */
 import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { listPayments, listAllOrders } from '../services/wholesaleMemoryStore.js';
 
 const router = express.Router();
 
 /**
  * GET /api/billing/receipts
- * Return billing receipts (stub — no payment system configured yet)
+ * Return billing receipts derived from payment records + orders.
+ * Query params: ?page=1&limit=20&status=created
  */
-router.get('/receipts', (req, res) => {
-  res.json({
-    status: 'ok',
-    receipts: [],
-    total: 0
-  });
+router.get('/receipts', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const statusFilter = req.query.status || null;
+
+    const payments = listPayments() || [];
+    const orders = await listAllOrders({ page: 1, limit: 50000 });
+    const orderMap = new Map((orders || []).map(o => [o.master_order_id, o]));
+
+    // Build receipt objects from payments
+    let receipts = payments.map(p => {
+      const order = orderMap.get(p.order_id) || {};
+      return {
+        receipt_id: p.payment_id,
+        order_id: p.order_id,
+        date: p.created_at,
+        amount: p.amount,
+        currency: p.currency || 'CAD',
+        status: p.status,
+        provider: p.provider,
+        broker_fee: p.broker_fee_amount || 0,
+        net_to_farms: p.net_to_farms_total || 0,
+        buyer_id: order.buyer_id || null,
+        order_status: order.status || null,
+        items_count: (order.farm_sub_orders || []).reduce(
+          (sum, sub) => sum + (sub.items || []).length, 0
+        ),
+      };
+    });
+
+    if (statusFilter) {
+      receipts = receipts.filter(r => r.status === statusFilter);
+    }
+
+    const total = receipts.length;
+    const start = (page - 1) * limit;
+    const pageReceipts = receipts.slice(start, start + limit);
+
+    res.json({
+      status: 'ok',
+      receipts: pageReceipts,
+      total,
+      pagination: { page, pageSize: limit, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error('[Billing] Receipts error:', err.message);
+    res.status(500).json({ status: 'error', message: 'Failed to load receipts' });
+  }
 });
 
 /**

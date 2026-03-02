@@ -1447,7 +1447,7 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
   }
 });
 
-// --- Wholesale admin stubs (avoid 404s for the dashboard in dev) ---
+// --- Wholesale admin utility endpoints ---
 
 router.get('/oauth/square/farms', (req, res) => {
   return res.json({ status: 'ok', data: { farms: [] } });
@@ -1461,8 +1461,53 @@ router.get('/refunds', (req, res) => {
   return res.json({ status: 'ok', data: { refunds: listRefunds() } });
 });
 
-router.post('/webhooks/reconcile', (req, res) => {
-  return res.json({ status: 'ok', data: { reconciled: true } });
+router.post('/webhooks/reconcile', adminAuthMiddleware, async (req, res) => {
+  try {
+    const payments = listPayments() || [];
+    const orders = await listAllOrders({ page: 1, limit: 50000 });
+    const orderMap = new Map((orders || []).map(o => [o.master_order_id, o]));
+
+    let matched = 0;
+    let unmatched = 0;
+    let mismatches = [];
+
+    for (const payment of payments) {
+      const order = orderMap.get(payment.order_id);
+      if (!order) {
+        unmatched++;
+        mismatches.push({ payment_id: payment.payment_id, order_id: payment.order_id, issue: 'order_not_found' });
+        continue;
+      }
+      const orderTotal = order.totals?.grand_total || order.grand_total || 0;
+      const paymentAmount = payment.amount || 0;
+      if (Math.abs(orderTotal - paymentAmount) > 0.01) {
+        mismatches.push({
+          payment_id: payment.payment_id,
+          order_id: payment.order_id,
+          issue: 'amount_mismatch',
+          payment_amount: paymentAmount,
+          order_total: orderTotal,
+          difference: Math.round((paymentAmount - orderTotal) * 100) / 100,
+        });
+      }
+      matched++;
+    }
+
+    return res.json({
+      status: 'ok',
+      data: {
+        reconciled_at: new Date().toISOString(),
+        total_payments: payments.length,
+        matched,
+        unmatched,
+        mismatches,
+        clean: mismatches.length === 0,
+      },
+    });
+  } catch (err) {
+    console.error('[Wholesale] Reconcile error:', err.message);
+    return res.status(500).json({ status: 'error', message: 'Reconciliation failed' });
+  }
 });
 
 router.get('/oauth/square/authorize', (req, res) => {
