@@ -6,6 +6,78 @@ import { syncGitHubBilling } from '../services/githubBillingSync.js';
 
 const router = express.Router();
 
+const DEFAULT_CLASSIFICATION_THRESHOLD = 0.85;
+
+function inferCategoryFromText({ sourceKey, description, memo, accountCode }) {
+  const haystack = `${sourceKey || ''} ${description || ''} ${memo || ''} ${accountCode || ''}`.toLowerCase();
+
+  const rules = [
+    {
+      id: 'source_aws_cost_explorer',
+      test: () => (sourceKey || '').toLowerCase() === 'aws_cost_explorer',
+      category: 'cloud_infrastructure',
+      confidence: 0.98
+    },
+    {
+      id: 'source_github_billing',
+      test: () => (sourceKey || '').toLowerCase() === 'github_billing',
+      category: 'dev_tools_saas',
+      confidence: 0.98
+    },
+    {
+      id: 'keyword_payment_processor',
+      test: () => /(stripe|square|paypal|processing fee|transaction fee)/.test(haystack),
+      category: 'payment_processing_fees',
+      confidence: 0.92
+    },
+    {
+      id: 'keyword_cloud_vendor',
+      test: () => /(aws|amazon web services|ec2|s3|rds|cloudwatch)/.test(haystack),
+      category: 'cloud_infrastructure',
+      confidence: 0.9
+    },
+    {
+      id: 'keyword_dev_tools',
+      test: () => /(github|gitlab|vercel|linear|jira|notion|openai|anthropic|cursor|copilot|slack)/.test(haystack),
+      category: 'dev_tools_saas',
+      confidence: 0.88
+    },
+    {
+      id: 'account_cloud_infra_610000',
+      test: () => String(accountCode || '') === '610000',
+      category: 'cloud_infrastructure',
+      confidence: 0.96
+    },
+    {
+      id: 'account_dev_tools_620000',
+      test: () => String(accountCode || '') === '620000',
+      category: 'dev_tools_saas',
+      confidence: 0.96
+    },
+    {
+      id: 'account_payment_fees_630000',
+      test: () => String(accountCode || '') === '630000',
+      category: 'payment_processing_fees',
+      confidence: 0.96
+    }
+  ];
+
+  const matched = rules.find(rule => rule.test());
+  if (!matched) {
+    return {
+      category: 'uncategorized',
+      confidence: 0.4,
+      ruleApplied: 'fallback_uncategorized'
+    };
+  }
+
+  return {
+    category: matched.category,
+    confidence: matched.confidence,
+    ruleApplied: matched.id
+  };
+}
+
 function buildIdempotencyKey({ sourceKey, sourceTxnId, txnDate, amount }) {
   const raw = `${sourceKey || 'unknown'}|${sourceTxnId || 'none'}|${txnDate || 'none'}|${Number(amount || 0).toFixed(2)}`;
   return crypto.createHash('sha256').update(raw).digest('hex');
@@ -244,7 +316,7 @@ router.get('/transactions', async (req, res) => {
   return res.json({ ok: true, transactions: rows.rows });
 });
 
-router.post('/classifications/:transactionId', async (req, res) => {
+router.post('/classifications/:transactionId(\\d+)', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
   }
@@ -267,7 +339,7 @@ router.post('/classifications/:transactionId', async (req, res) => {
   const result = await query(
     `INSERT INTO accounting_classifications
       (transaction_id, entry_id, suggested_category, confidence, rule_applied, status, reviewer, review_note, approved_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $6 = 'approved' THEN NOW() ELSE NULL END, NOW())
+     VALUES ($1, $2, $3, $4, $5, $6::varchar, $7, $8, CASE WHEN $6::varchar = 'approved' THEN NOW() ELSE NULL END, NOW())
      RETURNING id, transaction_id, entry_id, suggested_category, confidence, status, reviewer, approved_at, created_at`,
     [
       Number(transactionId),
@@ -282,6 +354,147 @@ router.post('/classifications/:transactionId', async (req, res) => {
   );
 
   return res.json({ ok: true, classification: result.rows[0] });
+});
+
+router.post('/classifications/apply-rules', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const {
+    from,
+    to,
+    source,
+    threshold = DEFAULT_CLASSIFICATION_THRESHOLD,
+    limit = 250
+  } = req.body || {};
+
+  const conditions = ['c.id IS NULL'];
+  const params = [];
+
+  if (from) {
+    params.push(from);
+    conditions.push(`t.txn_date >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    conditions.push(`t.txn_date <= $${params.length}::date`);
+  }
+  if (source) {
+    params.push(source);
+    conditions.push(`s.source_key = $${params.length}`);
+  }
+
+  params.push(Math.min(Number(limit) || 250, 1000));
+
+  const candidates = await query(
+    `SELECT
+       t.id AS transaction_id,
+       t.txn_date,
+       t.description,
+       s.source_key,
+       e.id AS entry_id,
+       e.account_code,
+       e.memo
+     FROM accounting_transactions t
+     JOIN accounting_entries e ON e.transaction_id = t.id
+     LEFT JOIN accounting_sources s ON s.id = t.source_id
+     LEFT JOIN accounting_classifications c ON c.entry_id = e.id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY t.txn_date DESC, t.id DESC, e.line_number ASC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  let autoApproved = 0;
+  let queued = 0;
+  let inserted = 0;
+  const created = [];
+
+  for (const row of candidates.rows) {
+    const inferred = inferCategoryFromText({
+      sourceKey: row.source_key,
+      description: row.description,
+      memo: row.memo,
+      accountCode: row.account_code
+    });
+
+    const status = Number(inferred.confidence) >= Number(threshold) ? 'approved' : 'pending';
+
+    const result = await query(
+      `INSERT INTO accounting_classifications
+        (transaction_id, entry_id, suggested_category, confidence, rule_applied, status, reviewer, review_note, approved_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::varchar, NULL, NULL, CASE WHEN $6::varchar = 'approved' THEN NOW() ELSE NULL END, NOW())
+       RETURNING id, transaction_id, entry_id, suggested_category, confidence, rule_applied, status, approved_at, created_at`,
+      [
+        Number(row.transaction_id),
+        Number(row.entry_id),
+        inferred.category,
+        Number(inferred.confidence),
+        inferred.ruleApplied,
+        status
+      ]
+    );
+
+    inserted += 1;
+    if (status === 'approved') autoApproved += 1;
+    else queued += 1;
+    created.push(result.rows[0]);
+  }
+
+  return res.json({
+    ok: true,
+    summary: {
+      scanned: candidates.rows.length,
+      inserted,
+      threshold: Number(threshold),
+      auto_approved: autoApproved,
+      queued
+    },
+    classifications: created
+  });
+});
+
+router.get('/classifications/queue', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const status = req.query.status || 'pending';
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+
+  const rows = await query(
+    `SELECT
+       c.id,
+       c.transaction_id,
+       c.entry_id,
+       c.suggested_category,
+       c.confidence,
+       c.rule_applied,
+       c.status,
+       c.reviewer,
+       c.review_note,
+       c.approved_at,
+       c.created_at,
+       t.txn_date,
+       t.description,
+       t.source_txn_id,
+       s.source_key,
+       e.account_code,
+       e.debit,
+       e.credit,
+       e.memo
+     FROM accounting_classifications c
+     LEFT JOIN accounting_transactions t ON t.id = c.transaction_id
+     LEFT JOIN accounting_sources s ON s.id = t.source_id
+     LEFT JOIN accounting_entries e ON e.id = c.entry_id
+     WHERE c.status = $1
+     ORDER BY c.created_at DESC, c.id DESC
+     LIMIT $2`,
+    [status, limit]
+  );
+
+  return res.json({ ok: true, status, count: rows.rows.length, queue: rows.rows });
 });
 
 router.post('/periods/:periodKey/lock', async (req, res) => {
