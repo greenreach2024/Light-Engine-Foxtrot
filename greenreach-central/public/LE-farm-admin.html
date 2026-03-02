@@ -2112,6 +2112,8 @@
                             <option value="shipped">Shipped</option>
                             <option value="delivered">Delivered</option>
                         </select>
+                        <input type="date" id="traceFromDate" onchange="loadTraceRecords()" title="From date" style="padding: 8px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                        <input type="date" id="traceToDate" onchange="loadTraceRecords()" title="To date" style="padding: 8px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
                         <button onclick="exportSFCR('csv')" style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">📄 SFCR Export</button>
                     </div>
                 </div>
@@ -3839,21 +3841,30 @@
 
         async function loadTraceRecords() {
             try {
+                // Build query params for date range filter
+                const params = new URLSearchParams();
+                const fromDate = document.getElementById('traceFromDate')?.value;
+                const toDate = document.getElementById('traceToDate')?.value;
+                if (fromDate) params.set('from_date', fromDate);
+                if (toDate) params.set('to_date', toDate);
+                const qs = params.toString() ? '?' + params.toString() : '';
+
                 const [listRes, statsRes] = await Promise.all([
-                    fetch(`${TRACE_API}/api/traceability`),
+                    fetch(`${TRACE_API}/api/traceability${qs}`),
                     fetch(`${TRACE_API}/api/traceability/stats`)
                 ]);
                 const listData = await listRes.json();
                 const statsData = await statsRes.json();
 
-                if (statsData.ok) {
-                    document.getElementById('totalTraceRecords').textContent = statsData.stats.total_records ?? 0;
-                    document.getElementById('activeTraceRecords').textContent = statsData.stats.active_records ?? 0;
-                    document.getElementById('traceCrops').textContent = statsData.stats.crops_tracked ?? 0;
-                    document.getElementById('traceEvents').textContent = statsData.stats.total_events ?? 0;
+                if (statsData.ok || statsData.success) {
+                    const s = statsData.stats || {};
+                    document.getElementById('totalTraceRecords').textContent = s.total_records ?? s.total ?? 0;
+                    document.getElementById('activeTraceRecords').textContent = s.active_records ?? s.active ?? 0;
+                    document.getElementById('traceCrops').textContent = s.crops_tracked ?? s.crops ?? 0;
+                    document.getElementById('traceEvents').textContent = s.total_events ?? s.events ?? 0;
                 }
 
-                if (listData.ok) {
+                if (listData.ok || listData.success) {
                     _traceRecordsCache = listData.records || [];
                     renderTraceRecords(_traceRecordsCache);
                 }
@@ -3891,7 +3902,9 @@
                 };
                 const color = statusColors[r.status] || '#6b7280';
                 const harvestDate = r.harvest_date ? new Date(r.harvest_date).toLocaleDateString() : '-';
-                const weight = r.harvest_weight_g ? (r.harvest_weight_g >= 1000 ? (r.harvest_weight_g / 1000).toFixed(2) + ' kg' : r.harvest_weight_g + ' g') : '-';
+                const rawWeight = r.actual_weight ?? r.harvest_weight_g;
+                const weightUnit = r.weight_unit || (r.harvest_weight_g ? 'g' : '');
+                const weight = rawWeight ? `${rawWeight} ${weightUnit}` : '-';
                 const customers = (r.customers || []).map(c => c.name).join(', ') || '-';
                 return `
                     <tr style="cursor:pointer;" onclick="viewTraceDetail('${r.lot_code}')">
@@ -3914,11 +3927,13 @@
             try {
                 const res = await fetch(`${TRACE_API}/api/traceability/lot/${lotCode}`);
                 const data = await res.json();
-                if (!data.ok) { alert('Record not found'); return; }
+                if (!data.ok && !data.success) { alert('Record not found'); return; }
                 const r = data.record;
                 const events = data.events || [];
 
-                const weight = r.harvest_weight_g ? (r.harvest_weight_g >= 1000 ? (r.harvest_weight_g / 1000).toFixed(2) + ' kg' : r.harvest_weight_g + ' g') : '-';
+                const rawWeight = r.actual_weight ?? r.harvest_weight_g;
+                const weightUnit = r.weight_unit || (r.harvest_weight_g ? 'g' : '');
+                const weight = rawWeight ? `${rawWeight} ${weightUnit}` : '-';
                 const customers = (r.customers || []).map(c => `
                     <div style="padding:8px;background:var(--bg-card);border-left:3px solid #10b981;margin-bottom:6px;border-radius:4px;">
                         <strong>${c.name}</strong> — ${c.quantity || ''} — Order ${c.order_id || ''}
@@ -3952,11 +3967,30 @@
                     ${timeline}
                     <h4 style="margin:16px 0 8px;">Customers (One Step Forward)</h4>
                     ${customers}
+                    <h4 style="margin:16px 0 8px;">QR Code</h4>
+                    <div id="traceQRCode" style="display:flex;justify-content:center;padding:16px;"></div>
                     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
                         <button onclick="exportSFCR('json')" style="padding:8px 14px;background:var(--accent-primary);color:white;border:none;border-radius:6px;cursor:pointer;">SFCR JSON</button>
                         <button onclick="exportSFCR('csv')" style="padding:8px 14px;background:linear-gradient(135deg,#4CAF50,#45a049);color:white;border:none;border-radius:6px;cursor:pointer;">SFCR CSV</button>
                     </div>`;
                 document.getElementById('traceDetailModal').style.display = 'flex';
+
+                // Render QR code from label-data endpoint
+                try {
+                    const qrDiv = document.getElementById('traceQRCode');
+                    qrDiv.innerHTML = '';
+                    const labelRes = await fetch(`${TRACE_API}/api/traceability/label-data/${lotCode}`);
+                    const labelData = await labelRes.json();
+                    if ((labelData.ok || labelData.success) && labelData.label?.qr_payload) {
+                        new QRCode(qrDiv, { text: labelData.label.qr_payload, width: 160, height: 160 });
+                    } else {
+                        qrDiv.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">QR code not available</div>';
+                    }
+                } catch (qrErr) {
+                    console.log('QR code not available:', qrErr.message);
+                    const qrDiv = document.getElementById('traceQRCode');
+                    if (qrDiv) qrDiv.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">QR code not available</div>';
+                }
             } catch (err) {
                 console.error('Failed to load trace detail:', err);
                 alert('Failed to load trace details');
