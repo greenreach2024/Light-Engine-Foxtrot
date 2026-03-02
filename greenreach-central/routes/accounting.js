@@ -555,6 +555,75 @@ router.patch('/classifications/:classificationId(\\d+)/review', async (req, res)
   return res.json({ ok: true, classification: result.rows[0] });
 });
 
+router.patch('/classifications/review/bulk', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const {
+    action,
+    reviewer,
+    review_note,
+    classification_ids,
+    suggested_category,
+    confidence
+  } = req.body || {};
+
+  if (!action || !['approve', 'reject'].includes(String(action))) {
+    return res.status(400).json({ ok: false, error: 'invalid_action', allowed: ['approve', 'reject'] });
+  }
+
+  if (!Array.isArray(classification_ids) || classification_ids.length === 0) {
+    return res.status(400).json({ ok: false, error: 'classification_ids_required' });
+  }
+
+  const ids = [...new Set(classification_ids.map(id => Number(id)).filter(Boolean))];
+  if (!ids.length) {
+    return res.status(400).json({ ok: false, error: 'classification_ids_invalid' });
+  }
+
+  const reviewerIdentity = reviewer || req.user?.email || req.user?.id || null;
+  if (!reviewerIdentity) {
+    return res.status(400).json({ ok: false, error: 'reviewer_required' });
+  }
+
+  const status = action === 'approve' ? 'approved' : 'rejected';
+
+  const result = await query(
+    `UPDATE accounting_classifications
+     SET
+       status = $1::varchar,
+       reviewer = $2,
+       review_note = $3,
+       suggested_category = COALESCE($4, suggested_category),
+       confidence = COALESCE($5, confidence),
+       approved_at = CASE WHEN $1::varchar = 'approved' THEN NOW() ELSE NULL END,
+       updated_at = NOW()
+     WHERE id = ANY($6::int[])
+     RETURNING id, transaction_id, entry_id, suggested_category, confidence, rule_applied, status, reviewer, review_note, approved_at, updated_at, created_at`,
+    [
+      status,
+      reviewerIdentity,
+      review_note || null,
+      suggested_category || null,
+      confidence != null ? Number(confidence) : null,
+      ids
+    ]
+  );
+
+  return res.json({
+    ok: true,
+    summary: {
+      requested: ids.length,
+      updated: result.rows.length,
+      action,
+      status,
+      reviewer: reviewerIdentity
+    },
+    classifications: result.rows
+  });
+});
+
 router.post('/periods/:periodKey/lock', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
