@@ -379,6 +379,223 @@ router.post('/connectors/aws-cost-explorer/sync', async (req, res) => {
   }
 });
 
+// ─── Valuation Snapshots ────────────────────────────────────
+
+router.post('/valuations', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const {
+    snapshot_date,
+    method,
+    valuation_low,
+    valuation_base,
+    valuation_high,
+    confidence_score,
+    assumptions,
+    notes,
+    created_by
+  } = req.body || {};
+
+  if (!method) return res.status(400).json({ ok: false, error: 'method_required' });
+
+  try {
+    const result = await query(
+      `INSERT INTO valuation_snapshots
+        (snapshot_date, method, valuation_low, valuation_base, valuation_high, confidence_score, assumptions, notes, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+       RETURNING *`,
+      [
+        snapshot_date || new Date().toISOString().slice(0, 10),
+        method,
+        valuation_low != null ? Number(valuation_low) : null,
+        valuation_base != null ? Number(valuation_base) : null,
+        valuation_high != null ? Number(valuation_high) : null,
+        confidence_score != null ? Number(confidence_score) : null,
+        JSON.stringify(assumptions || {}),
+        notes || null,
+        created_by || 'system'
+      ]
+    );
+
+    return res.json({ ok: true, snapshot: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'valuation_insert_failed', message: error.message });
+  }
+});
+
+router.get('/valuations', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+  const from = req.query.from;
+  const to = req.query.to;
+  const method = req.query.method;
+
+  const conditions = [];
+  const params = [];
+
+  if (from) {
+    params.push(from);
+    conditions.push(`snapshot_date >= $${params.length}::date`);
+  }
+  if (to) {
+    params.push(to);
+    conditions.push(`snapshot_date <= $${params.length}::date`);
+  }
+  if (method) {
+    params.push(method);
+    conditions.push(`method = $${params.length}`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(limit);
+
+  try {
+    const result = await query(
+      `SELECT * FROM valuation_snapshots
+       ${whereClause}
+       ORDER BY snapshot_date DESC, id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+
+    return res.json({ ok: true, snapshots: result.rows });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'valuation_query_failed', message: error.message });
+  }
+});
+
+router.get('/valuations/:id', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  try {
+    const result = await query(
+      `SELECT * FROM valuation_snapshots WHERE id = $1`,
+      [Number(req.params.id)]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: 'snapshot_not_found' });
+    }
+
+    return res.json({ ok: true, snapshot: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'valuation_get_failed', message: error.message });
+  }
+});
+
+// ─── QuickBooks Export Adapter ──────────────────────────────
+
+router.post('/export/quickbooks', async (req, res) => {
+  if (!await isDatabaseAvailable()) {
+    return res.status(503).json({ ok: false, error: 'database_unavailable' });
+  }
+
+  const {
+    from,
+    to,
+    source,
+    format = 'journal_entries'
+  } = req.body || {};
+
+  if (!from || !to) {
+    return res.status(400).json({ ok: false, error: 'from_and_to_required' });
+  }
+
+  try {
+    const conditions = [`t.txn_date >= $1::date`, `t.txn_date <= $2::date`];
+    const params = [from, to];
+
+    if (source) {
+      params.push(source);
+      conditions.push(`s.source_key = $${params.length}`);
+    }
+
+    const rows = await query(
+      `SELECT
+         t.id AS txn_id,
+         t.txn_date,
+         t.description,
+         t.currency,
+         t.total_amount,
+         t.source_txn_id,
+         t.idempotency_key,
+         s.source_key,
+         e.line_number,
+         e.account_code,
+         a.account_name,
+         a.account_class,
+         a.account_type,
+         e.debit,
+         e.credit,
+         e.memo
+       FROM accounting_transactions t
+       LEFT JOIN accounting_sources s ON s.id = t.source_id
+       JOIN accounting_entries e ON e.transaction_id = t.id
+       LEFT JOIN accounting_accounts a ON a.account_code = e.account_code
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY t.txn_date ASC, t.id ASC, e.line_number ASC`,
+      params
+    );
+
+    // Group entries by transaction → QuickBooks JournalEntry format
+    const txnMap = new Map();
+    for (const row of rows.rows) {
+      if (!txnMap.has(row.txn_id)) {
+        txnMap.set(row.txn_id, {
+          TxnDate: row.txn_date instanceof Date ? row.txn_date.toISOString().slice(0, 10) : String(row.txn_date).slice(0, 10),
+          DocNumber: `GRC-${row.txn_id}`,
+          PrivateNote: row.description || `${row.source_key || 'manual'} transaction`,
+          CurrencyRef: { value: row.currency || 'CAD' },
+          Line: []
+        });
+      }
+
+      const je = txnMap.get(row.txn_id);
+      const isDebit = Number(row.debit || 0) > 0;
+      const amount = isDebit ? Number(row.debit) : Number(row.credit);
+
+      je.Line.push({
+        DetailType: 'JournalEntryLineDetail',
+        Amount: amount,
+        Description: row.memo || row.description || '',
+        JournalEntryLineDetail: {
+          PostingType: isDebit ? 'Debit' : 'Credit',
+          AccountRef: {
+            name: row.account_name || row.account_code,
+            value: row.account_code
+          }
+        }
+      });
+    }
+
+    const journalEntries = Array.from(txnMap.values());
+
+    const syncResult = {
+      run_id: `qb-export-${Date.now()}`,
+      period: { from, to },
+      source_filter: source || 'all',
+      format,
+      generated_at: new Date().toISOString(),
+      transaction_count: journalEntries.length,
+      total_lines: rows.rows.length,
+      journal_entries: journalEntries
+    };
+
+    return res.json({ ok: true, export: syncResult });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'quickbooks_export_failed', message: error.message });
+  }
+});
+
+// ─── Connectors ─────────────────────────────────────────────
+
 router.post('/connectors/github-billing/sync', async (req, res) => {
   if (!await isDatabaseAvailable()) {
     return res.status(503).json({ ok: false, error: 'database_unavailable' });
