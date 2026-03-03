@@ -2544,10 +2544,90 @@ async function cloudNativeScan(req, res) {
 app.post('/discovery/scan', express.json(), cloudNativeScan);
 app.get('/discovery/scan', cloudNativeScan);
 
+
+// ─── Cloud-native SwitchBot Device Status ────────────────────────────────
+// Tries edge proxy first; falls back to SwitchBot API v1.1 /devices/{id}/status
+// using stored credentials from farmStore (DB) or farm.json.
+async function cloudSwitchBotStatus(req, res) {
+  const deviceId = req.params.id;
+  if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
+
+  // 1. Try edge proxy (fast 5s timeout)
+  const edgeUrl = resolveEdgeUrlForProxy();
+  if (edgeUrl) {
+    try {
+      const qs = new URLSearchParams(req.query).toString();
+      const edgeResp = await fetch(
+        `${edgeUrl}/api/switchbot/devices/${encodeURIComponent(deviceId)}/status${qs ? '?' + qs : ''}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (edgeResp.ok) {
+        const edgeData = await edgeResp.json();
+        if (edgeData?.statusCode === 100 && edgeData?.body) {
+          logger.info(`[SwitchBotStatus] Edge returned status for ${deviceId}`);
+          return res.json(edgeData);
+        }
+      }
+    } catch (edgeErr) {
+      logger.warn(`[SwitchBotStatus] Edge unreachable for ${deviceId}: ${edgeErr.message}`);
+    }
+  }
+
+  // 2. Cloud-native: call SwitchBot API directly
+  try {
+    let sb = null;
+    try {
+      const dbCreds = await farmStore.get('default', 'switchbot_credentials');
+      if (dbCreds?.token && dbCreds?.secret) sb = dbCreds;
+    } catch (_) {}
+    if (!sb) {
+      const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+      try {
+        const farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
+        sb = farm?.integrations?.switchbot;
+      } catch (_) {}
+    }
+    if (!sb?.token || !sb?.secret) {
+      return res.status(503).json({
+        statusCode: 190,
+        message: 'No SwitchBot credentials configured',
+        body: {}
+      });
+    }
+
+    const t = Date.now().toString();
+    const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
+    const strToSign = sb.token + t + nonce;
+    const sign = createHmac('sha256', sb.secret).update(strToSign, 'utf8').digest('base64');
+    const headers = {
+      'Authorization': sb.token,
+      't': t,
+      'sign': sign,
+      'nonce': nonce,
+      'Content-Type': 'application/json'
+    };
+
+    const sbResp = await fetch(`${SWITCHBOT_API_BASE}/devices/${encodeURIComponent(deviceId)}/status`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(10000)
+    });
+    const sbData = await sbResp.json().catch(() => ({}));
+    logger.info(`[SwitchBotStatus] Cloud API response for ${deviceId}: statusCode=${sbData.statusCode}`);
+    return res.json(sbData);
+  } catch (err) {
+    logger.error(`[SwitchBotStatus] Cloud API error for ${deviceId}: ${err.message}`);
+    return res.status(502).json({
+      statusCode: 190,
+      message: `SwitchBot API error: ${err.message}`,
+      body: {}
+    });
+  }
+}
 // SwitchBot endpoints
 app.post('/api/switchbot/discover', express.json(), (req, res) => edgeProxy(req, res, '/api/switchbot/discover', 'POST', req.body));
 app.get('/switchbot/devices', (req, res) => edgeProxy(req, res, '/switchbot/devices'));
-app.get('/api/switchbot/devices/:id/status', (req, res) => edgeProxy(req, res, `/api/switchbot/devices/${req.params.id}/status?${new URLSearchParams(req.query)}`));
+app.get('/api/switchbot/devices/:id/status', cloudSwitchBotStatus);
 app.post('/api/switchbot/devices/:id/commands', express.json(), (req, res) => edgeProxy(req, res, `/api/switchbot/devices/${req.params.id}/commands`, 'POST', req.body));
 
 // Kasa endpoints

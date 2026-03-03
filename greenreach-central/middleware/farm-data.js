@@ -121,7 +121,8 @@ function extractFarmId(req) {
     return req.session.farmId;
   }
 
-  return null;
+  // 4. FARM_ID env var or 'default' (single-tenant mode — matches farmStore.farmIdFromReq)
+  return process.env.FARM_ID || 'default';
 }
 
 /**
