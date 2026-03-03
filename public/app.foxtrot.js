@@ -3385,10 +3385,49 @@ window.runUniversalScan = async function() {
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
     console.log('[UniversalScan] Full URL:', window.location.origin + discoveryEndpoint);
     
-    let response = await fetch(discoveryEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    let response;
+
+    // When on cloud, try scanning via local edge first (scan must run on the farm's machine)
+    if (isCloudHost) {
+      const edgeUrls = [];
+      if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
+      edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+      // Deduplicate
+      const uniqueEdge = [...new Set(edgeUrls)];
+      console.log('[UniversalScan] Cloud mode — trying local edge URLs:', uniqueEdge);
+      if (status) status.textContent = 'Cloud mode: connecting to local Light Engine for scan...';
+
+      for (const edgeBase of uniqueEdge) {
+        try {
+          console.log('[UniversalScan] Trying edge:', edgeBase + '/discovery/scan');
+          const edgeResp = await fetch(edgeBase + '/discovery/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(60000)
+          });
+          if (edgeResp.ok) {
+            response = edgeResp;
+            console.log('[UniversalScan] Edge scan succeeded via', edgeBase);
+            break;
+          }
+        } catch (edgeErr) {
+          console.warn('[UniversalScan] Edge unreachable at', edgeBase, edgeErr.message);
+        }
+      }
+
+      // Fall back to cloud endpoint (which may proxy to edge or return limited results)
+      if (!response) {
+        console.log('[UniversalScan] Local edge not reachable, falling back to cloud endpoint');
+        if (status) status.textContent = 'Local Light Engine not found. Trying cloud scan...';
+      }
+    }
+
+    if (!response) {
+      response = await fetch(discoveryEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     
     if (!response.ok) {
       console.warn('[UniversalScan] Primary scan failed, trying fallback:', fallbackEndpoint);
@@ -19953,7 +19992,31 @@ class DevicePairWizard {
       if (this.scanStatus) this.scanStatus.textContent = 'Scanning Wi‑Fi, BLE, MQTT, Kasa, SwitchBot...';
       const scanStart = Date.now();
       const minScanDurationMs = 12000;
-      let resp = await fetch('/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      let resp;
+
+      // When on cloud, try local edge first for device scanning
+      const isCloudHost = (window?.location?.hostname || '').toLowerCase().includes('greenreachgreens.com');
+      if (isCloudHost) {
+        const edgeUrls = [];
+        if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
+        edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+        const uniqueEdge = [...new Set(edgeUrls)];
+        if (this.scanStatus) this.scanStatus.textContent = 'Cloud mode: connecting to local Light Engine...';
+        for (const edgeBase of uniqueEdge) {
+          try {
+            const edgeResp = await fetch(edgeBase + '/discovery/scan', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(60000)
+            });
+            if (edgeResp.ok) { resp = edgeResp; break; }
+          } catch (_) {}
+        }
+        if (!resp && this.scanStatus) this.scanStatus.textContent = 'Local engine not found, trying cloud...';
+      }
+
+      if (!resp) {
+        resp = await fetch('/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      }
       if (!resp.ok) {
         resp = await fetch('/discovery/devices', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
       }
