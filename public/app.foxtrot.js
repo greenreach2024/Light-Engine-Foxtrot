@@ -3395,30 +3395,47 @@ window.runUniversalScan = async function() {
       // Deduplicate
       const uniqueEdge = [...new Set(edgeUrls)];
       console.log('[UniversalScan] Cloud mode — trying local edge URLs:', uniqueEdge);
-      if (status) status.textContent = 'Cloud mode: connecting to local Light Engine for scan...';
+      if (status) status.textContent = 'Cloud mode: checking for local Light Engine...';
 
+      // Quick health check first (2s timeout) to give fast feedback
+      let connectedEdge = null;
       for (const edgeBase of uniqueEdge) {
         try {
-          console.log('[UniversalScan] Trying edge:', edgeBase + '/discovery/scan');
-          const edgeResp = await fetch(edgeBase + '/discovery/scan', {
+          const hc = await fetch(edgeBase + '/env', { signal: AbortSignal.timeout(2000) });
+          if (hc.ok) { connectedEdge = edgeBase; break; }
+        } catch (_) {}
+      }
+
+      if (connectedEdge) {
+        console.log('[UniversalScan] Local Light Engine detected at', connectedEdge);
+        if (status) status.textContent = '✓ Local Light Engine connected — scanning network devices...';
+
+        try {
+          const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(60000)
+            signal: AbortSignal.timeout(90000)
           });
           if (edgeResp.ok) {
             response = edgeResp;
-            console.log('[UniversalScan] Edge scan succeeded via', edgeBase);
-            break;
+            console.log('[UniversalScan] Edge scan succeeded via', connectedEdge);
           }
         } catch (edgeErr) {
-          console.warn('[UniversalScan] Edge unreachable at', edgeBase, edgeErr.message);
+          console.warn('[UniversalScan] Edge scan failed at', connectedEdge, edgeErr.message);
         }
       }
 
-      // Fall back to cloud endpoint (which may proxy to edge or return limited results)
+      // Fall back to cloud endpoint with actionable message
       if (!response) {
         console.log('[UniversalScan] Local edge not reachable, falling back to cloud endpoint');
-        if (status) status.textContent = 'Local Light Engine not found. Trying cloud scan...';
+        if (status) {
+          status.innerHTML = connectedEdge
+            ? 'Local scan returned no results. Trying cloud scan...'
+            : '<span style="color:#e67e22">⚠ Local Light Engine not detected.</span> '
+              + 'To scan devices, start it on this machine:<br>'
+              + '<code style="background:#f4f4f4;padding:2px 6px;border-radius:3px;font-size:0.9em">'
+              + 'PORT=8091 node server-foxtrot.js</code>';
+        }
       }
     }
 
@@ -20001,17 +20018,34 @@ class DevicePairWizard {
         if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
         edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
         const uniqueEdge = [...new Set(edgeUrls)];
-        if (this.scanStatus) this.scanStatus.textContent = 'Cloud mode: connecting to local Light Engine...';
-        for (const edgeBase of uniqueEdge) {
+        if (this.scanStatus) this.scanStatus.textContent = 'Cloud mode: checking for local Light Engine...';
+
+        // Quick health check first
+        let connectedEdge = null;
+        for (const eb of uniqueEdge) {
           try {
-            const edgeResp = await fetch(edgeBase + '/discovery/scan', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(60000)
-            });
-            if (edgeResp.ok) { resp = edgeResp; break; }
+            const hc = await fetch(eb + '/env', { signal: AbortSignal.timeout(2000) });
+            if (hc.ok) { connectedEdge = eb; break; }
           } catch (_) {}
         }
-        if (!resp && this.scanStatus) this.scanStatus.textContent = 'Local engine not found, trying cloud...';
+
+        if (connectedEdge) {
+          if (this.scanStatus) this.scanStatus.textContent = '✓ Local Light Engine connected — scanning...';
+          try {
+            const edgeResp = await fetch(connectedEdge + '/discovery/scan', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(90000)
+            });
+            if (edgeResp.ok) { resp = edgeResp; }
+          } catch (_) {}
+        }
+
+        if (!resp && this.scanStatus) {
+          this.scanStatus.innerHTML = connectedEdge
+            ? 'Local scan returned no results. Trying cloud...'
+            : '<span style="color:#e67e22">⚠ Local Light Engine not detected.</span> '
+              + 'Start it: <code>PORT=8091 node server-foxtrot.js</code>';
+        }
       }
 
       if (!resp) {
