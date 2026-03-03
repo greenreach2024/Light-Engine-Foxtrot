@@ -25950,7 +25950,7 @@ async function discoverNetworkDevices() {
   try {
     const controller = getController();
     if (controller) {
-      const kasaResponse = await fetch(`${controller}/api/devices/kasa`);
+      const kasaResponse = await fetch(`${controller}/api/devices/kasa`, { signal: AbortSignal.timeout(3000) });
       if (kasaResponse.ok) {
         const kasaData = await kasaResponse.json();
         if (kasaData.devices) {
@@ -26102,7 +26102,8 @@ async function scanNetworkForDevices() {
     // Scan for devices with common IoT ports
     const commonPorts = [80, 443, 8080, 8081, 1883, 8883, 9999, 10002, 502, 8000];
     const { stdout: nmapOut } = await execAsync(
-      `nmap -p ${commonPorts.join(',')} --open ${networkBase}.0/24 | grep -E "(Nmap scan report|open)"`
+      `nmap -n -T4 --max-retries 1 --host-timeout 2000ms -p ${commonPorts.join(',')} --open ${networkBase}.0/24 | grep -E "(Nmap scan report|open)"`
+      , { timeout: 15000, maxBuffer: 1024 * 1024 }
     );
     
     const lines = nmapOut.split('\n');
@@ -26379,7 +26380,7 @@ app.post('/discovery/scan', async (req, res) => {
       const controller = getNetworkBridgeUrl();
       if (controller) {
         const url = `${controller.replace(/\/$/, '')}/api/discovery/devices`;
-        const response = await fetch(url).catch(() => null);
+        const response = await fetch(url, { signal: AbortSignal.timeout(3000) }).catch(() => null);
         if (response && response.ok) {
           const body = await response.json();
           if (Array.isArray(body?.devices)) {
@@ -26447,9 +26448,11 @@ app.post('/discovery/scan', async (req, res) => {
       console.warn('Kasa direct discovery failed:', e.message);
     }
 
-    // Fallback to live network discovery if no devices found yet
-    if (!allDevices.length) {
-      console.warn('Universal scan found 0 devices; attempting live network discovery fallback');
+    // Always run live network discovery stages
+    if (true) {
+      if (!allDevices.length) {
+        console.warn('Universal scan found 0 devices; attempting live network discovery fallback');
+      }
       try {
         const networkDevices = await discoverNetworkDevices();
         allDevices.push(...networkDevices.map(d => ({
@@ -26661,9 +26664,8 @@ import { initHealthTracker } from './lib/device-health-tracker.js';
 initHealthTracker(deviceHealthDB);
 
 // Wire audit store into the AI agent service
-import { setAuditStore, setFeedbackStore } from './services/ai-agent.js';
+import { setAuditStore } from './services/ai-agent.js';
 setAuditStore(agentAuditDB);
-setFeedbackStore(aiFeedbackDB);
 
 // Load wizard states from database on startup
 async function loadWizardStates() {
@@ -27570,7 +27572,7 @@ async function discoverMQTTDevices() {
   try {
     const controller = getController();
     if (controller) {
-      const mqttResponse = await fetch(`${controller}/api/devices/mqtt`);
+      const mqttResponse = await fetch(`${controller}/api/devices/mqtt`, { signal: AbortSignal.timeout(3000) });
       if (mqttResponse.ok) {
         const mqttData = await mqttResponse.json();
         if (mqttData.devices) {
@@ -27599,6 +27601,47 @@ async function discoverMQTTDevices() {
     console.warn('MQTT discovery via controller failed:', e.message);
   }
 
+  // Local fallback: detect MQTT brokers on local network via port probe
+  if (!devices.length) {
+    try {
+      const net = await import('net');
+      const probeHosts = ['127.0.0.1'];
+      // Try gateway too
+      try {
+        const { execSync } = await import('child_process');
+        const gw = execSync("route -n get default 2>/dev/null | grep gateway | awk '{print $2}'", { timeout: 2000 }).toString().trim();
+        if (gw && /^\d+\.\d+\.\d+\.\d+$/.test(gw)) probeHosts.push(gw);
+      } catch (_) {}
+
+      for (const host of probeHosts) {
+        const isOpen = await new Promise((resolve) => {
+          const sock = new (net.Socket || net.default.Socket)();
+          sock.setTimeout(1500);
+          sock.once('connect', () => { sock.destroy(); resolve(true); });
+          sock.once('timeout', () => { sock.destroy(); resolve(false); });
+          sock.once('error', () => { sock.destroy(); resolve(false); });
+          sock.connect(1883, host);
+        });
+        if (isOpen) {
+          devices.push({
+            id: 'mqtt:broker:' + host + ':1883',
+            name: 'MQTT Broker (' + host + ')',
+            protocol: 'mqtt',
+            confidence: 0.80,
+            signal: null,
+            address: host + ':1883',
+            vendor: 'MQTT Broker',
+            lastSeen: new Date().toISOString(),
+            hints: { type: 'mqtt-broker', port: 1883, capabilities: ['publish', 'subscribe'], metrics: ['topics', 'clients'] }
+          });
+          console.log(' Found local MQTT broker at ' + host + ':1883');
+        }
+      }
+    } catch (mqttFallbackErr) {
+      console.warn('MQTT local fallback failed:', mqttFallbackErr.message);
+    }
+  }
+
   return devices;
 }
 
@@ -27610,7 +27653,7 @@ async function discoverBLEDevices() {
   try {
     const controller = getController();
     if (controller) {
-      const bleResponse = await fetch(`${controller}/api/devices/ble`);
+      const bleResponse = await fetch(`${controller}/api/devices/ble`, { signal: AbortSignal.timeout(3000) });
       if (bleResponse.ok) {
         const bleData = await bleResponse.json();
         if (bleData.devices) {
@@ -27637,7 +27680,73 @@ async function discoverBLEDevices() {
     }
   } catch (e) {
     // BLE discovery is optional - many systems don't have it
-    console.log('BLE discovery not available (normal on many systems)');
+    console.log('BLE discovery via controller not available');
+  }
+
+  // macOS fallback: enumerate paired/nearby BLE devices via system_profiler
+  if (!devices.length && process.platform === 'darwin') {
+    try {
+      const { execSync } = await import('child_process');
+      const stdout = execSync('system_profiler SPBluetoothDataType -json', {
+        timeout: 15000,
+        maxBuffer: 4 * 1024 * 1024
+      }).toString();
+
+      const parsed = JSON.parse(stdout || '{}');
+      const bluetoothInfo = Array.isArray(parsed?.SPBluetoothDataType)
+        ? parsed.SPBluetoothDataType[0]
+        : null;
+
+      const sourceBuckets = [
+        { key: 'device_connected', connected: true },
+        { key: 'device_not_connected', connected: false },
+        { key: 'device_paired', connected: false },
+        { key: 'device_recently_connected', connected: false }
+      ];
+
+      const seenAddresses = new Set();
+      for (const bucket of sourceBuckets) {
+        const entries = bluetoothInfo?.[bucket.key];
+        if (!Array.isArray(entries)) continue;
+
+        for (const entry of entries) {
+          if (!entry || typeof entry !== 'object') continue;
+          const [deviceName, rawMeta] = Object.entries(entry)[0] || [];
+          if (!deviceName || !rawMeta || typeof rawMeta !== 'object') continue;
+
+          const address = rawMeta.device_address || rawMeta.address || null;
+          if (!address) continue;
+
+          const normalizedAddr = String(address).toLowerCase();
+          if (seenAddresses.has(normalizedAddr)) continue;
+          seenAddresses.add(normalizedAddr);
+
+          devices.push({
+            id: 'ble:' + address,
+            name: deviceName,
+            protocol: 'bluetooth-le',
+            confidence: bucket.connected ? 0.78 : 0.55,
+            signal: null,
+            address,
+            vendor: rawMeta.device_vendorID ? 'Vendor ' + rawMeta.device_vendorID : 'Unknown BLE',
+            lastSeen: new Date().toISOString(),
+            hints: {
+              type: rawMeta.device_minorType || 'ble-peripheral',
+              connected: bucket.connected,
+              productId: rawMeta.device_productID || null,
+              firmwareVersion: rawMeta.device_firmwareVersion || null,
+              metrics: ['battery', 'signal_strength', 'sensor_data']
+            }
+          });
+        }
+      }
+
+      if (devices.length) {
+        console.log(' Discovered ' + devices.length + ' BLE device(s) via macOS system profiler');
+      }
+    } catch (bleFallbackErr) {
+      console.warn('BLE macOS fallback failed:', bleFallbackErr.message);
+    }
   }
 
   return devices;

@@ -3374,7 +3374,7 @@ window.runUniversalScan = async function() {
     }
 
     // Update status text
-    if (status) status.textContent = 'Scanning WiFi, BLE, MQTT, Kasa, SwitchBot...';
+    if (status) status.textContent = 'Scanning WiFi, BLE, MQTT, Kasa, SwitchBot... this can take up to 60 seconds.';
     
     // Use universal scanner on Node.js (port 8091). Fallback to Python discovery if needed.
     const discoveryEndpoint = '/discovery/scan';

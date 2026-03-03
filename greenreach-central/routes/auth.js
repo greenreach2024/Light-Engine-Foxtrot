@@ -6,7 +6,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -14,6 +13,7 @@ const router = express.Router();
 const isProductionRuntime =
   process.env.NODE_ENV === 'production' ||
   String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
+const DEV_JWT_SECRET = 'greenreach-jwt-secret-2025';
 
 const JWT_SECRET = (() => {
   const configured = process.env.JWT_SECRET;
@@ -25,8 +25,8 @@ const JWT_SECRET = (() => {
     throw new Error('JWT_SECRET environment variable is required in production');
   }
 
-  console.warn('[Auth] JWT_SECRET not set; using ephemeral development secret');
-  return crypto.randomBytes(32).toString('hex');
+  console.warn('[Auth] JWT_SECRET not set; using development fallback secret');
+  return DEV_JWT_SECRET;
 })();
 const JWT_EXPIRES_IN = '24h';
 
@@ -184,9 +184,18 @@ router.post('/login', async (req, res) => {
       // Matches server-foxtrot.js edge auth pattern: email is optional
       console.log(`[Auth] Fallback credentials mode for ${farm_id || 'default'}`);
 
-      // Build fallback credentials — requires ADMIN_PASSWORD env var
+      // Build fallback credentials.
+      // In production/cloud runtime, ADMIN_PASSWORD is required.
+      // In local development only (loopback requests), allow password passthrough
+      // so local credentials can be exercised without cloud secrets.
       const adminPassword = process.env.ADMIN_PASSWORD;
-      if (!adminPassword) {
+      const host = String(req.hostname || '').toLowerCase();
+      const isLoopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      const remoteAddress = String(req.ip || req.socket?.remoteAddress || '').toLowerCase();
+      const isLoopbackIp = remoteAddress.includes('127.0.0.1') || remoteAddress.includes('::1');
+      const allowLocalDevFallback = !isProductionRuntime && (isLoopbackHost || isLoopbackIp);
+
+      if (!adminPassword && !allowLocalDevFallback) {
         return res.status(503).json({
           success: false,
           error: 'Authentication not configured',
@@ -196,7 +205,7 @@ router.post('/login', async (req, res) => {
       const FALLBACK_FARM = {
         farm_id: farm_id || process.env.FARM_ID || 'FARM-MLTP9LVH-B0B85039',
         email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,
-        password: adminPassword,
+        password: adminPassword || password,
         name: process.env.ADMIN_NAME || 'Farm Admin',
         role: FARM_ROLES.ADMIN
       };

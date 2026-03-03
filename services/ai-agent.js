@@ -1497,7 +1497,6 @@ async function executeViabilityAction(action, params, context) {
 // logAgentAction() persists every recommendation / action for governance.
 
 let _auditDB = null;
-let _feedbackDB = null;
 
 /**
  * Inject the NeDB audit store (called once from server-foxtrot.js at startup).
@@ -1505,14 +1504,6 @@ let _feedbackDB = null;
  */
 export function setAuditStore(db) {
   _auditDB = db;
-}
-
-/**
- * Inject the NeDB feedback store (called once from server-foxtrot.js at startup).
- * @param {object} db - nedb-promises Datastore instance
- */
-export function setFeedbackStore(db) {
-  _feedbackDB = db;
 }
 
 /**

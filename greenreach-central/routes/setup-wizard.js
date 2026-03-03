@@ -5,11 +5,14 @@
 
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { randomBytes } from 'crypto';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
 
 const router = express.Router();
+const isProductionRuntime =
+  process.env.NODE_ENV === 'production' ||
+  String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
+const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
 
 /**
  * JWT Authentication Middleware
@@ -36,11 +39,10 @@ function authenticateToken(req, res, next) {
   }
 
   try {
-    if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+    if (!process.env.JWT_SECRET && isProductionRuntime) {
       throw new Error('JWT_SECRET environment variable is required in production');
     }
-    const jwtSecret = process.env.JWT_SECRET || randomBytes(32).toString('hex');
-    const decoded = jwt.verify(token, jwtSecret, {
+    const decoded = jwt.verify(token, JWT_SECRET, {
       issuer: 'greenreach-central',
       audience: 'greenreach-farms'
     });
@@ -203,20 +205,39 @@ router.get('/status', authenticateToken, async (req, res) => {
     }
 
     // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
-    const setupCompleted = farm?.setup_completed === true || roomCount > 0;
+    let setupCompleted = farm?.setup_completed === true || roomCount > 0;
+
+    // In DB mode, fall back to farmStore values when DB flags are stale/empty
+    // (common for synced farms where room data lives in farm_data).
+    let storeRoomCount = 0;
+    let storeSetupCompleted = false;
 
     // Load certifications from farmStore (works in both DB and no-DB modes)
     let certifications = {};
     if (req.farmStore) {
       try {
         const profile = await req.farmStore.get(farmId, 'farm_profile');
+        if (profile && profile.setup_completed === true) {
+          storeSetupCompleted = true;
+        }
         if (profile && profile.certifications) {
           certifications = profile.certifications;
+        }
+
+        const storeRooms = await req.farmStore.get(farmId, 'rooms');
+        if (Array.isArray(storeRooms)) {
+          storeRoomCount = storeRooms.length;
         }
       } catch (e) {
         // Non-fatal — certifications are optional
       }
     }
+
+    if (!setupCompleted) {
+      setupCompleted = storeSetupCompleted || storeRoomCount > 0;
+    }
+
+    const effectiveRoomCount = Math.max(roomCount, storeRoomCount);
 
     res.json({
       success: true,
@@ -230,7 +251,7 @@ router.get('/status', authenticateToken, async (req, res) => {
         hasBusinessHours: !!farm?.business_hours
       },
       certifications,
-      roomCount
+      roomCount: effectiveRoomCount
     });
 
   } catch (error) {
