@@ -9,7 +9,7 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pathToFileURL } from 'url';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac, randomUUID } from 'crypto';
 
 // Import routes
 import farmRoutes from './routes/farms.js';
@@ -1421,6 +1421,90 @@ app.post('/api/credential-store', express.json(), (req, res) => {
   }
 });
 
+
+// ── SwitchBot Discover (saves credentials + calls SwitchBot Cloud API) ─────
+const SWITCHBOT_API_BASE = 'https://api.switch-bot.com/v1.1';
+
+async function switchBotDiscover(req, res) {
+  try {
+    const { token, secret } = req.body || {};
+    if (!token || !secret) {
+      return res.status(400).json({ ok: false, error: 'Both token and secret are required', devices: [] });
+    }
+
+    // 1. Persist credentials to farm.json
+    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+    let farm = {};
+    try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) { /* new file */ }
+    if (!farm.integrations) farm.integrations = {};
+    farm.integrations.switchbot = {
+      token: token.trim(),
+      secret: secret.trim(),
+      region: farm.integrations.switchbot?.region || ''
+    };
+    fs.mkdirSync(FARM_DATA_DIR, { recursive: true });
+    fs.writeFileSync(farmJsonPath, JSON.stringify(farm, null, 2));
+    logger.info('[switchbot/discover] Credentials saved to farm.json');
+    // 2. Call SwitchBot Cloud API v1.1 to discover devices
+    const t = Date.now().toString();
+    const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
+    const strToSign = token.trim() + t + nonce;
+    const sign = createHmac('sha256', secret.trim()).update(strToSign, 'utf8').digest('base64');
+
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 10000);
+    if (fetchTimeout.unref) fetchTimeout.unref();
+
+    let response;
+    try {
+      response = await fetch(`${SWITCHBOT_API_BASE}/devices`, {
+        method: 'GET',
+        headers: {
+          'Authorization': token.trim(),
+          't': t,
+          'sign': sign,
+          'nonce': nonce,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+    } catch (fetchErr) {
+      clearTimeout(fetchTimeout);
+      const status = fetchErr.name === 'AbortError' ? 504 : 502;
+      return res.status(status).json({ ok: false, error: fetchErr.message || 'Network error', devices: [] });
+    }
+    clearTimeout(fetchTimeout);
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.statusCode !== 100) {
+      const status = response.status === 401 ? 401 : response.status === 429 ? 429 : 502;
+      return res.status(status).json({
+        ok: false,
+        error: body.message || `SwitchBot API error (${response.status})`,
+        devices: []
+      });
+    }
+
+    const deviceList = body.body?.deviceList || [];
+    const infraredList = body.body?.infraredRemoteList || [];
+    const allDevices = [...deviceList, ...infraredList].map(d => ({
+      name: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+      deviceName: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+      deviceId: d.deviceId,
+      deviceType: d.deviceType || d.remoteType || 'Unknown',
+      hubDeviceId: d.hubDeviceId || '',
+    }));
+
+    logger.info(`[switchbot/discover] Found ${allDevices.length} device(s)`);
+    res.json({ ok: true, devices: allDevices, count: allDevices.length });
+  } catch (error) {
+    logger.error('[switchbot/discover] Error:', error.message);
+    res.status(502).json({ ok: false, error: error.message || 'Failed to discover SwitchBot devices', devices: [] });
+  }
+}
+
+app.post('/api/switchbot/discover', express.json(), switchBotDiscover);
+app.post('/switchbot/discover', express.json(), switchBotDiscover);
 app.get('/farm', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
