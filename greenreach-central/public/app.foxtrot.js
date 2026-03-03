@@ -3417,8 +3417,34 @@ window.runUniversalScan = async function() {
             signal: AbortSignal.timeout(90000)
           });
           if (edgeResp.ok) {
-            response = edgeResp;
-            console.log('[UniversalScan] Edge scan succeeded via', connectedEdge);
+            const edgeData = await edgeResp.json();
+            const edgeDevices = Array.isArray(edgeData.devices) ? edgeData.devices : [];
+            console.log('[UniversalScan] Edge scan succeeded via', connectedEdge, '- devices:', edgeDevices.length);
+
+            // If edge found 0 devices, also try cloud scan for SwitchBot
+            if (edgeDevices.length === 0) {
+              console.log('[UniversalScan] Edge found 0 devices - also trying cloud scan for SwitchBot');
+              if (status) status.textContent = 'Local scan complete. Checking cloud for SwitchBot devices...';
+              try {
+                const cloudResp = await fetch('/discovery/scan', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                if (cloudResp.ok) {
+                  const cloudData = await cloudResp.json();
+                  const cloudDevices = Array.isArray(cloudData.devices) ? cloudData.devices : [];
+                  edgeDevices.push(...cloudDevices);
+                  console.log('[UniversalScan] Cloud returned', cloudDevices.length, 'additional device(s)');
+                }
+              } catch (cloudErr) {
+                console.warn('[UniversalScan] Cloud scan also failed:', cloudErr.message);
+              }
+            }
+
+            // Build merged response
+            response = new Response(JSON.stringify({
+              ok: true, devices: edgeDevices, count: edgeDevices.length, source: 'merged'
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
           }
         } catch (edgeErr) {
           console.warn('[UniversalScan] Edge scan failed at', connectedEdge, edgeErr.message);
@@ -3427,14 +3453,9 @@ window.runUniversalScan = async function() {
 
       // Fall back to cloud endpoint with actionable message
       if (!response) {
-        console.log('[UniversalScan] Local edge not reachable, falling back to cloud endpoint');
+        console.log('[UniversalScan] No local edge or edge failed, falling back to cloud endpoint');
         if (status) {
-          status.innerHTML = connectedEdge
-            ? 'Local scan returned no results. Trying cloud scan...'
-            : '<span style="color:#e67e22">⚠ Local Light Engine not detected.</span> '
-              + 'To scan devices, start it on this machine:<br>'
-              + '<code style="background:#f4f4f4;padding:2px 6px;border-radius:3px;font-size:0.9em">'
-              + 'PORT=8091 node server-foxtrot.js</code>';
+          status.textContent = 'Scanning via cloud...';
         }
       }
     }
@@ -20036,15 +20057,32 @@ class DevicePairWizard {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               signal: AbortSignal.timeout(90000)
             });
-            if (edgeResp.ok) { resp = edgeResp; }
+            if (edgeResp.ok) {
+              const edgeData = await edgeResp.json();
+              const edgeDevices = Array.isArray(edgeData.devices) ? edgeData.devices : [];
+              console.log('[UniversalScan] Edge scan (wizard) succeeded, devices:', edgeDevices.length);
+              if (edgeDevices.length === 0) {
+                if (this.scanStatus) this.scanStatus.textContent = 'Local scan done. Checking cloud for SwitchBot...';
+                try {
+                  const cloudResp = await fetch('/discovery/scan', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }
+                  });
+                  if (cloudResp.ok) {
+                    const cloudData = await cloudResp.json();
+                    const cloudDevices = Array.isArray(cloudData.devices) ? cloudData.devices : [];
+                    edgeDevices.push(...cloudDevices);
+                  }
+                } catch (_) {}
+              }
+              resp = new Response(JSON.stringify({
+                ok: true, devices: edgeDevices, count: edgeDevices.length, source: 'merged'
+              }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
           } catch (_) {}
         }
 
         if (!resp && this.scanStatus) {
-          this.scanStatus.innerHTML = connectedEdge
-            ? 'Local scan returned no results. Trying cloud...'
-            : '<span style="color:#e67e22">⚠ Local Light Engine not detected.</span> '
-              + 'Start it: <code>PORT=8091 node server-foxtrot.js</code>';
+          this.scanStatus.textContent = 'Scanning via cloud...';
         }
       }
 

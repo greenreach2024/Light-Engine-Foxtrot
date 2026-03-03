@@ -2419,7 +2419,103 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeou
 
 // Discovery endpoints
 app.get('/discovery/capabilities', (req, res) => edgeProxy(req, res, '/discovery/capabilities'));
-app.post('/discovery/scan', express.json(), (req, res) => edgeProxy(req, res, '/discovery/scan', 'POST', req.body, 90000));
+
+// ─── Cloud-native Discovery Scanner (SwitchBot + edge proxy) ────────────
+// When edge is unreachable (cloud-only EB deployment), query SwitchBot API
+// directly using stored credentials from farm.json.
+async function cloudNativeScan(req, res) {
+  const devices = [];
+  let edgeReachable = false;
+
+  // 1. Try edge proxy first (fast 8s timeout)
+  const edgeUrl = resolveEdgeUrlForProxy();
+  if (edgeUrl) {
+    try {
+      logger.info(`[CloudScan] Trying edge at ${edgeUrl}/discovery/scan`);
+      const edgeResp = await fetch(`${edgeUrl}/discovery/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body || {}),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (edgeResp.ok) {
+        const edgeData = await edgeResp.json();
+        const edgeDevices = Array.isArray(edgeData.devices) ? edgeData.devices : [];
+        devices.push(...edgeDevices);
+        edgeReachable = true;
+        logger.info(`[CloudScan] Edge returned ${edgeDevices.length} device(s)`);
+      }
+    } catch (edgeErr) {
+      logger.warn(`[CloudScan] Edge unreachable: ${edgeErr.message}`);
+    }
+  }
+
+  // 2. Cloud-native SwitchBot scan using stored credentials
+  try {
+    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+    let farm = {};
+    try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) {}
+    const sb = farm?.integrations?.switchbot;
+    if (sb?.token && sb?.secret) {
+      const hasSwitchBotFromEdge = devices.some(d =>
+        (d.protocol || '').toLowerCase() === 'switchbot' ||
+        (d.brand || '').toLowerCase() === 'switchbot'
+      );
+      if (!hasSwitchBotFromEdge) {
+        logger.info('[CloudScan] Querying SwitchBot API with stored credentials');
+        const t = Date.now().toString();
+        const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
+        const strToSign = sb.token + t + nonce;
+        const sign = createHmac('sha256', sb.secret).update(strToSign, 'utf8').digest('base64');
+
+        const sbResp = await fetch(`${SWITCHBOT_API_BASE}/devices`, {
+          method: 'GET',
+          headers: {
+            'Authorization': sb.token,
+            't': t,
+            'sign': sign,
+            'nonce': nonce,
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(10000)
+        });
+        const sbBody = await sbResp.json().catch(() => ({}));
+        if (sbResp.ok && sbBody.statusCode === 100) {
+          const deviceList = sbBody.body?.deviceList || [];
+          const infraredList = sbBody.body?.infraredRemoteList || [];
+          const sbDevices = [...deviceList, ...infraredList].map(d => ({
+            name: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+            deviceName: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+            deviceId: d.deviceId,
+            deviceType: d.deviceType || d.remoteType || 'Unknown',
+            hubDeviceId: d.hubDeviceId || '',
+            protocol: 'switchbot',
+            brand: 'SwitchBot',
+            source: 'cloud-api'
+          }));
+          devices.push(...sbDevices);
+          logger.info(`[CloudScan] SwitchBot API returned ${sbDevices.length} device(s)`);
+        } else {
+          logger.warn(`[CloudScan] SwitchBot API error: ${sbBody.message || sbResp.status}`);
+        }
+      }
+    } else {
+      logger.info('[CloudScan] No SwitchBot credentials stored - skipping cloud SwitchBot scan');
+    }
+  } catch (sbErr) {
+    logger.warn(`[CloudScan] SwitchBot cloud scan error: ${sbErr.message}`);
+  }
+
+  res.json({
+    ok: true,
+    devices,
+    count: devices.length,
+    source: edgeReachable ? 'edge+cloud' : 'cloud',
+    timestamp: new Date().toISOString()
+  });
+}
+app.post('/discovery/scan', express.json(), cloudNativeScan);
+app.get('/discovery/scan', cloudNativeScan);
 
 // SwitchBot endpoints
 app.post('/api/switchbot/discover', express.json(), (req, res) => edgeProxy(req, res, '/api/switchbot/discover', 'POST', req.body));
