@@ -1445,6 +1445,19 @@ async function switchBotDiscover(req, res) {
     fs.mkdirSync(FARM_DATA_DIR, { recursive: true });
     fs.writeFileSync(farmJsonPath, JSON.stringify(farm, null, 2));
     logger.info('[switchbot/discover] Credentials saved to farm.json');
+
+    // Also persist to farmStore (database) for deployment persistence
+    try {
+      const fid = farmStore.farmIdFromReq(req) || 'default';
+      await farmStore.set(fid, 'switchbot_credentials', {
+        token: token.trim(),
+        secret: secret.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      logger.info('[switchbot/discover] Credentials also saved to farmStore (DB)');
+    } catch (dbErr) {
+      logger.warn('[switchbot/discover] farmStore save failed (non-fatal):', dbErr.message);
+    }
     // 2. Call SwitchBot Cloud API v1.1 to discover devices
     const t = Date.now().toString();
     const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
@@ -2452,10 +2465,24 @@ async function cloudNativeScan(req, res) {
 
   // 2. Cloud-native SwitchBot scan using stored credentials
   try {
-    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
-    let farm = {};
-    try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) {}
-    const sb = farm?.integrations?.switchbot;
+    // Check farmStore (database) first — persists across deploys
+    let sb = null;
+    try {
+      const dbCreds = await farmStore.get('default', 'switchbot_credentials');
+      if (dbCreds?.token && dbCreds?.secret) {
+        sb = dbCreds;
+        logger.info('[CloudScan] Found SwitchBot credentials in farmStore (DB)');
+      }
+    } catch (_) {}
+
+    // Fall back to farm.json filesystem
+    if (!sb) {
+      const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
+      let farm = {};
+      try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) {}
+      sb = farm?.integrations?.switchbot;
+      if (sb?.token) logger.info('[CloudScan] Found SwitchBot credentials in farm.json');
+    }
     if (sb?.token && sb?.secret) {
       const hasSwitchBotFromEdge = devices.some(d =>
         (d.protocol || '').toLowerCase() === 'switchbot' ||
