@@ -762,6 +762,8 @@ function renderEmbeddedView(url, title) {
                 '.main-nav',
                 '.sidebar-header-nav',
                 '#farm-assistant',
+                '#le-help-toggle',
+                '#le-help-popup',
                 '.voice-assistant-btn',
                 '#voiceModal',
                 '#voiceBtn'

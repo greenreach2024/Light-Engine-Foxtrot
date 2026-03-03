@@ -4,6 +4,13 @@
  */
 
 (function() {
+  // Skip when loaded inside admin iframe to prevent duplicate help buttons
+  const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === '1';
+  if (isEmbedded) {
+    console.debug('[LE Help] Skipping — embedded mode');
+    return;
+  }
+
   function initHelp() {
     console.log('Light Engine Help System Initializing...');
 
@@ -19,22 +26,23 @@
       // Ensure visibility with high z-index and explicit styles
       toggleBtn.style.cssText = `
           position: fixed;
-          bottom: 20px;
+          bottom: 90px;
           right: 20px;
-          z-index: 2147483647; /* Max z-index */
-          width: 50px;
-          height: 50px;
+          z-index: 99999;
+          width: 44px;
+          height: 44px;
           border-radius: 50%;
-          background: #3b82f6; /* Blue-500 */
+          background: #3b82f6;
           color: white;
           border: none;
           box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          font-size: 24px;
+          font-size: 20px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          pointer-events: auto; 
+          pointer-events: auto;
+          transition: bottom 0.3s ease;
       `;
       
       document.body.appendChild(toggleBtn);

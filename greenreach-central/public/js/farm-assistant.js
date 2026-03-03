@@ -1391,14 +1391,21 @@ class FarmAssistant {
   }
 }
 
-// Auto-initialize when DOM is ready
-console.debug('[Farm Assistant] Script loaded. DOM state:', document.readyState);
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    console.debug('[Farm Assistant] DOM loaded, creating instance...');
+// Auto-initialize when DOM is ready — skip when loaded inside admin iframe
+(function() {
+  const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === '1';
+  if (isEmbedded) {
+    console.debug('[Farm Assistant] Skipping — embedded mode');
+    return;
+  }
+  console.debug('[Farm Assistant] Script loaded. DOM state:', document.readyState);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      console.debug('[Farm Assistant] DOM loaded, creating instance...');
+      window.farmAssistant = new FarmAssistant();
+    });
+  } else {
+    console.debug('[Farm Assistant] DOM already loaded, creating instance immediately...');
     window.farmAssistant = new FarmAssistant();
-  });
-} else {
-  console.debug('[Farm Assistant] DOM already loaded, creating instance immediately...');
-  window.farmAssistant = new FarmAssistant();
-}
+  }
+})();
