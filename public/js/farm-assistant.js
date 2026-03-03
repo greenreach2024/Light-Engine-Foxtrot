@@ -1344,11 +1344,16 @@ class FarmAssistant {
   }
 }
 
-// Auto-initialize when DOM is ready — skip when loaded inside admin iframe
+// Auto-initialize when DOM is ready — skip when loaded inside an iframe
 (function() {
-  const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === '1';
-  if (isEmbedded) {
-    console.debug('[Farm Assistant] Skipping — embedded mode');
+  try {
+    if (window.self !== window.top) {
+      console.debug('[Farm Assistant] Skipping — running inside iframe');
+      return;
+    }
+  } catch (e) {
+    // Cross-origin iframe — skip initialization
+    console.debug('[Farm Assistant] Skipping — cross-origin iframe');
     return;
   }
   console.debug('[Farm Assistant] Script loaded. DOM state:', document.readyState);

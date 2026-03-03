@@ -4,10 +4,14 @@
  */
 
 (function() {
-  // Skip when loaded inside admin iframe to prevent duplicate help buttons
-  const isEmbedded = new URLSearchParams(window.location.search).get('embedded') === '1';
-  if (isEmbedded) {
-    console.debug('[LE Help] Skipping — embedded mode');
+  // Skip when loaded inside an iframe to prevent duplicate help buttons
+  try {
+    if (window.self !== window.top) {
+      console.debug('[LE Help] Skipping — running inside iframe');
+      return;
+    }
+  } catch (e) {
+    console.debug('[LE Help] Skipping — cross-origin iframe');
     return;
   }
 
