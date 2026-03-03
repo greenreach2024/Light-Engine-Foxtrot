@@ -8842,6 +8842,67 @@ app.post("/api/switchbot/devices/:deviceId/commands", requireEdgeForControl, asy
   }
 });
 
+
+// SwitchBot discover endpoint - saves credentials to farm.json, then fetches devices
+// Registered at /switchbot/discover (non-/api path to bypass /api proxy middleware)
+app.post("/switchbot/discover", async (req, res) => {
+  try {
+    const { token, secret } = req.body || {};
+    if (!token || !secret) {
+      return res.status(400).json({ ok: false, error: 'Both token and secret are required', devices: [] });
+    }
+
+    // 1. Persist credentials to farm.json (same logic as /api/credential-store)
+    const farm = readFarmProfile() || {};
+    farm.integrations = farm.integrations || {};
+    farm.integrations.switchbot = farm.integrations.switchbot || {};
+    farm.integrations.switchbot.token = token.trim();
+    farm.integrations.switchbot.secret = secret.trim();
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(FARM_PATH, JSON.stringify(farm, null, 2));
+    console.log('[switchbot/discover] Credentials saved to farm.json');
+
+    // 2. Clear caches so new credentials take effect immediately
+    switchBotDevicesCache.payload = null;
+    switchBotDevicesCache.fetchedAt = 0;
+    switchBotDevicesCache.inFlight = null;
+    switchBotDevicesCache.lastError = null;
+    for (const entry of switchBotStatusCache.values()) {
+      entry.payload = null;
+      entry.fetchedAt = 0;
+      entry.inFlight = null;
+      entry.lastError = null;
+    }
+    lastSwitchBotRequest = 0;
+
+    // 3. Fetch devices using the newly-saved credentials
+    const result = await fetchSwitchBotDevices({ force: true });
+    const deviceList = result?.payload?.body?.deviceList || [];
+    const infraredList = result?.payload?.body?.infraredRemoteList || [];
+    const allDevices = [...deviceList, ...infraredList].map(d => ({
+      name: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+      deviceName: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+      deviceId: d.deviceId,
+      deviceType: d.deviceType || d.remoteType || 'Unknown',
+      hubDeviceId: d.hubDeviceId || '',
+    }));
+
+    console.log(`[switchbot/discover] Found ${allDevices.length} device(s)`);
+    res.json({ ok: true, devices: allDevices, count: allDevices.length });
+  } catch (error) {
+    console.error('[switchbot/discover] Error:', error.message);
+    const status = error.code === 'SWITCHBOT_TIMEOUT' ? 504
+      : error.status === 401 ? 401
+      : error.status === 429 ? 429
+      : 502;
+    res.status(status).json({
+      ok: false,
+      error: error.message || 'Failed to discover SwitchBot devices',
+      devices: []
+    });
+  }
+});
+
 // Kasa device discovery endpoint
 app.get("/api/kasa/devices", asyncHandler(async (req, res) => {
   try {
