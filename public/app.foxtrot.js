@@ -2513,13 +2513,21 @@ function createDeviceEntryElement(device) {
   const typeLC = String(device.type || '').toLowerCase();
   const categoryLC = String(device.category || '').toLowerCase();
   const isWoiSensor = typeLC.includes('woiosensor') || categoryLC.includes('woiosensor');
+  const isSwitchbotSensor = isSwitchbot && (
+    isWoiSensor ||
+    typeLC.includes('sensor') ||
+    typeLC.includes('meter') ||
+    typeLC.includes('hub 2') ||
+    categoryLC.includes('sensor') ||
+    categoryLC.includes('meter')
+  );
   if (isSwitchbot) {
     const snapshot = buildSwitchbotSnapshot(device);
     if (snapshot) info.appendChild(snapshot);
   }
 
-  // Add zone assignment dropdown for SwitchBot sensors
-  if (isSwitchbot && isWoiSensor) {
+  // Add zone assignment dropdown for SwitchBot sensors (all sensor types, not just WoIOSensor)
+  if (isSwitchbotSensor) {
     const zoneSection = document.createElement('div');
     zoneSection.style.cssText = 'margin-top:10px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;';
     

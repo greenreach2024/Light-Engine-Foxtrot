@@ -5276,14 +5276,14 @@ app.get('/env', async (req, res) => {
     // If cloud returned empty zones but we have scopes, use zonesFromScopes as fallback
     const hasCloudZones = Array.isArray(zonesPayload.zones) && zonesPayload.zones.length > 0;
     
-    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones (zone-1, zone-2, zone-3)
+    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real numeric zones (zone-1 through zone-99)
     const mockDeviceIds = ['E8F9A2B4C6D1', 'D7C3B9A5E8F2', 'D5B8E1C4F7A2'];
-    const realZonePattern = /^zone-[123]$/; // Only zone-1, zone-2, zone-3 are real zones
+    const realZonePattern = /^zone-\d{1,2}$/; // Any numeric zone (zone-1 through zone-99)
     
     const filterRealZones = (zones) => zones.filter(zone => {
       // Exclude mock devices
       if (mockDeviceIds.some(mockId => zone.id.includes(mockId))) return false;
-      // Only include real zones (zone-1, zone-2, zone-3)
+      // Only include real numeric zones (zone-1 through zone-99)
       // Exclude sensor IDs being treated as zones (zone-CE2A..., zone-C3343..., etc.)
       return realZonePattern.test(zone.id);
     });
@@ -5299,7 +5299,7 @@ app.get('/env', async (req, res) => {
       payloadSource: zonesPayload.source
     });
     
-    // allZones is already filtered to only real zones (zone-1, zone-2, zone-3)
+    // allZones is already filtered to only real numeric zones (zone-1 through zone-99)
     // showAllZones query param can bypass for debugging, but still filter mocks/sensors
     const zones = req.query.showAllZones === 'true' ? allZones : allZones;
     const legacyEnvState = readEnv();
