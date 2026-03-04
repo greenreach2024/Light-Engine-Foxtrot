@@ -1873,6 +1873,17 @@
           return null;
         }
         
+        // Extract numeric zone number from any format: 1|"1"|"Zone 1"|"zone-1" → 1
+        function extractZoneNum(val) {
+          if (val == null) return null;
+          const s = String(val).trim();
+          if (!s) return null;
+          if (/^\d+$/.test(s)) return Number(s);
+          const m = s.match(/^zone[- ]?(\d+)$/i);
+          if (m) return Number(m[1]);
+          return null;
+        }
+
         // Build zone-to-sensor mapping from placed devices
         const zoneSensorMap = {};
         for (const device of placedDevices) {
@@ -1889,15 +1900,17 @@
           const isSensor = category && (category === 'sensor' || category === 'environmental_sensor' || category.includes('sensor'));
           
           if (isSensor && deviceZone) {
-            const zoneNum = parseInt(deviceZone);
-            if (!zoneSensorMap[zoneNum]) {
-              zoneSensorMap[zoneNum] = [];
+            const zoneNum = extractZoneNum(deviceZone);
+            if (zoneNum != null) {
+              if (!zoneSensorMap[zoneNum]) {
+                zoneSensorMap[zoneNum] = [];
+              }
+              zoneSensorMap[zoneNum].push({
+                deviceId: device.deviceId,
+                name: device.device?.name || device.snapshot?.name || 'Unknown Sensor',
+                type: device.device?.type || device.snapshot?.type || 'sensor'
+              });
             }
-            zoneSensorMap[zoneNum].push({
-              deviceId: device.deviceId,
-              name: device.device?.name || device.snapshot?.name || 'Unknown Sensor',
-              type: device.device?.type || device.snapshot?.type || 'sensor'
-            });
           }
         }
         
@@ -1920,7 +1933,7 @@
         // Update each zone with sensor assignments
         if (room.zones && Array.isArray(room.zones)) {
           for (const zone of room.zones) {
-            const zoneNum = parseInt(zone.id || zone.zone || '1');
+            const zoneNum = extractZoneNum(zone.id || zone.zone || zone) || extractZoneNum(zone);
             const sensors = zoneSensorMap[zoneNum] || [];
             
             // Assign primary environmental sensor (first one found)

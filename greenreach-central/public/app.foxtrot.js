@@ -3155,7 +3155,7 @@ window.updateDeviceZone = async function(deviceId, zone) {
     const updated = sanitizeDevicePayload({ ...device, zone: zone });
     updateDeviceRecord(updated, { persist: true });
     
-    const zoneName = zone ? `Zone ${zone}` : 'Unassigned';
+    const zoneName = zone ? (String(zone).match(/^zone\b/i) ? zone : `Zone ${zone}`) : 'Unassigned';
     const deviceName = device.name || device.address || device.id;
     
     showToast({ 

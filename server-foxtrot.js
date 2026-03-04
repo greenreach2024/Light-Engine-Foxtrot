@@ -29035,22 +29035,33 @@ function syncZoneAssignmentsFromRoomMap() {
     
     let updated = false;
     
+    // Extract a numeric zone number from any zone format:
+    // 1 | "1" → 1, "Zone 1" → 1, "zone-1" → 1, null → null
+    function extractZoneNumber(val) {
+      if (val == null) return null;
+      const s = String(val).trim();
+      if (!s) return null;
+      if (/^\d+$/.test(s)) return Number(s);
+      const m = s.match(/^zone[- ]?(\d+)$/i);
+      if (m) return Number(m[1]);
+      return null;
+    }
+
     // Build a lookup map from room-map.json: deviceId -> {zone, room, location}
     const zoneMap = new Map();
     for (const device of roomMap.devices) {
       const deviceId = device.deviceId || device.id;
-      const zone = device.snapshot?.zone || device.zone;
+      const rawZone = device.snapshot?.zone || device.zone;
       const room = device.snapshot?.room || device.room || roomMap.name;
-      const location = room && zone ? `${room} - Zone ${zone}` : room;
       
-      // SAFETY GUARD: Only accept numeric zones to prevent zone-<string> pollution
-      if (deviceId && zone != null) {
-        const zoneStr = String(zone).trim();
-        if (!/^\d+$/.test(zoneStr)) {
-          console.warn(`[zone-sync] REJECTED non-numeric zone "${zone}" from room-map.json for device ${deviceId}`);
-          continue; // Skip this device mapping
+      if (deviceId && rawZone != null) {
+        const zoneNum = extractZoneNumber(rawZone);
+        if (zoneNum == null) {
+          console.warn(`[zone-sync] REJECTED unrecognized zone "${rawZone}" from room-map.json for device ${deviceId}`);
+          continue;
         }
-        zoneMap.set(deviceId, { zone, room, location });
+        const location = room ? `${room} - Zone ${zoneNum}` : `Zone ${zoneNum}`;
+        zoneMap.set(deviceId, { zone: zoneNum, room, location });
       }
     }
     
