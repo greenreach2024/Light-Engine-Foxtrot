@@ -33,6 +33,8 @@ mobile-app/
 # Large deployment files
 *.zip
 external/
+config/sync-queue.json
+data/sync-monitor-snapshot.json
 venv/
 firmware/
 logs/
