@@ -838,6 +838,39 @@ const DB_PATH = path.join(DB_DIR, 'devices.nedb');
 function ensureDataDir() {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 }
+
+/**
+ * Seed runtime data files that are not shipped in the deploy artifact.
+ * These files are created at runtime and persisted via writeJsonQueued / fs.writeFileSync.
+ * On a fresh deploy (or first boot), they won't exist because they're .gitignored.
+ * The postdeploy hook restores them from backup when possible, but if no backup
+ * exists (first-ever deploy) we need sensible empty defaults so the app doesn't 404.
+ */
+function seedRuntimeDataFiles() {
+  ensureDataDir();
+  const seeds = [
+    { file: 'iot-devices.json',      defaultContent: '[]' },
+    { file: 'switchbot-devices.json', defaultContent: JSON.stringify({ devices: [], summary: null, lastSync: null, version: '1.0.0' }, null, 2) },
+    { file: 'farm.json',             defaultContent: '{}' },
+    { file: 'rooms.json',            defaultContent: '[]' },
+    { file: 'env.json',              defaultContent: '{}' },
+    { file: 'groups.json',           defaultContent: JSON.stringify({ groups: [] }, null, 2) },
+    { file: 'plans.json',            defaultContent: JSON.stringify(SAMPLE_PLAN_DOCUMENT, null, 2) },
+    { file: 'schedules.json',        defaultContent: '[]' },
+  ];
+  for (const { file, defaultContent } of seeds) {
+    const filePath = path.join(DATA_DIR, file);
+    if (!fs.existsSync(filePath)) {
+      try {
+        fs.writeFileSync(filePath, defaultContent);
+        console.log(`[seed] Created default ${file} (${defaultContent.length} bytes)`);
+      } catch (err) {
+        console.warn(`[seed] Failed to create ${file}:`, err.message);
+      }
+    }
+  }
+}
+
 function ensureDbDir(){ try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch {} }
 function isHttpUrl(u){ try { const x=new URL(u); return x.protocol==='http:'||x.protocol==='https:'; } catch { return false; } }
 
@@ -29863,6 +29896,9 @@ async function startServer() {
     if (isDemoMode()) {
       console.log(`[charlie] 🎭 DEMO MODE: Visit http://127.0.0.1:${PORT} to explore demo farm`);
     }
+
+    // Seed runtime data files that may not exist after a fresh deploy
+    seedRuntimeDataFiles();
     
     // Validate license (Task #2 - License Validation)
     try {
