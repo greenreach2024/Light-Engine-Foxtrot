@@ -2548,24 +2548,36 @@ function createDeviceEntryElement(device) {
     unassignedOption.textContent = 'Unassigned';
     zoneSelect.appendChild(unassignedOption);
     
-    // Add zone options 1-9
-    for (let i = 1; i <= 9; i++) {
-      const option = document.createElement('option');
-      option.value = i;
-      option.textContent = `Zone ${i}`;
-      zoneSelect.appendChild(option);
+    // Add zone options from farm rooms configuration
+    const farmRooms = collectRoomsFromState ? collectRoomsFromState() : (Array.isArray(STATE.rooms) ? STATE.rooms : Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : []);
+    let zoneOptionsAdded = false;
+    for (const room of farmRooms) {
+      const roomZones = Array.isArray(room.zones) ? room.zones : [];
+      for (const zoneName of roomZones) {
+        const option = document.createElement('option');
+        option.value = zoneName;
+        option.textContent = `${zoneName}${farmRooms.length > 1 ? ` (${room.name || room.id})` : ''}`;
+        zoneSelect.appendChild(option);
+        zoneOptionsAdded = true;
+      }
+    }
+    // Fallback: add generic zones 1-9 if no rooms/zones are configured
+    if (!zoneOptionsAdded) {
+      for (let i = 1; i <= 9; i++) {
+        const option = document.createElement('option');
+        option.value = `Zone ${i}`;
+        option.textContent = `Zone ${i}`;
+        zoneSelect.appendChild(option);
+      }
     }
     
     // Check multiple sources for zone data
     let currentZone = device.zone;
     if (!currentZone && device.telemetry?.zone_id) {
-      // Extract zone number from zone_id like "zone-main" or "GreenReach:1"
-      const zoneMatch = String(device.telemetry.zone_id).match(/[:\-](\d+)/);
-      if (zoneMatch) currentZone = parseInt(zoneMatch[1]);
+      currentZone = device.telemetry.zone_id;
     }
     if (!currentZone && device.deviceData?.zone_id) {
-      const zoneMatch = String(device.deviceData.zone_id).match(/[:\-](\d+)/);
-      if (zoneMatch) currentZone = parseInt(zoneMatch[1]);
+      currentZone = device.deviceData.zone_id;
     }
     if (!currentZone && device.telemetry?.room_name) {
       // Try to find zone from room name in groups data
@@ -2573,10 +2585,20 @@ function createDeviceEntryElement(device) {
       console.log(`[IoT] Looking for zone assignment for device in room: ${roomName}`);
     }
     
-    // Set selected zone
+    // Set selected zone - match by value or by partial match
     if (currentZone) {
       const zoneValue = String(currentZone);
-      const matchingOption = Array.from(zoneSelect.options).find(opt => opt.value === zoneValue);
+      let matchingOption = Array.from(zoneSelect.options).find(opt => opt.value === zoneValue);
+      // Fallback: try matching zone number to zone name (e.g. 1 → "Zone 1", "zone-1" → "Zone 1")
+      if (!matchingOption) {
+        const zoneNum = String(zoneValue).match(/\d+/)?.[0];
+        if (zoneNum) {
+          matchingOption = Array.from(zoneSelect.options).find(opt => {
+            const optNum = String(opt.value).match(/\d+/)?.[0];
+            return optNum === zoneNum;
+          });
+        }
+      }
       if (matchingOption) {
         matchingOption.selected = true;
       }
@@ -2585,7 +2607,7 @@ function createDeviceEntryElement(device) {
     }
     
     zoneSelect.addEventListener('change', (e) => {
-      const newZone = e.target.value ? parseInt(e.target.value) : null;
+      const newZone = e.target.value || null;
       window.updateDeviceZone(device.id, newZone);
     });
     
@@ -3628,19 +3650,38 @@ window.acceptDiscoveredDevice = async function(index) {
   const requiresSignIn = ['kasa', 'tplink', 'switchbot'].includes(protocol);
   
   if (requiresSignIn) {
-    // Check if we already have credentials for this protocol
-    const existingDevice = STATE.iotDevices?.find(d => 
-      d.protocol === protocol && d.credentials && Object.keys(d.credentials).length > 0
-    );
-    
-    if (existingDevice && existingDevice.credentials) {
-      // Use existing credentials - no need to ask again
-      console.log(`[UniversalScan] Using existing ${protocol} credentials`);
-      await addDeviceToIoT(device, index, existingDevice.credentials);
+    // First check if credentials are already saved in the credential store (farm.json)
+    let storeConfigured = false;
+    try {
+      const storeResp = await fetch('/api/credential-store');
+      const storeData = await storeResp.json();
+      if (storeData.ok) {
+        if (protocol === 'switchbot' && storeData.switchbot?.configured) storeConfigured = true;
+        if ((protocol === 'kasa' || protocol === 'tplink') && storeData.kasa?.configured) storeConfigured = true;
+      }
+    } catch (e) {
+      console.warn('[UniversalScan] Could not check credential store:', e.message);
+    }
+
+    if (storeConfigured) {
+      // Credentials exist in farm.json credential store — no need to re-prompt
+      console.log(`[UniversalScan] ${protocol} credentials already configured in credential store, skipping sign-in`);
+      await addDeviceToIoT(device, index, { _fromStore: true, protocol });
     } else {
-      // Need to get credentials from user
-      console.log(`[UniversalScan] No existing ${protocol} credentials found, showing sign-in form`);
-      await showDeviceSignInForm(device, index);
+      // Check STATE.iotDevices for existing device with embedded credentials
+      const existingDevice = STATE.iotDevices?.find(d => 
+        d.protocol === protocol && d.credentials && Object.keys(d.credentials).length > 0
+      );
+      
+      if (existingDevice && existingDevice.credentials) {
+        // Use existing credentials - no need to ask again
+        console.log(`[UniversalScan] Using existing ${protocol} credentials`);
+        await addDeviceToIoT(device, index, existingDevice.credentials);
+      } else {
+        // Need to get credentials from user
+        console.log(`[UniversalScan] No existing ${protocol} credentials found, showing sign-in form`);
+        await showDeviceSignInForm(device, index);
+      }
     }
   } else {
     // No auth needed - add directly to IoT devices
@@ -3819,6 +3860,26 @@ window.submitDeviceSignIn = async function(deviceIndex, protocol) {
   
   // Close modal
   closeDeviceSignInModal();
+  
+  // Persist credentials to the credential store (farm.json) so they survive page reloads
+  try {
+    const storePayload = {};
+    if (protocol === 'switchbot') storePayload.switchbot = credentials;
+    if (protocol === 'kasa') storePayload.kasa = credentials;
+    const storeResp = await fetch('/api/credential-store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(storePayload)
+    });
+    if (!storeResp.ok) {
+      const errBody = await storeResp.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${storeResp.status}`);
+    }
+    console.log(`[UniversalScan] ${protocol} credentials saved to credential store`);
+  } catch (e) {
+    console.warn(`[UniversalScan] Failed to persist ${protocol} credentials to store:`, e.message);
+    showToast({ title: 'Credential save failed', msg: `Could not save ${protocol} credentials: ${e.message}. You may be re-prompted later.`, kind: 'warning', icon: '' });
+  }
   
   // Add device with credentials
   await addDeviceToIoT(device, deviceIndex, credentials);

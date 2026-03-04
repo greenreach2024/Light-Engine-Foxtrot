@@ -5276,15 +5276,19 @@ app.get('/env', async (req, res) => {
     // If cloud returned empty zones but we have scopes, use zonesFromScopes as fallback
     const hasCloudZones = Array.isArray(zonesPayload.zones) && zonesPayload.zones.length > 0;
     
-    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real numeric zones (zone-1 through zone-99)
+    // FILTER OUT MOCK DEVICES AND SENSOR-AS-ZONE: Only keep real zones
     const mockDeviceIds = ['E8F9A2B4C6D1', 'D7C3B9A5E8F2', 'D5B8E1C4F7A2'];
-    const realZonePattern = /^zone-\d{1,2}$/; // Any numeric zone (zone-1 through zone-99)
+    // Match zone-{number} (zone-1 through zone-99) and zone-{slug} (zone-main-grow)
+    // Exclude raw sensor/device IDs: hex-only suffixes (zone-ce2a3b4c, zone-C3343...)
+    const realZonePattern = /^zone-(\d{1,2}|[a-z][a-z0-9-]*[a-z][a-z0-9-]*)$/;
+    const hexOnlyPattern = /^zone-[0-9a-f]{4,}$/i;
     
     const filterRealZones = (zones) => zones.filter(zone => {
       // Exclude mock devices
       if (mockDeviceIds.some(mockId => zone.id.includes(mockId))) return false;
-      // Only include real numeric zones (zone-1 through zone-99)
-      // Exclude sensor IDs being treated as zones (zone-CE2A..., zone-C3343..., etc.)
+      // Exclude hex-only sensor IDs being treated as zones
+      if (hexOnlyPattern.test(zone.id)) return false;
+      // Only include real zones (numeric or named slugs, not sensor IDs)
       return realZonePattern.test(zone.id);
     });
     
@@ -29329,13 +29333,32 @@ function setupLiveSensorSync() {
           console.log(`[sensor-sync] Skipping unassigned sensor: ${device.name || deviceId}`);
           return;
         }
-        if (!/^\d+$/.test(zoneValueRaw)) {
-          console.warn(`[sensor-sync] REJECTED non-numeric zone "${device.zone}" for device ${device.name || deviceId}`);
-          return;
-        }
 
-        const zoneId = `zone-${zoneValueRaw}`;
-        const zoneName = `Zone ${zoneValueRaw}`;
+        // Derive zone ID and name from zone value
+        // Supports: numeric ("1"), named ("Zone 1"), or zone-id format ("zone-1")
+        let zoneId, zoneName;
+        if (/^\d+$/.test(zoneValueRaw)) {
+          // Pure numeric: "1" → zone-1 / "Zone 1"
+          zoneId = `zone-${zoneValueRaw}`;
+          zoneName = `Zone ${zoneValueRaw}`;
+        } else if (/^zone-/i.test(zoneValueRaw)) {
+          // Already a canonical zone-id ("zone-1", "zone-main-grow") — use lowercase as-is
+          zoneId = zoneValueRaw.toLowerCase();
+          zoneName = zoneValueRaw.replace(/^zone-/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        } else {
+          // Named zone: "Zone 1" or "Veg Room"
+          // For standard "Zone N" pattern, produce zone-N directly
+          const zoneNumMatch = zoneValueRaw.match(/^Zone\s+(\d+)$/i);
+          if (zoneNumMatch) {
+            zoneId = `zone-${zoneNumMatch[1]}`;
+            zoneName = zoneValueRaw;
+          } else {
+            // Slugify the full name; guard against double "zone-" prefix
+            const slug = zoneValueRaw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            zoneId = slug.startsWith('zone-') ? slug : `zone-${slug || 'unknown'}`;
+            zoneName = zoneValueRaw;
+          }
+        }
         let zone = envData.zones.find((entry) => entry.id === zoneId);
         if (!zone) {
           zone = {
