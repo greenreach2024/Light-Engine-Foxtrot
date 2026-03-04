@@ -573,10 +573,16 @@ router.get('/rooms', authenticateToken, async (req, res) => {
   try {
     const pool = req.app.locals?.db;
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Database not configured' 
-      });
+      // Edge mode: fall back to rooms.json file
+      try {
+        const roomsPath = require('path').join(__dirname, '..', 'public', 'data', 'rooms.json');
+        const roomsData = JSON.parse(require('fs').readFileSync(roomsPath, 'utf8'));
+        const rooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+        return res.json({ success: true, rooms, source: 'rooms.json' });
+      } catch (fileErr) {
+        console.warn('[Setup Wizard] No DB and no rooms.json:', fileErr.message);
+        return res.json({ success: true, rooms: [], source: 'empty' });
+      }
     }
 
     const farmId = req.farmId;

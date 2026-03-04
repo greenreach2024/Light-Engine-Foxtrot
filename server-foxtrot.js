@@ -18813,7 +18813,14 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         });
       }
       
-      // Return existing farm data
+      // Return existing farm data — include rooms from rooms.json if available
+      let edgeRooms = [];
+      try {
+        const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+        const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+        edgeRooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+      } catch (_) { /* rooms.json not available */ }
+
       return res.json({
         status: 'success',
         farm: {
@@ -18824,7 +18831,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
           contactName: farmData.contactPerson || 'Farm Admin',
           location: farmData.location || null,
           timezone: farmData.timezone || 'America/New_York',
-          rooms: []
+          rooms: farmData.rooms || edgeRooms
         },
         edgeMode: true
       });
@@ -18851,6 +18858,12 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
   // Handle local-access token for development
   if (token === 'local-access') {
     console.log('[/api/farm/profile] Local access token recognized - returning mock data');
+    let localRooms = [];
+    try {
+      const roomsPath = path.join(__dirname, 'public', 'data', 'rooms.json');
+      const roomsData = JSON.parse(fs.readFileSync(roomsPath, 'utf8'));
+      localRooms = Array.isArray(roomsData?.rooms) ? roomsData.rooms : [];
+    } catch (_) { /* no rooms.json */ }
     return res.json({
       status: 'success',
       farm: {
@@ -18861,7 +18874,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
         contactName: 'Admin User',
         location: null,
         timezone: 'America/New_York',
-        rooms: []
+        rooms: localRooms
       }
     });
   }

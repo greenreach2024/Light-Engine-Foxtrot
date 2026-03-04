@@ -5283,6 +5283,7 @@ async function safeRoomsDelete(roomId) {
 
 // Helper to reload rooms from backend
 async function loadRoomsFromBackend() {
+  let loaded = false;
   try {
     const token = localStorage.getItem('token');
     const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -5293,67 +5294,91 @@ async function loadRoomsFromBackend() {
         if (staticRoomsResp.ok) {
           const staticRoomsData = await staticRoomsResp.json();
           const staticRooms = Array.isArray(staticRoomsData?.rooms) ? staticRoomsData.rooms : [];
-          STATE.rooms = staticRooms.map(normalizeRoomRecord);
+          STATE.rooms = staticRooms;
           localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
-          return;
+          loaded = true;
         }
       } catch (staticError) {
         console.warn('[loadRoomsFromBackend] Static rooms fallback unavailable:', staticError);
       }
 
-      STATE.rooms = [];
-      return;
-    }
-
-    // Prefer dedicated rooms endpoint
-    const roomsResp = await fetch('/api/setup/rooms', { headers: authHeaders });
-    if (roomsResp.ok) {
-      const roomsData = await roomsResp.json();
-      if (roomsData.success && Array.isArray(roomsData.rooms)) {
-        STATE.rooms = roomsData.rooms;
-        localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
-        console.log('[loadRoomsFromBackend] Loaded rooms from', roomsData.source || 'api', ':', STATE.rooms.length);
-        return;
-      }
-    }
-
-    // Fallback to setup data API
-    const resp = await fetch('/api/setup/data', { headers: authHeaders });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success && data.config) {
-        // Store farm metadata
-        STATE.farm = STATE.farm || {};
-        STATE.farm.name = data.config.farmName;
-        STATE.farm.ownerName = data.config.ownerName;
-        STATE.farm.contactEmail = data.config.contactEmail;
-        STATE.farm.contactPhone = data.config.contactPhone;
-
-        // Load user's actual rooms
-        STATE.rooms = data.config.rooms || [];
-        localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
-
-        console.log('[loadRoomsFromBackend] Loaded real user data:',
-                    STATE.rooms.length, 'rooms from', data.config.farmName);
-
-        // Update header with farm name
-        if (data.config.farmName) {
-          updateFarmNameInHeader(data.config.farmName);
+      if (!loaded) STATE.rooms = [];
+    } else {
+      // Prefer dedicated rooms endpoint
+      const roomsResp = await fetch('/api/setup/rooms', { headers: authHeaders });
+      if (roomsResp.ok) {
+        const roomsData = await roomsResp.json();
+        if (roomsData.success && Array.isArray(roomsData.rooms)) {
+          STATE.rooms = roomsData.rooms;
+          localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+          console.log('[loadRoomsFromBackend] Loaded rooms from', roomsData.source || 'api', ':', STATE.rooms.length);
+          loaded = true;
         }
-        return;
+      }
+
+      if (!loaded) {
+        // Fallback to setup data API
+        const resp = await fetch('/api/setup/data', { headers: authHeaders });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.success && data.config) {
+            // Store farm metadata
+            STATE.farm = STATE.farm || {};
+            STATE.farm.name = data.config.farmName;
+            STATE.farm.ownerName = data.config.ownerName;
+            STATE.farm.contactEmail = data.config.contactEmail;
+            STATE.farm.contactPhone = data.config.contactPhone;
+
+            // Load user's actual rooms
+            STATE.rooms = data.config.rooms || [];
+            localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+
+            console.log('[loadRoomsFromBackend] Loaded real user data:',
+                        STATE.rooms.length, 'rooms from', data.config.farmName);
+
+            // Update header with farm name
+            if (data.config.farmName) {
+              updateFarmNameInHeader(data.config.farmName);
+            }
+            loaded = true;
+          }
+        }
+      }
+
+      if (!loaded) {
+        // Last resort: try static rooms.json even with token
+        try {
+          const staticResp = await fetch('/data/rooms.json', { cache: 'no-store' });
+          if (staticResp.ok) {
+            const staticData = await staticResp.json();
+            const staticRooms = Array.isArray(staticData?.rooms) ? staticData.rooms : [];
+            if (staticRooms.length) {
+              STATE.rooms = staticRooms;
+              localStorage.setItem('gr.rooms', JSON.stringify({ rooms: STATE.rooms }));
+              console.log('[loadRoomsFromBackend] Loaded rooms from static rooms.json:', STATE.rooms.length);
+              loaded = true;
+            }
+          }
+        } catch (_) { /* static fallback not available */ }
+      }
+
+      if (!loaded) {
+        console.log('[loadRoomsFromBackend] No setup data found, starting with empty state');
+        STATE.rooms = [];
       }
     }
-
-    // If no setup data found, start with empty rooms
-    console.log('[loadRoomsFromBackend] No setup data found, starting with empty state');
-    STATE.rooms = [];
-    
   } catch (e) {
     console.error('[loadRoomsFromBackend] Failed to load setup data:', e);
     STATE.rooms = [];
   }
 
-  // Enrich rooms with zone data from room-map files (in case rooms.json is stale)
+  // Normalize room id fields (API may return room_id or roomId instead of id)
+  STATE.rooms = (Array.isArray(STATE.rooms) ? STATE.rooms : []).map(r => {
+    if (!r.id && (r.room_id || r.roomId)) r.id = r.room_id || r.roomId;
+    return r;
+  });
+
+  // ALWAYS enrich rooms with zone data from room-map files
   await enrichRoomZonesFromMaps();
 }
 
@@ -5361,19 +5386,38 @@ async function loadRoomsFromBackend() {
 // so the Grow Room Setup card always reflects what the Room Mapper has saved.
 async function enrichRoomZonesFromMaps() {
   try {
+    // If STATE.rooms is empty, try loading from rooms.json first
+    if (!STATE.rooms || STATE.rooms.length === 0) {
+      try {
+        const resp = await fetch('/data/rooms.json', { cache: 'no-store' });
+        if (resp.ok) {
+          const data = await resp.json();
+          const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+          if (rooms.length) {
+            STATE.rooms = rooms.map(r => {
+              if (!r.id && (r.room_id || r.roomId)) r.id = r.room_id || r.roomId;
+              return r;
+            });
+            console.log('[enrichRoomZones] Loaded', STATE.rooms.length, 'rooms from rooms.json (STATE was empty)');
+          }
+        }
+      } catch (_) { /* rooms.json not available */ }
+    }
+
     for (const room of STATE.rooms) {
-      if (!room.id) continue;
+      const roomId = room.id || room.roomId || room.room_id;
+      if (!roomId) continue;
       // Skip if room already has zones populated
       if (Array.isArray(room.zones) && room.zones.length > 0) continue;
       try {
-        const resp = await fetch(`/data/room-map-${room.id}.json`, { cache: 'no-store' });
+        const resp = await fetch(`/data/room-map-${roomId}.json`, { cache: 'no-store' });
         if (!resp.ok) continue;
         const mapData = await resp.json();
         if (Array.isArray(mapData.zones) && mapData.zones.length > 0) {
           room.zones = mapData.zones
             .map(z => z.name || (z.zone != null ? `Zone ${z.zone}` : null))
             .filter(Boolean);
-          console.log(`[enrichRoomZones] ${room.id}: enriched with ${room.zones.length} zones from room-map`);
+          console.log(`[enrichRoomZones] ${roomId}: enriched with ${room.zones.length} zones from room-map`);
         }
       } catch (_) { /* room-map file doesn't exist — that's fine */ }
     }
