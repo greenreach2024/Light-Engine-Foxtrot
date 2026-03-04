@@ -2,7 +2,7 @@
 .git/
 .github/
 .vscode/
-# node_modules/  # Upload node_modules to avoid build issues
+node_modules/
 logs/
 *.log
 *.md
