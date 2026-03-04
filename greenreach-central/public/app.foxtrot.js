@@ -491,7 +491,17 @@ function collectRoomsFromState() {
   const wizardRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
   if (wizardRooms.length) return wizardRooms;
   const farmRooms = Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : [];
-  return farmRooms;
+  if (farmRooms.length) return farmRooms;
+  // Fallback: try localStorage (covers race conditions where STATE not yet populated)
+  try {
+    const cached = localStorage.getItem('gr.rooms');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      const lsRooms = Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
+      if (lsRooms.length) return lsRooms;
+    }
+  } catch (_) { /* localStorage unavailable */ }
+  return [];
 }
 
 function updateGroupActionStates({ hasGroup = false, hasRoom = false, hasZone = false } = {}) {
@@ -2550,6 +2560,8 @@ function createDeviceEntryElement(device) {
     
     // Add zone options from farm rooms configuration
     const farmRooms = collectRoomsFromState ? collectRoomsFromState() : (Array.isArray(STATE.rooms) ? STATE.rooms : Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : []);
+    console.log('[ZoneDropdown] farmRooms:', farmRooms.length, 'rooms. STATE.rooms:', STATE.rooms?.length, 'STATE.farm?.rooms:', STATE.farm?.rooms?.length);
+    console.log('[ZoneDropdown] farmRooms detail:', JSON.stringify(farmRooms.map(r => ({ id: r.id, name: r.name, zones: r.zones }))));
     let zoneOptionsAdded = false;
     for (const room of farmRooms) {
       const roomZones = Array.isArray(room.zones) ? room.zones : [];
@@ -2563,6 +2575,7 @@ function createDeviceEntryElement(device) {
     }
     // Fallback: add generic zones 1-9 if no rooms/zones are configured
     if (!zoneOptionsAdded) {
+      console.warn('[ZoneDropdown] No zone options from rooms — using Zone 1-9 fallback. farmRooms:', farmRooms.length);
       for (let i = 1; i <= 9; i++) {
         const option = document.createElement('option');
         option.value = `Zone ${i}`;
@@ -2570,6 +2583,36 @@ function createDeviceEntryElement(device) {
         zoneSelect.appendChild(option);
       }
     }
+
+    // Lazy re-populate: when user focuses the dropdown, refresh zone options
+    // from latest STATE.rooms in case they were loaded after initial render
+    zoneSelect.addEventListener('focus', function _refreshZones() {
+      const latestRooms = collectRoomsFromState ? collectRoomsFromState() : [];
+      let latestZones = [];
+      for (const room of latestRooms) {
+        const rz = Array.isArray(room.zones) ? room.zones : [];
+        for (const zn of rz) latestZones.push({ zone: zn, room });
+      }
+      if (!latestZones.length) return; // still nothing — keep current options
+      // Check if we already have the correct zones
+      const currentValues = Array.from(zoneSelect.options).map(o => o.value).filter(Boolean);
+      const latestValues = latestZones.map(z => z.zone);
+      if (currentValues.length === latestValues.length && currentValues.every((v,i) => v === latestValues[i])) return;
+      // Re-populate
+      const selectedValue = zoneSelect.value;
+      while (zoneSelect.options.length > 1) zoneSelect.remove(1); // keep "Unassigned"
+      for (const { zone: zoneName, room } of latestZones) {
+        const option = document.createElement('option');
+        option.value = zoneName;
+        option.textContent = `${zoneName}${latestRooms.length > 1 ? ` (${room.name || room.id})` : ''}`;
+        zoneSelect.appendChild(option);
+      }
+      // Restore selection
+      if (selectedValue) {
+        const match = Array.from(zoneSelect.options).find(o => o.value === selectedValue);
+        if (match) match.selected = true;
+      }
+    });
     
     // Check multiple sources for zone data
     let currentZone = device.zone;
