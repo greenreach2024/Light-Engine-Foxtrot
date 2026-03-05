@@ -2395,13 +2395,15 @@ function buildSwitchbotSnapshot(device) {
 
 function persistIotDevices(devices) {
   const payload = dedupeDevices(devices);
+  // Always backup to localStorage immediately (synchronous, reliable)
+  try { localStorage.setItem('gr.iotDevices', JSON.stringify(payload)); } catch (_) {}
   return fetch('/data/iot-devices.json', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }).then(res => {
     if (!res.ok) throw new Error(res.statusText || 'Failed to save devices');
-    console.log('[IoT] Devices persisted:', payload.length);
+    console.log('[IoT] Devices persisted to server:', payload.length);
     
     // ✅ DATA FLOW: Notify components that IoT devices have been updated
     try {
@@ -2411,7 +2413,11 @@ function persistIotDevices(devices) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
   }).catch(err => {
-    console.warn('[IoT] Failed to persist devices:', err);
+    console.error('[IoT] ⚠️ Failed to persist devices to server:', err);
+    // Show user-visible warning since devices may not survive navigation
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '⚠️', duration: 8000 });
+    }
   });
 }
 
@@ -6736,35 +6742,49 @@ const setStatus = m => { const el=$("#status"); if(el) el.textContent = m; };
 // Load saved IoT devices from persistent storage
 async function loadSavedIoTDevices() {
   console.log('[IoT] ===== loadSavedIoTDevices CALLED =====');
+  let deviceArray = [];
+  let source = 'none';
   try {
     console.log('[IoT] Fetching /data/iot-devices.json...');
-    const resp = await fetch('/data/iot-devices.json');
-    if (!resp.ok) {
-      console.log('[IoT] No saved devices found (404), starting fresh');
-      STATE.iotDevices = [];
-      window.LAST_IOT_SCAN = [];
-      return;
-    }
-    const devices = await resp.json();
-    console.log('[IoT] Received response:', devices);
-    const deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
-    console.log('[IoT] Device array length:', deviceArray.length);
-    STATE.iotDevices = deviceArray.map(d => sanitizeDevicePayload(d));
-    window.LAST_IOT_SCAN = STATE.iotDevices.slice();
-    console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
-    console.log('[IoT] Devices:', STATE.iotDevices);
-    
-    // Render devices if the panel exists
-    if (typeof window.renderIoTDeviceCards === 'function') {
-      console.log('[IoT] Calling renderIoTDeviceCards...');
-      window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+    if (resp.ok) {
+      const devices = await resp.json();
+      console.log('[IoT] Received response:', devices);
+      deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
+      source = 'server';
     } else {
-      console.warn('[IoT] renderIoTDeviceCards function NOT FOUND');
+      console.log('[IoT] Server returned', resp.status, '- trying localStorage fallback');
     }
   } catch (e) {
-    console.error('[IoT] Failed to load saved devices:', e);
-    STATE.iotDevices = [];
-    window.LAST_IOT_SCAN = [];
+    console.warn('[IoT] Server fetch failed:', e.message, '- trying localStorage fallback');
+  }
+  // Fallback: try localStorage if server returned empty or failed
+  if (!deviceArray.length) {
+    try {
+      const cached = localStorage.getItem('gr.iotDevices');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const lsDevices = Array.isArray(parsed) ? parsed : (parsed?.devices || []);
+        if (lsDevices.length) {
+          deviceArray = lsDevices;
+          source = 'localStorage';
+          console.log('[IoT] Recovered', lsDevices.length, 'devices from localStorage');
+        }
+      }
+    } catch (_) { /* localStorage unavailable */ }
+  }
+  console.log('[IoT] Device array length:', deviceArray.length, 'source:', source);
+  STATE.iotDevices = deviceArray.map(d => sanitizeDevicePayload(d));
+  window.LAST_IOT_SCAN = STATE.iotDevices.slice();
+  console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
+  // Persist localStorage backup for next load
+  try { localStorage.setItem('gr.iotDevices', JSON.stringify(STATE.iotDevices)); } catch (_) {}
+  // Render devices if the panel exists
+  if (typeof window.renderIoTDeviceCards === 'function') {
+    console.log('[IoT] Calling renderIoTDeviceCards...');
+    window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+  } else {
+    console.warn('[IoT] renderIoTDeviceCards function NOT FOUND');
   }
 }
 
@@ -12925,12 +12945,27 @@ async function loadAllData() {
       iotDevicesData.push(...switchbotAsIot);
     }
     
+    // Merge with localStorage fallback if server returned empty
+    if (!iotDevicesData.length) {
+      try {
+        const cached = localStorage.getItem('gr.iotDevices');
+        if (cached) {
+          const lsDevices = JSON.parse(cached);
+          if (Array.isArray(lsDevices) && lsDevices.length) {
+            iotDevicesData.push(...lsDevices);
+            console.log('[loadAllData] Recovered', lsDevices.length, 'IoT devices from localStorage');
+          }
+        }
+      } catch (_) {}
+    }
     const uniqueDevices = dedupeDevices(iotDevicesData);
     if (uniqueDevices.length !== iotDevicesData.length) {
       persistIotDevices(uniqueDevices);
     }
     STATE.iotDevices = uniqueDevices;
     window.LAST_IOT_SCAN = uniqueDevices.slice();
+    // Keep localStorage in sync
+    try { localStorage.setItem('gr.iotDevices', JSON.stringify(uniqueDevices)); } catch (_) {}
     console.log(' [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
     setTimeout(() => {
       if (typeof window.renderIoTDeviceCards === 'function') {
