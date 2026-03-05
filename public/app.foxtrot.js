@@ -1,6 +1,22 @@
 // API Base URL - uses window.API_BASE set in LE-farm-admin.html
 const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : (typeof location !== 'undefined' ? location.origin : '');
 
+/**
+ * Fetch helper that automatically includes Authorization header from
+ * localStorage token when available. This ensures correct farm-scoping
+ * when requests go through greenreach-central's multi-tenant middleware.
+ */
+function fetchWithFarmAuth(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (!headers['Authorization']) {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch (_) {}
+  }
+  return fetch(url, { ...options, headers });
+}
+
 // Global: silence common console.log noise in production unless explicitly enabled
 (function() {
   try {
@@ -2434,7 +2450,7 @@ function buildSwitchbotSnapshot(device) {
 async function enrichDeviceZonesFromRoomMap() {
   try {
     // Try room-map.json (legacy merged file)
-    const resp = await fetch('/data/room-map.json', { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth('/data/room-map.json', { cache: 'no-store' });
     if (!resp.ok) return;
     const roomMap = await resp.json();
     if (!roomMap?.devices?.length) return;
@@ -2488,7 +2504,7 @@ function persistIotDevices(devices) {
     'IDs:', payload.map(d => d.id).join(','));
   // Always backup to localStorage immediately (synchronous, reliable)
   try { localStorage.setItem('gr.iotDevices', JSON.stringify(payload)); } catch (_) {}
-  return fetch('/data/iot-devices.json', {
+  return fetchWithFarmAuth('/data/iot-devices.json', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -2499,10 +2515,10 @@ function persistIotDevices(devices) {
     
     // Verify round-trip: read back to confirm data was actually persisted
     try {
-      const verifyResp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      const verifyResp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
       if (verifyResp.ok) {
         const saved = await verifyResp.json();
-        const savedArr = Array.isArray(saved) ? saved : [];
+        const savedArr = Array.isArray(saved) ? saved : (saved.devices || []);
         if (savedArr.length !== payload.length) {
           console.error('[persistIotDevices] ⚠️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
         } else {
@@ -6518,7 +6534,7 @@ function cloneFallback(value) {
 // Global JSON loader with graceful fallback
 async function loadJSON(url, fallbackValue = null) {
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6533,7 +6549,7 @@ async function saveJSON(url, data) {
     if (!fileName) throw new Error('Invalid save target');
     console.log(`[saveJSON] Saving to /data/${fileName}`);
     console.log(`[saveJSON] Payload:`, JSON.stringify(data, null, 2));
-    const resp = await fetch(`/data/${encodeURIComponent(fileName)}`, {
+    const resp = await fetchWithFarmAuth(`/data/${encodeURIComponent(fileName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -6916,7 +6932,7 @@ async function loadSavedIoTDevices() {
   let source = 'none';
   try {
     console.log('[IoT] Fetching /data/iot-devices.json...');
-    const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
     if (resp.ok) {
       const devices = await resp.json();
       console.log('[IoT] Received response:', devices);
@@ -12986,10 +13002,10 @@ function ensureScheduleIdentity(rawSchedule) {
 // --- Data Loading and Initialization ---
 async function loadAllData() {
   try {
-    // 1) Try loading IoT devices from static file (no auth required)
+    // 1) Try loading IoT devices from farm-scoped DB (via greenreach-central)
     let dbDevices = null;
     try {
-      const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
       if (resp.ok) {
         const payload = await resp.json();
         dbDevices = Array.isArray(payload) ? { devices: payload } : payload;
@@ -13418,7 +13434,7 @@ async function patchDeviceDb(id, fields){
     // Read current devices, update the target, write back
     let devices = [];
     try {
-      const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
       if (resp.ok) {
         const parsed = await resp.json();
         devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
@@ -13430,7 +13446,7 @@ async function patchDeviceDb(id, fields){
     } else {
       devices.push({ id, ...fields });
     }
-    await fetch('/data/iot-devices.json', {
+    await fetchWithFarmAuth('/data/iot-devices.json', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(devices)

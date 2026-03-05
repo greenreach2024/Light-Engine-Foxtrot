@@ -839,7 +839,30 @@ async function syncFarmData(options = {}) {
         if (schedules) { await upsertFarmData('schedules', schedules); logger.info(`[${syncLabel}] DB: schedules for ${farmId}`); }
 
         const devices = resolve('iot-devices.json', 'iot-devices.json', r => Array.isArray(r) ? r : (r.devices || []));
-        if (devices) { await upsertFarmData('devices', devices); logger.info(`[${syncLabel}] DB: ${devices.length} devices for ${farmId}`); }
+        // IMPORTANT: The browser's persistIotDevices() saves device registry
+        // data directly to the DB via farmDataWriteMiddleware. The edge flat
+        // file is NOT the source of truth for the device registry — it may be
+        // empty or contain stale equipment entries. Only overwrite if the DB
+        // has no existing device data for this farm.
+        if (devices && Array.isArray(devices) && devices.length > 0) {
+          let existingArr = [];
+          try {
+            const existResult = await dbQuery(
+              `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+              [farmId, 'devices']
+            );
+            if (existResult.rows.length > 0 && existResult.rows[0].data != null) {
+              const existData = existResult.rows[0].data;
+              existingArr = Array.isArray(existData) ? existData : (existData?.devices || []);
+            }
+          } catch (_) { /* DB read failed — allow upsert */ }
+          if (existingArr.length === 0) {
+            await upsertFarmData('devices', devices);
+            logger.info(`[${syncLabel}] DB: ${devices.length} devices for ${farmId} (DB was empty, seeded from edge)`);
+          } else {
+            logger.info(`[${syncLabel}] DB: Skipping devices upsert — DB already has ${existingArr.length} device(s) for ${farmId} (browser is authoritative)`);
+          }
+        }
 
         if (Object.keys(farmData).length > 0) {
           await upsertFarmData('farm_profile', farmData);
@@ -2468,10 +2491,12 @@ async function cloudNativeScan(req, res) {
     // Check farmStore (database) first — persists across deploys
     let sb = null;
     try {
-      const dbCreds = await farmStore.get('default', 'switchbot_credentials');
+      // Use the request's farmId (via env var or JWT), not a hardcoded 'default'
+      const fid = farmStore.farmIdFromReq(req) || process.env.FARM_ID || 'default';
+      const dbCreds = await farmStore.get(fid, 'switchbot_credentials');
       if (dbCreds?.token && dbCreds?.secret) {
         sb = dbCreds;
-        logger.info('[CloudScan] Found SwitchBot credentials in farmStore (DB)');
+        logger.info(`[CloudScan] Found SwitchBot credentials in farmStore (DB) for ${fid}`);
       }
     } catch (_) {}
 
@@ -2577,7 +2602,8 @@ async function cloudSwitchBotStatus(req, res) {
   try {
     let sb = null;
     try {
-      const dbCreds = await farmStore.get('default', 'switchbot_credentials');
+      const fid = farmStore.farmIdFromReq(req) || process.env.FARM_ID || 'default';
+      const dbCreds = await farmStore.get(fid, 'switchbot_credentials');
       if (dbCreds?.token && dbCreds?.secret) sb = dbCreds;
     } catch (_) {}
     if (!sb) {

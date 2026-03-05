@@ -29149,36 +29149,13 @@ function syncZoneAssignmentsFromRoomMap() {
       }
     }
     
-    // CREATE entries for devices in room-map that don't exist in iot-devices.json
-    // This bridges the gap where Room Mapper places devices but they were never
-    // registered in the IoT device registry
-    for (const rmDevice of roomMap.devices) {
-      const deviceId = rmDevice.deviceId || rmDevice.id;
-      if (!deviceId || existingIds.has(deviceId)) continue;
-      
-      const mapping = zoneMap.get(deviceId);
-      if (!mapping) continue;
-      
-      const snap = rmDevice.snapshot || {};
-      const newEntry = {
-        id: deviceId,
-        name: snap.name || snap.deviceName || deviceId,
-        deviceName: snap.deviceName || snap.name || deviceId,
-        category: snap.category || 'unknown',
-        type: snap.type || snap.category || 'unknown',
-        protocol: snap.protocol || 'unknown',
-        manufacturer: snap.manufacturer || '',
-        model: snap.model || '',
-        zone: mapping.zone,
-        room: mapping.room,
-        location: mapping.location,
-        telemetry: snap.telemetry || {}
-      };
-      iotDevices.push(newEntry);
-      existingIds.add(deviceId);
-      updated = true;
-      console.log(`[zone-sync] CREATED device ${deviceId} (${newEntry.category}) in zone ${mapping.zone} from room-map`);
-    }
+    // NOTE: Do NOT auto-create device entries from room-map.json.
+    // Room Mapper places equipment (fans, lights, etc.) AND sensors.
+    // Only actual SwitchBot/IoT sensor devices belong in iot-devices.json.
+    // The browser's persistIotDevices() is the authoritative source for
+    // the device registry — it saves scan results from the SwitchBot API.
+    // Auto-creating from room-map incorrectly added equipment (fans) as
+    // IoT devices, causing 20 "Unknown Device" entries with no telemetry.
     
     if (updated) {
       fs.writeFileSync(IOT_DEVICES_PATH, JSON.stringify(iotDevices, null, 2));

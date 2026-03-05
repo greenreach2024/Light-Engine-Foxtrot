@@ -564,6 +564,17 @@ function toNumberOrNull(val) {
   var n = Number(val);
   return isNaN(n) ? null : n;
 }
+    // Fetch helper with automatic auth header for multi-tenant data scoping
+    function fetchWithFarmAuth(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (!headers['Authorization']) {
+        try {
+          const token = localStorage.getItem('token');
+          if (token) headers['Authorization'] = 'Bearer ' + token;
+        } catch (_) {}
+      }
+      return fetch(url, Object.assign({}, options, { headers: headers }));
+    }
     let devices = [];
     let syncInterval = null;
     let environmentData = [];
@@ -2286,7 +2297,7 @@ function toNumberOrNull(val) {
 
     async function fetchDeviceMetadata() {
       try {
-        const response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+        const response = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
 
         if (!response.ok) {
           throw new Error(`Failed to load device metadata (${response.status})`);
@@ -2395,7 +2406,7 @@ function toNumberOrNull(val) {
       // Read current devices from flat-file storage
       let devices = [];
       try {
-        const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+        const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
         if (resp.ok) {
           const parsed = await resp.json();
           devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
@@ -2422,7 +2433,7 @@ function toNumberOrNull(val) {
       }
 
       // Persist the entire array back
-      const saveResp = await fetch('/data/iot-devices.json', {
+      const saveResp = await fetchWithFarmAuth('/data/iot-devices.json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(devices)

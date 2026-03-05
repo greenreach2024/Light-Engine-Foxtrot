@@ -1,7 +1,64 @@
 # IoT Device Communication Paths
 
-> **Last updated:** 2026-03-04 (audit-corrected)  
-> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`
+> **Last updated:** 2026-03-05 (session 3 — root cause found, sync fix deployed)  
+> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`
+
+---
+
+## Change Log (2026-03-04 → 2026-03-05)
+
+### Commit 1706665 (deployed 2026-03-04)
+- **`js/iot-manager.js`**: All `/devices` and `/devices/:id` fetch calls replaced with `/data/iot-devices.json` read-modify-write (fixed 401 errors from auth-gated `/devices` route)
+- **`app.foxtrot.js`**: SwitchBot wizard URL changed from `/api/switchbot/discover` to `/switchbot/discover` (fixed 404)
+
+### Commit 5def58b (deployed 2026-03-05)
+- **`LE-switchbot.html`**: `fetchDeviceMetadata()` — removed `/devices` call with auth header, now reads `/data/iot-devices.json` directly (fixed 401)
+- **`LE-switchbot.html`**: `persistDeviceMetadata()` — replaced PATCH `/devices/{id}` + POST `/devices` with read-modify-write to `/data/iot-devices.json` (fixed 401)
+- **`app.foxtrot.js`**: `patchDeviceDb()` — replaced PATCH `/devices/{id}` with read-modify-write to `/data/iot-devices.json` (fixed 401)
+- **`app.foxtrot.js`**: Zone dropdown fallback changed from hardcoded Zone 1-9 to async load from `/data/farm.json`
+- **`server-foxtrot.js`**: `syncZoneAssignmentsFromRoomMap()` — added logic to CREATE new `iot-devices.json` entries for devices in `room-map.json` not already in `iot-devices.json`. **PROBLEM: This incorrectly added 20 fan EQUIPMENT entries as IoT devices.** Fans are equipment placed via Room Mapper, not IoT sensor devices.
+- **`server-foxtrot.js`**: `syncZoneAssignmentsFromRoomMap()` — removed early return when `iot-devices.json` is missing/empty
+
+### ROOT CAUSE FOUND (session 3, 2026-03-05)
+
+**Architecture discovery: Dual data store**
+- `greenreachgreens.com` → CloudFront → `greenreach-central` (multi-tenant SaaS proxy)
+- greenreach-central's `farmDataWriteMiddleware` intercepts ALL `/data/*.json` POST/PUT → writes to PostgreSQL `farm_data` table
+- greenreach-central's `farmDataMiddleware` intercepts ALL `/data/*.json` GET → reads from PostgreSQL
+- Direct EB URL → Light Engine's flat file handlers (different data store)
+- **Browser on greenreachgreens.com NEVER touches the flat file — all data goes through PostgreSQL**
+
+**Root cause: Sync job overwrites browser-saved data**
+1. Browser's `persistIotDevices()` saves sensor data to PostgreSQL via greenreach-central ✓
+2. Every 5 minutes, greenreach-central sync job fetches `iot-devices.json` flat file from Light Engine EB
+3. `syncZoneAssignmentsFromRoomMap()` on Light Engine had auto-created 20 fan entries in the flat file
+4. Sync job UPSERTS (overwrites) the PostgreSQL `devices` record with the flat file contents
+5. Browser-saved sensor data gets overwritten with stale flat file data (20 fans, no sensors)
+6. On next page load, farmDataMiddleware reads from PostgreSQL → returns fans instead of sensors
+
+**Secondary issues:**
+- SwitchBot credential DB lookup used hardcoded `'default'` farmId instead of `FARM_ID` env var (`FARM-MLTP9LVH-B0B85039`)
+- `persistIotDevices()` and all `/data/*.json` fetches lacked Authorization headers (worked due to `FARM_ID` env var fallback, but fragile)
+
+### Fixes Applied (session 3)
+- **`server-foxtrot.js`**: Removed auto-create logic from `syncZoneAssignmentsFromRoomMap()` — only existing devices get zone assignments updated, no new entries created from room-map
+- **`greenreach-central/server.js`**: Sync job devices upsert now checks if DB already has data; skips overwrite if browser has saved devices (browser is authoritative for device registry)
+- **`greenreach-central/server.js`**: SwitchBot credential DB lookup uses `farmStore.farmIdFromReq(req)` instead of hardcoded `'default'`
+- **`app.foxtrot.js`**: Added `fetchWithFarmAuth()` helper that auto-includes `Authorization: Bearer` from localStorage token
+- **`app.foxtrot.js`**: All `/data/iot-devices.json` fetch calls (GET and POST) now use `fetchWithFarmAuth()`
+- **`app.foxtrot.js`**: `loadJSON()` and `saveJSON()` now use `fetchWithFarmAuth()` for all data file operations
+- **`LE-switchbot.html`**: Added `fetchWithFarmAuth()` helper and updated all `/data/iot-devices.json` calls
+- **Database**: Cleared stale 20-fan entries from PostgreSQL `farm_data` table for `FARM-MLTP9LVH-B0B85039`
+- **Flat file**: Cleared stale entries from Light Engine EB flat file
+
+### Rollback (post-deploy 2026-03-05, session 2)
+- **AWS (`iot-devices.json`)**: Cleared incorrectly-created fan entries back to `[]` via POST to `https://greenreachgreens.com/data/iot-devices.json`
+
+### Key Discovery: Production URL
+- User accesses app at `https://greenreachgreens.com/LE-farm-admin.html` (CloudFront → EB)
+- CloudFront origin → `light-engine-foxtrot-prod-v3` EB environment
+- EB environment CNAME is confusingly `light-engine-foxtrot-prod-v2.eba-ukiyyqf9...` (CNAMEs were swapped in prior blue/green deploy)
+- Direct EB URL and CloudFront URL serve the same instance but CloudFront POST to `/data/*` returns `{"success":true,"source":"database"}` (different handler path vs direct EB)
 
 ---
 
@@ -381,7 +438,9 @@ renderIoTDeviceCards(devices)            [L2821]
 | `seedRuntimeDataFiles()` | L849 | server-foxtrot.js | Create default data files |
 | `renderEmbeddedView(url, title)` | L726 | farm-admin.js | Load page in iframe |
 | `IoTDevicesManager` | class | js/iot-manager.js | Standalone device manager (calls missing /iot/devices routes) |
-| `fetchDeviceMetadata()` | ~L2289 | LE-switchbot.html | Fetch device metadata from /devices or /data/iot-devices.json |
+| `fetchDeviceMetadata()` | ~L2289 | LE-switchbot.html | Fetch device metadata from /data/iot-devices.json (was /devices — fixed 5def58b) |
+| `persistDeviceMetadata()` | ~L2399 | LE-switchbot.html | Read-modify-write to /data/iot-devices.json (was PATCH/POST /devices — fixed 5def58b) |
+| `patchDeviceDb()` | ~L13384 | app.foxtrot.js | Read-modify-write to /data/iot-devices.json (was PATCH /devices/{id} — fixed 5def58b) |
 
 ---
 
