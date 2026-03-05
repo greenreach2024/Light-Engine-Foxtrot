@@ -633,6 +633,19 @@
   </div>
 
   <script>
+    // Fetch helper with automatic auth header for multi-tenant data scoping
+    function fetchWithFarmAuth(url, options) {
+      options = options || {};
+      var headers = Object.assign({}, options.headers || {});
+      if (!headers['Authorization']) {
+        try {
+          var token = localStorage.getItem('token');
+          if (token) headers['Authorization'] = 'Bearer ' + token;
+        } catch (_) {}
+      }
+      return fetch(url, Object.assign({}, options, { headers: headers }));
+    }
+
     // Debug viewport
     const vpSpan = document.getElementById("vp");
     if (vpSpan) vpSpan.textContent = `${window.innerWidth}×${window.innerHeight}px`;
@@ -794,7 +807,7 @@
       }
 
       try {
-        const response = await fetch('/data/rooms.json');
+        const response = await fetchWithFarmAuth('/data/rooms.json', { cache: 'no-store' });
         const roomsData = await response.json();
         return roomsData.rooms || roomsData || [];
       } catch (error) {
@@ -938,8 +951,10 @@
     async function loadIoTDevices() {
       try {
         // Load sensors from iot-devices.json (filter for sensors only)
-        const sensorResponse = await fetch('/data/iot-devices.json');
-        const allDevices = await sensorResponse.json();
+        const sensorResponse = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+        const rawPayload = await sensorResponse.json();
+        // Handle both array format and { devices: [] } wrapper
+        const allDevices = Array.isArray(rawPayload) ? rawPayload : (rawPayload.devices || []);
         
         console.log(`[Room Mapper] Fetched ${allDevices.length} total devices from iot-devices.json`);
         
@@ -947,7 +962,8 @@
         const sensors = allDevices.filter(d => {
           const type = (d.type || '').toLowerCase();
           const category = (d.category || '').toLowerCase();
-          return type.includes('sensor') || category === 'sensor';
+          const deviceType = (d.deviceType || '').toLowerCase();
+          return type.includes('sensor') || category === 'sensor' || category.includes('sensor') || deviceType.includes('sensor');
         });
         
         console.log(`[Room Mapper] Filtered to ${sensors.length} sensors`);
@@ -974,7 +990,7 @@
       let metadata = {};
       try {
         // Fetch .json directly to avoid 403 error from middleware
-        const res = await fetch('/data/equipment-metadata.json');
+        const res = await fetchWithFarmAuth('/data/equipment-metadata.json');
         if (res.ok) {
           metadata = await res.json();
         } else {
@@ -1856,6 +1872,49 @@
     }
 
     /**
+     * After saving the map, update iot-devices.json with zone/location from
+     * device placements. This ensures sensor cards show the correct zone
+     * and the data flows to summary/heatmap pages.
+     */
+    async function updateIotDevicesWithPlacements(mapDevices, roomName) {
+      try {
+        // Load current iot-devices.json
+        const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+        if (!resp.ok) return;
+        const raw = await resp.json();
+        const devices = Array.isArray(raw) ? raw : (raw.devices || []);
+        if (!devices.length) return;
+
+        let updated = false;
+        for (const placed of mapDevices) {
+          const zone = placed.snapshot?.zone;
+          if (zone == null) continue;
+          const idx = devices.findIndex(d => (d.id || d.deviceId) === placed.deviceId);
+          if (idx < 0) continue;
+          const location = roomName ? roomName + ' - Zone ' + zone : 'Zone ' + zone;
+          if (devices[idx].zone !== zone || devices[idx].location !== location) {
+            devices[idx].zone = zone;
+            devices[idx].location = location;
+            devices[idx].room = roomName || devices[idx].room;
+            updated = true;
+          }
+        }
+        if (updated) {
+          const saveResp = await fetchWithFarmAuth('/data/iot-devices.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(devices)
+          });
+          if (saveResp.ok) {
+            console.log('[Room Mapper] ✅ Updated iot-devices.json with zone/location from placements');
+          }
+        }
+      } catch (err) {
+        console.warn('[Room Mapper] Failed to update iot-devices.json:', err.message);
+      }
+    }
+
+    /**
      * Update rooms.json with sensor-to-zone assignments
      * This ensures ML, AI, and Farm Summary can access sensor data
      */
@@ -1917,7 +1976,7 @@
         console.log('[Room Mapper] Zone sensor map:', zoneSensorMap);
         
         // Load current rooms.json
-        const roomsResponse = await fetch('/data/rooms.json');
+        const roomsResponse = await fetchWithFarmAuth('/data/rooms.json', { cache: 'no-store' });
         if (!roomsResponse.ok) {
           throw new Error('Failed to load rooms.json');
         }
@@ -1993,7 +2052,7 @@
           }
           
           // Save updated rooms.json
-          const saveResponse = await fetch('/data/rooms.json', {
+          const saveResponse = await fetchWithFarmAuth('/data/rooms.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rooms: roomsData.rooms })
@@ -2075,7 +2134,7 @@
       try {
         // Save to room-specific file: room-map-{roomId}.json
         const fileName = `room-map-${STATE.currentRoomId}.json`;
-        const response = await fetch(`/data/${fileName}`, {
+        const response = await fetchWithFarmAuth(`/data/${fileName}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(mapData)
@@ -2084,6 +2143,9 @@
         if (response.ok) {
           // NEW: Update rooms.json with sensor assignments
           await updateRoomsSensorAssignments(STATE.currentRoomId, STATE.placedDevices, STATE.zones);
+          
+          // Also update iot-devices.json with zone/location from placements
+          await updateIotDevicesWithPlacements(mapData.devices, roomName);
           
           alert(`Map saved successfully for room: ${roomName}`);
           
@@ -2109,7 +2171,7 @@
       
       try {
         const fileName = `room-map-${STATE.currentRoomId}.json`;
-        const response = await fetch(`/data/${fileName}`);
+        const response = await fetchWithFarmAuth(`/data/${fileName}`, { cache: 'no-store' });
         if (response.status === 404) {
           console.log('[Room Mapper] No saved map for this room, starting fresh');
           return;
@@ -2137,7 +2199,7 @@
       try {
         // Try to load room-specific map first
         const fileName = `room-map-${STATE.currentRoomId}.json`;
-        const response = await fetch(`/data/${fileName}`);
+        const response = await fetchWithFarmAuth(`/data/${fileName}`, { cache: 'no-store' });
         if (response.ok) {
           const mapData = await response.json();
           await loadExistingMapData(mapData);
@@ -2146,7 +2208,7 @@
         }
         
         // Fallback: try legacy room-map.json if it exists and matches current room
-        const legacyResponse = await fetch('/data/room-map.json');
+        const legacyResponse = await fetchWithFarmAuth('/data/room-map.json', { cache: 'no-store' });
         if (legacyResponse.ok) {
           const legacyData = await legacyResponse.json();
           if (legacyData.roomId === STATE.currentRoomId || legacyData.roomId === 'default') {
