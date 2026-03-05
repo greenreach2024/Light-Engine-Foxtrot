@@ -1795,8 +1795,8 @@ function showKasaWizard() {
         </div>
       `;
       modal.style.display = 'flex';
-      // Call backend to discover devices
-      fetch('/api/switchbot/discover', {
+      // Call backend to discover devices (route is /switchbot/discover, NOT /api/switchbot/discover)
+      fetch('/switchbot/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, secret })
