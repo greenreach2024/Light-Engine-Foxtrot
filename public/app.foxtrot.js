@@ -2483,20 +2483,39 @@ async function enrichDeviceZonesFromRoomMap() {
 
 function persistIotDevices(devices) {
   const payload = dedupeDevices(devices);
+  console.log('[persistIotDevices] Saving', payload.length, 'devices to server...',
+    'trusted:', payload.filter(d => d.trust === 'trusted').length,
+    'IDs:', payload.map(d => d.id).join(','));
   // Always backup to localStorage immediately (synchronous, reliable)
   try { localStorage.setItem('gr.iotDevices', JSON.stringify(payload)); } catch (_) {}
   return fetch('/data/iot-devices.json', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).then(res => {
+  }).then(async res => {
     if (!res.ok) throw new Error(res.statusText || 'Failed to save devices');
-    console.log('[IoT] Devices persisted to server:', payload.length);
+    const result = await res.json().catch(() => ({}));
+    console.log('[persistIotDevices] ✅ Server confirmed save:', result, 'count:', payload.length);
+    
+    // Verify round-trip: read back to confirm data was actually persisted
+    try {
+      const verifyResp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      if (verifyResp.ok) {
+        const saved = await verifyResp.json();
+        const savedArr = Array.isArray(saved) ? saved : [];
+        if (savedArr.length !== payload.length) {
+          console.error('[persistIotDevices] ⚠️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
+        } else {
+          console.log('[persistIotDevices] ✅ Verified: read back', savedArr.length, 'devices from server');
+        }
+      }
+    } catch (verifyErr) {
+      console.warn('[persistIotDevices] Verification read-back failed:', verifyErr.message);
+    }
     
     // ✅ DATA FLOW: Notify components that IoT devices have been updated
     try {
       document.dispatchEvent(new Event('iot-devices-updated'));
-      console.log('[persistIotDevices] Dispatched iot-devices-updated event');
     } catch (err) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
@@ -7037,10 +7056,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Load persisted light setups
   console.log('[INIT] Loading light setups...');
   await loadLightSetups();
-  // Load saved IoT devices
-  console.log('[INIT] Loading saved IoT devices...');
-  await loadSavedIoTDevices();
-  console.log('[INIT] IoT devices loaded, STATE.iotDevices:', STATE.iotDevices?.length);
+  // NOTE: IoT devices are loaded by loadAllData() in the second DOMContentLoaded handler.
+  // Loading here was redundant and caused a race condition where both handlers wrote
+  // to STATE.iotDevices concurrently. loadAllData() is the authoritative load path
+  // because it also merges SwitchBot devices and handles persistence.
+  console.log('[INIT] Skipping loadSavedIoTDevices (handled by loadAllData)');
   // Remove demo rooms (will skip if in demo mode)
   removeDemoRooms();
   // Render rooms if function exists
@@ -13099,24 +13119,29 @@ async function loadAllData() {
       } catch (_) {}
     }
     const uniqueDevices = dedupeDevices(iotDevicesData);
-    // Always persist so iot-devices.json is seeded and server-side zone sync triggers
-    if (uniqueDevices.length) {
-      persistIotDevices(uniqueDevices);
+    // Only re-persist if SwitchBot merge enriched the list (avoid unnecessary writes that
+    // can race with server-side syncSensorData timer). Skip if we just loaded the same data.
+    if (uniqueDevices.length && switchbotDevicesList.length > 0) {
+      console.log('[loadAllData] SwitchBot merge enriched list, persisting', uniqueDevices.length, 'devices');
+      await persistIotDevices(uniqueDevices);
     }
     STATE.iotDevices = uniqueDevices;
     window.LAST_IOT_SCAN = uniqueDevices.slice();
     // Keep localStorage in sync
     try { localStorage.setItem('gr.iotDevices', JSON.stringify(uniqueDevices)); } catch (_) {}
-    console.log(' [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
+    console.log('[loadAllData] Loaded IoT devices:', STATE.iotDevices.length,
+      'trusted:', uniqueDevices.filter(d => d.trust === 'trusted').length);
+    if (uniqueDevices.length > 0) {
+      console.log('[loadAllData] Device IDs:', uniqueDevices.map(d => d.id).join(', '));
+    }
 
     // Enrich device zones from room-map data (bridges Room Mapper → IoT cards)
     await enrichDeviceZonesFromRoomMap();
 
-    setTimeout(() => {
-      if (typeof window.renderIoTDeviceCards === 'function') {
-        window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
-      }
-    }, 500);
+    // Render IoT device cards immediately (no delay)
+    if (typeof window.renderIoTDeviceCards === 'function') {
+      window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    }
   const schedulesDoc = (schedules && typeof schedules === 'object') ? schedules : null;
   STATE.scheduleDocument = schedulesDoc;
   const loadedSchedules = Array.isArray(schedulesDoc?.schedules) ? schedulesDoc.schedules : [];

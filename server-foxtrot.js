@@ -29587,7 +29587,34 @@ function setupLiveSensorSync() {
       });
 
       if (switchBotUpdated) {
-        await writeJsonQueued(IOT_DEVICES_PATH, JSON.stringify(iotDevices, null, 2));
+        // Re-read the file before writing to avoid overwriting concurrent POST changes.
+        // The refreshSwitchBotTelemetry call above may have taken several seconds,
+        // during which a client POST could have added/removed devices.
+        try {
+          const freshDevices = JSON.parse(fs.readFileSync(IOT_DEVICES_PATH, 'utf8'));
+          if (Array.isArray(freshDevices)) {
+            // Merge telemetry updates from our working copy into the fresh copy
+            const telemetryMap = new Map();
+            for (const dev of iotDevices) {
+              const devId = dev.id || dev.deviceId;
+              if (devId && dev.telemetry) {
+                telemetryMap.set(devId, dev.telemetry);
+              }
+            }
+            for (const dev of freshDevices) {
+              const devId = dev.id || dev.deviceId;
+              const updatedTelemetry = telemetryMap.get(devId);
+              if (updatedTelemetry) {
+                dev.telemetry = { ...(dev.telemetry || {}), ...updatedTelemetry };
+              }
+            }
+            await writeJsonQueued(IOT_DEVICES_PATH, JSON.stringify(freshDevices, null, 2));
+          }
+        } catch (mergeErr) {
+          console.warn('[sensor-sync] Failed to merge telemetry safely:', mergeErr.message);
+          // Fall back to writing our working copy (original behavior)
+          await writeJsonQueued(IOT_DEVICES_PATH, JSON.stringify(iotDevices, null, 2));
+        }
         console.log(`[sensor-sync] Refreshed SwitchBot telemetry for ${[...new Set(Array.from(switchBotReadings.keys()))].length} device(s)`);
       }
 

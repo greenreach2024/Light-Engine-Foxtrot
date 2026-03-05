@@ -491,14 +491,14 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         }
 
-        // Fetch device count from API
+        // Fetch device count from IoT devices file (no auth required)
         try {
-            const devResp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/devices`, {
-                headers: { 'Authorization': `Bearer ${currentSession.token}` }
-            });
+            const devResp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
             if (devResp.ok) {
                 const devData = await devResp.json();
-                const devCount = devData.count || (Array.isArray(devData.devices) ? devData.devices.length : 0);
+                const devArr = Array.isArray(devData) ? devData : (devData.devices || []);
+                const trustedDevices = devArr.filter(d => d.trust === 'trusted');
+                const devCount = trustedDevices.length;
                 document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
                 document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
             } else {
