@@ -487,21 +487,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 // --- Groups Card Room/Zone Dropdown Seeding ---
+function getRoomZones(room) {
+  if (!room || typeof room !== 'object') return [];
+  if (Array.isArray(room.zones) && room.zones.length) return room.zones.filter(Boolean);
+  if (Array.isArray(room.zoneNames) && room.zoneNames.length) return room.zoneNames.filter(Boolean);
+  if (Array.isArray(room.zone_names) && room.zone_names.length) return room.zone_names.filter(Boolean);
+  return [];
+}
+
+function roomHasZones(room) {
+  return getRoomZones(room).length > 0;
+}
+
+function buildRoomLookupKey(room) {
+  const id = String(room?.id || room?.roomId || room?.room_id || '').trim().toLowerCase();
+  const name = String(room?.name || room?.roomName || '').trim().toLowerCase();
+  return id || name;
+}
+
+function mergeRoomsWithZoneFallback(baseRooms, fallbackPools = []) {
+  const pools = fallbackPools.filter(pool => Array.isArray(pool) && pool.length);
+  if (!Array.isArray(baseRooms)) return [];
+  return baseRooms.map((room) => {
+    if (roomHasZones(room)) return room;
+    const key = buildRoomLookupKey(room);
+    if (!key) return room;
+    for (const pool of pools) {
+      const match = pool.find((candidate) => buildRoomLookupKey(candidate) === key && roomHasZones(candidate));
+      if (match) {
+        return { ...room, zones: getRoomZones(match) };
+      }
+    }
+    return room;
+  });
+}
+
 function collectRoomsFromState() {
   const wizardRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
-  if (wizardRooms.length) return wizardRooms;
   const farmRooms = Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : [];
-  if (farmRooms.length) return farmRooms;
-  // Fallback: try localStorage (covers race conditions where STATE not yet populated)
+  let lsRooms = [];
   try {
     const cached = localStorage.getItem('gr.rooms');
     if (cached) {
       const parsed = JSON.parse(cached);
-      const lsRooms = Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
-      if (lsRooms.length) return lsRooms;
+      lsRooms = Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
     }
   } catch (_) { /* localStorage unavailable */ }
-  return [];
+
+  const firstAvailable = wizardRooms.length ? wizardRooms : (farmRooms.length ? farmRooms : lsRooms);
+  if (!firstAvailable.length) return [];
+  return mergeRoomsWithZoneFallback(firstAvailable, [farmRooms, lsRooms, wizardRooms]);
 }
 
 function updateGroupActionStates({ hasGroup = false, hasRoom = false, hasZone = false } = {}) {
@@ -3460,17 +3495,21 @@ window.runUniversalScan = async function() {
     const fallbackEndpoint = '/discovery/devices';
     const currentHost = (window?.location?.hostname || '').toLowerCase();
     const currentOrigin = window?.location?.origin || '';
-    const isCloudHost = currentHost.includes('greenreachgreens.com');
+    const isProductionHost = currentHost && !['localhost', '127.0.0.1'].includes(currentHost);
+    const explicitLocalProbe = window.ENABLE_LOCAL_EDGE_PROBE === true || (new URLSearchParams(window.location.search).get('edgeLocal') === '1');
+    const canProbeEdge = Boolean(window.EDGE_URL) || explicitLocalProbe;
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
     console.log('[UniversalScan] Full URL:', window.location.origin + discoveryEndpoint);
     
     let response;
 
-    // When on cloud, try scanning via local edge first (scan must run on the farm's machine)
-    if (isCloudHost) {
+    // On hosted UI, only probe edge when an edge URL is configured or explicitly requested.
+    if (isProductionHost && canProbeEdge) {
       const edgeUrls = [];
       if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
-      edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+      if (explicitLocalProbe) {
+        edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+      }
       // Deduplicate
       const uniqueEdge = [...new Set(edgeUrls)];
       console.log('[UniversalScan] Cloud mode — trying local edge URLs:', uniqueEdge);
@@ -5435,13 +5474,20 @@ async function loadRoomsFromBackend() {
 // so the Grow Room Setup card always reflects what the Room Mapper has saved.
 async function enrichRoomZonesFromMaps() {
   try {
+    let staticRooms = [];
+    try {
+      const staticResp = await fetch('/data/rooms.json', { cache: 'no-store' });
+      if (staticResp.ok) {
+        const staticData = await staticResp.json();
+        staticRooms = Array.isArray(staticData?.rooms) ? staticData.rooms : Array.isArray(staticData) ? staticData : [];
+      }
+    } catch (_) { /* static rooms not available */ }
+
     // If STATE.rooms is empty, try loading from rooms.json first
     if (!STATE.rooms || STATE.rooms.length === 0) {
       try {
-        const resp = await fetch('/data/rooms.json', { cache: 'no-store' });
-        if (resp.ok) {
-          const data = await resp.json();
-          const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+        if (staticRooms.length) {
+          const rooms = staticRooms;
           if (rooms.length) {
             STATE.rooms = rooms.map(r => {
               if (!r.id && (r.room_id || r.roomId)) r.id = r.room_id || r.roomId;
@@ -5453,9 +5499,25 @@ async function enrichRoomZonesFromMaps() {
       } catch (_) { /* rooms.json not available */ }
     }
 
+    const staticZoneMap = new Map(
+      (Array.isArray(staticRooms) ? staticRooms : []).map((room) => [
+        buildRoomLookupKey(room),
+        getRoomZones(room)
+      ])
+    );
+
     for (const room of STATE.rooms) {
       const roomId = room.id || room.roomId || room.room_id;
       if (!roomId) continue;
+
+      if (!roomHasZones(room)) {
+        const fromStatic = staticZoneMap.get(buildRoomLookupKey(room));
+        if (Array.isArray(fromStatic) && fromStatic.length) {
+          room.zones = fromStatic;
+          continue;
+        }
+      }
+
       // Skip if room already has zones populated
       if (Array.isArray(room.zones) && room.zones.length > 0) continue;
       try {
@@ -12816,7 +12878,12 @@ async function loadAllData() {
     // 1) Try DB-backed devices first
     let dbDevices = null;
     try {
-      dbDevices = await api('/devices');
+      const token = localStorage.getItem('token');
+      if (token) {
+        dbDevices = await api('/devices', { headers: { Authorization: `Bearer ${token}` } });
+      } else {
+        console.info('Skipping /devices fetch because no auth token is present');
+      }
     } catch (e) {
       console.warn('DB /devices fetch failed, will try forwarder/api', e);
     }
@@ -13035,7 +13102,7 @@ async function loadAllData() {
       try {
         const raw = localStorage.getItem('gr.rooms');
         const parsed = raw ? JSON.parse(raw) : null;
-        return Array.isArray(parsed?.rooms) ? parsed.rooms : [];
+        return Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
       } catch {
         return [];
       }
@@ -13063,6 +13130,8 @@ async function loadAllData() {
           name: fallbackName
         };
       });
+
+    STATE.rooms = mergeRoomsWithZoneFallback(STATE.rooms, [localRooms, fileRooms, farmRooms]);
 
     STATE.equipmentMetadata = equipmentMetadata || {};
     console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
@@ -20223,12 +20292,17 @@ class DevicePairWizard {
       const minScanDurationMs = 12000;
       let resp;
 
-      // When on cloud, try local edge first for device scanning
-      const isCloudHost = (window?.location?.hostname || '').toLowerCase().includes('greenreachgreens.com');
-      if (isCloudHost) {
+      // On hosted UI, only probe edge when an edge URL is configured or explicitly requested.
+      const currentHost = (window?.location?.hostname || '').toLowerCase();
+      const isProductionHost = currentHost && !['localhost', '127.0.0.1'].includes(currentHost);
+      const explicitLocalProbe = window.ENABLE_LOCAL_EDGE_PROBE === true || (new URLSearchParams(window.location.search).get('edgeLocal') === '1');
+      const canProbeEdge = Boolean(window.EDGE_URL) || explicitLocalProbe;
+      if (isProductionHost && canProbeEdge) {
         const edgeUrls = [];
         if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
-        edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+        if (explicitLocalProbe) {
+          edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+        }
         const uniqueEdge = [...new Set(edgeUrls)];
         if (this.scanStatus) this.scanStatus.textContent = 'Cloud mode: checking for local Light Engine...';
 
