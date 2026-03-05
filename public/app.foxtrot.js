@@ -12875,17 +12875,16 @@ function ensureScheduleIdentity(rawSchedule) {
 // --- Data Loading and Initialization ---
 async function loadAllData() {
   try {
-    // 1) Try DB-backed devices first
+    // 1) Try loading IoT devices from static file (no auth required)
     let dbDevices = null;
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        dbDevices = await api('/devices', { headers: { Authorization: `Bearer ${token}` } });
-      } else {
-        console.info('Skipping /devices fetch because no auth token is present');
+      const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      if (resp.ok) {
+        const payload = await resp.json();
+        dbDevices = Array.isArray(payload) ? { devices: payload } : payload;
       }
     } catch (e) {
-      console.warn('DB /devices fetch failed, will try forwarder/api', e);
+      console.warn('/data/iot-devices.json fetch failed, will try forwarder/api', e);
     }
     if (dbDevices && Array.isArray(dbDevices.devices)) {
       STATE.devices = dbDevices.devices;

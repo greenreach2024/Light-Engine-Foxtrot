@@ -35,8 +35,8 @@ function initializeFirebase() {
       const notificationTitle = payload.notification?.title || 'GreenReach Notification';
       const notificationOptions = {
         body: payload.notification?.body || '',
-        icon: payload.notification?.icon || '/images/cheo-mascot.svg',
-        badge: '/images/cheo-mascot.svg',
+        icon: payload.notification?.icon || '/images/cheo-mascot.svg?v=20260304',
+        badge: '/images/cheo-mascot.svg?v=20260304',
         tag: payload.data?.orderId || 'default',
         data: payload.data || {},
         requireInteraction: payload.data?.priority === 'high',
@@ -146,7 +146,7 @@ async function checkUrgentOrders() {
       const order = data.urgentOrders[0];
       await self.registration.showNotification('Urgent Order Reminder', {
         body: `Order #${order.id} expires in ${order.hoursLeft} hours`,
-        icon: '/images/cheo-mascot.svg',
+        icon: '/images/cheo-mascot.svg?v=20260304',
         tag: `urgent-${order.id}`,
         data: { orderId: order.id },
         requireInteraction: true
