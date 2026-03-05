@@ -24624,6 +24624,7 @@ app.post("/data/:name", (req, res) => {
       .then(async () => {
         // If this is a room map save, perform additional side-effects so Room Mapper becomes source of truth
         const isRoomMap = /^room-map(.*)?\.json$/.test(baseName);
+        const isIotDevices = baseName === 'iot-devices.json';
         if (isRoomMap) {
           try {
             // While multi-room support is evolving, mirror room-map-<roomId>.json to legacy room-map.json
@@ -24648,7 +24649,17 @@ app.post("/data/:name", (req, res) => {
           }
         }
 
-        return res.json({ ok: true, name: baseName, refreshed: isRoomMap || false });
+        // When iot-devices.json is saved, apply zone assignments from room-map data
+        if (isIotDevices) {
+          try {
+            syncZoneAssignmentsFromRoomMap();
+            console.log('[iot-devices] Post-save zone sync from room-map completed');
+          } catch (err) {
+            console.warn('[iot-devices] Post-save zone sync failed:', err?.message || err);
+          }
+        }
+
+        return res.json({ ok: true, name: baseName, refreshed: isRoomMap || isIotDevices || false });
       })
       .catch((e) => res.status(500).json({ ok: false, error: e.message }));
   } catch (e) {

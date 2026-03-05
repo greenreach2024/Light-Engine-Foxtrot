@@ -2428,6 +2428,59 @@ function buildSwitchbotSnapshot(device) {
   return wrapper;
 }
 
+// ===== Client-side zone enrichment from room-map data =====
+// Reads room-map.json and applies zone assignments to devices in STATE.iotDevices.
+// This bridges the gap where room-map has zone data but iot-devices.json doesn't.
+async function enrichDeviceZonesFromRoomMap() {
+  try {
+    // Try room-map.json (legacy merged file)
+    const resp = await fetch('/data/room-map.json', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const roomMap = await resp.json();
+    if (!roomMap?.devices?.length) return;
+
+    // Build zone lookup: deviceId -> { zone, room, location }
+    const zoneMap = new Map();
+    for (const dev of roomMap.devices) {
+      const deviceId = dev.deviceId || dev.id;
+      const rawZone = dev.snapshot?.zone ?? dev.zone;
+      const room = dev.snapshot?.room || dev.room || roomMap.name || '';
+      if (deviceId && rawZone != null) {
+        const zoneNum = typeof rawZone === 'number' ? rawZone : (() => {
+          const s = String(rawZone).trim();
+          if (/^\d+$/.test(s)) return Number(s);
+          const m = s.match(/^zone[- ]?(\d+)$/i);
+          return m ? Number(m[1]) : null;
+        })();
+        if (zoneNum != null) {
+          const location = room ? `${room} - Zone ${zoneNum}` : `Zone ${zoneNum}`;
+          zoneMap.set(deviceId, { zone: zoneNum, room, location });
+        }
+      }
+    }
+    if (!zoneMap.size) return;
+
+    // Apply zone assignments to STATE.iotDevices
+    let updated = false;
+    const devices = Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [];
+    for (const device of devices) {
+      const deviceId = device.id || device.deviceId;
+      const mapping = zoneMap.get(deviceId);
+      if (mapping && (!device.zone || device.zone === null || device.zone === '')) {
+        device.zone = mapping.zone;
+        if (!device.location) device.location = mapping.location;
+        updated = true;
+      }
+    }
+    if (updated) {
+      window.LAST_IOT_SCAN = STATE.iotDevices.slice();
+      console.log('[enrichDeviceZonesFromRoomMap] Applied zone assignments from room-map to', devices.length, 'device(s)');
+    }
+  } catch (err) {
+    console.warn('[enrichDeviceZonesFromRoomMap] Failed:', err.message || err);
+  }
+}
+
 function persistIotDevices(devices) {
   const payload = dedupeDevices(devices);
   // Always backup to localStorage immediately (synchronous, reliable)
@@ -3401,6 +3454,10 @@ window.scanIoTDevices = async function() {
   const scanned = devices.map(dev => sanitizeDevicePayload(dev, { trust: 'unknown' }));
   const trusted = Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [];
   window.LAST_IOT_SCAN = dedupeDevices([...scanned, ...trusted]);
+  // Persist so iot-devices.json gets populated and server-side zone sync runs
+  STATE.iotDevices = window.LAST_IOT_SCAN.slice();
+  await persistIotDevices(STATE.iotDevices);
+  await enrichDeviceZonesFromRoomMap();
   renderIoTDeviceCards(window.LAST_IOT_SCAN);
     showToast({ title: 'Scan complete', msg: `Found ${devices.length} devices`, kind: 'success', icon: '' });
     if (data.analysis && data.analysis.suggestedWizards) {
@@ -6841,6 +6898,8 @@ async function loadSavedIoTDevices() {
   console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
   // Persist localStorage backup for next load
   try { localStorage.setItem('gr.iotDevices', JSON.stringify(STATE.iotDevices)); } catch (_) {}
+  // Enrich device zones from room-map data
+  await enrichDeviceZonesFromRoomMap();
   // Render devices if the panel exists
   if (typeof window.renderIoTDeviceCards === 'function') {
     console.log('[IoT] Calling renderIoTDeviceCards...');
@@ -12970,43 +13029,58 @@ async function loadAllData() {
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
+    // Build a lookup of existing zone/location from stored iot-devices.json
+    // so that SwitchBot merge doesn't overwrite manually-set zones
+    const storedZoneMap = new Map();
+    for (const d of iotDevicesData) {
+      const id = d.id || d.deviceId;
+      if (id && (d.zone != null || d.location)) {
+        storedZoneMap.set(id, { zone: d.zone, location: d.location });
+      }
+    }
+
     // Merge SwitchBot devices from switchbot-devices.json into IoT devices
     const switchbotDevicesList = Array.isArray(switchbotDevices?.devices) ? switchbotDevices.devices : [];
     if (switchbotDevicesList.length > 0) {
       console.log(`[loadAllData] Merging ${switchbotDevicesList.length} SwitchBot devices into IoT devices`);
       // Convert SwitchBot device format to IoT device format
-      const switchbotAsIot = switchbotDevicesList.map(sbDev => ({
-        id: sbDev.id || sbDev.deviceId,
-        deviceId: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
-        vendor: 'SwitchBot',
-        brand: 'SwitchBot',
-        protocol: 'switchbot',
-        type: (sbDev.type || '').toLowerCase(),
-        category: sbDev.type || 'Unknown',
-        address: sbDev.id || sbDev.deviceId,
-        location: sbDev.location || null,
-        zone: sbDev.zone || null,
-        trust: 'trusted',
-        automationControl: false,
-        lastSeen: sbDev.lastSeen || null,
-        telemetry: {
-          device_id: sbDev.id || sbDev.deviceId,
-          name: sbDev.name || sbDev.deviceName,
-          category: sbDev.type,
+      const switchbotAsIot = switchbotDevicesList.map(sbDev => {
+        const devId = sbDev.id || sbDev.deviceId;
+        // Preserve existing zone/location from iot-devices.json if SwitchBot API doesn't provide one
+        const stored = storedZoneMap.get(devId);
+        return {
+          id: devId,
+          deviceId: devId,
+          name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
+          vendor: 'SwitchBot',
+          brand: 'SwitchBot',
           protocol: 'switchbot',
-          online: sbDev.status !== 'offline',
-          battery: sbDev.battery,
-          ...sbDev.readings
-        },
-        deviceData: {
-          device_id: sbDev.id || sbDev.deviceId,
-          name: sbDev.name || sbDev.deviceName,
-          category: sbDev.type,
-          protocol: 'switchbot',
-          online: sbDev.status !== 'offline'
-        }
-      }));
+          type: (sbDev.type || '').toLowerCase(),
+          category: sbDev.type || 'Unknown',
+          address: devId,
+          location: sbDev.location || stored?.location || null,
+          zone: sbDev.zone || stored?.zone || null,
+          trust: 'trusted',
+          automationControl: false,
+          lastSeen: sbDev.lastSeen || null,
+          telemetry: {
+            device_id: devId,
+            name: sbDev.name || sbDev.deviceName,
+            category: sbDev.type,
+            protocol: 'switchbot',
+            online: sbDev.status !== 'offline',
+            battery: sbDev.battery,
+            ...sbDev.readings
+          },
+          deviceData: {
+            device_id: devId,
+            name: sbDev.name || sbDev.deviceName,
+            category: sbDev.type,
+            protocol: 'switchbot',
+            online: sbDev.status !== 'offline'
+          }
+        };
+      });
       // Merge into iot devices
       iotDevicesData.push(...switchbotAsIot);
     }
@@ -13025,7 +13099,8 @@ async function loadAllData() {
       } catch (_) {}
     }
     const uniqueDevices = dedupeDevices(iotDevicesData);
-    if (uniqueDevices.length !== iotDevicesData.length) {
+    // Always persist so iot-devices.json is seeded and server-side zone sync triggers
+    if (uniqueDevices.length) {
       persistIotDevices(uniqueDevices);
     }
     STATE.iotDevices = uniqueDevices;
@@ -13033,6 +13108,10 @@ async function loadAllData() {
     // Keep localStorage in sync
     try { localStorage.setItem('gr.iotDevices', JSON.stringify(uniqueDevices)); } catch (_) {}
     console.log(' [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
+
+    // Enrich device zones from room-map data (bridges Room Mapper → IoT cards)
+    await enrichDeviceZonesFromRoomMap();
+
     setTimeout(() => {
       if (typeof window.renderIoTDeviceCards === 'function') {
         window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
@@ -13208,9 +13287,10 @@ async function loadAllData() {
     renderSwitchBotDevices();
     const switchBotCreds = STATE?.farm?.integrations?.switchbot || {};
     if (switchBotCreds.token && switchBotCreds.secret) {
-      // Auto-sync live SwitchBot data when credentials are available
+      // Auto-sync live SwitchBot data: use refreshSwitchBotDevices() which
+      // merges into STATE.iotDevices AND persists to iot-devices.json
       setTimeout(() => {
-        loadSwitchBotDevices().catch((error) => {
+        refreshSwitchBotDevices().catch((error) => {
           console.warn('[switchbot] Startup sync failed', error);
         });
       }, 0);
@@ -17116,39 +17196,51 @@ async function refreshSwitchBotDevices() {
   // Merge SwitchBot devices into STATE.iotDevices so they're available everywhere
   if (result.devices && result.devices.length > 0) {
     console.log(`[SwitchBot] Merging ${result.devices.length} refreshed devices into IoT devices`);
-    // Convert SwitchBot device format to IoT device format
-    const switchbotAsIot = result.devices.map(sbDev => ({
-      id: sbDev.id || sbDev.deviceId,
-      deviceId: sbDev.id || sbDev.deviceId,
-      name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
-      vendor: 'SwitchBot',
-      brand: 'SwitchBot',
-      protocol: 'switchbot',
-      type: (sbDev.type || '').toLowerCase(),
-      category: sbDev.type || 'Unknown',
-      address: sbDev.id || sbDev.deviceId,
-      location: sbDev.location || null,
-      zone: sbDev.zone || null,
-      trust: 'trusted',
-      automationControl: false,
-      lastSeen: sbDev.lastSeen || null,
-      telemetry: {
-        device_id: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName,
-        category: sbDev.type,
-        protocol: 'switchbot',
-        online: sbDev.status !== 'offline',
-        battery: sbDev.battery,
-        ...sbDev.readings
-      },
-      deviceData: {
-        device_id: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName,
-        category: sbDev.type,
-        protocol: 'switchbot',
-        online: sbDev.status !== 'offline'
+    // Build lookup for existing zone/location so refreshed data doesn't overwrite manual assignments
+    const existingZoneMap = new Map();
+    for (const d of (STATE.iotDevices || [])) {
+      const id = d.id || d.deviceId;
+      if (id && (d.zone != null || d.location)) {
+        existingZoneMap.set(id, { zone: d.zone, location: d.location });
       }
-    }));
+    }
+    // Convert SwitchBot device format to IoT device format
+    const switchbotAsIot = result.devices.map(sbDev => {
+      const devId = sbDev.id || sbDev.deviceId;
+      const existing = existingZoneMap.get(devId);
+      return {
+        id: devId,
+        deviceId: devId,
+        name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
+        vendor: 'SwitchBot',
+        brand: 'SwitchBot',
+        protocol: 'switchbot',
+        type: (sbDev.type || '').toLowerCase(),
+        category: sbDev.type || 'Unknown',
+        address: devId,
+        location: sbDev.location || existing?.location || null,
+        zone: sbDev.zone || existing?.zone || null,
+        trust: 'trusted',
+        automationControl: false,
+        lastSeen: sbDev.lastSeen || null,
+        telemetry: {
+          device_id: devId,
+          name: sbDev.name || sbDev.deviceName,
+          category: sbDev.type,
+          protocol: 'switchbot',
+          online: sbDev.status !== 'offline',
+          battery: sbDev.battery,
+          ...sbDev.readings
+        },
+        deviceData: {
+          device_id: devId,
+          name: sbDev.name || sbDev.deviceName,
+          category: sbDev.type,
+          protocol: 'switchbot',
+          online: sbDev.status !== 'offline'
+        }
+      };
+    });
     
     // Remove old SwitchBot devices and add new ones
     const nonSwitchBot = (STATE.iotDevices || []).filter(d => d.protocol !== 'switchbot');
@@ -17157,6 +17249,9 @@ async function refreshSwitchBotDevices() {
     
     // Persist the merged list
     await persistIotDevices(STATE.iotDevices);
+
+    // Enrich zones from room-map data
+    await enrichDeviceZonesFromRoomMap();
     
     // Re-render IoT device cards
     if (typeof window.renderIoTDeviceCards === 'function') {
