@@ -65,9 +65,13 @@ class IoTDevicesManager {
 
   async loadDevices() {
     try {
-      const response = await fetch('/iot/devices');
+      // Try DB-backed /devices first, fall back to static file
+      let response = await fetch('/devices');
+      if (!response.ok) {
+        response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      }
       const data = await response.json();
-      this.devices = data.devices;
+      this.devices = Array.isArray(data) ? data : (data.devices || []);
       this.renderDevices();
     } catch (error) {
       console.error('Failed to load IoT devices:', error);
@@ -83,9 +87,9 @@ class IoTDevicesManager {
     if (this.scanButton) this.scanButton.disabled = true;
     
     try {
-      const response = await fetch('/iot/devices/scan', { method: 'POST' });
+      const response = await fetch('/discovery/devices');
       const data = await response.json();
-      this.devices = data.devices;
+      this.devices = Array.isArray(data) ? data : (data.devices || []);
       this.renderDevices();
     } catch (error) {
       console.error('Device scan failed:', error);
@@ -228,10 +232,10 @@ class IoTDevicesManager {
 
   async updateDevice(deviceId, updates) {
     try {
-      const response = await fetch(`/iot/devices/${deviceId}`, {
-        method: 'PATCH',
+      const response = await fetch(`/devices/${encodeURIComponent(deviceId)}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify({ id: deviceId, ...updates })
       });
       
       if (!response.ok) throw new Error('Failed to update device');
@@ -254,7 +258,7 @@ class IoTDevicesManager {
     if (!confirm('Are you sure you want to remove this device?')) return;
     
     try {
-      const response = await fetch(`/iot/devices/${deviceId}`, {
+      const response = await fetch(`/devices/${encodeURIComponent(deviceId)}`, {
         method: 'DELETE'
       });
       

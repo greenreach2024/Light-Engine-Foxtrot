@@ -1,7 +1,7 @@
 # IoT Device Communication Paths
 
-> **Last updated:** 2025-06-14  
-> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`
+> **Last updated:** 2026-03-04 (audit-corrected)  
+> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`
 
 ---
 
@@ -15,7 +15,9 @@
 │  ┌───────────────────────────┐  │
 │  │  iframe (admin-iframe)    │  │
 │  │  LE-dashboard.html        │  │ ← Loaded when user clicks "Setup/Update"
-│  │  loads: app.foxtrot.js    │  │    ALL IoT code lives here
+│  │  loads: app.foxtrot.js    │  │    Primary IoT code
+│  │  loads: groups-v2.js      │  │
+│  │  loads: js/iot-manager.js │  │    IoTDevicesManager class (fetches /iot/devices)
 │  │                           │  │
 │  │  ┌─ #iotPanel ──────────┐ │  │
 │  │  │  IoT Devices panel   │ │  │
@@ -29,11 +31,17 @@
 ┌─────────────────────────────────┐
 │     server-foxtrot.js           │
 │                                 │
+│  GET  /devices                  │ ← DB-backed device list (L6389)
+│  POST /devices                  │ ← Upsert device (L6422)
+│  GET  /data/iot-devices.json    │ ← Read saved devices (static + L22836 demo)
 │  POST /data/iot-devices.json    │ ← Write devices (L24614)
-│  GET  /data/iot-devices.json    │ ← Read devices (express.static + L22836 demo)
-│  POST /data/switchbot-devices   │ ← SwitchBot sync  
+│  GET  /discovery/devices        │ ← Network device discovery (L25905)
+│  GET  /switchbot/devices        │ ← SwitchBot device list (L8625)
+│  GET  /api/switchbot/devices    │ ← SwitchBot devices via API (L8730)
 │  GET  /data/rooms.json          │ ← Zone data for dropdowns
 │  GET  /api/rooms                │ ← DB-backed rooms
+│                                 │
+│  ⚠ /iot/devices — NO route      │ ← iot-manager.js calls this (silent 404)
 │                                 │
 │  File: public/data/iot-devices.json
 │  File: public/data/switchbot-devices.json
@@ -59,7 +67,10 @@ farm-admin.js → renderEmbeddedView('/LE-dashboard.html', 'Setup/Update')
               → iframe.src = '/LE-dashboard.html?embedded=1'
               → LE-dashboard.html loads in iframe
               → <script src="/app.foxtrot.js?v=20260302-prodroot-fix" defer>
+              → <script src="/groups-v2.js?v=20260302-prodroot-fix" defer>
+              → <script src="/js/iot-manager.js?v={{BUILD_TIME}}" defer>
               → DOMContentLoaded fires (multiple listeners in app.foxtrot.js)
+              → IoTDevicesManager auto-inits, fetches /iot/devices (⚠ 404)
 ```
 
 ### Step 3: User navigates away from "Setup/Update"
@@ -229,16 +240,34 @@ createDeviceEntryElement(device)        [L2430]
 
 ---
 
-## Server-Side Endpoints
+## Server-Side Endpoints (Complete Device Inventory)
 
-| Method | Path | Handler Line | Purpose |
-|--------|------|-------------|---------|
-| GET | `/data/iot-devices.json` | L22836 (demo) → L23492 (static) | Read saved devices |
-| POST | `/data/iot-devices.json` | L24614 | Write/update devices |
-| GET | `/data/switchbot-devices.json` | L23492 (static) | Read SwitchBot cache |
-| GET | `/data/rooms.json` | L23492 (static) | Read rooms/zones |
-| GET | `/api/rooms` | varies | DB-backed rooms |
-| GET | `/` | L22756 | 302 → /LE-farm-admin.html |
+| Method | Path | Handler Line | Auth? | Purpose |
+|--------|------|-------------|-------|----------|
+| GET | `/devices` | L6389 | No (demo-mode middleware only) | DB-backed device list |
+| GET | `/devices/:id` | L6410 | No | Single device by ID |
+| POST | `/devices` | L6422 | No | Upsert device |
+| DELETE | `/devices/:id` | L6470 | No | Remove device |
+| GET | `/data/iot-devices.json` | L22836 (demo) → static | No | Read saved devices (file) |
+| POST | `/data/iot-devices.json` | L24614 | No | Write/update devices (file) |
+| GET | `/discovery/devices` | L25905 | No | Network device discovery |
+| GET | `/switchbot/devices` | L8625 | No | SwitchBot device list |
+| GET | `/api/switchbot/devices` | L8730 | No | SwitchBot devices (API wrapper) |
+| GET | `/api/switchbot/devices/:id/status` | L8810 | No | SwitchBot device status |
+| POST | `/api/switchbot/devices/:id/commands` | L8846 | Edge required | SwitchBot control command |
+| GET | `/data/switchbot-devices.json` | static | No | Read SwitchBot cache (file) |
+| GET | `/data/rooms.json` | static | No | Read rooms/zones |
+| GET | `/api/rooms` | varies | No | DB-backed rooms |
+| GET | `/` | L22756 | No | 302 → /LE-farm-admin.html |
+
+### ⚠ Missing Routes (called by client but not defined on server)
+
+| Endpoint | Called By | Result |
+|----------|-----------|--------|
+| `GET /iot/devices` | `js/iot-manager.js` (L68) | **404** — no server route |
+| `POST /iot/devices/scan` | `js/iot-manager.js` (L86) | **404** — no server route |
+| `GET /iot/devices/:id` | `js/iot-manager.js` (L231) | **404** — no server route |
+| `PUT /iot/devices/:id` | `js/iot-manager.js` (L257) | **404** — no server route |
 
 ### Server Boot Sequence
 ```
@@ -303,16 +332,34 @@ renderIoTDeviceCards(devices)            [L2821]
 
 ---
 
-## Files NOT Currently Loaded
+## Scripts Loaded per Page
 
-These files exist but are NOT included in any HTML `<script>` tag:
+### `LE-dashboard.html` (iframe from farm-admin)
+| Script | Version Param | Purpose |
+|--------|--------------|----------|
+| `/app.foxtrot.js` | `v=20260302-prodroot-fix` (static) | Primary IoT + zone + dashboard logic (~23K lines) |
+| `/groups-v2.js` | `v=20260302-prodroot-fix` (static) | Device groups |
+| `/js/iot-manager.js` | `v={{BUILD_TIME}}` (template) | IoTDevicesManager class — fetches `/iot/devices` |
+| `/js/net.guard.js` | `v={{BUILD_TIME}}` | Network guard |
+| `/js/console-wrapper.js` | `v={{BUILD_TIME}}` | Console wrapper |
 
+### `LE-switchbot.html`
+| Script | Purpose |
+|--------|---------|
+| `/js/light-engine-help.js` | Help system |
+| *(inline ~4K lines)* | SwitchBot device management — fetches `/devices`, `/api/switchbot/devices` |
+
+### `LE-farm-admin.html`
+| Script | Purpose |
+|--------|---------|
+| `/farm-admin.js` | Farm dashboard — NO IoT code, manages iframe loading |
+
+### Files NOT Loaded by Any Page
 | File | Size | Purpose |
-|------|------|---------|
-| `public/js/iot-manager.js` | 10KB | Standalone IoT manager class (Jan 29) |
-| `public/js/switchbot-helpers.js` | 2.2KB | SwitchBot helper functions |
+|------|------|----------|
+| `public/js/switchbot-helpers.js` | 2.2KB | SwitchBot helper functions (unused) |
 
-All IoT functionality is consolidated in `app.foxtrot.js`.
+> **Note:** `iot-manager.js` IS loaded by `LE-dashboard.html` (previously documented as not loaded — corrected 2026-03-04).
 
 ---
 
@@ -325,12 +372,16 @@ All IoT functionality is consolidated in `app.foxtrot.js`.
 | `renderIoTDeviceCards(devices)` | ~L2821 | app.foxtrot.js | Render device cards in panel |
 | `createDeviceEntryElement(device)` | ~L2430 | app.foxtrot.js | Build single device card DOM |
 | `addDeviceToIoT(device, idx, creds)` | ~L3952 | app.foxtrot.js | Accept discovered device |
-| `collectRoomsFromState()` | ~L490 | app.foxtrot.js | Get rooms for zone dropdowns |
+| `collectRoomsFromState()` | ~L525 | app.foxtrot.js | Get rooms for zone dropdowns (zone-merge-aware) |
+| `mergeRoomsWithZoneFallback()` | ~L508 | app.foxtrot.js | Merge rooms with static zone data |
+| `getRoomZones()` | ~L490 | app.foxtrot.js | Extract zones from room object |
 | `sanitizeDevicePayload(device)` | ~L1880 | app.foxtrot.js | Normalize device shape |
 | `dedupeDevices(devices)` | varies | app.foxtrot.js | Remove duplicate devices |
-| `loadAllData()` | ~L12814 | app.foxtrot.js | Full data bootstrap |
+| `loadAllData()` | ~L12878 | app.foxtrot.js | Full data bootstrap (token-gated /devices) |
 | `seedRuntimeDataFiles()` | L849 | server-foxtrot.js | Create default data files |
 | `renderEmbeddedView(url, title)` | L726 | farm-admin.js | Load page in iframe |
+| `IoTDevicesManager` | class | js/iot-manager.js | Standalone device manager (calls missing /iot/devices routes) |
+| `fetchDeviceMetadata()` | ~L2289 | LE-switchbot.html | Fetch device metadata from /devices or /data/iot-devices.json |
 
 ---
 

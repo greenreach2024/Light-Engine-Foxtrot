@@ -2286,7 +2286,18 @@ function toNumberOrNull(val) {
 
     async function fetchDeviceMetadata() {
       try {
-        const response = await fetch('/devices');
+        const token = localStorage.getItem('token');
+        let response;
+        if (token) {
+          response = await fetch('/devices', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+
+        if (!response || !response.ok) {
+          response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+        }
+
         if (!response.ok) {
           throw new Error(`Failed to load device metadata (${response.status})`);
         }
