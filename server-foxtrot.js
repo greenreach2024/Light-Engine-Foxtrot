@@ -29079,14 +29079,20 @@ function syncZoneAssignmentsFromRoomMap() {
   const ROOM_MAP_PATH = path.join(PUBLIC_DIR, 'data', 'room-map.json');
   
   try {
-    if (!fs.existsSync(ROOM_MAP_PATH) || !fs.existsSync(IOT_DEVICES_PATH)) {
+    if (!fs.existsSync(ROOM_MAP_PATH)) {
       return;
     }
     
     const roomMap = JSON.parse(fs.readFileSync(ROOM_MAP_PATH, 'utf8'));
-    const iotDevices = JSON.parse(fs.readFileSync(IOT_DEVICES_PATH, 'utf8'));
+    let iotDevices = [];
+    if (fs.existsSync(IOT_DEVICES_PATH)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(IOT_DEVICES_PATH, 'utf8'));
+        iotDevices = Array.isArray(parsed) ? parsed : [];
+      } catch (_) { iotDevices = []; }
+    }
     
-    if (!Array.isArray(roomMap.devices) || !Array.isArray(iotDevices)) {
+    if (!Array.isArray(roomMap.devices)) {
       return;
     }
     
@@ -29122,7 +29128,10 @@ function syncZoneAssignmentsFromRoomMap() {
       }
     }
     
-    // Apply zone assignments to iot-devices.json
+    // Build a set of existing device IDs for quick lookup
+    const existingIds = new Set(iotDevices.map(d => d.id || d.deviceId));
+    
+    // Apply zone assignments to existing iot-devices.json entries
     for (const device of iotDevices) {
       const deviceId = device.id || device.deviceId;
       const mapping = zoneMap.get(deviceId);
@@ -29140,9 +29149,40 @@ function syncZoneAssignmentsFromRoomMap() {
       }
     }
     
+    // CREATE entries for devices in room-map that don't exist in iot-devices.json
+    // This bridges the gap where Room Mapper places devices but they were never
+    // registered in the IoT device registry
+    for (const rmDevice of roomMap.devices) {
+      const deviceId = rmDevice.deviceId || rmDevice.id;
+      if (!deviceId || existingIds.has(deviceId)) continue;
+      
+      const mapping = zoneMap.get(deviceId);
+      if (!mapping) continue;
+      
+      const snap = rmDevice.snapshot || {};
+      const newEntry = {
+        id: deviceId,
+        name: snap.name || snap.deviceName || deviceId,
+        deviceName: snap.deviceName || snap.name || deviceId,
+        category: snap.category || 'unknown',
+        type: snap.type || snap.category || 'unknown',
+        protocol: snap.protocol || 'unknown',
+        manufacturer: snap.manufacturer || '',
+        model: snap.model || '',
+        zone: mapping.zone,
+        room: mapping.room,
+        location: mapping.location,
+        telemetry: snap.telemetry || {}
+      };
+      iotDevices.push(newEntry);
+      existingIds.add(deviceId);
+      updated = true;
+      console.log(`[zone-sync] CREATED device ${deviceId} (${newEntry.category}) in zone ${mapping.zone} from room-map`);
+    }
+    
     if (updated) {
       fs.writeFileSync(IOT_DEVICES_PATH, JSON.stringify(iotDevices, null, 2));
-      console.log('[zone-sync] Updated iot-devices.json with zone assignments from room-map.json');
+      console.log('[zone-sync] Updated iot-devices.json with zone assignments from room-map.json (' + iotDevices.length + ' devices)');
     }
   } catch (error) {
     console.error('[zone-sync] Error syncing zone assignments:', error.message);

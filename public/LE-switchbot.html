@@ -2286,17 +2286,7 @@ function toNumberOrNull(val) {
 
     async function fetchDeviceMetadata() {
       try {
-        const token = localStorage.getItem('token');
-        let response;
-        if (token) {
-          response = await fetch('/devices', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-        }
-
-        if (!response || !response.ok) {
-          response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
-        }
+        const response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
 
         if (!response.ok) {
           throw new Error(`Failed to load device metadata (${response.status})`);
@@ -2402,41 +2392,46 @@ function toNumberOrNull(val) {
         throw new Error('Unable to determine device id for metadata update');
       }
 
-      const payload = sanitizeMetadataPayload(updates);
-      let result = await fetchJson(`/devices/${encodeURIComponent(deviceId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      // Read current devices from flat-file storage
+      let devices = [];
+      try {
+        const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+        if (resp.ok) {
+          const parsed = await resp.json();
+          devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
+        }
+      } catch (_) {}
+
+      const idx = devices.findIndex(d => (d.id || d.deviceId) === deviceId);
+      const merged = sanitizeMetadataPayload({
+        id: deviceId,
+        protocol: 'switchbot',
+        category: device?.deviceType || 'SwitchBot Device',
+        name: device?.displayName || device?.deviceName || deviceId,
+        deviceName: device?.displayName || device?.deviceName || deviceId,
+        manufacturer: 'SwitchBot',
+        model: device?.deviceType || device?.deviceName || 'SwitchBot',
+        ...(idx >= 0 ? devices[idx] : {}),
+        ...updates
       });
 
-      if (result.response.status === 404) {
-        const createPayload = sanitizeMetadataPayload({
-          id: deviceId,
-          protocol: 'switchbot',
-          category: device?.deviceType || 'SwitchBot Device',
-          name: device?.displayName || device?.deviceName || deviceId,
-          deviceName: device?.displayName || device?.deviceName || deviceId,
-          manufacturer: 'SwitchBot',
-          model: device?.deviceType || device?.deviceName || 'SwitchBot',
-          ...updates
-        });
-        result = await fetchJson('/devices', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createPayload)
-        });
+      if (idx >= 0) {
+        devices[idx] = { ...devices[idx], ...merged };
+      } else {
+        devices.push(merged);
       }
 
-      const { response, data } = result;
-      if (!response.ok) {
-        const message = (data && (data.error || data.message)) || `Request failed with status ${response.status}`;
-        const error = new Error(message);
-        error.status = response.status;
-        error.data = data;
-        throw error;
+      // Persist the entire array back
+      const saveResp = await fetch('/data/iot-devices.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(devices)
+      });
+      if (!saveResp.ok) {
+        throw new Error(`Failed to persist device metadata (${saveResp.status})`);
       }
 
-      const saved = data && (data.device || data);
+      const saved = merged;
       if (saved) {
         const normalized = storeDeviceMetadata(saved);
         rebuildZoneOptions();

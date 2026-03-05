@@ -2686,15 +2686,47 @@ function createDeviceEntryElement(device) {
         zoneOptionsAdded = true;
       }
     }
-    // Fallback: add generic zones 1-9 if no rooms/zones are configured
+    // Fallback: if no rooms/zones configured yet, attempt async load from farm.json
     if (!zoneOptionsAdded) {
-      console.warn('[ZoneDropdown] No zone options from rooms — using Zone 1-9 fallback. farmRooms:', farmRooms.length);
-      for (let i = 1; i <= 9; i++) {
-        const option = document.createElement('option');
-        option.value = `Zone ${i}`;
-        option.textContent = `Zone ${i}`;
-        zoneSelect.appendChild(option);
-      }
+      console.warn('[ZoneDropdown] No zone options from rooms — attempting async load from /data/farm.json');
+      // Add a temporary "Loading zones..." option
+      const loadingOpt = document.createElement('option');
+      loadingOpt.value = '';
+      loadingOpt.textContent = 'Loading zones…';
+      loadingOpt.disabled = true;
+      zoneSelect.appendChild(loadingOpt);
+      
+      // Async load farm.json and populate
+      (async () => {
+        try {
+          const resp = await fetch('/data/farm.json', { cache: 'no-store' });
+          if (resp.ok) {
+            const farm = await resp.json();
+            if (!STATE.farm) STATE.farm = farm;
+            const rooms = Array.isArray(farm.rooms) ? farm.rooms : [];
+            // Remove the loading option
+            if (loadingOpt.parentNode) loadingOpt.remove();
+            let added = false;
+            for (const room of rooms) {
+              const roomZones = Array.isArray(room.zones) ? room.zones : [];
+              for (const zoneName of roomZones) {
+                const option = document.createElement('option');
+                option.value = zoneName;
+                option.textContent = `${zoneName}${rooms.length > 1 ? ` (${room.name || room.id})` : ''}`;
+                zoneSelect.appendChild(option);
+                added = true;
+              }
+            }
+            if (added) {
+              // Re-select current zone if device already has one
+              if (device.zone) zoneSelect.value = device.zone;
+              console.log('[ZoneDropdown] Loaded zones from /data/farm.json:', rooms.flatMap(r => r.zones || []));
+            }
+          }
+        } catch (e) {
+          console.warn('[ZoneDropdown] Async farm.json load failed:', e.message);
+        }
+      })();
     }
 
     // Lazy re-populate: when user focuses the dropdown, refresh zone options
@@ -13383,10 +13415,25 @@ async function loadAllData() {
 // Patch a single device's location into the server DB (best-effort)
 async function patchDeviceDb(id, fields){
   try {
-    await fetch(`/devices/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+    // Read current devices, update the target, write back
+    let devices = [];
+    try {
+      const resp = await fetch('/data/iot-devices.json', { cache: 'no-store' });
+      if (resp.ok) {
+        const parsed = await resp.json();
+        devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
+      }
+    } catch (_) {}
+    const idx = devices.findIndex(d => (d.id || d.deviceId) === id);
+    if (idx >= 0) {
+      devices[idx] = { ...devices[idx], ...fields };
+    } else {
+      devices.push({ id, ...fields });
+    }
+    await fetch('/data/iot-devices.json', {
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(fields)
+      body: JSON.stringify(devices)
     });
   } catch (e) {
     console.warn('patchDeviceDb failed', e);
