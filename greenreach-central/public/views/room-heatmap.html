@@ -955,6 +955,14 @@
   </div>
 
   <script>
+    // Auth helper for /data/ routes through greenreach-central
+    function fetchWithFarmAuth(url, opts = {}) {
+      const token = localStorage.getItem('token');
+      const headers = Object.assign({}, opts.headers || {});
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+
     // Global State
     const STATE = {
       canvas: null,
@@ -988,9 +996,9 @@
     async function fetchEquipmentMetadata() {
       let metadata = {};
       try {
-        let response = await fetch('/data/equipment-metadata');
+        let response = await fetchWithFarmAuth('/data/equipment-metadata');
         if (!response.ok) {
-          response = await fetch('/data/equipment-metadata.json');
+          response = await fetchWithFarmAuth('/data/equipment-metadata.json');
         }
         if (response.ok) {
           metadata = await response.json();
@@ -1440,7 +1448,7 @@
         
         // Load rooms list
         console.debug('[Heat Map] Fetching /data/rooms.json...');
-        const roomsResponse = await fetch('/data/rooms.json');
+        const roomsResponse = await fetchWithFarmAuth('/data/rooms.json');
         console.debug('[Heat Map] Rooms response status:', roomsResponse.status, roomsResponse.ok);
         if (!roomsResponse.ok) throw new Error(`Failed to load rooms.json: ${roomsResponse.status}`);
         const roomsData = await roomsResponse.json();
@@ -1461,14 +1469,14 @@
         // Try room-specific file first (room-map-{roomId}.json), fallback to generic room-map.json
         let mapResponse;
         try {
-          mapResponse = await fetch(`/data/room-map-${selectedRoomId}.json`);
+          mapResponse = await fetchWithFarmAuth(`/data/room-map-${selectedRoomId}.json`);
           if (!mapResponse.ok) {
             console.warn(`[Heat Map] Room-specific map not found: room-map-${selectedRoomId}.json, using generic room-map.json`);
-            mapResponse = await fetch('/data/room-map.json');
+            mapResponse = await fetchWithFarmAuth('/data/room-map.json');
           }
         } catch (mapFetchErr) {
           console.warn('[Heat Map] Room map fetch error, trying generic:', mapFetchErr);
-          try { mapResponse = await fetch('/data/room-map.json'); } catch (e) { mapResponse = null; }
+          try { mapResponse = await fetchWithFarmAuth('/data/room-map.json'); } catch (e) { mapResponse = null; }
         }
         if (!mapResponse || !mapResponse.ok) {
           console.warn('[Heat Map] No room map available, continuing with empty map');
@@ -1552,10 +1560,67 @@
 
         // Load full IoT registry for name/online resolution of linked controllers not placed on the map
         try {
-          const allIotRes = await fetch('/data/iot-devices.json');
+          const allIotRes = await fetchWithFarmAuth('/data/iot-devices.json');
           if (allIotRes.ok) {
-            STATE.iotDevicesAll = await allIotRes.json();
-            console.log('[Heat Map] Loaded full IoT registry:', Array.isArray(STATE.iotDevicesAll) ? STATE.iotDevicesAll.length : 0, 'devices');
+            const iotRaw = await allIotRes.json();
+            STATE.iotDevicesAll = Array.isArray(iotRaw) ? iotRaw : (iotRaw.devices || []);
+            console.log('[Heat Map] Loaded full IoT registry:', STATE.iotDevicesAll.length, 'devices');
+
+            // ── AUTO-POSITION: If no sensors were placed on room map, pull from IoT registry ──
+            // Sensors with zone assignments get auto-positioned within their zone boundaries
+            if (STATE.sensors.length === 0 && STATE.iotDevicesAll.length > 0) {
+              console.log('[Heat Map] No sensors from room map — augmenting from IoT registry');
+              const registrySensors = STATE.iotDevicesAll.filter(d => {
+                if (!d) return false;
+                const type = (d.type || '').toLowerCase();
+                const deviceType = (d.deviceData?.deviceType || d.telemetry?.deviceType || '').toLowerCase();
+                const category = (d.category || '').toLowerCase();
+                return type.includes('sensor') || deviceType.includes('sensor') || category.includes('sensor');
+              });
+              console.log('[Heat Map] Found', registrySensors.length, 'sensors in IoT registry');
+
+              const mapZones = STATE.roomMap?.zones || [];
+              const sensorCountPerZone = {};
+
+              for (const dev of registrySensors) {
+                const devZone = dev.zone;
+                if (devZone == null) continue;
+
+                // Find matching zone boundary in room map
+                const zoneNum = typeof devZone === 'number' ? devZone : parseInt(devZone, 10);
+                const mapZone = mapZones.find(z => z.zone === zoneNum || z.zone === devZone || z.name === `Zone ${devZone}`);
+
+                let x, y;
+                if (mapZone && Number.isFinite(mapZone.x1) && Number.isFinite(mapZone.x2)) {
+                  // Distribute sensors within zone bounds
+                  const key = mapZone.zone || mapZone.name;
+                  sensorCountPerZone[key] = (sensorCountPerZone[key] || 0) + 1;
+                  const count = sensorCountPerZone[key];
+                  const zoneW = mapZone.x2 - mapZone.x1;
+                  const zoneH = mapZone.y2 - mapZone.y1;
+                  // Place sensors at staggered positions within zone
+                  x = mapZone.x1 + Math.round(zoneW * (0.3 + (count % 3) * 0.2));
+                  y = mapZone.y1 + Math.round(zoneH * (0.3 + Math.floor(count / 3) * 0.2));
+                } else {
+                  // No zone boundary, skip
+                  console.log('[Heat Map] No zone boundary for sensor', dev.name, 'zone:', devZone);
+                  continue;
+                }
+
+                STATE.sensors.push({
+                  id: dev.id || dev.deviceId,
+                  deviceId: dev.id || dev.deviceId,
+                  x, y,
+                  name: dev.name || dev.deviceId || dev.id,
+                  type: dev.type,
+                  protocol: dev.protocol,
+                  category: dev.category,
+                  zone: devZone,
+                  telemetry: dev.telemetry || {}
+                });
+              }
+              console.log('[Heat Map] Auto-positioned', STATE.sensors.length, 'sensors from IoT registry');
+            }
           } else {
             console.warn('[Heat Map] Failed to load /data/iot-devices.json for fallback matching');
             STATE.iotDevicesAll = [];
@@ -2223,10 +2288,17 @@
       }
 
       if (values.length > 0) {
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        document.getElementById('legendMin').textContent = `${min.toFixed(1)}${metric.unit}`;
-        document.getElementById('legendMax').textContent = `${max.toFixed(1)}${metric.unit}`;
+        // Use absolute ranges for legend (matching renderHeatMap)
+        const LEGEND_RANGES = {
+          temperature: { min: 10, max: 35 },
+          humidity:    { min: 20, max: 80 },
+          vpd:         { min: 0.4, max: 1.6 }
+        };
+        const absRange = LEGEND_RANGES[STATE.currentMetric];
+        const legendMin = absRange ? absRange.min : Math.min(...values);
+        const legendMax = absRange ? absRange.max : Math.max(...values);
+        document.getElementById('legendMin').textContent = `${legendMin.toFixed(1)}${metric.unit}`;
+        document.getElementById('legendMax').textContent = `${legendMax.toFixed(1)}${metric.unit}`;
       } else {
         document.getElementById('legendMin').textContent = 'Min';
         document.getElementById('legendMax').textContent = 'Max';
@@ -2288,9 +2360,25 @@
       }
 
       // Calculate min/max from actual sensor readings
+      // Use absolute ranges to ensure meaningful color gradients
       const values = sensorReadings.map(s => s.value).filter(v => v != null);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
+      let min = Math.min(...values);
+      let max = Math.max(...values);
+
+      // When all values are very close (or identical), colors become meaningless
+      // Use sensible absolute ranges so colors represent actual conditions
+      const ABSOLUTE_RANGES = {
+        temperature: { min: 10, max: 35 },  // 10°C to 35°C
+        humidity:    { min: 20, max: 80 },   // 20% to 80% RH
+        vpd:         { min: 0.4, max: 1.6 }  // 0.4 to 1.6 kPa
+      };
+      const absRange = ABSOLUTE_RANGES[STATE.currentMetric];
+      if (absRange) {
+        // Always use absolute range for consistent colors
+        min = absRange.min;
+        max = absRange.max;
+      }
+      if (max <= min) max = min + 1; // Safety: prevent division by zero
 
       // Draw interpolated heat map using real sensor positions
       drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max);
@@ -2348,23 +2436,43 @@
           ctx.lineWidth = 2;
           ctx.stroke();
           
-          // Sensor value
-          const tel = sensor.telemetry || {};
+          // Sensor value - show live reading from the heat map data
+          const liveReading = sensorReadings.find(r => r.deviceId === sensor.deviceId);
           let reading = '';
           const metricKey = STATE.currentMetric;
-          if (metricKey === 'temperature' && tel.temperature != null) {
-            reading = tel.temperature.toFixed(1);
-          } else if (metricKey === 'humidity' && tel.humidity != null) {
-            reading = tel.humidity.toFixed(1);
-          } else if (metricKey === 'vpd' && tel.vpd != null) {
-            reading = tel.vpd.toFixed(2);
+          const metricConfig = METRICS[metricKey];
+          if (liveReading && liveReading.value != null) {
+            reading = metricKey === 'vpd' ? liveReading.value.toFixed(2) : liveReading.value.toFixed(1);
+          } else {
+            // Fallback to snapshot telemetry
+            const tel = sensor.telemetry || {};
+            if (metricKey === 'temperature' && tel.temperature != null) {
+              reading = tel.temperature.toFixed(1);
+            } else if (metricKey === 'humidity' && tel.humidity != null) {
+              reading = tel.humidity.toFixed(1);
+            } else if (metricKey === 'vpd' && tel.vpd != null) {
+              reading = tel.vpd.toFixed(2);
+            }
           }
           
           if (reading) {
+            const unit = metricConfig ? metricConfig.unit : '';
             ctx.fillStyle = 'white';
-            ctx.font = 'bold 10px sans-serif';
+            ctx.font = 'bold 11px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(reading, x, y - 15);
+            ctx.fillText(`${reading}${unit}`, x, y - 15);
+          }
+          
+          // Sensor name label below marker
+          const sensorName = sensor.name || sensor.deviceId;
+          if (sensorName) {
+            const shortName = sensorName.length > 12 ? sensorName.substring(0, 10) + '..' : sensorName;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.fillRect(x - 30, y + 12, 60, 14);
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = 'bold 9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(shortName, x, y + 22);
           }
         }
       });
@@ -2476,13 +2584,30 @@
           }
         }
 
-        // Fallback: use the zone's current value based on placement location
+        // Fallback: use the zone's current value based on sensor zone assignment or grid position
         if (value == null) {
-          const containingZone = findZoneForPoint(sensor.x, sensor.y, STATE.roomMap?.zones || []);
-          if (containingZone) {
-            console.log('[Heat Map] Sensor', sensor.name, 'in zone:', containingZone.zone || containingZone.id);
+          let zoneObj = null;
+
+          // First try: use sensor's zone property directly (set by Room Mapper save or IoT registry)
+          const sensorZone = sensor.zone;
+          if (sensorZone != null) {
+            const zoneKey = typeof sensorZone === 'number' || /^\d+$/.test(sensorZone) 
+              ? `zone-${sensorZone}` : sensorZone;
+            zoneObj = zonesById.get(zoneKey);
+            if (zoneObj) {
+              console.log('[Heat Map] Matched sensor', sensor.name, 'to zone by assignment:', zoneKey);
+            }
           }
-          const zoneObj = containingZone ? zonesById.get(`zone-${containingZone.zone}`) || zonesById.get(containingZone.id) : null;
+
+          // Second try: find zone by grid position
+          if (!zoneObj) {
+            const containingZone = findZoneForPoint(sensor.x, sensor.y, STATE.roomMap?.zones || []);
+            if (containingZone) {
+              console.log('[Heat Map] Sensor', sensor.name, 'in zone by position:', containingZone.zone || containingZone.id);
+              zoneObj = zonesById.get(`zone-${containingZone.zone}`) || zonesById.get(containingZone.id);
+            }
+          }
+
           if (zoneObj) {
             console.log('[Heat Map] Found zone object for', sensor.name, '- has sensors?', !!zoneObj.sensors);
           }
@@ -2782,7 +2907,7 @@
     // Load farm name into header
     (async function() {
       try {
-        const response = await fetch('/data/farm.json');
+        const response = await fetchWithFarmAuth('/data/farm.json');
         if (response.ok) {
           const farmData = await response.json();
           const farmName = farmData.name || farmData.farmName;
