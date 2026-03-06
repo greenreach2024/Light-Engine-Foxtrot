@@ -972,7 +972,8 @@
       roomMap: null,
       envData: null,
       iotDevices: [],
-  equipmentMetadata: {},
+      iotDevicesAll: [],  // Full IoT registry (primary telemetry source)
+      equipmentMetadata: {},
       currentMetric: 'temperature',
       currentTimeIndex: -1, // Will be set to last data point index dynamically
       isPlaying: false,
@@ -1376,21 +1377,37 @@
       updateStatusBar();
       updateTimeDisplay();
 
-      // Auto-refresh: pull fresh environmental data every 3 minutes
+      // Auto-refresh: pull fresh sensor data every 3 minutes
+      // Refreshes BOTH IoT device telemetry (primary) and env zone data (fallback)
       if (!STATE.refreshTimer) {
         STATE.refreshTimer = setInterval(async () => {
           try {
+            // Primary: refresh IoT device telemetry (same source farm-summary uses)
+            const iotRes = await fetchWithFarmAuth('/data/iot-devices.json');
+            if (iotRes.ok) {
+              const iotRaw = await iotRes.json();
+              STATE.iotDevicesAll = Array.isArray(iotRaw) ? iotRaw : (iotRaw.devices || []);
+              // Update telemetry on existing sensors from fresh IoT data
+              for (const sensor of STATE.sensors) {
+                const freshDevice = STATE.iotDevicesAll.find(d =>
+                  (d.id || d.deviceId) === sensor.deviceId
+                );
+                if (freshDevice?.telemetry) {
+                  sensor.telemetry = freshDevice.telemetry;
+                }
+              }
+              console.log('[Heat Map] Auto-refresh: updated telemetry from', STATE.iotDevicesAll.length, 'IoT devices');
+            }
+            // Secondary: also refresh env zone data for history/trends
             const res = await fetch('/env?hours=24');
             if (res.ok) {
               STATE.envData = await res.json();
               STATE.envLastLoadedAt = Date.now();
-              renderHeatMap();
-              updateTimeDisplay();
-              renderSensorList();
-              updateStatusBar();
-            } else {
-              console.warn('[Heat Map] Auto-refresh failed with status', res.status);
             }
+            renderHeatMap();
+            updateTimeDisplay();
+            renderSensorList();
+            updateStatusBar();
           } catch (e) {
             console.warn('[Heat Map] Auto-refresh error:', e);
           }
@@ -1768,70 +1785,72 @@
     }
 
     /**
-     * Get live sensor data from /env endpoint by matching sensor zone
-     * @param {object} sensor - Sensor object with zone property
-     * @returns {object|null} Live data {tempC, rh, vpd} or null if not found
+     * Get live sensor data — prefers IoT device telemetry from the farm_data
+     * table (same source as farm-summary sensor cards), falls back to /env
+     * zone aggregate data.
+     *
+     * @param {object} sensor - Sensor object with deviceId and zone
+     * @returns {object|null} Live data {tempC, rh, vpd} or null
      */
     function getLiveSensorData(sensor) {
-      if (!STATE.envData?.zones) {
-        console.log('[getLiveSensorData] No env zones available');
-        return null;
+      // ── PRIMARY: IoT device registry telemetry (real-time per-device) ──
+      // This is the same data source that farm-summary sensor cards use.
+      // The IoT registry is refreshed from the farm_data DB table.
+      if (STATE.iotDevicesAll?.length > 0 && sensor?.deviceId) {
+        const iotDevice = STATE.iotDevicesAll.find(d =>
+          (d.id || d.deviceId) === sensor.deviceId
+        );
+        if (iotDevice?.telemetry) {
+          const tel = iotDevice.telemetry;
+          const tempC = tel.temperature != null ? Number(tel.temperature) : null;
+          const rh = tel.humidity != null ? Number(tel.humidity) : null;
+          let vpd = tel.vpd != null ? Number(tel.vpd) : null;
+          // Calculate VPD if we have temp + humidity but no VPD
+          if (vpd == null && tempC != null && rh != null) {
+            const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+            vpd = svp * (1 - rh / 100);
+          }
+          if (tempC != null || rh != null) {
+            return { tempC, rh, vpd };
+          }
+        }
       }
-      
-      // Match sensor.zone - it could be:
-      // 1. A full zone ID like "room-knukf2:1" (matches ENV directly)
-      // 2. A numeric value like 1 or "1" (needs to be formatted as "zone-1")
-      // 3. A compound ID like "zone-1" (matches ENV directly)
-      // 4. null/undefined - if only one zone, use it automatically
+
+      // Also check sensor's own telemetry snapshot (populated from IoT registry during loadData)
+      if (sensor?.telemetry) {
+        const tel = sensor.telemetry;
+        const tempC = tel.temperature != null ? Number(tel.temperature) : null;
+        const rh = tel.humidity != null ? Number(tel.humidity) : null;
+        let vpd = tel.vpd != null ? Number(tel.vpd) : null;
+        if (vpd == null && tempC != null && rh != null) {
+          const svp = 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
+          vpd = svp * (1 - rh / 100);
+        }
+        if (tempC != null || rh != null) {
+          return { tempC, rh, vpd };
+        }
+      }
+
+      // ── FALLBACK: /env zone aggregate data ──
+      if (!STATE.envData?.zones) return null;
+
       let zoneId = sensor?.zone;
-      
-      // Smart fallback: If sensor has no zone but there's only ONE zone, use it
       if (!zoneId && STATE.envData.zones.length === 1) {
         zoneId = STATE.envData.zones[0].id;
-        console.log('[getLiveSensorData] Sensor has no zone, using single available zone:', zoneId);
       }
-      
-      if (!zoneId) {
-        console.log('[getLiveSensorData] No zone for sensor:', {
-          sensorId: sensor?.deviceId || sensor?.id,
-          availableZones: STATE.envData.zones.map(z => z.id)
-        });
-        return null;
-      }
-      
-      // If it's a simple number, format it as "zone-N"
+      if (!zoneId) return null;
+
       if (typeof zoneId === 'number' || /^\d+$/.test(zoneId)) {
         zoneId = `zone-${zoneId}`;
       }
-      
+
       const zoneData = STATE.envData.zones.find(z => z.id === zoneId);
-      
-      console.log('[getLiveSensorData] Looking for zone:', {
-        sensorZone: sensor.zone,
-        zoneId: zoneId,
-        foundZone: !!zoneData,
-        availableZones: STATE.envData.zones.map(z => z.id)
-      });
-      
-      if (!zoneData?.sensors) {
-        console.log('[getLiveSensorData] Zone found but no sensors:', { zoneId, hasZoneData: !!zoneData });
-        return null;
-      }
-      
+      if (!zoneData?.sensors) return null;
+
       const tempC = zoneData.sensors.tempC?.current;
       const rh = zoneData.sensors.rh?.current;
       const vpd = zoneData.sensors.vpd?.current;
-      
-      console.log('[getLiveSensorData] Sensor data:', {
-        zoneId,
-        tempC,
-        rh,
-        vpd,
-        hasTempC: !!zoneData.sensors.tempC,
-        hasRh: !!zoneData.sensors.rh
-      });
-      
-      return { tempC, rh, vpd };
+      return (tempC != null || rh != null) ? { tempC, rh, vpd } : null;
     }
 
     function buildSensorSparklineId(sensor, metric) {
@@ -2547,108 +2566,93 @@
       }
     }
 
-    // Helper: Get sensor readings for current metric from IoT devices
+    // Helper: Get sensor readings for current metric from IoT devices.
+    // Priority: 1) IoT registry telemetry (per-device, real-time from farm_data DB)
+    //           2) /env zone aggregate data
+    //           3) Sensor snapshot telemetry (from load time)
     function getSensorReadingsForMetric(metric) {
-      console.log('[Heat Map] getSensorReadingsForMetric called for:', metric);
-      console.log('[Heat Map] STATE.sensors count:', STATE.sensors?.length);
-      console.log('[Heat Map] STATE.envData:', STATE.envData ? 'exists' : 'null');
-      console.log('[Heat Map] STATE.envData.zones count:', STATE.envData?.zones?.length);
-      
-      if (!STATE.sensors || STATE.sensors.length === 0) {
-        console.warn('[Heat Map] No sensors available');
-        return [];
-      }
+      if (!STATE.sensors || STATE.sensors.length === 0) return [];
 
       const readings = [];
       const metricKey = metric === 'temperature' ? 'tempC' : (metric === 'humidity' ? 'rh' : metric);
+      const telemetryKey = metric === 'temperature' ? 'temperature' : (metric === 'humidity' ? 'humidity' : metric);
       const zones = Array.isArray(STATE.envData?.zones) ? STATE.envData.zones : [];
       const zonesById = new Map(zones.map(z => [z.id, z]));
-      
-      console.log('[Heat Map] Zones by ID:', Array.from(zonesById.keys()));
-      console.log('[Heat Map] Processing', STATE.sensors.length, 'sensors');
-      
-      for (const sensor of STATE.sensors) {
-        if (sensor.x == null || sensor.y == null) {
-          console.log('[Heat Map] Skipping sensor (no position):', sensor.name);
-          continue;
+
+      // Build a fast lookup of IoT registry devices by ID
+      const iotById = new Map();
+      if (STATE.iotDevicesAll?.length > 0) {
+        for (const d of STATE.iotDevicesAll) {
+          const key = d.id || d.deviceId;
+          if (key) iotById.set(key, d);
         }
+      }
 
-        // Prefer live reading from env API by deviceId (when sources map exists)
+      for (const sensor of STATE.sensors) {
+        if (sensor.x == null || sensor.y == null) continue;
+
         let value = null;
-        const deviceId = sensor.deviceId;
         let source = 'none';
+        const deviceId = sensor.deviceId;
 
-        // Try lookup by sources in any zone
-        for (const z of zones) {
-          const sBucket = z?.sensors?.[metricKey];
-          const srcs = sBucket && sBucket.sources ? sBucket.sources : null;
-          if (srcs && deviceId && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
-            const srcVal = srcs[deviceId]?.current ?? srcs[deviceId]?.value;
-            if (Number.isFinite(srcVal)) { 
-              value = srcVal; 
-              source = 'sources';
-              break; 
-            }
+        // ── 1. IoT registry per-device telemetry (primary — real-time) ──
+        // Same data source as farm-summary sensor cards. Stored in farm_data
+        // DB table as data_type='devices', refreshed via iot-devices.json.
+        if (value == null && deviceId && iotById.has(deviceId)) {
+          const telVal = iotById.get(deviceId)?.telemetry?.[telemetryKey];
+          if (telVal != null && Number.isFinite(Number(telVal))) {
+            value = Number(telVal);
+            source = 'iot-registry';
           }
         }
 
-        // Fallback: use the zone's current value based on sensor zone assignment or grid position
-        if (value == null) {
-          let zoneObj = null;
+        // ── 2. Sensor's own telemetry snapshot (populated during loadData) ──
+        if (value == null && sensor.telemetry) {
+          const snapVal = sensor.telemetry[telemetryKey];
+          if (snapVal != null && Number.isFinite(Number(snapVal))) {
+            value = Number(snapVal);
+            source = 'sensor-telemetry';
+          }
+        }
 
-          // First try: use sensor's zone property directly (set by Room Mapper save or IoT registry)
+        // ── 3. /env zone aggregate (may be stale if SwitchBot polling is down) ──
+        if (value == null) {
+          // Try sources map first (per-device readings within a zone)
+          for (const z of zones) {
+            const srcs = z?.sensors?.[metricKey]?.sources;
+            if (srcs && deviceId && Object.prototype.hasOwnProperty.call(srcs, deviceId)) {
+              const srcVal = srcs[deviceId]?.current ?? srcs[deviceId]?.value;
+              if (Number.isFinite(srcVal)) {
+                value = srcVal;
+                source = 'env-sources';
+                break;
+              }
+            }
+          }
+        }
+        if (value == null) {
+          // Zone-level current value by zone assignment or grid position
+          let zoneObj = null;
           const sensorZone = sensor.zone;
           if (sensorZone != null) {
-            const zoneKey = typeof sensorZone === 'number' || /^\d+$/.test(sensorZone) 
+            const zoneKey = typeof sensorZone === 'number' || /^\d+$/.test(sensorZone)
               ? `zone-${sensorZone}` : sensorZone;
             zoneObj = zonesById.get(zoneKey);
-            if (zoneObj) {
-              console.log('[Heat Map] Matched sensor', sensor.name, 'to zone by assignment:', zoneKey);
-            }
           }
-
-          // Second try: find zone by grid position
           if (!zoneObj) {
             const containingZone = findZoneForPoint(sensor.x, sensor.y, STATE.roomMap?.zones || []);
             if (containingZone) {
-              console.log('[Heat Map] Sensor', sensor.name, 'in zone by position:', containingZone.zone || containingZone.id);
               zoneObj = zonesById.get(`zone-${containingZone.zone}`) || zonesById.get(containingZone.id);
             }
-          }
-
-          if (zoneObj) {
-            console.log('[Heat Map] Found zone object for', sensor.name, '- has sensors?', !!zoneObj.sensors);
           }
           const zoneVal = zoneObj?.sensors?.[metricKey]?.current;
           if (Number.isFinite(zoneVal)) {
             value = zoneVal;
-            source = 'zone-current';
-            console.log('[Heat Map] Using zone current for', sensor.name, ':', value);
-          }
-        }
-
-        // Final fallback: use snapshot telemetry value (may be stale)
-        if (value == null && sensor.telemetry) {
-          if (metric === 'temperature') {
-            // Telemetry may be in Fahrenheit, convert to Celsius
-            const tempVal = sensor.telemetry.temperature;
-            if (tempVal != null) {
-              // Assume telemetry is in Fahrenheit if > 40 (heuristic)
-              value = tempVal > 40 ? (tempVal - 32) * 5/9 : tempVal;
-            }
-          } else if (metric === 'humidity') {
-            value = sensor.telemetry.humidity;
-          } else if (metric === 'vpd') {
-            value = sensor.telemetry.vpd;
-          }
-          if (value != null) {
-            source = 'telemetry';
-            console.log('[Heat Map] Using telemetry for', sensor.name, ':', value);
+            source = 'env-zone';
           }
         }
 
         if (value != null) {
-          console.log('[Heat Map] ✓', sensor.name, '=', value, '(source:', source + ')');
           readings.push({
             x: sensor.x,
             y: sensor.y,
@@ -2656,13 +2660,10 @@
             deviceId: sensor.deviceId,
             name: sensor.name || sensor.deviceId
           });
-        } else {
-          console.warn('[Heat Map] ✗ No value for', sensor.name, '- checked sources/zone/telemetry');
         }
       }
 
-      console.log(`[Heat Map] Found ${readings.length} sensor readings for ${metric}`);
-      console.log('[Heat Map] Readings:', readings);
+      console.log(`[Heat Map] ${readings.length} readings for ${metric}:`, readings.map(r => `${r.name}=${r.value}`).join(', '));
       return readings;
     }
 
