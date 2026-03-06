@@ -238,6 +238,11 @@
       z-index: 10;
     }
 
+    #trendingCard {
+      grid-column: 1 / 3;
+      z-index: 10;
+    }
+
     /* Card Styles */
     .card {
       background: rgba(30, 41, 59, 0.6);
@@ -1905,7 +1910,7 @@
     <div id="zoneSummariesContainer"></div>
 
     <!-- Trending Data -->
-    <div class="card">
+    <div class="card" id="trendingCard">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2 id="trendingChartTitle" style="margin: 0;">Environmental Trends - All Zones Average</h2>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -2046,7 +2051,15 @@
   </script>
 
   <script>
-    console.debug('🔄 FARM SUMMARY - CODE VERSION 2.3 LOADED - Dec 22, 2025 - Local Chart.js');
+    // Auth helper for /data/ routes through greenreach-central multi-tenant middleware
+    function fetchWithFarmAuth(url, opts = {}) {
+      const token = localStorage.getItem('token');
+      const headers = Object.assign({}, opts.headers || {});
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+
+    console.debug('🔄 FARM SUMMARY - CODE VERSION 2.4 LOADED - Mar 6, 2026 - Live Data + Weather');
     console.log('🔄 If you see this message, the updated file is being served!');
     
     const queryParams = new URLSearchParams(window.location.search);
@@ -2122,7 +2135,7 @@
         // Fallback to /data/farm.json if API didn't work
         if (!farmName) {
           try {
-            const response = await fetch('/data/farm.json');
+            const response = await fetchWithFarmAuth('/data/farm.json');
             if (response.ok) {
               const farmData = await response.json();
               if (farmData && farmData.name) {
@@ -2199,7 +2212,7 @@
       
       // Detect management-only mode (no sensor data available)
       try {
-        const testResponse = await fetch('/env?hours=1');
+        const testResponse = await fetchWithFarmAuth('/env?hours=1');
         if (testResponse.status === 403 || testResponse.status === 404) {
           isCloudMode = true;
           console.log('[Farm Summary] ☁️ Cloud mode detected - no sensor data available');
@@ -2277,7 +2290,7 @@
 
   // Refresh data frequently so trends stay fresh (Heat Map also uses 60s)
   if (!isCloudMode) {
-    updateInterval = setInterval(loadData, 300000); // Refresh every 5 minutes (300 seconds)
+    updateInterval = setInterval(loadData, 60000); // Refresh every 60 seconds
         setInterval(loadWeather, 300000); // Refresh weather every 5 minutes
         
         // Refresh ML widgets every 10 minutes
@@ -2673,7 +2686,7 @@
     async function loadWeather() {
       try {
         // Fetch farm data to get location coordinates
-        const farmResponse = await fetch('/data/farm.json');
+        const farmResponse = await fetchWithFarmAuth('/data/farm.json');
         if (!farmResponse.ok) return;
         
         const farmData = await farmResponse.json();
@@ -2697,7 +2710,7 @@
         
         let data;
         try {
-          const response = await fetch(`/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
+          const response = await fetchWithFarmAuth(`/api/weather?lat=${coords.lat}&lng=${coords.lng}`);
           if (!response.ok) {
             console.warn('[Weather] Weather service returned status', response.status);
             weatherContent.innerHTML = '<span style="color:#f59e0b">Weather unavailable</span>';
@@ -2867,7 +2880,7 @@
         const envData = await fetchEnvData();
         let selectedZone = null;
         if (envData) {
-          selectedZone = loadEnvironmentalFromData(envData);
+          selectedZone = await loadEnvironmentalFromData(envData);
         }
         const tasks = [loadSchedule(envData), loadZoneSummaries(envData), loadMLAnomalies(), loadHealthStatus(), loadHarvestReadiness(), loadLossPredictions(), loadLearningCorrelations(), loadExperimentRecords(), loadRecipeModifiers(), loadAIFeatureCards()];
         if (envData) {
@@ -2912,7 +2925,7 @@
         envDataInFlight = (async () => {
           // Ask server for 24-hour window; when ENV_SOURCE=cloud and CLOUD_ENDPOINT_URL are set
           // the server will proxy to AWS and include per-zone histories.
-          const response = await fetch('/env?hours=24');
+          const response = await fetchWithFarmAuth('/env?hours=24');
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
           
@@ -3058,7 +3071,7 @@
 
       try {
         // Load room map data
-        const response = await fetch('/data/room-map.json');
+        const response = await fetchWithFarmAuth('/data/room-map.json');
         if (!response.ok) {
           console.warn('[Zone Summaries] No room map data available');
           container.innerHTML = '';
@@ -3080,7 +3093,7 @@
         let groups = [];
         let plans = [];
         try {
-          const groupsResponse = await fetch('/data/groups.json');
+          const groupsResponse = await fetchWithFarmAuth('/data/groups.json');
           if (groupsResponse.ok) {
             const groupsData = await groupsResponse.json();
             // Normalize groups for consistent planId/scheduleId handling
@@ -3088,7 +3101,7 @@
           }
           
           // Load plans from merged endpoint (includes lighting-recipes.json)
-          const plansResponse = await fetch('/plans');
+          const plansResponse = await fetchWithFarmAuth('/plans');
           if (plansResponse.ok) {
             const plansData = await plansResponse.json();
             plans = plansData.plans || [];
@@ -3101,7 +3114,7 @@
         // Load IoT devices to get sensor data by zone
         let iotDevices = [];
         try {
-          const iotResponse = await fetch('/data/iot-devices.json');
+          const iotResponse = await fetchWithFarmAuth('/data/iot-devices.json');
           if (iotResponse.ok) {
             iotDevices = await iotResponse.json();
             if (!Array.isArray(iotDevices)) iotDevices = [];
@@ -3926,7 +3939,7 @@
 
         // ── Phase 4 Ticket 4.4: Central Planting Suggestions ───────────────
         try {
-          const envResp = await fetch('/env?hours=1');
+          const envResp = await fetchWithFarmAuth('/env?hours=1');
           const envData = await envResp.json();
           const networkIntel = envData?.ai?.network_intelligence;
           const riskAlerts = networkIntel?.risk_alerts || [];
@@ -3973,7 +3986,94 @@
       }
     }
 
-    function loadEnvironmentalFromData(data) {
+    async function loadEnvironmentalFromData(data) {
+      // ── Augment env zones with IoT device data ──
+      // The /env endpoint may only return zone-1. Fetch IoT devices and room map
+      // to build zone data from actual sensor telemetry (same pattern as zone cards).
+      try {
+        const [iotRes, mapRes] = await Promise.all([
+          fetchWithFarmAuth('/data/iot-devices.json').catch(() => null),
+          fetchWithFarmAuth('/data/room-map.json').catch(() => null)
+        ]);
+        let iotDevices = [];
+        let roomMapZones = [];
+        if (iotRes && iotRes.ok) {
+          const raw = await iotRes.json();
+          iotDevices = Array.isArray(raw) ? raw : (raw.devices || []);
+        }
+        if (mapRes && mapRes.ok) {
+          const mapData = await mapRes.json();
+          roomMapZones = mapData.zones || [];
+        }
+
+        if (iotDevices.length > 0 && roomMapZones.length > 0) {
+          // Ensure data.zones exists
+          if (!data) data = { zones: [] };
+          if (!Array.isArray(data.zones)) data.zones = [];
+
+          for (const rmZone of roomMapZones) {
+            const zoneNum = Number(rmZone.zone);
+            const zoneId = 'zone-' + zoneNum;
+
+            // Check if this zone already has fresh env data
+            const existingZone = data.zones.find(z => z.id === zoneId);
+
+            // Filter IoT sensors for this zone
+            const sensors = iotDevices.filter(dev => {
+              if (Number(dev.zone) !== zoneNum) return false;
+              if (!dev.telemetry) return false;
+              const t = (dev.type || '').toLowerCase();
+              const c = (dev.category || '').toLowerCase();
+              return t.includes('sensor') || c.includes('sensor') ||
+                     dev.telemetry.temperature != null || dev.telemetry.humidity != null;
+            });
+
+            if (sensors.length === 0) continue;
+
+            // Average readings
+            let tempSum = 0, humSum = 0, tC = 0, hC = 0;
+            for (const s of sensors) {
+              const tel = s.telemetry;
+              if (tel.temperature != null && Number.isFinite(tel.temperature)) {
+                tempSum += tel.temperature; tC++;
+              }
+              if (tel.humidity != null && Number.isFinite(tel.humidity)) {
+                humSum += tel.humidity; hC++;
+              }
+            }
+            const avgTemp = tC > 0 ? tempSum / tC : null;
+            const avgHum = hC > 0 ? humSum / hC : null;
+            const avgVpd = (avgTemp != null && avgHum != null) ? calculateVPD(avgTemp, avgHum) : null;
+
+            const iotZone = {
+              id: zoneId,
+              name: rmZone.name || ('Zone ' + zoneNum),
+              sensors: {
+                tempC: { current: avgTemp },
+                rh: { current: avgHum },
+                vpd: { current: avgVpd }
+              },
+              _iotSource: true,
+              _sensorCount: sensors.length
+            };
+
+            if (existingZone) {
+              // Overwrite env data with IoT data (fresher)
+              existingZone.sensors = iotZone.sensors;
+              existingZone._iotSource = true;
+              existingZone._sensorCount = sensors.length;
+              console.log(`[Indoor Conditions] Augmented ${zoneId} with ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)}`);
+            } else {
+              // Add new zone from IoT data
+              data.zones.push(iotZone);
+              console.log(`[Indoor Conditions] Added ${zoneId} from ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)}`);
+            }
+          }
+        }
+      } catch (augmentErr) {
+        console.warn('[Indoor Conditions] IoT augmentation failed (non-fatal):', augmentErr.message);
+      }
+
       if (!data || !Array.isArray(data.zones) || data.zones.length === 0) {
         const grid = document.getElementById('envGrid');
         if (grid) {
@@ -4442,7 +4542,7 @@
 
     async function fetchPlansWithFallback() {
       try {
-        const resp = await fetch('/plans', { cache: 'no-store' });
+        const resp = await fetchWithFarmAuth('/plans', { cache: 'no-store' });
         if (resp.ok) {
           const data = await resp.json();
           if (data && (Array.isArray(data.plans) || Array.isArray(data))) {
@@ -4456,7 +4556,7 @@
         console.warn('[Schedule] Failed to fetch /plans', error);
       }
       try {
-        const fallback = await fetch('/data/plans.json', { cache: 'no-store' });
+        const fallback = await fetchWithFarmAuth('/data/plans.json', { cache: 'no-store' });
         if (fallback.ok) {
           return await fallback.json();
         }
@@ -4477,8 +4577,8 @@
 
         const [statusRes, groupsRes, schedulesRes] = await Promise.all([
           fetch('/api/schedule-executor/status'),
-          fetch('/data/groups.json'),
-          fetch('/data/schedules.json')
+          fetchWithFarmAuth('/data/groups.json'),
+          fetchWithFarmAuth('/data/schedules.json')
         ]);
 
         if (!statusRes.ok) throw new Error(`status HTTP ${statusRes.status}`);
@@ -4628,8 +4728,8 @@
     async function augmentHealthWithIoTDevices(healthData) {
       try {
         // Load room map to know which zones exist
-        const roomMapResp = await fetch('/data/room-map-room-3xxjln.json');
-        const iotResp = await fetch('/data/iot-devices.json');
+        const roomMapResp = await fetchWithFarmAuth('/data/room-map-room-3xxjln.json');
+        const iotResp = await fetchWithFarmAuth('/data/iot-devices.json');
         if (!roomMapResp.ok || !iotResp.ok) return;
 
         const roomMap = await roomMapResp.json();
@@ -7178,7 +7278,7 @@
         // Load group to check harvest cycle strategy
         let groups = [];
         try {
-          const resp = await fetch('/data/groups.json');
+          const resp = await fetchWithFarmAuth('/data/groups.json');
           if (resp.ok) {
             const data = await resp.json();
             groups = data.groups || [];
@@ -7217,7 +7317,7 @@
           group.status = 'regrowing';
 
           // Save updated groups
-          const saveResp = await fetch('/data/groups.json', {
+          const saveResp = await fetchWithFarmAuth('/data/groups.json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groups })
@@ -7330,7 +7430,7 @@
           group.harvestedAt = new Date().toISOString();
           group.lights = [];
           try {
-            await fetch('/data/groups.json', {
+            await fetchWithFarmAuth('/data/groups.json', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ groups })
@@ -7383,7 +7483,7 @@
         // Load existing groups to find the next available number
         let groups = [];
         try {
-          const response = await fetch('/data/groups.json');
+          const response = await fetchWithFarmAuth('/data/groups.json');
           if (response.ok) {
             const data = await response.json();
             groups = data.groups || [];
@@ -7424,7 +7524,7 @@
         // Look up harvest strategy from crop registry
         let harvestCycle = null;
         try {
-          const regResp = await fetch('/data/crop-registry.json');
+          const regResp = await fetchWithFarmAuth('/data/crop-registry.json');
           if (regResp.ok) {
             const registry = await regResp.json();
             const crops = registry.crops || {};
@@ -7510,7 +7610,7 @@
         groups.push(newGroup);
         
         // Save to server
-        const saveResponse = await fetch('/data/groups', {
+        const saveResponse = await fetchWithFarmAuth('/data/groups', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ groups })
@@ -7590,7 +7690,7 @@
         } catch (e) { console.warn('[NewPlanting] Could not load dedicated crops:', e); }
 
         // Load available zones
-        const roomMapResponse = await fetch('/data/room-map.json');
+        const roomMapResponse = await fetchWithFarmAuth('/data/room-map.json');
         if (roomMapResponse.ok) {
           const roomMap = await roomMapResponse.json();
           availableZones = roomMap.zones || [];
@@ -7784,7 +7884,7 @@
 
         // Look up harvest strategy from crop registry
         try {
-          const regResp = await fetch('/data/crop-registry.json');
+          const regResp = await fetchWithFarmAuth('/data/crop-registry.json');
           if (regResp.ok) {
             const registry = await regResp.json();
             const crops = registry.crops || {};
@@ -7814,7 +7914,7 @@
         }
 
         // Load existing groups
-        const groupsResponse = await fetch('/data/groups.json');
+        const groupsResponse = await fetchWithFarmAuth('/data/groups.json');
         let groupsData = { groups: [] };
         if (groupsResponse.ok) {
           groupsData = await groupsResponse.json();
@@ -7824,7 +7924,7 @@
         groupsData.groups.push(newGroup);
 
         // Save to server
-        const saveResponse = await fetch('/data/groups.json', {
+        const saveResponse = await fetchWithFarmAuth('/data/groups.json', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(groupsData)

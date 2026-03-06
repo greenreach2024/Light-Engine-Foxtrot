@@ -2268,22 +2268,61 @@ app.get('/data/equipment-metadata', async (req, res) => {
   return res.json(payload);
 });
 
-app.get('/api/weather', (req, res) => {
+// Weather API — proxy to Light Engine (which calls Open-Meteo)
+// Previously returned hardcoded stub data; now forwards to LE for real weather.
+app.get('/api/weather', async (req, res) => {
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return res.status(400).json({ ok: false, error: 'lat and lng are required' });
   }
 
-  return res.json({
-    ok: true,
-    current: {
-      temperature_c: 22,
-      temperature_f: 72,
-      humidity: 55,
-      description: 'Clear'
+  // Try proxying to Light Engine first (real Open-Meteo data)
+  const leUrl = resolveEdgeUrlForProxy();
+  if (leUrl) {
+    try {
+      const url = `${leUrl}/api/weather?lat=${lat}&lng=${lng}`;
+      logger.info(`[WeatherProxy] Fetching from ${url}`);
+      const upstream = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const text = await upstream.text();
+      return res.status(upstream.status).type('json').send(text);
+    } catch (err) {
+      logger.warn('[WeatherProxy] Light Engine unreachable, falling back to direct Open-Meteo:', err.message);
     }
-  });
+  }
+
+  // Fallback: call Open-Meteo directly (same logic as Light Engine)
+  try {
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`;
+    const response = await fetch(weatherUrl, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+    const data = await response.json();
+    const weatherCodes = { 0: 'Clear', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+      45: 'Foggy', 48: 'Depositing Rime Fog', 51: 'Light Drizzle', 53: 'Moderate Drizzle',
+      55: 'Dense Drizzle', 61: 'Slight Rain', 63: 'Moderate Rain', 65: 'Heavy Rain',
+      71: 'Slight Snow', 73: 'Moderate Snow', 75: 'Heavy Snow', 77: 'Snow Grains',
+      80: 'Slight Rain Showers', 81: 'Moderate Rain Showers', 82: 'Violent Rain Showers',
+      85: 'Slight Snow Showers', 86: 'Heavy Snow Showers', 95: 'Thunderstorm',
+      96: 'Thunderstorm with Slight Hail', 99: 'Thunderstorm with Heavy Hail' };
+    return res.json({
+      ok: true,
+      current: {
+        temperature_c: data.current_weather.temperature,
+        temperature_f: (data.current_weather.temperature * 9 / 5) + 32,
+        humidity: Array.isArray(data.hourly?.relative_humidity_2m) ? data.hourly.relative_humidity_2m[0] : null,
+        wind_speed: data.current_weather.windspeed,
+        wind_direction: data.current_weather.winddirection,
+        weather_code: data.current_weather.weathercode,
+        is_day: data.current_weather.is_day,
+        description: weatherCodes[data.current_weather.weathercode] || 'Unknown',
+        last_updated: data.current_weather.time
+      },
+      location: { lat, lng }
+    });
+  } catch (err) {
+    logger.error('[WeatherProxy] Direct Open-Meteo also failed:', err.message);
+    return res.status(502).json({ ok: false, error: 'Weather service unavailable' });
+  }
 });
 
 app.get('/configuration', async (req, res) => {
