@@ -1014,6 +1014,18 @@ All ML models that use outdoor weather data (`outside_temperature_c`, `outside_h
 | **Save Map button** | Added Save Map button next to + New Room button in room mapper | room-mapper.html |
 | **Sync to Central** | Synced room-mapper.html to greenreach-central public folder | greenreach-central room-mapper.html |
 
+### 2026-03-06: Sensor Data Flow — Two-Pass Aggregation Fix
+
+**Root cause:** `syncSensorData()` in server-foxtrot.js called `updateValidDataHistory()` on zone-level sensor objects **inside** the per-device loop. When 2+ sensors shared a zone (Zone 2 has Sen 2 + Sen 3), both calls happened within the same JavaScript tick (~0ms apart), but the rate-limiter required 5 minutes between history pushes. The second device's call saw `lastPushMs` was just updated, so it **overwrote `history[0]`** instead of accumulating a new entry. Zone 2 was permanently stuck at 1 zone-level history entry. Zone-level `current` values also showed the last device's raw reading, not an average.
+
+| Fix | Description | Files Modified |
+|-----|-------------|----------------|
+| **Two-pass aggregation** | Split `iotDevices.forEach` into Pass 1 (per-source updates only) and Pass 2 (zone-level aggregation after all devices processed). `updateValidDataHistory` now called once per zone per cycle, not per device. | server-foxtrot.js |
+| **Averaged zone values** | Zone-level `current` is now the mean of all sources' `current` values, not the last device's raw reading. VPD computed from averaged temp + humidity. | server-foxtrot.js |
+| **Zone history rebuild** | Added `rebuildZoneHistoryFromSources()` — when zone-level history length < 50% of max source history length, reconstructs zone-level arrays by time-aligning source histories and averaging values. Bootstraps Zone 2 from 1 → 14+ entries immediately. | server-foxtrot.js |
+| **Fahrenheit guard fix** | Fahrenheit detection now also scrubs per-source histories that contain values > 40°C, preventing the bug where zone history was wiped but sources retained stale Fahrenheit data that re-polluted on next rebuild. | server-foxtrot.js |
+| **Frontend fallback** | Added `ensureZoneHistoryFromSources()` defence-in-depth in farm-summary.html — before rendering trending charts, checks if zone-level history is too short vs per-source data and rebuilds in-memory. Called from both `buildAggregatedHistoryFromAllZones` and `buildHistoryFromZone`. | farm-summary.html, greenreach-central farm-summary.html |
+
 ---
 
 ## Appendix A: farm_data data_type Quick Reference
