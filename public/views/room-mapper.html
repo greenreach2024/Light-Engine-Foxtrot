@@ -2117,6 +2117,7 @@
             deviceId: d.deviceId,
             x: d.x,
             y: d.y,
+            isEquipment: d.isEquipment || false,
             snapshot: {
               name: d.device?.name || null,
               type: d.device?.type || null,
@@ -2124,7 +2125,8 @@
               category: d.device?.category || null,
               zone: finalZone,
               room: roomName,
-              icon: d.icon || null
+              icon: d.icon || null,
+              isEquipment: d.isEquipment || false
             }
           };
         }),
@@ -2229,6 +2231,9 @@
       if (!STATE.iotDevices.length) {
         await loadIoTDevices();
       }
+      if (!STATE.equipment.length) {
+        await loadEquipment();
+      }
 
       STATE.gridSize = mapData.gridSize || 20;
       STATE.cellSize = mapData.cellSize || 40;
@@ -2241,10 +2246,23 @@
       
       // Restore placed devices
       STATE.placedDevices = [];
+      let sensorCount = 0, equipCount = 0;
       if (mapData.devices) {
         for (const devicePos of mapData.devices) {
           const snapshot = devicePos.snapshot || devicePos.metadata || null;
+          
+          // Determine if this is equipment from saved flag or category inference
+          const isEquipment = devicePos.isEquipment || snapshot?.isEquipment || (() => {
+            const cat = (snapshot?.category || '').toLowerCase();
+            return cat.includes('fan') || cat.includes('vent') || cat.includes('controller') || 
+                   cat.includes('energy') || cat.includes('dehumid') || cat.includes('hvac');
+          })();
+          
+          // Search both IoT sensors AND equipment lists
           let device = STATE.iotDevices.find(d => d.id === devicePos.deviceId);
+          if (!device) {
+            device = STATE.equipment.find(e => e.id === devicePos.deviceId);
+          }
 
           if (!device && snapshot) {
             device = {
@@ -2257,7 +2275,11 @@
             };
           }
 
-          const resolvedIcon = device ? getDeviceIcon(device) : (snapshot ? getDeviceIcon(snapshot) : DEVICE_ICONS.default);
+          // Use correct icon function based on device type
+          const resolvedIcon = isEquipment 
+            ? (device ? getEquipmentIcon(device) : (snapshot ? getEquipmentIcon(snapshot) : DEVICE_ICONS.default))
+            : (device ? getDeviceIcon(device) : (snapshot ? getDeviceIcon(snapshot) : DEVICE_ICONS.default));
+          
           const devicePayload = {
             deviceId: devicePos.deviceId,
             device: device || {
@@ -2270,7 +2292,8 @@
             },
             x: devicePos.x,
             y: devicePos.y,
-            icon: resolvedIcon
+            icon: resolvedIcon,
+            isEquipment: isEquipment
           };
 
           if (!devicePayload.icon) {
@@ -2278,11 +2301,14 @@
           }
 
           STATE.placedDevices.push(devicePayload);
+          if (isEquipment) equipCount++; else sensorCount++;
         }
       }
       
+      console.log(`[Room Mapper] Restored ${sensorCount} sensors and ${equipCount} equipment from saved map`);
       updateZoneList();
       renderDeviceList();
+      renderEquipmentList();
       draw();
       updateStats();
     }

@@ -1850,6 +1850,57 @@
       </div>
     </div>
 
+    <!-- Harvest Readiness Cards (S4.2) -->
+    <div class="card" id="harvestReadinessCard" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">🌾 Harvest Readiness</h2>
+        <button class="refresh-btn" onclick="loadHarvestReadiness()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      </div>
+      <div id="harvestReadinessContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0.75rem;"></div>
+    </div>
+
+    <!-- Loss Prediction Alerts (S4.3) -->
+    <div class="card" id="lossPredictionCard" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">⚠️ Loss Risk Alerts</h2>
+        <button class="refresh-btn" onclick="loadLossPredictions()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      </div>
+      <div id="lossPredictionContent"></div>
+    </div>
+
+    <!-- Learning Correlations Panel (Phase D) -->
+    <div class="card" id="learningCorrelationCard" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">📈 Learning Correlations</h2>
+        <button class="refresh-btn" onclick="loadLearningCorrelations()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      </div>
+      <div id="learningCorrelationContent"></div>
+    </div>
+
+    <!-- Experiment Record Visibility (Phase D) -->
+    <div class="card" id="experimentRecordCard" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">🧪 Experiment Records</h2>
+        <button class="refresh-btn" onclick="loadExperimentRecords()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      </div>
+      <div id="experimentRecordContent"></div>
+    </div>
+
+    <!-- Recipe Modifier Panel (S4.1) -->
+    <div class="card" id="recipeModifierCard" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">🧬 Recipe Modifiers</h2>
+        <button class="refresh-btn" onclick="loadRecipeModifiers()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      </div>
+      <div id="recipeModifierContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;"></div>
+    </div>
+
+    <!-- AI Feature Cards (S4.5) -->
+    <div class="card" id="aiFeatureCards" style="display:none;">
+      <h2 style="margin:0 0 1rem 0;">🤖 AI Intelligence Summary</h2>
+      <div id="aiFeatureContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;"></div>
+    </div>
+
     <!-- Zone Summaries -->
     <div id="zoneSummariesContainer"></div>
 
@@ -2020,14 +2071,33 @@
 
     /**
      * Load farm name from API and update page header
+     * Also stores farm context for navigation to sales pages
      */
     async function loadFarmNameIntoHeader() {
       try {
         const token = localStorage.getItem('token');
         let farmName = null;
+        let farmId = null;
+        let farmSlug = null;
         
-        // Try authenticated API first if token exists
-        if (token) {
+        // Try /api/config/app first (works without auth)
+        try {
+          const configResponse = await fetch('/api/config/app');
+          if (configResponse.ok) {
+            const config = await configResponse.json();
+            if (config.ok) {
+              farmId = config.farmId;
+              farmName = config.farmName;
+              farmSlug = config.farmSlug || config.farmId;
+              console.log('[Farm Summary] Loaded farm from /api/config/app:', { farmId, farmName, farmSlug });
+            }
+          }
+        } catch (err) {
+          console.log('[Farm Summary] /api/config/app failed:', err.message);
+        }
+        
+        // Try authenticated API if token exists and we didn't get a name
+        if (!farmName && token) {
           try {
             const response = await fetch('/api/farm/profile', {
               headers: {
@@ -2039,6 +2109,8 @@
               const data = await response.json();
               if (data.status === 'success' && data.farm && data.farm.name) {
                 farmName = data.farm.name;
+                farmId = farmId || data.farm.farm_id || data.farm.farmId;
+                farmSlug = farmSlug || data.farm.slug || data.farm.farm_slug;
                 console.log('[Farm Summary] Loaded farm name from API:', farmName);
               }
             }
@@ -2055,6 +2127,8 @@
               const farmData = await response.json();
               if (farmData && farmData.name) {
                 farmName = farmData.name;
+                farmId = farmId || farmData.farmId || farmData.farm_id;
+                farmSlug = farmSlug || farmData.slug || farmData.farm_slug;
                 console.log('[Farm Summary] Loaded farm name from farm.json:', farmName);
               }
             }
@@ -2074,12 +2148,43 @@
           
           // Update page title
           document.title = `${farmName} Room Summary - Light Engine`;
+          
+          // Store farm context for navigation to sales pages
+          if (farmId) {
+            sessionStorage.setItem('farm_id', farmId);
+            sessionStorage.setItem('farm_name', farmName);
+            sessionStorage.setItem('farm_slug', farmSlug || farmId);
+            console.log('[Farm Summary] Stored farm context in sessionStorage:', { farmId, farmName, farmSlug });
+            
+            // Update sales navigation links with farm context
+            updateSalesNavigationLinks(farmId, farmName, farmSlug || farmId);
+          }
         } else {
           console.warn('[Farm Summary] Could not load farm name from any source');
         }
       } catch (error) {
         console.error('[Farm Summary] Failed to load farm name:', error);
       }
+    }
+    
+    /**
+     * Update sales navigation links to include farm context
+     * This ensures POS/Store/Shop pages know which farm they're serving
+     */
+    function updateSalesNavigationLinks(farmId, farmName, farmSlug) {
+      const salesLinks = document.querySelectorAll('a[href*="farm-sales"]');
+      salesLinks.forEach(link => {
+        try {
+          const url = new URL(link.href, window.location.origin);
+          url.searchParams.set('farm', farmSlug);
+          url.searchParams.set('id', farmId);
+          url.searchParams.set('name', encodeURIComponent(farmName));
+          link.href = url.toString();
+          console.log('[Farm Summary] Updated sales link:', link.href);
+        } catch (err) {
+          console.warn('[Farm Summary] Failed to update link:', link.href, err.message);
+        }
+      });
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -2580,7 +2685,7 @@
           return;
         }
         
-        console.debug('[Weather] Using coordinates:', coords.lat, coords.lng);
+        grLog('[Weather] Using coordinates:', coords.lat, coords.lng);
         
         const weatherDiv = document.getElementById('weatherDisplay');
         const weatherContent = document.getElementById('weatherContent');
@@ -2764,7 +2869,7 @@
         if (envData) {
           selectedZone = loadEnvironmentalFromData(envData);
         }
-        const tasks = [loadSchedule(envData), loadZoneSummaries(envData), loadMLAnomalies(), loadHealthStatus()];
+        const tasks = [loadSchedule(envData), loadZoneSummaries(envData), loadMLAnomalies(), loadHealthStatus(), loadHarvestReadiness(), loadLossPredictions(), loadLearningCorrelations(), loadExperimentRecords(), loadRecipeModifiers(), loadAIFeatureCards()];
         if (envData) {
           // Populate zone selector dropdown with available zones
           if (envData.zones && envData.zones.length > 0) {
@@ -2952,11 +3057,8 @@
       console.log('[Zone Summaries] Loading zone summaries...');
 
       try {
-        // Load room map data with auth header for farm-scoped data
-        const token = localStorage.getItem('token');
-        const response = await fetch('/data/room-map.json', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
+        // Load room map data
+        const response = await fetch('/data/room-map.json');
         if (!response.ok) {
           console.warn('[Zone Summaries] No room map data available');
           container.innerHTML = '';
@@ -3112,41 +3214,9 @@
           
           // Build group cards with harvest countdown
           let groupsHtml = '';
-          // Separate groups into planted (has plan reference) vs unplanted (draft)
-          const plantedGroups = [];
-          const unplantedGroups = [];
-          for (const g of zoneGroups) {
-            const hasRef = g.planId || g.plan || g.planKey || g.planConfig?.planId || g.planConfig?.preview?.planId;
-            if (hasRef) plantedGroups.push(g);
-            else unplantedGroups.push(g);
-          }
-          console.log(`[Zone ${zone.name}] ${zoneGroups.length} group(s): ${plantedGroups.length} planted, ${unplantedGroups.length} unplanted/draft`);
-
-          // Show summary card for unplanted/draft groups
-          if (unplantedGroups.length > 0) {
-            const totalTrays = unplantedGroups.reduce((sum, g) => sum + (g.trays || 0), 0);
-            const totalPlants = unplantedGroups.reduce((sum, g) => sum + (g.plants || 0), 0);
-            groupsHtml += `
-              <div class="group-harvest-info">
-                <div class="harvest-countdown" style="border-left-color: #94a3b8;">
-                  <div class="harvest-details">
-                    <div class="harvest-label" style="color: #64748b;">
-                      📋 ${unplantedGroups.length} Unplanted Group${unplantedGroups.length !== 1 ? 's' : ''}
-                    </div>
-                    <div class="harvest-status" style="color: #94a3b8;">
-                      ${totalTrays} trays • ${totalPlants} plant sites available
-                    </div>
-                    <div style="margin-top: 4px; font-size: 0.8rem; color: #94a3b8;">
-                      Assign a crop plan to start tracking
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-          }
-
-          if (plantedGroups.length > 0) {
-            for (const group of plantedGroups) {
+          console.log(`[Zone ${zone.name}] Found ${zoneGroups.length} group(s)`);
+          if (zoneGroups.length > 0) {
+            for (const group of zoneGroups) {
               console.log(`[Zone ${zone.name}] Processing group:`, group.id || group.name, {
                 planId: group.planId,
                 plan: group.plan,
@@ -3695,7 +3765,20 @@
             z.id === String(zone.zone)
           );
           
-          const isStale = envZone ? !isSensorDataFresh(envZone, 5 * 60 * 1000) : false;
+          // Determine staleness based on whichever data source was actually used
+          let isStale = false;
+          if (zoneSensorDevices.length > 0) {
+            // IoT device telemetry was the primary source — check device timestamps
+            const maxAgeMs = 15 * 60 * 1000; // 15 minutes
+            isStale = zoneSensorDevices.every(d => {
+              const ts = d.telemetry?.lastUpdated || d.telemetry?.timestamp || d.lastSeen || d.updatedAt;
+              if (!ts) return false; // No timestamp available, assume fresh
+              return (Date.now() - new Date(ts).getTime()) > maxAgeMs;
+            });
+          } else if (envZone) {
+            // Fell back to envData — check envZone.meta.lastSync
+            isStale = !isSensorDataFresh(envZone, 15 * 60 * 1000);
+          }
           const tempInvalid = Number.isFinite(temp) ? !isSensorReadingValid(temp, 'tempC', envZone) : false;
           const humidityInvalid = Number.isFinite(humidity) ? !isSensorReadingValid(humidity, 'rh', envZone) : false;
           
@@ -3839,6 +3922,50 @@
             });
           });
           console.log(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
+        }
+
+        // ── Phase 4 Ticket 4.4: Central Planting Suggestions ───────────────
+        try {
+          const envResp = await fetch('/env?hours=1');
+          const envData = await envResp.json();
+          const networkIntel = envData?.ai?.network_intelligence;
+          const riskAlerts = networkIntel?.risk_alerts || [];
+          const experiments = envData?.ai?.experiments || [];
+
+          if (riskAlerts.length > 0 || experiments.length > 0) {
+            let centralHtml = '<div style="margin-top:16px;padding:12px;background:#f0f7ff;border-radius:8px;border-left:4px solid #2d5016;">';
+            centralHtml += '<h4 style="margin:0 0 8px;color:#2d5016;font-size:0.9rem;">📡 Central Network Suggestions</h4>';
+
+            riskAlerts.forEach(alert => {
+              const color = alert.severity === 'high' ? '#c0392b' : alert.severity === 'medium' ? '#e67e22' : '#7f8c8d';
+              centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid ${color};">`;
+              centralHtml += `<span style="font-size:0.82rem;">${alert.message}</span>`;
+              centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
+              centralHtml += `<button onclick="this.closest('div[style]').style.opacity='0.4';this.disabled=true" style="font-size:0.75rem;padding:2px 8px;border:1px solid #2d5016;background:#eaf5e0;border-radius:4px;cursor:pointer;">✓ Noted</button>`;
+              centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+              centralHtml += `</div></div>`;
+            });
+
+            experiments.forEach(exp => {
+              centralHtml += `<div style="padding:8px;margin-bottom:6px;background:white;border-radius:4px;border-left:3px solid #8e44ad;">`;
+              centralHtml += `<span style="font-size:0.82rem;">🧪 <strong>A/B Experiment:</strong> ${exp.crop} — ${exp.hypothesis || 'spectrum test'}</span>`;
+              centralHtml += `<div style="margin-top:4px;display:flex;gap:6px;">`;
+              centralHtml += `<button onclick="this.textContent='Accepted ✓';this.disabled=true;this.style.background='#d5f5e3'" style="font-size:0.75rem;padding:2px 8px;border:1px solid #8e44ad;background:#f5eef8;border-radius:4px;cursor:pointer;">Accept Experiment</button>`;
+              centralHtml += `<button onclick="this.closest('div[style]').remove()" style="font-size:0.75rem;padding:2px 8px;border:1px solid #ccc;background:#f9f9f9;border-radius:4px;cursor:pointer;">Dismiss</button>`;
+              centralHtml += `</div></div>`;
+            });
+
+            centralHtml += '</div>';
+
+            // Insert into the first zone container
+            const firstZoneContainer = container.querySelector('.zone-card') || container.firstElementChild;
+            if (firstZoneContainer) {
+              firstZoneContainer.insertAdjacentHTML('afterbegin', centralHtml);
+              console.log(`[Zone Summaries] Rendered ${riskAlerts.length} Central risk alerts + ${experiments.length} experiments`);
+            }
+          }
+        } catch (centralErr) {
+          console.warn('[Zone Summaries] Central suggestions fetch failed (non-fatal):', centralErr.message);
         }
       } catch (error) {
         console.error('[Zone Summaries] Failed to load zone summaries:', error);
@@ -4493,6 +4620,95 @@
       }
     }
 
+    /**
+     * Augment health data with IoT device telemetry for zones not covered by /env.
+     * The /env endpoint may only have zone-1, but IoT devices report for all zones.
+     * This fills in missing zones so the health score reflects the full farm.
+     */
+    async function augmentHealthWithIoTDevices(healthData) {
+      try {
+        // Load room map to know which zones exist
+        const roomMapResp = await fetch('/data/room-map-room-3xxjln.json');
+        const iotResp = await fetch('/data/iot-devices.json');
+        if (!roomMapResp.ok || !iotResp.ok) return;
+
+        const roomMap = await roomMapResp.json();
+        let iotDevices = await iotResp.json();
+        if (!Array.isArray(iotDevices)) iotDevices = iotDevices.devices || [];
+
+        const definedZones = roomMap.zones || [];
+        const existingZoneIds = new Set((healthData.zones || []).map(z => z.zone_id));
+
+        const computeQuickScore = (temp, rh, vpd) => {
+          let score = 40;
+          if (Number.isFinite(temp) && temp >= 18 && temp <= 24) score += 20;
+          if (Number.isFinite(rh) && rh >= 40 && rh <= 70) score += 20;
+          if (Number.isFinite(vpd) && vpd >= 0.8 && vpd <= 1.2) score += 20;
+          return Math.max(0, Math.min(100, Math.round(score)));
+        };
+
+        let augmented = false;
+        for (const zone of definedZones) {
+          const zoneId = `zone-${zone.zone}`;
+          if (existingZoneIds.has(zoneId)) continue;
+
+          // Find IoT sensors in this zone
+          const sensors = iotDevices.filter(d => {
+            if (d.zone !== zone.zone) return false;
+            const t = (d.type || '').toLowerCase();
+            const c = (d.category || '').toLowerCase();
+            return t.includes('sensor') || c.includes('sensor') || 
+                   (d.telemetry?.temperature != null || d.telemetry?.humidity != null);
+          });
+
+          if (sensors.length === 0) continue;
+
+          // Average sensor readings
+          let tempSum = 0, rhSum = 0, tempN = 0, rhN = 0;
+          for (const s of sensors) {
+            const tel = s.telemetry || {};
+            if (Number.isFinite(tel.temperature)) { tempSum += tel.temperature; tempN++; }
+            if (Number.isFinite(tel.humidity)) { rhSum += tel.humidity; rhN++; }
+          }
+
+          const temp = tempN > 0 ? tempSum / tempN : null;
+          const rh = rhN > 0 ? rhSum / rhN : null;
+          const vpd = (Number.isFinite(temp) && Number.isFinite(rh)) 
+            ? calculateVPD(temp, rh) : null;
+
+          const score = computeQuickScore(temp, rh, vpd);
+
+          healthData.zones = healthData.zones || [];
+          healthData.zones.push({
+            zone_id: zoneId,
+            zone_name: zone.name || `Zone ${zone.zone}`,
+            score, overall: score,
+            grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F',
+            status: score >= 80 ? 'healthy' : score >= 60 ? 'warning' : 'critical',
+            source: 'iot-devices'
+          });
+          augmented = true;
+          console.log(`[Health] Augmented ${zoneId} from IoT devices: temp=${temp?.toFixed(1)}, rh=${rh?.toFixed(0)}, score=${score}`);
+        }
+
+        // Recalculate farm score if we added zones
+        if (augmented && healthData.zones.length > 0) {
+          const avgScore = Math.round(healthData.zones.reduce((s, z) => s + z.score, 0) / healthData.zones.length);
+          healthData.farm_score = avgScore;
+          healthData.grade = avgScore >= 90 ? 'A' : avgScore >= 80 ? 'B' : avgScore >= 70 ? 'C' : avgScore >= 60 ? 'D' : 'F';
+          healthData.summary = {
+            total_zones: healthData.zones.length,
+            excellent: healthData.zones.filter(z => z.score >= 90).length,
+            good: healthData.zones.filter(z => z.score >= 70 && z.score < 90).length,
+            fair: healthData.zones.filter(z => z.score >= 50 && z.score < 70).length,
+            poor: healthData.zones.filter(z => z.score < 50).length
+          };
+        }
+      } catch (err) {
+        console.warn('[Health] Failed to augment with IoT data:', err);
+      }
+    }
+
     // Health Status Loader - Unified Renderer (no duplicate cards)
     async function loadHealthStatus() {
       const container = document.getElementById('healthContent');
@@ -4536,7 +4752,8 @@
       };
 
       // === STEP 2: NORMALIZE DATA TO SINGLE FORMAT ===
-      const normalizeHealthData = (fetchResult) => {
+      // Also augment with IoT device data for zones missing from /env
+      const normalizeHealthData = async (fetchResult) => {
         if (fetchResult.source === 'none') {
           return {
             farm_score: 0,
@@ -4549,8 +4766,10 @@
         }
         
         if (fetchResult.source === 'api') {
-          // Already in correct format
-          return fetchResult.data;
+          // Augment with IoT device data for any zones missing from health API
+          const healthData = fetchResult.data;
+          await augmentHealthWithIoTDevices(healthData);
+          return healthData;
         }
         
         // Normalize env data to API format
@@ -4709,7 +4928,7 @@
         container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading health data...</div>';
 
         const fetchResult = await fetchHealthData();
-        const normalized = normalizeHealthData(fetchResult);
+        const normalized = await normalizeHealthData(fetchResult);
         renderHealthCard(normalized);
 
       } catch (error) {
@@ -4728,6 +4947,287 @@
           refreshBtn.textContent = '↻ Refresh';
         }
       }
+    }
+
+    async function trackAIInteraction(eventType, context = {}) {
+      try {
+        const actionMap = {
+          view: 'modified',
+          acknowledge: 'modified',
+          accept: 'accepted',
+          dismiss: 'rejected'
+        };
+        const action = actionMap[eventType];
+        if (!action) return;
+
+        await fetch('/api/ai/record-decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action,
+            recommendedCrop: context.crop || context.category || 'ai-event',
+            actualCrop: context.crop || context.category || 'ai-event',
+            groupId: context.itemKey || context.category || 'dashboard'
+          })
+        });
+      } catch (_) {}
+    }
+
+    function acknowledgeAIItem(category, itemKey, btn) {
+      trackAIInteraction('acknowledge', { category, itemKey });
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Acknowledged';
+        btn.style.opacity = '0.7';
+      }
+    }
+
+    // ═══════════ Harvest Readiness (S4.2) ═══════════
+    async function loadHarvestReadiness() {
+      try {
+        const resp = await fetch('/api/harvest/readiness?t=' + Date.now());
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const rawItems = data.notifications || data.groups || data.data || [];
+        const groups = rawItems.map((item, idx) => ({
+          id: item.group_id || item.groupId || item.id || `harvest-${idx}`,
+          group_name: item.group_name || item.groupId || item.group_id || item.crop || item.id || 'Group',
+          readiness_score: item.readiness_score ?? item.readiness ?? item.confidence ?? 0,
+          days_remaining: item.days_remaining ?? item.days_to_harvest ?? item.daysUntilHarvest ?? null,
+          predicted_yield: item.predicted_yield ?? item.predictedYield ?? null,
+          message: item.message || null
+        }));
+        const el = document.getElementById('harvestReadinessContent');
+        const card = document.getElementById('harvestReadinessCard');
+        if (!el || groups.length === 0) { if (card) card.style.display = 'none'; return; }
+        card.style.display = '';
+        trackAIInteraction('view', { category: 'harvest_readiness', count: groups.length });
+        el.innerHTML = groups.map(g => {
+          const pct = Math.min(100, Math.round((g.readiness_score || g.readiness || 0) * 100));
+          const color = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#64748b';
+          return `<div style="background:#1e293b;border-radius:8px;padding:1rem;border-left:3px solid ${color};">
+            <div style="font-weight:600;color:#f1f5f9;margin-bottom:0.25rem;">${g.group_name || g.crop || g.id}</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+              <div style="flex:1;background:#334155;border-radius:4px;height:6px;"><div style="width:${pct}%;background:${color};border-radius:4px;height:100%;"></div></div>
+              <span style="color:${color};font-weight:700;font-size:0.8rem;">${pct}%</span>
+            </div>
+            <div style="color:#94a3b8;font-size:0.75rem;">${g.days_remaining != null ? g.days_remaining + ' days to harvest' : ''} ${g.predicted_yield ? '· ~' + g.predicted_yield + ' yield' : ''} ${g.message ? '· ' + g.message : ''}</div>
+            <div style="margin-top:0.5rem;display:flex;justify-content:flex-end;">
+              <button onclick="acknowledgeAIItem('harvest_readiness','${g.id}',this)" style="background:#334155;border:none;color:#94a3b8;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.72rem;">Acknowledge</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) { console.warn('[HarvestReadiness]', e.message); }
+    }
+
+    // ═══════════ Loss Prediction Alerts (S4.3) ═══════════
+    async function loadLossPredictions() {
+      try {
+        const resp = await fetch('/api/losses/predict?t=' + Date.now());
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const alerts = data.alerts || [];
+        const el = document.getElementById('lossPredictionContent');
+        const card = document.getElementById('lossPredictionCard');
+        if (!el || alerts.length === 0) { if (card) card.style.display = 'none'; return; }
+        card.style.display = '';
+        trackAIInteraction('view', { category: 'loss_prediction', count: alerts.length });
+        el.innerHTML = alerts.slice(0, 5).map(a => {
+          const sev = (a.risk_score || 0) > 0.7 ? '#ef4444' : (a.risk_score || 0) > 0.4 ? '#f59e0b' : '#3b82f6';
+          return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#1e293b;border-radius:8px;margin-bottom:0.5rem;border-left:3px solid ${sev};">
+            <span style="font-size:1.25rem;">${(a.risk_score || 0) > 0.7 ? '🔴' : '🟡'}</span>
+            <div style="flex:1;">
+              <div style="color:#f1f5f9;font-weight:600;">${a.group_name || a.zone || 'Zone'}</div>
+              <div style="color:#94a3b8;font-size:0.75rem;">${a.factors ? a.factors.join(', ') : a.message || 'Elevated risk'}</div>
+            </div>
+            <span style="color:${sev};font-weight:700;font-size:0.875rem;">${Math.round((a.risk_score || 0) * 100)}%</span>
+            <button onclick="acknowledgeAIItem('loss_prediction','${a.group_id || a.group_name || a.zone || 'zone'}',this)" style="background:#334155;border:none;color:#94a3b8;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.72rem;">Acknowledge</button>
+          </div>`;
+        }).join('');
+      } catch (e) { console.warn('[LossPredictions]', e.message); }
+    }
+
+    async function loadLearningCorrelations() {
+      try {
+        const resp = await fetch('/api/ai/learning-correlations?t=' + Date.now());
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const rooms = data.rooms || {};
+        const card = document.getElementById('learningCorrelationCard');
+        const el = document.getElementById('learningCorrelationContent');
+        if (!card || !el) return;
+
+        const correlations = [];
+        Object.entries(rooms).forEach(([roomId, metrics]) => {
+          Object.entries(metrics || {}).forEach(([metric, value]) => {
+            const coeff = typeof value === 'number'
+              ? value
+              : (value?.coefficient ?? value?.correlation ?? value?.r ?? null);
+            if (Number.isFinite(coeff)) {
+              correlations.push({ roomId, metric, coeff, samples: value?.samples ?? value?.n ?? null });
+            }
+          });
+        });
+
+        if (correlations.length === 0) {
+          card.style.display = 'none';
+          return;
+        }
+
+        card.style.display = '';
+        trackAIInteraction('view', { category: 'learning_correlations', count: correlations.length });
+
+        correlations.sort((a, b) => Math.abs(b.coeff) - Math.abs(a.coeff));
+        el.innerHTML = correlations.slice(0, 6).map(item => {
+          const strength = Math.round(Math.abs(item.coeff) * 100);
+          const polarity = item.coeff >= 0 ? '+' : '-';
+          const color = strength >= 75 ? '#22c55e' : strength >= 50 ? '#f59e0b' : '#64748b';
+          return `<div style="background:#1e293b;border-radius:8px;padding:0.9rem;margin-bottom:0.6rem;border-left:3px solid ${color};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+              <div style="color:#f1f5f9;font-weight:600;">${item.metric}</div>
+              <div style="color:${color};font-weight:700;">${polarity}${strength}%</div>
+            </div>
+            <div style="color:#94a3b8;font-size:0.75rem;">Room ${item.roomId}${item.samples != null ? ` · samples ${item.samples}` : ''}</div>
+            <div style="margin-top:0.5rem;background:#334155;border-radius:4px;height:6px;overflow:hidden;">
+              <div style="width:${strength}%;background:${color};height:100%;"></div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.warn('[LearningCorrelations]', e.message);
+      }
+    }
+
+    async function loadExperimentRecords() {
+      try {
+        const [statsResp, recordsResp] = await Promise.all([
+          fetch('/api/harvest/experiment-stats?t=' + Date.now()),
+          fetch('/api/harvest/experiment-records?limit=5&t=' + Date.now())
+        ]);
+
+        if (!statsResp.ok || !recordsResp.ok) return;
+
+        const statsData = await statsResp.json();
+        const recordsData = await recordsResp.json();
+        const crops = statsData.crops || [];
+        const records = recordsData.records || [];
+        const card = document.getElementById('experimentRecordCard');
+        const el = document.getElementById('experimentRecordContent');
+        if (!card || !el) return;
+
+        if (records.length === 0) {
+          card.style.display = 'none';
+          return;
+        }
+
+        card.style.display = '';
+        trackAIInteraction('view', { category: 'experiment_records', count: records.length, cropsTracked: crops.length });
+
+        const cropSummary = crops.slice(0, 3).map(c => `${c.crop}: ${c.harvest_count}`).join(' · ');
+        el.innerHTML = `
+          <div style="margin-bottom:0.75rem;color:#94a3b8;font-size:0.82rem;">${statsData.total_experiments || records.length} total records · ${crops.length} crops tracked${cropSummary ? ` · ${cropSummary}` : ''}</div>
+          <div style="display:grid;gap:0.55rem;">
+            ${records.slice(0, 5).map(r => `
+              <div style="background:#1e293b;border-radius:8px;padding:0.75rem;display:flex;justify-content:space-between;gap:0.5rem;align-items:center;">
+                <div>
+                  <div style="color:#f1f5f9;font-weight:600;">${r.crop || 'unknown crop'}</div>
+                  <div style="color:#94a3b8;font-size:0.75rem;">${r.recipe_id || 'recipe n/a'} · ${r.grow_days != null ? `${r.grow_days} days` : 'grow days n/a'}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#22c55e;font-weight:700;">${r.outcomes?.weight_per_plant_oz != null ? `${r.outcomes.weight_per_plant_oz} oz` : '--'}</div>
+                  <div style="color:#64748b;font-size:0.72rem;">${r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (e) {
+        console.warn('[ExperimentRecords]', e.message);
+      }
+    }
+
+    // ═══════════ Recipe Modifiers Panel (S4.1) ═══════════
+    async function loadRecipeModifiers() {
+      try {
+        const resp = await fetch('/api/recipe-modifiers?t=' + Date.now());
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const local = data.local || [];
+        const network = data.network || [];
+        const el = document.getElementById('recipeModifierContent');
+        const card = document.getElementById('recipeModifierCard');
+        if (!el) return;
+        const items = [...local.map(m => ({...m, source: 'local'})), ...network.map(m => ({...m, source: 'network'}))];
+        if (items.length === 0) { if (card) card.style.display = 'none'; return; }
+        card.style.display = '';
+        el.innerHTML = items.map(m => {
+          const conf = m.confidence != null ? Math.round(m.confidence * 100) : null;
+          const confColor = conf >= 80 ? '#22c55e' : conf >= 50 ? '#f59e0b' : '#94a3b8';
+          const badge = m.source === 'network'
+            ? '<span style="background:#3b82f6;color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.65rem;font-weight:700;">NETWORK</span>'
+            : '<span style="background:#22c55e;color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.65rem;font-weight:700;">LOCAL</span>';
+          const harvestGate = (m.harvest_count || 0) < (m.source === 'network' ? 50 : 10)
+            ? `<div style="color:#f59e0b;font-size:0.7rem;margin-top:0.25rem;">⚠ Insufficient data (${m.harvest_count || 0}/${m.source === 'network' ? 50 : 10} harvests)</div>`
+            : '';
+          const btns = m.source === 'network' && !m.accepted
+            ? `<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                <button onclick="acceptModifier('${m.crop}')" style="flex:1;background:#22c55e;color:white;border:none;padding:0.375rem;border-radius:6px;cursor:pointer;font-size:0.75rem;">✓ Accept</button>
+                <button onclick="dismissModifier('${m.crop}')" style="flex:1;background:#475569;color:#94a3b8;border:none;padding:0.375rem;border-radius:6px;cursor:pointer;font-size:0.75rem;">✕ Dismiss</button>
+              </div>` : '';
+          return `<div style="background:#1e293b;border-radius:8px;padding:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">${badge}<span style="color:#94a3b8;font-size:0.75rem;">${m.crop || ''}</span></div>
+            <div style="color:#f1f5f9;font-weight:600;margin-bottom:0.25rem;">${m.parameter || m.modifier_type || 'Modifier'}: ${m.value != null ? m.value : ''} ${m.unit || ''}</div>
+            ${conf != null ? `<div style="color:${confColor};font-size:0.75rem;">Confidence: ${conf}%</div>` : ''}
+            ${harvestGate}${btns}
+          </div>`;
+        }).join('');
+      } catch (e) { console.warn('[RecipeModifiers]', e.message); }
+    }
+    async function acceptModifier(crop) {
+      try {
+        await fetch(`/api/recipe-modifiers/network/${encodeURIComponent(crop)}/accept`, { method: 'POST' });
+        trackAIInteraction('accept', { category: 'recipe_modifier', crop });
+        await loadRecipeModifiers();
+      } catch (e) { console.error(e); }
+    }
+    async function dismissModifier(crop) {
+      try {
+        await fetch(`/api/recipe-modifiers/network/${encodeURIComponent(crop)}/dismiss`, { method: 'POST' });
+        trackAIInteraction('dismiss', { category: 'recipe_modifier', crop });
+        await loadRecipeModifiers();
+      } catch (e) { console.error(e); }
+    }
+
+    // ═══════════ AI Feature Cards (S4.5) ═══════════
+    async function loadAIFeatureCards() {
+      try {
+        const el = document.getElementById('aiFeatureContent');
+        const card = document.getElementById('aiFeatureCards');
+        if (!el) return;
+        const features = [];
+        // Fetch multiple AI endpoints in parallel
+        const [modResp, harvestResp, lossResp, autonomousResp] = await Promise.allSettled([
+          fetch('/api/recipe-modifiers').then(r => r.ok ? r.json() : null),
+          fetch('/api/harvest/readiness').then(r => r.ok ? r.json() : null),
+          fetch('/api/losses/predict').then(r => r.ok ? r.json() : null),
+          fetch('/api/recipe-modifiers/autonomous/status').then(r => r.ok ? r.json() : null)
+        ]);
+        const modData = modResp.status === 'fulfilled' ? modResp.value : null;
+        const harvestData = harvestResp.status === 'fulfilled' ? harvestResp.value : null;
+        const lossData = lossResp.status === 'fulfilled' ? lossResp.value : null;
+        const autoData = autonomousResp.status === 'fulfilled' ? autonomousResp.value : null;
+        if (modData) { const n = (modData.local || []).length + (modData.network || []).length; features.push({ icon: '🧬', label: 'Recipe Modifiers', value: n + ' active', color: n > 0 ? '#22c55e' : '#64748b' }); }
+        if (harvestData) { const groups = harvestData.notifications || harvestData.groups || harvestData.data || []; const ready = groups.filter(g => (g.readiness_score || g.readiness || g.confidence || 0) >= 0.8).length; features.push({ icon: '🌾', label: 'Harvest Ready', value: ready + '/' + groups.length, color: ready > 0 ? '#f59e0b' : '#64748b' }); }
+        if (lossData) { const alerts = lossData.alerts || []; const high = alerts.filter(a => (a.risk_score || 0) > 0.7).length; features.push({ icon: '⚠️', label: 'Loss Risk', value: high > 0 ? high + ' high risk' : 'Clear', color: high > 0 ? '#ef4444' : '#22c55e' }); }
+        if (autoData) { features.push({ icon: '🤖', label: 'Autonomous', value: autoData.enabled ? 'Active' : 'Inactive', color: autoData.enabled ? '#3b82f6' : '#64748b' }); }
+        if (features.length === 0) { if (card) card.style.display = 'none'; return; }
+        card.style.display = '';
+        el.innerHTML = features.map(f => `<div style="background:#1e293b;border-radius:8px;padding:1rem;text-align:center;">
+          <div style="font-size:1.5rem;margin-bottom:0.25rem;">${f.icon}</div>
+          <div style="color:#94a3b8;font-size:0.75rem;margin-bottom:0.25rem;">${f.label}</div>
+          <div style="color:${f.color};font-weight:700;">${f.value}</div>
+        </div>`).join('');
+      } catch (e) { console.warn('[AIFeatureCards]', e.message); }
     }
 
     // ML Insights Dashboard Widget Loaders
@@ -7080,7 +7580,7 @@
         // Load farm's dedicated crop list
         let dedicatedPlanIds = new Set();
         try {
-          const dcResp = await fetch('/api/dedicated-crops');
+          const dcResp = await fetch('/api/farm/dedicated-crops');
           if (dcResp.ok) {
             const dcData = await dcResp.json();
             if (dcData.dedicated_crops && dcData.dedicated_crops.length > 0) {
@@ -7371,8 +7871,8 @@
   </script>
   <script src="/js/farm-assistant.js?v=20260203"></script>
   
-  <!-- Harvest Predictions AI Component (P3) - Disabled (requires AI backend) -->
-  <!-- <script src="/harvest-predictions.js?v=20260203"></script> -->
+  <!-- Harvest Predictions AI Component (P3) -->
+  <script src="/harvest-predictions.js?v=20260222"></script>
   
   <!-- Succession Planner AI Component (P4) - Disabled (requires AI backend) -->
   <!--

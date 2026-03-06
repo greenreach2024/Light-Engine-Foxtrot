@@ -1616,7 +1616,8 @@
                   protocol: dev.protocol,
                   category: dev.category,
                   zone: devZone,
-                  telemetry: dev.telemetry || {}
+                  telemetry: dev.telemetry || {},
+                  estimated: true  // Flag: position is auto-generated, not from room map
                 });
               }
               console.log('[Heat Map] Auto-positioned', STATE.sensors.length, 'sensors from IoT registry');
@@ -2467,12 +2468,19 @@
           const sensorName = sensor.name || sensor.deviceId;
           if (sensorName) {
             const shortName = sensorName.length > 12 ? sensorName.substring(0, 10) + '..' : sensorName;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-            ctx.fillRect(x - 30, y + 12, 60, 14);
+            const labelBg = sensor.estimated ? 'rgba(120, 80, 20, 0.85)' : 'rgba(15, 23, 42, 0.85)';
+            const labelH = sensor.estimated ? 26 : 14;
+            ctx.fillStyle = labelBg;
+            ctx.fillRect(x - 30, y + 12, 60, labelH);
             ctx.fillStyle = '#e2e8f0';
             ctx.font = 'bold 9px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(shortName, x, y + 22);
+            if (sensor.estimated) {
+              ctx.fillStyle = '#fbbf24';
+              ctx.font = 'italic 8px sans-serif';
+              ctx.fillText('~ estimated', x, y + 34);
+            }
           }
         }
       });

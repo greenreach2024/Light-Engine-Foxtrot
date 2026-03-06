@@ -3765,7 +3765,20 @@
             z.id === String(zone.zone)
           );
           
-          const isStale = envZone ? !isSensorDataFresh(envZone, 5 * 60 * 1000) : false;
+          // Determine staleness based on whichever data source was actually used
+          let isStale = false;
+          if (zoneSensorDevices.length > 0) {
+            // IoT device telemetry was the primary source — check device timestamps
+            const maxAgeMs = 15 * 60 * 1000; // 15 minutes
+            isStale = zoneSensorDevices.every(d => {
+              const ts = d.telemetry?.lastUpdated || d.telemetry?.timestamp || d.lastSeen || d.updatedAt;
+              if (!ts) return false; // No timestamp available, assume fresh
+              return (Date.now() - new Date(ts).getTime()) > maxAgeMs;
+            });
+          } else if (envZone) {
+            // Fell back to envData — check envZone.meta.lastSync
+            isStale = !isSensorDataFresh(envZone, 15 * 60 * 1000);
+          }
           const tempInvalid = Number.isFinite(temp) ? !isSensorReadingValid(temp, 'tempC', envZone) : false;
           const humidityInvalid = Number.isFinite(humidity) ? !isSensorReadingValid(humidity, 'rh', envZone) : false;
           
@@ -4607,6 +4620,95 @@
       }
     }
 
+    /**
+     * Augment health data with IoT device telemetry for zones not covered by /env.
+     * The /env endpoint may only have zone-1, but IoT devices report for all zones.
+     * This fills in missing zones so the health score reflects the full farm.
+     */
+    async function augmentHealthWithIoTDevices(healthData) {
+      try {
+        // Load room map to know which zones exist
+        const roomMapResp = await fetch('/data/room-map-room-3xxjln.json');
+        const iotResp = await fetch('/data/iot-devices.json');
+        if (!roomMapResp.ok || !iotResp.ok) return;
+
+        const roomMap = await roomMapResp.json();
+        let iotDevices = await iotResp.json();
+        if (!Array.isArray(iotDevices)) iotDevices = iotDevices.devices || [];
+
+        const definedZones = roomMap.zones || [];
+        const existingZoneIds = new Set((healthData.zones || []).map(z => z.zone_id));
+
+        const computeQuickScore = (temp, rh, vpd) => {
+          let score = 40;
+          if (Number.isFinite(temp) && temp >= 18 && temp <= 24) score += 20;
+          if (Number.isFinite(rh) && rh >= 40 && rh <= 70) score += 20;
+          if (Number.isFinite(vpd) && vpd >= 0.8 && vpd <= 1.2) score += 20;
+          return Math.max(0, Math.min(100, Math.round(score)));
+        };
+
+        let augmented = false;
+        for (const zone of definedZones) {
+          const zoneId = `zone-${zone.zone}`;
+          if (existingZoneIds.has(zoneId)) continue;
+
+          // Find IoT sensors in this zone
+          const sensors = iotDevices.filter(d => {
+            if (d.zone !== zone.zone) return false;
+            const t = (d.type || '').toLowerCase();
+            const c = (d.category || '').toLowerCase();
+            return t.includes('sensor') || c.includes('sensor') || 
+                   (d.telemetry?.temperature != null || d.telemetry?.humidity != null);
+          });
+
+          if (sensors.length === 0) continue;
+
+          // Average sensor readings
+          let tempSum = 0, rhSum = 0, tempN = 0, rhN = 0;
+          for (const s of sensors) {
+            const tel = s.telemetry || {};
+            if (Number.isFinite(tel.temperature)) { tempSum += tel.temperature; tempN++; }
+            if (Number.isFinite(tel.humidity)) { rhSum += tel.humidity; rhN++; }
+          }
+
+          const temp = tempN > 0 ? tempSum / tempN : null;
+          const rh = rhN > 0 ? rhSum / rhN : null;
+          const vpd = (Number.isFinite(temp) && Number.isFinite(rh)) 
+            ? calculateVPD(temp, rh) : null;
+
+          const score = computeQuickScore(temp, rh, vpd);
+
+          healthData.zones = healthData.zones || [];
+          healthData.zones.push({
+            zone_id: zoneId,
+            zone_name: zone.name || `Zone ${zone.zone}`,
+            score, overall: score,
+            grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F',
+            status: score >= 80 ? 'healthy' : score >= 60 ? 'warning' : 'critical',
+            source: 'iot-devices'
+          });
+          augmented = true;
+          console.log(`[Health] Augmented ${zoneId} from IoT devices: temp=${temp?.toFixed(1)}, rh=${rh?.toFixed(0)}, score=${score}`);
+        }
+
+        // Recalculate farm score if we added zones
+        if (augmented && healthData.zones.length > 0) {
+          const avgScore = Math.round(healthData.zones.reduce((s, z) => s + z.score, 0) / healthData.zones.length);
+          healthData.farm_score = avgScore;
+          healthData.grade = avgScore >= 90 ? 'A' : avgScore >= 80 ? 'B' : avgScore >= 70 ? 'C' : avgScore >= 60 ? 'D' : 'F';
+          healthData.summary = {
+            total_zones: healthData.zones.length,
+            excellent: healthData.zones.filter(z => z.score >= 90).length,
+            good: healthData.zones.filter(z => z.score >= 70 && z.score < 90).length,
+            fair: healthData.zones.filter(z => z.score >= 50 && z.score < 70).length,
+            poor: healthData.zones.filter(z => z.score < 50).length
+          };
+        }
+      } catch (err) {
+        console.warn('[Health] Failed to augment with IoT data:', err);
+      }
+    }
+
     // Health Status Loader - Unified Renderer (no duplicate cards)
     async function loadHealthStatus() {
       const container = document.getElementById('healthContent');
@@ -4650,7 +4752,8 @@
       };
 
       // === STEP 2: NORMALIZE DATA TO SINGLE FORMAT ===
-      const normalizeHealthData = (fetchResult) => {
+      // Also augment with IoT device data for zones missing from /env
+      const normalizeHealthData = async (fetchResult) => {
         if (fetchResult.source === 'none') {
           return {
             farm_score: 0,
@@ -4663,8 +4766,10 @@
         }
         
         if (fetchResult.source === 'api') {
-          // Already in correct format
-          return fetchResult.data;
+          // Augment with IoT device data for any zones missing from health API
+          const healthData = fetchResult.data;
+          await augmentHealthWithIoTDevices(healthData);
+          return healthData;
         }
         
         // Normalize env data to API format
@@ -4823,7 +4928,7 @@
         container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading health data...</div>';
 
         const fetchResult = await fetchHealthData();
-        const normalized = normalizeHealthData(fetchResult);
+        const normalized = await normalizeHealthData(fetchResult);
         renderHealthCard(normalized);
 
       } catch (error) {
