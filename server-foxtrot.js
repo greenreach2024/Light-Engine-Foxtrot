@@ -29519,12 +29519,24 @@ function setupLiveSensorSync() {
           zone.sensors.tempC.setpoint = targetSetpoint;
 
           const tempC = Math.round(Number(telemetry.temperature) * 10) / 10;
+
+          // Fahrenheit guard – scrub Fahrenheit values from per-source histories too
           const historyContainsFahrenheit = Array.isArray(zone.sensors.tempC.history) && zone.sensors.tempC.history.some((value) => value > 40);
           if (historyContainsFahrenheit) {
             console.log(`[Sensor Sync] Detected Fahrenheit values in ${zone.name} history, resetting to Celsius`);
             zone.sensors.tempC.history = [];
             zone.sensors.tempC.timestamps = [];
             zone.sensors.tempC.historyMeta = {};
+            // Also scrub per-source histories that contain Fahrenheit
+            if (zone.sensors.tempC.sources) {
+              for (const src of Object.values(zone.sensors.tempC.sources)) {
+                if (Array.isArray(src.history) && src.history.some(v => v > 40)) {
+                  src.history = [];
+                  src.timestamps = [];
+                  src.historyMeta = {};
+                }
+              }
+            }
           }
 
           if (targetSetpoint && (targetSetpoint.min > 40 || targetSetpoint.max > 40)) {
@@ -29532,18 +29544,13 @@ function setupLiveSensorSync() {
             zone.sensors.tempC.setpoint = { min: 20, max: 24 };
           }
 
-          if (zone.sensors.tempC.current !== tempC) {
-            zone.sensors.tempC.current = tempC;
-            zoneMutated = true;
-          }
-
+          // Per-source history only – zone-level aggregation happens AFTER the device loop
           zone.sensors.tempC.updatedAt = timestampIso;
-          const tempHistoryChanged = updateValidDataHistory(zone.sensors.tempC, tempC);
           const tempSourceChanged = updateSensorSourceHistory(zone.sensors.tempC, deviceId, tempC, timestampIso, {
             name: device.name || deviceId,
             battery: Number.isFinite(telemetry.battery) ? telemetry.battery : undefined
           });
-          if (tempHistoryChanged || tempSourceChanged) {
+          if (tempSourceChanged) {
             zoneMutated = true;
           }
         }
@@ -29557,38 +29564,23 @@ function setupLiveSensorSync() {
           }
 
           const rhValue = Math.round(Number(telemetry.humidity) * 10) / 10;
-          if (zone.sensors.rh.current !== rhValue) {
-            zone.sensors.rh.current = rhValue;
-            zoneMutated = true;
-          }
 
+          // Per-source history only – zone-level aggregation happens AFTER the device loop
           zone.sensors.rh.updatedAt = timestampIso;
-          const rhHistoryChanged = updateValidDataHistory(zone.sensors.rh, rhValue);
           const rhSourceChanged = updateSensorSourceHistory(zone.sensors.rh, deviceId, rhValue, timestampIso, {
             name: device.name || deviceId,
             battery: Number.isFinite(telemetry.battery) ? telemetry.battery : undefined
           });
-          if (rhHistoryChanged || rhSourceChanged) {
+          if (rhSourceChanged) {
             zoneMutated = true;
           }
         }
 
+        // VPD is computed in zone-level aggregation from averaged temp/rh
         if (hasTemp && hasHumidity) {
-          const vpd = computeVPDkPa(Number(telemetry.temperature), Number(telemetry.humidity));
           zone.sensors.vpd = zone.sensors.vpd || { current: null, history: [], setpoint: { min: 0.90, max: 1.05 } };
           if (!zone.sensors.vpd.setpoint || zone.sensors.vpd.setpoint.min !== 0.90 || zone.sensors.vpd.setpoint.max !== 1.05) {
             zone.sensors.vpd.setpoint = { min: 0.90, max: 1.05 };
-            zoneMutated = true;
-          }
-
-          const vpdValue = Math.round(Number(vpd) * 100) / 100;
-          if (zone.sensors.vpd.current !== vpdValue) {
-            zone.sensors.vpd.current = vpdValue;
-            zoneMutated = true;
-          }
-
-          zone.sensors.vpd.updatedAt = timestampIso;
-          if (updateValidDataHistory(zone.sensors.vpd, vpdValue, { minDelta: 0.01 })) {
             zoneMutated = true;
           }
         }
@@ -29602,6 +29594,128 @@ function setupLiveSensorSync() {
           envUpdated = true;
         }
       });
+
+      // ── PASS 2: Zone-level aggregation from per-source data ──────────────
+      // Runs once per zone per cycle, using averaged source values.
+      // This prevents multi-sensor clobbering of zone-level history.
+      for (const zone of envData.zones) {
+        if (!zone?.sensors) continue;
+        let zoneAggMutated = false;
+
+        // Helper: average all source `current` values for a sensor bucket
+        function avgSourceCurrents(bucket) {
+          if (!bucket?.sources) return null;
+          const vals = Object.values(bucket.sources)
+            .map(s => s.current)
+            .filter(v => Number.isFinite(v));
+          if (!vals.length) return null;
+          return vals.reduce((a, b) => a + b, 0) / vals.length;
+        }
+
+        // Helper: rebuild zone-level history from per-source histories
+        // when zone-level is too short compared to source data
+        function rebuildZoneHistoryFromSources(bucket, roundDigits = 1) {
+          if (!bucket?.sources) return false;
+          const sources = Object.values(bucket.sources)
+            .filter(s => Array.isArray(s.history) && s.history.length > 1);
+          if (!sources.length) return false;
+
+          const zoneLen = Array.isArray(bucket.history) ? bucket.history.length : 0;
+          const maxSrcLen = Math.max(...sources.map(s => s.history.length));
+
+          // Only rebuild if zone has significantly fewer points than sources
+          if (zoneLen >= maxSrcLen * 0.5) return false;
+
+          const newHistory = [];
+          const newTimestamps = [];
+          const factor = Math.pow(10, roundDigits);
+
+          for (let i = 0; i < maxSrcLen; i++) {
+            const vals = [];
+            for (const src of sources) {
+              if (i < src.history.length && Number.isFinite(src.history[i])) {
+                vals.push(src.history[i]);
+              }
+            }
+            if (vals.length > 0) {
+              newHistory.push(Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * factor) / factor);
+              // Use the first available source timestamp for this index
+              const ts = sources.find(s => Array.isArray(s.timestamps) && i < s.timestamps.length)?.timestamps[i];
+              newTimestamps.push(ts || new Date(Date.now() - i * HISTORY_SAMPLE_INTERVAL_MS).toISOString());
+            }
+          }
+
+          if (newHistory.length > zoneLen) {
+            bucket.history = newHistory;
+            bucket.timestamps = newTimestamps;
+            bucket.historyMeta = bucket.historyMeta || {};
+            bucket.historyMeta.lastValue = newHistory[0];
+            bucket.historyMeta.lastPushMs = Date.now();
+            console.log(`[sensor-sync] Rebuilt zone history from sources: ${zoneLen} → ${newHistory.length} points`);
+            return true;
+          }
+          return false;
+        }
+
+        // ── Temperature aggregation ──
+        if (zone.sensors.tempC?.sources && Object.keys(zone.sensors.tempC.sources).length) {
+          const avgTemp = avgSourceCurrents(zone.sensors.tempC);
+          if (avgTemp != null) {
+            const rounded = Math.round(avgTemp * 10) / 10;
+            if (zone.sensors.tempC.current !== rounded) {
+              zone.sensors.tempC.current = rounded;
+              zoneAggMutated = true;
+            }
+            if (updateValidDataHistory(zone.sensors.tempC, rounded)) {
+              zoneAggMutated = true;
+            }
+          }
+          if (rebuildZoneHistoryFromSources(zone.sensors.tempC, 1)) {
+            zoneAggMutated = true;
+          }
+        }
+
+        // ── Humidity aggregation ──
+        if (zone.sensors.rh?.sources && Object.keys(zone.sensors.rh.sources).length) {
+          const avgRh = avgSourceCurrents(zone.sensors.rh);
+          if (avgRh != null) {
+            const rounded = Math.round(avgRh * 10) / 10;
+            if (zone.sensors.rh.current !== rounded) {
+              zone.sensors.rh.current = rounded;
+              zoneAggMutated = true;
+            }
+            if (updateValidDataHistory(zone.sensors.rh, rounded)) {
+              zoneAggMutated = true;
+            }
+          }
+          if (rebuildZoneHistoryFromSources(zone.sensors.rh, 1)) {
+            zoneAggMutated = true;
+          }
+        }
+
+        // ── VPD aggregation from averaged temp + rh ──
+        if (zone.sensors.vpd) {
+          const avgT = avgSourceCurrents(zone.sensors.tempC);
+          const avgH = avgSourceCurrents(zone.sensors.rh);
+          if (avgT != null && avgH != null) {
+            const vpdValue = Math.round(computeVPDkPa(avgT, avgH) * 100) / 100;
+            if (zone.sensors.vpd.current !== vpdValue) {
+              zone.sensors.vpd.current = vpdValue;
+              zoneAggMutated = true;
+            }
+            zone.sensors.vpd.updatedAt = new Date().toISOString();
+            if (updateValidDataHistory(zone.sensors.vpd, vpdValue, { minDelta: 0.01 })) {
+              zoneAggMutated = true;
+            }
+          }
+        }
+
+        if (zoneAggMutated) {
+          zone.meta = zone.meta || {};
+          zone.meta.lastSync = new Date().toISOString();
+          envUpdated = true;
+        }
+      }
 
       if (switchBotUpdated) {
         // Re-read the file before writing to avoid overwriting concurrent POST changes.

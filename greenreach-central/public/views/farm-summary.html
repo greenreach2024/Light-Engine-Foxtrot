@@ -6587,6 +6587,54 @@
       return modifiedZScore > threshold;
     }
 
+    // Defence-in-depth: if a zone's sensor has per-source histories but
+    // a very short (or empty) zone-level history, rebuild the zone-level
+    // array by averaging the available source histories.  This handles
+    // the multi-sensor clobbering bug on the server side until the
+    // server fix has accumulated enough zone-level data.
+    function ensureZoneHistoryFromSources(zone) {
+      if (!zone?.sensors) return;
+      for (const metric of ['tempC', 'rh', 'vpd']) {
+        const bucket = zone.sensors[metric];
+        if (!bucket?.sources) continue;
+
+        const sources = Object.values(bucket.sources)
+          .filter(s => Array.isArray(s.history) && s.history.length > 1);
+        if (!sources.length) continue;
+
+        const zoneLen = Array.isArray(bucket.history) ? bucket.history.length : 0;
+        const maxSrcLen = Math.max(...sources.map(s => s.history.length));
+
+        // Only rebuild if zone history is significantly shorter
+        if (zoneLen >= maxSrcLen * 0.5) continue;
+
+        const digits = metric === 'vpd' ? 2 : 1;
+        const factor = Math.pow(10, digits);
+        const newHistory = [];
+        const newTimestamps = [];
+
+        for (let i = 0; i < maxSrcLen; i++) {
+          const vals = [];
+          for (const src of sources) {
+            if (i < src.history.length && Number.isFinite(src.history[i])) {
+              vals.push(src.history[i]);
+            }
+          }
+          if (vals.length) {
+            newHistory.push(Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * factor) / factor);
+            const ts = sources.find(s => Array.isArray(s.timestamps) && i < s.timestamps.length)?.timestamps[i];
+            newTimestamps.push(ts || new Date(Date.now() - i * 300000).toISOString());
+          }
+        }
+
+        if (newHistory.length > zoneLen) {
+          console.log(`[Trending] Rebuilt ${zone.id} ${metric} history from sources: ${zoneLen} → ${newHistory.length} points`);
+          bucket.history = newHistory;
+          bucket.timestamps = newTimestamps;
+        }
+      }
+    }
+
     function buildAggregatedHistoryFromAllZones(zones) {
       if (!zones || zones.length === 0) {
         console.warn('[Trending] buildAggregatedHistoryFromAllZones: No zones provided');
@@ -6595,6 +6643,9 @@
       
       console.log('[Trending] buildAggregatedHistoryFromAllZones: Processing', zones.length, 'zones');
       
+      // Patch zones that have short zone-level history but rich per-source data
+      zones.forEach(ensureZoneHistoryFromSources);
+
       const zoneHasHistory = (zone) => {
         const sensors = zone?.sensors || {};
         return [sensors.tempC?.history, sensors.rh?.history, sensors.co2?.history, sensors.vpd?.history]
@@ -6889,6 +6940,9 @@
     }
 
     function buildHistoryFromZone(zone) {
+      // Patch short zone-level history from per-source data if needed
+      ensureZoneHistoryFromSources(zone);
+
       const sensors = zone?.sensors || {};
       
       // Check if timestamps are available in the sensor data
