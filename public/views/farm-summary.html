@@ -4058,11 +4058,19 @@
             };
 
             if (existingZone) {
-              // Overwrite env data with IoT data (fresher)
-              existingZone.sensors = iotZone.sensors;
+              // Merge IoT current values while PRESERVING history arrays
+              // (loadTrending needs history for the trending chart)
+              for (const sKey of Object.keys(iotZone.sensors)) {
+                if (!existingZone.sensors[sKey]) {
+                  existingZone.sensors[sKey] = iotZone.sensors[sKey];
+                } else {
+                  existingZone.sensors[sKey].current = iotZone.sensors[sKey].current;
+                  // Keep .history intact
+                }
+              }
               existingZone._iotSource = true;
               existingZone._sensorCount = sensors.length;
-              console.log(`[Indoor Conditions] Augmented ${zoneId} with ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)}`);
+              console.log(`[Indoor Conditions] Augmented ${zoneId} with ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)} (history preserved)`);
             } else {
               // Add new zone from IoT data
               data.zones.push(iotZone);
