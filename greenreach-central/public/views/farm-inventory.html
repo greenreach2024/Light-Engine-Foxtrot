@@ -579,6 +579,13 @@
       // Use current server origin for API calls (works on localhost and AWS)
       const API_BASE = window.location.origin;
 
+      function fetchWithFarmAuth(url, opts = {}) {
+        const token = localStorage.getItem('token');
+        const headers = Object.assign({}, opts.headers || {});
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch(url, Object.assign({}, opts, { headers }));
+      }
+
       // Detect if we're on Central server or Farm server
       const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
                              window.location.hostname.includes('greenreach.farm');
@@ -591,13 +598,6 @@
       showLoading();
 
       try {
-        // If on Central server, show message that this page is for farm view only
-        if (isCentralServer) {
-          hideLoading();
-          showError('This inventory view is designed for individual farm servers. Please access this page from your farm\'s Light Engine dashboard.');
-          return;
-        }
-
         console.debug('[loadInventory] Fetching data from:', API_BASE);
         console.log('[loadInventory] Endpoint 1:', `${API_BASE}/api/inventory/current`);
         console.log('[loadInventory] Endpoint 2:', `${API_BASE}/api/inventory/forecast`);
@@ -606,7 +606,7 @@
         // Fetch with timeout and better error handling
         const fetchWithTimeout = (url, timeout = 5000) => {
           return Promise.race([
-            fetch(url),
+            fetchWithFarmAuth(url),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Request timeout')), timeout)
             )
@@ -685,7 +685,7 @@
         // Load crop registry for CCA (Cut and Come Again) awareness
         let cropRegistry = {};
         try {
-          const regResp = await fetch(`${API_BASE}/data/crop-registry.json`);
+          const regResp = await fetchWithFarmAuth(`${API_BASE}/data/crop-registry.json`);
           if (regResp.ok) {
             const regData = await regResp.json();
             cropRegistry = regData.crops || {};
