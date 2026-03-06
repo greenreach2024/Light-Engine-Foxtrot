@@ -1602,23 +1602,6 @@
           ctx.font = 'bold 9px sans-serif';
           ctx.fillText(`Z${device.device.zone}`, x, y - 20);
         }
-
-        // Draw dashed outline for auto-restored sensors (not yet saved by user)
-        if (device.autoRestored) {
-          ctx.save();
-          ctx.setLineDash([4, 3]);
-          ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(x, y, iconSize * 0.45, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.restore();
-          // Small "auto" label
-          ctx.fillStyle = '#f59e0b';
-          ctx.font = 'bold 8px sans-serif';
-          ctx.fillText('auto-placed', x, y + labelOffset + 13);
-        }
       });
     }
 

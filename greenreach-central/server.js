@@ -1,3 +1,20 @@
+/**
+ * GreenReach Central — Cloud Gateway for the GreenReach IoT Platform
+ *
+ * Architecture: ONE Light Engine system with two server components:
+ *   1. Light Engine (server-foxtrot.js) — device control, sensor polling,
+ *      SwitchBot integration, lighting schedules, flat-file data storage.
+ *   2. GreenReach Central (this file) — cloud gateway, PostgreSQL multi-tenant
+ *      DB, web UI, wholesale/billing/admin APIs, syncs FROM Light Engine.
+ *
+ * Data flow:
+ *   Browser → Central (DB + forwards to Light Engine) → Light Engine (flat files)
+ *   Light Engine (sensor data) → Central sync (every 5 min) → DB
+ *
+ * There is NO separate "edge" version. The Light Engine IS the system.
+ * Central is the cloud interface that keeps a database copy and provides
+ * the multi-tenant web UI at greenreachgreens.com.
+ */
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -278,6 +295,45 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
   }
 });
 
+// ── IoT Devices: save to DB + forward to Light Engine ──────────────────────
+// The browser's room-mapper saves device registry data (zone assignments,
+// sensor placements) via POST /data/iot-devices.json. This handler persists
+// to the database AND forwards the payload to the Light Engine so its
+// syncSensorData() loop has the device list it needs to poll SwitchBot.
+app.post('/data/iot-devices.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  try {
+    const payload = req.body;
+    const devicesList = Array.isArray(payload) ? payload : (payload.devices || payload);
+
+    // 1. Save to DB (source of truth for multi-tenant data)
+    await farmStore.set(fid, 'devices', devicesList);
+    logger.info(`[IoT Devices] Saved ${Array.isArray(devicesList) ? devicesList.length : '?'} device(s) for farm ${fid} to DB`);
+
+    // 2. Forward to Light Engine so flat-file storage is updated and
+    //    zone-assignment side-effects (syncZoneAssignmentsFromRoomMap) run.
+    const lightEngineUrl = resolveEdgeUrlForProxy();
+    if (lightEngineUrl) {
+      fetch(`${lightEngineUrl}/data/iot-devices.json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000)
+      })
+        .then(r => logger.info(`[IoT Devices] Forwarded to Light Engine: ${r.status}`))
+        .catch(err => logger.warn(`[IoT Devices] Light Engine forward failed (non-fatal): ${err.message}`));
+    }
+
+    return res.json({ success: true, dataType: 'devices', farmId: fid });
+  } catch (err) {
+    logger.error('[IoT Devices] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── Phase 4: Auto-inject api-config.js + auth-guard.js into all HTML responses ──
 // Serves HTML pages with injected config/auth scripts so every page gets
 // environment detection + the enhanced fetch wrapper without editing 160+ files.
@@ -542,7 +598,7 @@ async function getInventoryTraysForCompat(farmId) {
 }
 
 function resolveEdgeUrl() {
-  // Env var override takes priority (works around broken Tailscale IPs in farm.json)
+  // Resolves the Light Engine URL. FARM_EDGE_URL env var takes priority.
   if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL;
   
   const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
@@ -555,9 +611,15 @@ function resolveEdgeUrl() {
 }
 
 /**
- * Sync farm identity from edge device to the farms DB row.
+ * Sync farm identity from the Light Engine to the farms DB row.
  * Does NOT write to the local farm.json file — only updates the database.
  * Called alongside syncFarmData() on the same interval.
+ *
+ * Architecture note: GreenReach Central and the Light Engine are two
+ * components of a single system. Central is the cloud gateway (UI, DB,
+ * multi-tenant API). The Light Engine handles device control and sensor
+ * polling. There is ONE Light Engine — not separate "edge" and "cloud"
+ * versions.
  */
 async function syncFarmIdentity(edgeUrl) {
   if (!edgeUrl) edgeUrl = resolveEdgeUrl();
@@ -577,7 +639,7 @@ async function syncFarmIdentity(edgeUrl) {
     const farmData = await response.json();
     const farmId = farmData.farmId;
     if (!farmId) {
-      logger.warn('[SyncIdentity] Edge farm.json has no farmId');
+      logger.warn('[SyncIdentity] Light Engine farm.json has no farmId');
       return { ok: false, reason: 'no_farm_id' };
     }
 
@@ -586,7 +648,7 @@ async function syncFarmIdentity(edgeUrl) {
       return { ok: false, reason: 'db_unavailable' };
     }
 
-    // Update farms DB row with current identity from edge
+    // Update farms DB row with current identity from Light Engine
     const farmMeta = {
       contact: farmData.contact || {},
       location: farmData.location || '',
@@ -631,16 +693,16 @@ async function syncFarmData(options = {}) {
   try {
     const edgeUrl = resolveEdgeUrl();
     if (!edgeUrl) {
-      logger.warn(`[${syncLabel}] No edge URL configured (set FARM_EDGE_URL env var or farm.json url)`);
+      logger.warn(`[${syncLabel}] No Light Engine URL configured (set FARM_EDGE_URL env var or farm.json url)`);
       return { ok: false, reason: 'no_edge_url' };
     }
     
-    logger.info(`[${syncLabel}] Syncing data from edge device: ${edgeUrl}`);
+    logger.info(`[${syncLabel}] Syncing data from Light Engine: ${edgeUrl}`);
     let updated = 0;
     let errors = 0;
-    const fetched = {}; // file -> parsed JSON from edge
+    const fetched = {}; // file -> parsed JSON from Light Engine
 
-    // Fetch ALL data files from edge (including farm.json for farmId)
+    // Fetch ALL data files from Light Engine (including farm.json for farmId)
     for (const file of SYNC_DATA_FILES) {
       try {
         const controller = new AbortController();
@@ -655,7 +717,7 @@ async function syncFarmData(options = {}) {
           // served by express.static to unauthenticated requests, causing
           // cross-farm data leaks. In-memory store + DB are the correct
           // persistence paths for multi-tenant mode.
-          logger.info(`[${syncLabel}] Fetched ${file} from edge device`);
+          logger.info(`[${syncLabel}] Fetched ${file} from Light Engine`);
           updated++;
         }
       } catch (err) {
@@ -675,7 +737,7 @@ async function syncFarmData(options = {}) {
         if (response.ok) {
           const text = await response.text();
           try { fetched[extra] = JSON.parse(text); } catch { /* non-JSON */ }
-          logger.info(`[${syncLabel}] Fetched ${extra} from edge device`);
+          logger.info(`[${syncLabel}] Fetched ${extra} from Light Engine`);
         }
       } catch { /* optional files — ignore errors */ }
     }
@@ -689,8 +751,8 @@ async function syncFarmData(options = {}) {
     if (isDaily) syncStatus.lastDailySync = new Date().toISOString();
 
     // Resolve farmId: FARM_ID env var takes priority (canonical ID), then
-    // fetched farm.json, then local farm.json. The edge may have a stale
-    // wizard-generated ID while the env var has the real production ID.
+    // fetched farm.json, then local farm.json. The Light Engine may have a
+    // stale wizard-generated ID while the env var has the real production ID.
     let farmId = process.env.FARM_ID;
     const fetchedFarmId = fetched['farm.json']?.farmId;
     if (!farmId) farmId = fetchedFarmId;
@@ -705,11 +767,11 @@ async function syncFarmData(options = {}) {
       return { ok: true, updated, errors, warning: 'no_farm_id' };
     }
 
-    // If edge farmId differs from canonical, log it and store under both
+    // If Light Engine farmId differs from canonical, log it and store under both
     const aliasFarmIds = new Set([farmId]);
     if (fetchedFarmId && fetchedFarmId !== farmId) {
       aliasFarmIds.add(fetchedFarmId);
-      logger.info(`[${syncLabel}] Edge farmId '${fetchedFarmId}' differs from canonical '${farmId}' — storing under both`);
+      logger.info(`[${syncLabel}] Light Engine farmId '${fetchedFarmId}' differs from canonical '${farmId}' — storing under both`);
     }
 
     // ── Always populate in-memory store (primary storage when DB is down) ──
@@ -781,8 +843,8 @@ async function syncFarmData(options = {}) {
     }
 
     // Tray formats: hydrate in-memory from flat file if not already populated
-    // (tray formats are created via UI, not synced from edge, so they only
-    //  live in the flat file / DB — seed them into memory on startup)
+    // (tray formats are created via UI, not synced from the Light Engine,
+    //  so they only live in the flat file / DB — seed them into memory on startup)
     if (!store.tray_formats) store.tray_formats = new Map();
     for (const fid of aliasFarmIds) {
       if (!store.tray_formats.has(fid)) {
@@ -815,7 +877,7 @@ async function syncFarmData(options = {}) {
           );
         }
 
-        // Use fetched data (from edge), falling back to local files
+        // Use fetched data (from Light Engine), falling back to local files
         const resolve = (fetchedKey, localFile, extractor) => {
           if (fetched[fetchedKey]) return extractor ? extractor(fetched[fetchedKey]) : fetched[fetchedKey];
           const p = path.join(FARM_DATA_DIR, localFile || fetchedKey);
@@ -840,10 +902,9 @@ async function syncFarmData(options = {}) {
 
         const devices = resolve('iot-devices.json', 'iot-devices.json', r => Array.isArray(r) ? r : (r.devices || []));
         // IMPORTANT: The browser's persistIotDevices() saves device registry
-        // data directly to the DB via farmDataWriteMiddleware. The edge flat
-        // file is NOT the source of truth for the device registry — it may be
-        // empty or contain stale equipment entries. Only overwrite if the DB
-        // has no existing device data for this farm.
+        // data directly to the DB via farmDataWriteMiddleware (which also
+        // forwards to the Light Engine). The Light Engine's flat file mirrors
+        // the DB — only seed if the DB has no existing device data.
         if (devices && Array.isArray(devices) && devices.length > 0) {
           let existingArr = [];
           try {
@@ -858,7 +919,7 @@ async function syncFarmData(options = {}) {
           } catch (_) { /* DB read failed — allow upsert */ }
           if (existingArr.length === 0) {
             await upsertFarmData('devices', devices);
-            logger.info(`[${syncLabel}] DB: ${devices.length} devices for ${farmId} (DB was empty, seeded from edge)`);
+            logger.info(`[${syncLabel}] DB: ${devices.length} devices for ${farmId} (DB was empty, seeded from Light Engine)`);
           } else {
             logger.info(`[${syncLabel}] DB: Skipping devices upsert — DB already has ${existingArr.length} device(s) for ${farmId} (browser is authoritative)`);
           }
@@ -869,8 +930,31 @@ async function syncFarmData(options = {}) {
           logger.info(`[${syncLabel}] DB: farm_profile for ${farmId}`);
         }
 
+        // IMPORTANT: The browser's room-mapper saves room map data directly
+        // to the DB via farmDataWriteMiddleware. The Light Engine flat file
+        // may be stale (missing sensors, old positions). Only seed if DB is empty.
         const roomMap = resolve('room-map.json', 'room-map.json');
-        if (roomMap) { await upsertFarmData('room_map', roomMap); logger.info(`[${syncLabel}] DB: room_map for ${farmId}`); }
+        if (roomMap) {
+          let existingRoomMap = null;
+          try {
+            const existResult = await dbQuery(
+              `SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+              [farmId, 'room_map']
+            );
+            if (existResult.rows.length > 0 && existResult.rows[0].data != null) {
+              existingRoomMap = existResult.rows[0].data;
+            }
+          } catch (_) { /* DB read failed — allow upsert */ }
+          const hasExistingDevices = existingRoomMap &&
+            Array.isArray(existingRoomMap.devices) &&
+            existingRoomMap.devices.length > 0;
+          if (!hasExistingDevices) {
+            await upsertFarmData('room_map', roomMap);
+            logger.info(`[${syncLabel}] DB: room_map for ${farmId} (DB was empty, seeded from Light Engine)`);
+          } else {
+            logger.info(`[${syncLabel}] DB: Skipping room_map upsert — DB already has ${existingRoomMap.devices.length} device(s) for ${farmId} (browser is authoritative)`);
+          }
+        }
 
         const lightSetups = resolve('light-setups.json', 'light-setups.json');
         if (lightSetups) { await upsertFarmData('light_setups', lightSetups); logger.info(`[${syncLabel}] DB: light_setups for ${farmId}`); }
@@ -908,7 +992,7 @@ async function syncFarmData(options = {}) {
       logger.warn(`[${syncLabel}] DB upsert skipped or failed:`, telErr.message);
     }
 
-    // Also register this edge farm in the wholesale network store
+    // Also register this farm in the wholesale network store
     // so the aggregator can fetch its inventory
     if (updated > 0 && farmId && edgeUrl) {
       try {
@@ -1445,7 +1529,10 @@ app.post('/api/credential-store', express.json(), (req, res) => {
 });
 
 
-// ── SwitchBot Discover (saves credentials + calls SwitchBot Cloud API) ─────
+// ── SwitchBot Discover ─────────────────────────────────────────────────────
+// Saves credentials to the DB and forwards them to the Light Engine so
+// the sensor polling loop (syncSensorData) can authenticate with SwitchBot.
+// Also queries the SwitchBot Cloud API directly to return discovered devices.
 const SWITCHBOT_API_BASE = 'https://api.switch-bot.com/v1.1';
 
 async function switchBotDiscover(req, res) {
@@ -1455,33 +1542,37 @@ async function switchBotDiscover(req, res) {
       return res.status(400).json({ ok: false, error: 'Both token and secret are required', devices: [] });
     }
 
-    // 1. Persist credentials to farm.json
-    const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
-    let farm = {};
-    try { farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8')); } catch (_) { /* new file */ }
-    if (!farm.integrations) farm.integrations = {};
-    farm.integrations.switchbot = {
-      token: token.trim(),
-      secret: secret.trim(),
-      region: farm.integrations.switchbot?.region || ''
-    };
-    fs.mkdirSync(FARM_DATA_DIR, { recursive: true });
-    fs.writeFileSync(farmJsonPath, JSON.stringify(farm, null, 2));
-    logger.info('[switchbot/discover] Credentials saved to farm.json');
-
-    // Also persist to farmStore (database) for deployment persistence
+    // 1. Persist credentials to farmStore (database) — deployment-persistent
     try {
-      const fid = farmStore.farmIdFromReq(req) || 'default';
+      const fid = farmStore.farmIdFromReq(req) || process.env.FARM_ID || 'default';
       await farmStore.set(fid, 'switchbot_credentials', {
         token: token.trim(),
         secret: secret.trim(),
         updatedAt: new Date().toISOString()
       });
-      logger.info('[switchbot/discover] Credentials also saved to farmStore (DB)');
+      logger.info('[switchbot/discover] Credentials saved to farmStore (DB)');
     } catch (dbErr) {
       logger.warn('[switchbot/discover] farmStore save failed (non-fatal):', dbErr.message);
     }
-    // 2. Call SwitchBot Cloud API v1.1 to discover devices
+
+    // 2. Forward credentials to the Light Engine so it can persist them
+    //    locally (farm.json) and start polling SwitchBot sensors.
+    //    Fire-and-forget — don't block the response on this.
+    const lightEngineUrl = resolveEdgeUrlForProxy();
+    if (lightEngineUrl) {
+      fetch(`${lightEngineUrl}/switchbot/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token.trim(), secret: secret.trim() }),
+        signal: AbortSignal.timeout(12000)
+      })
+        .then(r => logger.info(`[switchbot/discover] Forwarded credentials to Light Engine: ${r.status}`))
+        .catch(err => logger.warn(`[switchbot/discover] Light Engine credential forward failed (non-fatal): ${err.message}`));
+    } else {
+      logger.warn('[switchbot/discover] No Light Engine URL configured — credentials saved to DB only');
+    }
+
+    // 3. Call SwitchBot Cloud API v1.1 to discover devices
     const t = Date.now().toString();
     const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
     const strToSign = token.trim() + t + nonce;
@@ -2349,8 +2440,8 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// Edge-compatible login: /api/farm/auth/login
-// Translates edge format { farmId } → central format { farm_id }
+// Farm auth login (same interface as Light Engine): /api/farm/auth/login
+// Translates Light Engine format { farmId } → central format { farm_id }
 // and response { success } → { status: 'success' }
 app.post('/api/farm/auth/login', (req, res, next) => {
   const { farmId, email, password } = req.body;
@@ -2397,7 +2488,7 @@ app.use('/api/inventory', authMiddleware, inventoryRoutes);     // crop inventor
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
-app.use('/api/farm-settings', farmSettingsRoutes); // Cloud-to-edge settings sync (API key auth)
+app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Central and Light Engine (API key auth)
 app.use('/api/recipes', recipesRoutes); // Public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
@@ -2412,7 +2503,7 @@ app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/discovery/devices', discoveryProxyRoutes); // Device discovery proxy to farm devices
 app.use('/api/discovery/devices', discoveryProxyRoutes); // API alias for discovery proxy
 
-// ── IoT Edge Proxy — forwards IoT/device API calls to Foxtrot edge server ──
+// ── Light Engine Proxy — forwards IoT/device API calls to the Light Engine ──
 function resolveEdgeUrlForProxy() {
   if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL.replace(/\/$/, '');
   try {
@@ -2420,14 +2511,14 @@ function resolveEdgeUrlForProxy() {
     const farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
     if (farm.url) return farm.url.replace(/\/$/, '');
   } catch (_) { /* ignore */ }
-  return 'http://127.0.0.1:8091'; // Fallback: edge + cloud merged on same machine
+  return 'http://127.0.0.1:8091'; // Fallback: local development (both on same machine)
 }
 
 async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeoutMs = 15000) {
   const edgeUrl = resolveEdgeUrlForProxy();
   if (!edgeUrl) {
     return res.status(503).json({
-      error: 'No edge server configured',
+      error: 'No Light Engine URL configured',
       message: 'Set FARM_EDGE_URL or configure farm.json url field',
       timestamp: new Date().toISOString()
     });
@@ -2440,34 +2531,34 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeou
   };
   if (body && method !== 'GET') opts.body = JSON.stringify(body);
   try {
-    logger.info(`[EdgeProxy] ${method} ${url}`);
+    logger.info(`[LightEngineProxy] ${method} ${url}`);
     const response = await fetch(url, opts);
     const text = await response.text();
     res.status(response.status).type('json').send(text);
   } catch (err) {
     if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
-      return res.status(504).json({ error: 'Gateway timeout', message: 'Edge server did not respond', timestamp: new Date().toISOString() });
+      return res.status(504).json({ error: 'Gateway timeout', message: 'Light Engine did not respond', timestamp: new Date().toISOString() });
     }
-    logger.error(`[EdgeProxy] ${method} ${edgePath} error:`, err.message);
-    return res.status(502).json({ error: 'Edge proxy failure', message: err.message, timestamp: new Date().toISOString() });
+    logger.error(`[LightEngineProxy] ${method} ${edgePath} error:`, err.message);
+    return res.status(502).json({ error: 'Light Engine proxy failure', message: err.message, timestamp: new Date().toISOString() });
   }
 }
 
 // Discovery endpoints
 app.get('/discovery/capabilities', (req, res) => edgeProxy(req, res, '/discovery/capabilities'));
 
-// ─── Cloud-native Discovery Scanner (SwitchBot + edge proxy) ────────────
-// When edge is unreachable (cloud-only EB deployment), query SwitchBot API
-// directly using stored credentials from farm.json.
+// ─── Cloud-native Discovery Scanner (SwitchBot) ────────────────────────
+// Tries the Light Engine first; if unreachable, queries SwitchBot API
+// directly using stored credentials from the database or farm.json.
 async function cloudNativeScan(req, res) {
   const devices = [];
   let edgeReachable = false;
 
-  // 1. Try edge proxy first (fast 8s timeout)
+  // 1. Try Light Engine first (fast 8s timeout)
   const edgeUrl = resolveEdgeUrlForProxy();
   if (edgeUrl) {
     try {
-      logger.info(`[CloudScan] Trying edge at ${edgeUrl}/discovery/scan`);
+      logger.info(`[CloudScan] Trying Light Engine at ${edgeUrl}/discovery/scan`);
       const edgeResp = await fetch(`${edgeUrl}/discovery/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2479,10 +2570,10 @@ async function cloudNativeScan(req, res) {
         const edgeDevices = Array.isArray(edgeData.devices) ? edgeData.devices : [];
         devices.push(...edgeDevices);
         edgeReachable = true;
-        logger.info(`[CloudScan] Edge returned ${edgeDevices.length} device(s)`);
+        logger.info(`[CloudScan] Light Engine returned ${edgeDevices.length} device(s)`);
       }
     } catch (edgeErr) {
-      logger.warn(`[CloudScan] Edge unreachable: ${edgeErr.message}`);
+      logger.warn(`[CloudScan] Light Engine unreachable: ${edgeErr.message}`);
     }
   }
 
@@ -2509,11 +2600,11 @@ async function cloudNativeScan(req, res) {
       if (sb?.token) logger.info('[CloudScan] Found SwitchBot credentials in farm.json');
     }
     if (sb?.token && sb?.secret) {
-      const hasSwitchBotFromEdge = devices.some(d =>
+      const hasSwitchBotFromLightEngine = devices.some(d =>
         (d.protocol || '').toLowerCase() === 'switchbot' ||
         (d.brand || '').toLowerCase() === 'switchbot'
       );
-      if (!hasSwitchBotFromEdge) {
+      if (!hasSwitchBotFromLightEngine) {
         logger.info('[CloudScan] Querying SwitchBot API with stored credentials');
         const t = Date.now().toString();
         const nonce = randomUUID ? randomUUID().replace(/-/g, '') : randomBytes(16).toString('hex');
@@ -2562,7 +2653,7 @@ async function cloudNativeScan(req, res) {
     ok: true,
     devices,
     count: devices.length,
-    source: edgeReachable ? 'edge+cloud' : 'cloud',
+    source: edgeReachable ? 'light-engine+cloud' : 'cloud',
     timestamp: new Date().toISOString()
   });
 }
@@ -2571,13 +2662,13 @@ app.get('/discovery/scan', cloudNativeScan);
 
 
 // ─── Cloud-native SwitchBot Device Status ────────────────────────────────
-// Tries edge proxy first; falls back to SwitchBot API v1.1 /devices/{id}/status
+// Tries Light Engine first; falls back to SwitchBot API v1.1 /devices/{id}/status
 // using stored credentials from farmStore (DB) or farm.json.
 async function cloudSwitchBotStatus(req, res) {
   const deviceId = req.params.id;
   if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
 
-  // 1. Try edge proxy (fast 5s timeout)
+  // 1. Try Light Engine (fast 5s timeout)
   const edgeUrl = resolveEdgeUrlForProxy();
   if (edgeUrl) {
     try {
@@ -2589,12 +2680,12 @@ async function cloudSwitchBotStatus(req, res) {
       if (edgeResp.ok) {
         const edgeData = await edgeResp.json();
         if (edgeData?.statusCode === 100 && edgeData?.body) {
-          logger.info(`[SwitchBotStatus] Edge returned status for ${deviceId}`);
+          logger.info(`[SwitchBotStatus] Light Engine returned status for ${deviceId}`);
           return res.json(edgeData);
         }
       }
     } catch (edgeErr) {
-      logger.warn(`[SwitchBotStatus] Edge unreachable for ${deviceId}: ${edgeErr.message}`);
+      logger.warn(`[SwitchBotStatus] Light Engine unreachable for ${deviceId}: ${edgeErr.message}`);
     }
   }
 
@@ -2651,7 +2742,9 @@ async function cloudSwitchBotStatus(req, res) {
   }
 }
 // SwitchBot endpoints
-app.post('/api/switchbot/discover', express.json(), (req, res) => edgeProxy(req, res, '/api/switchbot/discover', 'POST', req.body));
+// NOTE: POST /api/switchbot/discover is handled by switchBotDiscover() (registered earlier)
+// which saves credentials to the DB AND forwards them to the Light Engine.
+// No edge proxy needed here — the switchBotDiscover handler is the single entry point.
 app.get('/switchbot/devices', (req, res) => edgeProxy(req, res, '/switchbot/devices'));
 app.get('/api/switchbot/devices/:id/status', cloudSwitchBotStatus);
 app.post('/api/switchbot/devices/:id/commands', express.json(), (req, res) => edgeProxy(req, res, `/api/switchbot/devices/${req.params.id}/commands`, 'POST', req.body));
@@ -2666,7 +2759,7 @@ app.get('/api/bus-mappings', (req, res) => edgeProxy(req, res, '/api/bus-mapping
 app.post('/api/bus-mapping', express.json(), (req, res) => edgeProxy(req, res, '/api/bus-mapping', 'POST', req.body));
 app.get('/api/bus/:busId/scan', (req, res) => edgeProxy(req, res, `/api/bus/${req.params.busId}/scan`));
 
-app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (edge feature)
+app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (Light Engine feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
 app.use('/api/accounting', authMiddleware, accountingRoutes); // Canonical accounting ledger + close controls
 app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
