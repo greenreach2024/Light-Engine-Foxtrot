@@ -2867,7 +2867,7 @@
         const envData = await fetchEnvData();
         let selectedZone = null;
         if (envData) {
-          selectedZone = loadEnvironmentalFromData(envData);
+          selectedZone = await loadEnvironmentalFromData(envData);
         }
         const tasks = [loadSchedule(envData), loadZoneSummaries(envData), loadMLAnomalies(), loadHealthStatus(), loadHarvestReadiness(), loadLossPredictions(), loadLearningCorrelations(), loadExperimentRecords(), loadRecipeModifiers(), loadAIFeatureCards()];
         if (envData) {
@@ -3973,7 +3973,94 @@
       }
     }
 
-    function loadEnvironmentalFromData(data) {
+    async function loadEnvironmentalFromData(data) {
+      // ── Augment env zones with IoT device data ──
+      // The /env endpoint may only return zone-1. Fetch IoT devices and room map
+      // to build zone data from actual sensor telemetry (same pattern as zone cards).
+      try {
+        const [iotRes, mapRes] = await Promise.all([
+          fetch('/data/iot-devices.json').catch(() => null),
+          fetch('/data/room-map.json').catch(() => null)
+        ]);
+        let iotDevices = [];
+        let roomMapZones = [];
+        if (iotRes && iotRes.ok) {
+          const raw = await iotRes.json();
+          iotDevices = Array.isArray(raw) ? raw : (raw.devices || []);
+        }
+        if (mapRes && mapRes.ok) {
+          const mapData = await mapRes.json();
+          roomMapZones = mapData.zones || [];
+        }
+
+        if (iotDevices.length > 0 && roomMapZones.length > 0) {
+          // Ensure data.zones exists
+          if (!data) data = { zones: [] };
+          if (!Array.isArray(data.zones)) data.zones = [];
+
+          for (const rmZone of roomMapZones) {
+            const zoneNum = Number(rmZone.zone);
+            const zoneId = 'zone-' + zoneNum;
+
+            // Check if this zone already has fresh env data
+            const existingZone = data.zones.find(z => z.id === zoneId);
+
+            // Filter IoT sensors for this zone
+            const sensors = iotDevices.filter(dev => {
+              if (Number(dev.zone) !== zoneNum) return false;
+              if (!dev.telemetry) return false;
+              const t = (dev.type || '').toLowerCase();
+              const c = (dev.category || '').toLowerCase();
+              return t.includes('sensor') || c.includes('sensor') ||
+                     dev.telemetry.temperature != null || dev.telemetry.humidity != null;
+            });
+
+            if (sensors.length === 0) continue;
+
+            // Average readings
+            let tempSum = 0, humSum = 0, tC = 0, hC = 0;
+            for (const s of sensors) {
+              const tel = s.telemetry;
+              if (tel.temperature != null && Number.isFinite(tel.temperature)) {
+                tempSum += tel.temperature; tC++;
+              }
+              if (tel.humidity != null && Number.isFinite(tel.humidity)) {
+                humSum += tel.humidity; hC++;
+              }
+            }
+            const avgTemp = tC > 0 ? tempSum / tC : null;
+            const avgHum = hC > 0 ? humSum / hC : null;
+            const avgVpd = (avgTemp != null && avgHum != null) ? calculateVPD(avgTemp, avgHum) : null;
+
+            const iotZone = {
+              id: zoneId,
+              name: rmZone.name || ('Zone ' + zoneNum),
+              sensors: {
+                tempC: { current: avgTemp },
+                rh: { current: avgHum },
+                vpd: { current: avgVpd }
+              },
+              _iotSource: true,
+              _sensorCount: sensors.length
+            };
+
+            if (existingZone) {
+              // Overwrite env data with IoT data (fresher)
+              existingZone.sensors = iotZone.sensors;
+              existingZone._iotSource = true;
+              existingZone._sensorCount = sensors.length;
+              console.log(`[Indoor Conditions] Augmented ${zoneId} with ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)}`);
+            } else {
+              // Add new zone from IoT data
+              data.zones.push(iotZone);
+              console.log(`[Indoor Conditions] Added ${zoneId} from ${sensors.length} IoT sensors: temp=${avgTemp?.toFixed(1)}, rh=${avgHum?.toFixed(0)}, vpd=${avgVpd?.toFixed(2)}`);
+            }
+          }
+        }
+      } catch (augmentErr) {
+        console.warn('[Indoor Conditions] IoT augmentation failed (non-fatal):', augmentErr.message);
+      }
+
       if (!data || !Array.isArray(data.zones) || data.zones.length === 0) {
         const grid = document.getElementById('envGrid');
         if (grid) {
