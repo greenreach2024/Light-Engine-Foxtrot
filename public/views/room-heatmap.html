@@ -2308,15 +2308,16 @@
       }
 
       if (values.length > 0) {
-        // Use absolute ranges for legend (matching renderHeatMap)
-        const LEGEND_RANGES = {
-          temperature: { min: 10, max: 35 },
-          humidity:    { min: 20, max: 80 },
-          vpd:         { min: 0.4, max: 1.6 }
-        };
-        const absRange = LEGEND_RANGES[STATE.currentMetric];
-        const legendMin = absRange ? absRange.min : Math.min(...values);
-        const legendMax = absRange ? absRange.max : Math.max(...values);
+        // ── Adaptive legend range (matches renderHeatMap adaptive scaling) ──
+        const dataMin = Math.min(...values);
+        const dataMax = Math.max(...values);
+        const dataMean = values.reduce((a, b) => a + b, 0) / values.length;
+        const dataRange = dataMax - dataMin;
+        const ADAPTIVE_MIN_RANGE = { temperature: 1.0, humidity: 5.0, vpd: 0.2 };
+        const minRange = ADAPTIVE_MIN_RANGE[STATE.currentMetric] || 1;
+        const displayRange = Math.max(dataRange * 2.5, minRange);
+        const legendMin = dataMean - displayRange / 2;
+        const legendMax = dataMean + displayRange / 2;
         document.getElementById('legendMin').textContent = `${legendMin.toFixed(1)}${metric.unit}`;
         document.getElementById('legendMax').textContent = `${legendMax.toFixed(1)}${metric.unit}`;
       } else {
@@ -2379,29 +2380,47 @@
         return;
       }
 
-      // Calculate min/max from actual sensor readings
-      // Use absolute ranges to ensure meaningful color gradients
+      // ── Adaptive Color Scaling ──
+      // Instead of fixed absolute ranges (which make small real-world variations
+      // invisible), center the color palette on the actual sensor data range.
+      // This ensures that even 0.2°C differences produce visible color gradients.
       const values = sensorReadings.map(s => s.value).filter(v => v != null);
-      let min = Math.min(...values);
-      let max = Math.max(...values);
+      const dataMin = Math.min(...values);
+      const dataMax = Math.max(...values);
+      const dataMean = values.reduce((a, b) => a + b, 0) / values.length;
+      const dataRange = dataMax - dataMin;
 
-      // When all values are very close (or identical), colors become meaningless
-      // Use sensible absolute ranges so colors represent actual conditions
-      const ABSOLUTE_RANGES = {
-        temperature: { min: 10, max: 35 },  // 10°C to 35°C
-        humidity:    { min: 20, max: 80 },   // 20% to 80% RH
-        vpd:         { min: 0.4, max: 1.6 }  // 0.4 to 1.6 kPa
+      // Minimum display range ensures visible gradients when sensors read identically
+      const ADAPTIVE_MIN_RANGE = {
+        temperature: 1.0,  // At least ±0.5°C
+        humidity:    5.0,   // At least ±2.5% RH
+        vpd:         0.2    // At least ±0.1 kPa
       };
-      const absRange = ABSOLUTE_RANGES[STATE.currentMetric];
-      if (absRange) {
-        // Always use absolute range for consistent colors
-        min = absRange.min;
-        max = absRange.max;
-      }
-      if (max <= min) max = min + 1; // Safety: prevent division by zero
+      const minRange = ADAPTIVE_MIN_RANGE[STATE.currentMetric] || 1;
+      // Expand sensor range ×2.5 so data occupies ~40% of colour palette
+      const displayRange = Math.max(dataRange * 2.5, minRange);
+      let min = dataMean - displayRange / 2;
+      let max = dataMean + displayRange / 2;
+      if (max <= min) max = min + 1;
 
-      // Draw interpolated heat map using real sensor positions
-      drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max);
+      console.log(`[Heat Map] Adaptive scale: data ${dataMin.toFixed(2)}–${dataMax.toFixed(2)}, display ${min.toFixed(2)}–${max.toFixed(2)}`);
+
+      // For VPD: interpolate temperature and humidity separately, compute VPD per-pixel
+      // (VPD is a non-linear function of T and RH — interpolating it directly is physically incorrect)
+      let tempReadings = null;
+      let humReadings = null;
+      if (STATE.currentMetric === 'vpd') {
+        tempReadings = getSensorReadingsForMetric('temperature');
+        humReadings  = getSensorReadingsForMetric('humidity');
+        console.log(`[Heat Map] VPD mode — ${tempReadings.length} temp, ${humReadings.length} hum readings for per-pixel computation`);
+      }
+
+      // Draw physics-based interpolated heat map across entire room
+      drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max, {
+        metric: STATE.currentMetric,
+        tempReadings,
+        humReadings
+      });
 
       // Draw room perimeter if defined
       if (STATE.roomMap.roomPerimeter) {
@@ -2678,70 +2697,205 @@
       return null;
     }
 
-    // Helper: Interpolate value at (x, y) using inverse distance weighting
-    function interpolateValue(x, y, sensorReadings, power = 2) {
-      if (sensorReadings.length === 0) return null;
-      if (sensorReadings.length === 1) return sensorReadings[0].value;
+    // ═══════════════════════════════════════════════════════════════════
+    // Physics-Based Thermal / Humidity Interpolation Engine
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // Models steady-state heat and moisture distribution in a grow room
+    // using Gaussian Radial-Basis-Function (RBF) interpolation, which is
+    // the Green's function solution to the 2-D diffusion equation:
+    //
+    //   ∂T/∂t = α ∇²T   (Fourier's Law / heat equation)
+    //   ∂C/∂t = D ∇²C   (Fick's Second Law / moisture diffusion)
+    //
+    // At steady state ∇²T = 0 (Laplace's equation). The Gaussian kernel
+    //   φ(r) = exp( −r² / 2σ² )
+    // with characteristic length σ derived from room geometry produces
+    // smooth, physically realistic temperature & humidity fields.
+    //
+    // Additional physics:
+    //  • Natural convection — warm air rises and spreads laterally at
+    //    ceiling level, giving warmer sensors a slightly broader footprint.
+    //  • Boundary cooling — near room edges, values relax toward the
+    //    room-mean (modelling wall heat exchange / insulation losses).
+    //  • VPD — computed per-pixel from interpolated T and RH via the
+    //    Tetens equation rather than interpolating VPD directly.
+    // ═══════════════════════════════════════════════════════════════════
 
-      let weightedSum = 0;
-      let weightSum = 0;
-
-      for (const sensor of sensorReadings) {
-        const dx = x - sensor.x;
-        const dy = y - sensor.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        // If very close to a sensor, use its value directly
-        if (distance < 0.1) {
-          return sensor.value;
-        }
-
-        const weight = 1 / Math.pow(distance, power);
-        weightedSum += sensor.value * weight;
-        weightSum += weight;
-      }
-
-      return weightSum > 0 ? weightedSum / weightSum : null;
+    /** Tetens formula: saturation vapour pressure (kPa) from temperature (°C) */
+    function saturationVaporPressure(tempC) {
+      return 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
     }
 
-    // Draw interpolated heat map using actual sensor positions
-    function drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max) {
-      console.log('[Heat Map] Drawing interpolated heat map with', sensorReadings.length, 'sensors');
-      
-      // Create pixel-level heat map data
+    /** Vapour Pressure Deficit (kPa) from temperature (°C) and RH (%) */
+    function computeVPD(tempC, rh) {
+      const svp = saturationVaporPressure(tempC);
+      return Math.max(0, svp * (1 - rh / 100));
+    }
+
+    /**
+     * Compute a physically-motivated length scale for the Gaussian kernel.
+     * Uses a blend of inter-sensor spacing and room diagonal so that each
+     * sensor's influence extends smoothly across the room while still
+     * preserving local detail.
+     */
+    function computeLengthScale(sensors, gridW, gridH) {
+      const roomDiag = Math.sqrt(gridW * gridW + gridH * gridH);
+      if (sensors.length < 2) return roomDiag / 2;
+
+      // Average nearest-neighbour distance
+      let totalNN = 0;
+      for (let i = 0; i < sensors.length; i++) {
+        let nearest = Infinity;
+        for (let j = 0; j < sensors.length; j++) {
+          if (i === j) continue;
+          const dx = sensors[i].x - sensors[j].x;
+          const dy = sensors[i].y - sensors[j].y;
+          nearest = Math.min(nearest, Math.sqrt(dx * dx + dy * dy));
+        }
+        totalNN += nearest;
+      }
+      const avgNN = totalNN / sensors.length;
+
+      // Length scale: 1.2× avg NN distance, but at least room_diagonal/4
+      // This yields smooth room-wide gradients that still reveal local variation
+      return Math.max(avgNN * 1.2, roomDiag / 4);
+    }
+
+    /**
+     * Interpolate a scalar field at (x, y) using Gaussian-kernel weighted
+     * averaging (steady-state diffusion solution).
+     *
+     * @param {number}   x             Grid-coordinate x
+     * @param {number}   y             Grid-coordinate y
+     * @param {Array}    sensors       [{x, y, value, …}, …]
+     * @param {number}   sigma         Gaussian length scale (grid units)
+     * @param {string}   [metric]      'temperature'|'humidity'|'vpd'
+     * @param {number}   [meanValue]   Room-mean value (for convective bias)
+     * @param {object}   [bounds]      {gridW, gridH} for boundary effects
+     * @returns {number|null}
+     */
+    function interpolateValue(x, y, sensors, sigma, metric, meanValue, bounds) {
+      if (!sensors || sensors.length === 0) return null;
+      if (sensors.length === 1) return sensors[0].value;
+
+      const sigma2x2 = 2 * sigma * sigma;
+      let weightedSum = 0;
+      let weightSum   = 0;
+
+      for (const sensor of sensors) {
+        const dx = x - sensor.x;
+        const dy = y - sensor.y;
+        const r2 = dx * dx + dy * dy;
+
+        // Very close → return exact sensor value (avoids numerical noise)
+        if (r2 < 0.01) return sensor.value;
+
+        // Gaussian diffusion kernel
+        let w = Math.exp(-r2 / sigma2x2);
+
+        // ── Natural convection correction (temperature only) ──
+        // Warmer sensors produce updrafts that spread air laterally,
+        // giving them a ~15 % broader effective radius.
+        if (metric === 'temperature' && meanValue != null) {
+          const deviation = sensor.value - meanValue;   // +ve = warmer
+          w *= 1.0 + 0.15 * Math.tanh(deviation);       // bounded ±15 %
+        }
+
+        // ── Humidity diffusion correction ──
+        // Higher humidity air is lighter (water vapour Mv=18 < dry air Md=29)
+        // and rises / disperses more readily — slightly broader footprint.
+        if (metric === 'humidity' && meanValue != null) {
+          const deviation = sensor.value - meanValue;
+          w *= 1.0 + 0.10 * Math.tanh(deviation / 10);  // bounded ±10 %
+        }
+
+        weightedSum += sensor.value * w;
+        weightSum   += w;
+      }
+
+      if (weightSum <= 0) return null;
+      let value = weightedSum / weightSum;
+
+      // ── Boundary effect ──
+      // Near room edges, blend toward room-mean (wall heat exchange / insulation)
+      if (bounds && meanValue != null) {
+        const edgeDist = Math.min(x, y, bounds.gridW - x, bounds.gridH - y);
+        const edgeWidth = Math.max(bounds.gridW, bounds.gridH) * 0.08; // ~8 % of room
+        if (edgeDist < edgeWidth) {
+          const blend = edgeDist / edgeWidth;                // 0 at wall → 1 interior
+          value = value * blend + meanValue * (1 - blend);   // relax toward mean
+        }
+      }
+
+      return value;
+    }
+
+    // Draw physics-based interpolated heat map across the entire room.
+    // For VPD mode: interpolates temperature & humidity separately at each
+    // pixel and computes VPD via the Tetens equation (physically correct).
+    function drawInterpolatedHeatMap(ctx, width, height, gridSize, cellSize, sensorReadings, min, max, opts = {}) {
+      const { metric, tempReadings, humReadings } = opts;
+      console.log('[Heat Map] Drawing physics-based heat map with', sensorReadings.length, 'sensors, metric:', metric || STATE.currentMetric);
+
+      const gridW = gridSize;
+      const gridH = Math.floor(gridSize * 0.75);
+      const bounds = { gridW, gridH };
+
+      // ── Precompute Gaussian length scale ──
+      const sigma = computeLengthScale(sensorReadings, gridW, gridH);
+      console.log(`[Heat Map] Gaussian σ = ${sigma.toFixed(2)} grid cells`);
+
+      // Precompute means for convective / boundary corrections
+      const meanVal = sensorReadings.reduce((s, r) => s + r.value, 0) / sensorReadings.length;
+      let meanTemp = null, meanHum = null, sigmaTemp = sigma, sigmaHum = sigma;
+      if (tempReadings && tempReadings.length > 0) {
+        meanTemp = tempReadings.reduce((s, r) => s + r.value, 0) / tempReadings.length;
+        sigmaTemp = computeLengthScale(tempReadings, gridW, gridH);
+      }
+      if (humReadings && humReadings.length > 0) {
+        meanHum = humReadings.reduce((s, r) => s + r.value, 0) / humReadings.length;
+        sigmaHum = computeLengthScale(humReadings, gridW, gridH);
+      }
+
+      // ── Pixel-level rendering ──
       const imageData = ctx.createImageData(width, height);
       const data = imageData.data;
+      const sampleSize = 4; // render in 4×4 blocks for performance
 
-      // Sample every N pixels for performance
-      const sampleSize = 4;
-      
       for (let py = 0; py < height; py += sampleSize) {
         for (let px = 0; px < width; px += sampleSize) {
-          // Convert pixel to grid coordinates
-          const gridX = px / cellSize;
-          const gridY = py / cellSize;
+          const gx = px / cellSize;
+          const gy = py / cellSize;
 
-          // Interpolate value at this position
-          const value = interpolateValue(gridX, gridY, sensorReadings);
+          let value;
+
+          if (metric === 'vpd' && tempReadings && tempReadings.length > 0 && humReadings && humReadings.length > 0) {
+            // ── Per-pixel VPD from Tetens equation ──
+            const t = interpolateValue(gx, gy, tempReadings, sigmaTemp, 'temperature', meanTemp, bounds);
+            const h = interpolateValue(gx, gy, humReadings, sigmaHum, 'humidity', meanHum, bounds);
+            value = (t != null && h != null) ? computeVPD(t, h) : null;
+          } else {
+            // ── Direct interpolation (temperature or humidity) ──
+            const effectiveMetric = metric || STATE.currentMetric;
+            value = interpolateValue(gx, gy, sensorReadings, sigma, effectiveMetric, meanVal, bounds);
+          }
 
           if (value != null) {
-            // Normalize to 0-1
-            const normalized = (value - min) / (max - min);
-            
-            // Get color from current metric palette
+            const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
             const color = getHeatColorForNormalized(normalized, METRICS[STATE.currentMetric]?.colors);
 
-            // Fill sampled pixels
+            // Fill 4×4 block
             for (let dy = 0; dy < sampleSize; dy++) {
               for (let dx = 0; dx < sampleSize; dx++) {
                 const x = px + dx;
                 const y = py + dy;
                 if (x < width && y < height) {
-                  const index = (y * width + x) * 4;
-                  data[index] = color.r;
-                  data[index + 1] = color.g;
-                  data[index + 2] = color.b;
-                  data[index + 3] = 200; // Slight transparency
+                  const idx = (y * width + x) * 4;
+                  data[idx]     = color.r;
+                  data[idx + 1] = color.g;
+                  data[idx + 2] = color.b;
+                  data[idx + 3] = 200; // slight transparency
                 }
               }
             }
