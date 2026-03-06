@@ -990,6 +990,14 @@ All ML models that use outdoor weather data (`outside_temperature_c`, `outside_h
 | **Route Conflict Removal** | Removed duplicate `/api/switchbot/status` route that conflicted with SwitchBot proxy | greenreach-central/server.js |
 | **Edge → Light Engine Terminology** | Updated all "edge" references to "Light Engine" in UI and server code | Multiple files |
 
+### 2026-03-06: Farm Summary Sensor Regression Fix
+
+| Fix | Description | Files Modified |
+|-----|-------------|----------------|
+| **Zone stale status uses `/env` freshness** | Farm Summary now treats `/env` zone freshness as authoritative before falling back to device registry timestamps, preventing false stale badges when device `lastSeen` lags behind rebuilt zone telemetry | farm-summary.html |
+| **All-zones trend no longer collapses to 1 point** | Aggregate trend now uses the richest available history depth instead of the minimum shared depth, so a newly-restored zone with 1 sample no longer blanks the full chart | farm-summary.html |
+| **Communication document updated** | Added this regression and fix to the system communication log per process requirement | SYSTEM_DATA_AUDIT_2026-03-06.md |
+
 ### 2026-03-06: Heatmap Sensor Data Fix
 
 | Fix | Description | Files Modified |

@@ -3781,19 +3781,18 @@
             z.id === String(zone.zone)
           );
           
-          // Determine staleness based on whichever data source was actually used
+          // In the merged cloud/edge flow, /env is the authoritative freshness
+          // source. Device-registry timestamps can lag even when zone telemetry is fresh.
           let isStale = false;
-          if (zoneSensorDevices.length > 0) {
-            // IoT device telemetry was the primary source — check device timestamps
+          if (envZone) {
+            isStale = !isSensorDataFresh(envZone, 15 * 60 * 1000);
+          } else if (zoneSensorDevices.length > 0) {
             const maxAgeMs = 15 * 60 * 1000; // 15 minutes
             isStale = zoneSensorDevices.every(d => {
               const ts = d.telemetry?.lastUpdated || d.telemetry?.timestamp || d.lastSeen || d.updatedAt;
               if (!ts) return false; // No timestamp available, assume fresh
               return (Date.now() - new Date(ts).getTime()) > maxAgeMs;
             });
-          } else if (envZone) {
-            // Fell back to envData — check envZone.meta.lastSync
-            isStale = !isSensorDataFresh(envZone, 15 * 60 * 1000);
           }
           const tempInvalid = Number.isFinite(temp) ? !isSensorReadingValid(temp, 'tempC', envZone) : false;
           const humidityInvalid = Number.isFinite(humidity) ? !isSensorReadingValid(humidity, 'rh', envZone) : false;
@@ -6596,17 +6595,32 @@
       
       console.log('[Trending] buildAggregatedHistoryFromAllZones: Processing', zones.length, 'zones');
       
+      const zoneHasHistory = (zone) => {
+        const sensors = zone?.sensors || {};
+        return [sensors.tempC?.history, sensors.rh?.history, sensors.co2?.history, sensors.vpd?.history]
+          .some(history => Array.isArray(history) && history.length > 0);
+      };
+
       // Filter out zones with stale data (older than 5 minutes)
       const freshZones = zones.filter(zone => isSensorDataFresh(zone, 5 * 60 * 1000));
+      const zonesWithHistory = zones.filter(zoneHasHistory);
+      const freshZonesWithHistory = freshZones.filter(zoneHasHistory);
       
       console.log('[Trending] Fresh zones:', freshZones.length, 'of', zones.length);
+      console.log('[Trending] Zones with history:', zonesWithHistory.length, 'fresh with history:', freshZonesWithHistory.length);
       
       if (freshZones.length === 0) {
         console.warn('[Sensor Guard] All zones have stale data, showing available data anyway');
         // Fall back to all zones if none are fresh (prevents blank display)
       }
       
-      const zonesToUse = freshZones.length > 0 ? freshZones : zones;
+      const zonesToUse = freshZonesWithHistory.length > 0
+        ? freshZonesWithHistory
+        : zonesWithHistory.length > 0
+          ? zonesWithHistory
+          : freshZones.length > 0
+            ? freshZones
+            : zones;
       console.log('[Trending] Using', zonesToUse.length, 'zones for aggregation');
       
       // Log each zone's metadata
@@ -6620,9 +6634,6 @@
         });
       });
       
-      // Find the MINIMUM history length across all zones to show only common available data
-      // This prevents forcing 288 points when some zones only have 6 points
-      let minHistoryLength = Infinity;
       let maxHistoryLength = 0;
       
       zonesToUse.forEach(zone => {
@@ -6639,17 +6650,15 @@
         }, 0);
         console.log('[Trending] Zone', zone.id, 'max history length:', zoneMaxLength);
         
-        // Track both min and max
+        // Track the richest available history depth.
         if (zoneMaxLength > 0) {
-          minHistoryLength = Math.min(minHistoryLength, zoneMaxLength);
           maxHistoryLength = Math.max(maxHistoryLength, zoneMaxLength);
         }
       });
+
+      const actualHistoryLength = maxHistoryLength;
       
-      // Use minimum if valid, otherwise fall back to max
-      const actualHistoryLength = minHistoryLength !== Infinity ? minHistoryLength : maxHistoryLength;
-      
-      console.log('[Trending] History lengths - min:', minHistoryLength, 'max:', maxHistoryLength, 'using:', actualHistoryLength);
+      console.log('[Trending] History lengths - max:', maxHistoryLength, 'using:', actualHistoryLength);
       
       if (actualHistoryLength === 0) {
         // No history, use current values
@@ -6733,8 +6742,8 @@
       const interval = 5 * 60 * 1000; // 5 minutes in milliseconds
       const now = Date.now();
       
-      // Use the MINIMUM available history length so all zones have data for every point
-      // This prevents sparse graphs when zones have different history depths (e.g., 288 vs 6 points)
+      // Use the MAX available history length so a newly-seen zone with a short
+      // history does not collapse the entire trend to a single point.
       const pointsToShow = actualHistoryLength;
       const hoursToShow = Math.round(pointsToShow * 5 / 60);
       console.log('[Trending] Showing', pointsToShow, 'points (', hoursToShow, 'hours) - common data across all zones');
