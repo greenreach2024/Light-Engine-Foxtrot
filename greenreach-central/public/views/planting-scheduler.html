@@ -2068,7 +2068,6 @@
         // populateTrayDropdown() removed — manual form uses scope-based target
         populateGroupDropdown(); // Populate AI recommendations dropdown
         loadAIStatus(); // Load AI training status
-        logGroupPlanSummary(); // Log findGroupPlan summary (single line, not per-tray)
 
       } catch (error) {
         console.error('Error loading scheduler data:', error);
@@ -2129,30 +2128,20 @@
       badge.title = `Decisions: ${status.progress.decisions.total}/500 | Cycles: ${status.progress.crop_cycles.total}/100 | Acceptance: ${status.progress.decisions.acceptance_rate}%`;
     }
 
-    // Cache for findGroupPlan to avoid spamming console (78+ groups × 15 trays = 1000+ calls)
-    const _findGroupPlanCache = { lookups: 0, hits: 0, misses: 0, noPlan: 0 };
     function findGroupPlan(groupId) {
       if (!state.groups || !Array.isArray(state.groups)) {
+        console.warn('[findGroupPlan] state.groups not available:', state.groups);
         return null;
       }
-      _findGroupPlanCache.lookups++;
+      console.log(`[findGroupPlan] Looking for groupId: "${groupId}" in ${state.groups.length} groups`);
       const group = state.groups.find(g => g.id === groupId);
       if (!group) {
-        _findGroupPlanCache.misses++;
-      } else if (!group.plan) {
-        _findGroupPlanCache.noPlan++;
+        console.warn(`[findGroupPlan] Group not found for: "${groupId}"`);
+        console.log('[findGroupPlan] Available group IDs:', state.groups.map(g => g.id));
       } else {
-        _findGroupPlanCache.hits++;
+        console.log(`[findGroupPlan] Found group with plan: "${group.plan}"`);
       }
       return group ? group.plan : null;
-    }
-    // Log summary once after data loads (called from render)
-    function logGroupPlanSummary() {
-      const c = _findGroupPlanCache;
-      if (c.lookups > 0) {
-        console.log(`[findGroupPlan] ${c.lookups} lookups: ${c.hits} with plan, ${c.noPlan} draft (no plan), ${c.misses} not found`);
-        c.lookups = c.hits = c.misses = c.noPlan = 0;
-      }
     }
 
     function processTrays(data) {
@@ -2431,7 +2420,8 @@
         // Get the group's plan (what the grower has configured for this location)
         const groupPlan = findGroupPlan(tray.groupId);
         if (!groupPlan) {
-          return; // Draft group with no plan assigned — skip silently
+          console.warn(`No plan found for group: ${tray.groupId}`);
+          return;
         }
 
         const normalizedCropId = normalizeCropId(groupPlan);

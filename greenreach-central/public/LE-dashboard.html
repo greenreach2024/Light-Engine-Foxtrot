@@ -131,9 +131,9 @@
 .wizard-test-area h4 {margin:0 0 1rem 0;}
   </style>
 
-  <script src="/app.foxtrot.js?v=20260302-b19b82f" defer></script>
+  <script src="/app.foxtrot.js?v=20260305-persist-fix" defer></script>
   <!-- Groups V2 module: handles plan dropdown, anchor toggle, and schedule UI -->
-  <script src="/groups-v2.js?v=20260302-b19b82f" defer></script>
+  <script src="/groups-v2.js?v=20260305-persist-fix" defer></script>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
 </head>
 <body>
@@ -1661,6 +1661,7 @@
               <span class="tiny" id="catSetupProgress" style="color:#475569"></span>
               <button type="button" class="ghost" id="catNextType">Next Equipment</button>
             </div>
+            </div>
           </section>
 
 
@@ -1948,72 +1949,32 @@
     <div class="wizard-container">
       <div class="wizard-header">
         <h2>Payment Processing Setup</h2>
-        <p class="wizard-subtitle" id="paymentWizardSubtitle">Choose a payment processor and connect your account</p>
+        <p class="wizard-subtitle">Connect your Square account to accept payments from customers</p>
         <button class="wizard-close" onclick="closePaymentWizard()" aria-label="Close">&times;</button>
       </div>
       
       <div class="wizard-progress">
         <div class="wizard-step" data-step="1">
           <div class="wizard-step-number">1</div>
-          <div class="wizard-step-label">Provider</div>
+          <div class="wizard-step-label">Square Account</div>
         </div>
         <div class="wizard-step" data-step="2">
           <div class="wizard-step-number">2</div>
-          <div class="wizard-step-label">Account</div>
+          <div class="wizard-step-label">Connect</div>
         </div>
         <div class="wizard-step" data-step="3">
           <div class="wizard-step-number">3</div>
-          <div class="wizard-step-label">Connect</div>
+          <div class="wizard-step-label">Configure</div>
         </div>
         <div class="wizard-step" data-step="4">
           <div class="wizard-step-number">4</div>
-          <div class="wizard-step-label">Configure</div>
-        </div>
-        <div class="wizard-step" data-step="5">
-          <div class="wizard-step-number">5</div>
           <div class="wizard-step-label">Test & Activate</div>
         </div>
       </div>
       
       <div class="wizard-content">
-        <!-- Step 1: Choose Provider -->
+        <!-- Step 1: Square Account -->
         <div class="wizard-panel" data-panel="1" style="display: block;">
-          <h3>Choose Your Payment Processor</h3>
-          <p class="wizard-description">Select which payment processor you'd like to use for your farm. You can change this later or set up both.</p>
-          
-          <div class="wizard-options" style="gap: 1.5rem;">
-            <button class="wizard-option-card" onclick="selectPaymentProvider('square')" style="flex: 1; min-width: 220px;">
-              <div class="wizard-option-icon" style="font-size: 2.5rem;">⬛</div>
-              <div class="wizard-option-title">Square</div>
-              <div class="wizard-option-desc">2.6% + 10¢ per transaction</div>
-              <ul style="text-align: left; font-size: 0.85rem; margin-top: 0.75rem; color: var(--text-secondary); padding-left: 1.2rem;">
-                <li>Built-in POS hardware</li>
-                <li>Free invoicing tools</li>
-                <li>1-2 day deposits</li>
-                <li>Great for in-person sales</li>
-              </ul>
-            </button>
-            
-            <button class="wizard-option-card" onclick="selectPaymentProvider('stripe')" style="flex: 1; min-width: 220px;">
-              <div class="wizard-option-icon" style="font-size: 2.5rem; color: #635bff;">⚡</div>
-              <div class="wizard-option-title">Stripe</div>
-              <div class="wizard-option-desc">2.9% + 30¢ per transaction</div>
-              <ul style="text-align: left; font-size: 0.85rem; margin-top: 0.75rem; color: var(--text-secondary); padding-left: 1.2rem;">
-                <li>Developer-friendly APIs</li>
-                <li>Advanced fraud protection</li>
-                <li>2-day rolling deposits</li>
-                <li>Great for online/wholesale</li>
-              </ul>
-            </button>
-          </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════ -->
-        <!-- SQUARE FLOW: Steps 2-5                      -->
-        <!-- ═══════════════════════════════════════════ -->
-
-        <!-- Step 2 (Square): Account Check -->
-        <div class="wizard-panel" data-panel="2" data-provider="square" style="display: none;">
           <h3>Do you have a Square account?</h3>
           <p class="wizard-description">Square is a secure payment processor that allows you to accept credit cards, debit cards, and digital payments from your customers.</p>
           
@@ -2045,13 +2006,10 @@
               <div class="wizard-option-desc">Sign up for a new Square account</div>
             </button>
           </div>
-          <div class="wizard-actions" style="margin-top: 1.5rem;">
-            <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
-          </div>
         </div>
         
-        <!-- Step 3 (Square): Connect -->
-        <div class="wizard-panel" data-panel="3" data-provider="square" style="display: none;">
+        <!-- Step 2: Connect Square -->
+        <div class="wizard-panel" data-panel="2" style="display: none;">
           <div id="hasAccountPanel" style="display: none;">
             <h3>Connect Your Square Account</h3>
             <p class="wizard-description">Click the button below to securely connect your Square account to your farm store. You'll be redirected to Square to authorize the connection.</p>
@@ -2095,6 +2053,7 @@
                   <p>Go to <a href="https://squareup.com/signup" target="_blank" rel="noopener">squareup.com/signup</a></p>
                 </div>
               </div>
+              
               <div class="wizard-step-item">
                 <div class="wizard-step-number-small">2</div>
                 <div class="wizard-step-content">
@@ -2102,6 +2061,7 @@
                   <p>Provide your farm name, contact details, and business type (Agriculture/Farm)</p>
                 </div>
               </div>
+              
               <div class="wizard-step-item">
                 <div class="wizard-step-number-small">3</div>
                 <div class="wizard-step-content">
@@ -2109,6 +2069,7 @@
                   <p>Square will verify your identity and business for security and compliance</p>
                 </div>
               </div>
+              
               <div class="wizard-step-item">
                 <div class="wizard-step-number-small">4</div>
                 <div class="wizard-step-content">
@@ -2131,141 +2092,17 @@
             </div>
           </div>
         </div>
-
-        <!-- ═══════════════════════════════════════════ -->
-        <!-- STRIPE FLOW: Steps 2-5                      -->
-        <!-- ═══════════════════════════════════════════ -->
-
-        <!-- Step 2 (Stripe): Account Check -->
-        <div class="wizard-panel" data-panel="2" data-provider="stripe" style="display: none;">
-          <h3>Do you have a Stripe account?</h3>
-          <p class="wizard-description">Stripe is a powerful payment platform for online and wholesale transactions with advanced fraud protection and developer tools.</p>
-          
-          <div class="wizard-info-box">
-            <h4>Why Stripe?</h4>
-            <ul>
-              <li>Industry-leading online payment security</li>
-              <li>Processing rates: 2.9% + 30¢ per transaction</li>
-              <li>2-day rolling deposits</li>
-              <li>Advanced fraud detection (Stripe Radar)</li>
-              <li>Instant payouts available (1% fee)</li>
-            </ul>
-          </div>
-          
-          <div class="wizard-note">
-            <strong>Important:</strong> This is YOUR Stripe account for your farm business. GreenReach uses Stripe Connect to collect a small platform fee on wholesale transactions.
-          </div>
-          
-          <div class="wizard-options">
-            <button class="wizard-option-card" onclick="paymentWizardNext('has-account')">
-              <div class="wizard-option-icon">✓</div>
-              <div class="wizard-option-title">I have a Stripe account</div>
-              <div class="wizard-option-desc">Connect your existing Stripe account</div>
-            </button>
-            
-            <button class="wizard-option-card" onclick="paymentWizardNext('need-account')">
-              <div class="wizard-option-icon">+</div>
-              <div class="wizard-option-title">I need to create one</div>
-              <div class="wizard-option-desc">Sign up for a new Stripe account</div>
-            </button>
-          </div>
-          <div class="wizard-actions" style="margin-top: 1.5rem;">
-            <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
-          </div>
-        </div>
-
-        <!-- Step 3 (Stripe): Connect -->
-        <div class="wizard-panel" data-panel="3" data-provider="stripe" style="display: none;">
-          <div id="stripeHasAccountPanel" style="display: none;">
-            <h3>Connect Your Stripe Account</h3>
-            <p class="wizard-description">Click the button below to securely connect your Stripe account via Stripe Connect. You'll be redirected to Stripe to authorize the connection.</p>
-            
-            <div class="wizard-info-box">
-              <h4>What permissions are requested?</h4>
-              <ul>
-                <li><strong>Process Payments:</strong> Accept card and bank payments from customers</li>
-                <li><strong>Read Account Details:</strong> Display your business name</li>
-                <li><strong>Manage Charges:</strong> Create and refund payments</li>
-              </ul>
-            </div>
-            
-            <div class="wizard-form-group">
-              <label>Farm Name</label>
-              <input type="text" id="stripePaymentFarmName" placeholder="Your Farm Name" class="wizard-input">
-              <small>This will appear on customer receipts and Stripe dashboard</small>
-            </div>
-            
-            <div class="wizard-actions">
-              <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
-              <button class="wizard-btn-primary" onclick="connectStripeAccount()" style="background: #635bff;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                </svg>
-                Connect to Stripe
-              </button>
-            </div>
-          </div>
-          
-          <div id="stripeNeedAccountPanel" style="display: none;">
-            <h3>Create Your Stripe Account</h3>
-            <p class="wizard-description">Follow these steps to create your Stripe account:</p>
-            
-            <div class="wizard-steps-list">
-              <div class="wizard-step-item">
-                <div class="wizard-step-number-small">1</div>
-                <div class="wizard-step-content">
-                  <strong>Visit Stripe Sign-Up</strong>
-                  <p>Go to <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener">dashboard.stripe.com/register</a></p>
-                </div>
-              </div>
-              <div class="wizard-step-item">
-                <div class="wizard-step-number-small">2</div>
-                <div class="wizard-step-content">
-                  <strong>Enter Business Information</strong>
-                  <p>Provide your farm name, contact details, and select "Agriculture" as your industry</p>
-                </div>
-              </div>
-              <div class="wizard-step-item">
-                <div class="wizard-step-number-small">3</div>
-                <div class="wizard-step-content">
-                  <strong>Verify Your Identity</strong>
-                  <p>Stripe will verify your identity and business for compliance (KYC)</p>
-                </div>
-              </div>
-              <div class="wizard-step-item">
-                <div class="wizard-step-number-small">4</div>
-                <div class="wizard-step-content">
-                  <strong>Add Bank Account</strong>
-                  <p>Connect your bank account to receive payouts from customer payments</p>
-                </div>
-              </div>
-            </div>
-            
-            <div class="wizard-note">
-              <strong>Estimated time:</strong> 10-15 minutes. Stripe typically verifies accounts within 1-2 business days.
-            </div>
-            
-            <div class="wizard-actions">
-              <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
-              <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener" class="wizard-btn-primary" style="background: #635bff;">
-                Open Stripe Sign-Up
-              </a>
-              <button class="wizard-btn-secondary" onclick="switchToHasStripeAccount()">I've created my account</button>
-            </div>
-          </div>
-        </div>
         
-        <!-- Step 4 (shared): Configure Settings -->
-        <div class="wizard-panel" data-panel="4" style="display: none;">
+        <!-- Step 3: Configure Settings -->
+        <div class="wizard-panel" data-panel="3" style="display: none;">
           <h3>Configure Payment Settings</h3>
           <p class="wizard-description">Customize how payments are processed for your farm store.</p>
           
-          <div id="providerConnectedBanner" style="display: none;">
+          <div id="squareConnected" style="display: none;">
             <div class="wizard-success-box">
               <div class="wizard-success-icon">✓</div>
               <div>
-                <strong id="connectedProviderLabel">Provider Connected Successfully!</strong>
+                <strong>Square Connected Successfully!</strong>
                 <p>Account: <span id="connectedMerchantName"></span></p>
                 <p>Location: <span id="connectedLocationName"></span></p>
               </div>
@@ -2284,11 +2121,8 @@
               <label class="wizard-checkbox">
                 <input type="checkbox" id="acceptCash"> Cash (in-person only)
               </label>
-              <label class="wizard-checkbox" id="giftCardsOption">
+              <label class="wizard-checkbox">
                 <input type="checkbox" id="acceptGiftCards" checked> Gift Cards
-              </label>
-              <label class="wizard-checkbox" id="applePayOption" style="display: none;">
-                <input type="checkbox" id="acceptApplePay"> Apple Pay / Google Pay
               </label>
             </div>
           </div>
@@ -2317,16 +2151,16 @@
           </div>
         </div>
         
-        <!-- Step 5 (shared): Test & Activate -->
-        <div class="wizard-panel" data-panel="5" style="display: none;">
+        <!-- Step 4: Test & Activate -->
+        <div class="wizard-panel" data-panel="4" style="display: none;">
           <h3>Test Your Payment Setup</h3>
           <p class="wizard-description">Run a test transaction to ensure everything is working correctly.</p>
           
           <div class="wizard-info-box">
             <h4>Test Mode</h4>
-            <p id="testCardInstructions">Use test card numbers to simulate transactions without charging real money:</p>
+            <p>Use Square's test card numbers to simulate transactions without charging real money:</p>
             <ul>
-              <li><strong>Test Card:</strong> 4242 4242 4242 4242</li>
+              <li><strong>Test Card:</strong> 4111 1111 1111 1111</li>
               <li><strong>CVV:</strong> Any 3 digits</li>
               <li><strong>Expiration:</strong> Any future date</li>
               <li><strong>ZIP:</strong> Any 5 digits</li>
@@ -2346,10 +2180,10 @@
           <div class="wizard-checklist">
             <h4>Pre-Launch Checklist</h4>
             <label class="wizard-checkbox">
-              <input type="checkbox" id="checkProviderConnected"> <span id="checkProviderLabel">Payment provider</span> connected
+              <input type="checkbox" id="checkSquareConnected"> Square account connected
             </label>
             <label class="wizard-checkbox">
-              <input type="checkbox" id="checkBankingSetup"> Bank account connected
+              <input type="checkbox" id="checkBankingSetup"> Bank account connected in Square
             </label>
             <label class="wizard-checkbox">
               <input type="checkbox" id="checkTestPassed"> Test transaction completed
@@ -2754,13 +2588,11 @@
     // Payment Wizard Functions
     let paymentWizardStep = 1;
     let paymentWizardData = {
-      selectedProvider: null, // 'square' or 'stripe'
       hasAccount: false,
       farmName: '',
-      providerConnected: false,
+      squareConnected: false,
       merchantId: null,
-      locationId: null,
-      stripeAccountId: null
+      locationId: null
     };
     
     function openPaymentWizard() {
@@ -2771,22 +2603,17 @@
       }
       modal.style.display = 'flex';
       paymentWizardStep = 1;
-      paymentWizardData.selectedProvider = null;
-      paymentWizardData.providerConnected = false;
       
       // Hide all panels first
       modal.querySelectorAll('.wizard-panel').forEach(p => p.style.display = 'none');
       
-      // Show panel 1 (provider selector)
+      // Show panel 1
       const panel1 = modal.querySelector('.wizard-panel[data-panel="1"]');
       if (panel1) {
         panel1.style.display = 'block';
+        // Belt-and-suspenders: reassert after paint in case another script flips it
         requestAnimationFrame(() => { panel1.style.display = 'block'; });
       }
-      
-      // Reset subtitle
-      const subtitle = document.getElementById('paymentWizardSubtitle');
-      if (subtitle) subtitle.textContent = 'Choose a payment processor and connect your account';
       
       updatePaymentWizardProgress();
     }
@@ -2807,125 +2634,36 @@
       });
     }
     
-    // Helper: show the correct provider-specific panel for a given step
-    function showProviderPanel(step) {
-      const modal = document.getElementById('paymentWizardModal');
-      const provider = paymentWizardData.selectedProvider;
-      
-      // Steps 4 and 5 are shared (no data-provider attribute)
-      if (step >= 4) {
-        const panel = modal.querySelector(`.wizard-panel[data-panel="${step}"]:not([data-provider])`);
-        if (panel) panel.style.display = 'block';
-        return;
-      }
-      
-      // Steps 2-3 have provider-specific panels
-      const panel = modal.querySelector(`.wizard-panel[data-panel="${step}"][data-provider="${provider}"]`);
-      if (panel) panel.style.display = 'block';
-    }
-    
-    // Helper: hide all panels for a given step
-    function hideStepPanels(step) {
-      const modal = document.getElementById('paymentWizardModal');
-      modal.querySelectorAll(`.wizard-panel[data-panel="${step}"]`).forEach(p => p.style.display = 'none');
-    }
-    
-    function selectPaymentProvider(provider) {
-      paymentWizardData.selectedProvider = provider;
-      
-      // Update subtitle
-      const subtitle = document.getElementById('paymentWizardSubtitle');
-      if (provider === 'square') {
-        subtitle.textContent = 'Connect your Square account to accept payments from customers';
-      } else {
-        subtitle.textContent = 'Connect your Stripe account to accept payments from customers';
-      }
-      
-      // Update step 5 labels for the chosen provider
-      const checkLabel = document.getElementById('checkProviderLabel');
-      if (checkLabel) checkLabel.textContent = provider === 'square' ? 'Square' : 'Stripe';
-      const connectedLabel = document.getElementById('connectedProviderLabel');
-      if (connectedLabel) connectedLabel.textContent = (provider === 'square' ? 'Square' : 'Stripe') + ' Connected Successfully!';
-      
-      // Show/hide Apple Pay option (Stripe supports it natively)
-      const applePayOpt = document.getElementById('applePayOption');
-      if (applePayOpt) applePayOpt.style.display = provider === 'stripe' ? 'block' : 'none';
-      
-      // Show/hide Gift Cards option (Square-specific)
-      const giftCardsOpt = document.getElementById('giftCardsOption');
-      if (giftCardsOpt) giftCardsOpt.style.display = provider === 'square' ? 'block' : 'none';
-      
-      // Update test card instructions
-      const testInstr = document.getElementById('testCardInstructions');
-      if (testInstr) {
-        testInstr.textContent = provider === 'square'
-          ? "Use Square's test card numbers to simulate transactions without charging real money:"
-          : "Use Stripe's test card numbers to simulate transactions without charging real money:";
-      }
-      
-      // Move to step 2
-      hideStepPanels(1);
-      paymentWizardStep = 2;
-      showProviderPanel(2);
-      updatePaymentWizardProgress();
-    }
-    
     function paymentWizardNext(option) {
-      const provider = paymentWizardData.selectedProvider;
-      
       if (option === 'has-account') {
         paymentWizardData.hasAccount = true;
-        if (provider === 'square') {
-          document.getElementById('hasAccountPanel').style.display = 'block';
-          document.getElementById('needAccountPanel').style.display = 'none';
-        } else {
-          document.getElementById('stripeHasAccountPanel').style.display = 'block';
-          document.getElementById('stripeNeedAccountPanel').style.display = 'none';
-        }
+        document.getElementById('hasAccountPanel').style.display = 'block';
+        document.getElementById('needAccountPanel').style.display = 'none';
       } else if (option === 'need-account') {
         paymentWizardData.hasAccount = false;
-        if (provider === 'square') {
-          document.getElementById('hasAccountPanel').style.display = 'none';
-          document.getElementById('needAccountPanel').style.display = 'block';
-        } else {
-          document.getElementById('stripeHasAccountPanel').style.display = 'none';
-          document.getElementById('stripeNeedAccountPanel').style.display = 'block';
-        }
+        document.getElementById('hasAccountPanel').style.display = 'none';
+        document.getElementById('needAccountPanel').style.display = 'block';
       }
       
-      hideStepPanels(2);
-      paymentWizardStep = 3;
-      showProviderPanel(3);
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="1"]').style.display = 'none';
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'block';
+      paymentWizardStep = 2;
       updatePaymentWizardProgress();
     }
     
     function paymentWizardPrev() {
-      if (paymentWizardStep <= 1) return;
-      
-      hideStepPanels(paymentWizardStep);
-      paymentWizardStep--;
-      
-      if (paymentWizardStep === 1) {
-        // Back to provider selector (no provider-specific panel)
-        const panel1 = document.querySelector('#paymentWizardModal .wizard-panel[data-panel="1"]');
-        if (panel1) panel1.style.display = 'block';
-      } else {
-        showProviderPanel(paymentWizardStep);
+      if (paymentWizardStep > 1) {
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="' + paymentWizardStep + '"]').style.display = 'none';
+        paymentWizardStep--;
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="' + paymentWizardStep + '"]').style.display = 'block';
+        updatePaymentWizardProgress();
       }
-      
-      updatePaymentWizardProgress();
     }
     
     function switchToHasAccount() {
       paymentWizardData.hasAccount = true;
       document.getElementById('hasAccountPanel').style.display = 'block';
       document.getElementById('needAccountPanel').style.display = 'none';
-    }
-    
-    function switchToHasStripeAccount() {
-      paymentWizardData.hasAccount = true;
-      document.getElementById('stripeHasAccountPanel').style.display = 'block';
-      document.getElementById('stripeNeedAccountPanel').style.display = 'none';
     }
     
     async function connectSquareAccount() {
@@ -2937,194 +2675,62 @@
       
       paymentWizardData.farmName = farmName;
       
-      try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const res = await fetch('/api/square-proxy/authorize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ farmName })
-        });
-        const data = await res.json();
-        
-        if (data.ok && data.data && data.data.authorizationUrl) {
-          // Open Square OAuth popup
-          const popup = window.open(data.data.authorizationUrl, 'squareConnect', 'width=600,height=700,scrollbars=yes');
-          
-          // Listen for completion message
-          window.addEventListener('message', function onSquareMsg(e) {
-            if (e.data && e.data.type === 'square-connected') {
-              window.removeEventListener('message', onSquareMsg);
-              paymentWizardData.providerConnected = true;
-              paymentWizardData.merchantId = e.data.merchantId || 'MERCHANT_' + Date.now();
-              paymentWizardData.locationId = e.data.locationId || 'LOCATION_' + Date.now();
-              advanceToConfigureStep(farmName, 'Main Location');
-            }
-          });
-        } else {
-          // Fallback: demo mode
-          alert('Square OAuth is being configured. Proceeding with demo connection.');
-          paymentWizardData.providerConnected = true;
-          paymentWizardData.merchantId = 'MERCHANT_' + Date.now();
-          paymentWizardData.locationId = 'LOCATION_' + Date.now();
-          setTimeout(() => advanceToConfigureStep(farmName, 'Main Location'), 500);
-        }
-      } catch (err) {
-        console.error('Square connect error:', err);
-        // Fallback: demo mode
-        alert('Square connection in demo mode. Proceeding.');
-        paymentWizardData.providerConnected = true;
+      // TODO: Call backend API to initiate Square OAuth flow
+      alert('Square OAuth integration will redirect you to Square to authorize the connection. This feature is being configured.');
+      
+      // Temporary: auto-populate demo values (remove when OAuth implemented)
+      setTimeout(() => {
+        paymentWizardData.squareConnected = true;
         paymentWizardData.merchantId = 'MERCHANT_' + Date.now();
         paymentWizardData.locationId = 'LOCATION_' + Date.now();
-        setTimeout(() => advanceToConfigureStep(farmName, 'Main Location'), 500);
-      }
-    }
-    
-    async function connectStripeAccount() {
-      const farmName = document.getElementById('stripePaymentFarmName').value.trim();
-      if (!farmName) {
-        alert('Please enter your farm name');
-        return;
-      }
-      
-      paymentWizardData.farmName = farmName;
-      
-      try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const res = await fetch('/api/farm/stripe/authorize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ farmName })
-        });
-        const data = await res.json();
         
-        if (data.ok && data.data && data.data.authorizationUrl) {
-          // Open Stripe Connect OAuth popup
-          const popup = window.open(data.data.authorizationUrl, 'stripeConnect', 'width=600,height=700,scrollbars=yes');
-          
-          // Listen for completion message from Stripe callback page
-          window.addEventListener('message', function onStripeMsg(e) {
-            if (e.data && e.data.type === 'stripe-connected') {
-              window.removeEventListener('message', onStripeMsg);
-              paymentWizardData.providerConnected = true;
-              paymentWizardData.stripeAccountId = e.data.accountId || e.data.farmId;
-              advanceToConfigureStep(farmName, 'Stripe Account');
-            }
-          });
-        } else {
-          // Fallback: demo mode
-          alert('Stripe Connect OAuth is being configured. Proceeding with demo connection.');
-          paymentWizardData.providerConnected = true;
-          paymentWizardData.stripeAccountId = 'acct_demo_' + Date.now();
-          setTimeout(() => advanceToConfigureStep(farmName, 'Stripe Account'), 500);
-        }
-      } catch (err) {
-        console.error('Stripe connect error:', err);
-        alert('Stripe connection in demo mode. Proceeding.');
-        paymentWizardData.providerConnected = true;
-        paymentWizardData.stripeAccountId = 'acct_demo_' + Date.now();
-        setTimeout(() => advanceToConfigureStep(farmName, 'Stripe Account'), 500);
-      }
-    }
-    
-    function advanceToConfigureStep(merchantName, locationName) {
-      // Show connected banner
-      const banner = document.getElementById('providerConnectedBanner');
-      if (banner) banner.style.display = 'block';
-      document.getElementById('connectedMerchantName').textContent = merchantName;
-      document.getElementById('connectedLocationName').textContent = locationName;
-      
-      // Advance to step 4 (Configure)
-      hideStepPanels(3);
-      paymentWizardStep = 4;
-      showProviderPanel(4);
-      updatePaymentWizardProgress();
+        document.getElementById('squareConnected').style.display = 'block';
+        document.getElementById('connectedMerchantName').textContent = farmName;
+        document.getElementById('connectedLocationName').textContent = 'Main Location';
+        
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'none';
+        document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'block';
+        paymentWizardStep = 3;
+        updatePaymentWizardProgress();
+      }, 1000);
     }
     
     async function savePaymentSettings() {
-      const provider = paymentWizardData.selectedProvider;
       const settings = {
-        provider,
         farmName: paymentWizardData.farmName,
+        merchantId: paymentWizardData.merchantId,
+        locationId: paymentWizardData.locationId,
         acceptACH: document.getElementById('acceptACH').checked,
         acceptCash: document.getElementById('acceptCash').checked,
+        acceptGiftCards: document.getElementById('acceptGiftCards').checked,
         taxRate: parseFloat(document.getElementById('taxRate').value),
         receiptFromName: document.getElementById('receiptFromName').value,
         autoReceipt: document.getElementById('autoReceipt').checked
       };
       
-      if (provider === 'square') {
-        settings.merchantId = paymentWizardData.merchantId;
-        settings.locationId = paymentWizardData.locationId;
-        settings.acceptGiftCards = document.getElementById('acceptGiftCards')?.checked || false;
-      } else {
-        settings.stripeAccountId = paymentWizardData.stripeAccountId;
-        settings.acceptApplePay = document.getElementById('acceptApplePay')?.checked || false;
-      }
+      // TODO: Save to backend
+      console.log('Saving payment settings:', settings);
       
-      // Save to backend
-      try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        if (provider === 'stripe') {
-          await fetch('/api/farm/stripe/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(settings)
-          });
-        }
-        // For Square, save via square-proxy if available
-        console.log('Saved payment settings:', settings);
-      } catch (err) {
-        console.warn('Could not save payment settings to backend:', err);
-      }
-      
-      // Advance to step 5 (Test & Activate)
-      hideStepPanels(4);
-      paymentWizardStep = 5;
-      showProviderPanel(5);
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'none';
+      document.querySelector('#paymentWizardModal .wizard-panel[data-panel="4"]').style.display = 'block';
+      paymentWizardStep = 4;
       updatePaymentWizardProgress();
       
-      // Pre-check provider connected
-      document.getElementById('checkProviderConnected').checked = paymentWizardData.providerConnected;
+      // Pre-check some items
+      document.getElementById('checkSquareConnected').checked = true;
     }
     
-    async function runTestTransaction() {
+    function runTestTransaction() {
       const amount = parseFloat(document.getElementById('testAmount').value);
       const resultDiv = document.getElementById('testResult');
-      const provider = paymentWizardData.selectedProvider;
       
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = '<p style="color: #3b82f6;">Processing test transaction...</p>';
       
-      try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        if (provider === 'stripe') {
-          const res = await fetch('/api/farm/stripe/test-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ amount: Math.round(amount * 100), currency: 'usd' })
-          });
-          const data = await res.json();
-          if (data.ok) {
-            resultDiv.innerHTML = `
-              <div style="background: #d1fae5; border: 1px solid #6ee7b7; padding: 1rem; border-radius: 6px;">
-                <strong style="color: #065f46;">Stripe Test Successful!</strong>
-                <p style="margin: 0.5rem 0 0 0; color: #047857;">Payment Intent: ${data.data?.paymentIntentId || 'pi_test'}</p>
-                <p style="margin: 0.25rem 0 0 0; color: #047857;">Amount: $${amount.toFixed(2)}</p>
-              </div>`;
-            document.getElementById('checkTestPassed').checked = true;
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Test transaction API call failed, using demo mode:', err);
-      }
-      
-      // Demo / Square fallback
       setTimeout(() => {
-        const providerLabel = provider === 'stripe' ? 'Stripe' : 'Square';
         resultDiv.innerHTML = `
           <div style="background: #d1fae5; border: 1px solid #6ee7b7; padding: 1rem; border-radius: 6px;">
-            <strong style="color: #065f46;">${providerLabel} Test Successful!</strong>
+            <strong style="color: #065f46;">Test Successful!</strong>
             <p style="margin: 0.5rem 0 0 0; color: #047857;">Transaction ID: TEST_${Date.now()}</p>
             <p style="margin: 0.25rem 0 0 0; color: #047857;">Amount: $${amount.toFixed(2)}</p>
           </div>
@@ -3134,7 +2740,7 @@
     }
     
     function activatePayments() {
-      const checklist = ['checkProviderConnected', 'checkBankingSetup', 'checkTestPassed', 'checkPricing', 'checkTOS'];
+      const checklist = ['checkSquareConnected', 'checkBankingSetup', 'checkTestPassed', 'checkPricing', 'checkTOS'];
       const allChecked = checklist.every(id => document.getElementById(id).checked);
       
       if (!allChecked) {
@@ -3142,9 +2748,8 @@
         return;
       }
       
-      const provider = paymentWizardData.selectedProvider;
-      const label = provider === 'stripe' ? 'Stripe' : 'Square';
-      alert(`${label} payment processing activated! Your farm store can now accept payments from customers.`);
+      // TODO: Activate payments in backend
+      alert('Payment processing activated! Your farm store can now accept payments from customers.');
       closePaymentWizard();
     }
     

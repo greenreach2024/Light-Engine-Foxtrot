@@ -65,9 +65,10 @@ class IoTDevicesManager {
 
   async loadDevices() {
     try {
-      const response = await fetch('/iot/devices');
+      // Load from the canonical iot-devices.json (same source as app.foxtrot.js loadAllData)
+      const response = await fetch('/data/iot-devices.json', { cache: 'no-store' });
       const data = await response.json();
-      this.devices = data.devices;
+      this.devices = Array.isArray(data) ? data : (data.devices || []);
       this.renderDevices();
     } catch (error) {
       console.error('Failed to load IoT devices:', error);
@@ -83,9 +84,9 @@ class IoTDevicesManager {
     if (this.scanButton) this.scanButton.disabled = true;
     
     try {
-      const response = await fetch('/iot/devices/scan', { method: 'POST' });
+      const response = await fetch('/discovery/devices');
       const data = await response.json();
-      this.devices = data.devices;
+      this.devices = Array.isArray(data) ? data : (data.devices || []);
       this.renderDevices();
     } catch (error) {
       console.error('Device scan failed:', error);
@@ -228,19 +229,19 @@ class IoTDevicesManager {
 
   async updateDevice(deviceId, updates) {
     try {
-      const response = await fetch(`/iot/devices/${deviceId}`, {
-        method: 'PATCH',
+      // Update local device data
+      this.devices = this.devices.map(d => 
+        d.id === deviceId ? { ...d, ...updates } : d
+      );
+      
+      // Persist to iot-devices.json
+      const response = await fetch('/data/iot-devices.json', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify(this.devices)
       });
       
       if (!response.ok) throw new Error('Failed to update device');
-      
-      // Update local device data
-      const updatedDevice = await response.json();
-      this.devices = this.devices.map(d => 
-        d.id === deviceId ? updatedDevice : d
-      );
       
       // Re-render devices
       this.renderDevices();
@@ -254,14 +255,17 @@ class IoTDevicesManager {
     if (!confirm('Are you sure you want to remove this device?')) return;
     
     try {
-      const response = await fetch(`/iot/devices/${deviceId}`, {
-        method: 'DELETE'
+      // Remove from local list
+      this.devices = this.devices.filter(d => d.id !== deviceId);
+      
+      // Persist to iot-devices.json
+      const response = await fetch('/data/iot-devices.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.devices)
       });
       
       if (!response.ok) throw new Error('Failed to remove device');
-      
-      // Update local device data
-      this.devices = this.devices.filter(d => d.id !== deviceId);
       
       // Re-render devices
       this.renderDevices();

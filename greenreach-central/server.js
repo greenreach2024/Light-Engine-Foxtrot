@@ -1901,6 +1901,162 @@ app.get('/api/ml/insights/forecast/:zone', (_req, res) => {
   return res.json({ ok: true, predictions });
 });
 
+// ── P0.1: Harvest Readiness compat (parity with LE /api/harvest/readiness) ──
+app.get('/api/harvest/readiness', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const groups = await farmStore.get(fid, 'groups') || [];
+    const trays = await farmStore.get(fid, 'trays') || [];
+
+    const now = new Date();
+    const notifications = groups
+      .filter(g => (g.status || '').toLowerCase() !== 'harvested')
+      .map(g => {
+        // Estimate days remaining from tray data
+        const groupTrays = trays.filter(t => t.groupId === g.id || t.group_id === g.id);
+        let daysRemaining = null;
+        if (g.estimatedHarvestDate) {
+          const hd = new Date(g.estimatedHarvestDate);
+          if (!Number.isNaN(hd.getTime())) daysRemaining = Math.max(0, Math.round((hd - now) / 86400000));
+        }
+        if (daysRemaining == null && Number.isFinite(Number(g.harvestIn))) {
+          daysRemaining = Number(g.harvestIn);
+        }
+        // Simple readiness score: closer to harvest = higher score
+        let readiness_score = 0;
+        if (daysRemaining != null) {
+          const maxDays = 30;
+          readiness_score = Math.min(1, Math.max(0, (maxDays - daysRemaining) / maxDays));
+        }
+        return {
+          group_id: g.id,
+          group_name: g.name || g.crop || g.id,
+          crop: g.crop || 'Unknown',
+          readiness_score,
+          days_remaining: daysRemaining,
+          predicted_yield: null,
+          tray_count: groupTrays.length,
+          message: daysRemaining != null
+            ? (daysRemaining <= 3 ? 'Harvest soon' : daysRemaining <= 7 ? 'Approaching harvest' : null)
+            : 'No harvest date set'
+        };
+      });
+
+    return res.json({
+      ok: true,
+      notifications,
+      count: notifications.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/harvest/readiness error:', error.message);
+    return res.json({ ok: true, notifications: [], count: 0, timestamp: new Date().toISOString() });
+  }
+});
+
+// ── P0.1: Loss Prediction compat (parity with LE /api/losses/predict) ──
+app.get('/api/losses/predict', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const envData = await farmStore.get(fid, 'telemetry') || {};
+    const zones = Array.isArray(envData?.zones) ? envData.zones : [];
+
+    const alerts = [];
+    for (const zone of zones) {
+      const readings = Array.isArray(zone?.sensors)
+        ? zone.sensors?.[0]?.readings
+        : (zone?.sensors || zone || null);
+      if (!readings) continue;
+
+      const tempC = readings.temperature_c ?? readings.temp ?? readings.tempC ?? null;
+      const rh = readings.humidity ?? readings.humidity_pct ?? readings.rh ?? null;
+
+      // Simple risk heuristics matching LE loss-predictor patterns
+      const factors = [];
+      let risk = 0;
+      if (tempC != null) {
+        if (tempC > 32) { risk += 0.4; factors.push('High temperature'); }
+        else if (tempC < 15) { risk += 0.3; factors.push('Low temperature'); }
+      }
+      if (rh != null) {
+        if (rh > 85) { risk += 0.3; factors.push('High humidity'); }
+        else if (rh < 30) { risk += 0.2; factors.push('Low humidity'); }
+      }
+
+      if (factors.length > 0) {
+        alerts.push({
+          zone: zone.id || zone.zone_id,
+          zone_name: zone.name || zone.zone_name || zone.id,
+          risk_score: Math.min(1, risk),
+          factors,
+          reason: factors[0],
+          message: `${factors.join(', ')} detected`
+        });
+      }
+    }
+
+    return res.json({
+      alerts: alerts.sort((a, b) => b.risk_score - a.risk_score),
+      profiles_summary: { total_events: 0, reasons_profiled: 0, status: 'compatibility' }
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/losses/predict error:', error.message);
+    return res.json({ alerts: [], profiles_summary: { total_events: 0, reasons_profiled: 0, status: 'error' } });
+  }
+});
+
+// ── P0.2: KPI endpoint compat (parity with LE /api/kpis) ──
+app.get('/api/kpis', async (req, res) => {
+  try {
+    const fid = farmStore.farmIdFromReq(req);
+    const trays = await farmStore.get(fid, 'trays') || [];
+    const groups = await farmStore.get(fid, 'groups') || [];
+
+    const activeTrays = trays.filter(t => (t.status || '').toLowerCase() !== 'harvested');
+    const harvested = trays.filter(t => (t.status || '').toLowerCase() === 'harvested');
+
+    // Simple KPI derivation from available farm_data
+    const kpis = {
+      fill_rate: { value: null, unit: '%', source: 'not_available_on_central' },
+      otif: { value: null, unit: '%', source: 'not_yet_instrumented' },
+      contribution_margin: { value: null, unit: 'USD', source: 'not_available_on_central' },
+      loss_rate: {
+        value: harvested.length > 0
+          ? +((trays.filter(t => (t.status || '').toLowerCase() === 'lost').length / trays.length) * 100).toFixed(1)
+          : null,
+        unit: '%',
+        source: 'farm_data_trays'
+      },
+      forecast_error: { value: null, unit: '%', source: 'not_available_on_central' },
+      labor_minutes_per_kg: { value: null, unit: 'min/kg', source: 'not_yet_instrumented' },
+      input_reduction: { value: null, unit: '%', source: 'not_available_on_central' }
+    };
+
+    return res.json({
+      ok: true,
+      generated_at: new Date().toISOString(),
+      period: 'current',
+      kpis
+    });
+  } catch (error) {
+    logger.warn('[Compat] /api/kpis error:', error.message);
+    return res.json({
+      ok: true,
+      generated_at: new Date().toISOString(),
+      period: 'current',
+      kpis: {
+        fill_rate: { value: null, unit: '%', source: 'error' },
+        otif: { value: null, unit: '%', source: 'error' },
+        contribution_margin: { value: null, unit: 'USD', source: 'error' },
+        loss_rate: { value: null, unit: '%', source: 'error' },
+        forecast_error: { value: null, unit: '%', source: 'error' },
+        labor_minutes_per_kg: { value: null, unit: 'min/kg', source: 'error' },
+        input_reduction: { value: null, unit: '%', source: 'error' }
+      }
+    });
+  }
+});
+
 app.get('/api/health/insights', async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);

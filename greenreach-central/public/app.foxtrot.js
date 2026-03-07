@@ -1,6 +1,22 @@
 // API Base URL - uses window.API_BASE set in LE-farm-admin.html
 const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : (typeof location !== 'undefined' ? location.origin : '');
 
+/**
+ * Fetch helper that automatically includes Authorization header from
+ * localStorage token when available. This ensures correct farm-scoping
+ * when requests go through greenreach-central's multi-tenant middleware.
+ */
+function fetchWithFarmAuth(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (!headers['Authorization']) {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch (_) {}
+  }
+  return fetch(url, { ...options, headers });
+}
+
 // Global: silence common console.log noise in production unless explicitly enabled
 (function() {
   try {
@@ -487,21 +503,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 // --- Groups Card Room/Zone Dropdown Seeding ---
+function getRoomZones(room) {
+  if (!room || typeof room !== 'object') return [];
+  if (Array.isArray(room.zones) && room.zones.length) return room.zones.filter(Boolean);
+  if (Array.isArray(room.zoneNames) && room.zoneNames.length) return room.zoneNames.filter(Boolean);
+  if (Array.isArray(room.zone_names) && room.zone_names.length) return room.zone_names.filter(Boolean);
+  return [];
+}
+
+function roomHasZones(room) {
+  return getRoomZones(room).length > 0;
+}
+
+function buildRoomLookupKey(room) {
+  const id = String(room?.id || room?.roomId || room?.room_id || '').trim().toLowerCase();
+  const name = String(room?.name || room?.roomName || '').trim().toLowerCase();
+  return id || name;
+}
+
+function mergeRoomsWithZoneFallback(baseRooms, fallbackPools = []) {
+  const pools = fallbackPools.filter(pool => Array.isArray(pool) && pool.length);
+  if (!Array.isArray(baseRooms)) return [];
+  return baseRooms.map((room) => {
+    if (roomHasZones(room)) return room;
+    const key = buildRoomLookupKey(room);
+    if (!key) return room;
+    for (const pool of pools) {
+      const match = pool.find((candidate) => buildRoomLookupKey(candidate) === key && roomHasZones(candidate));
+      if (match) {
+        return { ...room, zones: getRoomZones(match) };
+      }
+    }
+    return room;
+  });
+}
+
 function collectRoomsFromState() {
   const wizardRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
-  if (wizardRooms.length) return wizardRooms;
   const farmRooms = Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : [];
-  if (farmRooms.length) return farmRooms;
-  // Fallback: try localStorage (covers race conditions where STATE not yet populated)
+  let lsRooms = [];
   try {
     const cached = localStorage.getItem('gr.rooms');
     if (cached) {
       const parsed = JSON.parse(cached);
-      const lsRooms = Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
-      if (lsRooms.length) return lsRooms;
+      lsRooms = Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
     }
   } catch (_) { /* localStorage unavailable */ }
-  return [];
+
+  const firstAvailable = wizardRooms.length ? wizardRooms : (farmRooms.length ? farmRooms : lsRooms);
+  if (!firstAvailable.length) return [];
+  return mergeRoomsWithZoneFallback(firstAvailable, [farmRooms, lsRooms, wizardRooms]);
 }
 
 function updateGroupActionStates({ hasGroup = false, hasRoom = false, hasZone = false } = {}) {
@@ -1760,8 +1811,8 @@ function showKasaWizard() {
         </div>
       `;
       modal.style.display = 'flex';
-      // Call backend to discover devices
-      fetch('/api/switchbot/discover', {
+      // Call backend to discover devices (route is /switchbot/discover, NOT /api/switchbot/discover)
+      fetch('/switchbot/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, secret })
@@ -2393,25 +2444,103 @@ function buildSwitchbotSnapshot(device) {
   return wrapper;
 }
 
+// ===== Client-side zone enrichment from room-map data =====
+// Reads room-map.json and applies zone assignments to devices in STATE.iotDevices.
+// This bridges the gap where room-map has zone data but iot-devices.json doesn't.
+async function enrichDeviceZonesFromRoomMap() {
+  try {
+    // Try room-map.json (legacy merged file)
+    const resp = await fetchWithFarmAuth('/data/room-map.json', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const roomMap = await resp.json();
+    if (!roomMap?.devices?.length) return;
+
+    // Build zone lookup: deviceId -> { zone, room, location }
+    const zoneMap = new Map();
+    for (const dev of roomMap.devices) {
+      const deviceId = dev.deviceId || dev.id;
+      const rawZone = dev.snapshot?.zone ?? dev.zone;
+      const room = dev.snapshot?.room || dev.room || roomMap.name || '';
+      if (deviceId && rawZone != null) {
+        const zoneNum = typeof rawZone === 'number' ? rawZone : (() => {
+          const s = String(rawZone).trim();
+          if (/^\d+$/.test(s)) return Number(s);
+          const m = s.match(/^zone[- ]?(\d+)$/i);
+          return m ? Number(m[1]) : null;
+        })();
+        if (zoneNum != null) {
+          const location = room ? `${room} - Zone ${zoneNum}` : `Zone ${zoneNum}`;
+          zoneMap.set(deviceId, { zone: zoneNum, room, location });
+        }
+      }
+    }
+    if (!zoneMap.size) return;
+
+    // Apply zone assignments to STATE.iotDevices
+    let updated = false;
+    const devices = Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [];
+    for (const device of devices) {
+      const deviceId = device.id || device.deviceId;
+      const mapping = zoneMap.get(deviceId);
+      if (mapping && (!device.zone || device.zone === null || device.zone === '')) {
+        device.zone = mapping.zone;
+        if (!device.location) device.location = mapping.location;
+        updated = true;
+      }
+    }
+    if (updated) {
+      window.LAST_IOT_SCAN = STATE.iotDevices.slice();
+      console.log('[enrichDeviceZonesFromRoomMap] Applied zone assignments from room-map to', devices.length, 'device(s)');
+    }
+  } catch (err) {
+    console.warn('[enrichDeviceZonesFromRoomMap] Failed:', err.message || err);
+  }
+}
+
 function persistIotDevices(devices) {
   const payload = dedupeDevices(devices);
-  return fetch('/data/iot-devices.json', {
+  console.log('[persistIotDevices] Saving', payload.length, 'devices to server...',
+    'trusted:', payload.filter(d => d.trust === 'trusted').length,
+    'IDs:', payload.map(d => d.id).join(','));
+  // Always backup to localStorage immediately (synchronous, reliable)
+  try { localStorage.setItem('gr.iotDevices', JSON.stringify(payload)); } catch (_) {}
+  return fetchWithFarmAuth('/data/iot-devices.json', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).then(res => {
+  }).then(async res => {
     if (!res.ok) throw new Error(res.statusText || 'Failed to save devices');
-    console.log('[IoT] Devices persisted:', payload.length);
+    const result = await res.json().catch(() => ({}));
+    console.log('[persistIotDevices] ✅ Server confirmed save:', result, 'count:', payload.length);
+    
+    // Verify round-trip: read back to confirm data was actually persisted
+    try {
+      const verifyResp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+      if (verifyResp.ok) {
+        const saved = await verifyResp.json();
+        const savedArr = Array.isArray(saved) ? saved : (saved.devices || []);
+        if (savedArr.length !== payload.length) {
+          console.error('[persistIotDevices] ⚠️ VERIFICATION MISMATCH! Saved:', payload.length, 'Read back:', savedArr.length);
+        } else {
+          console.log('[persistIotDevices] ✅ Verified: read back', savedArr.length, 'devices from server');
+        }
+      }
+    } catch (verifyErr) {
+      console.warn('[persistIotDevices] Verification read-back failed:', verifyErr.message);
+    }
     
     // ✅ DATA FLOW: Notify components that IoT devices have been updated
     try {
       document.dispatchEvent(new Event('iot-devices-updated'));
-      console.log('[persistIotDevices] Dispatched iot-devices-updated event');
     } catch (err) {
       console.warn('[persistIotDevices] Failed to dispatch iot-devices-updated:', err);
     }
   }).catch(err => {
-    console.warn('[IoT] Failed to persist devices:', err);
+    console.error('[IoT] ⚠️ Failed to persist devices to server:', err);
+    // Show user-visible warning since devices may not survive navigation
+    if (typeof showToast === 'function') {
+      showToast({ title: 'Save Warning', msg: 'IoT devices saved locally but server save failed. They may not persist after page reload.', kind: 'warn', icon: '⚠️', duration: 8000 });
+    }
   });
 }
 
@@ -2573,15 +2702,47 @@ function createDeviceEntryElement(device) {
         zoneOptionsAdded = true;
       }
     }
-    // Fallback: add generic zones 1-9 if no rooms/zones are configured
+    // Fallback: if no rooms/zones configured yet, attempt async load from farm.json
     if (!zoneOptionsAdded) {
-      console.warn('[ZoneDropdown] No zone options from rooms — using Zone 1-9 fallback. farmRooms:', farmRooms.length);
-      for (let i = 1; i <= 9; i++) {
-        const option = document.createElement('option');
-        option.value = `Zone ${i}`;
-        option.textContent = `Zone ${i}`;
-        zoneSelect.appendChild(option);
-      }
+      console.warn('[ZoneDropdown] No zone options from rooms — attempting async load from /data/farm.json');
+      // Add a temporary "Loading zones..." option
+      const loadingOpt = document.createElement('option');
+      loadingOpt.value = '';
+      loadingOpt.textContent = 'Loading zones…';
+      loadingOpt.disabled = true;
+      zoneSelect.appendChild(loadingOpt);
+      
+      // Async load farm.json and populate
+      (async () => {
+        try {
+          const resp = await fetch('/data/farm.json', { cache: 'no-store' });
+          if (resp.ok) {
+            const farm = await resp.json();
+            if (!STATE.farm) STATE.farm = farm;
+            const rooms = Array.isArray(farm.rooms) ? farm.rooms : [];
+            // Remove the loading option
+            if (loadingOpt.parentNode) loadingOpt.remove();
+            let added = false;
+            for (const room of rooms) {
+              const roomZones = Array.isArray(room.zones) ? room.zones : [];
+              for (const zoneName of roomZones) {
+                const option = document.createElement('option');
+                option.value = zoneName;
+                option.textContent = `${zoneName}${rooms.length > 1 ? ` (${room.name || room.id})` : ''}`;
+                zoneSelect.appendChild(option);
+                added = true;
+              }
+            }
+            if (added) {
+              // Re-select current zone if device already has one
+              if (device.zone) zoneSelect.value = device.zone;
+              console.log('[ZoneDropdown] Loaded zones from /data/farm.json:', rooms.flatMap(r => r.zones || []));
+            }
+          }
+        } catch (e) {
+          console.warn('[ZoneDropdown] Async farm.json load failed:', e.message);
+        }
+      })();
     }
 
     // Lazy re-populate: when user focuses the dropdown, refresh zone options
@@ -3360,6 +3521,10 @@ window.scanIoTDevices = async function() {
   const scanned = devices.map(dev => sanitizeDevicePayload(dev, { trust: 'unknown' }));
   const trusted = Array.isArray(STATE.iotDevices) ? STATE.iotDevices : [];
   window.LAST_IOT_SCAN = dedupeDevices([...scanned, ...trusted]);
+  // Persist so iot-devices.json gets populated and server-side zone sync runs
+  STATE.iotDevices = window.LAST_IOT_SCAN.slice();
+  await persistIotDevices(STATE.iotDevices);
+  await enrichDeviceZonesFromRoomMap();
   renderIoTDeviceCards(window.LAST_IOT_SCAN);
     showToast({ title: 'Scan complete', msg: `Found ${devices.length} devices`, kind: 'success', icon: '' });
     if (data.analysis && data.analysis.suggestedWizards) {
@@ -3454,17 +3619,21 @@ window.runUniversalScan = async function() {
     const fallbackEndpoint = '/discovery/devices';
     const currentHost = (window?.location?.hostname || '').toLowerCase();
     const currentOrigin = window?.location?.origin || '';
-    const isCloudHost = currentHost.includes('greenreachgreens.com');
+    const isProductionHost = currentHost && !['localhost', '127.0.0.1'].includes(currentHost);
+    const explicitLocalProbe = window.ENABLE_LOCAL_EDGE_PROBE === true || (new URLSearchParams(window.location.search).get('edgeLocal') === '1');
+    const canProbeEdge = Boolean(window.EDGE_URL) || explicitLocalProbe;
     console.log('[UniversalScan] Fetching from:', discoveryEndpoint);
     console.log('[UniversalScan] Full URL:', window.location.origin + discoveryEndpoint);
     
     let response;
 
-    // When on cloud, try scanning via local edge first (scan must run on the farm's machine)
-    if (isCloudHost) {
+    // On hosted UI, only probe edge when an edge URL is configured or explicitly requested.
+    if (isProductionHost && canProbeEdge) {
       const edgeUrls = [];
       if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
-      edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+      if (explicitLocalProbe) {
+        edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+      }
       // Deduplicate
       const uniqueEdge = [...new Set(edgeUrls)];
       console.log('[UniversalScan] Cloud mode — trying local edge URLs:', uniqueEdge);
@@ -5429,13 +5598,20 @@ async function loadRoomsFromBackend() {
 // so the Grow Room Setup card always reflects what the Room Mapper has saved.
 async function enrichRoomZonesFromMaps() {
   try {
+    let staticRooms = [];
+    try {
+      const staticResp = await fetch('/data/rooms.json', { cache: 'no-store' });
+      if (staticResp.ok) {
+        const staticData = await staticResp.json();
+        staticRooms = Array.isArray(staticData?.rooms) ? staticData.rooms : Array.isArray(staticData) ? staticData : [];
+      }
+    } catch (_) { /* static rooms not available */ }
+
     // If STATE.rooms is empty, try loading from rooms.json first
     if (!STATE.rooms || STATE.rooms.length === 0) {
       try {
-        const resp = await fetch('/data/rooms.json', { cache: 'no-store' });
-        if (resp.ok) {
-          const data = await resp.json();
-          const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+        if (staticRooms.length) {
+          const rooms = staticRooms;
           if (rooms.length) {
             STATE.rooms = rooms.map(r => {
               if (!r.id && (r.room_id || r.roomId)) r.id = r.room_id || r.roomId;
@@ -5447,9 +5623,25 @@ async function enrichRoomZonesFromMaps() {
       } catch (_) { /* rooms.json not available */ }
     }
 
+    const staticZoneMap = new Map(
+      (Array.isArray(staticRooms) ? staticRooms : []).map((room) => [
+        buildRoomLookupKey(room),
+        getRoomZones(room)
+      ])
+    );
+
     for (const room of STATE.rooms) {
       const roomId = room.id || room.roomId || room.room_id;
       if (!roomId) continue;
+
+      if (!roomHasZones(room)) {
+        const fromStatic = staticZoneMap.get(buildRoomLookupKey(room));
+        if (Array.isArray(fromStatic) && fromStatic.length) {
+          room.zones = fromStatic;
+          continue;
+        }
+      }
+
       // Skip if room already has zones populated
       if (Array.isArray(room.zones) && room.zones.length > 0) continue;
       try {
@@ -6342,7 +6534,7 @@ function cloneFallback(value) {
 // Global JSON loader with graceful fallback
 async function loadJSON(url, fallbackValue = null) {
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6357,7 +6549,7 @@ async function saveJSON(url, data) {
     if (!fileName) throw new Error('Invalid save target');
     console.log(`[saveJSON] Saving to /data/${fileName}`);
     console.log(`[saveJSON] Payload:`, JSON.stringify(data, null, 2));
-    const resp = await fetch(`/data/${encodeURIComponent(fileName)}`, {
+    const resp = await fetchWithFarmAuth(`/data/${encodeURIComponent(fileName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -6736,35 +6928,51 @@ const setStatus = m => { const el=$("#status"); if(el) el.textContent = m; };
 // Load saved IoT devices from persistent storage
 async function loadSavedIoTDevices() {
   console.log('[IoT] ===== loadSavedIoTDevices CALLED =====');
+  let deviceArray = [];
+  let source = 'none';
   try {
     console.log('[IoT] Fetching /data/iot-devices.json...');
-    const resp = await fetch('/data/iot-devices.json');
-    if (!resp.ok) {
-      console.log('[IoT] No saved devices found (404), starting fresh');
-      STATE.iotDevices = [];
-      window.LAST_IOT_SCAN = [];
-      return;
-    }
-    const devices = await resp.json();
-    console.log('[IoT] Received response:', devices);
-    const deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
-    console.log('[IoT] Device array length:', deviceArray.length);
-    STATE.iotDevices = deviceArray.map(d => sanitizeDevicePayload(d));
-    window.LAST_IOT_SCAN = STATE.iotDevices.slice();
-    console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
-    console.log('[IoT] Devices:', STATE.iotDevices);
-    
-    // Render devices if the panel exists
-    if (typeof window.renderIoTDeviceCards === 'function') {
-      console.log('[IoT] Calling renderIoTDeviceCards...');
-      window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+    if (resp.ok) {
+      const devices = await resp.json();
+      console.log('[IoT] Received response:', devices);
+      deviceArray = Array.isArray(devices) ? devices : (devices.devices || []);
+      source = 'server';
     } else {
-      console.warn('[IoT] renderIoTDeviceCards function NOT FOUND');
+      console.log('[IoT] Server returned', resp.status, '- trying localStorage fallback');
     }
   } catch (e) {
-    console.error('[IoT] Failed to load saved devices:', e);
-    STATE.iotDevices = [];
-    window.LAST_IOT_SCAN = [];
+    console.warn('[IoT] Server fetch failed:', e.message, '- trying localStorage fallback');
+  }
+  // Fallback: try localStorage if server returned empty or failed
+  if (!deviceArray.length) {
+    try {
+      const cached = localStorage.getItem('gr.iotDevices');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const lsDevices = Array.isArray(parsed) ? parsed : (parsed?.devices || []);
+        if (lsDevices.length) {
+          deviceArray = lsDevices;
+          source = 'localStorage';
+          console.log('[IoT] Recovered', lsDevices.length, 'devices from localStorage');
+        }
+      }
+    } catch (_) { /* localStorage unavailable */ }
+  }
+  console.log('[IoT] Device array length:', deviceArray.length, 'source:', source);
+  STATE.iotDevices = deviceArray.map(d => sanitizeDevicePayload(d));
+  window.LAST_IOT_SCAN = STATE.iotDevices.slice();
+  console.log('[IoT] Loaded', STATE.iotDevices.length, 'saved devices');
+  // Persist localStorage backup for next load
+  try { localStorage.setItem('gr.iotDevices', JSON.stringify(STATE.iotDevices)); } catch (_) {}
+  // Enrich device zones from room-map data
+  await enrichDeviceZonesFromRoomMap();
+  // Render devices if the panel exists
+  if (typeof window.renderIoTDeviceCards === 'function') {
+    console.log('[IoT] Calling renderIoTDeviceCards...');
+    window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+  } else {
+    console.warn('[IoT] renderIoTDeviceCards function NOT FOUND');
   }
 }
 
@@ -6896,10 +7104,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Load persisted light setups
   console.log('[INIT] Loading light setups...');
   await loadLightSetups();
-  // Load saved IoT devices
-  console.log('[INIT] Loading saved IoT devices...');
-  await loadSavedIoTDevices();
-  console.log('[INIT] IoT devices loaded, STATE.iotDevices:', STATE.iotDevices?.length);
+  // NOTE: IoT devices are loaded by loadAllData() in the second DOMContentLoaded handler.
+  // Loading here was redundant and caused a race condition where both handlers wrote
+  // to STATE.iotDevices concurrently. loadAllData() is the authoritative load path
+  // because it also merges SwitchBot devices and handles persistence.
+  console.log('[INIT] Skipping loadSavedIoTDevices (handled by loadAllData)');
   // Remove demo rooms (will skip if in demo mode)
   removeDemoRooms();
   // Render rooms if function exists
@@ -12793,12 +13002,16 @@ function ensureScheduleIdentity(rawSchedule) {
 // --- Data Loading and Initialization ---
 async function loadAllData() {
   try {
-    // 1) Try DB-backed devices first
+    // 1) Try loading IoT devices from farm-scoped DB (via greenreach-central)
     let dbDevices = null;
     try {
-      dbDevices = await api('/devices');
+      const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+      if (resp.ok) {
+        const payload = await resp.json();
+        dbDevices = Array.isArray(payload) ? { devices: payload } : payload;
+      }
     } catch (e) {
-      console.warn('DB /devices fetch failed, will try forwarder/api', e);
+      console.warn('/data/iot-devices.json fetch failed, will try forwarder/api', e);
     }
     if (dbDevices && Array.isArray(dbDevices.devices)) {
       STATE.devices = dbDevices.devices;
@@ -12884,59 +13097,99 @@ async function loadAllData() {
     }
     const iotDevicesData = Array.isArray(storedIotDevices) ? storedIotDevices : [];
     
+    // Build a lookup of existing zone/location from stored iot-devices.json
+    // so that SwitchBot merge doesn't overwrite manually-set zones
+    const storedZoneMap = new Map();
+    for (const d of iotDevicesData) {
+      const id = d.id || d.deviceId;
+      if (id && (d.zone != null || d.location)) {
+        storedZoneMap.set(id, { zone: d.zone, location: d.location });
+      }
+    }
+
     // Merge SwitchBot devices from switchbot-devices.json into IoT devices
     const switchbotDevicesList = Array.isArray(switchbotDevices?.devices) ? switchbotDevices.devices : [];
     if (switchbotDevicesList.length > 0) {
       console.log(`[loadAllData] Merging ${switchbotDevicesList.length} SwitchBot devices into IoT devices`);
       // Convert SwitchBot device format to IoT device format
-      const switchbotAsIot = switchbotDevicesList.map(sbDev => ({
-        id: sbDev.id || sbDev.deviceId,
-        deviceId: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
-        vendor: 'SwitchBot',
-        brand: 'SwitchBot',
-        protocol: 'switchbot',
-        type: (sbDev.type || '').toLowerCase(),
-        category: sbDev.type || 'Unknown',
-        address: sbDev.id || sbDev.deviceId,
-        location: sbDev.location || null,
-        zone: sbDev.zone || null,
-        trust: 'trusted',
-        automationControl: false,
-        lastSeen: sbDev.lastSeen || null,
-        telemetry: {
-          device_id: sbDev.id || sbDev.deviceId,
-          name: sbDev.name || sbDev.deviceName,
-          category: sbDev.type,
+      const switchbotAsIot = switchbotDevicesList.map(sbDev => {
+        const devId = sbDev.id || sbDev.deviceId;
+        // Preserve existing zone/location from iot-devices.json if SwitchBot API doesn't provide one
+        const stored = storedZoneMap.get(devId);
+        return {
+          id: devId,
+          deviceId: devId,
+          name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
+          vendor: 'SwitchBot',
+          brand: 'SwitchBot',
           protocol: 'switchbot',
-          online: sbDev.status !== 'offline',
-          battery: sbDev.battery,
-          ...sbDev.readings
-        },
-        deviceData: {
-          device_id: sbDev.id || sbDev.deviceId,
-          name: sbDev.name || sbDev.deviceName,
-          category: sbDev.type,
-          protocol: 'switchbot',
-          online: sbDev.status !== 'offline'
-        }
-      }));
+          type: (sbDev.type || '').toLowerCase(),
+          category: sbDev.type || 'Unknown',
+          address: devId,
+          location: sbDev.location || stored?.location || null,
+          zone: sbDev.zone || stored?.zone || null,
+          trust: 'trusted',
+          automationControl: false,
+          lastSeen: sbDev.lastSeen || null,
+          telemetry: {
+            device_id: devId,
+            name: sbDev.name || sbDev.deviceName,
+            category: sbDev.type,
+            protocol: 'switchbot',
+            online: sbDev.status !== 'offline',
+            battery: sbDev.battery,
+            ...sbDev.readings
+          },
+          deviceData: {
+            device_id: devId,
+            name: sbDev.name || sbDev.deviceName,
+            category: sbDev.type,
+            protocol: 'switchbot',
+            online: sbDev.status !== 'offline'
+          }
+        };
+      });
       // Merge into iot devices
       iotDevicesData.push(...switchbotAsIot);
     }
     
+    // Merge with localStorage fallback if server returned empty
+    if (!iotDevicesData.length) {
+      try {
+        const cached = localStorage.getItem('gr.iotDevices');
+        if (cached) {
+          const lsDevices = JSON.parse(cached);
+          if (Array.isArray(lsDevices) && lsDevices.length) {
+            iotDevicesData.push(...lsDevices);
+            console.log('[loadAllData] Recovered', lsDevices.length, 'IoT devices from localStorage');
+          }
+        }
+      } catch (_) {}
+    }
     const uniqueDevices = dedupeDevices(iotDevicesData);
-    if (uniqueDevices.length !== iotDevicesData.length) {
-      persistIotDevices(uniqueDevices);
+    // Only re-persist if SwitchBot merge enriched the list (avoid unnecessary writes that
+    // can race with server-side syncSensorData timer). Skip if we just loaded the same data.
+    if (uniqueDevices.length && switchbotDevicesList.length > 0) {
+      console.log('[loadAllData] SwitchBot merge enriched list, persisting', uniqueDevices.length, 'devices');
+      await persistIotDevices(uniqueDevices);
     }
     STATE.iotDevices = uniqueDevices;
     window.LAST_IOT_SCAN = uniqueDevices.slice();
-    console.log(' [loadAllData] Loaded IoT devices:', STATE.iotDevices.length);
-    setTimeout(() => {
-      if (typeof window.renderIoTDeviceCards === 'function') {
-        window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
-      }
-    }, 500);
+    // Keep localStorage in sync
+    try { localStorage.setItem('gr.iotDevices', JSON.stringify(uniqueDevices)); } catch (_) {}
+    console.log('[loadAllData] Loaded IoT devices:', STATE.iotDevices.length,
+      'trusted:', uniqueDevices.filter(d => d.trust === 'trusted').length);
+    if (uniqueDevices.length > 0) {
+      console.log('[loadAllData] Device IDs:', uniqueDevices.map(d => d.id).join(', '));
+    }
+
+    // Enrich device zones from room-map data (bridges Room Mapper → IoT cards)
+    await enrichDeviceZonesFromRoomMap();
+
+    // Render IoT device cards immediately (no delay)
+    if (typeof window.renderIoTDeviceCards === 'function') {
+      window.renderIoTDeviceCards(window.LAST_IOT_SCAN);
+    }
   const schedulesDoc = (schedules && typeof schedules === 'object') ? schedules : null;
   STATE.scheduleDocument = schedulesDoc;
   const loadedSchedules = Array.isArray(schedulesDoc?.schedules) ? schedulesDoc.schedules : [];
@@ -13000,7 +13253,7 @@ async function loadAllData() {
       try {
         const raw = localStorage.getItem('gr.rooms');
         const parsed = raw ? JSON.parse(raw) : null;
-        return Array.isArray(parsed?.rooms) ? parsed.rooms : [];
+        return Array.isArray(parsed?.rooms) ? parsed.rooms : Array.isArray(parsed) ? parsed : [];
       } catch {
         return [];
       }
@@ -13028,6 +13281,8 @@ async function loadAllData() {
           name: fallbackName
         };
       });
+
+    STATE.rooms = mergeRoomsWithZoneFallback(STATE.rooms, [localRooms, fileRooms, farmRooms]);
 
     STATE.equipmentMetadata = equipmentMetadata || {};
     console.log(' [loadAllData] Loaded equipment metadata:', Object.keys(STATE.equipmentMetadata).length, 'items');
@@ -13105,9 +13360,10 @@ async function loadAllData() {
     renderSwitchBotDevices();
     const switchBotCreds = STATE?.farm?.integrations?.switchbot || {};
     if (switchBotCreds.token && switchBotCreds.secret) {
-      // Auto-sync live SwitchBot data when credentials are available
+      // Auto-sync live SwitchBot data: use refreshSwitchBotDevices() which
+      // merges into STATE.iotDevices AND persists to iot-devices.json
       setTimeout(() => {
-        loadSwitchBotDevices().catch((error) => {
+        refreshSwitchBotDevices().catch((error) => {
           console.warn('[switchbot] Startup sync failed', error);
         });
       }, 0);
@@ -13175,10 +13431,25 @@ async function loadAllData() {
 // Patch a single device's location into the server DB (best-effort)
 async function patchDeviceDb(id, fields){
   try {
-    await fetch(`/devices/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+    // Read current devices, update the target, write back
+    let devices = [];
+    try {
+      const resp = await fetchWithFarmAuth('/data/iot-devices.json', { cache: 'no-store' });
+      if (resp.ok) {
+        const parsed = await resp.json();
+        devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
+      }
+    } catch (_) {}
+    const idx = devices.findIndex(d => (d.id || d.deviceId) === id);
+    if (idx >= 0) {
+      devices[idx] = { ...devices[idx], ...fields };
+    } else {
+      devices.push({ id, ...fields });
+    }
+    await fetchWithFarmAuth('/data/iot-devices.json', {
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(fields)
+      body: JSON.stringify(devices)
     });
   } catch (e) {
     console.warn('patchDeviceDb failed', e);
@@ -17013,39 +17284,51 @@ async function refreshSwitchBotDevices() {
   // Merge SwitchBot devices into STATE.iotDevices so they're available everywhere
   if (result.devices && result.devices.length > 0) {
     console.log(`[SwitchBot] Merging ${result.devices.length} refreshed devices into IoT devices`);
-    // Convert SwitchBot device format to IoT device format
-    const switchbotAsIot = result.devices.map(sbDev => ({
-      id: sbDev.id || sbDev.deviceId,
-      deviceId: sbDev.id || sbDev.deviceId,
-      name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
-      vendor: 'SwitchBot',
-      brand: 'SwitchBot',
-      protocol: 'switchbot',
-      type: (sbDev.type || '').toLowerCase(),
-      category: sbDev.type || 'Unknown',
-      address: sbDev.id || sbDev.deviceId,
-      location: sbDev.location || null,
-      zone: sbDev.zone || null,
-      trust: 'trusted',
-      automationControl: false,
-      lastSeen: sbDev.lastSeen || null,
-      telemetry: {
-        device_id: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName,
-        category: sbDev.type,
-        protocol: 'switchbot',
-        online: sbDev.status !== 'offline',
-        battery: sbDev.battery,
-        ...sbDev.readings
-      },
-      deviceData: {
-        device_id: sbDev.id || sbDev.deviceId,
-        name: sbDev.name || sbDev.deviceName,
-        category: sbDev.type,
-        protocol: 'switchbot',
-        online: sbDev.status !== 'offline'
+    // Build lookup for existing zone/location so refreshed data doesn't overwrite manual assignments
+    const existingZoneMap = new Map();
+    for (const d of (STATE.iotDevices || [])) {
+      const id = d.id || d.deviceId;
+      if (id && (d.zone != null || d.location)) {
+        existingZoneMap.set(id, { zone: d.zone, location: d.location });
       }
-    }));
+    }
+    // Convert SwitchBot device format to IoT device format
+    const switchbotAsIot = result.devices.map(sbDev => {
+      const devId = sbDev.id || sbDev.deviceId;
+      const existing = existingZoneMap.get(devId);
+      return {
+        id: devId,
+        deviceId: devId,
+        name: sbDev.name || sbDev.deviceName || `SwitchBot ${sbDev.type || 'device'}`,
+        vendor: 'SwitchBot',
+        brand: 'SwitchBot',
+        protocol: 'switchbot',
+        type: (sbDev.type || '').toLowerCase(),
+        category: sbDev.type || 'Unknown',
+        address: devId,
+        location: sbDev.location || existing?.location || null,
+        zone: sbDev.zone || existing?.zone || null,
+        trust: 'trusted',
+        automationControl: false,
+        lastSeen: sbDev.lastSeen || null,
+        telemetry: {
+          device_id: devId,
+          name: sbDev.name || sbDev.deviceName,
+          category: sbDev.type,
+          protocol: 'switchbot',
+          online: sbDev.status !== 'offline',
+          battery: sbDev.battery,
+          ...sbDev.readings
+        },
+        deviceData: {
+          device_id: devId,
+          name: sbDev.name || sbDev.deviceName,
+          category: sbDev.type,
+          protocol: 'switchbot',
+          online: sbDev.status !== 'offline'
+        }
+      };
+    });
     
     // Remove old SwitchBot devices and add new ones
     const nonSwitchBot = (STATE.iotDevices || []).filter(d => d.protocol !== 'switchbot');
@@ -17054,6 +17337,9 @@ async function refreshSwitchBotDevices() {
     
     // Persist the merged list
     await persistIotDevices(STATE.iotDevices);
+
+    // Enrich zones from room-map data
+    await enrichDeviceZonesFromRoomMap();
     
     // Re-render IoT device cards
     if (typeof window.renderIoTDeviceCards === 'function') {
@@ -20188,12 +20474,17 @@ class DevicePairWizard {
       const minScanDurationMs = 12000;
       let resp;
 
-      // When on cloud, try local edge first for device scanning
-      const isCloudHost = (window?.location?.hostname || '').toLowerCase().includes('greenreachgreens.com');
-      if (isCloudHost) {
+      // On hosted UI, only probe edge when an edge URL is configured or explicitly requested.
+      const currentHost = (window?.location?.hostname || '').toLowerCase();
+      const isProductionHost = currentHost && !['localhost', '127.0.0.1'].includes(currentHost);
+      const explicitLocalProbe = window.ENABLE_LOCAL_EDGE_PROBE === true || (new URLSearchParams(window.location.search).get('edgeLocal') === '1');
+      const canProbeEdge = Boolean(window.EDGE_URL) || explicitLocalProbe;
+      if (isProductionHost && canProbeEdge) {
         const edgeUrls = [];
         if (window.EDGE_URL) edgeUrls.push(window.EDGE_URL.replace(/\/$/, ''));
-        edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+        if (explicitLocalProbe) {
+          edgeUrls.push('http://localhost:8091', 'http://127.0.0.1:8091');
+        }
         const uniqueEdge = [...new Set(edgeUrls)];
         if (this.scanStatus) this.scanStatus.textContent = 'Cloud mode: checking for local Light Engine...';
 

@@ -394,8 +394,8 @@
     const sessionKeys = Object.keys(sessionStorage).filter(key => key.startsWith('introCard_'));
     sessionKeys.forEach(key => sessionStorage.removeItem(key));
     
-    console.log('[IntroCard] Reset all dismissed intro cards from localStorage and sessionStorage');
+    console.debug('[IntroCard] Reset all dismissed intro cards from localStorage and sessionStorage');
   };
 
-  console.log('[IntroCard] Intro card component loaded');
+  console.debug('[IntroCard] Intro card component loaded');
 })();

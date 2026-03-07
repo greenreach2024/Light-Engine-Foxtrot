@@ -1,20 +1,6 @@
 // Groups V2 Script Loading
 g2debug('[Groups V2] 📄 Script loading...');
 
-/**
- * Build auth headers for tenant-scoped requests.
- * Used by both read and write operations to ensure farm data isolation.
- */
-function _g2AuthHeaders(extraHeaders) {
-  const headers = { ...(extraHeaders || {}) };
-  const token = (typeof localStorage !== 'undefined') &&
-    (localStorage.getItem('token') || sessionStorage.getItem('token'));
-  if (token && token !== 'local-access') {
-    headers['Authorization'] = 'Bearer ' + token;
-  }
-  return headers;
-}
-
 // Helper: safely escape HTML to prevent XSS
 function escapeHtml(text) {
   if (typeof text !== 'string') return '';
@@ -482,18 +468,9 @@ async function initializeGroupsV2State() {
     let groups = [];
     let source = '';
 
-    // Build auth headers for tenant-scoped requests (outside try so it's accessible in fallback)
-    const token = (typeof localStorage !== 'undefined') &&
-      (localStorage.getItem('token') || sessionStorage.getItem('token'));
-    const fetchOpts = { cache: 'no-store' };
-    if (token && token !== 'local-access') {
-      fetchOpts.headers = { 'Authorization': `Bearer ${token}` };
-    }
-
     try {
-      // Try authenticated /api/groups first (tenant-scoped), then fall back to static file
-      g2debug('[Groups V2] Loading groups from /api/groups...');
-      const response = await fetch('/api/groups', fetchOpts);
+      g2debug('[Groups V2] Loading groups from /data/groups.json...');
+      const response = await fetch('/data/groups.json', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       if (Array.isArray(payload)) {
@@ -501,22 +478,20 @@ async function initializeGroupsV2State() {
       } else if (payload && Array.isArray(payload.groups)) {
         groups = payload.groups;
       }
-      source = '/api/groups';
+      source = '/data/groups.json';
     } catch (error) {
-      console.warn('[Groups V2] Failed to load /api/groups:', error);
+      console.warn('[Groups V2] Failed to load /data/groups.json:', error);
     }
 
     if (!groups.length) {
-      g2debug('[Groups V2] Falling back to /data/groups.json...');
-      // Send auth headers so the Phase 1 middleware can scope data to this farm
-      const response = await fetch('/data/groups.json', fetchOpts);
+      g2debug('[Groups V2] Falling back to /api/groups...');
+      const response = await fetch('/api/groups');
       if (!response.ok) {
-        console.warn('[Groups V2] Failed to load groups from /data/groups.json:', response.status);
+        console.warn('[Groups V2] Failed to load groups from /api/groups:', response.status);
         return;
       }
-      const payload = await response.json();
-      groups = Array.isArray(payload) ? payload : (payload?.groups || []);
-      source = '/data/groups.json';
+      groups = await response.json();
+      source = '/api/groups';
     }
 
     g2debug('[Groups V2] Loaded', groups.length, 'groups from', source);
@@ -787,11 +762,8 @@ async function loadZonesFromRoomMapper() {
   if (!zoneSelect) return;
 
   try {
-    // Load room map data with auth header for farm-scoped data
-    const token = localStorage.getItem('token');
-    const response = await fetch('/data/room-map.json', {
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-    });
+    // Load room map data
+    const response = await fetch('/data/room-map.json');
     if (!response.ok) {
       console.warn('[Groups V2] No room map data available, using default zones');
       populateDefaultZones(zoneSelect);
@@ -2238,7 +2210,7 @@ async function saveGroupsV2Group(status = 'draft') {
     g2debug('[groups-v2] Saving groups to server...', window.STATE.groups.length, 'groups');
     const response = await fetch('/data/groups.json', {
       method: 'POST',
-      headers: _g2AuthHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
     });
     
@@ -2326,7 +2298,7 @@ async function saveGroupsV2GroupObject(groupObject) {
     g2debug('[groups-v2] Saving group object to server:', groupObject.id);
     const response = await fetch('/data/groups.json', {
       method: 'POST',
-      headers: _g2AuthHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
     });
     
@@ -2621,7 +2593,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const response = await fetch('/data/groups.json', {
             method: 'POST',
-            headers: _g2AuthHeaders({ 'Content-Type': 'application/json' }),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groups: window.STATE.groups })
           });
           console.log('[Groups V2] POST response status:', response.status, response.statusText);
@@ -7222,7 +7194,7 @@ async function executeBuildStockGroups() {
   try {
     const response = await fetch('/data/groups.json', {
       method: 'POST',
-      headers: _g2AuthHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
     });
     if (!response.ok) {
@@ -7507,7 +7479,7 @@ async function executeBulkEditGroups() {
   try {
     var response = await fetch('/data/groups.json', {
       method: 'POST',
-      headers: _g2AuthHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: window.STATE.groups })
     });
     if (!response.ok) {

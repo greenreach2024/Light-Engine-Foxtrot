@@ -2137,6 +2137,7 @@
       try {
         // Save to room-specific file: room-map-{roomId}.json
         const fileName = `room-map-${STATE.currentRoomId}.json`;
+        console.log(`[Room Mapper Save] Saving ${mapData.devices.length} devices (sensors: ${mapData.devices.filter(d => !d.isEquipment).length}, equipment: ${mapData.devices.filter(d => d.isEquipment).length}) to ${fileName}`);
         const response = await fetchWithFarmAuth(`/data/${fileName}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2306,6 +2307,53 @@
       }
       
       console.log(`[Room Mapper] Restored ${sensorCount} sensors and ${equipCount} equipment from saved map`);
+
+      // ── AUTO-RESTORE: If IoT sensors with zone assignments are NOT in the saved map, auto-place them ──
+      // This ensures sensors always appear even if they were missing from an older save.
+      if (STATE.iotDevices.length > 0 && STATE.zones.length > 0) {
+        let autoPlaced = 0;
+        for (const sensor of STATE.iotDevices) {
+          const alreadyPlaced = STATE.placedDevices.some(p => p.deviceId === sensor.id);
+          if (alreadyPlaced) continue;
+
+          // Sensor must have a zone assignment to auto-place
+          const sensorZone = sensor.zone != null ? Number(sensor.zone) : null;
+          if (sensorZone == null) continue;
+
+          // Find matching zone boundaries
+          const zone = STATE.zones.find(z => Number(z.zone) === sensorZone);
+          if (!zone) continue;
+
+          // Place sensor inside its zone — stagger positions to avoid overlap
+          const zoneWidth = (zone.x2 - zone.x1) || 1;
+          const zoneHeight = (zone.y2 - zone.y1) || 1;
+          // Count how many devices are already in this zone to stagger
+          const inZone = STATE.placedDevices.filter(p => {
+            return p.x >= zone.x1 && p.x <= zone.x2 && p.y >= zone.y1 && p.y <= zone.y2 && !p.isEquipment;
+          }).length;
+          // Place near center of zone, offset by stagger count
+          const cx = zone.x1 + Math.floor(zoneWidth / 2) + (inZone % 3) - 1;
+          const cy = zone.y1 + Math.floor(zoneHeight / 2) + Math.floor(inZone / 3);
+          const x = Math.max(zone.x1, Math.min(zone.x2, cx));
+          const y = Math.max(zone.y1, Math.min(zone.y2, cy));
+
+          STATE.placedDevices.push({
+            deviceId: sensor.id,
+            device: sensor,
+            x, y,
+            icon: getDeviceIcon(sensor),
+            isEquipment: false,
+            autoRestored: true // Flag for UI indicator
+          });
+          autoPlaced++;
+          sensorCount++;
+          console.log(`[Room Mapper] Auto-restored sensor "${sensor.name}" (${sensor.id}) into zone ${sensorZone} at (${x},${y})`);
+        }
+        if (autoPlaced > 0) {
+          console.log(`[Room Mapper] Auto-restored ${autoPlaced} sensors that were missing from saved map`);
+        }
+      }
+
       updateZoneList();
       renderDeviceList();
       renderEquipmentList();

@@ -5096,7 +5096,12 @@
     async function loadHarvestReadiness() {
       try {
         const resp = await fetch('/api/harvest/readiness?t=' + Date.now());
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          const el = document.getElementById('harvestReadinessContent');
+          const card = document.getElementById('harvestReadinessCard');
+          if (el && card) { card.style.display = ''; el.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;padding:0.75rem;text-align:center;">Harvest readiness data unavailable</div>'; }
+          return;
+        }
         const data = await resp.json();
         const rawItems = data.notifications || data.groups || data.data || [];
         const groups = rawItems.map((item, idx) => ({
@@ -5134,7 +5139,12 @@
     async function loadLossPredictions() {
       try {
         const resp = await fetch('/api/losses/predict?t=' + Date.now());
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          const el = document.getElementById('lossPredictionContent');
+          const card = document.getElementById('lossPredictionCard');
+          if (el && card) { card.style.display = ''; el.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;padding:0.75rem;text-align:center;">Loss prediction data unavailable</div>'; }
+          return;
+        }
         const data = await resp.json();
         const alerts = data.alerts || [];
         const el = document.getElementById('lossPredictionContent');

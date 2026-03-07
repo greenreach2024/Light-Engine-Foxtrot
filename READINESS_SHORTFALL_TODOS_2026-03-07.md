@@ -4,7 +4,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
 
 ## P0 — API Parity Blocking Dashboard Accuracy
 
-- [ ] **P0.1 Add Central parity for Farm Summary card feeds**
+- [x] **P0.1 Add Central parity for Farm Summary card feeds**
   - Scope:
     - Implement or proxy Central handlers for:
       - `GET /api/harvest/readiness`
@@ -18,7 +18,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
     - Both endpoints return `200` on Central (unauthenticated farm context or valid farm auth, per current contract).
     - Farm Summary cards on Central no longer show fallback/error states for readiness/loss sections.
 
-- [ ] **P0.2 Add Central parity for KPI dashboard endpoint**
+- [x] **P0.2 Add Central parity for KPI dashboard endpoint**
   - Scope:
     - Add Central-compatible `GET /api/kpis` (proxy LE or native implementation).
     - Match LE `routes/kpis.js` response fields expected by `public/views/kpi-dashboard.html`.
@@ -31,7 +31,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
 
 ## P1 — UI Communication Confidence and Card Integrity
 
-- [ ] **P1.1 Validate GR Admin card hydration path**
+- [x] **P1.1 Validate GR Admin card hydration path**
   - Scope:
     - Confirm all visible cards in `GR-admin.html` are hydrated by loaded runtime scripts.
     - Verify script include/version alignment between:
@@ -41,7 +41,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
     - Documented mapping: each major card section → script function → endpoint.
     - No placeholder-only cards in production without explicit “static/demo” label.
 
-- [ ] **P1.2 Add host-aware fallback for Farm Summary (defensive)**
+- [x] **P1.2 Add host-aware fallback for Farm Summary (defensive)**
   - Scope:
     - Where card endpoints may differ by host, add guarded fallback logic in `farm-summary.html`.
     - Prefer server parity first; fallback remains protection for regressions.
@@ -50,7 +50,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
 
 ## P1 — Automated Contract Verification
 
-- [ ] **P1.3 Add card endpoint smoke test suite**
+- [x] **P1.3 Add card endpoint smoke test suite**
   - Scope:
     - Add script that checks card-critical endpoints on both hosts (`LE`, `Central`).
     - Include expected status classes (`200` for public/farm, `401` for admin unauthenticated).
@@ -71,7 +71,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
 
 ## P2 — Drift Reduction Between LE and Central Static Trees
 
-- [ ] **P2.1 Establish single source-of-truth for mirrored pages**
+- [x] **P2.1 Establish single source-of-truth for mirrored pages**
   - Scope:
     - Identify duplicated pages/scripts under `public/` and `greenreach-central/public/`.
     - Define canonical source and sync mechanism.
@@ -81,7 +81,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
   - Acceptance:
     - No manual dual-editing needed for mirrored pages.
 
-- [ ] **P2.2 Add duplication guard check in CI**
+- [x] **P2.2 Add duplication guard check in CI**
   - Scope:
     - Add check that fails when mirrored files diverge unexpectedly.
   - Acceptance:
@@ -89,7 +89,7 @@ Source: `COMPREHENSIVE_READINESS_REPORT_2026-03-07.md`
 
 ## P2 — Auth Context Hardening
 
-- [ ] **P2.3 Audit card APIs for token-context correctness**
+- [x] **P2.3 Audit card APIs for token-context correctness**
   - Scope:
     - Ensure farm-facing pages use farm-compatible endpoints.
     - Ensure admin-only endpoints are only called in admin contexts.

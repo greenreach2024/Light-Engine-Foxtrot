@@ -18,7 +18,6 @@
     currentBuyer: null,
     authTab: 'sign-in',
     productRequests: [],
-    deliveryQuote: null,
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -57,8 +56,6 @@
       
       this.setupEventListeners();
       this.setDefaultDeliveryDate();
-      this.selectedTimeSlot = 'flexible';
-      this.toggleDeliveryFields();
 
       this.setupSourcingControls();
       await this.loadNetworkFarms();
@@ -126,44 +123,6 @@
 
       document.getElementById('single-farm-id')?.addEventListener('change', () => {
         this.loadCatalog();
-        if (this.currentView === 'checkout') this.previewAllocation();
-      });
-
-      // Fulfillment method radio cards
-      document.querySelectorAll('input[name="fulfillment"]').forEach((radio) => {
-        radio.addEventListener('change', () => {
-          this.toggleDeliveryFields();
-          if (this.currentView === 'checkout') this.previewAllocation();
-        });
-      });
-
-      // Delivery address fields trigger re-quote
-      ['delivery-address', 'delivery-city', 'delivery-province']
-        .forEach((fieldId) => {
-          document.getElementById(fieldId)?.addEventListener('change', () => {
-            if (this.currentView === 'checkout') this.previewAllocation();
-          });
-        });
-
-      // Postal code: debounced input for real-time zone lookup
-      const postalInput = document.getElementById('delivery-postal');
-      if (postalInput) {
-        let postalTimer = null;
-        postalInput.addEventListener('input', () => {
-          clearTimeout(postalTimer);
-          postalTimer = setTimeout(() => {
-            if (this.currentView === 'checkout') this.previewAllocation();
-          }, 600);
-        });
-      }
-
-      // Time slot buttons
-      document.getElementById('time-slots')?.addEventListener('click', (event) => {
-        const btn = event.target.closest('.time-slot-btn');
-        if (!btn || btn.disabled) return;
-        document.querySelectorAll('.time-slot-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        this.selectedTimeSlot = btn.dataset.slot;
         if (this.currentView === 'checkout') this.previewAllocation();
       });
 
@@ -994,204 +953,9 @@
       };
     },
 
-    getFulfillmentMethod() {
-      const checked = document.querySelector('input[name="fulfillment"]:checked');
-      return checked?.value || 'delivery';
-    },
-
-    getSelectedTimeSlot() {
-      const selected = document.querySelector('.time-slot-btn.selected');
-      return selected?.dataset?.slot || this.selectedTimeSlot || 'flexible';
-    },
-
-    toggleDeliveryFields() {
-      const method = this.getFulfillmentMethod();
-      const deliveryFields = document.getElementById('delivery-fields');
-      const pickupInfo = document.getElementById('pickup-info');
-      const feeDisplay = document.getElementById('delivery-fee-display');
-
-      if (method === 'pickup') {
-        deliveryFields?.classList.add('hidden');
-        pickupInfo?.classList.remove('hidden');
-        if (feeDisplay) feeDisplay.textContent = '—';
-      } else {
-        deliveryFields?.classList.remove('hidden');
-        pickupInfo?.classList.add('hidden');
-      }
-    },
-
-    getCartSubtotal() {
-      return this.cart.reduce((sum, item) => sum + (Number(item.price_per_unit) * Number(item.quantity)), 0);
-    },
-
-    getDeliveryZoneFromPostal(postalCode = '') {
-      const normalized = String(postalCode || '').replace(/\s+/g, '').toUpperCase();
-      const first = normalized.charAt(0);
-      if (!first) return null;
-      if (['M', 'H'].includes(first)) return 'ZONE_A';
-      if (['L', 'N', 'K'].includes(first)) return 'ZONE_B';
-      return 'ZONE_C';
-    },
-
-    async refreshDeliveryQuote(allocation) {
-      const quoteEl = document.getElementById('delivery-quote-status');
-      const zoneResultEl = document.getElementById('zone-result');
-      const feeDisplay = document.getElementById('delivery-fee-display');
-
-      const method = this.getFulfillmentMethod();
-      if (method === 'pickup') {
-        this.deliveryQuote = {
-          eligible: true,
-          fee: 0,
-          minimum_order: 0,
-          reason: 'pickup_selected'
-        };
-        if (quoteEl) {
-          quoteEl.textContent = 'Pickup selected. No delivery fee will be applied.';
-          quoteEl.style.color = 'var(--text-secondary)';
-        }
-        if (zoneResultEl) { zoneResultEl.classList.add('hidden'); }
-        return;
-      }
-
-      if (quoteEl) {
-        quoteEl.textContent = 'Calculating delivery quote...';
-        quoteEl.style.color = 'var(--text-secondary)';
-      }
-      if (zoneResultEl) {
-        zoneResultEl.textContent = 'Looking up your delivery zone...';
-        zoneResultEl.className = 'zone-result zone-loading';
-      }
-
-      try {
-        const postalCode = document.getElementById('delivery-postal')?.value || '';
-        const zone = this.getDeliveryZoneFromPostal(postalCode);
-        const requestedWindow = this.getSelectedTimeSlot();
-        const subtotal = Number(allocation?.subtotal || this.getCartSubtotal() || 0);
-
-        if (!postalCode || postalCode.length < 3) {
-          if (zoneResultEl) {
-            zoneResultEl.textContent = 'Enter your postal code to see delivery availability.';
-            zoneResultEl.className = 'zone-result zone-loading';
-          }
-          if (quoteEl) {
-            quoteEl.textContent = 'Enter postal code for delivery quote.';
-            quoteEl.style.color = 'var(--text-secondary)';
-          }
-          this.deliveryQuote = null;
-          return;
-        }
-
-        const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
-          method: 'POST',
-          body: JSON.stringify({
-            subtotal,
-            zone,
-            requested_window: requestedWindow,
-            fulfillment_method: method
-          })
-        });
-
-        if (response.ok && json?.status === 'ok' && json?.data) {
-          this.deliveryQuote = json.data;
-          if (json.data.eligible) {
-            const fee = Number(json.data.fee || 0);
-            if (zoneResultEl) {
-              zoneResultEl.innerHTML = `<strong>${json.data.zone_name || zone}</strong> — Delivery fee: <strong>$${fee.toFixed(2)}</strong>`;
-              zoneResultEl.className = 'zone-result zone-success';
-            }
-            if (feeDisplay) feeDisplay.textContent = fee > 0 ? `$${fee.toFixed(2)}` : 'Free';
-            if (quoteEl) {
-              quoteEl.textContent = `Delivery available. Estimated fee: $${fee.toFixed(2)}.`;
-              quoteEl.style.color = 'var(--success)';
-            }
-
-            // Update time slot availability from quote windows
-            if (json.data.windows && json.data.windows.length > 0) {
-              this.renderTimeSlots(json.data.windows);
-            }
-          } else {
-            const min = Number(json.data.minimum_order || 0).toFixed(2);
-            const reason = json.data.reason === 'below_minimum_order'
-              ? `Minimum order for delivery is $${min}. Add more to your cart.`
-              : 'Delivery is not available for this postal code.';
-            if (zoneResultEl) {
-              zoneResultEl.textContent = reason;
-              zoneResultEl.className = 'zone-result zone-error';
-            }
-            if (feeDisplay) feeDisplay.textContent = '—';
-            if (quoteEl) {
-              quoteEl.textContent = reason;
-              quoteEl.style.color = 'var(--error)';
-            }
-          }
-          return;
-        }
-
-        this.deliveryQuote = null;
-        if (zoneResultEl) {
-          zoneResultEl.textContent = 'Unable to check delivery zone right now.';
-          zoneResultEl.className = 'zone-result zone-loading';
-        }
-        if (quoteEl) {
-          quoteEl.textContent = 'Unable to load delivery quote right now.';
-          quoteEl.style.color = 'var(--text-secondary)';
-        }
-      } catch (error) {
-        console.error('Delivery quote error:', error);
-        this.deliveryQuote = null;
-        if (zoneResultEl) { zoneResultEl.classList.add('hidden'); }
-        if (quoteEl) {
-          quoteEl.textContent = 'Unable to load delivery quote right now.';
-          quoteEl.style.color = 'var(--text-secondary)';
-        }
-      }
-    },
-
-    renderTimeSlots(windows) {
-      const container = document.getElementById('time-slots');
-      if (!container) return;
-      const currentSlot = this.getSelectedTimeSlot();
-
-      container.innerHTML = windows.map(w => {
-        const isSelected = w.id === currentSlot;
-        const isFull = w.available === false;
-        return `
-          <button type="button" class="time-slot-btn${isSelected ? ' selected' : ''}${isFull ? '' : ''}" data-slot="${w.id}" ${isFull ? 'disabled' : ''}>
-            <span class="slot-label">${w.label || w.id}</span>
-            <span class="slot-time">${w.start || ''} – ${w.end || ''}</span>
-            ${isFull ? '<span class="slot-full">Full</span>' : ''}
-          </button>
-        `;
-      }).join('');
-
-      // Add flexible option if not in windows
-      if (!windows.find(w => w.id === 'flexible')) {
-        const isFlexSelected = currentSlot === 'flexible';
-        container.innerHTML += `
-          <button type="button" class="time-slot-btn${isFlexSelected ? ' selected' : ''}" data-slot="flexible">
-            <span class="slot-label">Flexible</span>
-            <span class="slot-time">Any time</span>
-          </button>
-        `;
-      }
-
-      // Ensure something is selected
-      if (!container.querySelector('.time-slot-btn.selected')) {
-        const first = container.querySelector('.time-slot-btn:not(:disabled)');
-        if (first) first.classList.add('selected');
-      }
-    },
-
     async previewAllocation() {
       if (this.cart.length === 0) {
         document.getElementById('allocation-preview').innerHTML = '<p>Your cart is empty</p>';
-        const quoteEl = document.getElementById('delivery-quote-status');
-        if (quoteEl) {
-          quoteEl.textContent = 'Delivery quote will appear after allocation preview.';
-          quoteEl.style.color = 'var(--text-secondary)';
-        }
-        this.deliveryQuote = null;
         return;
       }
 
@@ -1221,7 +985,6 @@
         });
 
         if (response.ok && json?.status === 'ok') {
-          await this.refreshDeliveryQuote(json.data);
           this.renderAllocationPreview(json.data);
           return;
         }
@@ -1236,9 +999,6 @@
     renderAllocationPreview(allocation) {
       const container = document.getElementById('allocation-preview');
       const cadence = allocation.recurrence?.cadence || this.getRecurrence().cadence;
-      const quote = this.deliveryQuote;
-      const quoteFee = Number(quote?.fee || 0);
-      const quoteEligible = quote?.eligible !== false;
 
       container.innerHTML = `
         <p style="margin-bottom: 0.75rem; color: var(--text-secondary);">Fulfillment cadence: <strong>${cadence.replace('_', ' ')}</strong></p>
@@ -1266,10 +1026,6 @@
           )
           .join('')}
         <div class="cart-summary">
-          <div class="cart-summary-row">
-            <span>Estimated delivery fee:</span>
-            <span>${quoteEligible ? `$${quoteFee.toFixed(2)}` : 'Unavailable'}</span>
-          </div>
           <div class="cart-summary-row">
             <span>Broker fee (GreenReach):</span>
             <span>$${Number(allocation.broker_fee_total || 0).toFixed(2)}</span>
@@ -2166,7 +1922,6 @@
 
     /**
      * Place wholesale order with payment authorization
-     * Uses the checkout/execute flow which handles allocation + payment
      */
     async placeOrder() {
       const placeOrderBtn = document.getElementById('place-order-btn');
@@ -2178,8 +1933,8 @@
       try {
         // Disable button
         placeOrderBtn.disabled = true;
-        if (placeOrderText) placeOrderText.style.display = 'none';
-        if (placeOrderSpinner) placeOrderSpinner.style.display = 'inline';
+        placeOrderText.style.display = 'none';
+        placeOrderSpinner.style.display = 'inline';
         
         // Validate cart
         if (this.cart.length === 0) {
@@ -2188,90 +1943,54 @@
         
         // Validate form
         const form = document.getElementById('checkout-form');
-        if (form && !form.checkValidity()) {
+        if (!form.checkValidity()) {
           form.reportValidity();
           throw new Error('Please fill in all required fields');
         }
+        
+        // Tokenize card via Square
+        const paymentToken = await this.createPaymentToken();
 
-        // Build checkout payload (same format as checkout/execute)
-        const buyerAccount = {
-          email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
-          name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName
+        // Prepare order data
+        const orderData = {
+          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
+          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
+          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
+          buyer_phone: this.currentBuyer?.phone || '',
+          delivery_address: document.getElementById('delivery-address')?.value,
+          delivery_city: document.getElementById('delivery-city')?.value,
+          delivery_province: document.getElementById('delivery-province')?.value,
+          delivery_postal_code: document.getElementById('delivery-postal')?.value,
+          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
+          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
+          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
+          cart_items: this.cart.map(item => ({
+            sku_id: item.sku_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit: item.unit,
+            price_per_unit: item.price_per_unit,
+            farm_id: item.farm_id
+          })),
+          payment_token: paymentToken,
+          payment_provider: 'square'
         };
-
-        const deliveryAddress = {
-          street: document.getElementById('delivery-address')?.value || '',
-          city: document.getElementById('delivery-city')?.value || '',
-          zip: document.getElementById('delivery-postal')?.value || ''
-        };
-
-        const deliveryDate = document.getElementById('delivery-date')?.value || this.deliveryDate;
-        const cadence = document.getElementById('fulfillment-cadence')?.value || 'one_time';
-        const fulfillmentMethod = this.getFulfillmentMethod();
-
-        if (fulfillmentMethod === 'delivery' && this.deliveryQuote && this.deliveryQuote.eligible === false) {
-          throw new Error('Delivery is not eligible for this order. Adjust your cart or switch to pickup.');
-        }
-
-        if (fulfillmentMethod === 'delivery') {
-          const street = document.getElementById('delivery-address')?.value?.trim();
-          const postal = document.getElementById('delivery-postal')?.value?.trim();
-          if (!street || !postal) {
-            throw new Error('Delivery address and postal code are required for delivery orders.');
-          }
-        }
-
-        const cartItems = this.cart.map(item => ({
-          sku_id: item.sku_id,
-          quantity: item.quantity
-        }));
-
-        // Try to get Square payment token if available
-        let paymentProvider = 'manual';
-        let paymentSource = null;
-        try {
-          if (this.squarePayments && this.squareCard) {
-            const tokenResult = await this.squareCard.tokenize();
-            if (tokenResult.status === 'OK') {
-              paymentProvider = 'square';
-              paymentSource = { source_id: tokenResult.token };
-            }
-          }
-        } catch (tokenErr) {
-          console.warn('Square tokenization skipped:', tokenErr.message);
-        }
-
-        const sourcing = this.getSourcingSelection ? this.getSourcingSelection() : { mode: 'auto_network' };
-
-        const response = await fetch('/api/wholesale/checkout/execute', {
+        
+        // Submit order to backend
+        const response = await fetch('/api/wholesale/orders/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
           },
-          body: JSON.stringify({
-            buyer_account: buyerAccount,
-            delivery_date: deliveryDate,
-            delivery_address: deliveryAddress,
-            recurrence: { cadence },
-            fulfillment: {
-              method: fulfillmentMethod,
-              requested_window: this.getSelectedTimeSlot()
-            },
-            cart: cartItems,
-            payment_provider: paymentProvider,
-            payment_source: paymentSource,
-            sourcing
-          })
+          body: JSON.stringify(orderData)
         });
         
         const result = await response.json();
         
-        if (!response.ok || result?.status !== 'ok') {
-          throw new Error(result?.message || 'Failed to place order');
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to place order');
         }
-        
-        const order = result.data;
         
         // Success!
         this.showToast('Order placed successfully!', 'success');
@@ -2285,20 +2004,20 @@
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
             <h2>Order Placed Successfully!</h2>
-            <p style="margin: 1rem 0;">Order #${order.master_order_id || 'confirmed'}</p>
+            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
             <p style="margin: 1rem 0; color: var(--text-secondary);">
-              Your order has been submitted to the farm network.
-              <br/>You'll receive an email confirmation shortly.
+              Your payment has been authorized but <strong>not charged yet</strong>.
+              <br/>Farms have 24 hours to confirm their portions.
+              <br/>You'll receive an email when farms respond.
             </p>
             <p style="margin: 1.5rem 0;">
-              <strong>Total:</strong> $${Number(order.grand_total || 0).toFixed(2)}
+              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
             </p>
             <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
           </div>
         `;
         
-        const container = document.querySelector('.checkout-container');
-        if (container) container.innerHTML = successMessage;
+        document.querySelector('.checkout-container').innerHTML = successMessage;
         
       } catch (error) {
         console.error('Order placement error:', error);
@@ -2309,9 +2028,9 @@
         }
       } finally {
         // Re-enable button
-        if (placeOrderBtn) placeOrderBtn.disabled = false;
-        if (placeOrderText) placeOrderText.style.display = 'inline';
-        if (placeOrderSpinner) placeOrderSpinner.style.display = 'none';
+        placeOrderBtn.disabled = false;
+        placeOrderText.style.display = 'inline';
+        placeOrderSpinner.style.display = 'none';
       }
     },
 
@@ -2357,16 +2076,22 @@
       };
 
       try {
-        const { response, json } = await this.apiFetch('/api/wholesale/product-requests', {
+        const response = await fetch('/api/wholesale/product-requests/create', {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`
+          },
           body: JSON.stringify(formData)
         });
 
-        if (!response.ok || json?.status !== 'ok') {
-          throw new Error(json?.message || 'Product requests are not yet available');
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message || 'Failed to submit request');
         }
 
-        this.showToast(`Request submitted! ${json?.data?.matched_farms || 0} farms notified`, 'success');
+        this.showToast(`Request submitted! ${result.matched_farms} farms notified`, 'success');
         this.closeProductRequestModal();
         
         // Reload requests if on that view
@@ -2384,15 +2109,21 @@
       if (!this.currentBuyer) return;
 
       try {
-        const { response, json } = await this.apiFetch(`/api/wholesale/product-requests`);
+        const response = await fetch(`/api/wholesale/product-requests/buyer/${this.currentBuyer.id}`, {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        });
 
-        if (response.ok && json?.status === 'ok') {
-          this.productRequests = json.data?.requests || [];
+        const result = await response.json();
+
+        if (response.ok && result.ok) {
+          this.productRequests = result.requests || [];
           this.renderProductRequests();
         }
 
       } catch (error) {
-        console.warn('Product requests not yet available');
+        console.error('Failed to load product requests:', error);
       }
     },
 

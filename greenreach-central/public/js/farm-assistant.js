@@ -12,105 +12,8 @@ class FarmAssistant {
     this.recognition = null;
     this.isSpeaking = false;
     this.voiceEnabled = true;
-    this.jokes = [
-      {
-        type: 'joke',
-        question: 'Why did the tomato turn red?',
-        answer: 'Because it saw the salad dressing!'
-      },
-      {
-        type: 'joke',
-        question: 'What do you get when you cross a snowman and a dog?',
-        answer: 'Frostbite!'
-      },
-      {
-        type: 'joke',
-        question: "Why don't eggs tell jokes?",
-        answer: "They'd crack each other up."
-      },
-      {
-        type: 'joke',
-        question: "What do you call cheese that isn't yours?",
-        answer: 'Nacho cheese!'
-      },
-      {
-        type: 'joke',
-        question: 'Why did the banana go to the doctor?',
-        answer: "Because it wasn't peeling well."
-      },
-      {
-        type: 'joke',
-        question: 'What do you call a bear with no teeth?',
-        answer: 'A gummy bear.'
-      },
-      {
-        type: 'joke',
-        question: 'Why did the bicycle fall over?',
-        answer: 'Because it was two-tired.'
-      },
-      {
-        type: 'joke',
-        question: "What do you call a dinosaur that's sleeping?",
-        answer: 'A dino-snore.'
-      },
-      {
-        type: 'riddle',
-        question: "I'm full of holes but I can still hold water. What am I?",
-        answer: 'A sponge.'
-      },
-      {
-        type: 'riddle',
-        question: 'The more you take, the more you leave behind. What are they?',
-        answer: 'Footsteps.'
-      },
-      {
-        type: 'riddle',
-        question: 'I can fly without wings. I can cry without eyes. Wherever I go, darkness follows me. What am I?',
-        answer: 'A cloud.'
-      },
-      {
-        type: 'riddle',
-        question: 'I have a face and two hands, but no arms or legs. What am I?',
-        answer: 'A clock.'
-      },
-      {
-        type: 'riddle',
-        question: 'What has to be broken before you can use it?',
-        answer: 'An egg.'
-      }
-    ];
-    this.funFacts = [
-      {
-        fact: "Want to be an astronaut—would you try a 'space salad'? Astronauts have grown leafy greens in NASA's Veggie system on the International Space Station—and they've even eaten space-grown lettuce!",
-        question: 'If you could grow one food in space, what would you pick?',
-        icon: '🚀'
-      },
-      {
-        fact: "What if your plants had a robot babysitter—would that be cool? NASA's Advanced Plant Habitat is like a super-smart space greenhouse with 180+ sensors watching things like humidity, oxygen, and moisture.",
-        question: 'If you could add ONE "plant sensor power," what would it measure?',
-        icon: '🤖'
-      },
-      {
-        fact: "Want to live on the Moon—how would you get fresh food? That's one reason NASA studies plant-growing systems in space: learning how to grow food when you can't just run to a grocery store.",
-        question: 'What do you think would be the hardest part—light, water, or space?',
-        icon: '🌙'
-      },
-      {
-        fact: 'Would you garden in the coldest place on Earth? In Antarctica, the EDEN ISS greenhouse has grown lots of fresh foods (like lettuce, cucumbers, tomatoes, herbs—and more).',
-        question: 'If you had an Antarctic greenhouse, what would you name it?',
-        icon: '❄️'
-      },
-      {
-        fact: 'Would you eat greens grown in a tunnel under a city? In London, an underground hydroponic farm grows plants without sunlight, using LED lights in old tunnels.',
-        question: 'If you found a secret farm underground, what would you hope they\'re growing?',
-        icon: '🚇'
-      },
-      {
-        fact: "Could fog help grow lettuce in a desert—like magic? In Chile's Atacama Desert, people have used fog-catching nets to collect water and grow crops (including lettuce) using hydroponics.",
-        question: 'If you could "catch" water from the air, where would you put your fog net?',
-        icon: '🌫️'
-      }
-    ];
+    this.jokes = [];
+    this.funFacts = [];
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -120,6 +23,7 @@ class FarmAssistant {
     this.createWidget();
     this.attachEventListeners();
     this.loadHistory();
+    this.injectHomeButton();
     this.initNavigationTracking();
   }
 
@@ -175,6 +79,54 @@ class FarmAssistant {
     });
   }
 
+  injectHomeButton() {
+    const ensureButton = () => {
+      const containers = document.querySelectorAll('.header-actions');
+      if (!containers.length) return;
+
+      containers.forEach(container => {
+        if (!container) return;
+        const sample = container.querySelector('button, a');
+        const existing = container.querySelector('[data-le-home-button]');
+
+        const button = existing || document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('data-le-home-button', 'true');
+        button.textContent = 'Home';
+
+        if (sample) {
+          button.className = sample.className || button.className;
+          if (sample.getAttribute('style')) {
+            button.setAttribute('style', sample.getAttribute('style'));
+          }
+        } else if (!button.className) {
+          button.className = 'btn btn-secondary';
+        }
+
+        if (!button.__leHomeBound) {
+          button.addEventListener('click', () => {
+            window.location.href = '/LE-farm-admin.html';
+          });
+          button.__leHomeBound = true;
+        }
+
+        if (!existing) {
+          if (container.firstChild) {
+            container.insertBefore(button, container.firstChild);
+          } else {
+            container.appendChild(button);
+          }
+        }
+      });
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', ensureButton, { once: true });
+    } else {
+      ensureButton();
+    }
+  }
+
   detectContext() {
     const path = window.location.pathname;
     const contexts = {
@@ -203,7 +155,7 @@ class FarmAssistant {
       <div class="assistant-container minimized">
         <div class="assistant-header">
           <div class="header-content">
-            <img src="/images/cheo-mascot.svg" alt="Cheo" class="assistant-mascot-thumb" />
+            <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo" class="assistant-mascot-thumb" />
             <div class="header-text">
               <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
@@ -217,12 +169,12 @@ class FarmAssistant {
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
             <div class="mascot-welcome">
-              <img src="/images/cheo-mascot.svg" alt="Cheo the Farm Assistant" class="mascot-image" />
+              <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
                 <strong>Hi I'm Cheo, your farm Assistant!</strong>
                 <strong class="love-to-help">I love to help!</strong>
                 <div class="example-queries">
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\\'s ready to harvest?')">What's ready to harvest?</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\'s ready to harvest?')">What's ready to harvest?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
@@ -237,12 +189,12 @@ class FarmAssistant {
           
           <div class="chat-input-container">
             <button id="voiceBtn" class="voice-btn" title="Voice command">
-              <span class="voice-icon">🎤</span>
+              <span class="voice-icon">♪</span>
             </button>
             <input 
               type="text" 
               id="assistantInput" 
-              placeholder="Ask me anything or click 🎤..."
+              placeholder="Ask me anything or use voice..."
               autocomplete="off"
             />
             <button id="sendBtn" class="send-btn">
@@ -453,7 +405,7 @@ class FarmAssistant {
     this.recognition.onend = () => {
       this.isListening = false;
       this.updateVoiceButton();
-      console.debug('🎤 Voice recognition ended');
+      console.log('🎤 Voice recognition ended');
     };
   }
 
@@ -461,23 +413,23 @@ class FarmAssistant {
     // ResponsiveVoice will be loaded via script tag in HTML
     // Check if either ResponsiveVoice or browser speech synthesis is available
     if (window.responsiveVoice) {
-      console.debug('🔊 ResponsiveVoice detected - using high-quality voices');
+      console.log('🔊 ResponsiveVoice detected - using high-quality voices');
       this.voiceEnabled = true;
       
       // Log available ResponsiveVoice voices
       if (window.responsiveVoice.getVoices) {
         const voices = window.responsiveVoice.getVoices();
-        console.debug('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
+        console.log('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
       }
     } else if (window.speechSynthesis) {
-      console.debug('🔊 Using browser Web Speech API (fallback)');
+      console.log('🔊 Using browser Web Speech API (fallback)');
       this.voiceEnabled = true;
       this.voices = [];
       
       // Load voices for fallback
       const loadVoices = () => {
         this.voices = window.speechSynthesis.getVoices();
-        console.debug('🔊 Browser voices loaded:', this.voices.length);
+        console.log('🔊 Browser voices loaded:', this.voices.length);
       };
       
       loadVoices();
@@ -490,11 +442,11 @@ class FarmAssistant {
       this.voiceEnabled = false;
     }
     
-    console.debug('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
+    console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
   }
 
   speak(text) {
-    console.debug('🔊 speak() called with:', text.substring(0, 50) + '...');
+    console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
     
     if (!this.voiceEnabled) {
       console.warn('🔊 Voice disabled');
@@ -744,6 +696,7 @@ class FarmAssistant {
     // Simplified navigation - just check if query contains ANY keyword
     const navPatterns = [
       { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
+      { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
       { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
       { keywords: ['wholesale', 'buyer'], url: '/GR-wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
       { keywords: ['sales', 'pos', 'sell', 'store'], url: '/Farmsales-pos.html', name: 'POS Terminal', emoji: '💰' },

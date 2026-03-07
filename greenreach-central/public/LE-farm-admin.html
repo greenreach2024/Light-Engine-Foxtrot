@@ -1101,10 +1101,6 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <!-- Delivery Service Banner -->
-    <script src="/js/components/service-intro-banner.js"></script>
-    <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/wholesale-about.html#delivery' });</script>
-
     <!-- DEBUG BANNER REMOVED: Developer debug banner removed to reduce visible banners in production. Re-enable in dev with localStorage.setItem('gr.debug','true') -->
     
     <!-- PRIVATE MODE BANNER: Shows when localStorage is restricted -->
@@ -2176,16 +2172,15 @@
                 </div>
             </div>
 
-            <!-- Traceability Section (Auto-populated from harvest flow — SFCR / CanadaGAP compliant) -->
+            <!-- Traceability Section (Auto-populated from Activity Hub) -->
             <div id="section-traceability" class="content-section" style="display: none;">
                 <div class="header">
-                    <h1>⚖️ Seed-to-Sale Traceability</h1>
+                    <h1>Seed-to-Sale Traceability</h1>
                     <div class="header-actions">
-                        <input type="text" id="traceabilitySearch" placeholder="Search by lot code, crop..." 
-                          oninput="filterTraceRecords()"
-                          style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); min-width: 250px;">
+                        <input type="text" id="traceabilitySearch" placeholder="Search by lot, crop, variety..." oninput="filterTraceRecords()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); min-width: 250px;">
                         <select id="traceStatusFilter" onchange="filterTraceRecords()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
                             <option value="">All Status</option>
+                            <option value="active">Active</option>
                             <option value="harvested">Harvested</option>
                             <option value="packed">Packed</option>
                             <option value="shipped">Shipped</option>
@@ -2193,27 +2188,28 @@
                         </select>
                         <input type="date" id="traceFromDate" onchange="loadTraceRecords()" title="From date" style="padding: 8px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
                         <input type="date" id="traceToDate" onchange="loadTraceRecords()" title="To date" style="padding: 8px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
-                        <button onclick="exportSFCR('csv')" style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">📄 SFCR Export</button>
+                        <button onclick="exportSFCR('csv')" style="padding: 8px 16px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">SFCR Export</button>
                     </div>
                 </div>
 
-                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 1.2rem;">🍁</span>
-                    <div style="flex: 1;">
-                        <strong style="color: #10b981;">Automatic Traceability</strong>
-                        <span style="color: var(--text-secondary); font-size: 0.9rem;"> — Records are created automatically at harvest. Seed source is captured at seeding. No manual batch creation needed. Compliant with Safe Food for Canadians Regulations (SFCR) Part 5 and CanadaGAP.</span>
+                <!-- CanadaGAP Compliance Banner -->
+                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 22px;">&#x2705;</span>
+                    <div>
+                        <strong style="color: var(--text-primary);">CanadaGAP / SFCR Compliant</strong>
+                        <div style="font-size: 13px; color: var(--text-secondary);">Records are created automatically at harvest. One-step-back (seed source) and one-step-forward (customer) data is captured in the normal workflow — no duplicate entry needed.</div>
                     </div>
                 </div>
 
                 <!-- Stats Cards -->
-                <div class="stats-grid" id="traceabilityStats" style="margin-bottom: 24px;">
+                <div class="stats-grid" style="margin-bottom: 24px;">
                     <div class="stat-card">
                         <div class="stat-value" id="totalTraceRecords">-</div>
                         <div class="stat-label">Total Records</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="activeTraceRecords">-</div>
-                        <div class="stat-label">Active (Harvested/Packed)</div>
+                        <div class="stat-label">Active</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="traceCrops">-</div>
@@ -2246,9 +2242,7 @@
                                 </tr>
                             </thead>
                             <tbody id="traceRecordsList">
-                                <tr>
-                                    <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading trace records...</td>
-                                </tr>
+                                <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading trace records...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2258,7 +2252,7 @@
                 <div id="traceDetailModal" class="modal" style="display: none;">
                     <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
                         <div class="modal-header">
-                            <h2 id="traceDetailTitle">Trace Detail</h2>
+                            <h2>Trace Detail</h2>
                             <button onclick="document.getElementById('traceDetailModal').style.display='none'" class="modal-close">&times;</button>
                         </div>
                         <div class="modal-body" id="traceDetailContent"></div>
@@ -2450,6 +2444,8 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Exports Section -->
             <div id="section-exports" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Data Exports</h1>
@@ -2557,72 +2553,6 @@
                             </button>
                         </div>
                     </div>
-
-                    <!-- Wholesale Order Export -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">🛒 Wholesale Order Export</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Export wholesale B2B orders with line-item detail, tax, and broker fees for CRA filing.</p>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Start Date</label>
-                                <input type="date" id="wholesaleExportStartDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">End Date</label>
-                                <input type="date" id="wholesaleExportEndDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
-                            </div>
-                            <button onclick="exportWholesaleOrders()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
-                                📥 Download Wholesale Orders CSV
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Payment History Export -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">💳 Payment History Export</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Export payment records including amounts, providers, and statuses.</p>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Start Date</label>
-                                <input type="date" id="paymentExportStartDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">End Date</label>
-                                <input type="date" id="paymentExportEndDate" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
-                            </div>
-                            <button onclick="exportPaymentHistory()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
-                                📥 Download Payment History CSV
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Tax Summary Export -->
-                    <div class="card">
-                        <h2 style="margin-bottom: 20px;">🧾 Tax Summary (CRA-Ready)</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Monthly summary of sales, tax collected, broker fees, and net revenue for tax filing.</p>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tax Year</label>
-                                <input type="number" id="taxSummaryYear" min="2024" max="2030" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
-                            </div>
-                            <div style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent-blue);">
-                                <div style="font-weight: 600; margin-bottom: 5px;">Includes:</div>
-                                <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px;">
-                                    <li>Monthly sales totals</li>
-                                    <li>HST/GST collected per month</li>
-                                    <li>Broker fees per month</li>
-                                    <li>Net revenue per month</li>
-                                    <li>Annual totals row</li>
-                                </ul>
-                            </div>
-                            <button onclick="exportTaxSummary()" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
-                                📥 Download Tax Summary CSV
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Export Tips -->
@@ -2667,18 +2597,6 @@
                         <div style="padding: 20px; text-align: center;">
                             <div style="font-size: 48px; margin-bottom: 15px;">💳</div>
                             <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 20px;">Checking connection status...</div>
-                            <div class="loading-spinner"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stripe Connection Status -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <h2>Stripe Payment Setup</h2>
-                    <div id="stripe-status-container">
-                        <div style="padding: 20px; text-align: center;">
-                            <div style="font-size: 48px; margin-bottom: 15px;">⚡</div>
-                            <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 20px;">Checking Stripe connection...</div>
                             <div class="loading-spinner"></div>
                         </div>
                     </div>
@@ -2907,6 +2825,7 @@
             </div>
 
             <!-- Other sections would be loaded here dynamically -->
+<!-- Other sections would be loaded here dynamically -->
             <div id="section-subscription" class="content-section" style="display: none;">
                 <div class="header">
                     <h1>Subscription Not Required</h1>
@@ -3027,8 +2946,8 @@
                 <div class="header">
                     <h1>Users & Access Control</h1>
                     <div class="header-actions">
-                        <button class="btn" onclick="openAddUserModal()">
-                            <span style="font-size: 18px; margin-right: 4px;">+</span> Add User
+                        <button class="btn" onclick="openInviteUserModal()">
+                            <span style="font-size: 18px; margin-right: 4px;">+</span> Invite User
                         </button>
                     </div>
                 </div>
@@ -3038,7 +2957,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h2>Active Users</h2>
                         <div style="display: flex; gap: 12px; align-items: center;">
-                            <input type="text" id="user-search" placeholder="Search users..." oninput="filterUsers()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); width: 250px;">
+                            <input type="text" id="user-search" placeholder="Search users..." style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); width: 250px;">
                             <select id="role-filter" onchange="filterUsers()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 <option value="all">All Roles</option>
                                 <option value="admin">Admin</option>
@@ -3131,6 +3050,33 @@
                     </div>
                 </div>
 
+                <!-- Pending Invitations -->
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Pending Invitations</h2>
+                    <div class="table-container">
+                        <table id="invitations-table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Invited By</th>
+                                    <th>Sent</th>
+                                    <th>Expires</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JavaScript -->
+                                <tr>
+                                    <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">
+                                        No pending invitations
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Access Activity Log -->
                 <div class="card">
                     <h2 style="margin-bottom: 20px;">Recent Access Activity</h2>
@@ -3158,49 +3104,45 @@
                 </div>
             </div>
 
-            <!-- Add User Modal -->
-            <div id="addUserModal" class="modal" style="display: none;">
+            <!-- Invite User Modal -->
+            <div id="inviteUserModal" class="modal" style="display: none;">
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
-                        <h2>Add New User</h2>
-                        <button class="modal-close" onclick="closeAddUserModal()">&times;</button>
+                        <h2>Invite New User</h2>
+                        <button class="modal-close" onclick="closeInviteUserModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <div id="add-user-message" style="display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px;"></div>
-                        <form id="add-user-form" onsubmit="createUser(event)">
+                        <form id="invite-user-form" onsubmit="sendUserInvitation(event)">
                             <div style="display: flex; flex-direction: column; gap: 20px;">
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Email Address *</label>
-                                    <input type="email" id="add-user-email" required placeholder="user@example.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <input type="email" id="invite-email" required placeholder="user@example.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 </div>
-                                <div style="display: flex; gap: 12px;">
-                                    <div style="flex: 1;">
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">First Name *</label>
-                                        <input type="text" id="add-user-first-name" required placeholder="John" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
-                                    <div style="flex: 1;">
-                                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Last Name</label>
-                                        <input type="text" id="add-user-last-name" placeholder="Doe" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">First Name *</label>
+                                    <input type="text" id="invite-first-name" required placeholder="John" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Last Name *</label>
+                                    <input type="text" id="invite-last-name" required placeholder="Doe" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Role *</label>
-                                    <select id="add-user-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                    <select id="invite-role" required style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
                                         <option value="">Select role...</option>
-                                        <option value="admin">Admin — Full system access</option>
-                                        <option value="manager">Manager — Operations & reporting</option>
-                                        <option value="operator">Operator — Daily operations</option>
-                                        <option value="viewer">Viewer — Read-only access</option>
+                                        <option value="admin">Admin - Full system access</option>
+                                        <option value="manager">Manager - Operations & reporting</option>
+                                        <option value="operator">Operator - Daily operations</option>
+                                        <option value="viewer">Viewer - Read-only access</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Temporary Password *</label>
-                                    <input type="password" id="add-user-password" required minlength="6" placeholder="Min 6 characters" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">The user can change this after first login.</p>
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Personal Message (Optional)</label>
+                                    <textarea id="invite-message" rows="3" placeholder="Welcome to the team!" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); resize: vertical;"></textarea>
                                 </div>
                                 <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px;">
-                                    <button type="button" class="btn" onclick="closeAddUserModal()" style="background: var(--bg-secondary); color: var(--text-primary);">Cancel</button>
-                                    <button type="submit" class="btn" style="background: var(--accent-green); color: white;">Create User</button>
+                                    <button type="button" class="btn" onclick="closeInviteUserModal()" style="background: var(--bg-secondary); color: var(--text-primary);">Cancel</button>
+                                    <button type="submit" class="btn" style="background: var(--accent-green); color: white;">Send Invitation</button>
                                 </div>
                             </div>
                         </form>
@@ -3217,7 +3159,7 @@
                     </div>
                     <div class="modal-body">
                         <form id="edit-user-form" onsubmit="saveUserChanges(event)">
-                            <input type="hidden" id="edit-user-email-key">
+                            <input type="hidden" id="edit-user-id">
                             <div style="display: flex; flex-direction: column; gap: 20px;">
                                 <div>
                                     <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Name</label>
@@ -3243,26 +3185,6 @@
                                         <option value="suspended">Suspended</option>
                                     </select>
                                 </div>
-
-                                <!-- Change Password Section -->
-                                <div>
-                                    <button type="button" onclick="toggleChangePassword()" style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 14px; padding: 0;">🔒 Change Password ▼</button>
-                                    <div id="edit-user-pw-section" style="display: none; margin-top: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);">
-                                        <div id="pw-change-message" style="display: none; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px;"></div>
-                                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                                            <div>
-                                                <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">New Password *</label>
-                                                <input type="password" id="edit-new-password" minlength="6" placeholder="Min 6 characters" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 14px;">
-                                            </div>
-                                            <div>
-                                                <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">Confirm Password *</label>
-                                                <input type="password" id="edit-confirm-password" minlength="6" placeholder="Confirm password" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 14px;">
-                                            </div>
-                                            <button type="button" onclick="changeUserPassword(event)" class="btn" style="background: var(--accent-blue); color: white; align-self: flex-end; padding: 8px 16px; font-size: 13px;">Update Password</button>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 12px;">
                                     <button type="button" class="btn" onclick="removeUser()" style="background: var(--accent-red); color: white;">Remove User</button>
                                     <div style="display: flex; gap: 12px;">
@@ -3315,10 +3237,7 @@
 
                     <!-- Certifications & Practices -->
                     <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h2 style="margin: 0;">Certifications & Practices</h2>
-                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="padding: 6px 14px; font-size: 12px;">Edit</button>
-                        </div>
+                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
@@ -3329,6 +3248,12 @@
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Growing Practices</h3>
                                 <div id="practices-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <!-- Loaded from setup wizard -->
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Farm Attributes</h3>
+                                <div id="attributes-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
                                     <!-- Loaded from setup wizard -->
                                 </div>
                             </div>
@@ -3445,28 +3370,28 @@
                                 </label>
                                 <p style="color: var(--text-muted); font-size: 11px; margin: 0;">Opt-out to disable wholesale orders from GreenReach Central. All other services (monitoring, updates, support) remain active.</p>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Tablet Device Pairing -->
-                    <div class="card" style="border: 1px solid var(--accent-blue); border-opacity: 0.3;">
-                        <h2 style="margin-bottom: 8px;">📱 Tablet Device Pairing</h2>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
-                            Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
-                        </p>
-                        <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
-                            Generate Pairing QR Code
-                        </button>
-                        <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
-                            <div id="pairingQRCode" style="display: inline-block;"></div>
-                            <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
-                                Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
-                                Token expires in 24 hours
-                            </p>
-                            <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
-                                Close
-                            </button>
+                            
+                            <!-- Device Pairing for Activity Hub Tablets -->
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Tablet Device Pairing</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                                    Generate a QR code to pair tablets with this farm's Activity Hub. Each tablet must scan this code for secure access.
+                                </p>
+                                <button class="btn-primary" onclick="generatePairingQR()" style="width: 100%; margin-bottom: 15px;">
+                                    Generate Pairing QR Code
+                                </button>
+                                <div id="pairingQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan with Tablet</h4>
+                                    <div id="pairingQRCode" style="display: inline-block;"></div>
+                                    <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
+                                        Farm: <strong id="pairingFarmName" style="color: #1a2332;"></strong><br>
+                                        Token expires in 24 hours
+                                    </p>
+                                    <button class="btn-secondary" onclick="closePairingQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -3558,42 +3483,30 @@
                         </div>
                     </div>
 
-                    <!-- Delivery Settings -->
-                    <div class="card" id="delivery-settings-card">
-                        <h2 style="margin-bottom: 20px;">🚚 Delivery Settings</h2>
+                    <!-- API & Webhooks -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">API & Webhooks</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div>
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                    <input type="checkbox" id="delivery-enabled" style="width: 18px; height: 18px; accent-color: var(--accent-green);">
-                                    <span style="font-weight: 600; color: var(--text-primary);">Enable Delivery Service</span>
-                                </label>
-                                <small style="color: var(--text-muted); margin-left: 28px;">Allow wholesale buyers to request farm delivery</small>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Webhook URL</label>
+                                <input type="url" id="webhook-url" placeholder="https://yourapp.com/webhook" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                <small style="color: var(--text-muted);">Receive real-time event notifications</small>
                             </div>
-
-                            <div id="delivery-config-fields" style="display: none;">
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Fee & Order Settings</h3>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                    <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Base Delivery Fee ($)</label>
-                                        <input type="number" id="delivery-base-fee" min="0" step="0.50" value="0" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Minimum Order ($)</label>
-                                        <input type="number" id="delivery-min-order" min="0" step="1" value="25" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
-                                    </div>
-                                </div>
-
-                                <h3 style="font-size: 14px; font-weight: 600; margin: 20px 0 10px; color: var(--text-secondary);">Delivery Windows</h3>
-                                <small style="display: block; margin-bottom: 10px; color: var(--text-muted);">Set which time windows are available for delivery on each day</small>
-                                <div id="delivery-windows-editor" style="display: flex; flex-direction: column; gap: 8px;">
-                                    <!-- Populated by JS -->
-                                </div>
-
-                                <div style="padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border);">
-                                    <div id="delivery-save-status" style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;"></div>
-                                    <button class="btn" onclick="saveDeliverySettings()" style="width: 100%; background: var(--accent-green); color: white; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                        Save Delivery Settings
-                                    </button>
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Webhook Events</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-orders">
+                                        <span>Order events</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-inventory">
+                                        <span>Inventory updates</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" id="webhook-harvest">
+                                        <span>Harvest events</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -3604,47 +3517,6 @@
                 <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
-                </div>
-            </div>
-
-            <!-- Edit Certifications Modal -->
-            <div id="editCertificationsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; display: none; align-items: center; justify-content: center;">
-                <div style="background: var(--bg-card); border-radius: 12px; padding: 30px; max-width: 520px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h2 style="margin: 0;">Edit Certifications & Practices</h2>
-                        <button onclick="closeEditCertificationsModal()" style="background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer;">&times;</button>
-                    </div>
-                    <form id="editCertificationsForm" onsubmit="saveEditCertifications(event)">
-                        <div style="margin-bottom: 20px;">
-                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary);">Certifications</h3>
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="USDA Organic"> USDA Organic</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Canada Organic"> Canada Organic</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="CanadaGAP"> CanadaGAP</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="SFCR Compliant"> SFCR Compliant</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="GlobalG.A.P."> GlobalG.A.P.</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Non-GMO Project Verified"> Non-GMO Project Verified</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="B-Corp Certified"> B-Corp Certified</label>
-                            </div>
-                        </div>
-                        <div style="margin-bottom: 24px;">
-                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary);">Growing Practices</h3>
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Hydroponic"> Hydroponic</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aquaponic"> Aquaponic</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Vertical Farming"> Vertical Farming</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="LED Growing"> LED Growing</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="No Pesticides"> No Pesticides</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="IPM (Integrated Pest Management)"> IPM (Integrated Pest Management)</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Regenerative"> Regenerative</label>
-                                <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Soil-Based"> Soil-Based</label>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 16px;">
-                            <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()">Cancel</button>
-                            <button type="submit" class="btn-primary">Save Changes</button>
-                        </div>
-                    </form>
                 </div>
             </div>
 
@@ -3817,7 +3689,7 @@
         }
       })();
     </script>
-    <script src="/farm-admin.js?v=2026-02-19-crop-utils"></script>
+    <script src="/farm-admin.js?v=20260305-persist-fix"></script>
     
     <!-- Production Planning JS REMOVED — consolidated into Planting Scheduler -->
 
@@ -4752,6 +4624,7 @@
         }
 
         // ===================================================================
+        // ===================================================================
         // SUSTAINABILITY DASHBOARD FUNCTIONS
         // ===================================================================
         
@@ -5350,56 +5223,6 @@
         showToast('Export failed: ' + error.message, 'error');
       }
     }
-
-    /**
-     * Export wholesale orders as CSV
-     */
-    async function exportWholesaleOrders() {
-      try {
-        const from = document.getElementById('wholesaleExportStartDate')?.value || '';
-        const to = document.getElementById('wholesaleExportEndDate')?.value || '';
-        let url = '/api/wholesale/exports/orders?format=csv';
-        if (from) url += `&from=${from}`;
-        if (to) url += `&to=${to}`;
-        window.location.href = url;
-        showToast('Wholesale orders export started...', 'success');
-      } catch (error) {
-        console.error('Wholesale export error:', error);
-        showToast('Export failed: ' + error.message, 'error');
-      }
-    }
-
-    /**
-     * Export payment history as CSV
-     */
-    async function exportPaymentHistory() {
-      try {
-        const from = document.getElementById('paymentExportStartDate')?.value || '';
-        const to = document.getElementById('paymentExportEndDate')?.value || '';
-        let url = '/api/wholesale/exports/payments?format=csv';
-        if (from) url += `&from=${from}`;
-        if (to) url += `&to=${to}`;
-        window.location.href = url;
-        showToast('Payment history export started...', 'success');
-      } catch (error) {
-        console.error('Payment export error:', error);
-        showToast('Export failed: ' + error.message, 'error');
-      }
-    }
-
-    /**
-     * Export tax summary as CSV (CRA-ready)
-     */
-    async function exportTaxSummary() {
-      try {
-        const year = document.getElementById('taxSummaryYear')?.value || new Date().getFullYear();
-        window.location.href = `/api/wholesale/exports/tax-summary?year=${year}`;
-        showToast('Tax summary export started...', 'success');
-      } catch (error) {
-        console.error('Tax summary export error:', error);
-        showToast('Export failed: ' + error.message, 'error');
-      }
-    }
     
     // Set default dates when exports section is opened
     document.addEventListener('DOMContentLoaded', () => {
@@ -5414,19 +5237,6 @@
       
       if (document.getElementById('quickbooksExportDate')) {
         document.getElementById('quickbooksExportDate').value = today;
-      }
-
-      // Set defaults for wholesale export date pickers
-      if (document.getElementById('wholesaleExportStartDate')) {
-        document.getElementById('wholesaleExportStartDate').value = firstOfMonth;
-        document.getElementById('wholesaleExportEndDate').value = today;
-      }
-      if (document.getElementById('paymentExportStartDate')) {
-        document.getElementById('paymentExportStartDate').value = firstOfMonth;
-        document.getElementById('paymentExportEndDate').value = today;
-      }
-      if (document.getElementById('taxSummaryYear')) {
-        document.getElementById('taxSummaryYear').value = new Date().getFullYear();
       }
     });
   </script>

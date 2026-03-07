@@ -1203,6 +1203,11 @@
             <div class="status-dot" style="background: #34d399;"></div>
             <span id="currentTime">--:--</span>
           </div>
+          <div id="aiStatusBadge" class="status-badge" style="display:none;cursor:pointer;" onclick="window.location.href='/views/farm-summary.html'" title="AI Recommendations">
+            <div class="status-dot" style="background: #a78bfa;"></div>
+            <span style="color:#a78bfa;font-size:0.75rem;font-weight:600;">AI</span>
+            <div id="aiStatusCount" style="background:#a78bfa;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;margin-left:0.25rem;">0</div>
+          </div>
         </div>
       </div>
     </div>
@@ -3671,6 +3676,175 @@
     function processVoiceCommand(command) {
       let response = '';
 
+      // ── Phase 5 Ticket 5.3: Intent recognition with API routing ──
+
+      // HARVEST ACTION: "record harvest for group 12" / "harvest group 5"
+      const harvestActionMatch = command.match(/(?:record |log |submit |do )?harvest(?:ing)?\s+(?:for\s+)?(?:group\s+)?(\S+)/i);
+      if (harvestActionMatch && !command.includes('list') && !command.includes('show') && !command.includes('ready') && !command.includes('predict') && !command.includes('status')) {
+        const groupId = harvestActionMatch[1];
+        response = `Recording harvest for group ${groupId}...`;
+        showResponse(response);
+        speakResponse(response);
+        // Open harvest modal for this group
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof openHarvestModal === 'function') {
+            openHarvestModal(groupId);
+          } else {
+            showHarvestListModal();
+          }
+        }, 500);
+        return;
+      }
+
+      // HARVEST READINESS: "what's ready to harvest" / "harvest readiness" / "ready to pick"
+      if ((command.includes('ready') && (command.includes('harvest') || command.includes('pick'))) ||
+          command.includes('readiness') || command.includes('what should i harvest')) {
+        response = 'Checking harvest readiness...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/harvest/readiness`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.notifications && data.notifications.length > 0) {
+              const items = data.notifications.map(n => n.message).join('. ');
+              const resp = `${data.notifications.length} group${data.notifications.length > 1 ? 's' : ''} ready: ${items}`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              const resp = 'No groups are currently at harvest readiness. All crops are still growing.';
+              showResponse(resp);
+              speakResponse(resp);
+            }
+          })
+          .catch(() => {
+            showResponse('Could not check harvest readiness.');
+            speakResponse('Could not check harvest readiness.');
+          });
+        return;
+      }
+
+      // HARVEST PREDICTION: "predict harvest for group 12" / "when will group 5 be ready"
+      const predictMatch = command.match(/(?:predict|forecast|when)\s+(?:harvest\s+)?(?:for\s+)?(?:group\s+)?(\S+)/i);
+      if (predictMatch && (command.includes('predict') || command.includes('when') || command.includes('forecast'))) {
+        const groupId = predictMatch[1].replace(/[?.!]/g, '');
+        response = `Predicting harvest for group ${groupId}...`;
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/harvest/predict/${groupId}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.prediction) {
+              const p = data.prediction;
+              const resp = `Group ${groupId} ${p.crop}: predicted harvest in ${p.daysRemaining} days, confidence ${Math.round(p.confidence * 100)}%.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse(`No prediction available for group ${groupId}.`);
+              speakResponse(`No prediction available for group ${groupId}.`);
+            }
+          })
+          .catch(() => {
+            showResponse('Could not get harvest prediction.');
+            speakResponse('Could not get harvest prediction.');
+          });
+        return;
+      }
+
+      // SEEDING / PLANTING ACTION: "seed basil" / "start planting kale" / "new tray of arugula"
+      const seedMatch = command.match(/(?:seed|plant|start|new tray)\s+(?:of\s+)?(?:some\s+)?(\w[\w\s]*)/i);
+      if (seedMatch && (command.includes('seed') || command.includes('plant') || command.includes('new tray'))) {
+        const crop = seedMatch[1].trim();
+        response = `Opening seeding form for ${crop}...`;
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof openNewTrayModal === 'function') {
+            openNewTrayModal(crop);
+          } else if (typeof showPlantingSchedule === 'function') {
+            showPlantingSchedule();
+          }
+        }, 500);
+        return;
+      }
+
+      // QUALITY CHECK: "quality check" / "run QA" / "check quality for group 5"
+      const qaMatch = command.match(/(?:quality|qa|qc)\s*(?:check|inspection|report)?(?:\s+(?:for\s+)?(?:group\s+)?(\S+))?/i);
+      if (qaMatch && (command.includes('quality') || command.includes(' qa') || command.includes(' qc'))) {
+        const groupId = qaMatch[1];
+        response = groupId ? `Opening quality check for group ${groupId}...` : 'Opening quality checkpoint...';
+        showResponse(response);
+        speakResponse(response);
+        closeVoiceAssistant();
+        setTimeout(() => {
+          if (typeof submitQACheckpoint === 'function' && groupId) {
+            submitQACheckpoint(groupId);
+          } else if (typeof loadChecklistInModal === 'function') {
+            loadChecklistInModal();
+          }
+        }, 500);
+        return;
+      }
+
+      // ENVIRONMENT STATUS: "environment status" / "how are the zones" / "zone status"
+      if (command.includes('environment') || command.includes('zone status') || command.includes('how are the zones')) {
+        response = 'Checking environment status...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/env`)
+          .then(r => r.json())
+          .then(data => {
+            const zones = data.zones || [];
+            if (zones.length > 0) {
+              const summaries = zones.slice(0, 3).map(z => {
+                const temp = z.sensors?.temperature?.current || z.sensors?.temp?.current || 'N/A';
+                const rh = z.sensors?.rh?.current || z.sensors?.humidity?.current || 'N/A';
+                return `${z.name || z.id}: ${temp}°F, ${rh}% humidity`;
+              });
+              const resp = `Zone status: ${summaries.join('. ')}.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse('No zone data available.');
+              speakResponse('No zone data available.');
+            }
+          })
+          .catch(() => {
+            showResponse('Could not retrieve environment data.');
+            speakResponse('Could not retrieve environment data.');
+          });
+        return;
+      }
+
+      // RECIPE STATUS: "recipe status" / "what recipes are active"
+      if (command.includes('recipe') && (command.includes('status') || command.includes('active') || command.includes('modifier'))) {
+        response = 'Checking recipe modifier status...';
+        showResponse(response);
+        speakResponse(response);
+        fetch(`${currentAPI}/recipe-modifiers/autonomous/status`)
+          .then(r => r.json())
+          .then(data => {
+            const crops = Object.entries(data.crops || {});
+            if (crops.length > 0) {
+              const items = crops.map(([c, s]) => `${c}: ${s.auto_eligible ? 'autonomous' : s.reverted ? 'reverted' : 'manual'}`);
+              const resp = `Recipe modifiers: ${items.join(', ')}.`;
+              showResponse(resp);
+              speakResponse(resp);
+            } else {
+              showResponse('No recipe modifiers computed yet.');
+              speakResponse('No recipe modifiers computed yet.');
+            }
+          })
+          .catch(() => {
+            showResponse('Could not check recipe status.');
+            speakResponse('Could not check recipe status.');
+          });
+        return;
+      }
+
+      // ── Original voice commands (kept for backward compatibility) ──
+
       // Planting schedule command
       if (command.includes('plant') && (command.includes('schedule') || command.includes('plan'))) {
         response = 'Loading planting schedule.';
@@ -3742,11 +3916,11 @@
       }
       // Help
       else if (command.includes('help') || command.includes('what can')) {
-        response = 'I can help you check harvest status, inventory, temperature, humidity, tasks, and seedling counts. Just ask!';
+        response = 'I can help with: harvest readiness, harvest predictions, record harvest, seed a crop, quality checks, zone status, recipe status, inventory, temperature, humidity, tasks, and seedlings. Just ask!';
       }
       // Default
       else {
-        response = 'I didn\'t understand that. Try asking about harvest, inventory, temperature, tasks, or seedlings.';
+        response = 'I didn\'t understand that. Try: "what\'s ready to harvest", "seed basil", "quality check", "zone status", or say "help" for all commands.';
       }
 
       showResponse(response);
@@ -3842,6 +4016,7 @@
       
       // Initialize new features
       loadRecentActivity();
+      loadAIStatus();
       initPullToRefresh();
       
       // Initialize voice button state
@@ -3854,8 +4029,28 @@
       setInterval(() => {
         loadDashboardData();
         loadRecentActivity();
+        loadAIStatus();
       }, 300000);
     });
+
+    // AI Status Badge Loader (S4.4)
+    async function loadAIStatus() {
+      try {
+        const resp = await fetch('/api/notifications?unread=true&limit=50&t=' + Date.now());
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const aiCount = (data.notifications || []).filter(n => n.type === 'ai_recommendation' || n.source === 'ai').length || data.totalUnread || 0;
+        const badge = document.getElementById('aiStatusBadge');
+        const countEl = document.getElementById('aiStatusCount');
+        if (!badge) return;
+        if (aiCount > 0) {
+          badge.style.display = '';
+          if (countEl) countEl.textContent = aiCount > 99 ? '99+' : aiCount;
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch (e) { /* AI status unavailable */ }
+    }
 
     // Update Clock and Temperature
     function updateTime() {
@@ -4224,13 +4419,14 @@
       let successful = 0;
       let failed = 0;
       const results = [];
+      let weighInTray = null; // Track which tray gets flagged for weigh-in
 
       for (const trayId of batchHarvestTrays) {
         try {
           const harvestData = {
             trayRunId: trayId,
             harvestedAt: new Date().toISOString(),
-            actualWeight: weight,
+            actualWeight: weight || null,
             note: `Batch harvest via Activity Hub (${batchHarvestTrays.length} trays)`
           };
 
@@ -4248,6 +4444,10 @@
               const data = await response.json();
               results.push({ trayId, lotCode: data.lotCode, batchId: data.batchId });
               successful++;
+              // Capture first tray flagged for weigh-in
+              if (data.shouldWeigh && !weighInTray) {
+                weighInTray = { trayRunId: trayId, ...data };
+              }
             } else {
               failed++;
             }
@@ -4260,7 +4460,41 @@
 
       // Show results
       if (isOnline) {
-        scanResult.innerHTML = `
+        // If a tray was flagged for weigh-in, show that prompt instead
+        if (weighInTray) {
+          scanResult.innerHTML = `
+            <div style="text-align: center; padding: 1.5rem;">
+              <div style="font-size: 2rem; color: #10b981; margin-bottom: 0.5rem;">✓</div>
+              <div style="font-size: 1.3rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
+                ${successful} trays harvested${failed > 0 ? `, ${failed} failed` : ''}
+              </div>
+              <div style="
+                background: rgba(245, 158, 11, 0.15);
+                border: 2px solid rgba(245, 158, 11, 0.4);
+                border-radius: 12px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+              ">
+                <div style="font-size: 1.1rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
+                  ⚖️ Weigh-In Selected
+                </div>
+                <div style="font-size: 0.95rem; color: #cbd5e1;">
+                  Tray <strong>${weighInTray.trayRunId}</strong> (Lot: ${weighInTray.lotCode}) has been selected for a full weigh-in.
+                </div>
+              </div>
+              <button
+                onclick="showWeighInPrompt('${weighInTray.trayRunId}', ${JSON.stringify(weighInTray).replace(/"/g, '&quot;')})"
+                style="
+                  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                  border: none; border-radius: 12px; padding: 0.75rem 2rem;
+                  font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
+                "
+              >⚖️ Record Weight</button>
+              <button onclick="closeScanModal()" class="button" style="margin-top: 0.75rem;">Skip & Done</button>
+            </div>
+          `;
+        } else {
+          scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 1rem;">
@@ -4279,6 +4513,7 @@
             <button onclick="closeScanModal()" class="button button-primary">Done</button>
           </div>
         `;
+        } // end else (no weighInTray)
       } else {
         scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
@@ -4639,7 +4874,7 @@
       // Route to appropriate flow based on mode
       switch (currentScanMode) {
         case 'seed':
-          window.location.href = `/views/tray-setup.html?tray=${scannedData}`;
+          showSeedForm(scannedData);
           break;
         case 'harvest':
           performHarvest(scannedData);
@@ -4647,6 +4882,145 @@
         case 'move':
           window.location.href = `/views/tray-inventory.html?move=${scannedData}`;
           break;
+      }
+    }
+
+    // Show inline seed form with seed_source for traceability
+    function showSeedForm(trayId) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="padding: 1.5rem;">
+          <div style="text-align: center; margin-bottom: 1.5rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌱</div>
+            <div style="font-size: 1.3rem; font-weight: 700; color: #10b981;">Seed Tray</div>
+            <div style="color: #94a3b8; margin-top: 0.25rem;">Tray: ${trayId}</div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Crop / Recipe *</label>
+            <input type="text" id="seedCrop" placeholder="e.g., Butterhead Lettuce" required
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            <div id="seedAiHint" style="font-size: 0.8rem; color: #60a5fa; margin-top: 4px;">
+              🤖 AI is selecting the best crop suggestion...
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Variety</label>
+            <input type="text" id="seedVariety" placeholder="e.g., Rex, Salanova"
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">
+              Seed Source <span style="color: #94a3b8; font-weight: 400;">(supplier & lot# for traceability)</span>
+            </label>
+            <input type="text" id="seedSource" placeholder="e.g., Johnny's Seeds / Lot 2026-A-42"
+              style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">
+              CanadaGAP / SFCR requires tracking seed supplier for recall readiness
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+            <div>
+              <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Plant Count</label>
+              <input type="number" id="seedPlantCount" placeholder="# sites"
+                style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            </div>
+            <div>
+              <label style="display: block; color: #e2e8f0; font-weight: 600; margin-bottom: 4px;">Seed Date</label>
+              <input type="date" id="seedDate" value="${new Date().toISOString().slice(0, 10)}"
+                style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 1rem;">
+            </div>
+          </div>
+
+          <button onclick="submitSeed('${trayId}')" style="
+            width: 100%; padding: 14px; border: none; border-radius: 12px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; font-size: 1.2rem; font-weight: 700; cursor: pointer;">
+            🌱 Record Seeding
+          </button>
+        </div>
+      `;
+      scanResult.style.display = 'block';
+      loadSuggestedSeedCrop(trayId);
+    }
+
+    async function loadSuggestedSeedCrop(trayId) {
+      const cropInput = document.getElementById('seedCrop');
+      const hintEl = document.getElementById('seedAiHint');
+      if (!cropInput || !hintEl) return;
+
+      try {
+        const params = new URLSearchParams();
+        if (trayId) params.set('trayId', trayId);
+        const suggestionRes = await fetch(`${currentAPI}/api/ai/suggested-crop?${params.toString()}`);
+        const suggestionData = await suggestionRes.json();
+
+        const suggestion = suggestionData?.suggestion || null;
+        if (suggestion?.cropName && !cropInput.value.trim()) {
+          cropInput.value = suggestion.cropName;
+        }
+
+        if (suggestion?.cropName) {
+          const confidencePct = suggestion.confidence != null
+            ? ` (${Math.round(suggestion.confidence * 100)}% confidence)`
+            : '';
+          hintEl.innerHTML = `🤖 AI suggestion: <strong style="color: #93c5fd;">${suggestion.cropName}</strong>${confidencePct} — you can edit this anytime.`;
+        } else {
+          hintEl.textContent = suggestionData?.reason || 'No AI suggestion available right now. Enter crop manually.';
+        }
+      } catch (error) {
+        hintEl.textContent = 'AI suggestion unavailable right now. Enter crop manually.';
+      }
+    }
+
+    async function submitSeed(trayId) {
+      const crop = document.getElementById('seedCrop').value.trim();
+      if (!crop) { alert('Crop is required'); return; }
+
+      try {
+        const res = await fetch(\`\${currentAPI}/api/trays/\${trayId}/seed\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipe:      crop,
+            variety:     document.getElementById('seedVariety').value.trim() || null,
+            seed_source: document.getElementById('seedSource').value.trim() || null,
+            seedDate:    document.getElementById('seedDate').value,
+            plantCount:  document.getElementById('seedPlantCount').value || null
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Seeding failed');
+
+        // Show target weight info if assigned
+        const weightInfo = data.target_weight_oz
+          ? `<div style="color: #60a5fa; font-size: 0.9rem; margin-top: 0.5rem;">
+               ⚖️ Target: ${data.target_weight_oz} oz/plant
+               (${data.target_weight_source === 'benchmark' ? 'verified from weigh-ins' : 'from tray format'})
+             </div>`
+          : '';
+
+        const scanResult = document.getElementById('scanResult');
+        scanResult.innerHTML = \`
+          <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem; color: #10b981;">✓</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin: 0.5rem 0;">Seeding Recorded</div>
+            <div style="color: #cbd5e1;">\${crop}\${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
+            ${weightInfo}
+            <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.5rem;">
+              Traceability will auto-track from here through harvest and delivery.
+            </div>
+            <button onclick="closeScanModal()" style="
+              margin-top: 1.5rem; padding: 12px 24px; border: none; border-radius: 12px;
+              background: #334155; color: white; font-size: 1.1rem; cursor: pointer;"
+            >Done</button>
+          </div>
+        \`;
+      } catch (err) {
+        alert('Seeding error: ' + err.message);
       }
     }
 
@@ -4658,6 +5032,8 @@
         scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #94a3b8;">Recording harvest...</div>';
         scanResult.style.display = 'block';
         
+        // No manual weight prompt — target weight was assigned at seeding
+        // and will be used server-side if no explicit weight is provided
         const harvestData = {
           trayRunId: trayRunId,
           harvestedAt: new Date().toISOString(),
@@ -4709,44 +5085,14 @@
         
         const data = await response.json();
         
-        // Success! Show result with print option
-        scanResult.innerHTML = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
-              Harvest Recorded
-            </div>
-            <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
-              Lot: ${data.lotCode}<br>
-              Batch: ${data.batchId}
-            </div>
-            <button 
-              onclick="printHarvestLabel('${data.lotCode}', '${trayRunId}')"
-              style="
-                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                border: none;
-                border-radius: 12px;
-                padding: 1rem 2rem;
-                font-size: 1.3rem;
-                font-weight: 700;
-                color: white;
-                cursor: pointer;
-                margin-top: 1rem;
-              "
-            >
-              🖨️ Print Harvest Label
-            </button>
-            <div id="autoPrintStatus" style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.9rem;"></div>
-            <div style="margin-top: 1rem;">
-              <button onclick="closeScanModal()" class="button">Done</button>
-            </div>
-          </div>
-        `;
-
-        triggerAutoHarvestLabelPrint(data?.label_print);
+        // Check if this tray was flagged for a full weigh-in
+        if (data.shouldWeigh) {
+          showWeighInPrompt(trayRunId, data);
+          return;
+        }
         
-        // Refresh harvest list
-        loadDashboardData();
+        // Standard success — no weigh-in required
+        showHarvestSuccess(trayRunId, data);
         
       } catch (error) {
         console.error('Error recording harvest:', error);
@@ -4766,22 +5112,43 @@
       }
     }
 
-    // Print Harvest Label
-    async function printHarvestLabel(lotCode, trayRunId) {
-      // Phase 2 Task 2.4: Print via thermal printer endpoint
-      try {
-        const res = await fetch(`${currentAPI}/api/printer/print-harvest`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lotCode, cropName: '', trayRunId, unit: 'oz' })
-        });
-        if (!res.ok) {
-          window.open(`${currentAPI}/api/printer/label-preview?lot_code=${lotCode}&tray_run_id=${trayRunId}`, '_blank', 'width=600,height=800');
-        }
-      } catch (err) {
-        console.warn('[Print] Manual harvest label print failed:', err.message);
-        window.open(`${currentAPI}/api/printer/label-preview?lot_code=${lotCode}&tray_run_id=${trayRunId}`, '_blank', 'width=600,height=800');
-      }
+    // Show standard harvest success result
+    function showHarvestSuccess(trayRunId, data) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+          <div style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;">✓</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+            Harvest Recorded
+          </div>
+          <div style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 1rem;">
+            Lot: ${data.lotCode}<br>
+            Batch: ${data.batchId}
+          </div>
+          <button 
+            onclick="printHarvestLabel('${data.lotCode}', '${trayRunId}')"
+            style="
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              border: none;
+              border-radius: 12px;
+              padding: 1rem 2rem;
+              font-size: 1.3rem;
+              font-weight: 700;
+              color: white;
+              cursor: pointer;
+              margin-top: 1rem;
+            "
+          >
+            🖨️ Print Harvest Label
+          </button>
+          <div id="autoPrintStatus" style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.9rem;"></div>
+          <div style="margin-top: 1rem;">
+            <button onclick="closeScanModal()" class="button">Done</button>
+          </div>
+        </div>
+      `;
+      triggerAutoHarvestLabelPrint(data?.label_print);
+      loadDashboardData();
     }
 
     async function triggerAutoHarvestLabelPrint(labelPrintData) {
@@ -4818,6 +5185,277 @@
         statusEl.textContent = '⚠️ Auto-print failed. Use "Print Harvest Label" to retry.';
         console.warn('[Print] Harvest auto-print failed:', error.message);
       }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // WEIGH-IN PROMPT — shown when a tray is randomly selected
+    // for full-tray weight reconciliation during harvest
+    // ────────────────────────────────────────────────────────────
+    function showWeighInPrompt(trayRunId, harvestData) {
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">⚖️</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">
+            Weigh-In Required
+          </div>
+          <div style="font-size: 1rem; color: #94a3b8; margin-bottom: 1.5rem; line-height: 1.5;">
+            This crop needs verified weight data to improve future forecasts.<br>
+            Please weigh the <strong style="color: #e2e8f0;">entire cut crop</strong> from this tray<br>
+            and enter the total weight below.
+          </div>
+
+          <div style="
+            background: rgba(245, 158, 11, 0.1);
+            border: 2px solid rgba(245, 158, 11, 0.3);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+          ">
+            <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 0.5rem;">
+              Lot: ${harvestData.lotCode} &nbsp;|&nbsp; Plants: ${harvestData.harvestedCount || '—'}
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 1rem;">
+              <input
+                type="number"
+                id="weighInTotalWeight"
+                placeholder="0.0"
+                step="0.1"
+                min="0"
+                style="
+                  width: 120px;
+                  font-size: 2rem;
+                  font-weight: 700;
+                  text-align: center;
+                  padding: 0.75rem;
+                  border: 2px solid rgba(245, 158, 11, 0.5);
+                  border-radius: 12px;
+                  background: rgba(15, 23, 42, 0.6);
+                  color: #f59e0b;
+                  outline: none;
+                "
+                autofocus
+              />
+              <select
+                id="weighInUnit"
+                style="
+                  font-size: 1.2rem;
+                  padding: 0.75rem;
+                  border: 2px solid rgba(245, 158, 11, 0.3);
+                  border-radius: 12px;
+                  background: rgba(15, 23, 42, 0.6);
+                  color: #e2e8f0;
+                  outline: none;
+                "
+              >
+                <option value="oz" selected>oz</option>
+                <option value="g">grams</option>
+                <option value="kg">kg</option>
+                <option value="lb">lbs</option>
+              </select>
+            </div>
+
+            <div style="color: #64748b; font-size: 0.85rem;">
+              Tip: Weigh the full tray cut crop together for best accuracy
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+            <button
+              onclick="submitWeighIn('${trayRunId}', '${harvestData.lotCode}')"
+              style="
+                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                border: none;
+                border-radius: 12px;
+                padding: 1rem 2rem;
+                font-size: 1.2rem;
+                font-weight: 700;
+                color: white;
+                cursor: pointer;
+                min-width: 160px;
+              "
+            >
+              ⚖️ Record Weight
+            </button>
+            <button
+              onclick="skipWeighIn('${trayRunId}', ${JSON.stringify(harvestData).replace(/'/g, "\\'")})"
+              style="
+                background: rgba(100, 116, 139, 0.3);
+                border: 1px solid rgba(100, 116, 139, 0.5);
+                border-radius: 12px;
+                padding: 1rem 1.5rem;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: #94a3b8;
+                cursor: pointer;
+              "
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Auto-focus the weight input
+      setTimeout(() => {
+        const input = document.getElementById('weighInTotalWeight');
+        if (input) input.focus();
+      }, 100);
+    }
+
+    // Submit a full weigh-in record
+    async function submitWeighIn(trayRunId, lotCode) {
+      const weightInput = document.getElementById('weighInTotalWeight');
+      const unitSelect = document.getElementById('weighInUnit');
+      const totalWeight = parseFloat(weightInput?.value);
+      const unit = unitSelect?.value || 'oz';
+
+      if (!totalWeight || totalWeight <= 0) {
+        weightInput.style.borderColor = '#ef4444';
+        weightInput.focus();
+        return;
+      }
+
+      // Convert to oz for consistency
+      let totalOz = totalWeight;
+      if (unit === 'g') totalOz = totalWeight * 0.03527396;
+      else if (unit === 'kg') totalOz = totalWeight * 35.27396;
+      else if (unit === 'lb') totalOz = totalWeight * 16;
+
+      const scanResult = document.getElementById('scanResult');
+      scanResult.innerHTML = '<div class="spinner"></div><div style="margin-top: 1rem; color: #f59e0b;">Recording weigh-in data...</div>';
+
+      try {
+        // Fetch tray details for context
+        let trayDetails = {};
+        try {
+          const detailRes = await fetch(`${currentAPI}/api/trays`);
+          if (detailRes.ok) {
+            const allTrays = await detailRes.json();
+            const match = allTrays.find(t => t.currentRunId === trayRunId);
+            if (match) {
+              trayDetails = {
+                tray_id: match.trayId,
+                tray_format_id: match.formatId,
+                tray_format_name: match.formatName,
+                planted_site_count: match.plantedSiteCount || match.plantSiteCount,
+                recipe_id: match.currentRecipe,
+                system_type: match.systemType || '',
+                grow_days: match.daysSinceSeeding
+              };
+            }
+          }
+        } catch (_) {}
+
+        // Submit weigh-in to crop-weights API
+        const weighRes = await fetch(`${currentAPI}/api/crop-weights/record`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tray_run_id: trayRunId,
+            tray_id: trayDetails.tray_id || null,
+            recipe_id: trayDetails.recipe_id || null,
+            crop_name: trayDetails.recipe_id || null,
+            tray_format_id: trayDetails.tray_format_id || null,
+            tray_format_name: trayDetails.tray_format_name || null,
+            system_type: trayDetails.system_type || null,
+            planted_site_count: trayDetails.planted_site_count || 1,
+            total_weight_oz: +totalOz.toFixed(2),
+            weight_unit: 'oz',
+            grow_days: trayDetails.grow_days || null,
+            zone: null,
+            room: null,
+            notes: `Full tray weigh-in during harvest. Input: ${totalWeight} ${unit}`
+          })
+        });
+
+        if (!weighRes.ok) throw new Error('Failed to record weigh-in');
+        const weighData = await weighRes.json();
+
+        // Show weigh-in success with comparison data
+        const plantCount = trayDetails.planted_site_count || '?';
+        const perPlant = weighData.weight_per_plant_oz;
+        const varianceMsg = weighData.variance_pct !== null
+          ? `<div style="margin-top: 0.5rem; font-size: 1rem; color: ${Math.abs(weighData.variance_pct) <= 10 ? '#10b981' : '#f59e0b'};">
+               ${weighData.variance_pct >= 0 ? '↑' : '↓'} ${Math.abs(weighData.variance_pct)}% ${weighData.variance_pct >= 0 ? 'above' : 'below'} average
+               ${weighData.benchmark ? `(avg: ${weighData.benchmark.avg_weight_per_plant_oz} oz/plant from ${weighData.benchmark.sample_count} samples)` : ''}
+             </div>`
+          : `<div style="margin-top: 0.5rem; font-size: 0.95rem; color: #10b981;">✓ Baseline established for this crop</div>`;
+
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem;">
+            <div style="font-size: 2.5rem; color: #10b981; margin-bottom: 0.5rem;">⚖️ ✓</div>
+            <div style="font-size: 1.4rem; font-weight: 700; color: #10b981; margin-bottom: 0.5rem;">
+              Weigh-In Recorded
+            </div>
+
+            <div style="
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 0.75rem;
+              margin: 1rem 0;
+              text-align: center;
+            ">
+              <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.8rem; color: #64748b;">Total Weight</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">
+                  ${totalOz.toFixed(1)} oz
+                </div>
+              </div>
+              <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 1rem;">
+                <div style="font-size: 0.8rem; color: #64748b;">Per Plant</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">
+                  ${perPlant} oz
+                </div>
+                <div style="font-size: 0.75rem; color: #64748b;">${plantCount} plants</div>
+              </div>
+            </div>
+
+            ${varianceMsg}
+
+            <div style="font-size: 0.85rem; color: #475569; margin-top: 0.75rem;">
+              Lot: ${lotCode}
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1.25rem;">
+              <button
+                onclick="printHarvestLabel('${lotCode}', '${trayRunId}')"
+                style="
+                  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                  border: none; border-radius: 12px; padding: 0.75rem 1.5rem;
+                  font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
+                "
+              >🖨️ Print Label</button>
+              <button onclick="closeScanModal()" class="button">Done</button>
+            </div>
+          </div>
+        `;
+
+        loadDashboardData();
+      } catch (error) {
+        console.error('Weigh-in error:', error);
+        scanResult.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: #ef4444;">
+            <div style="font-size: 2rem;">✗</div>
+            <div style="font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0;">Weigh-In Failed</div>
+            <div style="font-size: 1rem;">${error.message}</div>
+            <button onclick="closeScanModal()" class="button" style="margin-top: 1rem;">Close</button>
+          </div>
+        `;
+      }
+    }
+
+    // Skip weigh-in and show standard harvest success
+    function skipWeighIn(trayRunId, harvestData) {
+      showHarvestSuccess(trayRunId, harvestData);
+    }
+
+    // Print Harvest Label
+    function printHarvestLabel(lotCode, trayRunId) {
+      // Open label in new window to print
+      const labelUrl = `${API_BASE}/api/labels/harvest?lot_code=${lotCode}&tray_run_id=${trayRunId}`;
+      window.open(labelUrl, '_blank', 'width=600,height=800');
     }
 
     // Show Simple Planting Schedule
