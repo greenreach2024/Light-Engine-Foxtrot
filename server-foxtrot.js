@@ -29639,18 +29639,18 @@ function setupLiveSensorSync() {
         function avgSourceCurrents(bucket) {
           if (!bucket?.sources) return null;
           const now = Date.now();
-          const vals = Object.values(bucket.sources)
-            .filter(s => {
-              if (!Number.isFinite(s.current)) return false;
-              // Exclude stale sources — if updatedAt is set and too old, skip
-              if (s.updatedAt) {
-                const age = now - Date.parse(s.updatedAt);
-                if (age > STALE_SOURCE_MAX_AGE_MS) return false;
-              }
-              return true;
-            })
-            .map(s => s.current);
-          if (!vals.length) return null;
+          const allValid = Object.values(bucket.sources)
+            .filter(s => Number.isFinite(s.current));
+          if (!allValid.length) return null;
+          // Try fresh sources first (within staleness window)
+          const fresh = allValid.filter(s => {
+            if (!s.updatedAt) return true; // no timestamp = assume fresh
+            return (now - Date.parse(s.updatedAt)) <= STALE_SOURCE_MAX_AGE_MS;
+          });
+          // If some sources are fresh, use only those (avoids stale drag).
+          // If ALL sources are stale, use them all — orphans already pruned
+          // by Pass 1.5, so remaining sources are legitimate registered devices.
+          const vals = (fresh.length ? fresh : allValid).map(s => s.current);
           return vals.reduce((a, b) => a + b, 0) / vals.length;
         }
 
