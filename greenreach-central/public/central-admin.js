@@ -3691,7 +3691,7 @@ async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
  */
 async function loadZoneSensors(farmId, roomId, zoneId) {
     const tbody = document.getElementById('zone-sensors-tbody');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading sensors...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading sensors...</td></tr>';
     
     try {
         // Fetch farm environmental data to get zone sensors
@@ -3713,69 +3713,83 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
         });
         
         if (!zone || !zone.sensors) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty">No sensors configured for this zone</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No sensors configured for this zone</td></tr>';
             return;
         }
         
-        // Build sensor rows from the sensors object
+        // Build sensor rows — one row per physical device per metric
+        // This shows each individual sensor instead of a single aggregated row
         const sensors = [];
         const sensorMap = zone.sensors;
-
-        // Helper: derive device label from zone data
-        // Uses sensorDevices[].name, then source keys, never hardcoded 'ESP32'
         const sensorDevices = zone.sensorDevices || [];
-        function getDeviceLabel(metricKey) {
-            // Try to get names from sources for this metric
-            const sources = sensorMap[metricKey]?.sources;
-            if (sources) {
-                const names = Object.entries(sources)
-                    .map(([id, s]) => s.name || sensorDevices.find(d => d.id === id)?.name || id)
-                    .filter(Boolean);
-                if (names.length) return names.join(', ');
-            }
-            // Fallback to sensorDevices names
-            if (sensorDevices.length) {
-                return sensorDevices.map(d => d.name || d.id).join(', ');
-            }
-            return 'Sensor';
-        }
-        
+
         // Derive device type label from sensorDevices or zone source
-        function getDeviceTypeLabel() {
-            // Check if any sensorDevice has a type
-            for (const d of sensorDevices) {
-                const t = (d.type || '').toLowerCase();
-                if (t.includes('woio') || t.includes('switchbot') || t.includes('sensor')) return 'SwitchBot';
+        function getDeviceTypeLabel(deviceId) {
+            const sd = sensorDevices.find(d => d.id === deviceId);
+            if (sd) {
+                const t = (sd.type || '').toLowerCase();
+                if (t.includes('woio') || t.includes('switchbot')) return 'SwitchBot';
+                if (t.includes('hub')) return 'Hub';
+                if (t) return t;
             }
             const src = (zone.meta?.source || '').toLowerCase();
             if (src.includes('switchbot') || src === 'live-sync') return 'SwitchBot';
             return 'Sensor';
         }
-        const deviceTypeLabel = getDeviceTypeLabel();
-        
-        // Temperature sensor
-        if (sensorMap.tempC && sensorMap.tempC.current != null) {
-            sensors.push({
-                type: 'Temperature',
-                device: `${getDeviceLabel('tempC')} (${deviceTypeLabel})`,
-                value: `${sensorMap.tempC.current.toFixed(1)}°C`,
-                status: 'active',
-                lastSeen: zone.meta?.lastSeen || 'Active'
-            });
+
+        // Format a timestamp into a relative or absolute label
+        function formatLastSeen(isoStr) {
+            if (!isoStr) return 'Active';
+            const ms = Date.now() - new Date(isoStr).getTime();
+            if (ms < 0 || isNaN(ms)) return 'Active';
+            if (ms < 60000) return 'Just now';
+            if (ms < 3600000) return `${Math.floor(ms/60000)}m ago`;
+            if (ms < 86400000) return `${Math.floor(ms/3600000)}h ago`;
+            return `${Math.floor(ms/86400000)}d ago`;
         }
-        
-        // Humidity sensor
-        if (sensorMap.rh && sensorMap.rh.current != null) {
-            sensors.push({
-                type: 'Humidity',
-                device: `${getDeviceLabel('rh')} (${deviceTypeLabel})`,
-                value: `${sensorMap.rh.current.toFixed(0)}%`,
-                status: 'active',
-                lastSeen: zone.meta?.lastSeen || 'Active'
-            });
+
+        // Metric definitions: key, display name, unit, formatter
+        const metricDefs = [
+            { key: 'tempC', label: 'Temperature', unit: '°C', fmt: v => v.toFixed(1) },
+            { key: 'rh',    label: 'Humidity',    unit: '%',  fmt: v => v.toFixed(0) },
+            { key: 'co2',   label: 'CO2',         unit: ' ppm', fmt: v => v.toFixed(0) },
+            { key: 'ppfd',  label: 'PPFD',        unit: ' μmol/m²/s', fmt: v => v.toFixed(0) },
+            { key: 'pressure', label: 'Pressure', unit: ' hPa', fmt: v => v.toFixed(1) },
+        ];
+
+        // Iterate each metric and emit one row per source device
+        for (const { key, label, unit, fmt } of metricDefs) {
+            const bucket = sensorMap[key];
+            if (!bucket) continue;
+            const sources = bucket.sources || {};
+            const sourceEntries = Object.entries(sources);
+            if (sourceEntries.length > 0) {
+                // Per-device rows
+                for (const [srcId, src] of sourceEntries) {
+                    if (src.current == null || !Number.isFinite(src.current)) continue;
+                    const devName = src.name || sensorDevices.find(d => d.id === srcId)?.name || srcId;
+                    const typeLabel = getDeviceTypeLabel(srcId);
+                    sensors.push({
+                        type: label,
+                        device: `${devName} (${typeLabel})`,
+                        value: `${fmt(src.current)}${unit}`,
+                        status: 'active',
+                        lastSeen: formatLastSeen(src.updatedAt)
+                    });
+                }
+            } else if (bucket.current != null && Number.isFinite(bucket.current)) {
+                // No per-source breakdown — fall back to zone aggregate
+                sensors.push({
+                    type: label,
+                    device: sensorDevices.length ? sensorDevices.map(d => d.name || d.id).join(', ') : 'Sensor',
+                    value: `${fmt(bucket.current)}${unit}`,
+                    status: 'active',
+                    lastSeen: formatLastSeen(zone.meta?.lastSampleAt || zone.meta?.lastSync)
+                });
+            }
         }
-        
-        // VPD
+
+        // VPD — always a calculated metric, show as a single row
         if (sensorMap.vpd && sensorMap.vpd.current != null) {
             sensors.push({
                 type: 'VPD',
@@ -3786,59 +3800,25 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
             });
         }
         
-        // CO2
-        if (sensorMap.co2 && sensorMap.co2.current != null) {
-            sensors.push({
-                type: 'CO2',
-                device: `${getDeviceLabel('co2')} (${deviceTypeLabel})`,
-                value: `${sensorMap.co2.current.toFixed(0)} ppm`,
-                status: 'active',
-                lastSeen: zone.meta?.lastSeen || 'Active'
-            });
-        }
-        
-        // PPFD / Light
-        if (sensorMap.ppfd && sensorMap.ppfd.current != null) {
-            sensors.push({
-                type: 'PPFD',
-                device: zone.meta?.deviceId || 'Light Sensor',
-                value: `${sensorMap.ppfd.current.toFixed(0)} μmol/m²/s`,
-                status: 'active',
-                lastSeen: zone.meta?.lastSeen || 'Active'
-            });
-        }
-        
-        // Pressure
-        if (sensorMap.pressure && sensorMap.pressure.current != null) {
-            sensors.push({
-                type: 'Pressure',
-                device: `${getDeviceLabel('pressure')} (${deviceTypeLabel})`,
-                value: `${sensorMap.pressure.current.toFixed(1)} hPa`,
-                status: 'active',
-                lastSeen: zone.meta?.lastSeen || 'Active'
-            });
-        }
-        
         if (sensors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty">No active sensor readings</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No active sensor readings</td></tr>';
             return;
         }
         
         // Render sensors table
         tbody.innerHTML = sensors.map(sensor => `
             <tr>
-                <td>${escapeHtml(sensor.type)}</td>
                 <td>${escapeHtml(sensor.device)}</td>
+                <td>${escapeHtml(sensor.type)}</td>
                 <td><strong>${escapeHtml(sensor.value)}</strong></td>
                 <td><span class="status-badge status-${sensor.status}">${sensor.status}</span></td>
                 <td>${escapeHtml(sensor.lastSeen)}</td>
-                <td>—</td>
             </tr>
         `).join('');
         
     } catch (error) {
         console.error('[loadZoneSensors] Failed to load sensors:', error);
-        tbody.innerHTML = '<tr><td colspan="6" class="empty error">Failed to load sensors - ' + escapeHtml(error.message) + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty error">Failed to load sensors - ' + escapeHtml(error.message) + '</td></tr>';
     }
 }
 
