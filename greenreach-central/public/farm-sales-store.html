@@ -524,6 +524,10 @@
                   <span>Tax:</span>
                   <span id="cart-tax">$0.00</span>
                 </div>
+                <div class="summary-row" id="cart-delivery-row" style="display:none;">
+                  <span>Delivery Fee:</span>
+                  <span id="cart-delivery-fee">$0.00</span>
+                </div>
                 <div class="summary-row total">
                   <span>Total:</span>
                   <span id="cart-total">$0.00</span>
@@ -618,6 +622,13 @@
           </div>
         </div>
         
+        <div id="delivery-quote-message" class="alert alert-error hidden"></div>
+
+        <div class="summary-row" id="checkout-delivery-row" style="margin: 0.5rem 0; display:none;">
+          <span>Delivery Fee:</span>
+          <span id="checkout-delivery-fee">$0.00</span>
+        </div>
+
         <div class="summary-row total" style="margin: 1rem 0;">
           <span>Total Due:</span>
           <span id="checkout-total">$0.00</span>
@@ -709,6 +720,7 @@
     let cart = [];
     let inventory = [];
     let subscriptions = [];
+    let storeDeliveryQuote = { fee: 0, eligible: true, reason: null, minimum_order: 0 };
     
     // Square Payment State
     let squarePayments = null;
@@ -984,6 +996,75 @@
       document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
       document.getElementById('cart-tax').textContent = `$${tax.toFixed(2)}`;
       document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
+
+      refreshStoreCheckoutTotals();
+    }
+
+    async function refreshStoreDeliveryQuote() {
+      const deliveryOption = document.getElementById('delivery-option').value;
+      const messageEl = document.getElementById('delivery-quote-message');
+      messageEl.classList.add('hidden');
+      messageEl.textContent = '';
+
+      if (deliveryOption !== 'delivery' || cart.length === 0) {
+        storeDeliveryQuote = { fee: 0, eligible: true, reason: null, minimum_order: 0 };
+        return;
+      }
+
+      try {
+        const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+        const quote = await api('/farm-sales/delivery/quote', {
+          method: 'POST',
+          body: JSON.stringify({
+            subtotal,
+            zone: 'ZONE_A'
+          })
+        });
+
+        if (!quote.ok) {
+          throw new Error(quote.message || quote.error || 'Delivery quote failed');
+        }
+
+        storeDeliveryQuote = {
+          fee: Number(quote.fee || 0),
+          eligible: quote.eligible !== false,
+          reason: quote.reason || null,
+          minimum_order: Number(quote.minimum_order || 0)
+        };
+
+        if (storeDeliveryQuote.reason === 'below_minimum_order') {
+          messageEl.textContent = `Delivery requires minimum order of $${storeDeliveryQuote.minimum_order.toFixed(2)}.`;
+          messageEl.classList.remove('hidden');
+        } else if (storeDeliveryQuote.reason === 'delivery_disabled') {
+          messageEl.textContent = 'Delivery is currently disabled for this farm.';
+          messageEl.classList.remove('hidden');
+        }
+      } catch (error) {
+        storeDeliveryQuote = { fee: 0, eligible: false, reason: 'quote_failed', minimum_order: 0 };
+        messageEl.textContent = `Unable to quote delivery: ${error.message}`;
+        messageEl.classList.remove('hidden');
+      }
+    }
+
+    async function refreshStoreCheckoutTotals() {
+      await refreshStoreDeliveryQuote();
+
+      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+      const taxableSubtotal = cart.reduce((sum, item) => {
+        return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
+      }, 0);
+      const tax = taxableSubtotal * 0.08;
+      const deliveryFee = document.getElementById('delivery-option').value === 'delivery'
+        ? Number(storeDeliveryQuote.fee || 0)
+        : 0;
+      const total = subtotal + tax + deliveryFee;
+
+      document.getElementById('checkout-total').textContent = `$${total.toFixed(2)}`;
+      document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
+      document.getElementById('cart-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
+      document.getElementById('checkout-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
+      document.getElementById('cart-delivery-row').style.display = deliveryFee > 0 ? '' : 'none';
+      document.getElementById('checkout-delivery-row').style.display = deliveryFee > 0 ? '' : 'none';
     }
     
     // Checkout
@@ -1002,6 +1083,7 @@
       
       document.getElementById('checkout-total').textContent = `$${total.toFixed(2)}`;
       document.getElementById('checkout-modal').classList.add('active');
+      refreshStoreCheckoutTotals();
       
       // Set minimum delivery date to tomorrow
       const tomorrow = new Date();
@@ -1025,6 +1107,7 @@
         deliveryFields.style.display = 'none';
         document.getElementById('delivery-address').required = false;
       }
+      refreshStoreCheckoutTotals();
     });
     
     // Payment method change
@@ -1112,7 +1195,18 @@
         return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
       }, 0);
       const tax = taxableSubtotal * 0.08;
-      const total = subtotal + tax;
+      await refreshStoreCheckoutTotals();
+      const deliveryFee = deliveryOption === 'delivery' ? Number(storeDeliveryQuote.fee || 0) : 0;
+      const total = subtotal + tax + deliveryFee;
+
+      if (deliveryOption === 'delivery' && !storeDeliveryQuote.eligible) {
+        const reason = storeDeliveryQuote.reason === 'below_minimum_order'
+          ? `Minimum order for delivery is $${storeDeliveryQuote.minimum_order.toFixed(2)}.`
+          : 'Delivery is currently unavailable for this order.';
+        document.getElementById('checkout-error').textContent = reason;
+        document.getElementById('checkout-error').classList.remove('hidden');
+        return;
+      }
       
       if (paymentMethod === 'gift_card' && !giftCardNumber) {
         document.getElementById('checkout-error').textContent = 'Gift card number required';
@@ -1170,7 +1264,8 @@
               option: deliveryOption,
               date: deliveryDate,
               address: deliveryAddress || null,
-              notes: deliveryNotes || null
+              notes: deliveryNotes || null,
+              fee: deliveryFee
             }
           })
         });

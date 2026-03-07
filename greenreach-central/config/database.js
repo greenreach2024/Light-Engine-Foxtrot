@@ -1116,6 +1116,67 @@ async function runMigrations(client) {
 
         CREATE INDEX IF NOT EXISTS idx_farm_delivery_zones_farm ON farm_delivery_zones(farm_id);
         CREATE INDEX IF NOT EXISTS idx_farm_delivery_zones_status ON farm_delivery_zones(status);
+
+        CREATE TABLE IF NOT EXISTS delivery_orders (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          delivery_id VARCHAR(100) NOT NULL,
+          order_id VARCHAR(255) NOT NULL,
+          delivery_date DATE NOT NULL,
+          time_slot VARCHAR(50) NOT NULL,
+          zone_id VARCHAR(50),
+          route_id VARCHAR(100),
+          driver_id VARCHAR(100),
+          status VARCHAR(50) DEFAULT 'scheduled',
+          address JSONB DEFAULT '{}'::jsonb,
+          contact JSONB DEFAULT '{}'::jsonb,
+          instructions TEXT,
+          payload JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, delivery_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_delivery_orders_farm_date_slot ON delivery_orders(farm_id, delivery_date, time_slot);
+        CREATE INDEX IF NOT EXISTS idx_delivery_orders_status ON delivery_orders(status);
+        CREATE INDEX IF NOT EXISTS idx_delivery_orders_route ON delivery_orders(route_id);
+
+        CREATE TABLE IF NOT EXISTS delivery_routes (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          route_id VARCHAR(100) NOT NULL,
+          route_date DATE NOT NULL,
+          time_slot VARCHAR(50) NOT NULL,
+          zone_id VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'pending',
+          payload JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, route_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_delivery_routes_farm_date_slot ON delivery_routes(farm_id, route_date, time_slot);
+        CREATE INDEX IF NOT EXISTS idx_delivery_routes_status ON delivery_routes(status);
+
+        CREATE TABLE IF NOT EXISTS delivery_drivers (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          driver_id VARCHAR(100) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50) NOT NULL,
+          email VARCHAR(255),
+          vehicle VARCHAR(255),
+          zones JSONB DEFAULT '[]'::jsonb,
+          deliveries_30d INTEGER DEFAULT 0,
+          rating NUMERIC(3,2),
+          status VARCHAR(50) DEFAULT 'active',
+          hired_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(farm_id, driver_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_delivery_drivers_farm ON delivery_drivers(farm_id);
+        CREATE INDEX IF NOT EXISTS idx_delivery_drivers_status ON delivery_drivers(status);
       `);
       logger.info('Delivery service tables ready (migration 018)');
     } catch (err) {

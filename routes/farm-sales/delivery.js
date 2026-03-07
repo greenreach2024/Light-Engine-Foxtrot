@@ -7,7 +7,7 @@ import express from 'express';
 import { farmAuthMiddleware } from '../../lib/farm-auth.js';
 import { wholesaleAuthMiddleware } from '../../lib/wholesale-auth.js';
 import { farmStores } from '../../lib/farm-store.js';
-import { query, isDatabaseEnabled } from '../../lib/database.js';
+import { query, isDatabaseEnabled, transaction } from '../../lib/database.js';
 
 const router = express.Router();
 
@@ -48,7 +48,6 @@ router.use(deliveryAuthMiddleware);
 
 // In-memory route storage (shared Map, tenant-isolated via farm_id on each record)
 const routes = new Map();
-const routeSequence = { current: 100 };
 
 /**
  * Delivery time windows (configurable by farm)
@@ -72,6 +71,218 @@ const DELIVERY_ZONES = {
 const deliverySettingsByFarm = new Map();
 const deliveryWindowsByFarm = new Map();
 
+function generateEntityId(prefix = 'ENT') {
+  const now = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `${prefix}-${now}${rand}`;
+}
+
+function toDeliveryFromRow(row) {
+  const payload = row?.payload || {};
+  return {
+    ...payload,
+    delivery_id: row.delivery_id,
+    order_id: row.order_id,
+    delivery_date: row.delivery_date,
+    time_slot: row.time_slot,
+    zone: payload.zone || { id: row.zone_id },
+    route_id: row.route_id,
+    driver: payload.driver || (row.driver_id ? { id: row.driver_id } : null),
+    status: row.status,
+    instructions: row.instructions,
+    address: row.address || payload.address,
+    contact: row.contact || payload.contact,
+    timestamps: {
+      ...(payload.timestamps || {}),
+      updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : payload.timestamps?.updated_at
+    }
+  };
+}
+
+function toRouteFromRow(row) {
+  const payload = row?.payload || {};
+  return {
+    ...payload,
+    route_id: row.route_id,
+    farm_id: row.farm_id,
+    date: row.route_date,
+    time_slot: row.time_slot,
+    zone: row.zone_id,
+    status: row.status,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : payload.created_at,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : payload.updated_at
+  };
+}
+
+async function insertDeliveryRecord(farmId, delivery, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    farmStores.deliveries.set(farmId, delivery.delivery_id, delivery);
+    return;
+  }
+  const executor = dbClient || { query };
+  await executor.query(
+    `INSERT INTO delivery_orders (
+      farm_id, delivery_id, order_id, delivery_date, time_slot, zone_id,
+      route_id, driver_id, status, address, contact, instructions, payload, created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13::jsonb, NOW(), NOW()
+    )`,
+    [
+      farmId,
+      delivery.delivery_id,
+      delivery.order_id,
+      delivery.delivery_date,
+      delivery.time_slot,
+      delivery.zone?.id || null,
+      delivery.route_id || null,
+      delivery.driver?.id || null,
+      delivery.status || 'scheduled',
+      JSON.stringify(delivery.address || {}),
+      JSON.stringify(delivery.contact || {}),
+      delivery.instructions || null,
+      JSON.stringify(delivery)
+    ]
+  );
+}
+
+async function getDeliveryRecord(farmId, deliveryId, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    return farmStores.deliveries.get(farmId, deliveryId) || null;
+  }
+  const executor = dbClient || { query };
+  const result = await executor.query(
+    'SELECT * FROM delivery_orders WHERE farm_id = $1 AND delivery_id = $2 LIMIT 1',
+    [farmId, deliveryId]
+  );
+  if (!result.rows.length) return null;
+  return toDeliveryFromRow(result.rows[0]);
+}
+
+async function updateDeliveryRecord(farmId, deliveryId, delivery, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    farmStores.deliveries.set(farmId, deliveryId, delivery);
+    return;
+  }
+  const executor = dbClient || { query };
+  await executor.query(
+    `UPDATE delivery_orders
+     SET route_id = $3,
+         driver_id = $4,
+         status = $5,
+         address = $6::jsonb,
+         contact = $7::jsonb,
+         instructions = $8,
+         payload = $9::jsonb,
+         updated_at = NOW()
+     WHERE farm_id = $1 AND delivery_id = $2`,
+    [
+      farmId,
+      deliveryId,
+      delivery.route_id || null,
+      delivery.driver?.id || null,
+      delivery.status || 'scheduled',
+      JSON.stringify(delivery.address || {}),
+      JSON.stringify(delivery.contact || {}),
+      delivery.instructions || null,
+      JSON.stringify(delivery)
+    ]
+  );
+}
+
+async function listDeliveriesForSlot(farmId, date, timeSlot, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    return farmStores.deliveries.getAllForFarm(farmId)
+      .filter(d => d.delivery_date === date && d.time_slot === timeSlot);
+  }
+  const executor = dbClient || { query };
+  const result = await executor.query(
+    `SELECT *
+       FROM delivery_orders
+      WHERE farm_id = $1
+        AND delivery_date = $2
+        AND time_slot = $3`,
+    [farmId, date, timeSlot]
+  );
+  return result.rows.map(toDeliveryFromRow);
+}
+
+async function listUnassignedScheduledDeliveries(farmId, date, timeSlot, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    return farmStores.deliveries.getAllForFarm(farmId)
+      .filter(d => d.delivery_date === date && d.time_slot === timeSlot && d.status === 'scheduled' && !d.route_id);
+  }
+  const executor = dbClient || { query };
+  const result = await executor.query(
+    `SELECT *
+       FROM delivery_orders
+      WHERE farm_id = $1
+        AND delivery_date = $2
+        AND time_slot = $3
+        AND status = 'scheduled'
+        AND route_id IS NULL
+      ORDER BY created_at ASC`,
+    [farmId, date, timeSlot]
+  );
+  return result.rows.map(toDeliveryFromRow);
+}
+
+async function insertRouteRecord(route, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    routes.set(route.route_id, route);
+    return;
+  }
+  const executor = dbClient || { query };
+  await executor.query(
+    `INSERT INTO delivery_routes (
+      farm_id, route_id, route_date, time_slot, zone_id, status, payload, created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), NOW()
+    )`,
+    [
+      route.farm_id,
+      route.route_id,
+      route.date,
+      route.time_slot,
+      route.zone,
+      route.status,
+      JSON.stringify(route)
+    ]
+  );
+}
+
+async function listRoutesForFarm(farmId, filters = {}, dbClient = null) {
+  if (!isDatabaseEnabled()) {
+    let filtered = Array.from(routes.values()).filter(r => r.farm_id === farmId);
+    if (filters.date) filtered = filtered.filter(r => r.date === filters.date);
+    if (filters.time_slot) filtered = filtered.filter(r => r.time_slot === filters.time_slot);
+    if (filters.status) filtered = filtered.filter(r => r.status === filters.status);
+    return filtered;
+  }
+  const executor = dbClient || { query };
+  const values = [farmId];
+  const clauses = ['farm_id = $1'];
+
+  if (filters.date) {
+    values.push(filters.date);
+    clauses.push(`route_date = $${values.length}`);
+  }
+  if (filters.time_slot) {
+    values.push(filters.time_slot);
+    clauses.push(`time_slot = $${values.length}`);
+  }
+  if (filters.status) {
+    values.push(filters.status);
+    clauses.push(`status = $${values.length}`);
+  }
+
+  const result = await executor.query(
+    `SELECT * FROM delivery_routes WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC`,
+    values
+  );
+  return result.rows.map(toRouteFromRow);
+}
+
 function getDefaultDeliverySettings() {
   return {
     enabled: false,
@@ -86,10 +297,11 @@ function getDefaultDeliverySettings() {
 /**
  * Get delivery settings for a farm (DB-first, in-memory fallback)
  */
-async function getFarmDeliverySettings(farmId) {
+async function getFarmDeliverySettings(farmId, dbClient = null) {
+  const executor = dbClient || { query };
   if (isDatabaseEnabled()) {
     try {
-      const result = await query(
+      const result = await executor.query(
         'SELECT * FROM farm_delivery_settings WHERE farm_id = $1',
         [farmId]
       );
@@ -118,13 +330,14 @@ async function getFarmDeliverySettings(farmId) {
 /**
  * Save delivery settings for a farm (upsert to DB + update in-memory)
  */
-async function saveFarmDeliverySettings(farmId, settings) {
+async function saveFarmDeliverySettings(farmId, settings, dbClient = null) {
+  const executor = dbClient || { query };
   // Always update in-memory
   deliverySettingsByFarm.set(farmId, settings);
 
   if (isDatabaseEnabled()) {
     try {
-      await query(
+      await executor.query(
         `INSERT INTO farm_delivery_settings (farm_id, enabled, base_fee, min_order, lead_time_hours, max_deliveries_per_window, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
@@ -152,10 +365,11 @@ function getDefaultDeliveryWindows() {
 /**
  * Get delivery windows for a farm (DB-first, in-memory fallback)
  */
-async function getFarmDeliveryWindows(farmId) {
+async function getFarmDeliveryWindows(farmId, dbClient = null) {
+  const executor = dbClient || { query };
   if (isDatabaseEnabled()) {
     try {
-      const result = await query(
+      const result = await executor.query(
         'SELECT * FROM farm_delivery_windows WHERE farm_id = $1 ORDER BY window_id',
         [farmId]
       );
@@ -182,14 +396,15 @@ async function getFarmDeliveryWindows(farmId) {
 /**
  * Save delivery windows for a farm (upsert to DB + update in-memory)
  */
-async function saveFarmDeliveryWindows(farmId, windows) {
+async function saveFarmDeliveryWindows(farmId, windows, dbClient = null) {
+  const executor = dbClient || { query };
   // Always update in-memory
   deliveryWindowsByFarm.set(farmId, windows);
 
   if (isDatabaseEnabled()) {
     try {
       for (const w of windows) {
-        await query(
+        await executor.query(
           `INSERT INTO farm_delivery_windows (farm_id, window_id, label, start_time, end_time, active, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, NOW())
            ON CONFLICT (farm_id, window_id) DO UPDATE SET
@@ -237,7 +452,7 @@ function normalizeWindowsInput(input = []) {
  * @param {string} [zone] - optional zone ID
  * @returns {{ ok: boolean, windows: Array, error?: string }}
  */
-async function getWindowAvailability(farmId, date, zone) {
+async function getWindowAvailability(farmId, date, zone, dbClient = null) {
   const deliveryDate = new Date(date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -246,15 +461,29 @@ async function getWindowAvailability(farmId, date, zone) {
     return { ok: false, windows: [], error: 'invalid_date' };
   }
 
-  const settings = await getFarmDeliverySettings(farmId);
-  const configuredWindows = await getFarmDeliveryWindows(farmId);
+  const settings = await getFarmDeliverySettings(farmId, dbClient);
+  const configuredWindows = await getFarmDeliveryWindows(farmId, dbClient);
   const activeWindows = configuredWindows.filter((w) => w.active);
   const effectiveWindowTemplates = activeWindows.length
     ? activeWindows
     : configuredWindows;
 
-  const existingDeliveries = farmStores.deliveries.getAllForFarm(farmId)
-    .filter(d => d.delivery_date === date);
+  let existingDeliveries = [];
+  if (isDatabaseEnabled()) {
+    const executor = dbClient || { query };
+    const result = await executor.query(
+      `SELECT *
+         FROM delivery_orders
+        WHERE farm_id = $1
+          AND delivery_date = $2
+          AND status IN ('scheduled', 'assigned', 'en_route')`,
+      [farmId, date]
+    );
+    existingDeliveries = result.rows.map(toDeliveryFromRow);
+  } else {
+    existingDeliveries = farmStores.deliveries.getAllForFarm(farmId)
+      .filter(d => d.delivery_date === date);
+  }
 
   const windows = effectiveWindowTemplates.map(window => {
     const windowDeliveries = existingDeliveries.filter(d => d.time_slot === window.id);
@@ -732,17 +961,6 @@ router.post('/quote', async (req, res) => {
 });
 
 /**
- * GET /api/farm-sales/delivery/zones
- * Get delivery zones and fee structure
- */
-router.get('/zones', (req, res) => {
-  res.json({
-    ok: true,
-    zones: Object.values(DELIVERY_ZONES)
-  });
-});
-
-/**
  * POST /api/farm-sales/delivery/schedule
  * Schedule delivery for order
  * 
@@ -771,8 +989,11 @@ router.post('/schedule', async (req, res) => {
       });
     }
 
-    // Validate time slot
-    if (!TIME_WINDOWS[time_slot.toUpperCase()]) {
+    const normalizedTimeSlot = String(time_slot || '').trim().toLowerCase();
+    const normalizedZone = String(zone || '').trim().toUpperCase();
+
+    // Validate time slot format
+    if (!TIME_WINDOWS[normalizedTimeSlot.toUpperCase()]) {
       return res.status(400).json({
         ok: false,
         error: 'invalid_time_slot',
@@ -780,8 +1001,131 @@ router.post('/schedule', async (req, res) => {
       });
     }
 
-    // Validate zone
-    const deliveryZone = DELIVERY_ZONES[zone.toUpperCase()];
+    // Atomic reservation when DB is enabled; fallback to in-memory path otherwise.
+    if (isDatabaseEnabled()) {
+      const scheduled = await transaction(async (client) => {
+        const lockKey = `delivery-slot:${farmId}:${delivery_date}:${normalizedTimeSlot}`;
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lockKey]);
+
+        const settings = await getFarmDeliverySettings(farmId, client);
+        const configuredWindows = await getFarmDeliveryWindows(farmId, client);
+        const activeWindows = configuredWindows.filter((w) => w.active);
+        const effectiveWindows = activeWindows.length ? activeWindows : configuredWindows;
+        const selectedWindow = effectiveWindows.find((w) => w.id === normalizedTimeSlot);
+
+        if (!selectedWindow) {
+          return { error: 'invalid_or_inactive_window' };
+        }
+
+        let deliveryZone = null;
+        const zoneResult = await client.query(
+          `SELECT zone_id, name, description, fee, min_order
+             FROM farm_delivery_zones
+            WHERE farm_id = $1 AND zone_id = $2 AND status = 'active'
+            LIMIT 1`,
+          [farmId, normalizedZone]
+        );
+
+        if (zoneResult.rows.length) {
+          const row = zoneResult.rows[0];
+          deliveryZone = {
+            id: row.zone_id,
+            name: row.name,
+            description: row.description || '',
+            fee: Number(row.fee),
+            min_order: Number(row.min_order)
+          };
+        } else {
+          deliveryZone = DELIVERY_ZONES[normalizedZone] || null;
+        }
+
+        if (!deliveryZone) {
+          return { error: 'invalid_zone' };
+        }
+
+        const currentCountResult = await client.query(
+          `SELECT COUNT(*) AS count
+             FROM delivery_orders
+            WHERE farm_id = $1
+              AND delivery_date = $2
+              AND time_slot = $3
+              AND status IN ('scheduled', 'assigned', 'en_route')`,
+          [farmId, delivery_date, normalizedTimeSlot]
+        );
+        const currentCount = Number(currentCountResult.rows[0]?.count || 0);
+        const capacity = Number(settings.max_deliveries_per_window || 20);
+
+        if (currentCount >= capacity) {
+          return { error: 'window_unavailable' };
+        }
+
+        const deliveryId = generateEntityId('DEL');
+        const timestamp = new Date().toISOString();
+        const delivery = {
+          delivery_id: deliveryId,
+          order_id,
+          delivery_date,
+          time_slot: normalizedTimeSlot,
+          window: TIME_WINDOWS[normalizedTimeSlot.toUpperCase()],
+          address,
+          zone: deliveryZone,
+          instructions,
+          contact,
+          status: 'scheduled',
+          route_id: null,
+          driver: null,
+          timestamps: {
+            scheduled_at: timestamp,
+            assigned_at: null,
+            dispatched_at: null,
+            delivered_at: null,
+            updated_at: timestamp
+          },
+          tracking: {
+            status_history: [
+              { status: 'scheduled', timestamp }
+            ]
+          }
+        };
+
+        await insertDeliveryRecord(farmId, delivery, client);
+        return { delivery, fee: Number(deliveryZone.fee || 0) };
+      });
+
+      if (scheduled.error) {
+        if (scheduled.error === 'window_unavailable') {
+          return res.status(400).json({
+            ok: false,
+            error: 'window_unavailable',
+            message: 'Selected delivery window is full'
+          });
+        }
+        if (scheduled.error === 'invalid_or_inactive_window') {
+          return res.status(400).json({
+            ok: false,
+            error: 'invalid_time_slot',
+            message: 'Selected time slot is not active for this farm'
+          });
+        }
+        if (scheduled.error === 'invalid_zone') {
+          return res.status(400).json({
+            ok: false,
+            error: 'invalid_zone',
+            message: 'Selected zone is not valid for this farm'
+          });
+        }
+      }
+
+      return res.status(201).json({
+        ok: true,
+        delivery_id: scheduled.delivery.delivery_id,
+        delivery: scheduled.delivery,
+        fee: scheduled.fee
+      });
+    }
+
+    // Non-DB fallback path
+    const deliveryZone = DELIVERY_ZONES[normalizedZone];
     if (!deliveryZone) {
       return res.status(400).json({
         ok: false,
@@ -790,10 +1134,8 @@ router.post('/schedule', async (req, res) => {
       });
     }
 
-    // Check window availability (direct call — replaces self-fetch anti-pattern F-9)
-    const windowData = await getWindowAvailability(farmId, delivery_date, zone);
-    const selectedWindow = windowData.windows?.find(w => w.id === time_slot);
-
+    const windowData = await getWindowAvailability(farmId, delivery_date, normalizedZone);
+    const selectedWindow = windowData.windows?.find(w => w.id === normalizedTimeSlot);
     if (!selectedWindow?.available) {
       return res.status(400).json({
         ok: false,
@@ -804,20 +1146,18 @@ router.post('/schedule', async (req, res) => {
 
     const deliveryId = farmStores.deliveries.generateId(farmId, 'DEL', 6);
     const timestamp = new Date().toISOString();
-
-    // Create delivery
     const delivery = {
       delivery_id: deliveryId,
       order_id,
       delivery_date,
-      time_slot,
-      window: TIME_WINDOWS[time_slot.toUpperCase()],
+      time_slot: normalizedTimeSlot,
+      window: TIME_WINDOWS[normalizedTimeSlot.toUpperCase()],
       address,
       zone: deliveryZone,
       instructions,
       contact,
       status: 'scheduled',
-      route_id: null, // Assigned when route is optimized
+      route_id: null,
       driver: null,
       timestamps: {
         scheduled_at: timestamp,
@@ -833,7 +1173,7 @@ router.post('/schedule', async (req, res) => {
       }
     };
 
-    farmStores.deliveries.set(farmId, deliveryId, delivery);
+    await insertDeliveryRecord(farmId, delivery);
 
     res.status(201).json({
       ok: true,
@@ -856,23 +1196,28 @@ router.post('/schedule', async (req, res) => {
  * GET /api/farm-sales/delivery/:deliveryId
  * Get delivery status and tracking
  */
-router.get('/:deliveryId', (req, res) => {
-  const { deliveryId } = req.params;
-  const farmId = req.farm_id;
-  const delivery = farmStores.deliveries.get(farmId, deliveryId);
+router.get('/:deliveryId', async (req, res) => {
+  try {
+    const { deliveryId } = req.params;
+    const farmId = req.farm_id;
+    const delivery = await getDeliveryRecord(farmId, deliveryId);
 
-  if (!delivery) {
-    return res.status(404).json({
-      ok: false,
-      error: 'delivery_not_found',
-      delivery_id: deliveryId
+    if (!delivery) {
+      return res.status(404).json({
+        ok: false,
+        error: 'delivery_not_found',
+        delivery_id: deliveryId
+      });
+    }
+
+    return res.json({
+      ok: true,
+      delivery
     });
+  } catch (error) {
+    console.error('[farm-sales] Delivery get failed:', error);
+    return res.status(500).json({ ok: false, error: 'delivery_get_failed', message: error.message });
   }
-
-  res.json({
-    ok: true,
-    delivery
-  });
 });
 
 /**
@@ -886,12 +1231,12 @@ router.get('/:deliveryId', (req, res) => {
  *   notes?: string
  * }
  */
-router.patch('/:deliveryId', (req, res) => {
+router.patch('/:deliveryId', async (req, res) => {
   try {
     const { deliveryId } = req.params;
     const { status, driver, notes } = req.body;
     const farmId = req.farm_id;
-    const delivery = farmStores.deliveries.get(farmId, deliveryId);
+    const delivery = await getDeliveryRecord(farmId, deliveryId);
 
     if (!delivery) {
       return res.status(404).json({
@@ -906,6 +1251,8 @@ router.patch('/:deliveryId', (req, res) => {
     // Update status
     if (status) {
       delivery.status = status;
+      delivery.tracking = delivery.tracking || { status_history: [] };
+      delivery.tracking.status_history = delivery.tracking.status_history || [];
       delivery.tracking.status_history.push({
         status,
         timestamp,
@@ -929,8 +1276,9 @@ router.patch('/:deliveryId', (req, res) => {
       delivery.driver = driver;
     }
 
+    delivery.timestamps = delivery.timestamps || {};
     delivery.timestamps.updated_at = timestamp;
-    farmStores.deliveries.set(farmId, deliveryId, delivery);
+    await updateDeliveryRecord(farmId, deliveryId, delivery);
 
     res.json({
       ok: true,
@@ -958,7 +1306,7 @@ router.patch('/:deliveryId', (req, res) => {
  *   driver_count?: number (default 2)
  * }
  */
-router.post('/routes/optimize', (req, res) => {
+router.post('/routes/optimize', async (req, res) => {
   try {
     const { date, time_slot, driver_count = 2 } = req.body;
     const farmId = req.farm_id;
@@ -972,13 +1320,8 @@ router.post('/routes/optimize', (req, res) => {
     }
 
     // Get unassigned deliveries for this date/window (farm-scoped)
-    const unassignedDeliveries = farmStores.deliveries.getAllForFarm(farmId)
-      .filter(d => 
-        d.delivery_date === date &&
-        d.time_slot === time_slot &&
-        d.status === 'scheduled' &&
-        !d.route_id
-      );
+    const normalizedTimeSlot = String(time_slot || '').trim().toLowerCase();
+    const unassignedDeliveries = await listUnassignedScheduledDeliveries(farmId, date, normalizedTimeSlot);
 
     if (unassignedDeliveries.length === 0) {
       return res.json({
@@ -1001,20 +1344,20 @@ router.post('/routes/optimize', (req, res) => {
     const optimizedRoutes = [];
     let driverIndex = 1;
 
-    Object.entries(routesByZone).forEach(([zone, zoneDeliveries]) => {
+    for (const [zone, zoneDeliveries] of Object.entries(routesByZone)) {
       // Split zone deliveries across drivers
       const deliveriesPerDriver = Math.ceil(zoneDeliveries.length / driver_count);
       
       for (let i = 0; i < zoneDeliveries.length; i += deliveriesPerDriver) {
         const routeDeliveries = zoneDeliveries.slice(i, i + deliveriesPerDriver);
-        const routeId = `RT-${String(routeSequence.current++).padStart(4, '0')}`;
+        const routeId = generateEntityId('RT');
         const timestamp = new Date().toISOString();
 
         const route = {
           route_id: routeId,
           farm_id: farmId,
           date,
-          time_slot,
+          time_slot: normalizedTimeSlot,
           zone,
           driver_number: driverIndex++,
           status: 'pending',
@@ -1033,18 +1376,19 @@ router.post('/routes/optimize', (req, res) => {
           created_at: timestamp
         };
 
-        routes.set(routeId, route);
+        await insertRouteRecord(route);
         optimizedRoutes.push(route);
 
         // Assign route to deliveries
-        routeDeliveries.forEach(delivery => {
+        for (const delivery of routeDeliveries) {
           delivery.route_id = routeId;
           delivery.status = 'assigned';
+          delivery.timestamps = delivery.timestamps || {};
           delivery.timestamps.assigned_at = timestamp;
-          farmStores.deliveries.set(farmId, delivery.delivery_id, delivery);
-        });
+          await updateDeliveryRecord(farmId, delivery.delivery_id, delivery);
+        }
       }
-    });
+    }
 
     res.json({
       ok: true,
@@ -1071,23 +1415,16 @@ router.post('/routes/optimize', (req, res) => {
  * - time_slot: Filter by time slot
  * - status: Filter by status
  */
-router.get('/routes', (req, res) => {
+router.get('/routes', async (req, res) => {
   try {
     const { date, time_slot, status } = req.query;
     const farmId = req.farm_id;
-    
-    // Tenant isolation: only return routes belonging to this farm
-    let filtered = Array.from(routes.values()).filter(r => r.farm_id === farmId);
 
-    if (date) {
-      filtered = filtered.filter(r => r.date === date);
-    }
-    if (time_slot) {
-      filtered = filtered.filter(r => r.time_slot === time_slot);
-    }
-    if (status) {
-      filtered = filtered.filter(r => r.status === status);
-    }
+    const filtered = await listRoutesForFarm(farmId, {
+      date,
+      time_slot,
+      status
+    });
 
     res.json({
       ok: true,

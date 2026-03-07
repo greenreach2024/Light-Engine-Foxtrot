@@ -765,6 +765,10 @@
         <span>Tax (8%):</span>
         <span id="cart-tax">$0.00</span>
       </div>
+      <div class="summary-row" id="cart-delivery-row" style="display: none;">
+        <span>Delivery Fee:</span>
+        <span id="cart-delivery-fee">$0.00</span>
+      </div>
       <div class="summary-row total">
         <span>Total:</span>
         <span id="cart-total">$0.00</span>
@@ -825,7 +829,7 @@
               </div>
               <div class="form-group">
                 <label for="delivery-time">Time Window *</label>
-                <select id="delivery-time" required>
+                <select id="delivery-time" required onchange="refreshTotals()">
                   <option value="morning">Morning (8am-12pm)</option>
                   <option value="afternoon">Afternoon (12pm-5pm)</option>
                   <option value="evening">Evening (5pm-8pm)</option>
@@ -849,6 +853,13 @@
             </select>
           </div>
           
+          <div id="delivery-quote-message" class="alert alert-error hidden"></div>
+
+          <div class="summary-row" id="modal-delivery-row" style="margin: 0.5rem 0; display: none;">
+            <span>Delivery Fee:</span>
+            <span id="modal-delivery-fee">$0.00</span>
+          </div>
+
           <div class="summary-row total" style="margin: 2rem 0;">
             <span>Total Due:</span>
             <span id="modal-total">$0.00</span>
@@ -867,6 +878,8 @@
     let subscriptionPlans = [];
     let cart = [];
     let currentCategory = 'all';
+    let checkoutToken = null;
+    let deliveryQuoteState = { fee: 0, eligible: true, reason: null, minimum_order: 0 };
     
     // Category icons removed
     const categoryIcons = {};
@@ -1105,15 +1118,104 @@
         `).join('');
       }
       
-      // Calculate totals
-      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
-      const total = subtotal + tax;
-      
+      refreshTotals();
+    }
+
+    function computeSubtotal() {
+      return cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+    }
+
+    function computeTax(subtotal) {
+      return subtotal * 0.08;
+    }
+
+    async function getCheckoutToken() {
+      if (checkoutToken) return checkoutToken;
+      const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+      const tokensData = await tokensResponse.json();
+      checkoutToken = tokensData.tokens?.[selectedFarm]?.manager || null;
+      return checkoutToken;
+    }
+
+    async function refreshDeliveryQuote() {
+      const deliveryType = document.getElementById('delivery-type').value;
+      const messageEl = document.getElementById('delivery-quote-message');
+      messageEl.classList.add('hidden');
+      messageEl.textContent = '';
+
+      if (deliveryType !== 'delivery' || cart.length === 0) {
+        deliveryQuoteState = { fee: 0, eligible: true, reason: null, minimum_order: 0 };
+        return;
+      }
+
+      try {
+        const token = await getCheckoutToken();
+        if (!token) throw new Error('Unable to get checkout token');
+
+        const subtotal = computeSubtotal();
+        const timeSlot = document.getElementById('delivery-time').value || 'morning';
+        const response = await fetch('/api/farm-sales/delivery/quote', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            subtotal,
+            zone: 'ZONE_A',
+            requested_window: timeSlot
+          })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        }
+
+        deliveryQuoteState = {
+          fee: Number(data.fee || 0),
+          eligible: data.eligible !== false,
+          reason: data.reason || null,
+          minimum_order: Number(data.minimum_order || 0)
+        };
+
+        if (deliveryQuoteState.reason === 'below_minimum_order') {
+          messageEl.textContent = `Delivery requires minimum order of $${deliveryQuoteState.minimum_order.toFixed(2)}.`;
+          messageEl.classList.remove('hidden');
+        } else if (deliveryQuoteState.reason === 'window_unavailable') {
+          messageEl.textContent = 'Selected delivery time window is currently unavailable.';
+          messageEl.classList.remove('hidden');
+        } else if (deliveryQuoteState.reason === 'delivery_disabled') {
+          messageEl.textContent = 'Delivery is currently disabled for this farm.';
+          messageEl.classList.remove('hidden');
+        }
+      } catch (error) {
+        deliveryQuoteState = { fee: 0, eligible: false, reason: 'quote_failed', minimum_order: 0 };
+        messageEl.textContent = `Unable to quote delivery fee: ${error.message}`;
+        messageEl.classList.remove('hidden');
+      }
+    }
+
+    async function refreshTotals() {
+      await refreshDeliveryQuote();
+
+      const subtotal = computeSubtotal();
+      const tax = computeTax(subtotal);
+      const deliveryFee = document.getElementById('delivery-type').value === 'delivery'
+        ? Number(deliveryQuoteState.fee || 0)
+        : 0;
+      const total = subtotal + tax + deliveryFee;
+
       document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
       document.getElementById('cart-tax').textContent = `$${tax.toFixed(2)}`;
       document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
       document.getElementById('modal-total').textContent = `$${total.toFixed(2)}`;
+
+      const cartDeliveryRow = document.getElementById('cart-delivery-row');
+      const modalDeliveryRow = document.getElementById('modal-delivery-row');
+      cartDeliveryRow.style.display = deliveryFee > 0 ? '' : 'none';
+      modalDeliveryRow.style.display = deliveryFee > 0 ? '' : 'none';
+      document.getElementById('cart-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
+      document.getElementById('modal-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
     }
     
     function toggleCart() {
@@ -1124,6 +1226,7 @@
     function openCheckoutModal() {
       if (cart.length === 0) return;
       document.getElementById('checkout-modal').classList.add('active');
+      refreshTotals();
       toggleCart(); // Close cart sidebar
     }
     
@@ -1145,6 +1248,8 @@
         fields.style.display = 'block';
         addressField.required = true;
       }
+
+      refreshTotals();
     }
     
     // Submit order
@@ -1156,9 +1261,13 @@
         return;
       }
       
-      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
-      const total = subtotal + tax;
+      await refreshTotals();
+      const subtotal = computeSubtotal();
+      const tax = computeTax(subtotal);
+      const deliveryFee = document.getElementById('delivery-type').value === 'delivery'
+        ? Number(deliveryQuoteState.fee || 0)
+        : 0;
+      const total = subtotal + tax + deliveryFee;
       
       const orderData = {
         channel: 'd2c',
@@ -1185,11 +1294,19 @@
       
       // Add delivery info if delivery selected
       if (document.getElementById('delivery-type').value === 'delivery') {
+        if (!deliveryQuoteState.eligible) {
+          const reason = deliveryQuoteState.reason === 'below_minimum_order'
+            ? `Minimum order for delivery is $${deliveryQuoteState.minimum_order.toFixed(2)}.`
+            : 'Delivery is currently unavailable for this order.';
+          throw new Error(reason);
+        }
+
         orderData.delivery = {
           method: 'delivery',
           address: document.getElementById('delivery-address').value,
           delivery_date: document.getElementById('delivery-date').value,
-          time_slot: document.getElementById('delivery-time').value
+          time_slot: document.getElementById('delivery-time').value,
+          fee: deliveryFee
         };
       } else {
         orderData.delivery = {
@@ -1200,9 +1317,7 @@
       
       try {
         // Get token for order submission
-        const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
-        const tokensData = await tokensResponse.json();
-        const token = tokensData.tokens[selectedFarm].manager;
+        const token = await getCheckoutToken();
         
         const response = await fetch('/api/farm-sales/orders', {
           method: 'POST',

@@ -10324,7 +10324,14 @@ function editProduct(sku) {
 
 async function loadDeliveryManagement() {
     try {
-        const res = await fetch('/api/admin/delivery/config');
+        const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+        if (!farmId) {
+            renderDeliveryZones([]);
+            renderDrivers([]);
+            return;
+        }
+
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/delivery/config?farm_id=${encodeURIComponent(farmId)}`);
         const data = res.ok ? await res.json() : null;
         
         if (data && data.success) {
@@ -10395,7 +10402,7 @@ function renderDeliveryZones(zones) {
     tbody.innerHTML = zones.map(z => {
         const windows = Array.isArray(z.windows) ? z.windows.join(', ') : z.windows || 'All';
         const statusColor = z.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
-        return `<tr>
+        return `<tr data-zone-id="${escapeHtml(String(z.id || ''))}">
             <td><strong>${z.name || z.id}</strong></td>
             <td>${z.description || '—'}</td>
             <td>$${parseFloat(z.fee || 0).toFixed(2)}</td>
@@ -10418,7 +10425,7 @@ function renderDrivers(drivers) {
     tbody.innerHTML = drivers.map(d => {
         const zonesStr = Array.isArray(d.zones) ? d.zones.join(', ') : d.zones || '—';
         const statusColor = d.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
-        return `<tr>
+        return `<tr data-driver-id="${escapeHtml(String(d.id || ''))}">
             <td><strong>${d.name || '—'}</strong></td>
             <td>${d.phone || '—'}</td>
             <td>${d.vehicle || '—'}</td>
@@ -10454,14 +10461,21 @@ function renderFeeDistribution(fees) {
 
 async function saveDeliverySettings(event) {
     event.preventDefault();
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to update delivery settings.');
+        return;
+    }
+
     const config = {
+        farm_id: farmId,
         base_fee: parseFloat(document.getElementById('delivery-base-fee').value),
         min_order: parseFloat(document.getElementById('delivery-min-order').value),
         enabled: document.getElementById('delivery-enabled').value === 'true'
     };
     
     try {
-        const res = await fetch('/api/admin/delivery/config', {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/delivery/config`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -10469,6 +10483,7 @@ async function saveDeliverySettings(event) {
         const data = await res.json();
         if (data.success) {
             alert('Delivery settings saved!');
+            await loadDeliveryManagement();
         } else {
             alert(`Error: ${data.error || 'Failed to save settings'}`);
         }
@@ -10479,6 +10494,12 @@ async function saveDeliverySettings(event) {
 }
 
 function showAddZoneModal() {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to create a zone.');
+        return;
+    }
+
     const id = prompt('Zone ID (e.g. ZONE_D):');
     if (!id) return;
     const name = prompt('Zone name (e.g. Zone D — Remote):');
@@ -10486,31 +10507,206 @@ function showAddZoneModal() {
     const fee = prompt('Delivery fee ($):');
     if (!fee) return;
     const minOrder = prompt('Minimum order amount ($):') || '25';
+    const description = prompt('Description (optional):') || '';
+    const postalPrefix = prompt('Postal prefix (optional, e.g. K7):') || '';
     
-    alert(`Zone "${name}" would be created with $${fee} delivery fee and $${minOrder} minimum.\n\nDelivery zone management API coming soon.`);
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    id: id.trim(),
+                    name: name.trim(),
+                    description: description.trim(),
+                    fee: parseFloat(fee),
+                    min_order: parseFloat(minOrder),
+                    postal_prefix: postalPrefix.trim() || null
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Zone ${id.trim()} created successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Add zone failed:', error);
+            alert(`Failed to create zone: ${error.message}`);
+        }
+    })();
 }
 
 function showAddDriverModal() {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to add a driver.');
+        return;
+    }
+
     const name = prompt('Driver name:');
     if (!name) return;
     const phone = prompt('Phone number:');
     if (!phone) return;
     const vehicle = prompt('Vehicle description (e.g. Sprinter Van):');
+    const email = prompt('Email (optional):') || '';
     const zones = prompt('Assigned zones (comma-separated, e.g. ZONE_A, ZONE_B):') || 'ZONE_A';
-    
-    alert(`Driver "${name}" would be added and assigned to ${zones}.\n\nDriver management API coming soon.`);
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    email: email.trim(),
+                    vehicle: (vehicle || '').trim(),
+                    zones: zones.split(',').map(z => z.trim()).filter(Boolean)
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Driver ${name.trim()} added successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Add driver failed:', error);
+            alert(`Failed to add driver: ${error.message}`);
+        }
+    })();
 }
 
 function editDeliveryZone(zoneId) {
-    alert(`Edit zone ${zoneId}\n\nZone editing will be available when the delivery admin API is fully implemented.`);
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to edit a zone.');
+        return;
+    }
+
+    const row = document.querySelector(`#delivery-zones-tbody tr[data-zone-id="${CSS.escape(zoneId)}"]`);
+    const nameDefault = row?.children?.[0]?.innerText || zoneId;
+    const descDefault = row?.children?.[1]?.innerText === '—' ? '' : (row?.children?.[1]?.innerText || '');
+    const feeDefault = (row?.children?.[2]?.innerText || '$0').replace('$', '');
+    const minDefault = (row?.children?.[3]?.innerText || '$25').replace('$', '');
+
+    const name = prompt(`Zone name (${zoneId}):`, nameDefault);
+    if (name == null) return;
+    const description = prompt('Description:', descDefault);
+    if (description == null) return;
+    const fee = prompt('Delivery fee ($):', feeDefault);
+    if (fee == null) return;
+    const minOrder = prompt('Minimum order ($):', minDefault);
+    if (minOrder == null) return;
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    name: name.trim(),
+                    description: description.trim(),
+                    fee: parseFloat(fee),
+                    min_order: parseFloat(minOrder)
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Zone ${zoneId} updated successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Edit zone failed:', error);
+            alert(`Failed to update zone: ${error.message}`);
+        }
+    })();
 }
 
 function editDriver(driverId) {
-    alert(`Edit driver ${driverId}\n\nDriver editing will be available when the delivery admin API is fully implemented.`);
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to edit a driver.');
+        return;
+    }
+
+    const row = document.querySelector(`#drivers-tbody tr[data-driver-id="${CSS.escape(driverId)}"]`);
+    const nameDefault = row?.children?.[0]?.innerText || '';
+    const phoneDefault = row?.children?.[1]?.innerText || '';
+    const vehicleDefault = row?.children?.[2]?.innerText === '—' ? '' : (row?.children?.[2]?.innerText || '');
+    const zonesDefault = row?.children?.[3]?.innerText === '—' ? '' : (row?.children?.[3]?.innerText || '');
+
+    const name = prompt('Driver name:', nameDefault);
+    if (name == null) return;
+    const phone = prompt('Phone number:', phoneDefault);
+    if (phone == null) return;
+    const vehicle = prompt('Vehicle:', vehicleDefault);
+    if (vehicle == null) return;
+    const zones = prompt('Assigned zones (comma-separated):', zonesDefault);
+    if (zones == null) return;
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers/${encodeURIComponent(driverId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    vehicle: vehicle.trim(),
+                    zones: zones.split(',').map(z => z.trim()).filter(Boolean)
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Driver ${driverId} updated successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Edit driver failed:', error);
+            alert(`Failed to update driver: ${error.message}`);
+        }
+    })();
 }
 
 function toggleDriverStatus(driverId) {
-    alert(`Toggle status for driver ${driverId}\n\nDriver status management will be available when the delivery admin API is fully implemented.`);
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to update driver status.');
+        return;
+    }
+
+    const row = document.querySelector(`#drivers-tbody tr[data-driver-id="${CSS.escape(driverId)}"]`);
+    const statusCell = row?.children?.[6]?.innerText?.trim()?.toLowerCase();
+    const nextStatus = statusCell === 'active' ? 'inactive' : 'active';
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers/${encodeURIComponent(driverId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    status: nextStatus
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Toggle driver status failed:', error);
+            alert(`Failed to update driver status: ${error.message}`);
+        }
+    })();
 }
 
 // ==============================================================================

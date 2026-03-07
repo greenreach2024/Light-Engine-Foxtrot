@@ -38,13 +38,43 @@ const deliveryConfig = {
   }
 };
 
+function extractFarmId(req) {
+  return req.query.farm_id || req.body?.farm_id || req.headers['x-farm-id'] || null;
+}
+
+async function getDriversForFarm(farmId) {
+  if (!isDatabaseAvailable()) {
+    return deliveryConfig.drivers;
+  }
+  const result = await query(
+    `SELECT driver_id, name, phone, email, vehicle, zones, deliveries_30d, rating, status, hired_at, updated_at
+       FROM delivery_drivers
+      WHERE farm_id = $1
+      ORDER BY name ASC`,
+    [farmId]
+  );
+  return result.rows.map(r => ({
+    id: r.driver_id,
+    name: r.name,
+    phone: r.phone,
+    email: r.email || '',
+    vehicle: r.vehicle || '',
+    zones: Array.isArray(r.zones) ? r.zones : [],
+    deliveries_30d: Number(r.deliveries_30d || 0),
+    rating: r.rating == null ? null : Number(r.rating),
+    status: r.status || 'active',
+    hired_at: r.hired_at,
+    updated_at: r.updated_at
+  }));
+}
+
 /**
  * GET /config - Get full delivery configuration for a farm
  * Query: ?farm_id=XXX (required)
  */
 router.get('/config', async (req, res) => {
   try {
-    const farmId = req.query.farm_id;
+    const farmId = extractFarmId(req);
     if (!farmId) {
       return res.status(400).json({ success: false, error: 'farm_id query parameter is required' });
     }
@@ -71,9 +101,11 @@ router.get('/config', async (req, res) => {
       }));
     }
 
+    const drivers = await getDriversForFarm(farmId);
+
     res.json({
       success: true,
-      config: { ...settings, zones, drivers: deliveryConfig.drivers, stats: deliveryConfig.stats }
+      config: { ...settings, zones, drivers, stats: deliveryConfig.stats }
     });
   } catch (error) {
     console.error('[Admin Delivery] Config get failed:', error);
@@ -126,7 +158,7 @@ router.put('/config', async (req, res) => {
  */
 router.get('/zones', async (req, res) => {
   try {
-    const farmId = req.query.farm_id;
+    const farmId = extractFarmId(req);
     if (!farmId) {
       return res.status(400).json({ success: false, error: 'farm_id query parameter is required' });
     }
@@ -241,7 +273,7 @@ router.put('/zones/:id', async (req, res) => {
 router.delete('/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
-    const farmId = req.query.farm_id || req.body?.farm_id;
+    const farmId = extractFarmId(req);
     if (!farmId) {
       return res.status(400).json({ success: false, error: 'farm_id is required' });
     }
@@ -269,18 +301,30 @@ router.delete('/zones/:id', async (req, res) => {
  * GET /drivers - List all drivers
  */
 router.get('/drivers', (req, res) => {
-  res.json({
-    success: true,
-    drivers: deliveryConfig.drivers
-  });
+  const farmId = extractFarmId(req);
+  if (!farmId) {
+    return res.status(400).json({ success: false, error: 'farm_id is required' });
+  }
+
+  getDriversForFarm(farmId)
+    .then(drivers => res.json({ success: true, drivers }))
+    .catch(error => {
+      console.error('[Admin Delivery] Drivers list failed:', error);
+      res.status(500).json({ success: false, error: error.message });
+    });
 });
 
 /**
  * POST /drivers - Add a new driver
  */
-router.post('/drivers', (req, res) => {
-  const { name, phone, vehicle, zones, email } = req.body;
+router.post('/drivers', async (req, res) => {
+  const { farm_id, name, phone, vehicle, zones, email } = req.body;
+  const farmId = farm_id || extractFarmId(req);
   
+  if (!farmId) {
+    return res.status(400).json({ success: false, error: 'farm_id is required' });
+  }
+
   if (!name || !phone) {
     return res.status(400).json({ success: false, error: 'Driver name and phone are required' });
   }
@@ -298,22 +342,104 @@ router.post('/drivers', (req, res) => {
     hired_at: new Date().toISOString()
   };
   
+  if (isDatabaseAvailable()) {
+    try {
+      await query(
+        `INSERT INTO delivery_drivers (
+          farm_id, driver_id, name, phone, email, vehicle, zones,
+          deliveries_30d, rating, status, hired_at, updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7::jsonb,
+          $8, $9, $10, $11, NOW()
+        )`,
+        [
+          farmId,
+          driver.id,
+          driver.name,
+          driver.phone,
+          driver.email,
+          driver.vehicle,
+          JSON.stringify(driver.zones || []),
+          driver.deliveries_30d,
+          driver.rating,
+          driver.status,
+          driver.hired_at
+        ]
+      );
+      console.log('[Admin Delivery] Driver added:', driver.id, driver.name, 'farm:', farmId);
+      return res.json({ success: true, driver });
+    } catch (error) {
+      console.error('[Admin Delivery] Driver create failed:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
   deliveryConfig.drivers.push(driver);
-  console.log('[Admin Delivery] Driver added:', driver.id, driver.name);
-  
-  res.json({ success: true, driver });
+  console.log('[Admin Delivery] Driver added (in-memory):', driver.id, driver.name);
+  return res.json({ success: true, driver });
 });
 
 /**
  * PUT /drivers/:id - Update a driver
  */
-router.put('/drivers/:id', (req, res) => {
-  const driver = deliveryConfig.drivers.find(d => d.id === req.params.id);
+router.put('/drivers/:id', async (req, res) => {
+  const farmId = extractFarmId(req);
+  if (!farmId) {
+    return res.status(400).json({ success: false, error: 'farm_id is required' });
+  }
+
+  const driverId = req.params.id;
+  const { name, phone, vehicle, zones, email, status } = req.body;
+
+  if (isDatabaseAvailable()) {
+    try {
+      const existing = await query(
+        `SELECT * FROM delivery_drivers WHERE farm_id = $1 AND driver_id = $2 LIMIT 1`,
+        [farmId, driverId]
+      );
+      if (!existing.rows.length) {
+        return res.status(404).json({ success: false, error: 'Driver not found' });
+      }
+
+      const row = existing.rows[0];
+      await query(
+        `UPDATE delivery_drivers
+            SET name = $3,
+                phone = $4,
+                email = $5,
+                vehicle = $6,
+                zones = $7::jsonb,
+                status = $8,
+                updated_at = NOW()
+          WHERE farm_id = $1
+            AND driver_id = $2`,
+        [
+          farmId,
+          driverId,
+          name !== undefined ? name : row.name,
+          phone !== undefined ? phone : row.phone,
+          email !== undefined ? email : row.email,
+          vehicle !== undefined ? vehicle : row.vehicle,
+          JSON.stringify(zones !== undefined ? zones : (Array.isArray(row.zones) ? row.zones : [])),
+          status !== undefined ? status : row.status
+        ]
+      );
+
+      const updated = await getDriversForFarm(farmId);
+      const driver = updated.find(d => d.id === driverId);
+      console.log('[Admin Delivery] Driver updated:', driverId, 'farm:', farmId);
+      return res.json({ success: true, driver });
+    } catch (error) {
+      console.error('[Admin Delivery] Driver update failed:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  const driver = deliveryConfig.drivers.find(d => d.id === driverId);
   if (!driver) {
     return res.status(404).json({ success: false, error: 'Driver not found' });
   }
-  
-  const { name, phone, vehicle, zones, email, status } = req.body;
+
   if (name !== undefined) driver.name = name;
   if (phone !== undefined) driver.phone = phone;
   if (email !== undefined) driver.email = email;
@@ -321,9 +447,9 @@ router.put('/drivers/:id', (req, res) => {
   if (zones !== undefined) driver.zones = zones;
   if (status !== undefined) driver.status = status;
   driver.updated_at = new Date().toISOString();
-  
-  console.log('[Admin Delivery] Driver updated:', driver.id);
-  res.json({ success: true, driver });
+
+  console.log('[Admin Delivery] Driver updated (in-memory):', driver.id);
+  return res.json({ success: true, driver });
 });
 
 /**
@@ -362,7 +488,7 @@ router.get('/readiness', async (req, res) => {
       min_order: Number(r.min_order),
       active_windows: Number(r.active_windows),
       active_zones: Number(r.active_zones),
-      ready: r.enabled && Number(r.active_windows) > 0
+      ready: r.enabled && Number(r.active_windows) > 0 && Number(r.active_zones) > 0
     }));
 
     res.json({
