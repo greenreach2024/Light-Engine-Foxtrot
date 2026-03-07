@@ -73,7 +73,7 @@ GET /api/weather?lat=44.2588&lng=-76.3729
 
 | ID | Severity | Description | Status |
 |----|----------|-------------|--------|
-| **W-1** | Low | `/ingest/env` endpoint accepts unauthenticated data with no device registry validation | Open — recommend adding auth + device ID check |
+| **W-1** | ~~Low~~ | ~~`/ingest/env` endpoint accepts unauthenticated data with no device registry validation~~ | **Resolved** — `3b47e64` (auth + device check) |
 | **W-2** | Info | 78 crop groups have 0 plan assignments | Confirmed not a bug — plans assigned at zone/room level |
 | **W-3** | Info | EB platform version advisory | Non-blocking — current version stable |
 | **S-1** | Resolved | Phantom sources inflating zone averages | **Fixed** — `077969f` + `a789d77` |

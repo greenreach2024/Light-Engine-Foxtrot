@@ -1038,6 +1038,18 @@ All ML models that use outdoor weather data (`outside_temperature_c`, `outside_h
 
 **Commits:** `077969f` (prune + filter), `a789d77` (soft fallback refinement)
 
+### 2026-03-06: /ingest/env Authentication + Device Validation
+
+**Root cause:** The `/ingest/env` POST endpoint was completely unauthenticated — any HTTP POST could create arbitrary zone sources in `env.json`. This is how phantom source `sb-meter-test` entered the system.
+
+| Fix | Description | Files Modified |
+|-----|-------------|----------------|
+| **Password authentication** | Requires `x-farm-password` header or `password` field in body matching `ADMIN_PASSWORD` env var. Returns 401 on failure. | server-foxtrot.js |
+| **Device registry validation** | When `source` field is provided, validates against `iot-devices.json` device IDs. Unregistered sources are rejected with 403. | server-foxtrot.js |
+| **Verified live** | Test results: no auth → 401, wrong password → 401, valid auth + unregistered device → 403, valid auth + registered device → 200 `{ok:true}` | — |
+
+**Commit:** `3b47e64`
+
 ---
 
 ## Appendix A: farm_data data_type Quick Reference
