@@ -24372,10 +24372,39 @@ async function loadEnvZonesPayload(query = {}) {
 
 // POST: ingest a telemetry message and upsert into env.json
 // Expected body: { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source }
+// Requires authentication: x-farm-password header or password field in body
+// Requires device validation: source must match a registered device in iot-devices.json
 app.post("/ingest/env", async (req, res) => {
   try {
+    // ── Authentication ──────────────────────────────────────────────────
+    const password = req.headers['x-farm-password'] || req.body?.password;
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    if (!password || password !== adminPassword) {
+      console.warn(`[ingest/env] Auth rejected — invalid or missing password from ${req.ip}`);
+      return res.status(401).json({ ok: false, error: "Authentication required. Provide x-farm-password header or password in body." });
+    }
+
     const { zoneId, name, temperature, humidity, vpd, co2, battery, rssi, source } = req.body || {};
     if (!zoneId) return res.status(400).json({ ok: false, error: "zoneId required" });
+
+    // ── Device registry validation ──────────────────────────────────────
+    // The source field must correspond to a device ID in iot-devices.json.
+    // This prevents phantom sources from being created by arbitrary POST requests.
+    if (source) {
+      const IOT_DEVICES_PATH = path.join(PUBLIC_DIR, 'data', 'iot-devices.json');
+      let registeredIds = new Set();
+      try {
+        if (fs.existsSync(IOT_DEVICES_PATH)) {
+          const parsed = JSON.parse(fs.readFileSync(IOT_DEVICES_PATH, 'utf8'));
+          const devices = Array.isArray(parsed) ? parsed : (parsed?.devices || []);
+          registeredIds = new Set(devices.map(d => d.id || d.deviceId).filter(Boolean));
+        }
+      } catch (_) { /* if registry can't be read, skip validation */ }
+      if (registeredIds.size > 0 && !registeredIds.has(source)) {
+        console.warn(`[ingest/env] Rejected unregistered source "${source}" for ${zoneId} — not in iot-devices.json`);
+        return res.status(403).json({ ok: false, error: `Source device "${source}" is not registered in iot-devices.json. Register the device first.` });
+      }
+    }
     
     // Load/ensure in-memory state
     const data = await ensureEnvCacheLoaded();
