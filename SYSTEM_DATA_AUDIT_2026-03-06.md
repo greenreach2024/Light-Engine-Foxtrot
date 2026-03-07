@@ -1026,6 +1026,18 @@ All ML models that use outdoor weather data (`outside_temperature_c`, `outside_h
 | **Fahrenheit guard fix** | Fahrenheit detection now also scrubs per-source histories that contain values > 40°C, preventing the bug where zone history was wiped but sources retained stale Fahrenheit data that re-polluted on next rebuild. | server-foxtrot.js |
 | **Frontend fallback** | Added `ensureZoneHistoryFromSources()` defence-in-depth in farm-summary.html — before rendering trending charts, checks if zone-level history is too short vs per-source data and rebuilds in-memory. Called from both `buildAggregatedHistoryFromAllZones` and `buildHistoryFromZone`. | farm-summary.html, greenreach-central farm-summary.html |
 
+### 2026-03-06: Phantom Source Pruning + Staleness Filter
+
+**Root cause:** `env.json` zone sources follow a write-only, append-never-prune design. When devices are removed from `iot-devices.json`, their source entries in `env.json` persist indefinitely. The ESP32 test device (`serial-0001`, last seen Feb 19 at 18.7°C/33.8% RH) was manually registered during early testing then removed, but its footprint remained. Similarly, `sb-meter-test` (last seen Mar 5 at 18.5°C/45% RH) entered via the unauthenticated `/ingest/env` endpoint. Both phantom sources inflated Zone 1's average — showing 17.1°C instead of the real 15.65°C (+1.45°C error).
+
+| Fix | Description | Files Modified |
+|-----|-------------|----------------|
+| **Pass 1.5: Orphan source pruning** | New step between Pass 1 (per-source updates) and Pass 2 (zone aggregation). Builds a Set of active device IDs from `iot-devices.json`, then iterates all zones and deletes `sources[srcId]` entries not in the set for both `tempC` and `rh` metrics. Also prunes orphaned entries from `zone.sensorDevices[]` array. | server-foxtrot.js |
+| **Soft staleness filter in avgSourceCurrents()** | Added `STALE_SOURCE_MAX_AGE_MS = 30 * 60 * 1000`. When computing zone averages, prefers sources updated within 30 min. If ALL sources are stale (e.g. overnight), falls back to averaging all sources — safe because orphans are already pruned by Pass 1.5. Prevents stale drag when mix of fresh/stale exists. | server-foxtrot.js |
+| **Impact** | Zone 1 tempC corrected from 17.1°C → 15.7°C. Zone 1 rh corrected similarly. `serial-0001` and `sb-meter-test` fully removed from sources and sensorDevices arrays. | env.json (runtime) |
+
+**Commits:** `077969f` (prune + filter), `a789d77` (soft fallback refinement)
+
 ---
 
 ## Appendix A: farm_data data_type Quick Reference
@@ -1062,11 +1074,13 @@ ORDER BY data_type;
 ]
 ```
 
-### /env?hours=1 (Zone Aggregate — May Be Stale)
+### /env?hours=1 (Zone Aggregate — Corrected after phantom prune)
 ```json
 {
-  "zones": [{"id": "zone-1", "sensors": {"tempC": {"current": 18.5}, "rh": {"current": 45}}}],
-  "outdoor_conditions": null
+  "zones": [
+    {"id": "zone-1", "sensors": {"tempC": {"current": 15.7}, "rh": {"current": 28.5}}, "sensorDevices": ["CE2A81460E78", "D0C841064453"]},
+    {"id": "zone-2", "sensors": {"tempC": {"current": 15.6}, "rh": {"current": 29}}, "sensorDevices": ["C3343035702D", "CE2A8606558E"]}
+  ]
 }
 ```
 
