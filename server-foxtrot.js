@@ -29504,6 +29504,7 @@ function setupLiveSensorSync() {
           zone.sensorDevices.push({
             id: deviceId,
             name: device.name || deviceId,
+            type: device.type || undefined,
             lastUpdate: timestampIso,
             battery: Number.isFinite(telemetry.battery) ? telemetry.battery : undefined
           });
@@ -29512,6 +29513,11 @@ function setupLiveSensorSync() {
           const sensorEntry = zone.sensorDevices[sensorIndex];
           if (sensorEntry.name !== (device.name || deviceId)) {
             sensorEntry.name = device.name || deviceId;
+            zoneMutated = true;
+          }
+          // Ensure type is populated for existing entries
+          if (device.type && sensorEntry.type !== device.type) {
+            sensorEntry.type = device.type;
             zoneMutated = true;
           }
           if (sensorEntry.lastUpdate !== timestampIso) {

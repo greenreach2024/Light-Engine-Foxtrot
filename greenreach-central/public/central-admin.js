@@ -3720,12 +3720,44 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
         // Build sensor rows from the sensors object
         const sensors = [];
         const sensorMap = zone.sensors;
+
+        // Helper: derive device label from zone data
+        // Uses sensorDevices[].name, then source keys, never hardcoded 'ESP32'
+        const sensorDevices = zone.sensorDevices || [];
+        function getDeviceLabel(metricKey) {
+            // Try to get names from sources for this metric
+            const sources = sensorMap[metricKey]?.sources;
+            if (sources) {
+                const names = Object.entries(sources)
+                    .map(([id, s]) => s.name || sensorDevices.find(d => d.id === id)?.name || id)
+                    .filter(Boolean);
+                if (names.length) return names.join(', ');
+            }
+            // Fallback to sensorDevices names
+            if (sensorDevices.length) {
+                return sensorDevices.map(d => d.name || d.id).join(', ');
+            }
+            return 'Sensor';
+        }
+        
+        // Derive device type label from sensorDevices or zone source
+        function getDeviceTypeLabel() {
+            // Check if any sensorDevice has a type
+            for (const d of sensorDevices) {
+                const t = (d.type || '').toLowerCase();
+                if (t.includes('woio') || t.includes('switchbot') || t.includes('sensor')) return 'SwitchBot';
+            }
+            const src = (zone.meta?.source || '').toLowerCase();
+            if (src.includes('switchbot') || src === 'live-sync') return 'SwitchBot';
+            return 'Sensor';
+        }
+        const deviceTypeLabel = getDeviceTypeLabel();
         
         // Temperature sensor
         if (sensorMap.tempC && sensorMap.tempC.current != null) {
             sensors.push({
                 type: 'Temperature',
-                device: zone.meta?.deviceId || 'ESP32',
+                device: `${getDeviceLabel('tempC')} (${deviceTypeLabel})`,
                 value: `${sensorMap.tempC.current.toFixed(1)}°C`,
                 status: 'active',
                 lastSeen: zone.meta?.lastSeen || 'Active'
@@ -3736,7 +3768,7 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
         if (sensorMap.rh && sensorMap.rh.current != null) {
             sensors.push({
                 type: 'Humidity',
-                device: zone.meta?.deviceId || 'ESP32',
+                device: `${getDeviceLabel('rh')} (${deviceTypeLabel})`,
                 value: `${sensorMap.rh.current.toFixed(0)}%`,
                 status: 'active',
                 lastSeen: zone.meta?.lastSeen || 'Active'
@@ -3758,7 +3790,7 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
         if (sensorMap.co2 && sensorMap.co2.current != null) {
             sensors.push({
                 type: 'CO2',
-                device: zone.meta?.deviceId || 'ESP32',
+                device: `${getDeviceLabel('co2')} (${deviceTypeLabel})`,
                 value: `${sensorMap.co2.current.toFixed(0)} ppm`,
                 status: 'active',
                 lastSeen: zone.meta?.lastSeen || 'Active'
@@ -3780,7 +3812,7 @@ async function loadZoneSensors(farmId, roomId, zoneId) {
         if (sensorMap.pressure && sensorMap.pressure.current != null) {
             sensors.push({
                 type: 'Pressure',
-                device: zone.meta?.deviceId || 'ESP32',
+                device: `${getDeviceLabel('pressure')} (${deviceTypeLabel})`,
                 value: `${sensorMap.pressure.current.toFixed(1)} hPa`,
                 status: 'active',
                 lastSeen: zone.meta?.lastSeen || 'Active'
