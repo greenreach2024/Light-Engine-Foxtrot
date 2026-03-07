@@ -487,24 +487,69 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = 'No active grows';
         }
 
-        // Fetch device count from API
+        // Fetch communicating device count from IoT device feed
         try {
-            const devResp = await fetch(`${API_BASE}/api/admin/farms/${currentSession.farmId}/devices`, {
-                headers: { 'Authorization': `Bearer ${currentSession.token}` }
+            const devResp = await fetch(`${API_BASE}/data/iot-devices.json`, {
+                cache: 'no-store',
+                headers: currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : undefined
             });
+
             if (devResp.ok) {
                 const devData = await devResp.json();
-                const devCount = devData.count || (Array.isArray(devData.devices) ? devData.devices.length : 0);
-                document.getElementById('kpi-devices').textContent = devCount > 0 ? devCount : '0';
-                document.getElementById('kpi-devices-change').textContent = devCount > 0 ? 'Connected' : 'No devices registered';
+                const devArr = Array.isArray(devData) ? devData : (devData.devices || []);
+
+                const now = Date.now();
+                const freshnessMs = 48 * 60 * 60 * 1000;
+
+                const communicatingDevices = devArr.filter((device) => {
+                    const status = String(device.status || '').toLowerCase();
+                    if (status === 'online' || status === 'connected' || status === 'active') {
+                        return true;
+                    }
+
+                    const telemetry = device.telemetry || {};
+                    const activityRaw =
+                        device.lastSeen ||
+                        device.last_seen ||
+                        device.updatedAt ||
+                        device.updated_at ||
+                        device.heartbeatAt ||
+                        device.lastActivity ||
+                        telemetry.timestamp ||
+                        telemetry.updatedAt ||
+                        telemetry.lastSeen ||
+                        null;
+
+                    if (activityRaw) {
+                        const activityMs = new Date(activityRaw).getTime();
+                        if (Number.isFinite(activityMs) && (now - activityMs) <= freshnessMs) {
+                            return true;
+                        }
+                    }
+
+                    const hasTelemetry =
+                        telemetry.temperature != null ||
+                        telemetry.humidity != null ||
+                        telemetry.co2 != null ||
+                        telemetry.ppfd != null ||
+                        telemetry.pressure != null;
+
+                    return device.trust === 'trusted' && hasTelemetry;
+                });
+
+                const devCount = communicatingDevices.length;
+                document.getElementById('kpi-devices').textContent = String(devCount);
+                document.getElementById('kpi-devices-change').textContent = devCount > 0
+                    ? `${devCount} communicating`
+                    : 'No communicating devices';
             } else {
                 document.getElementById('kpi-devices').textContent = '0';
-                document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+                document.getElementById('kpi-devices-change').textContent = 'No communicating devices';
             }
         } catch (devErr) {
             console.warn('Could not fetch device count:', devErr.message);
             document.getElementById('kpi-devices').textContent = '0';
-            document.getElementById('kpi-devices-change').textContent = 'No devices registered';
+            document.getElementById('kpi-devices-change').textContent = 'No communicating devices';
         }
         
         // Load subscription usage
