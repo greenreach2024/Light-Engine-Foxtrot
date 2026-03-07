@@ -6,7 +6,7 @@
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-LE_HOST="${LE_HOST:-https://lightenginefoxtrot.com}"
+LE_HOST="${LE_HOST:-http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com}"
 CENTRAL_HOST="${CENTRAL_HOST:-https://greenreachgreens.com}"
 CI_MODE="${1:-}"
 PASS=0
