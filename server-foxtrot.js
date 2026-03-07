@@ -29595,19 +29595,61 @@ function setupLiveSensorSync() {
         }
       });
 
+      // ── PASS 1.5: Prune orphaned sources ─────────────────────────────────
+      // Remove sources from env.json that no longer exist in iot-devices.json.
+      // This prevents stale phantom devices (e.g. ESP32 test units, removed
+      // SwitchBot meters) from polluting zone-level averages indefinitely.
+      const activeDeviceIds = new Set(iotDevices.map(d => d.id || d.deviceId).filter(Boolean));
+      for (const zone of envData.zones) {
+        if (!zone?.sensors) continue;
+        for (const metric of ['tempC', 'rh']) {
+          const bucket = zone.sensors[metric];
+          if (!bucket?.sources) continue;
+          for (const srcId of Object.keys(bucket.sources)) {
+            if (!activeDeviceIds.has(srcId)) {
+              console.log(`[sensor-sync] Pruning orphaned source "${srcId}" (${bucket.sources[srcId]?.name || '?'}) from ${zone.id}.${metric} — not in iot-devices.json`);
+              delete bucket.sources[srcId];
+              envUpdated = true;
+            }
+          }
+        }
+        // Also prune sensorDevices[] entries
+        if (Array.isArray(zone.sensorDevices)) {
+          const before = zone.sensorDevices.length;
+          zone.sensorDevices = zone.sensorDevices.filter(sd => activeDeviceIds.has(sd.id));
+          if (zone.sensorDevices.length < before) {
+            zone.meta = zone.meta || {};
+            zone.meta.sensorCount = zone.sensorDevices.length;
+            console.log(`[sensor-sync] Pruned ${before - zone.sensorDevices.length} orphaned sensorDevices from ${zone.id}`);
+            envUpdated = true;
+          }
+        }
+      }
+
       // ── PASS 2: Zone-level aggregation from per-source data ──────────────
       // Runs once per zone per cycle, using averaged source values.
       // This prevents multi-sensor clobbering of zone-level history.
+      const STALE_SOURCE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes — sources older than this are excluded from averaging
       for (const zone of envData.zones) {
         if (!zone?.sensors) continue;
         let zoneAggMutated = false;
 
         // Helper: average all source `current` values for a sensor bucket
+        // Excludes sources whose updatedAt is older than STALE_SOURCE_MAX_AGE_MS
         function avgSourceCurrents(bucket) {
           if (!bucket?.sources) return null;
+          const now = Date.now();
           const vals = Object.values(bucket.sources)
-            .map(s => s.current)
-            .filter(v => Number.isFinite(v));
+            .filter(s => {
+              if (!Number.isFinite(s.current)) return false;
+              // Exclude stale sources — if updatedAt is set and too old, skip
+              if (s.updatedAt) {
+                const age = now - Date.parse(s.updatedAt);
+                if (age > STALE_SOURCE_MAX_AGE_MS) return false;
+              }
+              return true;
+            })
+            .map(s => s.current);
           if (!vals.length) return null;
           return vals.reduce((a, b) => a + b, 0) / vals.length;
         }
