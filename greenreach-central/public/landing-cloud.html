@@ -660,6 +660,99 @@
             margin-right: 12px;
         }
 
+        /* Delivery Promo */
+        .delivery-promo {
+            padding: 100px 40px;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            text-align: center;
+        }
+
+        .delivery-promo-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .delivery-promo h2 {
+            font-size: 44px;
+            font-weight: 700;
+            color: var(--primary-dark);
+            margin-bottom: 16px;
+        }
+
+        .delivery-promo .promo-subtitle {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .delivery-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .delivery-feature {
+            background: white;
+            padding: 32px 24px;
+            border-radius: 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+
+        .delivery-feature h4 {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--primary-dark);
+            margin-bottom: 8px;
+        }
+
+        .delivery-feature p {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .delivery-ctas {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-delivery {
+            padding: 14px 32px;
+            border-radius: 980px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-delivery-primary {
+            background: var(--primary-dark);
+            color: white;
+        }
+
+        .btn-delivery-primary:hover {
+            background: var(--accent-green);
+            transform: translateY(-2px);
+        }
+
+        .btn-delivery-secondary {
+            background: transparent;
+            color: var(--primary-dark);
+            border: 2px solid var(--primary-dark);
+        }
+
+        .btn-delivery-secondary:hover {
+            background: var(--primary-dark);
+            color: white;
+            transform: translateY(-2px);
+        }
+
         /* CTA Section */
         .cta-section {
             padding: 120px 40px;
@@ -1006,6 +1099,36 @@
             </script>
         </section>
 
+        <!-- Delivery Service Promo -->
+        <section class="delivery-promo">
+            <div class="delivery-promo-content">
+                <h2>Farm-to-Door Delivery</h2>
+                <p class="promo-subtitle">Deliver fresh, locally grown produce directly to customers — same-day harvest to their door.</p>
+                <div class="delivery-features">
+                    <div class="delivery-feature">
+                        <h4>Same-Day Harvest</h4>
+                        <p>Produce picked the morning of delivery for peak freshness.</p>
+                    </div>
+                    <div class="delivery-feature">
+                        <h4>Local Coverage</h4>
+                        <p>Serving Kingston and areas within 50km of network farms.</p>
+                    </div>
+                    <div class="delivery-feature">
+                        <h4>Driver Network</h4>
+                        <p>Join our growing team of local delivery drivers with flexible hours.</p>
+                    </div>
+                    <div class="delivery-feature">
+                        <h4>Sustainable Routes</h4>
+                        <p>Reduced food miles with efficient, optimized delivery routes.</p>
+                    </div>
+                </div>
+                <div class="delivery-ctas">
+                    <a href="/driver-enrollment.html" class="btn-delivery btn-delivery-primary">Become a Driver</a>
+                    <a href="https://greenreachgreens.com/wholesale-about.html#delivery" class="btn-delivery btn-delivery-secondary">Learn About Delivery</a>
+                </div>
+            </div>
+        </section>
+
         <section class="cta-section">
             <div class="cta-container">
                 <h2 class="cta-title">Start Managing Your Farm Today</h2>
@@ -1056,6 +1179,14 @@
                     <li><a href="/wholesale-learn-more.html">Learn More</a></li>
                     <li><a href="/GR-wholesale.html">Buyer Login</a></li>
                     <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-links">
+                <h4>Delivery</h4>
+                <ul>
+                    <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+                    <li><a href="https://greenreachgreens.com/wholesale-about.html#delivery">Delivery Info</a></li>
                 </ul>
             </div>
 

@@ -546,6 +546,100 @@
       color: var(--text-light);
     }
 
+    /* Delivery Promo */
+    .delivery-promo {
+      padding: 100px 22px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      text-align: center;
+    }
+
+    .delivery-promo-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .delivery-promo h2 {
+      font-size: 44px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .delivery-promo .promo-sub {
+      font-size: 20px;
+      color: var(--text-light);
+      margin-bottom: 48px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .delivery-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .delivery-feat {
+      background: white;
+      padding: 32px 24px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    .delivery-feat h4 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .delivery-feat p {
+      font-size: 15px;
+      color: var(--text-light);
+      line-height: 1.5;
+    }
+
+    .delivery-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-delivery {
+      padding: 14px 32px;
+      border-radius: 980px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+    }
+
+    .btn-delivery-fill {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-delivery-fill:hover {
+      background: var(--accent);
+      color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .btn-delivery-outline {
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+
+    .btn-delivery-outline:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+    }
+
     /* CTA Section */
     .cta-section {
       padding: 120px 22px;
@@ -1006,6 +1100,36 @@
     <a href="/wholesale-learn-more.html" class="impact-cta">Learn More About Our Impact →</a>
   </section>
 
+  <!-- Delivery Service -->
+  <section class="delivery-promo">
+    <div class="delivery-promo-content">
+      <h2>Farm-to-Door Delivery</h2>
+      <p class="promo-sub">Get fresh produce delivered directly to your business — harvested the morning of your delivery.</p>
+      <div class="delivery-features">
+        <div class="delivery-feat">
+          <h4>Same-Day Harvest</h4>
+          <p>Produce picked the morning of delivery for peak freshness and nutrition.</p>
+        </div>
+        <div class="delivery-feat">
+          <h4>Local Coverage</h4>
+          <p>Serving Kingston and surrounding areas within 50km of network farms.</p>
+        </div>
+        <div class="delivery-feat">
+          <h4>Flexible Scheduling</h4>
+          <p>Choose your preferred delivery window, available Monday through Saturday.</p>
+        </div>
+        <div class="delivery-feat">
+          <h4>Become a Driver</h4>
+          <p>Join our delivery team — flexible hours, competitive pay, and community impact.</p>
+        </div>
+      </div>
+      <div class="delivery-ctas">
+        <a href="/driver-enrollment.html" class="btn-delivery btn-delivery-fill">Drive With Us</a>
+        <a href="https://greenreachgreens.com/wholesale-about.html#delivery" class="btn-delivery btn-delivery-outline">Delivery Details</a>
+      </div>
+    </div>
+  </section>
+
   <!-- Pricing CTA Section -->
   <section class="cta-section" id="pricing">
     <div class="cta-content">
@@ -1065,6 +1189,14 @@
           <li><a href="/wholesale-learn-more.html">Learn More</a></li>
           <li><a href="/GR-wholesale.html">Buyer Login</a></li>
           <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Delivery</h4>
+        <ul>
+          <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html#delivery">Delivery Info</a></li>
         </ul>
       </div>
 

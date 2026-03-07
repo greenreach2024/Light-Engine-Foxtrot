@@ -1184,6 +1184,48 @@ async function runMigrations(client) {
     }
   }
 
+  // Migration 020: Driver applications table (public enrollment)
+  {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS driver_applications (
+          id SERIAL PRIMARY KEY,
+          application_id VARCHAR(100) NOT NULL UNIQUE,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          phone VARCHAR(50) NOT NULL,
+          address VARCHAR(500) DEFAULT '',
+          city VARCHAR(100) DEFAULT 'Kingston',
+          postal_code VARCHAR(10) DEFAULT '',
+          vehicle_type VARCHAR(50) NOT NULL,
+          vehicle_year INTEGER,
+          vehicle_make_model VARCHAR(255) DEFAULT '',
+          licence_class VARCHAR(20) DEFAULT '',
+          insurance_info VARCHAR(500) DEFAULT '',
+          availability JSONB DEFAULT '[]',
+          preferred_zones TEXT DEFAULT '',
+          food_cert_status VARCHAR(50) DEFAULT '',
+          experience VARCHAR(50) DEFAULT '',
+          agreements JSONB DEFAULT '{}',
+          status VARCHAR(50) DEFAULT 'pending',
+          reviewer_notes TEXT DEFAULT '',
+          reviewed_at TIMESTAMPTZ,
+          reviewed_by VARCHAR(255),
+          submitted_at TIMESTAMPTZ DEFAULT NOW(),
+          ip_address VARCHAR(45) DEFAULT '',
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_driver_applications_status ON driver_applications(status);
+        CREATE INDEX IF NOT EXISTS idx_driver_applications_email ON driver_applications(email);
+        CREATE INDEX IF NOT EXISTS idx_driver_applications_submitted ON driver_applications(submitted_at);
+      `);
+      logger.info('Driver applications table ready (migration 020)');
+    } catch (err) {
+      logger.warn('Driver applications migration warning:', err.message);
+    }
+  }
+
   logger.info('Database migrations completed');
 }
 

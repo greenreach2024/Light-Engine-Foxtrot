@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drive With GreenReach | Delivery Driver Enrollment</title>
+  <meta name="description" content="Join our delivery team and help bring fresh, locally grown produce from farm to table. Apply to become a GreenReach delivery driver today.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+      --error: #d32f2f;
+      --success: #2d5016;
+      --border: #d2d2d7;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img {
+      height: 32px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent);
+      color: var(--primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 120px 22px 80px;
+      text-align: center;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #fbfbfd 100%);
+    }
+
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.07;
+      letter-spacing: -0.005em;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .hero .subtitle {
+      font-size: 24px;
+      line-height: 1.38;
+      color: var(--text-light);
+      max-width: 640px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+
+    .hero-stat {
+      text-align: center;
+    }
+
+    .hero-stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .hero-stat-label {
+      font-size: 14px;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    /* Benefits Section */
+    .benefits {
+      padding: 100px 22px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-size: 48px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text);
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+
+    .section-subtitle {
+      font-size: 21px;
+      text-align: center;
+      color: var(--text-light);
+      margin-bottom: 60px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.5;
+    }
+
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .benefit-card {
+      background: var(--surface);
+      padding: 40px 32px;
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .benefit-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .benefit-icon {
+      font-size: 36px;
+      margin-bottom: 16px;
+    }
+
+    .benefit-card h3 {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .benefit-card p {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    /* Requirements Section */
+    .requirements {
+      padding: 100px 22px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    }
+
+    .requirements-content {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .requirements-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+      gap: 40px;
+    }
+
+    .req-category {
+      background: var(--surface);
+      padding: 40px 32px;
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    }
+
+    .req-category h3 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid rgba(130, 195, 65, 0.3);
+    }
+
+    .req-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .req-list li {
+      padding: 12px 0;
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--text);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
+    .req-list li:last-child {
+      border-bottom: none;
+    }
+
+    .req-check {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Safety & Compliance Section */
+    .safety {
+      padding: 100px 22px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .safety-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .safety-card {
+      background: var(--surface);
+      padding: 32px;
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      border-left: 4px solid var(--accent);
+    }
+
+    .safety-card h3 {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .safety-card p {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+      margin-bottom: 16px;
+    }
+
+    .safety-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .safety-card ul li {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text);
+      padding: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .safety-card ul li::before {
+      content: "•";
+      color: var(--accent);
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+
+    /* How It Works */
+    .how-it-works {
+      padding: 100px 22px;
+      background: var(--bg);
+    }
+
+    .steps-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .step {
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+      margin-bottom: 48px;
+      position: relative;
+    }
+
+    .step:last-child {
+      margin-bottom: 0;
+    }
+
+    .step-number {
+      width: 56px;
+      height: 56px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .step-content h3 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .step-content p {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    /* Application Form */
+    .application {
+      padding: 100px 22px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    }
+
+    .form-container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 48px 40px;
+      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.08);
+    }
+
+    .form-section {
+      margin-bottom: 40px;
+    }
+
+    .form-section:last-of-type {
+      margin-bottom: 32px;
+    }
+
+    .form-section-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid rgba(130, 195, 65, 0.3);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-row.full {
+      grid-template-columns: 1fr;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .form-group label .required {
+      color: var(--error);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 17px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.3s, box-shadow 0.3s;
+      outline: none;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(130, 195, 65, 0.2);
+    }
+
+    .form-group input.error,
+    .form-group select.error {
+      border-color: var(--error);
+    }
+
+    .form-group .error-text {
+      font-size: 13px;
+      color: var(--error);
+      margin-top: 4px;
+      display: none;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-group select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2386868b' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      padding-right: 40px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--primary);
+      flex-shrink: 0;
+    }
+
+    .checkbox-group label {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .checkbox-group label a {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+
+    .availability-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .availability-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .availability-chip:has(input:checked) {
+      background: rgba(130, 195, 65, 0.15);
+      border-color: var(--accent);
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    .availability-chip input {
+      accent-color: var(--primary);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 16px 40px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    .btn-submit:hover {
+      background: var(--accent);
+      color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 80, 22, 0.3);
+    }
+
+    .btn-submit:disabled {
+      background: var(--border);
+      color: var(--text-light);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .form-status {
+      text-align: center;
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      display: none;
+    }
+
+    .form-status.success {
+      display: block;
+      background: rgba(45, 80, 22, 0.08);
+      color: var(--success);
+      border: 1px solid rgba(45, 80, 22, 0.2);
+    }
+
+    .form-status.error {
+      display: block;
+      background: rgba(211, 47, 47, 0.08);
+      color: var(--error);
+      border: 1px solid rgba(211, 47, 47, 0.2);
+    }
+
+    /* FAQ Section */
+    .faq {
+      padding: 100px 22px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 24px 0;
+    }
+
+    .faq-question {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .faq-question::after {
+      content: "+";
+      font-size: 24px;
+      color: var(--accent);
+      transition: transform 0.3s;
+      flex-shrink: 0;
+    }
+
+    .faq-item.open .faq-question::after {
+      transform: rotate(45deg);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .faq-answer p {
+      padding-top: 16px;
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    .faq-item.open .faq-answer {
+      max-height: 300px;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: white;
+      padding: 80px 22px 40px;
+    }
+
+    .footer-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 40px;
+    }
+
+    .footer-about h3 {
+      font-size: 21px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .footer-about p {
+      font-size: 14px;
+      line-height: 1.6;
+      opacity: 0.7;
+    }
+
+    .footer-links h4 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 10px;
+    }
+
+    .footer-links a {
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+
+    .footer-links a:hover {
+      opacity: 1;
+    }
+
+    .footer-bottom {
+      max-width: 1000px;
+      margin: 40px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+      font-size: 12px;
+      opacity: 0.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 734px) {
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .hero .subtitle {
+        font-size: 19px;
+      }
+
+      .section-title {
+        font-size: 36px;
+      }
+
+      .hero-stats {
+        gap: 24px;
+      }
+
+      .requirements-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .form-container {
+        padding: 32px 20px;
+      }
+
+      .footer-content {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .step {
+        gap: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo">
+        <img src="images/greenreach-clr.png" alt="GreenReach">
+      </a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/grow-and-sell.html">Wholesale</a></li>
+        <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+        <li><a href="/schedule.html">Schedule a Call</a></li>
+      </ul>
+      <a href="#apply" class="nav-cta">Apply Now</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Drive With GreenReach</h1>
+    <p class="subtitle">
+      Deliver fresh, locally grown produce from farm to table. Set your own schedule, earn competitive pay, and make a real difference in your community's food system.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">50km</div>
+        <div class="hero-stat-label">Local Delivery Radius</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">Mon–Sat</div>
+        <div class="hero-stat-label">Flexible Scheduling</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">Same Day</div>
+        <div class="hero-stat-label">Harvest-to-Delivery</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Benefits -->
+  <section class="benefits">
+    <h2 class="section-title">Why Drive With Us</h2>
+    <p class="section-subtitle">
+      Join a delivery network that values local food, driver safety, and community impact.
+    </p>
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon">📅</div>
+        <h3>Flexible Hours</h3>
+        <p>Choose when you want to deliver. Pick morning, afternoon, or evening shifts that fit your life — no minimum hours required.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">💰</div>
+        <h3>Competitive Earnings</h3>
+        <p>Earn per delivery with transparent pay. Base pay plus tips, with no hidden fees deducted from your earnings.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🌱</div>
+        <h3>Support Local Food</h3>
+        <p>Deliver produce harvested the same morning. Help strengthen Kingston's local food economy and reduce food miles.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🚗</div>
+        <h3>Use Your Own Vehicle</h3>
+        <p>Car, van, truck, bicycle, or e-bike — deliver with whatever vehicle works best for you and your community.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">📱</div>
+        <h3>Easy-to-Use App</h3>
+        <p>Manage deliveries, track routes, and communicate with customers using our streamlined driver dashboard.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🛡️</div>
+        <h3>Safety First</h3>
+        <p>Comprehensive food safety training, insulated delivery bags provided, and 24/7 driver support when you need it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Requirements -->
+  <section class="requirements">
+    <div class="requirements-content">
+      <h2 class="section-title">Requirements</h2>
+      <p class="section-subtitle">
+        What you need to get started delivering with GreenReach.
+      </p>
+      <div class="requirements-grid">
+        <div class="req-category">
+          <h3>Basic Eligibility</h3>
+          <ul class="req-list">
+            <li><span class="req-check">✓</span> Must be 18 years of age or older</li>
+            <li><span class="req-check">✓</span> Legal authorization to work in Canada</li>
+            <li><span class="req-check">✓</span> Valid government-issued photo identification</li>
+            <li><span class="req-check">✓</span> Access to a smartphone with data plan</li>
+            <li><span class="req-check">✓</span> Consent to a background check</li>
+          </ul>
+        </div>
+        <div class="req-category">
+          <h3>Vehicle Requirements</h3>
+          <ul class="req-list">
+            <li><span class="req-check">✓</span> Valid full-class Ontario driver's licence (G or equivalent) — if using a motor vehicle</li>
+            <li><span class="req-check">✓</span> Current vehicle insurance with adequate liability coverage</li>
+            <li><span class="req-check">✓</span> Clean driving record (no major infractions in past 3 years)</li>
+            <li><span class="req-check">✓</span> Vehicle in safe operating condition — car, van, SUV, scooter, or bicycle accepted</li>
+            <li><span class="req-check">✓</span> Ability to transport insulated delivery bags and produce containers safely</li>
+          </ul>
+        </div>
+        <div class="req-category">
+          <h3>Food Safety (Ontario)</h3>
+          <ul class="req-list">
+            <li><span class="req-check">✓</span> Safe Food Handling certification (or willingness to complete within 30 days of approval)</li>
+            <li><span class="req-check">✓</span> Understanding of temperature-controlled transport requirements for fresh produce</li>
+            <li><span class="req-check">✓</span> Commitment to Ontario Food Premises Regulation (O. Reg. 493/17) compliance</li>
+            <li><span class="req-check">✓</span> Knowledge of allergen-awareness and cross-contamination prevention</li>
+            <li><span class="req-check">✓</span> Maintain cleanliness standards for vehicle cargo areas</li>
+          </ul>
+        </div>
+        <div class="req-category">
+          <h3>Personal Qualities</h3>
+          <ul class="req-list">
+            <li><span class="req-check">✓</span> Excellent customer service and communication skills</li>
+            <li><span class="req-check">✓</span> Punctual and reliable — customers count on delivery windows</li>
+            <li><span class="req-check">✓</span> Comfortable navigating local roads and neighbourhoods</li>
+            <li><span class="req-check">✓</span> Physical ability to carry up to 20 kg (produce boxes)</li>
+            <li><span class="req-check">✓</span> Passion for local food systems and community well-being</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Safety & Compliance -->
+  <section class="safety">
+    <h2 class="section-title">Safety &amp; Compliance</h2>
+    <p class="section-subtitle">
+      GreenReach is committed to food safety, driver safety, and full regulatory compliance under Ontario and Canadian law.
+    </p>
+    <div class="safety-grid">
+      <div class="safety-card">
+        <h3>Food Safety Training</h3>
+        <p>All drivers complete GreenReach food safety onboarding, aligned with Ontario's Health Protection and Promotion Act.</p>
+        <ul>
+          <li>Temperature monitoring for perishable goods (2–4°C cold chain)</li>
+          <li>Proper handling of organic and conventionally grown produce</li>
+          <li>Allergen identification and customer communication protocols</li>
+          <li>Hygiene and handwashing procedures before and during shifts</li>
+        </ul>
+      </div>
+      <div class="safety-card">
+        <h3>Vehicle Safety Standards</h3>
+        <p>We require vehicles meet Ontario's Highway Traffic Act standards and maintain safe conditions for food transport.</p>
+        <ul>
+          <li>Annual vehicle safety inspection (Safety Standards Certificate for motor vehicles)</li>
+          <li>Clean and sanitized cargo area — free of chemicals, pets, and contaminants</li>
+          <li>Insulated delivery bags provided by GreenReach to maintain produce quality</li>
+          <li>Seasonal readiness — winter tires required November through April</li>
+        </ul>
+      </div>
+      <div class="safety-card">
+        <h3>Insurance &amp; Background Checks</h3>
+        <p>All drivers must carry proper insurance and consent to a comprehensive background screening.</p>
+        <ul>
+          <li>Valid auto insurance with minimum $1M liability coverage (Ontario requirement)</li>
+          <li>Criminal Record Check (CRC) through an accredited Canadian police service</li>
+          <li>Driving abstract reviewed — no DUI/DWI, reckless driving, or licence suspensions</li>
+          <li>Commercial use endorsement on insurance policy (if required by insurer)</li>
+        </ul>
+      </div>
+      <div class="safety-card">
+        <h3>Regulatory Compliance</h3>
+        <p>GreenReach operates in full compliance with applicable federal and provincial regulations.</p>
+        <ul>
+          <li>Ontario Food Premises Regulation (O. Reg. 493/17) — transport standards</li>
+          <li>Canada's Safe Food for Canadians Act (SFCA) — for interprovincial deliveries</li>
+          <li>WHMIS awareness for any cleaning/sanitizing agents used in vehicle maintenance</li>
+          <li>Independent contractor relationship — drivers manage their own tax obligations (GST/HST if applicable)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-it-works">
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-subtitle">
+      From application to your first delivery — here's what to expect.
+    </p>
+    <div class="steps-container">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Submit Your Application</h3>
+          <p>Fill out the form below with your personal information, vehicle details, and availability. It takes about 5 minutes.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Background &amp; Document Review</h3>
+          <p>We'll verify your identity, driving record, and background check. You'll be asked to upload your licence, insurance, and food handling certificate.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Complete Safety Onboarding</h3>
+          <p>Attend a short online food safety and delivery orientation session. Learn our cold chain standards, customer protocols, and app usage.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Start Delivering</h3>
+          <p>Receive your insulated delivery bag, activate your driver account, pick your zones, and start accepting deliveries on your schedule.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Application Form -->
+  <section class="application" id="apply">
+    <h2 class="section-title">Apply to Drive</h2>
+    <p class="section-subtitle">
+      Complete the form below to start your application. Fields marked with <span style="color: var(--error);">*</span> are required.
+    </p>
+    <div class="form-container">
+      <form id="driver-application-form" novalidate>
+
+        <!-- Personal Information -->
+        <div class="form-section">
+          <h3 class="form-section-title">Personal Information</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="first-name">First Name <span class="required">*</span></label>
+              <input type="text" id="first-name" name="firstName" required autocomplete="given-name">
+              <span class="error-text">First name is required</span>
+            </div>
+            <div class="form-group">
+              <label for="last-name">Last Name <span class="required">*</span></label>
+              <input type="text" id="last-name" name="lastName" required autocomplete="family-name">
+              <span class="error-text">Last name is required</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email">Email Address <span class="required">*</span></label>
+              <input type="email" id="email" name="email" required autocomplete="email">
+              <span class="error-text">Valid email address is required</span>
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone Number <span class="required">*</span></label>
+              <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="(613) 555-0123">
+              <span class="error-text">Phone number is required</span>
+            </div>
+          </div>
+          <div class="form-row full">
+            <div class="form-group">
+              <label for="address">Street Address</label>
+              <input type="text" id="address" name="address" autocomplete="street-address">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="city">City <span class="required">*</span></label>
+              <input type="text" id="city" name="city" required autocomplete="address-level2" value="Kingston">
+            </div>
+            <div class="form-group">
+              <label for="postal-code">Postal Code</label>
+              <input type="text" id="postal-code" name="postalCode" autocomplete="postal-code" placeholder="K7L 1A1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Vehicle Information -->
+        <div class="form-section">
+          <h3 class="form-section-title">Vehicle Information</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="vehicle-type">Vehicle Type <span class="required">*</span></label>
+              <select id="vehicle-type" name="vehicleType" required>
+                <option value="">Select vehicle type…</option>
+                <option value="car">Car / Sedan</option>
+                <option value="suv">SUV / Crossover</option>
+                <option value="van">Van / Minivan</option>
+                <option value="truck">Pickup Truck</option>
+                <option value="scooter">Scooter / Motorcycle</option>
+                <option value="bicycle">Bicycle</option>
+                <option value="ebike">E-bike / Electric Scooter</option>
+              </select>
+              <span class="error-text">Please select a vehicle type</span>
+            </div>
+            <div class="form-group">
+              <label for="vehicle-year">Vehicle Year</label>
+              <input type="number" id="vehicle-year" name="vehicleYear" min="2000" max="2027" placeholder="2022">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="vehicle-make">Make &amp; Model</label>
+              <input type="text" id="vehicle-make" name="vehicleMakeModel" placeholder="e.g., Toyota Corolla">
+            </div>
+            <div class="form-group">
+              <label for="licence-class">Driver's Licence Class</label>
+              <select id="licence-class" name="licenceClass">
+                <option value="">Select licence class…</option>
+                <option value="G">G — Full Licence</option>
+                <option value="G2">G2 — Probationary</option>
+                <option value="M">M — Motorcycle</option>
+                <option value="none">N/A — Bicycle / E-bike</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row full">
+            <div class="form-group">
+              <label for="insurance-provider">Insurance Provider &amp; Policy Number</label>
+              <input type="text" id="insurance-provider" name="insuranceInfo" placeholder="e.g., Intact Insurance — Policy #12345678">
+            </div>
+          </div>
+        </div>
+
+        <!-- Availability -->
+        <div class="form-section">
+          <h3 class="form-section-title">Availability</h3>
+          <p style="font-size: 15px; color: var(--text-light); margin-bottom: 12px;">Select all time slots when you're typically available to deliver:</p>
+          <div class="availability-grid">
+            <label class="availability-chip"><input type="checkbox" name="availability" value="mon-am"> Mon AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="mon-pm"> Mon PM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="tue-am"> Tue AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="tue-pm"> Tue PM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="wed-am"> Wed AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="wed-pm"> Wed PM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="thu-am"> Thu AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="thu-pm"> Thu PM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="fri-am"> Fri AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="fri-pm"> Fri PM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="sat-am"> Sat AM</label>
+            <label class="availability-chip"><input type="checkbox" name="availability" value="sat-pm"> Sat PM</label>
+          </div>
+        </div>
+
+        <!-- Preferred Delivery Areas -->
+        <div class="form-section">
+          <h3 class="form-section-title">Preferred Delivery Areas</h3>
+          <div class="form-row full">
+            <div class="form-group">
+              <label for="preferred-zones">Areas you'd like to cover</label>
+              <textarea id="preferred-zones" name="preferredZones" placeholder="e.g., Downtown Kingston, Kingston West, Cataraqui, Collins Bay…"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Food Safety & Certifications -->
+        <div class="form-section">
+          <h3 class="form-section-title">Food Safety &amp; Certifications</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="food-cert">Do you have a Safe Food Handling certificate?</label>
+              <select id="food-cert" name="foodCertStatus">
+                <option value="">Select…</option>
+                <option value="yes">Yes — currently valid</option>
+                <option value="expired">Yes — expired, willing to renew</option>
+                <option value="willing">No — willing to obtain within 30 days</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="experience">Delivery experience</label>
+              <select id="experience" name="experience">
+                <option value="">Select…</option>
+                <option value="none">No prior experience</option>
+                <option value="some">Some experience (< 1 year)</option>
+                <option value="experienced">1–3 years experience</option>
+                <option value="veteran">3+ years experience</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agreements -->
+        <div class="form-section">
+          <h3 class="form-section-title">Agreements &amp; Acknowledgements</h3>
+          <div class="checkbox-group">
+            <input type="checkbox" id="agree-background" name="agreeBackground" required>
+            <label for="agree-background">I consent to a Criminal Record Check and driving abstract review as part of this application. <span class="required">*</span></label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="agree-food-safety" name="agreeFoodSafety" required>
+            <label for="agree-food-safety">I understand that I must comply with Ontario food safety regulations (O. Reg. 493/17) and complete food safety training before my first delivery. <span class="required">*</span></label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="agree-insurance" name="agreeInsurance" required>
+            <label for="agree-insurance">I confirm that I carry valid vehicle insurance with minimum $1M liability coverage, or will obtain it before my first delivery. <span class="required">*</span></label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="agree-contractor" name="agreeContractor" required>
+            <label for="agree-contractor">I understand that delivery drivers operate as independent contractors and are responsible for their own tax obligations (income tax, GST/HST if applicable). <span class="required">*</span></label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="agree-terms" name="agreeTerms" required>
+            <label for="agree-terms">I have read and agree to the <a href="/wholesale-about.html#delivery">GreenReach Delivery Service terms</a> and <a href="/wholesale-about.html">Privacy Policy</a>. <span class="required">*</span></label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submit-btn">Submit Application</button>
+        <div class="form-status" id="form-status"></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq">
+    <h2 class="section-title">Frequently Asked Questions</h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-question">How much can I earn delivering with GreenReach?</div>
+        <div class="faq-answer"><p>Earnings vary based on number of deliveries, distance, and tips. Drivers earn a base rate per delivery plus 100% of customer tips. Most active drivers in the Kingston area earn competitive rates comparable to other delivery platforms, with shorter average delivery distances.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">Do I need prior delivery experience?</div>
+        <div class="faq-answer"><p>No. We provide comprehensive onboarding including food safety training, app orientation, and delivery best practices. Prior experience is welcomed but not required — what matters most is reliability and a commitment to quality service.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">Can I deliver on a bicycle or e-bike?</div>
+        <div class="faq-answer"><p>Yes! We support bicycle and e-bike deliveries for orders within shorter distances. You'll need an insulated delivery bag (provided by GreenReach) and the ability to carry produce boxes safely. No driver's licence is needed for non-motorized vehicles.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">What is the background check process?</div>
+        <div class="faq-answer"><p>We request a Criminal Record Check (CRC) through an accredited Canadian police service and review your driving abstract. This process typically takes 5–10 business days. We cover the cost of the background check for approved applicants.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">What food safety training is required?</div>
+        <div class="faq-answer"><p>All drivers complete a GreenReach food safety orientation (approximately 1 hour online). If you don't already have a Safe Food Handling certificate, you'll have 30 days after approval to complete one through an Ontario-recognized provider. GreenReach provides resources and can reimburse the certification cost.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">What areas does GreenReach deliver to?</div>
+        <div class="faq-answer"><p>We currently serve Kingston and surrounding areas within approximately 50 km of our network farms. This includes downtown Kingston, the west end, east end, Cataraqui, Bath, Gananoque, and other nearby communities. Coverage areas are expanding as we grow.</p></div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">How long does the application process take?</div>
+        <div class="faq-answer"><p>Most applications are reviewed within 3–5 business days. Once approved, you can complete online onboarding and start delivering within a week. The background check may add an additional 5–10 business days depending on processing times.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
+        </p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html#contact">Contact Us</a></li>
+          <li><a href="/schedule.html">Schedule a Call</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Farm Server</a></li>
+          <li><a href="/landing-cloud.html">Management Platform</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Delivery</h4>
+        <ul>
+          <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html#delivery">Delivery Info</a></li>
+          <li><a href="/GR-central-admin-login.html">Admin Login</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+
+  <script>
+  (function() {
+    const form = document.getElementById('driver-application-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const statusEl = document.getElementById('form-status');
+
+    // FAQ accordion
+    document.querySelectorAll('.faq-question').forEach(q => {
+      q.addEventListener('click', () => {
+        q.closest('.faq-item').classList.toggle('open');
+      });
+    });
+
+    // Form validation
+    function validateField(field) {
+      const group = field.closest('.form-group');
+      if (!group) return true;
+      const errorText = group.querySelector('.error-text');
+      let valid = true;
+
+      if (field.required && !field.value.trim()) {
+        valid = false;
+      }
+      if (field.type === 'email' && field.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value)) {
+        valid = false;
+      }
+
+      if (!valid) {
+        field.classList.add('error');
+        if (errorText) errorText.style.display = 'block';
+      } else {
+        field.classList.remove('error');
+        if (errorText) errorText.style.display = 'none';
+      }
+      return valid;
+    }
+
+    // Real-time field validation
+    form.querySelectorAll('input, select').forEach(field => {
+      field.addEventListener('blur', () => validateField(field));
+      field.addEventListener('input', () => {
+        if (field.classList.contains('error')) validateField(field);
+      });
+    });
+
+    // Phone formatting
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', function() {
+      let digits = this.value.replace(/\D/g, '');
+      if (digits.length > 10) digits = digits.slice(0, 10);
+      if (digits.length >= 7) {
+        this.value = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+      } else if (digits.length >= 4) {
+        this.value = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+      }
+    });
+
+    // Postal code formatting
+    const postalInput = document.getElementById('postal-code');
+    postalInput.addEventListener('input', function() {
+      let val = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (val.length > 6) val = val.slice(0, 6);
+      if (val.length > 3) {
+        this.value = val.slice(0, 3) + ' ' + val.slice(3);
+      } else {
+        this.value = val;
+      }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      statusEl.className = 'form-status';
+      statusEl.style.display = 'none';
+
+      // Validate all required fields
+      let allValid = true;
+      form.querySelectorAll('[required]').forEach(field => {
+        if (field.type === 'checkbox' && !field.checked) {
+          allValid = false;
+          field.style.outline = '2px solid var(--error)';
+          field.addEventListener('change', () => { field.style.outline = ''; }, { once: true });
+        } else if (field.type !== 'checkbox' && !validateField(field)) {
+          allValid = false;
+        }
+      });
+
+      if (!allValid) {
+        statusEl.className = 'form-status error';
+        statusEl.textContent = 'Please complete all required fields and agree to all acknowledgements.';
+        statusEl.style.display = 'block';
+        // Scroll to first error
+        const firstError = form.querySelector('.error, [style*="outline"]');
+        if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      // Gather form data
+      const availability = Array.from(form.querySelectorAll('input[name="availability"]:checked')).map(c => c.value);
+
+      const applicationData = {
+        firstName: form.firstName.value.trim(),
+        lastName: form.lastName.value.trim(),
+        name: `${form.firstName.value.trim()} ${form.lastName.value.trim()}`,
+        email: form.email.value.trim(),
+        phone: form.phone.value.trim(),
+        address: form.address.value.trim(),
+        city: form.city.value.trim(),
+        postalCode: form.postalCode.value.trim(),
+        vehicleType: form.vehicleType.value,
+        vehicleYear: form.vehicleYear.value,
+        vehicleMakeModel: form.vehicleMakeModel.value.trim(),
+        licenceClass: form.licenceClass.value,
+        insuranceInfo: form.insuranceInfo.value.trim(),
+        availability: availability,
+        preferredZones: form.preferredZones.value.trim(),
+        foodCertStatus: form.foodCertStatus.value,
+        experience: form.experience.value,
+        agreements: {
+          backgroundCheck: form.agreeBackground.checked,
+          foodSafety: form.agreeFoodSafety.checked,
+          insurance: form.agreeInsurance.checked,
+          independentContractor: form.agreeContractor.checked,
+          termsAndPrivacy: form.agreeTerms.checked
+        }
+      };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+
+      try {
+        const response = await fetch('/api/delivery/driver-applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(applicationData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          statusEl.className = 'form-status success';
+          statusEl.innerHTML = `
+            <strong>Application submitted successfully!</strong><br>
+            Your application ID is <strong>${result.applicationId}</strong>.<br>
+            We'll review your application and contact you within 3–5 business days at <strong>${applicationData.email}</strong>.
+          `;
+          form.reset();
+          document.getElementById('city').value = 'Kingston';
+          statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          throw new Error(result.error || 'Submission failed');
+        }
+      } catch (err) {
+        statusEl.className = 'form-status error';
+        statusEl.textContent = `Something went wrong: ${err.message}. Please try again or contact us at info@greenreachfarms.com.`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Application';
+        statusEl.style.display = 'block';
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
