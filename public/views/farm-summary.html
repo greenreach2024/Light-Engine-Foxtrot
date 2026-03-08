@@ -196,55 +196,36 @@
       flex: 1;
       padding: 2rem;
       display: grid;
-      grid-template-columns: 3fr 1fr;
+      grid-template-columns: 1fr;
       grid-auto-rows: max-content;
       gap: 2rem;
       overflow: auto;
     }
 
-    /* Explicit grid area assignments to prevent overlap */
-    .ml-insights-dashboard {
-      grid-column: 1 / 3 !important;
-      grid-row: 1 !important;
-      z-index: 100 !important;
-      position: relative !important;
-    }
-
-    .card:nth-child(2) {
-      grid-column: 1 / 3;
-      grid-row: 2;
-      overflow: visible;
-      z-index: 10;
-    }
-
-    .card:nth-child(3) {
-      grid-column: 1 / 3;
-      grid-row: 3;
-      z-index: 10;
-    }
-
-    .card:nth-child(4) {
-      grid-column: 1 / 3;
-      grid-row: 4;
-      z-index: 10;
-    }
-
-    #zoneSummariesContainer {
-      grid-column: 1 / 3 !important;
-      grid-row: 5 !important;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
+    /* ── Priority-ordered layout via CSS order ── */
+    /* All cards span full width. Order controls visual priority. */
+    .container > .card,
+    .container > .ml-insights-dashboard,
+    .container > .ml-anomaly-card,
+    .container > #zoneSummariesContainer {
+      grid-column: 1 / -1;
       z-index: 10;
       position: relative;
     }
 
-    #trendingCard {
-      grid-column: 1 / 3;
-      grid-row: 6;
-      z-index: 10;
-      position: relative;
-    }
+    #envConditionsCard        { order: 1; }    /* Environmental Conditions – top priority */
+    #dailyTodoCard            { order: 2; overflow: visible; }    /* Today's Tasks */
+    #zoneSummariesContainer   { order: 3; display: flex; flex-direction: column; gap: 1rem; }
+    #harvestReadinessCard     { order: 4; }    /* Harvest Readiness (collapsed) */
+    #lossPredictionCard       { order: 5; }    /* Loss Risk Alerts */
+    #mlAnomalyCard            { order: 6; }    /* ML Anomaly Alerts */
+    #healthMonitorCard        { order: 7; }    /* AI Health Monitor */
+    #trendingCard             { order: 8; }    /* Environmental Trends */
+    .ml-insights-dashboard    { order: 9; z-index: 100 !important; }  /* ML Insights – demoted, collapsible */
+    #learningCorrelationCard  { order: 10; }
+    #experimentRecordCard     { order: 11; }
+    #recipeModifierCard       { order: 12; }
+    #aiFeatureCards           { order: 13; }
 
     /* Card Styles */
     .card {
@@ -1535,32 +1516,6 @@
     @media (max-width: 1400px) {
       .container {
         grid-template-columns: 1fr;
-        grid-template-rows: auto;
-        grid-template-areas:
-          "environmental"
-          "zones"
-          "schedule"
-          "trending";
-      }
-
-      .schedule-card {
-        grid-row: auto;
-      }
-      
-      .card:nth-child(1) {
-        grid-area: environmental;
-      }
-
-      .card:nth-child(2) {
-        grid-area: schedule;
-      }
-
-      #zoneSummariesContainer {
-        grid-area: zones;
-      }
-
-      .card:nth-child(4) {
-        grid-area: trending;
       }
 
       .env-grid {
@@ -1717,23 +1672,20 @@
 
   <div class="container">
     <!-- ML Insights Dashboard -->
-    <div class="card ml-insights-dashboard" style="
-      grid-column: 1 / 3;
-      grid-row: 1;
+    <div class="card ml-insights-dashboard" id="mlInsightsDashboard" style="
       background: rgba(15, 23, 42, 0.95);
       border: 1px solid rgba(100, 116, 139, 0.3);
       padding: 1.5rem;
       margin-bottom: 0;
-      z-index: 100;
       position: relative;
-      height: 350px;
-      min-height: 350px;
-      max-height: 350px;
       overflow: hidden;
     ">
-      <h2 style="color: #e2e8f0; margin-bottom: 1rem; font-size: 1.25rem;">ML Insights Dashboard</h2>
-      
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; height: calc(100% - 3rem);">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleMLInsights()">
+        <h2 style="color: #e2e8f0; margin: 0; font-size: 1.25rem;">📊 ML Insights Dashboard</h2>
+        <span id="mlInsightsToggleIcon" style="font-size:0.75rem;color:#94a3b8;">▶ expand</span>
+      </div>
+      <div id="mlInsightsContent" style="display:none; margin-top: 1rem;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; height: 300px;">
         
         <!-- Anomaly Score Sparkline -->
         <div class="ml-widget card-highlight" style="background: rgba(30, 41, 59, 0.6); border-radius: 8px; padding: 1rem; height: 100%; display: flex; flex-direction: column; border: 2px solid rgba(100, 116, 139, 0.3);">
@@ -1793,6 +1745,7 @@
         </div>
 
       </div>
+      </div> <!-- /mlInsightsContent -->
     </div>
 
     <!-- Daily To-Do — Farm Ops Agent -->
@@ -1820,8 +1773,14 @@
     </div>
 
     <!-- Environmental Conditions -->
-    <div class="card">
-      <h2>Environmental Conditions</h2>
+    <div class="card" id="envConditionsCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;">Environmental Conditions</h2>
+        <div style="display:flex;gap:0.75rem;align-items:center;">
+          <span id="envLastUpdated" style="font-size:0.75rem;color:#64748b;"></span>
+          <button class="refresh-btn" onclick="envDataCache=null;envDataCacheTime=0;loadData();" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+        </div>
+      </div>
       
       <!-- Outdoor Weather Section -->
       <div id="weatherDisplay" style="display: block; margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); position: relative; z-index: 2;">
@@ -2320,7 +2279,12 @@
 
   // Refresh data frequently so trends stay fresh (Heat Map also uses 60s)
   if (!isCloudMode) {
-    updateInterval = setInterval(loadData, 60000); // Refresh every 60 seconds
+    updateInterval = setInterval(() => {
+      // Bust cache so interval always fetches fresh data
+      envDataCache = null;
+      envDataCacheTime = 0;
+      loadData();
+    }, 60000); // Refresh every 60 seconds
         setInterval(loadWeather, 300000); // Refresh weather every 5 minutes
         
         // Refresh ML widgets every 10 minutes
@@ -2329,8 +2293,20 @@
           loadEnergyForecast();
           loadTempForecast();
         }, 600000);
-  }
-      setInterval(updateTimestamp, 1000);
+
+    // Force refresh when user returns to tab (browser throttles intervals in background tabs)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !isCloudMode) {
+        const age = Date.now() - envDataCacheTime;
+        if (age > ENV_CACHE_TTL_MS) {
+          console.log('[Farm Summary] Tab visible again – refreshing env data (age:', Math.round(age / 1000), 's)');
+          envDataCache = null;
+          envDataCacheTime = 0;
+          loadData();
+          loadWeather();
+        }
+      }
+    });
       setInterval(updateCountdowns, 60000); // Update countdowns every 60 seconds
 
       document.addEventListener('keydown', (event) => {
@@ -4449,6 +4425,14 @@
 
       const grid = document.getElementById('envGrid');
       if (grid) grid.innerHTML = finalHtml + outdoorHtml;
+
+      // Update "last updated" indicator on env card
+      const envTs = document.getElementById('envLastUpdated');
+      if (envTs) {
+        const now = new Date();
+        envTs.textContent = 'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        envTs.title = now.toLocaleString();
+      }
     }
 
     function formatNumber(value, fractionDigits) {
@@ -5195,6 +5179,16 @@
       el.style.display = hidden ? 'block' : 'none';
       if (icon) icon.textContent = hidden ? '\u25BC collapse' : '\u25B6 expand';
     }
+
+    function toggleMLInsights() {
+      const el = document.getElementById('mlInsightsContent');
+      const icon = document.getElementById('mlInsightsToggleIcon');
+      if (!el) return;
+      const hidden = el.style.display === 'none';
+      el.style.display = hidden ? 'block' : 'none';
+      if (icon) icon.textContent = hidden ? '\u25BC collapse' : '\u25B6 expand';
+    }
+
     function toggleHRCard(gid) {
       const el = document.getElementById('hr-detail-' + gid);
       const arrow = document.getElementById('hr-arrow-' + gid);
