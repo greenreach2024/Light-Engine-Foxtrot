@@ -221,7 +221,8 @@ function generateDailyTodo() {
       reservation_conflict: details.sku_id
         ? `Inventory conflict: ${details.sku_id} — need ${details.requested || '?'}, have ${details.available || '?'}`
         : 'Inventory reservation conflict',
-      payment_failed: `Payment failed${details.buyer_email ? ` for ${details.buyer_email}` : ''}${details.error ? `: ${details.error}` : ''}`,
+      payment_failure: `Payment failed${details.buyer_email ? ` for ${details.buyer_email}` : ''}${details.error ? `: ${details.error}` : ''}`,
+      notification_failure: `Notification failed${details.error ? `: ${details.error}` : ''}`,
       farm_offline: `Farm offline${details.farm_id ? ` (${details.farm_id})` : ''}`,
       deadline_missed: `Deadline missed${details.sub_order_id ? ` — order ${details.sub_order_id}` : ''}`
     };
@@ -253,7 +254,8 @@ function generateDailyTodo() {
     const alertActions = {
       overselling_detected: ['Check inventory levels', 'Adjust reservations', 'Contact affected buyers'],
       reservation_conflict: ['Review available stock', 'Update inventory', 'Adjust order quantities'],
-      payment_failed: ['Retry payment', 'Contact buyer', 'Review order'],
+      payment_failure: ['Retry payment', 'Contact buyer', 'Review order'],
+      notification_failure: ['Check notification service', 'Verify API credentials', 'Retry notification'],
       farm_offline: ['Check network connectivity', 'Verify farm API status', 'Restart services'],
       deadline_missed: ['Review order timeline', 'Contact buyer', 'Update delivery estimate']
     };
