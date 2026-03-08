@@ -18,6 +18,8 @@
     currentBuyer: null,
     authTab: 'sign-in',
     productRequests: [],
+    deliveryQuote: null,
+    selectedFulfillment: 'delivery',
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -124,6 +126,31 @@
       document.getElementById('single-farm-id')?.addEventListener('change', () => {
         this.loadCatalog();
         if (this.currentView === 'checkout') this.previewAllocation();
+      });
+
+      // Fulfillment method radio toggle (pickup vs delivery)
+      document.querySelectorAll('input[name="fulfillment"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          this.selectedFulfillment = e.target.value;
+          const deliveryFields = document.getElementById('delivery-fields');
+          const pickupInfo = document.getElementById('pickup-info');
+          if (e.target.value === 'pickup') {
+            if (deliveryFields) deliveryFields.classList.add('hidden');
+            if (pickupInfo) pickupInfo.classList.remove('hidden');
+            this.deliveryQuote = null;
+            const feeEl = document.getElementById('delivery-fee-display');
+            if (feeEl) feeEl.textContent = '—';
+          } else {
+            if (deliveryFields) deliveryFields.classList.remove('hidden');
+            if (pickupInfo) pickupInfo.classList.add('hidden');
+            this.refreshDeliveryQuote();
+          }
+        });
+      });
+
+      // Refresh quote when postal code changes
+      document.getElementById('delivery-postal')?.addEventListener('change', () => {
+        if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
       });
 
       document.getElementById('sort-by')?.addEventListener('change', () => {
@@ -445,7 +472,10 @@
         section.classList.toggle('active', section.id === `${view}-view`);
       });
 
-      if (view === 'checkout') this.previewAllocation();
+      if (view === 'checkout') {
+        this.previewAllocation();
+        if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
+      }
       if (view === 'orders') this.loadOrders();
       if (view === 'account') this.loadAccountSettings();
     },
@@ -953,6 +983,54 @@
       };
     },
 
+    async refreshDeliveryQuote() {
+      const postalCode = document.getElementById('delivery-postal')?.value?.trim() || '';
+      const statusEl = document.getElementById('delivery-quote-status');
+      const zoneResultEl = document.getElementById('zone-result');
+      const feeDisplayEl = document.getElementById('delivery-fee-display');
+      if (statusEl) statusEl.textContent = 'Fetching delivery quote…';
+
+      // Determine zone from postal code prefix
+      let zone = 'ZONE_A';
+      if (postalCode.length >= 3) {
+        const fsa = postalCode.substring(0, 3).toUpperCase();
+        if (['K7L','K7K','K7M','K7N','K7P'].includes(fsa)) zone = 'ZONE_A';
+        else if (fsa.startsWith('K')) zone = 'ZONE_B';
+        else zone = 'ZONE_C';
+      }
+
+      const subtotal = this.cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
+          method: 'POST',
+          body: JSON.stringify({ zone, subtotal })
+        });
+        if (response.ok && json?.ok) {
+          this.deliveryQuote = json;
+          if (feeDisplayEl) feeDisplayEl.textContent = `$${Number(json.fee).toFixed(2)}`;
+          if (zoneResultEl) {
+            zoneResultEl.className = 'zone-result zone-success';
+            zoneResultEl.textContent = `${json.zone_name || zone} — $${Number(json.fee).toFixed(2)} delivery fee`;
+            if (json.min_order && subtotal < json.min_order) {
+              zoneResultEl.textContent += ` (min order $${json.min_order})`;
+              zoneResultEl.className = 'zone-result zone-error';
+            }
+          }
+          if (statusEl) statusEl.textContent = '';
+        } else {
+          this.deliveryQuote = null;
+          if (feeDisplayEl) feeDisplayEl.textContent = '—';
+          if (statusEl) statusEl.textContent = json?.message || 'Unable to get delivery quote';
+          if (zoneResultEl) { zoneResultEl.className = 'zone-result hidden'; }
+        }
+      } catch (err) {
+        console.error('[Wholesale] Delivery quote error:', err);
+        this.deliveryQuote = null;
+        if (feeDisplayEl) feeDisplayEl.textContent = '—';
+        if (statusEl) statusEl.textContent = 'Could not fetch delivery quote';
+      }
+    },
+
     async previewAllocation() {
       if (this.cart.length === 0) {
         document.getElementById('allocation-preview').innerHTML = '<p>Your cart is empty</p>';
@@ -1030,9 +1108,14 @@
             <span>Broker fee (GreenReach):</span>
             <span>$${Number(allocation.broker_fee_total || 0).toFixed(2)}</span>
           </div>
+          ${this.selectedFulfillment === 'delivery' && this.deliveryQuote ? `
+          <div class="cart-summary-row">
+            <span>Delivery fee:</span>
+            <span>$${Number(this.deliveryQuote.fee || 0).toFixed(2)}</span>
+          </div>` : ''}
           <div class="cart-summary-row total">
             <span>Total:</span>
-            <span>$${Number(allocation.grand_total).toFixed(2)}</span>
+            <span>$${Number((allocation.grand_total || 0) + (this.selectedFulfillment === 'delivery' && this.deliveryQuote ? Number(this.deliveryQuote.fee || 0) : 0)).toFixed(2)}</span>
           </div>
         </div>
       `;
@@ -1083,6 +1166,8 @@
             payment_provider: 'square',
             payment_source: { type: 'demo', nonce: `demo-${Date.now()}` },
             po_number: document.getElementById('po-number')?.value?.trim() || '',
+            fulfillment_method: this.selectedFulfillment,
+            delivery_fee: this.selectedFulfillment === 'delivery' && this.deliveryQuote ? Number(this.deliveryQuote.fee || 0) : 0,
             sourcing
           })
         });

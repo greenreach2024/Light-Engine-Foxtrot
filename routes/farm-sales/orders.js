@@ -40,7 +40,7 @@ const ORDER_CHANNELS = {
  */
 router.post('/', async (req, res) => {
   try {
-    const { channel, customer, items, payment, delivery, program, notes } = req.body;
+    const { channel, customer, items, payment, delivery, pricing, program, notes } = req.body;
     const farmId = req.farm_id; // From auth middleware
 
     // Validate channel
@@ -79,7 +79,27 @@ router.post('/', async (req, res) => {
     }
 
     const tax = finalTotal * 0.08; // 8% sales tax (configurable by jurisdiction)
-    const total = finalTotal + tax;
+    const requestedDeliveryFee = Math.max(
+      0,
+      Number(
+        pricing?.delivery_fee ??
+        delivery?.delivery_fee ??
+        0
+      ) || 0
+    );
+    const requestedTip = Math.max(
+      0,
+      Number(
+        pricing?.tip ??
+        pricing?.tip_amount ??
+        delivery?.tip_amount ??
+        0
+      ) || 0
+    );
+    const isDeliveryOrder = String(delivery?.method || '').toLowerCase() === 'delivery' || channel === ORDER_CHANNELS.DELIVERY;
+    const deliveryFee = isDeliveryOrder ? requestedDeliveryFee : 0;
+    const tipAmount = requestedTip;
+    const total = finalTotal + tax + deliveryFee + tipAmount;
 
     // Create order object
     const order = {
@@ -101,6 +121,8 @@ router.post('/', async (req, res) => {
         subtotal,
         subsidy,
         tax,
+        delivery_fee: deliveryFee,
+        tip: tipAmount,
         total
       },
       timestamps: {

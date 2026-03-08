@@ -272,6 +272,8 @@ router.get('/delivery-manifest', (req, res) => {
         instructions: order.delivery?.instructions,
         items_count: order.items.length,
         total_units: order.items.reduce((sum, item) => sum + item.quantity, 0),
+        delivery_fee: order.pricing?.delivery_fee ?? order.delivery?.delivery_fee ?? 0,
+        tip_amount: order.pricing?.tip ?? order.delivery?.tip_amount ?? 0,
         status: order.status
       });
     });
@@ -321,6 +323,17 @@ router.get('/delivery-manifest', (req, res) => {
 });
 
 /**
+ * Escape a CSV field value (wrap in quotes if it contains commas, quotes, or newlines)
+ */
+function csvEscape(val) {
+  const s = String(val == null ? '' : val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+/**
  * Helper: Generate pick list CSV
  */
 function generatePickListCSV(pickList, summary) {
@@ -343,7 +356,7 @@ function generatePickListCSV(pickList, summary) {
     ]);
   });
 
-  return rows.map(row => row.join(',')).join('\n');
+  return rows.map(row => row.map(csvEscape).join(',')).join('\n');
 }
 
 /**
@@ -376,7 +389,7 @@ function generatePackListCSV(packList, summary) {
     rows.push([]); // Blank line between orders
   });
 
-  return rows.map(row => row.join(',')).join('\n');
+  return rows.map(row => row.map(csvEscape).join(',')).join('\n');
 }
 
 /**
@@ -388,7 +401,7 @@ function generateManifestCSV(manifest, summary) {
     [`Date: ${summary.date}`],
     [`Total Deliveries: ${summary.total_deliveries}`],
     [],
-    ['Time Slot', 'Order ID', 'Customer', 'Phone', 'Street', 'City', 'State', 'Zip', 'Items', 'Instructions']
+    ['Time Slot', 'Order ID', 'Customer', 'Phone', 'Street', 'City', 'State', 'Zip', 'Items', 'Delivery Fee', 'Tip', 'Instructions']
   ];
 
   ['morning', 'afternoon', 'evening'].forEach(slot => {
@@ -404,13 +417,15 @@ function generateManifestCSV(manifest, summary) {
           delivery.address?.state || '',
           delivery.address?.zip || '',
           delivery.items_count,
+          delivery.delivery_fee != null ? `$${Number(delivery.delivery_fee).toFixed(2)}` : '$0.00',
+          delivery.tip_amount != null ? `$${Number(delivery.tip_amount).toFixed(2)}` : '$0.00',
           delivery.instructions || ''
         ]);
       });
     }
   });
 
-  return rows.map(row => row.join(',')).join('\n');
+  return rows.map(row => row.map(csvEscape).join(',')).join('\n');
 }
 
 export default router;

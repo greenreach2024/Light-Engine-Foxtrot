@@ -1131,6 +1131,10 @@ async function runMigrations(client) {
           address JSONB DEFAULT '{}'::jsonb,
           contact JSONB DEFAULT '{}'::jsonb,
           instructions TEXT,
+          delivery_fee NUMERIC(10,2) DEFAULT 0,
+          tip_amount NUMERIC(10,2) DEFAULT 0,
+          driver_payout_amount NUMERIC(10,2) DEFAULT 0,
+          platform_margin NUMERIC(10,2) DEFAULT 0,
           payload JSONB DEFAULT '{}'::jsonb,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -1167,6 +1171,9 @@ async function runMigrations(client) {
           email VARCHAR(255),
           vehicle VARCHAR(255),
           zones JSONB DEFAULT '[]'::jsonb,
+          pay_per_delivery NUMERIC(10,2) DEFAULT 5.50,
+          cold_chain_bonus NUMERIC(10,2) DEFAULT 2.00,
+          cold_chain_certified BOOLEAN DEFAULT FALSE,
           deliveries_30d INTEGER DEFAULT 0,
           rating NUMERIC(3,2),
           status VARCHAR(50) DEFAULT 'active',
@@ -1177,6 +1184,34 @@ async function runMigrations(client) {
 
         CREATE INDEX IF NOT EXISTS idx_delivery_drivers_farm ON delivery_drivers(farm_id);
         CREATE INDEX IF NOT EXISTS idx_delivery_drivers_status ON delivery_drivers(status);
+
+        CREATE TABLE IF NOT EXISTS driver_payouts (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) NOT NULL,
+          driver_id VARCHAR(100) NOT NULL,
+          delivery_id VARCHAR(100),
+          order_id VARCHAR(255),
+          base_amount NUMERIC(10,2) DEFAULT 0,
+          cold_chain_bonus NUMERIC(10,2) DEFAULT 0,
+          tip_amount NUMERIC(10,2) DEFAULT 0,
+          total_payout NUMERIC(10,2) DEFAULT 0,
+          payout_status VARCHAR(50) DEFAULT 'pending',
+          paid_at TIMESTAMPTZ,
+          payout_method VARCHAR(50),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_driver_payouts_farm_driver ON driver_payouts(farm_id, driver_id);
+        CREATE INDEX IF NOT EXISTS idx_driver_payouts_status ON driver_payouts(payout_status);
+
+        ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) DEFAULT 0;
+        ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(10,2) DEFAULT 0;
+        ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS driver_payout_amount NUMERIC(10,2) DEFAULT 0;
+        ALTER TABLE delivery_orders ADD COLUMN IF NOT EXISTS platform_margin NUMERIC(10,2) DEFAULT 0;
+        ALTER TABLE delivery_drivers ADD COLUMN IF NOT EXISTS pay_per_delivery NUMERIC(10,2) DEFAULT 5.50;
+        ALTER TABLE delivery_drivers ADD COLUMN IF NOT EXISTS cold_chain_bonus NUMERIC(10,2) DEFAULT 2.00;
+        ALTER TABLE delivery_drivers ADD COLUMN IF NOT EXISTS cold_chain_certified BOOLEAN DEFAULT FALSE;
       `);
       logger.info('Delivery service tables ready (migration 018)');
     } catch (err) {

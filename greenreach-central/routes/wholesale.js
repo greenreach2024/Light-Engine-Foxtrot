@@ -206,9 +206,9 @@ function shouldUseNetworkAllocation(req) {
 
 const DELIVERY_WINDOWS = ['morning', 'afternoon', 'evening'];
 const DELIVERY_ZONE_RULES = {
-  ZONE_A: { id: 'zone_a', fee: 0, min_order: 25 },
-  ZONE_B: { id: 'zone_b', fee: 5, min_order: 35 },
-  ZONE_C: { id: 'zone_c', fee: 10, min_order: 50 }
+  ZONE_A: { id: 'zone_a', fee: 8, min_order: 25 },
+  ZONE_B: { id: 'zone_b', fee: 8, min_order: 35 },
+  ZONE_C: { id: 'zone_c', fee: 12, min_order: 50 }
 };
 
 function parseBooleanEnv(value, fallback) {
@@ -228,6 +228,7 @@ router.post('/delivery/quote', requireBuyerAuth, async (req, res) => {
     const {
       subtotal = 0,
       zone,
+      farm_id,
       requested_window,
       fulfillment_method = 'delivery'
     } = req.body || {};
@@ -235,11 +236,52 @@ router.post('/delivery/quote', requireBuyerAuth, async (req, res) => {
     const numericSubtotal = Math.max(0, Number(subtotal) || 0);
     const requestedWindow = String(requested_window || '').trim().toLowerCase();
     const requestedZone = String(zone || '').trim().toUpperCase();
-    const zoneRule = DELIVERY_ZONE_RULES[requestedZone] || null;
+    const requestedFarmId = String(farm_id || req.headers['x-farm-id'] || '').trim();
+    let zoneRule = DELIVERY_ZONE_RULES[requestedZone] || null;
 
     const deliveryEnabled = parseBooleanEnv(process.env.WHOLESALE_DELIVERY_ENABLED, true);
-    const baseFee = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_BASE_FEE || 0));
-    const baseMinOrder = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_MIN_ORDER || 25));
+    let baseFee = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_BASE_FEE || 0));
+    let baseMinOrder = Math.max(0, Number(process.env.WHOLESALE_DELIVERY_MIN_ORDER || 25));
+
+    if (requestedFarmId) {
+      try {
+        const settingsResult = await query(
+          `SELECT enabled, base_fee, min_order
+             FROM farm_delivery_settings
+            WHERE farm_id = $1
+            LIMIT 1`,
+          [requestedFarmId]
+        );
+        if (settingsResult.rows.length) {
+          const settings = settingsResult.rows[0];
+          baseFee = Math.max(0, Number(settings.base_fee || 0));
+          baseMinOrder = Math.max(0, Number(settings.min_order || 25));
+        }
+
+        if (requestedZone) {
+          const zoneResult = await query(
+            `SELECT zone_id, fee, min_order
+               FROM farm_delivery_zones
+              WHERE farm_id = $1
+                AND zone_id = $2
+                AND status = 'active'
+              LIMIT 1`,
+            [requestedFarmId, String(requestedZone || '').toLowerCase()]
+          );
+          if (zoneResult.rows.length) {
+            const dbZone = zoneResult.rows[0];
+            zoneRule = {
+              id: dbZone.zone_id,
+              fee: Number(dbZone.fee || 0),
+              min_order: Number(dbZone.min_order || 0)
+            };
+          }
+        }
+      } catch (dbError) {
+        console.warn('[wholesale] delivery quote DB lookup failed, using fallback constants:', dbError.message);
+      }
+    }
+
     const fee = Math.max(baseFee, Number(zoneRule?.fee || 0));
     const minimumOrder = Math.max(baseMinOrder, Number(zoneRule?.min_order || 0));
 

@@ -765,6 +765,14 @@
         <span>Tax (8%):</span>
         <span id="cart-tax">$0.00</span>
       </div>
+      <div class="summary-row">
+        <span>Delivery Fee:</span>
+        <span id="cart-delivery-fee">$0.00</span>
+      </div>
+      <div class="summary-row">
+        <span>Tip:</span>
+        <span id="cart-tip">$0.00</span>
+      </div>
       <div class="summary-row total">
         <span>Total:</span>
         <span id="cart-total">$0.00</span>
@@ -832,6 +840,30 @@
                 </select>
               </div>
             </div>
+            <div class="form-group">
+              <label for="delivery-zone">Delivery Zone *</label>
+              <select id="delivery-zone" required>
+                <option value="ZONE_A">Zone A - Downtown ($8)</option>
+                <option value="ZONE_B" selected>Zone B - Suburbs ($8)</option>
+                <option value="ZONE_C">Zone C - Rural ($12)</option>
+              </select>
+            </div>
+            <div id="delivery-quote-status" style="font-size: 0.9rem; color: var(--text-light);"></div>
+          </div>
+
+          <h3 style="margin: 2rem 0 1rem; color: var(--primary);">Driver Tip</h3>
+          <div class="form-group">
+            <label for="tip-amount">Tip Amount</label>
+            <select id="tip-amount">
+              <option value="0" selected>No tip</option>
+              <option value="2">$2.00</option>
+              <option value="5">$5.00</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="form-group" id="tip-custom-group" style="display: none;">
+            <label for="tip-custom">Custom Tip</label>
+            <input type="number" id="tip-custom" min="0" step="0.01" placeholder="0.00">
           </div>
           
           <div class="form-group">
@@ -849,6 +881,14 @@
             </select>
           </div>
           
+          <div class="summary-row" style="margin-top: 1rem;">
+            <span>Delivery Fee:</span>
+            <span id="modal-delivery-fee">$0.00</span>
+          </div>
+          <div class="summary-row">
+            <span>Tip:</span>
+            <span id="modal-tip">$0.00</span>
+          </div>
           <div class="summary-row total" style="margin: 2rem 0;">
             <span>Total Due:</span>
             <span id="modal-total">$0.00</span>
@@ -867,6 +907,8 @@
     let subscriptionPlans = [];
     let cart = [];
     let currentCategory = 'all';
+    let deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
+    let selectedTipAmount = 0;
     
     // Category icons removed
     const categoryIcons = {};
@@ -921,7 +963,88 @@
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       document.getElementById('delivery-date').min = tomorrow.toISOString().split('T')[0];
+
+      document.getElementById('delivery-zone').addEventListener('change', refreshDeliveryQuote);
+      document.getElementById('delivery-time').addEventListener('change', refreshDeliveryQuote);
+      document.getElementById('tip-amount').addEventListener('change', () => {
+        const tipValue = document.getElementById('tip-amount').value;
+        const customGroup = document.getElementById('tip-custom-group');
+        if (tipValue === 'custom') {
+          customGroup.style.display = 'block';
+          selectedTipAmount = Math.max(0, Number(document.getElementById('tip-custom').value) || 0);
+        } else {
+          customGroup.style.display = 'none';
+          selectedTipAmount = Math.max(0, Number(tipValue) || 0);
+        }
+        updateCart();
+      });
+      document.getElementById('tip-custom').addEventListener('input', () => {
+        selectedTipAmount = Math.max(0, Number(document.getElementById('tip-custom').value) || 0);
+        updateCart();
+      });
     });
+
+    function getCartSubtotal() {
+      return cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
+    }
+
+    function getCartTax(subtotal) {
+      return subtotal * 0.08;
+    }
+
+    async function refreshDeliveryQuote() {
+      const type = document.getElementById('delivery-type').value;
+      const statusEl = document.getElementById('delivery-quote-status');
+      if (type !== 'delivery' || !selectedFarm || cart.length === 0) {
+        deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
+        statusEl.textContent = '';
+        updateCart();
+        return;
+      }
+
+      try {
+        const subtotal = getCartSubtotal();
+        const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+        const tokensData = await tokensResponse.json();
+        const token = tokensData.tokens[selectedFarm].manager;
+        const zone = document.getElementById('delivery-zone').value;
+        const requested_window = document.getElementById('delivery-time').value;
+
+        const response = await fetch('/api/farm-sales/delivery/quote', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ subtotal, zone, requested_window })
+        });
+        const result = await response.json();
+        if (!result?.ok) {
+          throw new Error(result?.message || 'Failed to quote delivery');
+        }
+
+        deliveryQuote = {
+          fee: Math.max(0, Number(result.fee) || 0),
+          minimum_order: Math.max(0, Number(result.minimum_order) || 0),
+          eligible: Boolean(result.eligible),
+          reason: result.reason || null
+        };
+
+        if (!deliveryQuote.eligible && deliveryQuote.reason === 'below_minimum_order') {
+          statusEl.textContent = `Minimum order for delivery: $${deliveryQuote.minimum_order.toFixed(2)}`;
+          statusEl.style.color = 'var(--error)';
+        } else {
+          statusEl.textContent = `Delivery fee: $${deliveryQuote.fee.toFixed(2)}`;
+          statusEl.style.color = 'var(--text-light)';
+        }
+      } catch (error) {
+        deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
+        statusEl.textContent = `Delivery quote unavailable: ${error.message}`;
+        statusEl.style.color = 'var(--error)';
+      }
+
+      updateCart();
+    }
     
     // Load inventory (public access - no auth required for browsing)
     async function loadInventory() {
@@ -1129,13 +1252,20 @@
       }
       
       // Calculate totals
-      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
-      const total = subtotal + tax;
+      const subtotal = getCartSubtotal();
+      const tax = getCartTax(subtotal);
+      const isDelivery = document.getElementById('delivery-type').value === 'delivery';
+      const deliveryFee = isDelivery ? Math.max(0, Number(deliveryQuote.fee) || 0) : 0;
+      const tip = Math.max(0, Number(selectedTipAmount) || 0);
+      const total = subtotal + tax + deliveryFee + tip;
       
       document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
       document.getElementById('cart-tax').textContent = `$${tax.toFixed(2)}`;
+      document.getElementById('cart-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
+      document.getElementById('cart-tip').textContent = `$${tip.toFixed(2)}`;
       document.getElementById('cart-total').textContent = `$${total.toFixed(2)}`;
+      document.getElementById('modal-delivery-fee').textContent = `$${deliveryFee.toFixed(2)}`;
+      document.getElementById('modal-tip').textContent = `$${tip.toFixed(2)}`;
       document.getElementById('modal-total').textContent = `$${total.toFixed(2)}`;
     }
     
@@ -1148,6 +1278,7 @@
       if (cart.length === 0) return;
       document.getElementById('checkout-modal').classList.add('active');
       toggleCart(); // Close cart sidebar
+      refreshDeliveryQuote();
     }
     
     function closeCheckoutModal() {
@@ -1164,10 +1295,13 @@
       if (type === 'pickup') {
         fields.style.display = 'none';
         addressField.required = false;
+        deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
       } else {
         fields.style.display = 'block';
         addressField.required = true;
+        refreshDeliveryQuote();
       }
+      updateCart();
     }
     
     // Submit order
@@ -1179,9 +1313,19 @@
         return;
       }
       
-      const subtotal = cart.reduce((sum, item) => sum + (item.retail_price * item.quantity), 0);
-      const tax = subtotal * 0.08;
-      const total = subtotal + tax;
+      const subtotal = getCartSubtotal();
+      const tax = getCartTax(subtotal);
+      const isDelivery = document.getElementById('delivery-type').value === 'delivery';
+      const deliveryFee = isDelivery ? Math.max(0, Number(deliveryQuote.fee) || 0) : 0;
+      const tipAmount = Math.max(0, Number(selectedTipAmount) || 0);
+      const total = subtotal + tax + deliveryFee + tipAmount;
+
+      if (isDelivery && (!deliveryQuote.eligible || subtotal < deliveryQuote.minimum_order)) {
+        document.getElementById('checkout-error').textContent =
+          `Delivery minimum order is $${deliveryQuote.minimum_order.toFixed(2)}.`;
+        document.getElementById('checkout-error').classList.remove('hidden');
+        return;
+      }
       
       const orderData = {
         channel: 'd2c',
@@ -1203,6 +1347,10 @@
           method: document.getElementById('payment-method').value,
           amount: total
         },
+        pricing: {
+          delivery_fee: deliveryFee,
+          tip: tipAmount
+        },
         notes: document.getElementById('order-notes').value
       };
       
@@ -1212,7 +1360,10 @@
           method: 'delivery',
           address: document.getElementById('delivery-address').value,
           delivery_date: document.getElementById('delivery-date').value,
-          time_slot: document.getElementById('delivery-time').value
+          time_slot: document.getElementById('delivery-time').value,
+          zone: document.getElementById('delivery-zone').value,
+          delivery_fee: deliveryFee,
+          tip_amount: tipAmount
         };
       } else {
         orderData.delivery = {

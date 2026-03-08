@@ -35,7 +35,7 @@ router.use(farmAuthMiddleware);
  */
 router.post('/checkout', async (req, res) => {
   try {
-    const { customer, items, payment, use_credits, cashier } = req.body;
+    const { customer, items, payment, delivery, pricing, use_credits, cashier } = req.body;
     const farmId = req.farm_id;
     const authToken = req.headers.authorization; // Pass through to internal calls
 
@@ -101,7 +101,12 @@ router.post('/checkout', async (req, res) => {
 
     // Calculate totals
     const tax = subtotal * 0.08; // 8% sales tax
-    let total = subtotal + tax;
+    const isDeliveryOrder = String(delivery?.option || delivery?.method || '').toLowerCase() === 'delivery';
+    const deliveryFee = isDeliveryOrder
+      ? Math.max(0, Number(pricing?.delivery_fee ?? delivery?.delivery_fee ?? 0) || 0)
+      : 0;
+    const tipAmount = Math.max(0, Number(pricing?.tip ?? pricing?.tip_amount ?? delivery?.tip_amount ?? 0) || 0);
+    let total = subtotal + tax + deliveryFee + tipAmount;
 
     // Step 1.5: Apply store credits if requested and customer_id provided
     let creditsApplied = 0;
@@ -172,13 +177,29 @@ router.post('/checkout', async (req, res) => {
         'Authorization': authToken // Pass farm auth token
       },
       body: JSON.stringify({
-        channel: 'pos',
+        channel: isDeliveryOrder ? 'delivery' : 'pos',
         customer: customer || { name: 'Walk-up Customer' },
         items: orderItems,
         payment: {
           method: payment.method === 'credit' ? 'credit' : payment.method,
-          amount: subtotal + (subtotal * 0.08), // Original total before credits
+          amount: subtotal + tax + deliveryFee + tipAmount, // Original total before credits
           credits_applied: creditsApplied
+        },
+        delivery: isDeliveryOrder ? {
+          method: 'delivery',
+          address: delivery?.address || null,
+          delivery_date: delivery?.date || null,
+          time_slot: delivery?.time_slot || null,
+          zone: delivery?.zone || null,
+          delivery_fee: deliveryFee,
+          tip_amount: tipAmount,
+          notes: delivery?.notes || null
+        } : {
+          method: 'pickup'
+        },
+        pricing: {
+          delivery_fee: deliveryFee,
+          tip: tipAmount
         },
         notes: cashier ? `POS checkout by ${cashier.name}` : 'POS checkout'
       })
@@ -253,30 +274,56 @@ router.post('/checkout', async (req, res) => {
       })
     });
 
-    // Step 5: Mark order as fulfilled (POS orders are immediate)
-    await fetch(`${BASE_URL}/api/farm-sales/orders/${order.order_id}`, {
-      method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': authToken
-      },
-      body: JSON.stringify({
-        status: 'fulfilled',
-        fulfillment: {
-          status: 'completed',
-          picked_at: timestamp,
-          packed_at: timestamp,
-          ready_at: timestamp,
-          completed_at: timestamp
+    // Step 5: Mark order status based on channel
+    if (!isDeliveryOrder) {
+      await fetch(`${BASE_URL}/api/farm-sales/orders/${order.order_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authToken
         },
-        payment: {
-          status: 'completed',
-          completed_at: timestamp,
-          reference: paymentData?.payment?.payment_id || 'CREDIT-PAYMENT',
-          credits_applied: creditsApplied
-        }
-      })
-    });
+        body: JSON.stringify({
+          status: 'fulfilled',
+          fulfillment: {
+            status: 'completed',
+            picked_at: timestamp,
+            packed_at: timestamp,
+            ready_at: timestamp,
+            completed_at: timestamp
+          },
+          payment: {
+            status: 'completed',
+            completed_at: timestamp,
+            reference: paymentData?.payment?.payment_id || 'CREDIT-PAYMENT',
+            credits_applied: creditsApplied
+          }
+        })
+      });
+    } else {
+      await fetch(`${BASE_URL}/api/farm-sales/orders/${order.order_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authToken
+        },
+        body: JSON.stringify({
+          status: 'confirmed',
+          fulfillment: {
+            status: 'pending',
+            picked_at: null,
+            packed_at: null,
+            ready_at: null,
+            completed_at: null
+          },
+          payment: {
+            status: 'completed',
+            completed_at: timestamp,
+            reference: paymentData?.payment?.payment_id || 'CREDIT-PAYMENT',
+            credits_applied: creditsApplied
+          }
+        })
+      });
+    }
 
     // Step 6: Generate receipt
     const receipt = {
@@ -288,9 +335,11 @@ router.post('/checkout', async (req, res) => {
       customer: customer || { name: 'Walk-up Customer' },
       items: orderItems,
       subtotal,
-      tax: subtotal * 0.08,
+      tax,
+      delivery_fee: deliveryFee,
+      tip_amount: tipAmount,
       credits_applied: creditsApplied,
-      total: subtotal + (subtotal * 0.08),
+      total: subtotal + tax + deliveryFee + tipAmount,
       amount_due: total,
       payment_method: payment.method,
       card_last4: payment.card?.last4,

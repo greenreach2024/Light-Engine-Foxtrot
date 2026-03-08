@@ -47,7 +47,9 @@ async function getDriversForFarm(farmId) {
     return deliveryConfig.drivers;
   }
   const result = await query(
-    `SELECT driver_id, name, phone, email, vehicle, zones, deliveries_30d, rating, status, hired_at, updated_at
+    `SELECT driver_id, name, phone, email, vehicle, zones,
+            pay_per_delivery, cold_chain_bonus, cold_chain_certified,
+            deliveries_30d, rating, status, hired_at, updated_at
        FROM delivery_drivers
       WHERE farm_id = $1
       ORDER BY name ASC`,
@@ -60,12 +62,73 @@ async function getDriversForFarm(farmId) {
     email: r.email || '',
     vehicle: r.vehicle || '',
     zones: Array.isArray(r.zones) ? r.zones : [],
+    pay_per_delivery: Number(r.pay_per_delivery || 5.5),
+    cold_chain_bonus: Number(r.cold_chain_bonus || 2),
+    cold_chain_certified: Boolean(r.cold_chain_certified),
     deliveries_30d: Number(r.deliveries_30d || 0),
     rating: r.rating == null ? null : Number(r.rating),
     status: r.status || 'active',
     hired_at: r.hired_at,
     updated_at: r.updated_at
   }));
+}
+
+async function getDeliveryStatsForFarm(farmId) {
+  if (!isDatabaseAvailable()) {
+    return {
+      stats: deliveryConfig.stats,
+      recent_fees: deliveryConfig.recent_fees
+    };
+  }
+
+  try {
+    const statsResult = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS deliveries_30d,
+         COALESCE(SUM(delivery_fee) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::numeric AS fees_collected,
+         COALESCE(SUM(driver_payout_amount) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::numeric AS driver_payouts,
+         COALESCE(SUM(platform_margin) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::numeric AS platform_revenue
+       FROM delivery_orders
+       WHERE farm_id = $1`,
+      [farmId]
+    );
+
+    const row = statsResult.rows[0] || {};
+    const stats = {
+      deliveries_30d: Number(row.deliveries_30d || 0),
+      revenue_30d: Number(row.platform_revenue || 0),
+      fees_collected: Number(row.fees_collected || 0),
+      driver_payouts: Number(row.driver_payouts || 0),
+      platform_revenue: Number(row.platform_revenue || 0)
+    };
+
+    const recentResult = await query(
+      `SELECT delivery_id, order_id, delivery_fee, driver_payout_amount, platform_margin, created_at
+         FROM delivery_orders
+        WHERE farm_id = $1
+          AND delivery_fee > 0
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [farmId]
+    );
+
+    const recent_fees = recentResult.rows.map(r => ({
+      delivery_id: r.delivery_id,
+      order_id: r.order_id,
+      delivery_fee: Number(r.delivery_fee || 0),
+      driver_payout: Number(r.driver_payout_amount || 0),
+      platform_margin: Number(r.platform_margin || 0),
+      created_at: r.created_at
+    }));
+
+    return { stats, recent_fees };
+  } catch (error) {
+    console.warn('[Admin Delivery] Stats query fallback:', error.message);
+    return {
+      stats: deliveryConfig.stats,
+      recent_fees: deliveryConfig.recent_fees
+    };
+  }
 }
 
 /**
@@ -102,10 +165,11 @@ router.get('/config', async (req, res) => {
     }
 
     const drivers = await getDriversForFarm(farmId);
+    const { stats } = await getDeliveryStatsForFarm(farmId);
 
     res.json({
       success: true,
-      config: { ...settings, zones, drivers, stats: deliveryConfig.stats }
+      config: { ...settings, zones, drivers, stats }
     });
   } catch (error) {
     console.error('[Admin Delivery] Config get failed:', error);
@@ -318,7 +382,7 @@ router.get('/drivers', (req, res) => {
  * POST /drivers - Add a new driver
  */
 router.post('/drivers', async (req, res) => {
-  const { farm_id, name, phone, vehicle, zones, email } = req.body;
+  const { farm_id, name, phone, vehicle, zones, email, pay_per_delivery, cold_chain_bonus, cold_chain_certified } = req.body;
   const farmId = farm_id || extractFarmId(req);
   
   if (!farmId) {
@@ -336,6 +400,9 @@ router.post('/drivers', async (req, res) => {
     email: email || '',
     vehicle: vehicle || '',
     zones: zones || [],
+    pay_per_delivery: Math.max(0, Number(pay_per_delivery) || 5.5),
+    cold_chain_bonus: Math.max(0, Number(cold_chain_bonus) || 2),
+    cold_chain_certified: Boolean(cold_chain_certified),
     deliveries_30d: 0,
     rating: null,
     status: 'active',
@@ -347,10 +414,12 @@ router.post('/drivers', async (req, res) => {
       await query(
         `INSERT INTO delivery_drivers (
           farm_id, driver_id, name, phone, email, vehicle, zones,
+          pay_per_delivery, cold_chain_bonus, cold_chain_certified,
           deliveries_30d, rating, status, hired_at, updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7::jsonb,
-          $8, $9, $10, $11, NOW()
+          $8, $9, $10,
+          $11, $12, $13, $14, NOW()
         )`,
         [
           farmId,
@@ -360,6 +429,9 @@ router.post('/drivers', async (req, res) => {
           driver.email,
           driver.vehicle,
           JSON.stringify(driver.zones || []),
+          driver.pay_per_delivery,
+          driver.cold_chain_bonus,
+          driver.cold_chain_certified,
           driver.deliveries_30d,
           driver.rating,
           driver.status,
@@ -389,7 +461,7 @@ router.put('/drivers/:id', async (req, res) => {
   }
 
   const driverId = req.params.id;
-  const { name, phone, vehicle, zones, email, status } = req.body;
+  const { name, phone, vehicle, zones, email, status, pay_per_delivery, cold_chain_bonus, cold_chain_certified } = req.body;
 
   if (isDatabaseAvailable()) {
     try {
@@ -410,6 +482,9 @@ router.put('/drivers/:id', async (req, res) => {
                 vehicle = $6,
                 zones = $7::jsonb,
                 status = $8,
+                pay_per_delivery = $9,
+                cold_chain_bonus = $10,
+                cold_chain_certified = $11,
                 updated_at = NOW()
           WHERE farm_id = $1
             AND driver_id = $2`,
@@ -421,7 +496,10 @@ router.put('/drivers/:id', async (req, res) => {
           email !== undefined ? email : row.email,
           vehicle !== undefined ? vehicle : row.vehicle,
           JSON.stringify(zones !== undefined ? zones : (Array.isArray(row.zones) ? row.zones : [])),
-          status !== undefined ? status : row.status
+          status !== undefined ? status : row.status,
+          pay_per_delivery !== undefined ? Math.max(0, Number(pay_per_delivery) || 0) : row.pay_per_delivery,
+          cold_chain_bonus !== undefined ? Math.max(0, Number(cold_chain_bonus) || 0) : row.cold_chain_bonus,
+          cold_chain_certified !== undefined ? Boolean(cold_chain_certified) : row.cold_chain_certified
         ]
       );
 
@@ -446,6 +524,9 @@ router.put('/drivers/:id', async (req, res) => {
   if (vehicle !== undefined) driver.vehicle = vehicle;
   if (zones !== undefined) driver.zones = zones;
   if (status !== undefined) driver.status = status;
+  if (pay_per_delivery !== undefined) driver.pay_per_delivery = Math.max(0, Number(pay_per_delivery) || 0);
+  if (cold_chain_bonus !== undefined) driver.cold_chain_bonus = Math.max(0, Number(cold_chain_bonus) || 0);
+  if (cold_chain_certified !== undefined) driver.cold_chain_certified = Boolean(cold_chain_certified);
   driver.updated_at = new Date().toISOString();
 
   console.log('[Admin Delivery] Driver updated (in-memory):', driver.id);
@@ -455,12 +536,118 @@ router.put('/drivers/:id', async (req, res) => {
 /**
  * GET /fees - Get fee distribution summary
  */
-router.get('/fees', (req, res) => {
-  res.json({
-    success: true,
-    stats: deliveryConfig.stats,
-    recent_fees: deliveryConfig.recent_fees
-  });
+router.get('/fees', async (req, res) => {
+  try {
+    const farmId = extractFarmId(req);
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+
+    const { stats, recent_fees } = await getDeliveryStatsForFarm(farmId);
+    return res.json({
+      success: true,
+      stats,
+      recent_fees
+    });
+  } catch (error) {
+    console.error('[Admin Delivery] Fee stats failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /driver-payouts - Driver payout ledger
+ * Query: farm_id (required), driver_id?, from?, to?
+ */
+router.get('/driver-payouts', async (req, res) => {
+  try {
+    const farmId = extractFarmId(req);
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+    if (!isDatabaseAvailable()) {
+      return res.json({ success: true, payouts: [] });
+    }
+
+    const { driver_id, from, to } = req.query;
+    const values = [farmId];
+    const clauses = ['farm_id = $1'];
+
+    if (driver_id) {
+      values.push(driver_id);
+      clauses.push(`driver_id = $${values.length}`);
+    }
+    if (from) {
+      values.push(from);
+      clauses.push(`created_at >= $${values.length}::timestamptz`);
+    }
+    if (to) {
+      values.push(to);
+      clauses.push(`created_at <= $${values.length}::timestamptz`);
+    }
+
+    const result = await query(
+      `SELECT id, farm_id, driver_id, delivery_id, order_id,
+              base_amount, cold_chain_bonus, tip_amount, total_payout,
+              payout_status, payout_method, paid_at, created_at, updated_at
+         FROM driver_payouts
+        WHERE ${clauses.join(' AND ')}
+        ORDER BY created_at DESC
+        LIMIT 500`,
+      values
+    );
+
+    return res.json({ success: true, payouts: result.rows });
+  } catch (error) {
+    console.error('[Admin Delivery] Driver payouts list failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /driver-payouts/:id - Mark payout as paid / update payout status
+ * Body: { farm_id, payout_status?, payout_method? }
+ */
+router.patch('/driver-payouts/:id', async (req, res) => {
+  try {
+    const farmId = extractFarmId(req);
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'farm_id is required' });
+    }
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const payoutId = Number(req.params.id);
+    if (!Number.isFinite(payoutId) || payoutId <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid payout id' });
+    }
+
+    const payoutStatus = String(req.body?.payout_status || 'paid').toLowerCase();
+    const payoutMethod = req.body?.payout_method || null;
+    const paidAt = payoutStatus === 'paid' ? new Date().toISOString() : null;
+
+    const result = await query(
+      `UPDATE driver_payouts
+          SET payout_status = $3,
+              payout_method = COALESCE($4, payout_method),
+              paid_at = CASE WHEN $3 = 'paid' THEN COALESCE($5::timestamptz, NOW()) ELSE NULL END,
+              updated_at = NOW()
+        WHERE id = $1
+          AND farm_id = $2
+      RETURNING *`,
+      [payoutId, farmId, payoutStatus, payoutMethod, paidAt]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ success: false, error: 'Payout not found' });
+    }
+
+    return res.json({ success: true, payout: result.rows[0] });
+  } catch (error) {
+    console.error('[Admin Delivery] Driver payout update failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**

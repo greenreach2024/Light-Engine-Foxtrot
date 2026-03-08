@@ -327,4 +327,456 @@ Production Confidence:    ████░░░░░░░░░░░░░░
 
 ---
 
-*Report generated from live code review of `recovery/feb11-clean` branch, commit `a2a4a21`.*
+## 12. Delivery Revenue Model & Driver Economics (Added 2026-03-08)
+
+### 12.1 Revenue Streams — Current State in Code
+
+| Stream | Rate / Amount | Code Location | Status |
+|--------|---------------|---------------|--------|
+| **Wholesale broker fee** (Central) | **12%** of produce subtotal | `wholesale.js:1103` → `squarePaymentService.js:44` | **Active** — collected via Square payment splits |
+| **Legacy wholesale platform fee** (LE) | **10%** of order total | `wholesale-orders.js:259` | **Active** — older single-farm path |
+| **Delivery zone fees** (customer-facing) | $0 / $5 / $10 by zone | `delivery.js:64-67`, `wholesale.js:208-211` | **Defined** but D2C checkout never charges (H-1). **Delivery fees are GreenReach revenue, not farm revenue.** |
+| **Delivery base fee** (farm-level) | $0 default, configurable | `delivery.js:289` | **Stored in DB**, not surfaced to D2C buyer. Must route to GreenReach, not farm. |
+| **Driver payouts** | — | — | **Not implemented** — no schema, no logic |
+| **Tips** | — | — | **Not implemented** — no UI, no data flow |
+| **Distance-based surcharges** | — | Comment at `delivery.js:866` "Phase 2" | **Not implemented** |
+| **Free-delivery threshold** | — | — | **Not implemented** |
+
+### 12.2 How Commission Is Collected (Working)
+
+```
+Customer places wholesale order:  produce subtotal = $X
+                                         │
+          ┌──────────────────────────────────────────┐
+          │  squarePaymentService.js                 │
+          │  brokerFeeCents = amountCents × 0.12     │
+          │  (per farm sub-order)                    │
+          └────────┬──────────────────────┬──────────┘
+                   │                      │
+            Farm receives            GreenReach keeps
+              88% of $X               12% of $X
+```
+
+The broker fee is **embedded in the subtotal** — not a separate customer line item. Square processes one payment per farm sub-order with the broker fee split.
+
+### 12.3 Proposed Delivery Fee Schedule (Skip-Style Model)
+
+**Business model:** GreenReach operates as the delivery platform. Customer pays a delivery fee **to GreenReach** — farms do not receive any portion of delivery fees. GreenReach pays the driver a base rate per drop and keeps the margin. Drivers are independent contractors (1099/GST-HST responsible). Drivers receive 100% of tips.
+
+**Minimum delivery fee: $8** (all zones). This ensures positive margin after driver payout in every zone.
+
+| Zone | Name | Current Fee | **Proposed Fee** | Min Order (Current) | **Proposed Min Order** |
+|------|------|:-----------:|:----------------:|:-------------------:|:----------------------:|
+| A | Downtown / Core | $0 | **$8** | $25 | **$25** |
+| B | Suburbs | $5 | **$8** | $35 | **$35** |
+| C | Rural | $10 | **$12** | $50 | **$50** |
+
+**Rationale for $8 minimum:**
+- Driver base pay $5–6/drop (see §12.4) leaves $2–3 platform margin at $8 fee
+- Zone A at $0 was guaranteeing a loss on every downtown delivery
+- $8 is competitive with Skip ($3.99–6.99 + service fees that total ~$7–10)
+- Kingston's short delivery distances (avg <10 km) make flat-fee viable
+
+### 12.4 Driver Compensation Model
+
+| Component | Amount | Funded By | Notes |
+|-----------|--------|-----------|-------|
+| **Base rate per delivery** | **$5.50** (recommended) | GreenReach from delivery fee | Flat per-drop, all zones initially. Zone-tier later if needed. |
+| **Cold-chain bonus** | **+$2.00** | GreenReach from delivery fee | Drivers must maintain cooler/insulated bags. Tagged in driver profile. |
+| **Distance bonus** | **Phase 2** | GreenReach from delivery fee | Per-km top-up for Rural zone (>15 km). Not built yet. |
+| **Tips** | **100% to driver** | Customer | Added at checkout. GreenReach takes $0 of tips. |
+
+**Driver does NOT pay:** No app fee, no commission deduction, no vehicle rental. Clean "earn per drop + tips" model per Skip/DoorDash norms.
+
+### 12.5 Unit Economics — P&L Per Delivery
+
+#### Scenario A: Zone A (Downtown), $40 order, no tip
+| Line | Amount | To Whom |
+|------|-------:|---------|
+| Produce subtotal | $40.00 | — |
+| GreenReach broker fee (12%) | +$4.80 | → GreenReach |
+| Farm net payout (88%) | $35.20 | → Farm |
+| Delivery fee (Zone A) | $8.00 | — |
+| Driver payout (base) | −$5.50 | → Driver |
+| **GreenReach delivery margin** | **$2.50** | → GreenReach |
+| **GreenReach total revenue** | **$7.30** | Broker + delivery margin |
+
+#### Scenario B: Zone B (Suburbs), $60 order, $5 tip
+| Line | Amount | To Whom |
+|------|-------:|---------|
+| Produce subtotal | $60.00 | — |
+| GreenReach broker fee (12%) | +$7.20 | → GreenReach |
+| Farm net payout (88%) | $52.80 | → Farm |
+| Delivery fee (Zone B) | $8.00 | — |
+| Driver payout (base) | −$5.50 | → Driver |
+| Tip | $5.00 | → Driver (100%) |
+| **GreenReach delivery margin** | **$2.50** | → GreenReach |
+| **Driver total earnings** | **$10.50** | Base + tip |
+| **GreenReach total revenue** | **$9.70** | Broker + delivery margin |
+
+#### Scenario C: Zone C (Rural), $80 order, cold-chain, $8 tip
+| Line | Amount | To Whom |
+|------|-------:|---------|
+| Produce subtotal | $80.00 | — |
+| GreenReach broker fee (12%) | +$9.60 | → GreenReach |
+| Farm net payout (88%) | $70.40 | → Farm |
+| Delivery fee (Zone C) | $12.00 | — |
+| Driver payout (base + cold) | −$7.50 | → Driver |
+| Tip | $8.00 | → Driver (100%) |
+| **GreenReach delivery margin** | **$4.50** | → GreenReach |
+| **Driver total earnings** | **$15.50** | Base + cold + tip |
+| **GreenReach total revenue** | **$14.10** | Broker + delivery margin |
+
+#### Break-even analysis
+| | Zone A ($8) | Zone B ($8) | Zone C ($12) |
+|---|:-:|:-:|:-:|
+| Driver base | $5.50 | $5.50 | $5.50 |
+| Cold-chain (if applicable) | +$2.00 | +$2.00 | +$2.00 |
+| **GreenReach margin (no cold)** | **$2.50** | **$2.50** | **$6.50** |
+| **GreenReach margin (with cold)** | **$0.50** | **$0.50** | **$4.50** |
+| **Min order prevents loss?** | ✅ Yes | ✅ Yes | ✅ Yes |
+
+At $8 minimum fee and $5.50 driver base, **no zone produces a loss** even without tips. Cold-chain Zone A is tight ($0.50 margin) — monitor volume; if cold-chain dominates Zone A, consider $9 fee.
+
+### 12.6 Money Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CUSTOMER PAYS                                                  │
+│                                                                 │
+│  Produce subtotal ($X) + Delivery fee ($Y) + Tip ($Z)          │
+│         │                      │                  │             │
+│         ▼                      ▼                  ▼             │
+│   ┌───────────┐         ┌───────────┐       ┌──────────┐       │
+│   │  Square   │         │ GreenReach│       │  Driver   │       │
+│   │  Payment  │         │  Collects │       │  Payout   │       │
+│   │  Split    │         │  ALL of   │       │  Ledger   │       │
+│   │           │         │  $Y       │       │           │       │
+│   └─────┬─────┘         └─────┬─────┘       └────┬─────┘       │
+│         │                     │                   │             │
+│    ┌────┴────┐           ┌────┴────┐         ┌────┴────┐        │
+│    │ Farm    │           │Platform │         │ Driver  │        │
+│    │ 88%    │           │ 12% of  │         │ base +  │        │
+│    │ of $X  │           │ $X  +   │         │ 100%    │        │
+│    │ ONLY   │           │ 100% of │         │ of $Z   │        │
+│    │($0 of  │           │$Y minus │         │         │        │
+│    │ deliv.) │           │drv cost │         │         │        │
+│    └────────┘           └─────────┘         └─────────┘        │
+│                                                                 │
+│  Farm receives $0 of delivery fee. Delivery is a GreenReach     │
+│  service; farm is paid only for produce (88% of subtotal).      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 12.7 What the Notes Propose vs. What Exists — Evaluation
+
+| Notes Proposal | Codebase Reality | Verdict |
+|---|---|---|
+| Driver base rate $5–6/drop | No driver pay in schema or code | **ADD** — recommend $5.50 flat |
+| Raise Zone A from $0 → $5+ | Zone A hardcoded at $0, DB default $0 | **ADD** — raise to $8 minimum |
+| $15 minimum order (Skip-style) | Current: Zone A=$25, B=$35, C=$50 | **KEEP CURRENT** — existing mins are already above $15, more appropriate for produce |
+| Tip field in checkout | No tip UI, no tip column in orders | **ADD** — essential for driver retention |
+| Weekly driver payouts | No payout logic exists | **ADD** — use e-transfer initially, Stripe Connect later |
+| Cold-chain bonus $2 | Not in code | **ADD** — tag drivers with cold-cert, add $2/drop |
+| Distance bonus per km | Noted as "Phase 2" in delivery.js | **DEFER** — Kingston routes are short; flat fee works initially |
+| Free delivery threshold | Not in code | **DO NOT ADD** — conflicts with $8 minimum; use promo codes instead |
+| Dynamic pricing | Not in code | **DEFER** — premature without volume data |
+| Autonomous scheduling | Not in code | **DEFER** — requires reliable driver pool first |
+
+### 12.8 Agent & AI Notes — Evaluation
+
+The user's notes also include AI agent features. Cross-referencing with codebase:
+
+| Notes Claim | Codebase Reality | Verdict |
+|---|---|---|
+| T6 correlations UI — ~4h gap | **ALREADY DONE** — API + UI in `farm-summary.html:5172` (commit `d682847`) | ✅ Remove from gap list |
+| T16 auto-print on harvest — ~2h gap | **ALREADY DONE** — server `auto_print:true` + client `triggerAutoHarvestLabelPrint()` (commit `d682847`) | ✅ Remove from gap list |
+| T19 auto-assign lights — ~4h gap | **DONE** — UI button added to IoT manager (commit `495ffc6`) | ✅ Remove from gap list |
+| T21 onboarding benchmarks — ~4h gap | **DONE** — Step 6 added to setup wizard (commit `495ffc6`) | ✅ Remove from gap list |
+| "Remaining gaps are minor (~14h)" | **All 4 gaps are now closed (0h remaining)** | ✅ Corrected |
+| Farm ops agent (daily todo, tool gateway, command taxonomy) | **DONE** — `routes/farm-ops-agent.js` (commit `495ffc6`) | ✅ Already deployed |
+| 5 feedback loops closed | Confirmed in code: Recipe→Yield, Env→Loss, Spectrum→Quality, Timing→Efficiency, Demand→Production | ✅ Accurate |
+| Experiment record system | Confirmed: harvest events → structured records → training exports | ✅ Accurate |
+| Central AI push every 30 min | Confirmed in `server-foxtrot.js` AI sync loop | ✅ Accurate |
+| Skills matrix, roadmap, training schema | Valid planning content, not code-testable | ✅ Include as planning reference |
+
+### 12.9 Items From Notes — Should NOT Be Added to This Document
+
+| Item | Reason to Exclude |
+|---|---|
+| Full agent architecture diagram (NLU → DM → Planner → Tool Gateway) | Already documented in `FARM_OPS_AGENT_BUILD_PLAN_2026-03-08.md` — duplication |
+| Command taxonomy & sample dialogues | Already implemented in `routes/farm-ops-agent.js` `COMMAND_FAMILIES` — duplication |
+| Tool-calling safety rules (abstain, two-phase commit, idempotency) | Already implemented in farm-ops-agent tool gateway — duplication |
+| Training data schema & dataset sizes | Belongs in a separate ML/data doc, not delivery readiness |
+| Implementation skills matrix | Planning artifact, not delivery-specific |
+| Full roadmap (short/mid/long-term) | Too broad for delivery doc; keep delivery-specific phases |
+
+### 12.10 Implementation Priorities — Delivery Revenue Pipeline
+
+| Priority | Item | Effort | Files |
+|:---------|------|:------:|-------|
+| **P0** | Update `DELIVERY_ZONES` constants: Zone A fee $0→$8, Zone B $5→$8, Zone C $10→$12 | 30min | `delivery.js:64-67`, `wholesale.js:208-211` |
+| **P0** | Add `pay_per_delivery` and `cold_chain_bonus` columns to `delivery_drivers` table | 30min | `database.js`, `config/database.js` |
+| **P0** | Wire `/quote` API into D2C shop + store checkouts (H-1 fix) | 3–4h | `farm-sales-shop.html`, `farm-sales-store.html` |
+| **P0** | Add `tip` field to checkout UI + store on order record | 2–3h | `farm-sales-shop.html`, `farm-sales-store.html`, `orders.js` |
+| **P1** | Build `driver_payouts` ledger table (driver_id, delivery_id, base_amount, cold_bonus, tip, paid_at) | 2h | `database.js`, `admin-delivery.js` |
+| **P1** | Calculate & record driver payout on delivery completion (base + cold bonus) | 2h | `delivery.js` |
+| **P1** | Route tips to driver payout ledger (100% pass-through) | 1h | `delivery.js` |
+| **P1** | Split delivery fee accounting: platform_margin = fee − driver_base − cold_bonus. **Delivery fee is 100% GreenReach revenue — farm gets $0 of it.** | 1h | `delivery.js`, `admin-delivery.js` |
+| **P1** | Populate `deliveryConfig.stats` with real aggregations (replace hardcoded zeros) | 2h | `admin-delivery.js` |
+| **P2** | Weekly driver earnings report endpoint (`GET /api/admin/delivery/driver-payouts`) | 3h | `admin-delivery.js` |
+| **P2** | Driver earnings view in Central Admin UI | 2h | `central-admin.js`, `GR-central-admin.html` |
+| **P2** | A/B test Zone A fee ($8 vs $9) with cold-chain volume monitoring | — | Ops decision |
+
+**Total estimated effort: ~18–20h** for P0+P1 (delivery revenue pipeline operational).
+
+### 12.11 Legal / Compliance Notes
+
+- **Independent contractor status:** Driver enrollment page already states IC terms + tax responsibility. Ensure no employment-like controls (no mandatory shifts, no exclusivity, driver chooses which deliveries to accept).
+- **GST/HST on delivery fees:** Delivery of goods is generally taxable in Ontario. Delivery fee should have HST applied. Verify with accountant.
+- **Tips:** Tips are not subject to HST when they are voluntary and not added to the price of the supply (CRA policy). Ensure tip is presented as optional.
+- **T4A slips:** GreenReach must issue T4A slips to IC drivers earning >$500/year. Build reporting capability.
+- **Insurance:** Drivers should carry their own vehicle insurance. Consider requiring proof of insurance during enrollment (field exists on enrollment form but not enforced).
+
+---
+
+## 13. Implementation Strategy — Delivery Revenue Pipeline (Added 2026-03-08)
+
+### 13.1 Execution Phases
+
+The delivery revenue pipeline is broken into 5 phases. Each phase produces a deployable, testable increment. **No phase ships free delivery to customers** — the $8 minimum fee must be in place before D2C checkout is wired.
+
+```
+Phase 1          Phase 2          Phase 3          Phase 4          Phase 5
+Schema +         D2C Checkout     Driver Payout    Admin UX         Wholesale
+Fee Constants    Fee + Tip        Pipeline         + Reporting      Integration
+(2h)             (6-8h)           (6h)             (5-6h)           (3-4h)
+    │                │                │                │                │
+    ▼                ▼                ▼                ▼                ▼
+ Deployable      Fees charging    Drivers paid     Admin manages    Full channel
+ no behavior     customers        per delivery     zones/drivers    coverage
+ change yet      correctly        correctly        with real data   complete
+```
+
+---
+
+### 13.2 Phase 1 — Schema & Constants (Est. 2h)
+
+**Goal:** Update fee constants and extend DB schemas. No runtime behavior change — pure foundation.
+
+#### Tasks
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **1.1** | Update `DELIVERY_ZONES` constants: Zone A fee `$0→$8`, Zone B `$5→$8`, Zone C `$10→$12` | `delivery.js:64-67` | 10min |
+| **1.2** | Update `DELIVERY_ZONE_RULES` to match: Zone A `$0→$8`, Zone B `$5→$8`, Zone C `$10→$12` | `wholesale.js:208-211` | 10min |
+| **1.3** | Update default `base_fee` from `$0→$8` in `getDefaultDeliverySettings()` | `delivery.js:289` | 5min |
+| **1.4** | Add columns to `delivery_orders` DDL: `delivery_fee NUMERIC(10,2) DEFAULT 0`, `tip_amount NUMERIC(10,2) DEFAULT 0`, `driver_payout_amount NUMERIC(10,2) DEFAULT 0`, `platform_margin NUMERIC(10,2) DEFAULT 0` | `lib/database.js`, `greenreach-central/config/database.js` | 15min |
+| **1.5** | Add columns to `delivery_drivers` DDL: `pay_per_delivery NUMERIC(10,2) DEFAULT 5.50`, `cold_chain_bonus NUMERIC(10,2) DEFAULT 2.00`, `cold_chain_certified BOOLEAN DEFAULT FALSE` | `greenreach-central/config/database.js` | 10min |
+| **1.6** | Create `driver_payouts` table DDL: `id SERIAL PRIMARY KEY`, `farm_id VARCHAR(255)`, `driver_id VARCHAR(100)`, `delivery_id VARCHAR(100)`, `order_id VARCHAR(100)`, `base_amount NUMERIC(10,2)`, `cold_chain_bonus NUMERIC(10,2) DEFAULT 0`, `tip_amount NUMERIC(10,2) DEFAULT 0`, `total_payout NUMERIC(10,2)`, `payout_status VARCHAR(50) DEFAULT 'pending'` (pending/paid), `paid_at TIMESTAMP`, `payout_method VARCHAR(50)`, `created_at TIMESTAMP DEFAULT NOW()` | `lib/database.js`, `greenreach-central/config/database.js` | 15min |
+| **1.7** | Run `ALTER TABLE` migrations on prod DB for existing `delivery_orders` + `delivery_drivers` (add new columns) | Manual SQL / migration script | 15min |
+| **1.8** | Mirror all file changes to greenreach-central counterparts | `cp` sync | 10min |
+
+#### Acceptance Criteria
+- `node -c delivery.js` passes (syntax check)
+- Server starts without error
+- Existing zone CRUD, quote, schedule endpoints still work (no behavior change)
+- New columns visible in DB: `SELECT column_name FROM information_schema.columns WHERE table_name = 'delivery_orders'`
+
+---
+
+### 13.3 Phase 2 — D2C Checkout: Fee + Tip (Est. 6–8h)
+
+**Goal:** Customer selecting "Home Delivery" sees a delivery fee, can add a tip, and total includes both. This fixes **H-1** (free delivery) and **H-2** (no minimum enforcement).
+
+#### Tasks
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **2.1** | On delivery method selection, call `POST /api/farm-sales/delivery/quote` with `{ zone, subtotal }`. Display fee in order summary row. | `farm-sales-shop.html` | 2h |
+| **2.2** | Add minimum order enforcement — if `subtotal < zone.min_order`, disable checkout button, show message. | `farm-sales-shop.html` | 30min |
+| **2.3** | Add tip input field: preset buttons ($0, $2, $5, Custom) below delivery fee. Store in `tip_amount`. | `farm-sales-shop.html` | 1.5h |
+| **2.4** | Update order total calculation: `total = subtotal + tax + delivery_fee + tip_amount` | `farm-sales-shop.html` | 30min |
+| **2.5** | Repeat 2.1–2.4 for `farm-sales-store.html` (POS variant) | `farm-sales-store.html` | 1.5h |
+| **2.6** | Update order schema in `orders.js`: add `pricing.delivery_fee`, `pricing.tip`, `delivery.zone`, `delivery.driver_id` fields. Recalculate `pricing.total` to include fee + tip. | `orders.js` | 1h |
+| **2.7** | Ensure delivery fee is collected as **GreenReach revenue**: when order is processed via Square, `delivery_fee` must NOT be included in the `amountCents` sent to `squarePaymentService`. The delivery fee is a separate GreenReach charge. | `orders.js`, payment integration | 1h |
+| **2.8** | Mirror `farm-sales-shop.html`, `farm-sales-store.html` to `greenreach-central/public/` | `cp` sync | 10min |
+
+#### Acceptance Criteria
+- Selecting "Home Delivery" triggers quote API call; fee displays as "$8.00" (Zone A/B) or "$12.00" (Zone C)
+- Order below minimum shows "Minimum order for delivery: $35" (Zone B example) and checkout is disabled
+- Tip buttons work; custom amount validated as ≥ $0
+- Order JSON contains `pricing.delivery_fee`, `pricing.tip`, updated `pricing.total`
+- Farm's Square payment only contains produce subtotal; delivery fee not in farm payment
+
+#### Key Accounting Rule
+```
+Farm Square payment:     amountCents = produce_subtotal_cents
+                         brokerFeeCents = amountCents × 0.12
+                         Farm receives: amountCents - brokerFeeCents
+
+GreenReach collects:     brokerFeeCents (12% produce commission)
+                       + delivery_fee_cents (100% of delivery fee)
+                       - driver_payout_cents (Phase 3)
+                       = platform_revenue
+
+Customer is charged:     produce_subtotal + tax + delivery_fee + tip
+```
+
+---
+
+### 13.4 Phase 3 — Driver Payout Pipeline (Est. 6h)
+
+**Goal:** When a delivery is marked `delivered`, automatically calculate driver earnings and create a payout ledger entry.
+
+#### Tasks
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **3.1** | On `PATCH /api/farm-sales/delivery/:id` with `status: 'delivered'`: look up assigned driver, get `pay_per_delivery` and `cold_chain_certified` from `delivery_drivers` table. | `delivery.js` | 1h |
+| **3.2** | Calculate payout: `base = driver.pay_per_delivery`, `cold = driver.cold_chain_certified ? driver.cold_chain_bonus : 0`, `tip = delivery_order.tip_amount`. Insert into `driver_payouts` table with `total_payout = base + cold + tip`. | `delivery.js` | 1.5h |
+| **3.3** | Update `delivery_orders` row: set `driver_payout_amount = base + cold`, `platform_margin = delivery_fee - base - cold`. (Tip is pass-through, not a platform cost.) | `delivery.js` | 30min |
+| **3.4** | Route tips to driver: tip is included in `driver_payouts.tip_amount` and `driver_payouts.total_payout`. GreenReach takes $0 of tip. | `delivery.js` | 30min |
+| **3.5** | Add `GET /api/admin/delivery/driver-payouts?driver_id=X&from=&to=` endpoint: returns payout history with filtering. | `admin-delivery.js` | 1.5h |
+| **3.6** | Add `PATCH /api/admin/delivery/driver-payouts/:id` endpoint: mark payout as `paid` with `paid_at` timestamp and `payout_method` (e-transfer/cheque). | `admin-delivery.js` | 1h |
+
+#### Acceptance Criteria
+- Marking delivery as `delivered` creates a `driver_payouts` row automatically
+- Payout row contains correct base ($5.50), cold bonus ($2.00 or $0), tip, total
+- `delivery_orders` shows `platform_margin = fee - base - cold`
+- Admin can query driver payouts by date range
+- Admin can mark payouts as paid
+
+---
+
+### 13.5 Phase 4 — Admin UX & Reporting (Est. 5–6h)
+
+**Goal:** Replace stub UI and hardcoded zeros with functional admin tools.
+
+#### Tasks
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **4.1** | Replace hardcoded `stats: { deliveries_30d: 0, revenue_30d: 0, fees_collected: 0, driver_payouts: 0, platform_revenue: 0 }` with real SQL aggregations from `delivery_orders` + `driver_payouts`. | `admin-delivery.js:35-42` | 2h |
+| **4.2** | Replace `alert()` stubs for zone CRUD: wire `showAddZoneModal()`, `editDeliveryZone()`, `deleteZone()` to actual API calls. | `central-admin.js`, `GR-central-admin.html` | 2h |
+| **4.3** | Replace `alert()` stubs for driver CRUD: wire `showAddDriverModal()`, `editDriver()`, `toggleDriverStatus()` to actual API calls. Add `pay_per_delivery` and `cold_chain_certified` fields to driver forms. | `central-admin.js`, `GR-central-admin.html` | 2h |
+| **4.4** | Add driver payouts view to admin panel: table of recent payouts with driver name, delivery date, base, cold, tip, total, status (pending/paid). Bulk "Mark Paid" button. | `central-admin.js`, `GR-central-admin.html` | 2h |
+| **4.5** | Fix readiness check: require `active_zones > 0` in addition to `enabled && active_windows > 0`. | `admin-delivery.js` | 15min |
+
+#### Acceptance Criteria
+- Stats show real numbers from DB
+- Admin can add/edit/delete zones through modals (no more `alert()`)
+- Admin can add/edit drivers with pay rate and cold-chain fields
+- Admin can view and bulk-mark driver payouts as paid
+- Readiness check fails if farm has no active zones
+
+---
+
+### 13.6 Phase 5 — Wholesale Channel Integration (Est. 3–4h)
+
+**Goal:** Wholesale checkout also charges delivery fee (currently uses hardcoded zones) and collects tips.
+
+#### Tasks
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **5.1** | Wholesale quote endpoint: read zones from DB instead of hardcoded `DELIVERY_ZONE_RULES`. Fall back to constants if DB returns empty. | `wholesale.js:226-250` | 1h |
+| **5.2** | Wholesale checkout: add delivery fee as line item in order summary (separate from broker fee). | `public/js/wholesale.js` | 1h |
+| **5.3** | Wholesale checkout: add tip field matching D2C design. | `public/js/wholesale.js` | 1h |
+| **5.4** | Ensure wholesale Square payment excludes delivery fee from farm `amountCents`. Delivery fee collected as GreenReach-only charge. | `wholesale.js:1199-1210` | 1h |
+| **5.5** | Legacy `wholesale-orders.js:259`: align platform fee from 10% → 12% OR migrate orders to Central wholesale path. | `wholesale-orders.js` | 30min |
+
+#### Acceptance Criteria
+- Wholesale quote returns zone fee from DB
+- Wholesale checkout shows delivery fee + tip in order summary
+- Farm Square payment contains produce only; delivery fee is separate
+- Legacy 10% rate aligned or migrated
+
+---
+
+### 13.7 Supporting Tasks (Any Phase)
+
+| # | Task | File(s) | Est. |
+|:--|------|---------|:----:|
+| **S.1** | Fix CSV manifest: add `=`/`+`/`-`/`@` escaping for injection prevention. Add `driver_name`, `delivery_fee`, `tip` columns. | `fulfillment.js:385-410` | 1h |
+| **S.2** | Add application→driver conversion endpoint: approve a `driver_application` and auto-create `delivery_drivers` row with default pay rate. | `admin-delivery.js` | 2h |
+| **S.3** | Update driver enrollment page: replace vague "base rate per delivery" with concrete "$5.50 per delivery + $2.00 cold-chain bonus + 100% of tips". | `driver-enrollment.html` | 15min |
+| **S.4** | Add `delivery_fee` and `tip_amount` to PDF invoice generator (already reads `o.tip_amount` — verify field alignment). | `services/pdf-generator.js` | 30min |
+
+---
+
+### 13.8 Dependency Graph
+
+```
+Phase 1 (Schema + Constants)
+    │
+    ├──────────────────────────────┐
+    ▼                              ▼
+Phase 2 (D2C Checkout)         Phase 5 (Wholesale)
+    │                              │
+    ▼                              │
+Phase 3 (Driver Payouts)  ◄────────┘
+    │
+    ▼
+Phase 4 (Admin UX + Reporting)
+```
+
+- **Phase 1** is prerequisite for all others (schema must exist)
+- **Phase 2 and 5** can run in parallel (different checkout pages)
+- **Phase 3** requires Phase 2 (orders must carry fee/tip before payout can calculate)
+- **Phase 4** requires Phase 3 (stats and payout views need ledger data)
+- **Supporting tasks (S.1–S.4)** can be done at any point
+
+---
+
+### 13.9 Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Delivery fee accidentally included in farm Square payment → farm gets paid for delivery fee | Medium | **Critical** — GreenReach pays farm for something GreenReach should keep | Task 2.7: explicit separation of produce vs. delivery in payment flow. Test with sandbox Square. |
+| Driver payout calculated at wrong rate (cached stale pay_per_delivery) | Low | Medium — incorrect driver earnings | Task 3.1: always read driver's current rate from DB at delivery completion time |
+| Cold-chain Zone A ($0.50 margin) becomes loss center with high volume | Medium | Medium — negative delivery margin | Monitor via Phase 4 stats; raise Zone A to $9 if cold-chain > 30% of downtown deliveries |
+| HST not applied to delivery fee → tax compliance issue | Medium | Medium | Confirm with accountant before shipping Phase 2; add HST to delivery fee in checkout total |
+| Tips treated as GreenReach revenue for tax purposes | Low | **High** — CRA audit risk | Tips must flow through to driver as pass-through, never booked as GreenReach revenue. Task 3.4 ensures $0 GreenReach cut. |
+| `delivery_orders` table doesn't exist on prod (only DDL, never run) | Possible | High — Phase 2 inserts fail | Task 1.7: verify table exists with `SELECT 1 FROM delivery_orders LIMIT 0` before deploying Phase 2 |
+
+---
+
+### 13.10 Estimated Timeline
+
+| Phase | Effort | Calendar (solo dev) | Cumulative |
+|-------|:------:|:-------------------:|:----------:|
+| **Phase 1** | 2h | Day 1 (morning) | Day 1 |
+| **Phase 2** | 6–8h | Day 1 (afternoon) + Day 2 | Day 2 |
+| **Phase 3** | 6h | Day 3 | Day 3 |
+| **Phase 4** | 5–6h | Day 4 | Day 4 |
+| **Phase 5** | 3–4h | Day 5 (morning) | Day 5 |
+| **Supporting** | 3–4h | Day 5 (afternoon) | Day 5 |
+| **Total** | **~26–30h** | **~5 working days** | |
+
+---
+
+### 13.11 Definition of Done
+
+- [ ] All zones charge $8+ delivery fee (no $0 zones)
+- [ ] D2C checkout displays delivery fee and enforces minimum order
+- [ ] Tip field functional with $0/$2/$5/custom options
+- [ ] Order total = subtotal + tax + delivery_fee + tip
+- [ ] Farm Square payment excludes delivery fee (farm gets 88% of produce only)
+- [ ] Delivery fee is 100% GreenReach revenue
+- [ ] Driver payout calculated on delivery completion (base + cold bonus)
+- [ ] 100% of tips routed to driver ($0 to GreenReach)
+- [ ] `driver_payouts` ledger populated with every completed delivery
+- [ ] Admin stats show real aggregated data (not zeros)
+- [ ] Admin can CRUD zones and drivers through modals (no `alert()` stubs)
+- [ ] Admin can view and mark driver payouts as paid
+- [ ] CSV manifest escapes injection vectors
+- [ ] Wholesale checkout charges delivery fee (from DB zones, not hardcoded)
+- [ ] Legacy 10% platform fee aligned to 12%
+- [ ] All changes mirrored to greenreach-central
+
+---
+
+*Original report generated from live code review of `recovery/feb11-clean` branch, commit `a2a4a21`.*
+*§12 (Revenue Model) added 2026-03-08 from code audit of commits through `495ffc6`.*
+*§13 (Implementation Strategy) added 2026-03-08.*

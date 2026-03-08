@@ -62,9 +62,9 @@ const TIME_WINDOWS = {
  * Delivery zones (would be configured per farm's service area)
  */
 const DELIVERY_ZONES = {
-  ZONE_A: { id: 'zone_a', name: 'Downtown', fee: 0, min_order: 25 },
-  ZONE_B: { id: 'zone_b', name: 'Suburbs', fee: 5, min_order: 35 },
-  ZONE_C: { id: 'zone_c', name: 'Rural', fee: 10, min_order: 50 }
+  ZONE_A: { id: 'zone_a', name: 'Downtown', fee: 8, min_order: 25 },
+  ZONE_B: { id: 'zone_b', name: 'Suburbs', fee: 8, min_order: 35 },
+  ZONE_C: { id: 'zone_c', name: 'Rural', fee: 12, min_order: 50 }
 };
 
 // Farm-scoped MVP settings (in-memory fallback; PostgreSQL primary when DB_ENABLED)
@@ -89,6 +89,10 @@ function toDeliveryFromRow(row) {
     route_id: row.route_id,
     driver: payload.driver || (row.driver_id ? { id: row.driver_id } : null),
     status: row.status,
+    delivery_fee: Number(row.delivery_fee || payload.delivery_fee || 0),
+    tip_amount: Number(row.tip_amount || payload.tip_amount || 0),
+    driver_payout_amount: Number(row.driver_payout_amount || payload.driver_payout_amount || 0),
+    platform_margin: Number(row.platform_margin || payload.platform_margin || 0),
     instructions: row.instructions,
     address: row.address || payload.address,
     contact: row.contact || payload.contact,
@@ -123,10 +127,14 @@ async function insertDeliveryRecord(farmId, delivery, dbClient = null) {
   await executor.query(
     `INSERT INTO delivery_orders (
       farm_id, delivery_id, order_id, delivery_date, time_slot, zone_id,
-      route_id, driver_id, status, address, contact, instructions, payload, created_at, updated_at
+      route_id, driver_id, status, address, contact, instructions,
+      delivery_fee, tip_amount, driver_payout_amount, platform_margin,
+      payload, created_at, updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6,
-      $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13::jsonb, NOW(), NOW()
+      $7, $8, $9, $10::jsonb, $11::jsonb, $12,
+      $13, $14, $15, $16,
+      $17::jsonb, NOW(), NOW()
     )`,
     [
       farmId,
@@ -141,6 +149,10 @@ async function insertDeliveryRecord(farmId, delivery, dbClient = null) {
       JSON.stringify(delivery.address || {}),
       JSON.stringify(delivery.contact || {}),
       delivery.instructions || null,
+      Number(delivery.delivery_fee || 0),
+      Number(delivery.tip_amount || 0),
+      Number(delivery.driver_payout_amount || 0),
+      Number(delivery.platform_margin || 0),
       JSON.stringify(delivery)
     ]
   );
@@ -173,7 +185,11 @@ async function updateDeliveryRecord(farmId, deliveryId, delivery, dbClient = nul
          address = $6::jsonb,
          contact = $7::jsonb,
          instructions = $8,
-         payload = $9::jsonb,
+       delivery_fee = $9,
+       tip_amount = $10,
+       driver_payout_amount = $11,
+       platform_margin = $12,
+       payload = $13::jsonb,
          updated_at = NOW()
      WHERE farm_id = $1 AND delivery_id = $2`,
     [
@@ -185,9 +201,76 @@ async function updateDeliveryRecord(farmId, deliveryId, delivery, dbClient = nul
       JSON.stringify(delivery.address || {}),
       JSON.stringify(delivery.contact || {}),
       delivery.instructions || null,
+      Number(delivery.delivery_fee || 0),
+      Number(delivery.tip_amount || 0),
+      Number(delivery.driver_payout_amount || 0),
+      Number(delivery.platform_margin || 0),
       JSON.stringify(delivery)
     ]
   );
+}
+
+async function ensureDriverPayoutForDelivery(farmId, delivery, dbClient = null) {
+  if (!isDatabaseEnabled()) return null;
+  const executor = dbClient || { query };
+  const driverId = delivery?.driver?.id || null;
+  if (!driverId) return null;
+
+  const existing = await executor.query(
+    `SELECT id FROM driver_payouts
+      WHERE farm_id = $1 AND delivery_id = $2
+      LIMIT 1`,
+    [farmId, delivery.delivery_id]
+  );
+  if (existing.rows.length > 0) {
+    return { created: false, payout_id: existing.rows[0].id };
+  }
+
+  const driverResult = await executor.query(
+    `SELECT pay_per_delivery, cold_chain_bonus, cold_chain_certified
+       FROM delivery_drivers
+      WHERE farm_id = $1 AND driver_id = $2
+      LIMIT 1`,
+    [farmId, driverId]
+  );
+  if (!driverResult.rows.length) {
+    return null;
+  }
+
+  const driver = driverResult.rows[0];
+  const baseAmount = Number(driver.pay_per_delivery || 0);
+  const coldBonus = Boolean(driver.cold_chain_certified) ? Number(driver.cold_chain_bonus || 0) : 0;
+  const tipAmount = Number(delivery.tip_amount || 0);
+  const totalPayout = baseAmount + coldBonus + tipAmount;
+
+  const deliveryFee = Number(delivery.delivery_fee || 0);
+  const platformMargin = deliveryFee - baseAmount - coldBonus;
+  delivery.driver_payout_amount = baseAmount + coldBonus;
+  delivery.platform_margin = platformMargin;
+
+  const insertResult = await executor.query(
+    `INSERT INTO driver_payouts (
+       farm_id, driver_id, delivery_id, order_id,
+       base_amount, cold_chain_bonus, tip_amount, total_payout,
+       payout_status, created_at, updated_at
+     ) VALUES (
+       $1, $2, $3, $4,
+       $5, $6, $7, $8,
+       'pending', NOW(), NOW()
+     ) RETURNING id`,
+    [
+      farmId,
+      driverId,
+      delivery.delivery_id,
+      delivery.order_id || null,
+      baseAmount,
+      coldBonus,
+      tipAmount,
+      totalPayout
+    ]
+  );
+
+  return { created: true, payout_id: insertResult.rows[0]?.id || null };
 }
 
 async function listDeliveriesForSlot(farmId, date, timeSlot, dbClient = null) {
@@ -286,7 +369,7 @@ async function listRoutesForFarm(farmId, filters = {}, dbClient = null) {
 function getDefaultDeliverySettings() {
   return {
     enabled: false,
-    base_fee: 0,
+    base_fee: 8,
     min_order: 25,
     lead_time_hours: 24,
     max_deliveries_per_window: 20,
@@ -977,7 +1060,7 @@ router.post('/quote', async (req, res) => {
  */
 router.post('/schedule', async (req, res) => {
   try {
-    const { order_id, delivery_date, time_slot, address, zone, instructions, contact } = req.body;
+    const { order_id, delivery_date, time_slot, address, zone, instructions, contact, delivery_fee, tip_amount } = req.body;
     const farmId = req.farm_id;
 
     // Validate required fields
@@ -1071,6 +1154,10 @@ router.post('/schedule', async (req, res) => {
           zone: deliveryZone,
           instructions,
           contact,
+          delivery_fee: Math.max(0, Number(delivery_fee ?? deliveryZone.fee ?? 0) || 0),
+          tip_amount: Math.max(0, Number(tip_amount || 0) || 0),
+          driver_payout_amount: 0,
+          platform_margin: 0,
           status: 'scheduled',
           route_id: null,
           driver: null,
@@ -1156,6 +1243,10 @@ router.post('/schedule', async (req, res) => {
       zone: deliveryZone,
       instructions,
       contact,
+      delivery_fee: Math.max(0, Number(delivery_fee ?? deliveryZone.fee ?? 0) || 0),
+      tip_amount: Math.max(0, Number(tip_amount || 0) || 0),
+      driver_payout_amount: 0,
+      platform_margin: 0,
       status: 'scheduled',
       route_id: null,
       driver: null,
@@ -1278,7 +1369,14 @@ router.patch('/:deliveryId', async (req, res) => {
 
     delivery.timestamps = delivery.timestamps || {};
     delivery.timestamps.updated_at = timestamp;
-    await updateDeliveryRecord(farmId, deliveryId, delivery);
+    if (status === 'delivered' && isDatabaseEnabled()) {
+      await transaction(async (client) => {
+        await ensureDriverPayoutForDelivery(farmId, delivery, client);
+        await updateDeliveryRecord(farmId, deliveryId, delivery, client);
+      });
+    } else {
+      await updateDeliveryRecord(farmId, deliveryId, delivery);
+    }
 
     res.json({
       ok: true,
