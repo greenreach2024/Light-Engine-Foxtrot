@@ -1795,6 +1795,30 @@
       </div>
     </div>
 
+    <!-- Daily To-Do — Farm Ops Agent -->
+    <div class="card" id="dailyTodoCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin:0;display:flex;align-items:center;gap:0.5rem;">
+          <span style="font-size:1.1rem;">📋</span> Today's Tasks
+        </h2>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <select id="todoFilterCategory" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:0.35rem 0.6rem;font-size:0.8rem;cursor:pointer;">
+            <option value="">All</option>
+            <option value="wholesale">Wholesale</option>
+            <option value="harvest">Harvest</option>
+            <option value="seeding">Seeding</option>
+            <option value="anomaly">Alerts</option>
+            <option value="environment">Environment</option>
+            <option value="ai-recommendation">AI Recs</option>
+          </select>
+          <button class="refresh-btn" onclick="loadDailyTodo()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+        </div>
+      </div>
+      <div id="dailyTodoContent" style="display:flex;flex-direction:column;gap:0.5rem;">
+        <span style="color:#64748b;font-size:0.9rem;">Loading tasks...</span>
+      </div>
+    </div>
+
     <!-- Environmental Conditions -->
     <div class="card">
       <h2>Environmental Conditions</h2>
@@ -5091,6 +5115,73 @@
         btn.style.opacity = '0.7';
       }
     }
+
+    // ═══════════ Daily To-Do — Farm Ops Agent ═══════════
+    async function loadDailyTodo() {
+      const container = document.getElementById('dailyTodoContent');
+      const card = document.getElementById('dailyTodoCard');
+      if (!container) return;
+
+      try {
+        const filter = document.getElementById('todoFilterCategory')?.value || '';
+        const url = '/api/farm-ops/daily-todo' + (filter ? '?category=' + encodeURIComponent(filter) : '');
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('API returned ' + resp.status);
+        const data = await resp.json();
+
+        if (!data.tasks || data.tasks.length === 0) {
+          container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#64748b;font-size:0.9rem;">✅ No tasks for today — you\'re all caught up!</div>';
+          if (card) card.style.display = '';
+          return;
+        }
+
+        const categoryColors = {
+          wholesale: { bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.4)', text: '#fb923c', icon: '📦' },
+          harvest: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.4)', text: '#4ade80', icon: '🌾' },
+          seeding: { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.4)', text: '#60a5fa', icon: '🌱' },
+          anomaly: { bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.4)', text: '#f87171', icon: '⚠️' },
+          environment: { bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.4)', text: '#f472b6', icon: '🌡️' },
+          'ai-recommendation': { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.4)', text: '#a78bfa', icon: '🤖' }
+        };
+        const defaultStyle = { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.3)', text: '#94a3b8', icon: '📌' };
+
+        let html = '';
+        for (const task of data.tasks.slice(0, 10)) {
+          const s = categoryColors[task.category] || defaultStyle;
+          const scorePct = Math.round((task.score || 0) * 100);
+          const scoreColor = scorePct >= 70 ? '#f87171' : scorePct >= 40 ? '#fbbf24' : '#4ade80';
+          html += `
+            <div style="background:${s.bg};border:1px solid ${s.border};border-radius:8px;padding:0.75rem 1rem;display:flex;gap:0.75rem;align-items:flex-start;">
+              <span style="font-size:1.1rem;flex-shrink:0;margin-top:2px;">${s.icon}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+                  <span style="font-weight:600;color:${s.text};font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
+                  <span style="flex-shrink:0;font-size:0.7rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:2px 6px;border-radius:4px;" title="Priority score">${scorePct}%</span>
+                </div>
+                <div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;">${task.why || ''}</div>
+                ${task.estimated_minutes ? `<span style="font-size:0.7rem;color:#64748b;margin-top:0.25rem;display:inline-block;">~${task.estimated_minutes} min</span>` : ''}
+              </div>
+            </div>`;
+        }
+
+        if (data.task_count > 10) {
+          html += `<div style="text-align:center;padding:0.5rem;color:#64748b;font-size:0.8rem;">${data.task_count - 10} more task(s) not shown</div>`;
+        }
+
+        container.innerHTML = html;
+        if (card) card.style.display = '';
+      } catch (err) {
+        console.warn('[Daily Todo]', err.message);
+        container.innerHTML = '<div style="color:#64748b;font-size:0.85rem;padding:0.75rem;text-align:center;">Daily tasks unavailable</div>';
+        if (card) card.style.display = '';
+      }
+    }
+
+    // Wire up category filter
+    document.getElementById('todoFilterCategory')?.addEventListener('change', () => loadDailyTodo());
+
+    // Load on page ready
+    loadDailyTodo();
 
     // ═══════════ Harvest Readiness (S4.2) ═══════════
     async function loadHarvestReadiness() {

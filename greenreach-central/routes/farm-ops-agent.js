@@ -419,44 +419,137 @@ const TOOL_CATALOG = {
     category: 'write',
     required: ['alert_id'],
     optional: ['reason'],
+    undoable: true,
     handler: async ({ alert_id, reason }) => {
       let alerts = readJSON('system-alerts.json', []);
       alerts = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
       const alert = alerts.find(a => a.id === alert_id);
       if (!alert) return { ok: false, error: `Alert ${alert_id} not found` };
+      const previousState = { dismissed: alert.dismissed, dismissed_at: alert.dismissed_at, dismiss_reason: alert.dismiss_reason };
       alert.dismissed = true;
       alert.dismissed_at = new Date().toISOString();
       alert.dismiss_reason = reason || 'Agent-dismissed';
       writeJSON('system-alerts.json', alerts);
-      return { ok: true, alert_id, dismissed: true };
+      return { ok: true, alert_id, dismissed: true, _undo_state: previousState };
+    },
+    undoHandler: async ({ alert_id }, previousState) => {
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+      const alert = alerts.find(a => a.id === alert_id);
+      if (!alert) return { ok: false, error: `Alert ${alert_id} not found for undo` };
+      alert.dismissed = previousState.dismissed || false;
+      alert.dismissed_at = previousState.dismissed_at || undefined;
+      alert.dismiss_reason = previousState.dismiss_reason || undefined;
+      writeJSON('system-alerts.json', alerts);
+      return { ok: true, alert_id, undone: true };
     }
   },
   'auto_assign_devices': {
-    description: 'Auto-assign unassigned IoT devices to rooms/zones',
+    description: 'Auto-assign unassigned IoT devices to rooms/zones based on type and availability',
     category: 'write',
     required: [],
     optional: ['room_id'],
+    undoable: true,
     handler: async ({ room_id }) => {
-      // Delegate to the existing backend endpoint via internal fetch
-      const payload = room_id ? { room_id } : {};
-      // Direct implementation to avoid circular HTTP calls
-      const deviceMetaPath = path.join(DATA_DIR, 'device-meta.json');
-      const roomsPath = path.join(DATA_DIR, 'rooms.json');
-      let rooms = {};
-      try { rooms = JSON.parse(fs.readFileSync(roomsPath, 'utf8')); } catch (_) {}
-      let deviceMeta = {};
-      try { deviceMeta = JSON.parse(fs.readFileSync(deviceMetaPath, 'utf8')); } catch (_) {}
-      const unassigned = Object.values(deviceMeta).filter(d => !d.room_id);
-      return { ok: true, unassigned_count: unassigned.length, message: 'Use POST /api/devices/auto-assign for full assignment' };
+      const deviceMeta = readJSON('device-meta.json', {});
+      const rooms = readJSON('rooms.json', {});
+      const roomList = rooms.rooms || Object.values(rooms).filter(r => typeof r === 'object');
+
+      // Snapshot for undo
+      const previousAssignments = {};
+      const assignments = [];
+      const unassigned = Object.entries(deviceMeta).filter(([_, d]) => !d.room_id);
+
+      if (unassigned.length === 0) {
+        return { ok: true, assigned: 0, message: 'All devices are already assigned.' };
+      }
+
+      // Simple round-robin assignment: assign to rooms that have fewest devices
+      const roomDeviceCounts = {};
+      for (const r of roomList) {
+        const rid = r.id || r.room_id;
+        if (room_id && rid !== room_id) continue;
+        roomDeviceCounts[rid] = Object.values(deviceMeta).filter(d => d.room_id === rid).length;
+      }
+
+      const availableRooms = Object.keys(roomDeviceCounts);
+      if (availableRooms.length === 0) {
+        return { ok: true, assigned: 0, message: 'No rooms available for assignment.' };
+      }
+
+      for (const [deviceId, device] of unassigned) {
+        // Pick room with fewest devices
+        availableRooms.sort((a, b) => (roomDeviceCounts[a] || 0) - (roomDeviceCounts[b] || 0));
+        const targetRoom = availableRooms[0];
+        previousAssignments[deviceId] = { room_id: device.room_id, zone: device.zone };
+        device.room_id = targetRoom;
+        device.zone = 'zone-1';
+        device.assigned_at = new Date().toISOString();
+        device.assigned_by = 'farm-ops-agent';
+        roomDeviceCounts[targetRoom] = (roomDeviceCounts[targetRoom] || 0) + 1;
+        assignments.push({ device_id: deviceId, room_id: targetRoom, zone: 'zone-1', device_type: device.type || device.protocol || 'unknown' });
+      }
+
+      writeJSON('device-meta.json', deviceMeta);
+      return { ok: true, assigned: assignments.length, assignments, _undo_state: previousAssignments };
+    },
+    undoHandler: async (params, previousAssignments) => {
+      const deviceMeta = readJSON('device-meta.json', {});
+      let undone = 0;
+      for (const [deviceId, prev] of Object.entries(previousAssignments)) {
+        if (deviceMeta[deviceId]) {
+          deviceMeta[deviceId].room_id = prev.room_id || undefined;
+          deviceMeta[deviceId].zone = prev.zone || undefined;
+          delete deviceMeta[deviceId].assigned_at;
+          delete deviceMeta[deviceId].assigned_by;
+          undone++;
+        }
+      }
+      writeJSON('device-meta.json', deviceMeta);
+      return { ok: true, undone, message: `Reverted ${undone} device assignment(s)` };
     }
   },
   'seed_benchmarks': {
-    description: 'Seed crop benchmarks from the GreenReach network',
+    description: 'Seed crop benchmarks from the crop registry into benchmark config',
     category: 'write',
     required: [],
-    optional: ['farm_id', 'crops'],
+    optional: ['crops'],
+    undoable: true,
     handler: async (params) => {
-      return { ok: true, message: 'Use POST /api/setup-wizard/seed-benchmarks for full benchmark seeding', params };
+      const registry = readJSON('crop-registry.json', {});
+      const crops = registry.crops || registry;
+      const benchmarkPath = path.join(DATA_DIR, 'crop-benchmarks.json');
+      const existing = readJSON('crop-benchmarks.json', { benchmarks: {}, seeded_at: null });
+      const previousState = JSON.parse(JSON.stringify(existing));
+
+      const filterCrops = params.crops ? params.crops.split(',').map(c => c.trim().toLowerCase()) : null;
+      let seeded = 0;
+      for (const [name, info] of Object.entries(crops)) {
+        if (filterCrops && !filterCrops.some(f => name.toLowerCase().includes(f))) continue;
+        const growth = info.growth || {};
+        existing.benchmarks[name] = {
+          days_to_harvest: growth.daysToHarvest || growth.cycle_days || 28,
+          yield_factor: growth.yieldFactor || 0.85,
+          harvest_strategy: growth.harvestStrategy || 'single',
+          max_harvests: growth.maxHarvests || 1,
+          regrowth_days: growth.regrowthDays || null,
+          retail_price_per_lb: growth.retailPricePerLb || null,
+          category: info.category || 'unknown',
+          source: 'crop-registry',
+          seeded_at: new Date().toISOString()
+        };
+        seeded++;
+      }
+      existing.seeded_at = new Date().toISOString();
+      existing.crop_count = Object.keys(existing.benchmarks).length;
+      writeJSON('crop-benchmarks.json', existing);
+
+      return {
+        ok: true,
+        seeded,
+        total_benchmarks: existing.crop_count,
+        _undo_state: previousState
+      };
     }
   }
 };
@@ -464,6 +557,10 @@ const TOOL_CATALOG = {
 // Idempotency cache: key → { result, created_at }
 const idempotencyCache = new Map();
 const IDEMPOTENCY_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Undo history: stores last N write operations with undo state
+const undoHistory = [];
+const MAX_UNDO_HISTORY = 50;
 
 // Audit log (in-memory, persisted to file on each write)
 const AUDIT_LOG_PATH = path.join(DATA_DIR, 'agent-audit-log.json');
@@ -532,8 +629,27 @@ router.post('/tool-gateway', async (req, res) => {
     }
   }
 
-  // Safety: dangerous tools require explicit confirmation (two-phase)
-  if (toolDef.category === 'dangerous') {
+  // Safety: write tools use two-phase commit (preview → confirm)
+  // On first call without confirm:true, return a preview of what will happen.
+  // Client must re-send with confirm:true to actually execute.
+  const { confirm } = req.body;
+  if (toolDef.category === 'write' && !confirm) {
+    return res.json({
+      ok: true,
+      phase: 'preview',
+      tool,
+      category: toolDef.category,
+      description: toolDef.description,
+      params,
+      undoable: !!toolDef.undoable,
+      message: 'This is a write operation. Review and re-send with confirm: true to execute.',
+      required: toolDef.required,
+      optional: toolDef.optional
+    });
+  }
+
+  // Dangerous tools require explicit confirmation even beyond two-phase
+  if (toolDef.category === 'dangerous' && !confirm) {
     return res.status(403).json({
       ok: false,
       error: 'This tool requires explicit confirmation. Send confirm: true to proceed.',
@@ -565,7 +681,20 @@ router.post('/tool-gateway', async (req, res) => {
       idempotencyCache.set(idempotency_key, { result, created_at: Date.now() });
     }
 
-    res.json({ ok: true, tool, result, duration_ms: durationMs });
+    // Store undo state for undoable write tools
+    if (toolDef.undoable && toolDef.category === 'write' && result._undo_state) {
+      undoHistory.push({
+        id: auditEntry.id,
+        tool,
+        params,
+        undo_state: result._undo_state,
+        timestamp: auditEntry.timestamp
+      });
+      if (undoHistory.length > MAX_UNDO_HISTORY) undoHistory.shift();
+      delete result._undo_state; // Don't expose internals to client
+    }
+
+    res.json({ ok: true, tool, result, undoable: !!toolDef.undoable, duration_ms: durationMs });
   } catch (error) {
     const durationMs = Date.now() - startTime;
     appendAuditEntry({
@@ -592,9 +721,64 @@ router.get('/tool-catalog', (req, res) => {
     description: def.description,
     category: def.category,
     required_params: def.required,
-    optional_params: def.optional
+    optional_params: def.optional,
+    undoable: !!def.undoable
   }));
   res.json({ ok: true, tools: catalog, count: catalog.length });
+});
+
+/**
+ * POST /undo — Undo the last write operation (or a specific one by audit ID)
+ * Body: { audit_id? }
+ */
+router.post('/undo', async (req, res) => {
+  const { audit_id } = req.body || {};
+  try {
+    let entry;
+    if (audit_id) {
+      const idx = undoHistory.findIndex(e => e.id === audit_id);
+      if (idx === -1) return res.status(404).json({ ok: false, error: `No undoable action found with ID ${audit_id}` });
+      entry = undoHistory.splice(idx, 1)[0];
+    } else {
+      entry = undoHistory.pop();
+      if (!entry) return res.status(404).json({ ok: false, error: 'No undoable actions in history' });
+    }
+
+    const toolDef = TOOL_CATALOG[entry.tool];
+    if (!toolDef || !toolDef.undoHandler) {
+      return res.status(400).json({ ok: false, error: `Tool ${entry.tool} does not support undo` });
+    }
+
+    const result = await toolDef.undoHandler(entry.params, entry.undo_state);
+    appendAuditEntry({
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      tool: entry.tool,
+      category: 'undo',
+      params: { original_audit_id: entry.id },
+      success: true,
+      duration_ms: 0
+    });
+    res.json({ ok: true, undone_tool: entry.tool, undone_at: entry.timestamp, result });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /undo-history — list undoable actions
+ */
+router.get('/undo-history', (req, res) => {
+  res.json({
+    ok: true,
+    count: undoHistory.length,
+    entries: undoHistory.map(e => ({
+      id: e.id,
+      tool: e.tool,
+      params: e.params,
+      timestamp: e.timestamp
+    }))
+  });
 });
 
 // ============================================================================
@@ -697,11 +881,86 @@ const COMMAND_FAMILIES = [
     slots: {},
     tool: 'get_daily_todo',
     tool_params: { category: 'seeding' }
+  },
+  {
+    intent: 'seed_benchmarks',
+    family: 'planting',
+    patterns: [
+      /(?:seed|load|import)\s*benchmark/i,
+      /benchmark\s*(?:data|seed|import|setup)/i,
+      /(?:crop|yield)\s*benchmark/i
+    ],
+    slots: {},
+    tool: 'seed_benchmarks'
+  },
+  {
+    intent: 'undo_last',
+    family: 'status',
+    patterns: [
+      /undo\s*(?:last|that|previous)/i,
+      /(?:revert|rollback|take\s*back)/i
+    ],
+    slots: {},
+    tool: null,
+    special: 'undo'
   }
 ];
 
 /**
+ * Fuzzy keyword matching — provides medium-confidence matches when regex fails.
+ * Uses word overlap scoring against command family keywords.
+ */
+const INTENT_KEYWORDS = {
+  daily_todo: ['today', 'todo', 'tasks', 'priorities', 'morning', 'briefing', 'agenda', 'list', 'plan'],
+  room_status: ['room', 'space', 'status', 'check', 'environment', 'growing'],
+  harvest_check: ['harvest', 'ready', 'pick', 'cut', 'ripe', 'mature'],
+  order_status: ['order', 'orders', 'wholesale', 'pending', 'delivery', 'buyer'],
+  alert_check: ['alert', 'alerts', 'warning', 'problem', 'issue', 'sensor', 'outage', 'anomaly'],
+  dismiss_alert: ['dismiss', 'clear', 'resolve', 'acknowledge'],
+  auto_assign: ['assign', 'auto', 'device', 'devices', 'light', 'lights', 'sensor'],
+  seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],
+  seed_benchmarks: ['benchmark', 'benchmarks', 'import', 'crop', 'yield', 'baseline'],
+  undo_last: ['undo', 'revert', 'rollback', 'takeback']
+};
+
+function fuzzyMatch(text) {
+  const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  if (words.length === 0) return null;
+
+  let bestIntent = null;
+  let bestScore = 0;
+
+  for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
+    const overlap = words.filter(w => keywords.some(kw => kw.includes(w) || w.includes(kw))).length;
+    const score = overlap / Math.max(words.length, keywords.length);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIntent = intent;
+    }
+  }
+
+  if (bestScore >= 0.15 && bestIntent) {
+    const cmd = COMMAND_FAMILIES.find(c => c.intent === bestIntent);
+    const confidence = Math.min(0.7, 0.3 + bestScore);
+    return {
+      ok: true,
+      intent: bestIntent,
+      family: cmd?.family || 'unknown',
+      confidence,
+      slots: cmd?.tool_params || {},
+      suggested_tool: cmd?.tool || null,
+      match_type: 'fuzzy',
+      original_text: text,
+      requires_confirmation: confidence < 0.5
+    };
+  }
+  return null;
+}
+
+/**
  * Parse a natural-language command into intent + slots + suggested tool.
+ * Uses regex matching first (high confidence), then fuzzy keyword matching
+ * (medium confidence), then abstains.
  */
 function parseNaturalCommand(text) {
   const normalized = text.trim();
@@ -732,6 +991,10 @@ function parseNaturalCommand(text) {
       }
     }
   }
+
+  // No regex match — try fuzzy keyword matching
+  const fuzzyResult = fuzzyMatch(normalized);
+  if (fuzzyResult) return fuzzyResult;
 
   // No match — return abstain response
   return {
