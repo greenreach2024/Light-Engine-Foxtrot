@@ -1882,13 +1882,16 @@
       </div>
     </div>
 
-    <!-- Harvest Readiness Cards (S4.2) -->
+    <!-- Harvest Readiness Cards (S4.2) — collapsed by default, expand for recipe details -->
     <div class="card" id="harvestReadinessCard" style="display:none;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin:0;">🌾 Harvest Readiness</h2>
-        <button class="refresh-btn" onclick="loadHarvestReadiness()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+        <h2 style="margin:0;cursor:pointer;" onclick="toggleHarvestReadinessPanel()">🌾 Harvest Readiness <span id="hrToggleIcon" style="font-size:0.75rem;color:#94a3b8;">▶ expand</span></h2>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span id="hrSummaryBadge" style="font-size:0.8rem;color:#94a3b8;"></span>
+          <button class="refresh-btn" onclick="loadHarvestReadiness()" style="background:#334155;border:none;color:#94a3b8;padding:0.375rem 0.75rem;border-radius:6px;cursor:pointer;font-size:0.8rem;">↻</button>
+        </div>
       </div>
-      <div id="harvestReadinessContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:0.75rem;"></div>
+      <div id="harvestReadinessContent" style="display:none;margin-top:0.75rem;"></div>
     </div>
 
     <!-- Loss Prediction Alerts (S4.3) -->
@@ -5183,44 +5186,202 @@
     // Load on page ready
     loadDailyTodo();
 
-    // ═══════════ Harvest Readiness (S4.2) ═══════════
+    // ═══════════ Harvest Readiness (S4.2) — rich recipe cards, collapsed by default ═══════════
+    function toggleHarvestReadinessPanel() {
+      const el = document.getElementById('harvestReadinessContent');
+      const icon = document.getElementById('hrToggleIcon');
+      if (!el) return;
+      const hidden = el.style.display === 'none';
+      el.style.display = hidden ? 'block' : 'none';
+      if (icon) icon.textContent = hidden ? '\u25BC collapse' : '\u25B6 expand';
+    }
+    function toggleHRCard(gid) {
+      const el = document.getElementById('hr-detail-' + gid);
+      const arrow = document.getElementById('hr-arrow-' + gid);
+      if (!el) return;
+      const hidden = el.style.display === 'none';
+      el.style.display = hidden ? 'block' : 'none';
+      if (arrow) arrow.textContent = hidden ? '\u25BC' : '\u25B6';
+    }
+
     async function loadHarvestReadiness() {
       try {
-        const resp = await fetch('/api/harvest/readiness?t=' + Date.now());
-        if (!resp.ok) {
-          const el = document.getElementById('harvestReadinessContent');
-          const card = document.getElementById('harvestReadinessCard');
-          if (el && card) { card.style.display = ''; el.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;padding:0.75rem;text-align:center;">Harvest readiness data unavailable</div>'; }
+        // Fetch readiness data + groups + plans in parallel
+        const [readinessResp, groupsResp, plansPayload] = await Promise.all([
+          fetch('/api/harvest/readiness?t=' + Date.now()),
+          fetchWithFarmAuth('/data/groups.json'),
+          fetchPlansWithFallback()
+        ]);
+        const card = document.getElementById('harvestReadinessCard');
+        const el = document.getElementById('harvestReadinessContent');
+        if (!card || !el) return;
+        if (!readinessResp.ok) {
+          card.style.display = '';
+          el.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;padding:0.75rem;text-align:center;">Harvest readiness data unavailable</div>';
+          el.style.display = 'block';
           return;
         }
-        const data = await resp.json();
+
+        const data = await readinessResp.json();
         const rawItems = data.notifications || data.groups || data.data || [];
-        const groups = rawItems.map((item, idx) => ({
-          id: item.group_id || item.groupId || item.id || `harvest-${idx}`,
-          group_name: item.group_name || item.groupId || item.group_id || item.crop || item.id || 'Group',
-          readiness_score: item.readiness_score ?? item.readiness ?? item.confidence ?? 0,
-          days_remaining: item.days_remaining ?? item.days_to_harvest ?? item.daysUntilHarvest ?? null,
-          predicted_yield: item.predicted_yield ?? item.predictedYield ?? null,
-          message: item.message || null
-        }));
-        const el = document.getElementById('harvestReadinessContent');
-        const card = document.getElementById('harvestReadinessCard');
-        if (!el || groups.length === 0) { if (card) card.style.display = 'none'; return; }
+        if (rawItems.length === 0) { card.style.display = 'none'; return; }
+
+        // Build lookup maps for groups and plans
+        let allGroups = [];
+        if (groupsResp && groupsResp.ok) {
+          const gd = await groupsResp.json();
+          allGroups = normaliseGroupsPayload(gd).map(normalizeGroupRecord);
+        }
+        const allPlans = (plansPayload?.plans || []);
+
         card.style.display = '';
-        trackAIInteraction('view', { category: 'harvest_readiness', count: groups.length });
-        el.innerHTML = groups.map(g => {
-          const pct = Math.min(100, Math.round((g.readiness_score || g.readiness || 0) * 100));
-          const color = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#64748b';
-          return `<div style="background:#1e293b;border-radius:8px;padding:1rem;border-left:3px solid ${color};">
-            <div style="font-weight:600;color:#f1f5f9;margin-bottom:0.25rem;">${g.group_name || g.crop || g.id}</div>
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
-              <div style="flex:1;background:#334155;border-radius:4px;height:6px;"><div style="width:${pct}%;background:${color};border-radius:4px;height:100%;"></div></div>
-              <span style="color:${color};font-weight:700;font-size:0.8rem;">${pct}%</span>
+        trackAIInteraction('view', { category: 'harvest_readiness', count: rawItems.length });
+
+        // Summary badge
+        const readyCount = rawItems.filter(i => (i.level === 'ready_now' || (i.readiness_score || i.readiness || i.confidence || 0) >= 0.9)).length;
+        const badge = document.getElementById('hrSummaryBadge');
+        if (badge) {
+          badge.textContent = readyCount > 0
+            ? readyCount + ' ready now \u00B7 ' + rawItems.length + ' total'
+            : rawItems.length + ' group' + (rawItems.length !== 1 ? 's' : '') + ' tracked';
+        }
+
+        el.innerHTML = rawItems.map(item => {
+          const gid = item.groupId || item.group_id || item.id || 'hr-' + Math.random().toString(36).slice(2,8);
+          const crop = item.crop || '';
+          const level = item.level || 'growing';
+          const score = item.readinessScore ?? item.readiness_score ?? item.readiness ?? item.confidence ?? 0;
+          const pct = Math.min(100, Math.round(score * (score <= 1 ? 100 : 1)));
+          const daysRem = item.daysRemaining ?? item.days_remaining ?? item.days_to_harvest ?? null;
+          const msg = item.message || '';
+
+          // Color by level
+          const color = level === 'ready_now' ? '#22c55e' : level === 'almost_ready' ? '#f59e0b' : '#64748b';
+          const levelLabel = level === 'ready_now' ? 'READY' : level === 'almost_ready' ? 'SOON' : 'GROWING';
+
+          // Cross-reference with groups data for recipe details
+          const groupRec = allGroups.find(g => String(g.id) === String(gid) || g.id === gid);
+          const planKey = groupRec ? (groupRec.planId || groupRec.plan || groupRec.planKey || groupRec.planConfig?.planId) : null;
+          const plan = planKey ? findPlanById(allPlans, planKey) : null;
+
+          // Build recipe detail panel (only if plan + group found)
+          let recipeHtml = '';
+          if (plan && groupRec) {
+            // Calculate current day
+            const resolvedAnchor = groupRec.planConfig?.anchor || groupRec.planConfig?.preview?.anchor || {};
+            const anchor = { ...resolvedAnchor };
+            if (!anchor.seedDate) {
+              const rs = planSummaryGetSeedDate(groupRec.planConfig, groupRec);
+              anchor.seedDate = rs ? rs.toISOString() : (groupRec.planConfig?.seedDate || groupRec.seedDate || groupRec.planSeedDate || null);
+            }
+            let currentDay = 1;
+            if ((anchor.mode === 'seedDate' || anchor.mode == null) && anchor.seedDate) {
+              const sd = new Date(anchor.seedDate);
+              currentDay = Math.floor((new Date() - sd) / 86400000) + 1;
+            } else if (anchor.mode === 'dps' && anchor.dps != null) {
+              currentDay = anchor.dps;
+            }
+            if (currentDay < 1) currentDay = 1;
+
+            const dayData = getPlanDayData(plan, currentDay);
+            const planDays = Array.isArray(plan?.days) ? plan.days
+              : (Array.isArray(plan?.light?.days) ? plan.light.days
+                : (Array.isArray(plan?.env?.days) ? plan.env.days : []));
+            const dayNumbers = planDays.map(d => d.day || 0).filter(d => d > 0);
+            const planMaxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : currentDay;
+            const groupCrop = groupRec.crop || '';
+            const registryGrowDays = (window.cropUtils && cropUtils.getCropGrowDays(groupCrop)) || 0;
+            const maxDay = registryGrowDays || planMaxDay;
+            const daysToHarvest = maxDay - currentDay;
+
+            // Harvest countdown color
+            let hColor = '#10b981';
+            if (daysToHarvest <= 0) hColor = '#ef4444';
+            else if (daysToHarvest <= 7) hColor = '#f59e0b';
+
+            const ppfd = dayData?.ppfd || 0;
+            const photoperiod = groupRec.planConfig?.schedule?.photoperiodHours || groupRec.planConfig?.schedule?.totalOnHours || 0;
+            const dli = ppfd && photoperiod ? ((ppfd * photoperiod * 3600) / 1000000).toFixed(1) : 0;
+            let temp = dayData?.tempC || dayData?.temperature || 0;
+            if (!temp && plan?.env?.days) {
+              const ed = plan.env.days.find(d => d.day === currentDay) || plan.env.days[0];
+              temp = ed?.tempC || ed?.temperature || 0;
+            }
+            const stageName = dayData?.stage || '';
+            const tankSel = (dayData?.nutrients?.tank ?? dayData?.environment?.nutrients?.tank ?? plan?.env?.nutrients?.tank ?? plan?.environment?.nutrients?.tank ?? plan?.nutrients?.tank) || '';
+            const _sn = (stageName || '').trim().toLowerCase();
+            const effectiveTank = tankSel || (/flower|fruit/.test(_sn) ? 'Tank 2' : 'Tank 1');
+
+            // Spectrum
+            const mix = dayData?.mix || {};
+            const toNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+            const bv = toNum(mix.bl ?? dayData?.bl ?? dayData?.blue);
+            const gv = toNum((mix.gn ?? dayData?.gn ?? dayData?.green) ?? ((toNum(mix.cw ?? dayData?.cw) + toNum(mix.ww ?? dayData?.ww)) || null));
+            const rv = toNum(mix.rd ?? dayData?.rd ?? dayData?.red);
+            const fv = toNum(mix.fr ?? dayData?.fr ?? dayData?.far_red);
+            const st = bv + gv + rv + fv;
+            const bp = st > 0 ? (bv/st*100) : 0;
+            const gp = st > 0 ? (gv/st*100) : 0;
+            const rp = st > 0 ? (rv/st*100) : 0;
+            const fp = st > 0 ? (fv/st*100) : 0;
+
+            const seedStr = anchor.seedDate ? new Date(anchor.seedDate).toISOString().slice(0,10) : '';
+
+            const harvestLabel = daysToHarvest > 0
+              ? daysToHarvest + ' days to harvest'
+              : daysToHarvest === 0 ? 'Harvest Today!' : 'Overdue ' + Math.abs(daysToHarvest) + ' days';
+
+            recipeHtml = `
+              <div id="hr-detail-${gid}" style="display:none;margin-top:0.75rem;">
+                <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border:1px solid #334155;border-radius:8px;padding:12px;">
+                  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                    ${seedStr ? '<div style="font-size:0.8rem;color:#94a3b8;">Seed: ' + seedStr + '</div>' : ''}
+                    <div style="font-size:0.8rem;color:${hColor};font-weight:600;">${harvestLabel}</div>
+                    <div style="font-size:0.8rem;color:#94a3b8;">Day ${currentDay} of ${maxDay}${stageName ? ' \u00B7 ' + stageName : ''}</div>
+                  </div>
+                  <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0;margin-bottom:8px;">\uD83D\uDCCB Today's Recipe \u2014 Day ${currentDay} \u2013 ${plan.name || plan.crop || 'Plan'}</div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:0.8rem;">
+                    <div><div style="color:#64748b;font-size:0.7rem;">PPFD</div><div style="color:#e2e8f0;font-weight:700;">${ppfd || '\u2014'} \u00B5mol</div></div>
+                    <div><div style="color:#64748b;font-size:0.7rem;">DLI</div><div style="color:#e2e8f0;font-weight:700;">${dli || '\u2014'} mol/m\u00B2/d</div></div>
+                    <div><div style="color:#64748b;font-size:0.7rem;">Photoperiod</div><div style="color:#e2e8f0;font-weight:700;">${photoperiod || '\u2014'} hrs</div></div>
+                    <div><div style="color:#64748b;font-size:0.7rem;">Temp</div><div style="color:#e2e8f0;font-weight:700;">${temp || '\u2014'}\u00B0C</div></div>
+                    <div><div style="color:#64748b;font-size:0.7rem;">Stage</div><div style="color:#e2e8f0;font-weight:700;">${stageName || '\u2014'}</div></div>
+                    <div><div style="color:#64748b;font-size:0.7rem;">Nutrient Tank</div><div style="color:#e2e8f0;font-weight:700;">${effectiveTank || '\u2014'}</div></div>
+                  </div>
+                  ${st > 0 ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #334155;">
+                    <div style="font-size:0.7rem;color:#64748b;margin-bottom:6px;">Spectrum:</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${bp > 0 ? '<span style="font-size:0.75rem;padding:2px 8px;background:#1e3a5f;border:1px solid #60a5fa;border-radius:4px;color:#93c5fd;">Blue ' + bp.toFixed(0) + '%</span>' : ''}
+                    ${gp > 0 ? '<span style="font-size:0.75rem;padding:2px 8px;background:#064e3b;border:1px solid #6ee7b7;border-radius:4px;color:#6ee7b7;">Green ' + gp.toFixed(0) + '%</span>' : ''}
+                    ${rp > 0 ? '<span style="font-size:0.75rem;padding:2px 8px;background:#7f1d1d;border:1px solid #fca5a5;border-radius:4px;color:#fca5a5;">Red ' + rp.toFixed(0) + '%</span>' : ''}
+                    ${fp > 0 ? '<span style="font-size:0.75rem;padding:2px 8px;background:#831843;border:1px solid #f9a8d4;border-radius:4px;color:#f9a8d4;">Far-Red ' + fp.toFixed(0) + '%</span>' : ''}
+                    </div></div>` : ''}
+                </div>
+              </div>`;
+          } else {
+            recipeHtml = `<div id="hr-detail-${gid}" style="display:none;margin-top:0.75rem;"><div style="background:#1e293b;border-radius:8px;padding:12px;color:#94a3b8;font-size:0.8rem;">No grow recipe assigned to this group yet. Assign a recipe to see full details.</div></div>`;
+          }
+
+          const groupLabel = crop || (groupRec ? groupRec.name : '') || 'Group ' + gid;
+          const subLabel = crop && groupRec?.name ? '<span style="color:#64748b;font-size:0.75rem;">' + groupRec.name + '</span>' : '';
+
+          // Compact summary strip — click to expand for recipe details
+          return `<div style="margin-bottom:0.5rem;">
+            <div onclick="toggleHRCard('${gid}')" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#1e293b;border-radius:8px;border-left:3px solid ${color};cursor:pointer;transition:background 0.15s;">
+              <span id="hr-arrow-${gid}" style="color:#94a3b8;font-size:0.9rem;width:1rem;text-align:center;">\u25B6</span>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                  <span style="font-weight:600;color:#f1f5f9;font-size:0.9rem;">${groupLabel}</span>
+                  ${subLabel}
+                  <span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;font-weight:600;color:${color};background:${color}20;">${levelLabel}</span>
+                </div>
+                <div style="color:#94a3b8;font-size:0.75rem;margin-top:2px;">${daysRem != null ? daysRem + ' days remaining' : ''}${msg ? ' \u00B7 ' + msg : ''}</div>
+              </div>
+              <div style="text-align:right;min-width:50px;">
+                <div style="color:${color};font-weight:700;font-size:1rem;">${pct}%</div>
+              </div>
             </div>
-            <div style="color:#94a3b8;font-size:0.75rem;">${g.days_remaining != null ? g.days_remaining + ' days to harvest' : ''} ${g.predicted_yield ? '· ~' + g.predicted_yield + ' yield' : ''} ${g.message ? '· ' + g.message : ''}</div>
-            <div style="margin-top:0.5rem;display:flex;justify-content:flex-end;">
-              <button onclick="acknowledgeAIItem('harvest_readiness','${g.id}',this)" style="background:#334155;border:none;color:#94a3b8;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.72rem;">Acknowledge</button>
-            </div>
+            ${recipeHtml}
           </div>`;
         }).join('');
       } catch (e) { console.warn('[HarvestReadiness]', e.message); }
@@ -5252,7 +5413,6 @@
               <div style="color:#94a3b8;font-size:0.75rem;">${a.factors ? a.factors.join(', ') : a.message || 'Elevated risk'}</div>
             </div>
             <span style="color:${sev};font-weight:700;font-size:0.875rem;">${Math.round((a.risk_score || 0) * 100)}%</span>
-            <button onclick="acknowledgeAIItem('loss_prediction','${a.group_id || a.group_name || a.zone || 'zone'}',this)" style="background:#334155;border:none;color:#94a3b8;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.72rem;">Acknowledge</button>
           </div>`;
         }).join('');
       } catch (e) { console.warn('[LossPredictions]', e.message); }
