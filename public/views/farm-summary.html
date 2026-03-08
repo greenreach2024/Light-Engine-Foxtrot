@@ -5147,7 +5147,7 @@
                   <span style="font-weight:600;color:${s.text};font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
                   <span style="flex-shrink:0;font-size:0.7rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:2px 6px;border-radius:4px;" title="Priority score">${scorePct}%</span>
                 </div>
-                <div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;">${task.why || ''}</div>
+                <div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;">${typeof task.why === 'object' ? (task.why.message || task.why.error || JSON.stringify(task.why)) : (task.why || '')}</div>
                 ${task.estimated_minutes ? `<span style="font-size:0.7rem;color:#64748b;margin-top:0.25rem;display:inline-block;">~${task.estimated_minutes} min</span>` : ''}
               </div>
             </div>`;

@@ -200,19 +200,72 @@ function generateDailyTodo() {
   // --- Source D: Environment anomalies & sensor outages ---
   const alerts = readJSON('system-alerts.json', []);
   const alertArr = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+  const seenAlertKeys = new Set();
   for (const alert of alertArr) {
     if (alert.resolved || alert.dismissed) continue;
     const severity = (alert.severity || alert.level || 'info').toLowerCase();
     if (severity === 'info') continue;
 
+    // Deduplicate alerts with the same type + key details
+    const d = (alert.details && typeof alert.details === 'object') ? alert.details : {};
+    const dedupKey = `${alert.type || ''}-${d.sku_id || ''}-${d.error || ''}-${d.message || ''}-${d.farm_id || ''}-${d.sub_order_id || ''}`;
+    if (seenAlertKeys.has(dedupKey)) continue;
+    seenAlertKeys.add(dedupKey);
+
+    // Build a specific, actionable title from alert type + details
+    const details = d;
+    const alertTypeLabels = {
+      overselling_detected: details.sku_id
+        ? `Overselling: ${details.sku_id} (oversold by ${details.oversold_by || '?'})`
+        : 'Inventory overselling detected',
+      reservation_conflict: details.sku_id
+        ? `Inventory conflict: ${details.sku_id} — need ${details.requested || '?'}, have ${details.available || '?'}`
+        : 'Inventory reservation conflict',
+      payment_failed: `Payment failed${details.buyer_email ? ` for ${details.buyer_email}` : ''}${details.error ? `: ${details.error}` : ''}`,
+      farm_offline: `Farm offline${details.farm_id ? ` (${details.farm_id})` : ''}`,
+      deadline_missed: `Deadline missed${details.sub_order_id ? ` — order ${details.sub_order_id}` : ''}`
+    };
+    const alertTitle = alert.title || alert.message
+      || alertTypeLabels[alert.type]
+      || details.message
+      || `${severity} alert`;
+
+    // Build a human-readable 'why' string — never pass raw objects to the client
+    let alertWhy = alert.description;
+    if (!alertWhy) {
+      if (typeof alert.details === 'string') {
+        alertWhy = alert.details;
+      } else if (details.message) {
+        alertWhy = details.message;
+        if (details.sku_id) alertWhy += ` (${details.sku_id})`;
+      } else {
+        // Summarize key details as a readable string
+        const parts = [];
+        if (details.sku_id) parts.push(`SKU: ${details.sku_id}`);
+        if (details.error) parts.push(details.error);
+        if (details.farm_id) parts.push(`Farm: ${details.farm_id}`);
+        if (details.sub_order_id) parts.push(`Order: ${details.sub_order_id}`);
+        alertWhy = parts.length ? parts.join(' — ') : 'System alert requires attention';
+      }
+    }
+
+    // Build specific actions based on alert type
+    const alertActions = {
+      overselling_detected: ['Check inventory levels', 'Adjust reservations', 'Contact affected buyers'],
+      reservation_conflict: ['Review available stock', 'Update inventory', 'Adjust order quantities'],
+      payment_failed: ['Retry payment', 'Contact buyer', 'Review order'],
+      farm_offline: ['Check network connectivity', 'Verify farm API status', 'Restart services'],
+      deadline_missed: ['Review order timeline', 'Contact buyer', 'Update delivery estimate']
+    };
+
     tasks.push({
       id: `alert-${alert.id || crypto.randomUUID().slice(0, 8)}`,
       category: 'anomaly',
-      title: alert.title || alert.message || `${severity} alert`,
-      why: alert.description || alert.details || 'System alert requires attention',
+      title: alertTitle,
+      why: alertWhy,
       deadline: today,
       estimated_minutes: 15,
-      actions: ['Investigate', 'Acknowledge alert', 'Check sensor'],
+      actions: alertActions[alert.type] || ['Investigate', 'Acknowledge alert', 'Check sensor'],
       dependencies: [],
       score: priorityScore({
         urgency: severity === 'critical' ? 1.0 : severity === 'warning' ? 0.8 : 0.5,
