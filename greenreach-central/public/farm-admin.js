@@ -1268,8 +1268,7 @@ function exportPricingCSV() {
             item.isTaxable ? 'Yes' : 'No'
         ]);
     });
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('
-');
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -6478,58 +6477,6 @@ async function handleAddUser(event) {
         messageEl.style.display = 'block';
         messageEl.style.background = '#fee';
         messageEl.style.color = '#c33';
-    }
-}
-
-/**
- * Load users list
- */
-async function loadUsers() {
-    const tbody = document.getElementById('users-table-body');
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/users/list?farmId=${currentSession.farmId}`, {
-            headers: {
-                'Authorization': `Bearer ${currentSession.token}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load users');
-        }
-
-        const data = await response.json();
-        const users = data.users || [];
-
-        if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #999;">No users found</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = users.map(user => `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 12px;">${user.name || '-'}</td>
-                <td style="padding: 12px;">${user.email}</td>
-                <td style="padding: 12px;">
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #f5f5f5; text-transform: capitalize;">
-                        ${user.role}
-                    </span>
-                </td>
-                <td style="padding: 12px;">
-                    <span style="color: #4caf50;">Active</span>
-                </td>
-                <td style="padding: 12px; text-align: right;">
-                    ${user.email !== currentSession.email ? `
-                        <button onclick="deleteUser('${user.email}')" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                            Remove
-                        </button>
-                    ` : '<span style="color: #999; font-size: 12px;">You</span>'}
-                </td>
-            </tr>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading users:', error);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #f44336;">Failed to load users</td></tr>';
     }
 }
 
