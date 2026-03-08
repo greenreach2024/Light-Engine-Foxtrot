@@ -1,7 +1,42 @@
 # IoT Device Communication Paths
 
-> **Last updated:** 2026-03-05 (session 3 — root cause found, sync fix deployed)  
-> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`
+> **Last updated:** 2026-03-08 (session 4 — SwitchBot credential wipe root cause found, daily tasks fix)  
+> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`, `farm-summary.html`, `routes/farm-ops-agent.js`
+
+---
+
+## Change Log (2026-03-08)
+
+### Commit 943c254 — fix: POST /farm preserves integration credentials
+- **`server-foxtrot.js`**: `POST /farm` handler was doing a destructive replace of the entire `farm.json` file. Any save from `farm-admin.js` setup wizard or `app.foxtrot.js` farm settings would overwrite the file without including `integrations.switchbot` credentials, wiping credentials saved via `/switchbot/discover` or `/api/credential-store`. Now merges existing integration credentials into incoming body before writing.
+
+### Commit 1d64d1e — fix(daily-tasks): render specific alert titles, fix [object Object]
+- **`routes/farm-ops-agent.js`**: Source D alert tasks now build actionable titles from `alert.type` + `details` object (e.g. "Overselling: SKU-TOMATO-5LB (oversold by 3)" instead of generic "critical alert"). `why` field now extracts `details.message` as a human-readable string instead of passing the raw details object (which rendered as `[object Object]` in the DOM). Added deduplication of identical alerts and type-specific action buttons.
+- **`farm-summary.html`**: Client-side defensive rendering — if `task.why` is still an object, extracts `.message` or `.error`.
+
+### Commit 60bb2ed — fix: add payment_failure + notification_failure alert type mappings
+- **`routes/farm-ops-agent.js`**: Added missing alert type mappings for `payment_failure` and `notification_failure` (were falling through to generic "critical alert" title).
+
+### ROOT CAUSE: SwitchBot sensor data stopped refreshing (2026-03-08)
+
+**Symptoms:**
+- `iot-devices.json` showed all 4 sensors with `lastSeen` timestamps from March 6 (2 days stale)
+- `/env` endpoint returned fresh `evaluatedAt` timestamps but same stale values (15.6°C)
+- `GET /api/switchbot/devices` returned `503: SwitchBot credentials are not configured`
+
+**Root cause: POST /farm credential wipe**
+1. SwitchBot credentials were saved to `farm.json` via `/switchbot/discover` endpoint ✓
+2. Later, a `POST /farm` call (from setup wizard or farm settings save) replaced `farm.json` with a payload that did NOT include `integrations.switchbot`
+3. `farm.json` now had `integrations.switchbot.token = ""`, `integrations.switchbot.secret = ""`
+4. `ensureSwitchBotConfigured()` returned `false` → `refreshSwitchBotTelemetry()` returned `{ changed: false }` immediately
+5. No SwitchBot API calls were ever made → `iot-devices.json` stopped updating
+6. `syncSensorData()` still ran every 30s but re-read stale values from `iot-devices.json`
+7. `preEnvStore.updateSensor()` was called with stale values + fresh timestamps, masking the problem
+
+**Fix applied:**
+- `POST /farm` handler now merges existing `integrations` credentials from the current `farm.json` before overwriting (incoming values win, but empty strings don't overwrite real credentials)
+- Credentials restored via `POST /api/credential-store` with SwitchBot token + secret
+- Verified: all 4 sensors now reporting fresh readings (20.3°C, 19.2°C, 20.2°C, 19.8°C)
 
 ---
 
@@ -105,6 +140,147 @@
 │  File: public/data/rooms.json
 └─────────────────────────────────┘
 ```
+
+---
+
+## Live Sensor Telemetry Pipeline
+
+> Added 2026-03-08. This is the pipeline that delivers live SwitchBot sensor readings to the Farm Summary page — distinct from the device discovery/registration flow above.
+
+### Server-Side: Sensor Sync Loop
+
+```
+SENSOR_SYNC_TIMER (30s interval, L29929)
+  └─ syncSensorData()                                [L29424]
+       ├─ Read iot-devices.json from disk             (re-reads every cycle)
+       ├─ Read env.json from disk
+       ├─ refreshSwitchBotTelemetry(iotDevices)       [L29338]
+       │    ├─ ensureSwitchBotConfigured()             [L8398]
+       │    │    └─ getFarmIntegrations().switchbot     [L6754]
+       │    │         ├─ 1. farm.json → integrations.switchbot.token/secret
+       │    │         └─ 2. Fallback: SWITCHBOT_TOKEN / SWITCHBOT_SECRET env vars
+       │    │
+       │    ├─ fetchSwitchBotDevices({ force: false }) [L8570+]
+       │    │    └─ GET https://api.switch-bot.com/v1.1/devices
+       │    │         (cached 30 min: SWITCHBOT_DEVICE_CACHE_TTL_MS)
+       │    │
+       │    ├─ Filter: deviceType includes 'sensor'
+       │    ├─ Round-robin batch: 3 devices per cycle  (SWITCHBOT_SENSOR_STATUS_BATCH)
+       │    │
+       │    ├─ For each batch device:
+       │    │    └─ fetchSwitchBotDeviceStatus(id)     [L8570]
+       │    │         └─ GET /v1.1/devices/{id}/status
+       │    │              (cached 15 min: SWITCHBOT_STATUS_CACHE_TTL_MS)
+       │    │              (rate limited: 6s between API calls)
+       │    │
+       │    ├─ normalizeSwitchBotStatus()              [L29309]
+       │    │    └─ Returns { temperatureC, humidity, battery, updatedAt }
+       │    │
+       │    ├─ Mutates device.telemetry in-place
+       │    │    ├─ device.telemetry.temperature = reading.temperatureC
+       │    │    ├─ device.telemetry.humidity = reading.humidity
+       │    │    ├─ device.telemetry.lastUpdate = reading.updatedAt
+       │    │    └─ device.lastSeen = reading.updatedAt
+       │    │
+       │    └─ Returns { changed: fileChanged, readings: Map }
+       │         (fileChanged only true if values differ from previous)
+       │
+       ├─ Map devices → zones by device.zone value
+       │    └─ Derive zoneId: "1"→"zone-1", "Zone 1"→"zone-1"
+       │
+       ├─ preEnvStore.updateSensor(zoneId, 'tempC', value, timestamp)
+       │    └─ In-memory store used by /env endpoint
+       │
+       ├─ Write iot-devices.json   (only if switchBotUpdated === true)
+       │    └─ Re-reads file, merges telemetry, writes back
+       │
+       └─ Write env.json           (only if envUpdated === true)
+```
+
+### Server-Side: /env Endpoint
+
+```
+GET /env?hours=24                                    [L5173]
+  ├─ preEnvStore.getSnapshot()
+  │    └─ Returns scopes → { tempC: { sources }, rh: { sources }, ... }
+  │
+  ├─ zonesFromScopes()
+  │    └─ Maps sensorData.value → sensors.tempC.current
+  │
+  ├─ Merge cloud zones (if Central connection)
+  ├─ Filter mock devices
+  └─ Response: { zones: [{ id, sensors, sensorDevices, ... }], meta }
+```
+
+### Client-Side: Farm Summary Page
+
+```
+farm-summary.html — Environmental Conditions card
+
+loadData()                                           [L2908]
+  └─ fetchEnvData()                                  [L2938]
+       ├─ GET /env?hours=24
+       ├─ 30s cache (ENV_CACHE_TTL_MS)
+       ├─ Cache busted explicitly on 60s interval
+       └─ visibilitychange handler refreshes on tab focus
+
+loadEnvironmentalFromData(envData)                   [L3996]
+  ├─ Fetch /data/iot-devices.json (IoT device registry)
+  ├─ Fetch /data/room-map.json (zone→room assignments)
+  ├─ Augment envData.zones with IoT telemetry averages
+  └─ selectPreferredZone(zones)
+
+renderEnvironmental(zone, envData)                   [L4319]
+  ├─ Read zone.sensors.tempC.current / rh.current / vpd.current
+  ├─ Render env-grid with temp, humidity, VPD cards
+  └─ Status classification: Optimal / Acceptable / Alert
+```
+
+### Key Configuration Constants
+
+| Constant | Value | Location |
+|----------|-------|----------|
+| `SYNC_INTERVAL` | 30,000 ms (30s) | L29212 |
+| `SWITCHBOT_STATUS_CACHE_TTL_MS` | 900,000 ms (15 min) | L6738 |
+| `SWITCHBOT_DEVICE_CACHE_TTL_MS` | 1,800,000 ms (30 min) | L6737 |
+| `SWITCHBOT_RATE_LIMIT_MS` | 6,000 ms (6s) | L6735 |
+| `SWITCHBOT_SENSOR_STATUS_BATCH` | 3 devices/cycle | L6736 |
+| `SWITCHBOT_API_TIMEOUT_MS` | 8,000 ms | L6734 |
+| `ENV_CACHE_TTL_MS` (frontend) | 30,000 ms (30s) | farm-summary.html |
+
+### Credential Storage
+
+```
+Credentials are stored in farm.json → integrations.switchbot:
+  {
+    "integrations": {
+      "switchbot": {
+        "token": "...",   ← SwitchBot Open API token
+        "secret": "..."   ← SwitchBot Open API secret
+      }
+    }
+  }
+
+Save paths:
+  POST /switchbot/discover           → Saves token+secret to farm.json
+  POST /api/credential-store         → Merges token+secret into farm.json
+  POST /farm                         → ⚠ NOW preserves existing integrations
+                                       (was destructive replace before 943c254)
+
+Read path:
+  getFarmIntegrations()              → farm.json → env var fallback
+  ensureSwitchBotConfigured()        → Boolean(token && secret)
+```
+
+### Failure Modes
+
+| Symptom | Likely Cause | Check |
+|---------|-------------|-------|
+| `/env` returns stale values but fresh timestamps | `ensureSwitchBotConfigured()` false | `GET /api/credential-store` → switchbot.configured |
+| `iot-devices.json` lastSeen stuck days ago | No SwitchBot API calls being made | `GET /api/switchbot/devices` → 503 = no creds |
+| Values update but never change | Sensors reporting same value (normal) | Check SwitchBot app directly |
+| Partial updates (some sensors stale) | Round-robin batch not reaching all sensors | Wait 2+ minutes for full rotation |
+| `[object Object]` in Farm Summary | API returning objects where strings expected | Check `/api/farm-ops/daily-todo` response |
 
 ---
 
