@@ -224,6 +224,7 @@ import farmStoreSetupRouter from './routes/farm-store-setup.js';
 import procurementRouter from './routes/procurement.js';
 import edgeRouter from './routes/edge.js';
 import setupRouter from './routes/setup.js';
+import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
@@ -13852,6 +13853,16 @@ app.use('/api/farm-sales/donations', farmSalesDonationsRouter);
  * - System health checks (status, health check)
  */
 app.use('/api/farm-sales/ai-agent', farmSalesAIAgentRouter);
+
+/**
+ * Farm Operations Agent — daily to-do generator, tool gateway, command taxonomy
+ * GET  /api/farm-ops/daily-todo
+ * POST /api/farm-ops/tool-gateway
+ * GET  /api/farm-ops/tool-catalog
+ * POST /api/farm-ops/parse-command
+ * GET  /api/farm-ops/audit-log
+ */
+app.use('/api/farm-ops', farmOpsAgentRouter);
 
 console.log(' Farm sales terminal initialized - POS, D2C, B2B, food security programs, lot traceability, and AI agent enabled');
 

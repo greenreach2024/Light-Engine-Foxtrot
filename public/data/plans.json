@@ -1,0 +1,32 @@
+{
+  "sample": true,
+  "plans": [
+    {
+      "id": "sample-plan",
+      "key": "sample-plan",
+      "name": "Sample Photoperiod",
+      "description": "Fallback spectrum mix (16/8 photoperiod) until recipes are published.",
+      "photoperiod": 16,
+      "photoperiodLabel": "16/8",
+      "ramp": {
+        "sunrise": 10,
+        "sunset": 10
+      },
+      "spectrum": {
+        "cw": 40,
+        "ww": 40,
+        "bl": 35,
+        "rd": 30
+      },
+      "days": [
+        {
+          "stage": "Static",
+          "cw": 40,
+          "ww": 40,
+          "bl": 35,
+          "rd": 30
+        }
+      ]
+    }
+  ]
+}

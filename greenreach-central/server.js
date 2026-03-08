@@ -75,6 +75,7 @@ import { runYieldRegression } from './jobs/yield-regression.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
+import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -3095,6 +3096,7 @@ app.get('/api/wholesale/demand-analysis', async (req, res) => {
 });
 
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
+app.use('/api/farm-ops', farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
 
 // ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
 app.get('/api/network/harvest-conflicts', async (req, res) => {

@@ -15,22 +15,6 @@ function grLog(...args) { if (GR_DEBUG) console.debug(...args); }
 let currentSession = null;
 let farmData = null;
 
-/**
- * Auth-aware fetch: automatically attaches the JWT Bearer token to requests
- * so the farm-data middleware can scope data to the correct farm.
- * Falls back to plain fetch if no session/token exists.
- */
-function farmFetch(url, opts = {}) {
-    const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (token && token !== 'local-access') {
-        if (!opts.headers) opts.headers = {};
-        if (!opts.headers['Authorization'] && !opts.headers['authorization']) {
-            opts.headers['Authorization'] = `Bearer ${token}`;
-        }
-    }
-    return fetch(url, opts);
-}
-
 function getPostLoginRedirectPath() {
     const defaultPath = '/LE-farm-admin.html';
     let returnPath = new URLSearchParams(window.location.search).get('return') || '';
@@ -137,8 +121,25 @@ function initLogin() {
         }
     }
     
-    // SECURITY: Do NOT pre-fill farm ID on login page - users must enter manually
-    // Removed auto-fill logic to prevent farm ID exposure in shared/public browsers
+    // Check for remembered credentials
+    const remembered = JSON.parse(localStorage.getItem(STORAGE_KEY_REMEMBER) || '{}');
+    if (remembered.farmId) {
+        document.getElementById('farmId').value = remembered.farmId;
+    }
+    if (remembered.email) {
+        document.getElementById('email').value = remembered.email;
+        document.getElementById('remember').checked = true;
+    }
+    
+    // Pre-fill farm ID from current session if available
+    const farmIdInput = document.getElementById('farmId');
+    if (farmIdInput && !farmIdInput.value) {
+        const storedFarmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') ||
+                             sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId');
+        if (storedFarmId && storedFarmId !== 'LOCAL-FARM') {
+            farmIdInput.value = storedFarmId;
+        }
+    }
     
     // Setup form handler
     const form = document.getElementById('loginForm');
@@ -200,7 +201,10 @@ async function initDashboard() {
         }
     }
     
-    const allowLocalBypass = window.location.search.includes('demo=true');
+    const allowLocalBypass = 
+        window.location.hostname.includes('localhost') || 
+        window.location.hostname === '127.0.0.1' ||
+        window.location.search.includes('demo=true');
 
     // Create a default session only for local/demo environments
     if (!currentSession) {
@@ -459,10 +463,10 @@ async function loadDashboardData() {
             document.getElementById('kpi-trays-change').textContent = 'Live grow data';
             document.getElementById('kpi-plants-change').textContent = 'Live grow data';
         } else {
-            document.getElementById('kpi-trays').textContent = '0';
-            document.getElementById('kpi-plants').textContent = '0';
-            document.getElementById('kpi-trays-change').textContent = 'Assign a crop plan to start growing';
-            document.getElementById('kpi-plants-change').textContent = 'No active grows';
+            document.getElementById('kpi-trays').textContent = '--';
+            document.getElementById('kpi-plants').textContent = '--';
+            document.getElementById('kpi-trays-change').textContent = 'Start your first grow to see live data';
+            document.getElementById('kpi-plants-change').textContent = 'Start your first grow to see live data';
         }
 
         // Calculate next harvest from byFarm trays data
@@ -484,7 +488,7 @@ async function loadDashboardData() {
             document.getElementById('kpi-harvest-change').textContent = nextHarvest.cropName;
         } else {
             document.getElementById('kpi-harvest').textContent = '--';
-            document.getElementById('kpi-harvest-change').textContent = 'No active grows';
+            document.getElementById('kpi-harvest-change').textContent = 'Start your first grow to see live data';
         }
 
         // Fetch communicating device count from IoT device feed
@@ -1190,7 +1194,7 @@ async function loadCropsFromDatabase() {
         // Try loading from server-side pricing API first
         let loadedFromAPI = false;
         try {
-            const pricingRes = await farmFetch(`${API_BASE}/crop-pricing`);
+            const pricingRes = await fetch(`${API_BASE}/crop-pricing`);
             if (pricingRes.ok) {
                 const pricingResult = await pricingRes.json();
                 if (pricingResult.ok && pricingResult.pricing?.crops?.length) {
@@ -1217,7 +1221,6 @@ async function loadCropsFromDatabase() {
 
         // Fallback: load from groups.json + localStorage defaults
         if (!loadedFromAPI) {
-            // Check pricing version and clear old localStorage if needed
             const savedVersion = localStorage.getItem('pricing_version');
             if (savedVersion !== PRICING_VERSION) {
                 console.log(` Pricing version mismatch (${savedVersion} → ${PRICING_VERSION}). Clearing old prices...`);
@@ -1227,7 +1230,7 @@ async function loadCropsFromDatabase() {
                 localStorage.setItem('pricing_version', PRICING_VERSION);
             }
 
-            const response = await farmFetch(`${API_BASE}/data/groups.json`);
+            const response = await fetch(`${API_BASE}/data/groups.json`);
             const data = await response.json();
             const crops = [...new Set(data.groups.map(g => g.crop).filter(c => c && c.trim()))].sort();
 
@@ -1265,7 +1268,8 @@ function exportPricingCSV() {
             item.isTaxable ? 'Yes' : 'No'
         ]);
     });
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('
+');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -3199,10 +3203,8 @@ async function loadAccountingData() {
         document.getElementById('total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
         
         // Update net profit
-        const netProfitEl = document.getElementById('net-profit');
-        const profitMarginEl = document.getElementById('profit-margin');
-        if (netProfitEl) netProfitEl.textContent = `$${netProfit.toFixed(2)}`;
-        if (profitMarginEl) profitMarginEl.textContent = `${profitMargin}% margin`;
+        document.getElementById('net-profit').textContent = `$${netProfit.toFixed(2)}`;
+        document.getElementById('profit-margin').textContent = `${profitMargin}%`;
         
         // Update expense breakdown
         document.getElementById('wholesale-fees').textContent = `$${wholesaleFees.toFixed(2)}`;
@@ -3403,8 +3405,8 @@ function exportFinancialReport() {
     // Gather data from UI
     const revenue = document.getElementById('total-revenue').textContent;
     const expenses = document.getElementById('total-expenses').textContent;
-    const profit = document.getElementById('net-profit')?.textContent || '$0.00';
-    const margin = document.getElementById('profit-margin')?.textContent || '0%';
+    const profit = document.getElementById('net-profit').textContent;
+    const margin = document.getElementById('profit-margin').textContent;
     
     // Create CSV content
     let csv = 'Light Engine Financial Report\n';
@@ -3470,19 +3472,13 @@ async function checkQuickBooksStatus() {
         const data = await response.json();
         
         if (data.connected) {
-            const qbNotConn = document.getElementById('quickbooks-not-connected');
-            const qbConn = document.getElementById('quickbooks-connected');
-            if (qbNotConn) qbNotConn.style.display = 'none';
-            if (qbConn) qbConn.style.display = 'block';
-            const qbName = document.getElementById('qb-company-name');
-            const qbSync = document.getElementById('qb-last-sync');
-            if (qbName) qbName.textContent = data.companyName || 'Connected';
-            if (qbSync) qbSync.textContent = data.lastSync ? new Date(data.lastSync).toLocaleString() : 'Never';
+            document.getElementById('quickbooks-not-connected').style.display = 'none';
+            document.getElementById('quickbooks-connected').style.display = 'block';
+            document.getElementById('qb-company-name').textContent = data.companyName || 'Connected';
+            document.getElementById('qb-last-sync').textContent = data.lastSync ? new Date(data.lastSync).toLocaleString() : 'Never';
         } else {
-            const qbNotConn = document.getElementById('quickbooks-not-connected');
-            const qbConn = document.getElementById('quickbooks-connected');
-            if (qbNotConn) qbNotConn.style.display = 'block';
-            if (qbConn) qbConn.style.display = 'none';
+            document.getElementById('quickbooks-not-connected').style.display = 'block';
+            document.getElementById('quickbooks-connected').style.display = 'none';
         }
     } catch (error) {
         console.error('Error checking QuickBooks status:', error);
@@ -3704,9 +3700,6 @@ async function loadPaymentMethods() {
         // Load receipts
         await loadReceipts();
         
-        // Load Stripe status
-        await loadStripeStatus();
-        
     } catch (error) {
         console.error(' Error loading payment methods:', error);
         showToast('Failed to load payment methods', 'error');
@@ -3777,137 +3770,6 @@ async function connectSquare() {
  */
 function reconnectSquare() {
     connectSquare();
-}
-
-/**
- * Load Stripe connection status
- */
-async function loadStripeStatus() {
-    const container = document.getElementById('stripe-status-container');
-    if (!container) return;
-    
-    try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const response = await fetch('/api/farm/stripe/status', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM'
-            }
-        });
-        const data = await response.json();
-        
-        if (data.connected) {
-            container.innerHTML = `
-                <div style="padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-size: 18px; font-weight: bold; color: #635bff; margin-bottom: 8px;">
-                                ✓ Stripe Connected
-                            </div>
-                            <div style="color: var(--text-secondary);">
-                                <div>Business: ${data.data?.businessName || 'N/A'}</div>
-                                <div>Account: ${data.data?.accountId || 'N/A'}</div>
-                                <div>Charges: ${data.data?.chargesEnabled ? '✓ Enabled' : '✗ Pending'}</div>
-                                <div>Payouts: ${data.data?.payoutsEnabled ? '✓ Enabled' : '✗ Pending'}</div>
-                            </div>
-                        </div>
-                        <button class="btn" onclick="disconnectStripe()" style="background: #ef4444;">
-                            Disconnect
-                        </button>
-                    </div>
-                </div>
-            `;
-        } else {
-            container.innerHTML = `
-                <div style="padding: 20px; text-align: center;">
-                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
-                        Stripe Payment Processing Not Connected
-                    </div>
-                    <button class="btn" onclick="connectStripeFromAdmin()" style="background: #635bff;">
-                        Connect Stripe Account
-                    </button>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Stripe status check error:', error);
-        container.innerHTML = `
-            <div style="padding: 20px; text-align: center;">
-                <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
-                    Stripe Payment Processing Not Connected
-                </div>
-                <button class="btn" onclick="connectStripeFromAdmin()" style="background: #635bff;">
-                    Connect Stripe Account
-                </button>
-            </div>
-        `;
-    }
-}
-
-/**
- * Connect Stripe account from admin page
- */
-async function connectStripeFromAdmin() {
-    try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const response = await fetch('/api/farm/stripe/authorize', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ farmName: currentSession?.farmName || 'My Farm' })
-        });
-        
-        const data = await response.json();
-        
-        if (!data.ok || !data.data?.authorizationUrl) {
-            showToast('Failed to initialize Stripe connection', 'error');
-            return;
-        }
-        
-        const popup = window.open(data.data.authorizationUrl, 'stripeConnect', 'width=600,height=700,scrollbars=yes');
-        
-        window.addEventListener('message', function handleStripeCallback(event) {
-            if (event.data && event.data.type === 'stripe-connected') {
-                window.removeEventListener('message', handleStripeCallback);
-                showToast('Stripe account connected successfully!', 'success');
-                loadStripeStatus();
-            }
-        });
-    } catch (error) {
-        console.error('Stripe connection error:', error);
-        showToast('Failed to connect Stripe account', 'error');
-    }
-}
-
-/**
- * Disconnect Stripe account
- */
-async function disconnectStripe() {
-    if (!confirm('Are you sure you want to disconnect your Stripe account?')) return;
-    
-    try {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const response = await fetch('/api/farm/stripe/disconnect', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const data = await response.json();
-        if (data.ok) {
-            showToast('Stripe account disconnected', 'success');
-            loadStripeStatus();
-        } else {
-            showToast('Failed to disconnect Stripe', 'error');
-        }
-    } catch (error) {
-        console.error('Stripe disconnect error:', error);
-        showToast('Failed to disconnect Stripe', 'error');
-    }
 }
 
 /**
@@ -3995,7 +3857,7 @@ async function loadSettings() {
         // Load farm data from /data/farm.json (source of truth for edge devices)
         let farmData = {};
         try {
-            const farmResponse = await farmFetch('/data/farm.json');
+            const farmResponse = await fetch('/data/farm.json');
             if (farmResponse.ok) {
                 farmData = await farmResponse.json();
                 console.log('[Farm Settings] Loaded farm data from /data/farm.json:', farmData);
@@ -4036,16 +3898,12 @@ async function loadSettings() {
         // If we have complete setup data, use it
         if (setupData.completed) {
             
-            // Load hardware info (null-guarded — hardware card removed from HTML)
+            // Load hardware info
             if (setupData.hardwareDetected) {
-                const hwLights = document.getElementById('hardware-lights');
-                const hwFans = document.getElementById('hardware-fans');
-                const hwSensors = document.getElementById('hardware-sensors');
-                const hwOther = document.getElementById('hardware-other');
-                if (hwLights) hwLights.textContent = setupData.hardwareDetected.lights || 0;
-                if (hwFans) hwFans.textContent = setupData.hardwareDetected.fans || 0;
-                if (hwSensors) hwSensors.textContent = setupData.hardwareDetected.sensors || 0;
-                if (hwOther) hwOther.textContent = setupData.hardwareDetected.other || 0;
+                document.getElementById('hardware-lights').textContent = setupData.hardwareDetected.lights || 0;
+                document.getElementById('hardware-fans').textContent = setupData.hardwareDetected.fans || 0;
+                document.getElementById('hardware-sensors').textContent = setupData.hardwareDetected.sensors || 0;
+                document.getElementById('hardware-other').textContent = setupData.hardwareDetected.other || 0;
             }
             
             // Load certifications
@@ -4103,13 +3961,13 @@ async function loadSettings() {
         document.getElementById('notif-ai-recommend').checked = settings.notifAiRecommend !== false;
         document.getElementById('settings-notif-email').value = settings.notifEmail || '';
         
-        // Integration Settings (null-guarded — elements removed from HTML)
-        const syncEl = document.getElementById('greenreach-sync-enabled');
-        const endpointEl = document.getElementById('greenreach-endpoint');
-        const apiKeyEl = document.getElementById('settings-api-key');
-        if (syncEl) syncEl.checked = settings.greenreachSync !== false;
-        if (endpointEl) endpointEl.value = settings.greenreachEndpoint || 'https://central.greenreach.app';
-        if (apiKeyEl) apiKeyEl.value = settings.apiKey || '';
+        // Integration Settings
+        document.getElementById('greenreach-sync-enabled').checked = settings.greenreachSync !== false;
+        document.getElementById('greenreach-endpoint').value = settings.greenreachEndpoint || 'https://central.greenreach.app';
+        document.getElementById('settings-api-key').value = settings.apiKey || '';
+        
+        // Check Square status
+        checkSquareStatus();
         
         // System Configuration
         document.getElementById('auto-backup').checked = settings.autoBackup !== false;
@@ -4124,18 +3982,11 @@ async function loadSettings() {
         document.getElementById('default-ws3-discount').value = settings.defaultWS3Discount || 35;
         document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
         
-        // API & Webhooks (null-guarded — card removed from HTML)
-        const webhookUrlEl = document.getElementById('webhook-url');
-        const webhookOrdersEl = document.getElementById('webhook-orders');
-        const webhookInventoryEl = document.getElementById('webhook-inventory');
-        const webhookHarvestEl = document.getElementById('webhook-harvest');
-        if (webhookUrlEl) webhookUrlEl.value = settings.webhookUrl || '';
-        if (webhookOrdersEl) webhookOrdersEl.checked = settings.webhookOrders || false;
-        if (webhookInventoryEl) webhookInventoryEl.checked = settings.webhookInventory || false;
-        if (webhookHarvestEl) webhookHarvestEl.checked = settings.webhookHarvest || false;
-        
-        // Delivery Settings (from API, not localStorage)
-        loadDeliverySettings();
+        // API & Webhooks
+        document.getElementById('webhook-url').value = settings.webhookUrl || '';
+        document.getElementById('webhook-orders').checked = settings.webhookOrders || false;
+        document.getElementById('webhook-inventory').checked = settings.webhookInventory || false;
+        document.getElementById('webhook-harvest').checked = settings.webhookHarvest || false;
         
     } catch (error) {
         console.error('Error loading settings:', error);
@@ -4179,7 +4030,28 @@ async function checkSquareStatus() {
 /**
  * Rescan hardware devices
  */
-// scanHardware() — removed: hardware card removed from Settings page
+async function scanHardware() {
+    showToast('Scanning for hardware devices...', 'info');
+    
+    try {
+        // In production, this would call the hardware scan API
+        const response = await fetch('/api/hardware/scan', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('hardware-lights').textContent = data.lights || 0;
+            document.getElementById('hardware-fans').textContent = data.fans || 0;
+            document.getElementById('hardware-sensors').textContent = data.sensors || 0;
+            document.getElementById('hardware-other').textContent = data.other || 0;
+            showToast('Hardware scan complete', 'success');
+        }
+    } catch (error) {
+        console.error('Error scanning hardware:', error);
+        showToast('Hardware scan unavailable', 'error');
+    }
+}
 
 /**
  * Save farm settings
@@ -4202,10 +4074,10 @@ async function saveSettings() {
             notifAiRecommend: document.getElementById('notif-ai-recommend').checked,
             notifEmail: document.getElementById('settings-notif-email').value,
             
-            // Integration Settings (null-guarded — elements removed from HTML)
-            greenreachSync: document.getElementById('greenreach-sync-enabled')?.checked ?? true,
-            greenreachEndpoint: document.getElementById('greenreach-endpoint')?.value || '',
-            apiKey: document.getElementById('settings-api-key')?.value || '',
+            // Integration Settings
+            greenreachSync: document.getElementById('greenreach-sync-enabled').checked,
+            greenreachEndpoint: document.getElementById('greenreach-endpoint').value,
+            apiKey: document.getElementById('settings-api-key').value,
             
             // System Configuration
             autoBackup: document.getElementById('auto-backup').checked,
@@ -4216,14 +4088,15 @@ async function saveSettings() {
             
             defaultWS1Discount: document.getElementById('default-ws1-discount').value,
             defaultWS2Discount: document.getElementById('default-ws2-discount').value,
-            defaultWS3Discount: document.getElementById('default-ws3-discount').value,
+            defaultWS3Discount: document.getElementById('default-ws3-discountmarkup').value,
+            retailMarkup: document.getElementById('default-retail-markup').value,
             lowStockThreshold: document.getElementById('low-stock-threshold').value,
             
-            // API & Webhooks (null-guarded — card removed from HTML)
-            webhookUrl: document.getElementById('webhook-url')?.value || '',
-            webhookOrders: document.getElementById('webhook-orders')?.checked || false,
-            webhookInventory: document.getElementById('webhook-inventory')?.checked || false,
-            webhookHarvest: document.getElementById('webhook-harvest')?.checked || false,
+            // API & Webhooks
+            webhookUrl: document.getElementById('webhook-url').value,
+            webhookOrders: document.getElementById('webhook-orders').checked,
+            webhookInventory: document.getElementById('webhook-inventory').checked,
+            webhookHarvest: document.getElementById('webhook-harvest').checked,
             
             lastUpdated: new Date().toISOString()
         };
@@ -4252,167 +4125,6 @@ async function saveSettings() {
     }
 }
 
-// ─── Delivery Settings (Phase 4) ────────────────────────────────────────
-
-/**
- * Load delivery settings from API and populate the form
- */
-async function loadDeliverySettings() {
-    try {
-        const response = await farmFetch('/api/farm-sales/delivery/config');
-        if (!response.ok) {
-            console.warn('[Delivery] Failed to load config:', response.status);
-            return;
-        }
-        const data = await response.json();
-        if (!data.success) return;
-
-        const cfg = data.config;
-
-        // Populate form fields
-        const enabledEl = document.getElementById('delivery-enabled');
-        const configFields = document.getElementById('delivery-config-fields');
-        if (enabledEl) {
-            enabledEl.checked = cfg.enabled;
-            enabledEl.addEventListener('change', toggleDeliveryFields);
-        }
-        if (configFields) {
-            configFields.style.display = cfg.enabled ? 'block' : 'none';
-        }
-
-        const baseFeeEl = document.getElementById('delivery-base-fee');
-        const minOrderEl = document.getElementById('delivery-min-order');
-        if (baseFeeEl) baseFeeEl.value = cfg.base_fee || 0;
-        if (minOrderEl) minOrderEl.value = cfg.min_order || 25;
-
-        // Render delivery windows editor
-        if (cfg.windows && cfg.windows.length > 0) {
-            renderDeliveryWindows(cfg.windows);
-        }
-
-        console.log('[Delivery] Settings loaded:', cfg.enabled ? 'enabled' : 'disabled');
-    } catch (error) {
-        console.error('[Delivery] Error loading settings:', error);
-    }
-}
-
-/**
- * Toggle delivery config fields visibility based on enabled checkbox
- */
-function toggleDeliveryFields() {
-    const enabled = document.getElementById('delivery-enabled')?.checked;
-    const configFields = document.getElementById('delivery-config-fields');
-    if (configFields) {
-        configFields.style.display = enabled ? 'block' : 'none';
-    }
-}
-
-/**
- * Render delivery windows editor into the placeholder div
- */
-function renderDeliveryWindows(windows) {
-    const container = document.getElementById('delivery-windows-editor');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    windows.forEach(w => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display: grid; grid-template-columns: auto 1fr 80px 80px; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card);';
-        row.dataset.windowId = w.window_id;
-
-        row.innerHTML = `
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; min-width: 40px;">
-                <input type="checkbox" class="dw-active" ${w.active ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--accent-green);">
-            </label>
-            <span style="font-weight: 500; color: var(--text-primary); font-size: 14px;">${w.label || w.window_id}</span>
-            <input type="time" class="dw-start" value="${w.start_time || '06:00'}" style="padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 13px;">
-            <input type="time" class="dw-end" value="${w.end_time || '10:00'}" style="padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text-primary); font-size: 13px;">
-        `;
-
-        container.appendChild(row);
-    });
-}
-
-/**
- * Collect delivery window values from the editor
- */
-function collectDeliveryWindows() {
-    const container = document.getElementById('delivery-windows-editor');
-    if (!container) return [];
-
-    const rows = container.querySelectorAll('[data-window-id]');
-    const windows = [];
-    rows.forEach(row => {
-        windows.push({
-            window_id: row.dataset.windowId,
-            label: row.querySelector('span')?.textContent?.trim() || row.dataset.windowId,
-            start_time: row.querySelector('.dw-start')?.value || '06:00',
-            end_time: row.querySelector('.dw-end')?.value || '10:00',
-            active: row.querySelector('.dw-active')?.checked ?? true
-        });
-    });
-    return windows;
-}
-
-/**
- * Save delivery settings + windows to API
- */
-async function saveDeliverySettings() {
-    const statusEl = document.getElementById('delivery-save-status');
-    if (statusEl) {
-        statusEl.textContent = 'Saving…';
-        statusEl.style.color = 'var(--text-muted)';
-    }
-
-    try {
-        const enabled = document.getElementById('delivery-enabled')?.checked ?? false;
-        const baseFee = parseFloat(document.getElementById('delivery-base-fee')?.value || '0');
-        const minOrder = parseFloat(document.getElementById('delivery-min-order')?.value || '25');
-
-        // Save config
-        const configResp = await farmFetch('/api/farm-sales/delivery/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled, base_fee: baseFee, min_order: minOrder })
-        });
-
-        if (!configResp.ok) {
-            const err = await configResp.json().catch(() => ({}));
-            throw new Error(err.error || 'Failed to save delivery config');
-        }
-
-        // Save windows
-        const windows = collectDeliveryWindows();
-        if (windows.length > 0) {
-            const winResp = await farmFetch('/api/farm-sales/delivery/windows', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ windows })
-            });
-            if (!winResp.ok) {
-                const err = await winResp.json().catch(() => ({}));
-                throw new Error(err.error || 'Failed to save delivery windows');
-            }
-        }
-
-        if (statusEl) {
-            statusEl.textContent = 'Saved ✓';
-            statusEl.style.color = 'var(--accent-green)';
-            setTimeout(() => { statusEl.textContent = ''; }, 3000);
-        }
-        showToast('Delivery settings saved', 'success');
-        console.log('[Delivery] Settings saved — enabled:', enabled, 'fee:', baseFee, 'min:', minOrder);
-    } catch (error) {
-        console.error('[Delivery] Save failed:', error);
-        if (statusEl) {
-            statusEl.textContent = 'Error: ' + error.message;
-            statusEl.style.color = 'var(--accent-red)';
-        }
-        showToast('Error saving delivery settings', 'error');
-    }
-}
-
 /**
  * Open edit certifications modal
  */
@@ -4422,7 +4134,7 @@ async function openEditCertificationsModal() {
         let certifications = { certifications: [], practices: [], attributes: [] };
         
         try {
-            const farmResponse = await farmFetch('/data/farm.json');
+            const farmResponse = await fetch('/data/farm.json');
             if (farmResponse.ok) {
                 const farmData = await farmResponse.json();
                 if (farmData.certifications) {
@@ -4500,10 +4212,10 @@ async function saveEditCertifications(event) {
             headers['Authorization'] = `Bearer ${currentSession.token}`;
         }
         
-        const response = await fetch('/api/setup/farm-profile', {
+        const response = await fetch('/api/setup/certifications', {
             method: 'POST',
             headers,
-            body: JSON.stringify({ certifications: updatedCertifications })
+            body: JSON.stringify(updatedCertifications)
         });
         
         if (!response.ok) {
@@ -4677,18 +4389,29 @@ function closePairingQR() {
 // FIRST-TIME SETUP FUNCTIONS
 // ============================================================================
 
-let currentSetupStep = 2;
-const totalSetupSteps = 5;
+let currentSetupStep = 1;
+const totalSetupSteps = 6;
 let setupData = {
     rooms: [],
-    trayFormats: []
+    trayFormats: [],
+    benchmarks: null
 };
 
 /**
  * Check if first-time setup is needed
  */
 async function checkFirstTimeSetup() {
+    return;
     try {
+        // Cloud users use standalone wizard (redirected from login.html)
+        // Only check for embedded wizard on edge devices
+        const planType = (localStorage.getItem('planType') || 'cloud').toLowerCase();
+        
+        if (planType === 'cloud') {
+            console.log('[setup-wizard] Cloud user - skipping embedded wizard check (uses standalone wizard)');
+            return;
+        }
+        
         const token = localStorage.getItem('token');
         if (!token) {
             console.log('[setup-wizard] No token found, skipping setup check');
@@ -4982,7 +4705,7 @@ async function showFirstTimeSetup() {
         // Fetch farm data to pre-fill wizard fields from existing farm profile
         try {
             console.log('[Setup] Fetching farm.json for wizard pre-fill...');
-            const farmResponse = await farmFetch('/data/farm.json');
+            const farmResponse = await fetch('/data/farm.json');
             
             if (farmResponse.ok) {
                 const farmData = await farmResponse.json();
@@ -5080,9 +4803,9 @@ async function showFirstTimeSetup() {
             // Continue with wizard even if pre-fill fails
         }
         
-        // Always start at Step 2 (activation codes are no longer used)
-        currentSetupStep = 2;
-        console.log(`[Setup] Starting wizard at step ${currentSetupStep}`);
+        // Start at Step 2 for Cloud customers (skip activation code)
+        currentSetupStep = isCloudPlan ? 2 : 1;
+        console.log(`[Setup] Starting wizard at step ${currentSetupStep} (Cloud: ${isCloudPlan})`);
         
         updateSetupStepDisplay();
     }
@@ -5097,23 +4820,37 @@ async function setupNextStep() {
         return;
     }
     
-    // Step 1 (activation code) is no longer used — wizard starts at Step 2
+    // If step 1, verify activation code
+    if (currentSetupStep === 1) {
+        const activationCode = document.getElementById('setup-activation-code').value.trim();
+        if (!activationCode || activationCode.length !== 8) {
+            showSetupError('Please enter a valid 8-character activation code');
+            return;
+        }
+        
+        // Call activation API
+        const activated = await activateDevice(activationCode);
+        if (!activated) {
+            return; // Error already shown
+        }
+    }
     
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
-        // If on Step 5 (tray formats), collect selected formats
+        // If on Step 5 (certifications), collect selected certifications
         if (currentSetupStep === 5) {
-            const selectedFormats = Array.from(document.querySelectorAll('input[name="tray-format"]:checked'))
-                .map(cb => parseInt(cb.value));
-            setupData.trayFormats = selectedFormats;
-            console.log('[Setup] Tray formats selected:', selectedFormats);
+            setupData.certifications = Array.from(document.querySelectorAll('input[name="certification"]:checked'))
+                .map(cb => cb.value);
+            setupData.practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
+                .map(cb => cb.value);
+            console.log('[Setup] Certifications collected:', setupData.certifications);
         }
         
         currentSetupStep++;
         
-        // If moving to Step 7 (Activity Hub), generate both QR codes
-        if (currentSetupStep === 7) {
-            await generateWizardActivityHubQRCodes();
+        // If moving to Step 6 (Network Benchmarks), fetch from Central
+        if (currentSetupStep === 6) {
+            await seedBenchmarksStep();
         }
         
         updateSetupStepDisplay();
@@ -5124,7 +4861,7 @@ async function setupNextStep() {
  * Navigate to previous setup step
  */
 function setupPreviousStep() {
-    if (currentSetupStep > 2) {
+    if (currentSetupStep > 1) {
         currentSetupStep--;
         updateSetupStepDisplay();
     }
@@ -5158,7 +4895,7 @@ function updateSetupStepDisplay() {
     const nextBtn = document.getElementById('setup-next-btn');
     const completeBtn = document.getElementById('setup-complete-btn');
     
-    if (backBtn) backBtn.style.display = currentSetupStep > 2 ? 'block' : 'none';
+    if (backBtn) backBtn.style.display = currentSetupStep > 1 ? 'block' : 'none';
     if (nextBtn) nextBtn.style.display = currentSetupStep < totalSetupSteps ? 'block' : 'none';
     if (completeBtn) completeBtn.style.display = currentSetupStep === totalSetupSteps ? 'block' : 'none';
 }
@@ -5220,17 +4957,12 @@ function validateSetupStep(step) {
             break;
             
         case 5:
-            // Tray formats are optional, always valid
-            isValid = true;
-            break;
-            
-        case 6:
             // Certifications are optional, always valid
             isValid = true;
             break;
             
-        case 7:
-            // QR Label guide is informational only, always valid
+        case 6:
+            // Network benchmarks are informational, always valid
             isValid = true;
             break;
     }
@@ -5272,6 +5004,87 @@ function showSetupSuccess(message) {
     }
     
     showToast(message, 'success');
+}
+
+/**
+ * Fetch and display network benchmarks from Central during Step 6.
+ * Calls POST /api/setup-wizard/seed-benchmarks to pull crop targets,
+ * then renders the results into the #benchmark-results container.
+ */
+async function seedBenchmarksStep() {
+    const resultsContainer = document.getElementById('benchmark-results');
+    const loadingEl = document.getElementById('benchmark-loading');
+    const errorEl = document.getElementById('benchmark-error');
+
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl) errorEl.style.display = 'none';
+    if (resultsContainer) resultsContainer.innerHTML = '';
+
+    try {
+        const farmId = setupData.farmId || localStorage.getItem('farm_id') || 'new-farm';
+        const response = await fetch('/api/setup-wizard/seed-benchmarks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const data = await response.json();
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!data.ok) {
+            if (errorEl) { errorEl.textContent = data.error || 'Failed to load benchmarks'; errorEl.style.display = 'block'; }
+            return;
+        }
+
+        setupData.benchmarks = data;
+
+        if (!data.seeded || !data.benchmarks) {
+            if (resultsContainer) {
+                resultsContainer.innerHTML = `
+                    <div style="text-align:center; padding:30px 20px; color:var(--text-muted);">
+                        <p style="font-size:15px; margin:0 0 8px;">No network benchmarks available yet.</p>
+                        <p style="font-size:13px; margin:0;">Default environmental targets will be used. You can update these later in Settings.</p>
+                    </div>`;
+            }
+            return;
+        }
+
+        // Render benchmark cards
+        let html = '';
+        for (const [crop, bm] of Object.entries(data.benchmarks)) {
+            const targets = (data.environmental_targets || {})[crop] || {};
+            const confidence = bm.confidence || 'low';
+            const confColor = confidence === 'high' ? '#10b981' : confidence === 'medium' ? '#f59e0b' : '#6b7280';
+            html += `
+                <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; font-size:15px; color:var(--text-primary); text-transform:capitalize;">${crop}</h4>
+                        <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:${confColor}22; color:${confColor}; font-weight:600;">${confidence} confidence</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:12px; color:var(--text-secondary);">
+                        <div>Yield: <strong style="color:var(--text-primary);">${bm.avg_yield_oz != null ? bm.avg_yield_oz + ' oz' : '—'}</strong></div>
+                        <div>Cycle: <strong style="color:var(--text-primary);">${bm.avg_cycle_days != null ? bm.avg_cycle_days + ' days' : '—'}</strong></div>
+                        <div>Farms: <strong style="color:var(--text-primary);">${bm.network_farms || 0}</strong></div>
+                        <div>PPFD: <strong style="color:var(--text-primary);">${bm.recommended_ppfd || '—'}</strong></div>
+                        <div>Temp: <strong style="color:var(--text-primary);">${targets.temp_min || '—'}–${targets.temp_max || '—'}°F</strong></div>
+                        <div>RH: <strong style="color:var(--text-primary);">${targets.rh_min || '—'}–${targets.rh_max || '—'}%</strong></div>
+                    </div>
+                </div>`;
+        }
+
+        if (resultsContainer) {
+            resultsContainer.innerHTML = html || '<p style="color:var(--text-muted); text-align:center;">No crop benchmarks returned.</p>';
+        }
+
+        console.log(`[Setup] Benchmarks seeded: ${data.crops_seeded} crops`);
+    } catch (error) {
+        console.error('[Setup] Benchmark seeding error:', error);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.textContent = 'Could not connect to network. Default targets will be used.';
+            errorEl.style.display = 'block';
+        }
+    }
 }
 
 /**
@@ -5792,7 +5605,7 @@ async function loadUsers() {
         // Fetch real users from API
         let users = [];
         try {
-            const resp = await fetch(`${API_BASE}/api/users/list`, {
+            const resp = await fetch(`${API_BASE}/api/users/list?farmId=${currentSession.farmId}`, {
                 headers: { 'Authorization': `Bearer ${currentSession.token}` }
             });
             if (resp.ok) {
@@ -5836,39 +5649,41 @@ function renderUsersTable(users) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No users found</td></tr>';
         return;
     }
-
-    // Hex fallbacks for role/status badge colours (CSS vars can't go inside rgba())
-    const roleBadge = {
-        admin:    { bg: '#fde8e8', fg: '#dc2626', border: '#dc2626' },
-        manager:  { bg: '#dbeafe', fg: '#2563eb', border: '#2563eb' },
-        operator: { bg: '#d1fae5', fg: '#059669', border: '#059669' },
-        viewer:   { bg: '#f3f4f6', fg: '#6b7280', border: '#6b7280' }
-    };
-    const statusColor = { active: '#059669', suspended: '#d97706', inactive: '#6b7280' };
     
     tbody.innerHTML = users.map(user => {
-        const rb = roleBadge[user.role] || roleBadge.viewer;
-        const sc = statusColor[user.status] || statusColor.inactive;
-        const lastLogin = user.lastLogin ? formatTimeSince(new Date(user.lastLogin)) : 'Never';
-        const safeEmail = escapeHtml(user.email);
+        const roleColors = {
+            admin: 'var(--accent-red)',
+            manager: 'var(--accent-blue)',
+            operator: 'var(--accent-green)',
+            viewer: 'var(--text-muted)'
+        };
+        
+        const statusColors = {
+            active: 'var(--accent-green)',
+            suspended: 'var(--accent-yellow)',
+            inactive: 'var(--text-muted)'
+        };
+        
+        const lastLogin = new Date(user.lastLogin);
+        const timeSince = formatTimeSince(lastLogin);
         
         return `
             <tr>
                 <td style="font-weight: 500;">${escapeHtml(user.name)}</td>
-                <td>${safeEmail}</td>
+                <td>${escapeHtml(user.email)}</td>
                 <td>
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: ${rb.bg}; color: ${rb.fg}; border: 1px solid ${rb.border};">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: rgba(${roleColors[user.role]}, 0.1); color: ${roleColors[user.role]}; border: 1px solid ${roleColors[user.role]};">
                         ${user.role}
                     </span>
                 </td>
                 <td>
-                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; color: ${sc};">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; color: ${statusColors[user.status]};">
                         ● ${user.status}
                     </span>
                 </td>
-                <td style="color: var(--text-secondary);">${lastLogin}</td>
+                <td style="color: var(--text-secondary);">${timeSince}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="openEditUserModal('${safeEmail}')" style="padding: 6px 12px; font-size: 13px;">Edit</button>
+                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;">Edit</button>
                 </td>
             </tr>
         `;
@@ -5901,34 +5716,45 @@ function filterUsers() {
 }
 
 /**
- * Open add-user modal
+ * Open invite user modal
  */
-function openAddUserModal() {
-    document.getElementById('addUserModal').style.display = 'flex';
-    document.getElementById('add-user-form').reset();
-    const msgEl = document.getElementById('add-user-message');
-    if (msgEl) msgEl.style.display = 'none';
+function openInviteUserModal() {
+    document.getElementById('inviteUserModal').style.display = 'flex';
+    document.getElementById('invite-user-form').reset();
 }
 
 /**
- * Close add-user modal
+ * Close invite user modal
  */
-function closeAddUserModal() {
-    document.getElementById('addUserModal').style.display = 'none';
+function closeInviteUserModal() {
+    document.getElementById('inviteUserModal').style.display = 'none';
 }
 
 /**
- * Create a new farm user via API
+ * Generate a random temporary password
  */
-async function createUser(event) {
+function generateTempPassword(length = 12) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+}
+
+/**
+ * Send user invitation (creates user with temp password)
+ */
+async function sendUserInvitation(event) {
     event.preventDefault();
     
-    const email = document.getElementById('add-user-email').value;
-    const firstName = document.getElementById('add-user-first-name').value;
-    const lastName = document.getElementById('add-user-last-name').value;
-    const role = document.getElementById('add-user-role').value;
-    const password = document.getElementById('add-user-password').value;
-    const msgEl = document.getElementById('add-user-message');
+    const email = document.getElementById('invite-email').value;
+    const firstName = document.getElementById('invite-first-name').value;
+    const lastName = document.getElementById('invite-last-name').value;
+    const role = document.getElementById('invite-role').value;
+    const message = document.getElementById('invite-message').value;
+    const tempPassword = generateTempPassword();
+    const fullName = `${firstName} ${lastName}`.trim();
     
     try {
         const response = await fetch(`${API_BASE}/api/users/create`, {
@@ -5939,59 +5765,79 @@ async function createUser(event) {
             },
             body: JSON.stringify({
                 email,
-                name: `${firstName} ${lastName}`.trim(),
-                first_name: firstName,
-                last_name: lastName,
+                name: fullName,
                 role,
-                password,
+                password: tempPassword,
                 farmId: currentSession.farmId
             })
         });
 
         const data = await response.json();
 
-        if (response.ok) {
-            if (msgEl) {
-                msgEl.textContent = `User ${email} created. They can now log in.`;
-                msgEl.style.display = 'block';
-                msgEl.style.background = '#d1fae5';
-                msgEl.style.color = '#065f46';
-            }
-            showToast(`User ${email} created`, 'success');
-            setTimeout(() => { closeAddUserModal(); loadUsers(); }, 1500);
-        } else {
-            throw new Error(data.message || data.error || 'Failed to create user');
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to create user');
         }
+        
+        closeInviteUserModal();
+        
+        // Show temp password to admin so they can share it manually
+        // (email sending is not available - SES sandbox restriction)
+        const credentialsMsg = `User created successfully!\n\nLogin credentials for ${fullName}:\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nPlease share these credentials securely with the user and ask them to change their password after first login.`;
+        alert(credentialsMsg);
+        
+        showToast(`User ${email} created successfully`, 'success');
+        
+        // Reload users list
+        loadUsers();
+        
     } catch (error) {
         console.error('Error creating user:', error);
-        if (msgEl) {
-            msgEl.textContent = error.message;
-            msgEl.style.display = 'block';
-            msgEl.style.background = '#fee2e2';
-            msgEl.style.color = '#991b1b';
-        }
-        showToast('Error creating user', 'error');
+        showToast(error.message || 'Error creating user', 'error');
     }
 }
 
 /**
- * Open edit user modal (identified by email)
+ * Add pending invitation to table
  */
-function openEditUserModal(userEmail) {
-    const user = window.allUsers.find(u => u.email === userEmail);
+function addPendingInvitation(invitation) {
+    const tbody = document.querySelector('#invitations-table tbody');
+    
+    // Remove "no invitations" message if present
+    if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+    }
+    
+    const sent = formatTimeSince(new Date(invitation.sent));
+    const expires = new Date(invitation.expires).toLocaleDateString();
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>${escapeHtml(invitation.email)}</td>
+        <td style="text-transform: capitalize;">${invitation.role}</td>
+        <td>${escapeHtml(invitation.invitedBy)}</td>
+        <td>${sent}</td>
+        <td>${expires}</td>
+        <td>
+            <button class="btn btn-sm" onclick="resendInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px;">Resend</button>
+            <button class="btn btn-sm" onclick="cancelInvitation('${invitation.email}')" style="padding: 4px 8px; font-size: 12px; background: var(--accent-red);">Cancel</button>
+        </td>
+    `;
+    
+    tbody.appendChild(row);
+}
+
+/**
+ * Open edit user modal
+ */
+function openEditUserModal(userId) {
+    const user = window.allUsers.find(u => u.id === userId);
     if (!user) return;
     
-    document.getElementById('edit-user-email-key').value = user.email;
+    document.getElementById('edit-user-id').value = user.id;
     document.getElementById('edit-user-name').value = user.name;
     document.getElementById('edit-user-email').value = user.email;
     document.getElementById('edit-user-role').value = user.role;
-    document.getElementById('edit-user-status').value = user.status || 'active';
-
-    // Reset change-password section
-    const pwSection = document.getElementById('edit-user-pw-section');
-    if (pwSection) pwSection.style.display = 'none';
-    const pwMsg = document.getElementById('pw-change-message');
-    if (pwMsg) pwMsg.style.display = 'none';
+    document.getElementById('edit-user-status').value = user.status;
     
     document.getElementById('editUserModal').style.display = 'flex';
 }
@@ -6004,30 +5850,28 @@ function closeEditUserModal() {
 }
 
 /**
- * Save user changes via PATCH /api/users/update
+ * Save user changes
  */
 async function saveUserChanges(event) {
     event.preventDefault();
     
-    const email = document.getElementById('edit-user-email-key').value;
+    const userId = parseInt(document.getElementById('edit-user-id').value);
     const role = document.getElementById('edit-user-role').value;
     const status = document.getElementById('edit-user-status').value;
     
     try {
-        const response = await fetch(`${API_BASE}/api/users/update`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({ email, role, status })
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || data.error || 'Failed to update user');
+        // In production, would call API
+        // const response = await fetch(`/api/users/${userId}`, {
+        //     method: 'PATCH',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //         'X-Farm-ID': localStorage.getItem('farm_id')
+        //     },
+        //     body: JSON.stringify({ role, status })
+        // });
         
         // Update local data
-        const user = window.allUsers.find(u => u.email === email);
+        const user = window.allUsers.find(u => u.id === userId);
         if (user) {
             user.role = role;
             user.status = status;
@@ -6039,92 +5883,68 @@ async function saveUserChanges(event) {
         
     } catch (error) {
         console.error('Error updating user:', error);
-        showToast(error.message || 'Error updating user', 'error');
+        showToast('Error updating user', 'error');
     }
 }
 
 /**
- * Remove user via POST /api/users/delete
+ * Remove user
  */
 async function removeUser() {
-    const email = document.getElementById('edit-user-email-key').value;
-    const user = window.allUsers.find(u => u.email === email);
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const user = window.allUsers.find(u => u.id === userId);
     
-    if (!confirm(`Are you sure you want to remove ${user?.name || email}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to remove ${user.name}? This action cannot be undone.`)) {
         return;
     }
     
     try {
-        const response = await fetch(`${API_BASE}/api/users/delete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({ email, farmId: currentSession.farmId })
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || data.error || 'Failed to remove user');
+        // In production, would call API
+        // await fetch(`/api/users/${userId}`, {
+        //     method: 'DELETE',
+        //     headers: { 'X-Farm-ID': localStorage.getItem('farm_id') }
+        // });
+        
+        window.allUsers = window.allUsers.filter(u => u.id !== userId);
         
         showToast('User removed successfully', 'success');
         closeEditUserModal();
-        loadUsers(); // Reload from server
+        renderUsersTable(window.allUsers);
         
     } catch (error) {
         console.error('Error removing user:', error);
-        showToast(error.message || 'Error removing user', 'error');
+        showToast('Error removing user', 'error');
     }
 }
 
 /**
- * Toggle change-password section in edit modal
+ * Resend invitation
  */
-function toggleChangePassword() {
-    const section = document.getElementById('edit-user-pw-section');
-    if (!section) return;
-    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+function resendInvitation(email) {
+    showToast(`Invitation resent to ${email}`, 'success');
 }
 
 /**
- * Handle password change from edit modal
+ * Cancel invitation
  */
-async function changeUserPassword(event) {
-    event.preventDefault();
-    const email = document.getElementById('edit-user-email-key').value;
-    const newPassword = document.getElementById('edit-new-password').value;
-    const confirmPassword = document.getElementById('edit-confirm-password').value;
-    const msgEl = document.getElementById('pw-change-message');
-
-    if (newPassword !== confirmPassword) {
-        if (msgEl) { msgEl.textContent = 'Passwords do not match'; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
-        return;
+function cancelInvitation(email) {
+    if (!confirm(`Cancel invitation for ${email}?`)) return;
+    
+    const tbody = document.querySelector('#invitations-table tbody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        if (row.cells[0].textContent === email) {
+            row.remove();
+        }
+    });
+    
+    // If no more rows, show "no invitations" message
+    if (tbody.children.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">No pending invitations</td></tr>';
     }
-    if (newPassword.length < 6) {
-        if (msgEl) { msgEl.textContent = 'Password must be at least 6 characters'; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/api/user/change-password`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.token}`
-            },
-            body: JSON.stringify({ email, newPassword })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || data.error || 'Failed to change password');
-
-        if (msgEl) { msgEl.textContent = 'Password updated successfully'; msgEl.style.display = 'block'; msgEl.style.background = '#d1fae5'; msgEl.style.color = '#065f46'; }
-        document.getElementById('edit-new-password').value = '';
-        document.getElementById('edit-confirm-password').value = '';
-        showToast('Password updated', 'success');
-    } catch (error) {
-        console.error('Error changing password:', error);
-        if (msgEl) { msgEl.textContent = error.message; msgEl.style.display = 'block'; msgEl.style.background = '#fee2e2'; msgEl.style.color = '#991b1b'; }
-    }
+    
+    showToast('Invitation cancelled', 'info');
 }
 
 /**
@@ -6282,7 +6102,7 @@ async function loadQualityControl() {
     renderLabReports();
 }
 
-// ─── Tab switching ───
+// --- Tab switching ---
 function switchQualityTab(tab) {
     const inspPanel = document.getElementById('qa-panel-inspections');
     const labPanel = document.getElementById('qa-panel-labreports');
@@ -6302,7 +6122,7 @@ function switchQualityTab(tab) {
     }
 }
 
-// ─── QA Checkpoints rendering ───
+// --- QA Checkpoints rendering ---
 function renderQualityCheckpoints(filtered) {
     const tbody = document.querySelector('#quality-tests-table tbody');
     if (!tbody) return;
@@ -6310,7 +6130,7 @@ function renderQualityCheckpoints(filtered) {
     const items = filtered || qualityCheckpoints;
 
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">No QA inspections found. Inspections are recorded from the Activity Hub.</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">No QA inspections found. Inspections are recorded from the Activity Hub.</td></tr>';
         return;
     }
 
@@ -6338,17 +6158,17 @@ function renderQualityCheckpoints(filtered) {
         }
 
         const typeLabel = typeLabels[cp.checkpoint_type] || cp.checkpoint_type || 'Unknown';
-        const notes = cp.notes ? (cp.notes.length > 60 ? cp.notes.slice(0, 57) + '...' : cp.notes) : '—';
+        const notes = cp.notes ? (cp.notes.length > 60 ? cp.notes.slice(0, 57) + '...' : cp.notes) : '\u2014';
 
-        return `<tr>
-            <td><span style="font-family:monospace;color:var(--accent-blue);">${cp.id || '—'}</span></td>
-            <td><div>${dateStr}</div><small style="color:var(--text-muted);">${timeStr}</small></td>
-            <td><span style="font-family:monospace;">${cp.batch_id || '—'}</span></td>
-            <td>${typeLabel}</td>
-            <td>${cp.inspector || 'Unknown'}</td>
-            <td>${badge}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(cp.notes || '').replace(/"/g, '&quot;')}">${notes}</td>
-        </tr>`;
+        return '<tr>' +
+            '<td><span style="font-family:monospace;color:var(--accent-blue);">' + (cp.id || '\u2014') + '</span></td>' +
+            '<td><div>' + dateStr + '</div><small style="color:var(--text-muted);">' + timeStr + '</small></td>' +
+            '<td><span style="font-family:monospace;">' + (cp.batch_id || '\u2014') + '</span></td>' +
+            '<td>' + typeLabel + '</td>' +
+            '<td>' + (cp.inspector || 'Unknown') + '</td>' +
+            '<td>' + badge + '</td>' +
+            '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + notes + '</td>' +
+        '</tr>';
     }).join('');
 }
 
@@ -6363,13 +6183,13 @@ function filterQualityCheckpoints() {
     renderQualityCheckpoints(filtered);
 }
 
-// ─── Lab Reports rendering ───
+// --- Lab Reports rendering ---
 function renderLabReports() {
     const tbody = document.getElementById('lab-reports-tbody');
     if (!tbody) return;
 
     if (!labReports.length) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">No lab reports recorded yet. Click "+ Record Lab Report" to add one.</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">No lab reports recorded yet. Click "+ Record Lab Report" to add one.</td></tr>';
         return;
     }
 
@@ -6392,35 +6212,27 @@ function renderLabReports() {
             badge = '<span style="padding:4px 10px;background:var(--accent-yellow);color:white;border-radius:12px;font-size:12px;">PENDING</span>';
         }
 
-        const notes = r.notes ? (r.notes.length > 50 ? r.notes.slice(0, 47) + '...' : r.notes) : '—';
+        const notes = r.notes ? (r.notes.length > 50 ? r.notes.slice(0, 47) + '...' : r.notes) : '\u2014';
 
-        return `<tr>
-            <td><span style="font-family:monospace;color:var(--accent-blue);">${r.id}</span></td>
-            <td>${r.test_date || '—'}</td>
-            <td>${typeLabels[r.report_type] || r.report_type}</td>
-            <td>${r.lab_name || '—'}</td>
-            <td><span style="font-family:monospace;">${r.lot_code || '—'}</span></td>
-            <td>${badge}</td>
-            <td title="${(r.notes || '').replace(/"/g, '&quot;')}">${notes}</td>
-            <td>
-                <button class="btn-icon" onclick="deleteLabReport('${r.id}')" title="Delete">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                </button>
-            </td>
-        </tr>`;
+        return '<tr>' +
+            '<td><span style="font-family:monospace;color:var(--accent-blue);">' + r.id + '</span></td>' +
+            '<td>' + (r.test_date || '\u2014') + '</td>' +
+            '<td>' + (typeLabels[r.report_type] || r.report_type) + '</td>' +
+            '<td>' + (r.lab_name || '\u2014') + '</td>' +
+            '<td><span style="font-family:monospace;">' + (r.lot_code || '\u2014') + '</span></td>' +
+            '<td>' + badge + '</td>' +
+            '<td>' + notes + '</td>' +
+            '<td><button class="btn-icon" onclick="deleteLabReport(\'' + r.id + '\')" title="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>' +
+        '</tr>';
     }).join('');
 }
 
-// ─── Lab Report modal ───
+// --- Lab Report modal ---
 function openLabReportModal() {
     const modal = document.getElementById('labReportModal');
     if (modal) {
         modal.style.display = 'flex';
         document.getElementById('lab-report-form')?.reset();
-        // Default date to today
         const dateInput = document.getElementById('lr-test-date');
         if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
     }
@@ -6491,7 +6303,6 @@ async function deleteLabReport(id) {
 }
 
 function exportQualityReport() {
-    // Export both inspections and lab reports as CSV
     let csv = 'Source,ID,Date,Type,Inspector/Lab,Batch/Lot,Result,Notes\n';
 
     qualityCheckpoints.forEach(cp => {
@@ -6503,7 +6314,7 @@ function exportQualityReport() {
             cp.inspector || '',
             cp.batch_id || '',
             cp.result || '',
-            `"${(cp.notes || '').replace(/"/g, '""')}"`
+            '"' + (cp.notes || '').replace(/"/g, '""') + '"'
         ].join(',') + '\n';
     });
 
@@ -6516,7 +6327,7 @@ function exportQualityReport() {
             r.lab_name || '',
             r.lot_code || '',
             r.result || '',
-            `"${(r.notes || '').replace(/"/g, '""')}"`
+            '"' + (r.notes || '').replace(/"/g, '""') + '"'
         ].join(',') + '\n';
     });
 
@@ -6524,7 +6335,7 @@ function exportQualityReport() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quality-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = 'quality-report-' + new Date().toISOString().split('T')[0] + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -6537,9 +6348,236 @@ function showNotification(message, type = 'info') {
     alert(message);
 }
 // ========================================
-// USER MANAGEMENT — System 2 removed.
-// All user CRUD now uses the System 1 functions above
-// (createUser, saveUserChanges, removeUser, changeUserPassword)
-// wired to /api/users/create, PATCH /api/users/update,
-// POST /api/users/delete, POST /api/user/change-password.
+// USER MANAGEMENT FUNCTIONS
 // ========================================
+
+/**
+ * Initialize user management section
+ */
+async function initUserManagement() {
+    // Load current user info
+    if (currentSession && currentSession.email) {
+        document.getElementById('current-user-email').value = currentSession.email || '';
+        document.getElementById('current-user-role').value = currentSession.role || 'admin';
+    }
+
+    // Setup event listeners
+    document.getElementById('change-password-form').addEventListener('submit', handlePasswordChange);
+    document.getElementById('add-user-btn').addEventListener('click', () => {
+        document.getElementById('add-user-form-container').style.display = 'block';
+    });
+    document.getElementById('cancel-add-user-btn').addEventListener('click', () => {
+        document.getElementById('add-user-form-container').style.display = 'none';
+        document.getElementById('add-user-form').reset();
+    });
+    document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
+
+    // Load users list
+    await loadUsers();
+}
+
+/**
+ * Handle password change
+ */
+async function handlePasswordChange(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const messageEl = document.getElementById('password-change-message');
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        messageEl.textContent = 'New passwords do not match';
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/user/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            messageEl.textContent = 'Password updated successfully';
+            messageEl.style.display = 'block';
+            messageEl.style.background = '#efe';
+            messageEl.style.color = '#3a3';
+            document.getElementById('change-password-form').reset();
+        } else {
+            throw new Error(data.message || 'Failed to update password');
+        }
+    } catch (error) {
+        messageEl.textContent = error.message;
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+    }
+}
+
+/**
+ * Handle add new user
+ */
+async function handleAddUser(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('new-user-email').value;
+    const name = document.getElementById('new-user-name').value;
+    const role = document.getElementById('new-user-role').value;
+    const password = document.getElementById('new-user-password').value;
+    const messageEl = document.getElementById('add-user-message');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/users/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                name,
+                role,
+                password,
+                farmId: currentSession.farmId
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            messageEl.textContent = 'User created successfully. They can now log in with the provided credentials.';
+            messageEl.style.display = 'block';
+            messageEl.style.background = '#efe';
+            messageEl.style.color = '#3a3';
+            document.getElementById('add-user-form').reset();
+            
+            // Reload users list
+            setTimeout(() => {
+                document.getElementById('add-user-form-container').style.display = 'none';
+                loadUsers();
+            }, 2000);
+        } else {
+            throw new Error(data.message || 'Failed to create user');
+        }
+    } catch (error) {
+        messageEl.textContent = error.message;
+        messageEl.style.display = 'block';
+        messageEl.style.background = '#fee';
+        messageEl.style.color = '#c33';
+    }
+}
+
+/**
+ * Load users list
+ */
+async function loadUsers() {
+    const tbody = document.getElementById('users-table-body');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/users/list?farmId=${currentSession.farmId}`, {
+            headers: {
+                'Authorization': `Bearer ${currentSession.token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load users');
+        }
+
+        const data = await response.json();
+        const users = data.users || [];
+
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #999;">No users found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(user => `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px;">${user.name || '-'}</td>
+                <td style="padding: 12px;">${user.email}</td>
+                <td style="padding: 12px;">
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #f5f5f5; text-transform: capitalize;">
+                        ${user.role}
+                    </span>
+                </td>
+                <td style="padding: 12px;">
+                    <span style="color: #4caf50;">Active</span>
+                </td>
+                <td style="padding: 12px; text-align: right;">
+                    ${user.email !== currentSession.email ? `
+                        <button onclick="deleteUser('${user.email}')" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                            Remove
+                        </button>
+                    ` : '<span style="color: #999; font-size: 12px;">You</span>'}
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading users:', error);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #f44336;">Failed to load users</td></tr>';
+    }
+}
+
+/**
+ * Delete user
+ */
+async function deleteUser(email) {
+    if (!confirm(`Are you sure you want to remove ${email} from this farm?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/users/delete`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.token}`
+            },
+            body: JSON.stringify({
+                email,
+                farmId: currentSession.farmId
+            })
+        });
+
+        if (response.ok) {
+            showNotification('User removed successfully', 'success');
+            loadUsers();
+        } else {
+            const data = await response.json();
+            throw new Error(data.message || 'Failed to remove user');
+        }
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+// Initialize user management when the section is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if we're on the users section
+    const urlHash = window.location.hash;
+    if (urlHash === '#users') {
+        initUserManagement();
+    }
+    
+    // Also initialize when navigating to users section
+    document.addEventListener('click', (e) => {
+        if (e.target.matches('[data-section="users"]') || e.target.closest('[data-section="users"]')) {
+            setTimeout(() => initUserManagement(), 100);
+        }
+    });
+});

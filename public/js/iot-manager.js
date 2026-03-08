@@ -5,6 +5,8 @@ class IoTDevicesManager {
     this.scanning = false;
     this.deviceGroups = Array.from(document.querySelectorAll('.iot-device-group'));
     this.scanButton = document.getElementById('scanDevicesBtn') || document.getElementById('btnScanIoTDevices');
+    this.autoAssignButton = document.getElementById('autoAssignBtn');
+    this.autoAssignResult = document.getElementById('autoAssignResult');
     this.loadingState = document.querySelector('.iot-loading-state');
     this.rootList = document.getElementById('iotDevicesList');
 
@@ -55,6 +57,9 @@ class IoTDevicesManager {
     if (this.scanButton) {
       this.scanButton.addEventListener('click', () => this.scanDevices());
     }
+    if (this.autoAssignButton) {
+      this.autoAssignButton.addEventListener('click', () => this.autoAssignDevices());
+    }
     
     // Load initial device list
     await this.loadDevices();
@@ -95,6 +100,71 @@ class IoTDevicesManager {
       this.scanning = false;
       if (this.loadingState) this.loadingState.hidden = true;
       if (this.scanButton) this.scanButton.disabled = false;
+    }
+  }
+
+  /**
+   * Auto-assign unassigned devices to rooms/zones via POST /api/devices/auto-assign.
+   * Uses the backend's protocol/type matching algorithm (max 4 of same type per room).
+   */
+  async autoAssignDevices() {
+    if (this.autoAssignButton) this.autoAssignButton.disabled = true;
+
+    // Collect current unassigned devices
+    const unassigned = this.devices.filter(d => !d.room && !d.room_id);
+    const payload = unassigned.length > 0 ? { devices: unassigned } : {};
+
+    try {
+      const response = await fetch('/api/devices/auto-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+
+      // Show result banner
+      if (this.autoAssignResult) {
+        if (data.ok && data.assigned > 0) {
+          this.autoAssignResult.style.display = 'block';
+          this.autoAssignResult.style.background = 'rgba(16,185,129,0.1)';
+          this.autoAssignResult.style.border = '1px solid rgba(16,185,129,0.3)';
+          this.autoAssignResult.style.color = '#6ee7b7';
+          const lines = data.assignments.map(a =>
+            `${a.device_id} → ${a.room_id}${a.zone ? ' / ' + a.zone : ''} (${a.device_type})`
+          );
+          this.autoAssignResult.innerHTML =
+            `<strong>Auto-assigned ${data.assigned} device${data.assigned > 1 ? 's' : ''}:</strong><br>` +
+            lines.join('<br>');
+        } else {
+          this.autoAssignResult.style.display = 'block';
+          this.autoAssignResult.style.background = 'rgba(96,165,250,0.1)';
+          this.autoAssignResult.style.border = '1px solid rgba(96,165,250,0.3)';
+          this.autoAssignResult.style.color = '#93c5fd';
+          this.autoAssignResult.textContent = data.message || 'All devices are already assigned.';
+        }
+
+        // Auto-hide after 10 seconds
+        setTimeout(() => { this.autoAssignResult.style.display = 'none'; }, 10000);
+      }
+
+      // Refresh device list to reflect new assignments
+      if (data.assigned > 0) {
+        await this.loadDevices();
+        await this.setupAssignmentData();
+      }
+
+      if (typeof showToast === 'function') {
+        showToast(data.assigned > 0
+          ? `Auto-assigned ${data.assigned} device${data.assigned > 1 ? 's' : ''}`
+          : (data.message || 'No unassigned devices'), data.assigned > 0 ? 'success' : 'info');
+      }
+    } catch (error) {
+      console.error('[IoT Manager] Auto-assign failed:', error);
+      if (typeof showToast === 'function') {
+        showToast('Auto-assign failed: ' + error.message, 'error');
+      }
+    } finally {
+      if (this.autoAssignButton) this.autoAssignButton.disabled = false;
     }
   }
 

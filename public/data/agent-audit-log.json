@@ -1,0 +1,22 @@
+[
+  {
+    "id": "e6c2d17a-0d5e-411d-b846-397339c95b42",
+    "timestamp": "2026-03-08T16:11:24.846Z",
+    "tool": "get_daily_todo",
+    "category": "read",
+    "params": {},
+    "success": true,
+    "duration_ms": 3,
+    "idempotency_key": null
+  },
+  {
+    "id": "84a2e06d-7ac1-4df5-ac87-c3aa73e346eb",
+    "timestamp": "2026-03-08T16:11:29.914Z",
+    "tool": "get_alerts",
+    "category": "read",
+    "params": {},
+    "success": true,
+    "duration_ms": 0,
+    "idempotency_key": "test-idem-001"
+  }
+]

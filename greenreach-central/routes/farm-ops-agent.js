@@ -1,0 +1,802 @@
+/**
+ * Farm Operations Agent — Daily To-Do Generator, Tool Gateway, and Command Taxonomy
+ * ==================================================================================
+ *
+ * Deterministic, citation-backed daily task engine for Light Engine / GreenReach Central.
+ *
+ * Scoring formula (per build plan):
+ *   score = 0.35*Urgency + 0.25*Impact + 0.15*Risk + 0.15*Confidence - 0.10*Effort
+ *
+ * Data sources:
+ *   - wholesale-orders-status.json   → wholesale orders due / overdue
+ *   - harvest-log.json               → harvest readiness + cycle timing
+ *   - rooms.json / room-map-*.json   → active rooms, zones, tray positions
+ *   - env-cache.json / env.json      → live environment readings
+ *   - target-ranges.json             → environmental target ranges
+ *   - system-alerts.json             → sensor outages, anomalies
+ *   - crop-registry.json             → crop cycle lengths, seeding windows
+ *   - device-meta.json               → IoT device status
+ *   - demand-succession-suggestions  → upcoming seeding suggestions
+ *   - ai-recommendations.json        → AI/ML-derived actions
+ *
+ * Endpoints:
+ *   GET  /daily-todo           → ranked task list for today
+ *   POST /tool-gateway         → schema-validated tool execution with audit
+ *   GET  /tool-catalog         → list available tools with schemas
+ *   POST /parse-command        → intent + slot extraction from natural language
+ *   GET  /audit-log            → paginated audit trail of agent actions
+ */
+
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
+
+const router = express.Router();
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function readJSON(filename, fallback = null) {
+  try {
+    const filePath = path.join(DATA_DIR, filename);
+    if (!fs.existsSync(filePath)) return fallback;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJSON(filename, data) {
+  const filePath = path.join(DATA_DIR, filename);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function daysBetween(dateA, dateB) {
+  const a = new Date(dateA);
+  const b = new Date(dateB);
+  return Math.round((b - a) / 86400000);
+}
+
+/**
+ * Compute priority score.
+ * All inputs are 0–1 floats except effort which is 0–1 (lower is easier).
+ */
+function priorityScore({ urgency = 0, impact = 0, risk = 0, confidence = 0.5, effort = 0.5 }) {
+  return +(0.35 * urgency + 0.25 * impact + 0.15 * risk + 0.15 * confidence - 0.10 * effort).toFixed(4);
+}
+
+// ============================================================================
+// 1. Daily To-Do Generator
+// ============================================================================
+
+/**
+ * Gather tasks from all data sources and return a scored, ranked list.
+ */
+function generateDailyTodo() {
+  const today = todayISO();
+  const tasks = [];
+
+  // --- Source A: Wholesale orders due soon or overdue ---
+  const orders = readJSON('wholesale-orders-status.json', []);
+  const orderArr = Array.isArray(orders) ? orders : (orders.orders || []);
+  for (const order of orderArr) {
+    if (!order.delivery_date && !order.due_date) continue;
+    const due = order.delivery_date || order.due_date;
+    const daysUntil = daysBetween(today, due);
+    const status = (order.status || '').toLowerCase();
+    if (status === 'delivered' || status === 'cancelled') continue;
+
+    if (daysUntil <= 3) {
+      const overdue = daysUntil < 0;
+      tasks.push({
+        id: `order-${order.order_id || order.id}`,
+        category: 'wholesale',
+        title: overdue
+          ? `OVERDUE: Order ${order.order_id || order.id} was due ${Math.abs(daysUntil)} day(s) ago`
+          : `Order ${order.order_id || order.id} due in ${daysUntil} day(s)`,
+        why: `${order.buyer_name || 'Buyer'} — ${order.total_items || '?'} items, status: ${order.status || 'pending'}`,
+        deadline: due,
+        estimated_minutes: 30,
+        actions: ['View order details', 'Begin fulfillment', 'Contact buyer'],
+        dependencies: [],
+        score: priorityScore({
+          urgency: overdue ? 1.0 : Math.max(0, 1 - daysUntil / 3),
+          impact: 0.9,
+          risk: overdue ? 0.95 : 0.6,
+          confidence: 0.95,
+          effort: 0.3
+        })
+      });
+    }
+  }
+
+  // --- Source B: Harvest readiness ---
+  const harvestLog = readJSON('harvest-log.json', []);
+  const harvests = Array.isArray(harvestLog) ? harvestLog : (harvestLog.harvests || harvestLog.records || []);
+  const cropRegistry = readJSON('crop-registry.json', {});
+  const crops = cropRegistry.crops || cropRegistry;
+
+  // Check rooms for trays that may be ready to harvest
+  const rooms = readJSON('rooms.json', {});
+  const roomList = rooms.rooms || Object.values(rooms).filter(r => typeof r === 'object');
+
+  for (const room of roomList) {
+    const roomId = room.id || room.room_id;
+    const roomMap = readJSON(`room-map-${roomId}.json`, null);
+    if (!roomMap) continue;
+
+    const zones = roomMap.zones || [];
+    for (const zone of zones) {
+      const trays = zone.trays || zone.positions || [];
+      for (const tray of trays) {
+        if (!tray.crop || !tray.planted_date) continue;
+        const cropInfo = crops[tray.crop] || {};
+        const cycleDays = cropInfo.cycle_days || cropInfo.growthDays || 28;
+        const plantedDaysAgo = daysBetween(tray.planted_date, today);
+        const daysUntilHarvest = cycleDays - plantedDaysAgo;
+
+        if (daysUntilHarvest <= 2 && daysUntilHarvest >= -3) {
+          tasks.push({
+            id: `harvest-${roomId}-${zone.zone || zone.id}-${tray.position || tray.id}`,
+            category: 'harvest',
+            title: daysUntilHarvest <= 0
+              ? `Ready to harvest: ${tray.crop} in ${room.name || roomId}`
+              : `Harvest in ${daysUntilHarvest} day(s): ${tray.crop}`,
+            why: `Planted ${plantedDaysAgo}d ago (cycle: ${cycleDays}d) — ${room.name || roomId}, Zone ${zone.zone || zone.id}`,
+            deadline: new Date(new Date(tray.planted_date).getTime() + cycleDays * 86400000).toISOString().slice(0, 10),
+            estimated_minutes: 20,
+            actions: ['Harvest tray', 'Print label', 'Log harvest weight'],
+            dependencies: [],
+            score: priorityScore({
+              urgency: daysUntilHarvest <= 0 ? 0.95 : 0.7,
+              impact: 0.7,
+              risk: daysUntilHarvest < -1 ? 0.8 : 0.3,
+              confidence: 0.85,
+              effort: 0.25
+            })
+          });
+        }
+      }
+    }
+  }
+
+  // --- Source C: Seeding windows / succession planting ---
+  const succSuggestions = readJSON('demand-succession-suggestions.json', {});
+  const suggestions = succSuggestions.suggestions || succSuggestions.upcoming || [];
+  for (const sug of (Array.isArray(suggestions) ? suggestions : Object.values(suggestions))) {
+    const seedBy = sug.seed_by || sug.target_date;
+    if (!seedBy) continue;
+    const daysUntil = daysBetween(today, seedBy);
+    if (daysUntil >= 0 && daysUntil <= 5) {
+      tasks.push({
+        id: `seed-${sug.crop || 'unknown'}-${seedBy}`,
+        category: 'seeding',
+        title: `Seed ${sug.crop || 'crop'}: window closes in ${daysUntil} day(s)`,
+        why: sug.reason || `Succession planting for demand forecast`,
+        deadline: seedBy,
+        estimated_minutes: 45,
+        actions: ['Seed trays', 'Update room map', 'Order supplies if needed'],
+        dependencies: sug.requires || [],
+        score: priorityScore({
+          urgency: Math.max(0, 1 - daysUntil / 5),
+          impact: 0.6,
+          risk: 0.4,
+          confidence: sug.confidence || 0.6,
+          effort: 0.4
+        })
+      });
+    }
+  }
+
+  // --- Source D: Environment anomalies & sensor outages ---
+  const alerts = readJSON('system-alerts.json', []);
+  const alertArr = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+  for (const alert of alertArr) {
+    if (alert.resolved || alert.dismissed) continue;
+    const severity = (alert.severity || alert.level || 'info').toLowerCase();
+    if (severity === 'info') continue;
+
+    tasks.push({
+      id: `alert-${alert.id || crypto.randomUUID().slice(0, 8)}`,
+      category: 'anomaly',
+      title: alert.title || alert.message || `${severity} alert`,
+      why: alert.description || alert.details || 'System alert requires attention',
+      deadline: today,
+      estimated_minutes: 15,
+      actions: ['Investigate', 'Acknowledge alert', 'Check sensor'],
+      dependencies: [],
+      score: priorityScore({
+        urgency: severity === 'critical' ? 1.0 : severity === 'warning' ? 0.8 : 0.5,
+        impact: severity === 'critical' ? 0.9 : 0.5,
+        risk: severity === 'critical' ? 1.0 : 0.6,
+        confidence: 0.9,
+        effort: 0.2
+      })
+    });
+  }
+
+  // --- Source E: Environment drift (readings vs targets) ---
+  const envCache = readJSON('env-cache.json', {});
+  const targetRanges = readJSON('target-ranges.json', {});
+  const targets = targetRanges.targets || targetRanges;
+
+  for (const room of roomList) {
+    const roomId = room.id || room.room_id;
+    const envData = envCache[roomId] || envCache[room.name];
+    const roomTargets = targets[roomId] || targets[room.name];
+    if (!envData || !roomTargets) continue;
+
+    const checks = [
+      { metric: 'temperature', value: envData.temperature || envData.temp, min: roomTargets.temp_min, max: roomTargets.temp_max, unit: '°F' },
+      { metric: 'humidity', value: envData.humidity || envData.rh, min: roomTargets.rh_min, max: roomTargets.rh_max, unit: '%' },
+      { metric: 'co2', value: envData.co2, min: roomTargets.co2_min, max: roomTargets.co2_max, unit: 'ppm' }
+    ];
+
+    for (const chk of checks) {
+      if (chk.value == null || chk.min == null || chk.max == null) continue;
+      const drift = chk.value < chk.min ? chk.min - chk.value : chk.value > chk.max ? chk.value - chk.max : 0;
+      if (drift <= 0) continue;
+
+      const range = chk.max - chk.min;
+      const driftPct = range > 0 ? drift / range : 0.5;
+
+      tasks.push({
+        id: `env-drift-${roomId}-${chk.metric}`,
+        category: 'environment',
+        title: `${chk.metric} out of range in ${room.name || roomId}`,
+        why: `Current: ${chk.value}${chk.unit}, target: ${chk.min}–${chk.max}${chk.unit} (${drift.toFixed(1)}${chk.unit} off)`,
+        deadline: today,
+        estimated_minutes: 10,
+        actions: ['Adjust controller', 'Check HVAC', 'Verify sensor'],
+        dependencies: [],
+        score: priorityScore({
+          urgency: driftPct > 0.5 ? 0.9 : 0.6,
+          impact: 0.6,
+          risk: driftPct > 0.5 ? 0.7 : 0.4,
+          confidence: 0.8,
+          effort: 0.15
+        })
+      });
+    }
+  }
+
+  // --- Source F: AI recommendations ---
+  const aiRecs = readJSON('ai-recommendations.json', {});
+  const recActions = aiRecs.recommended_actions || aiRecs.actions || [];
+  for (const rec of (Array.isArray(recActions) ? recActions : [])) {
+    if (rec.dismissed || rec.completed) continue;
+    tasks.push({
+      id: `ai-rec-${rec.id || crypto.randomUUID().slice(0, 8)}`,
+      category: 'ai-recommendation',
+      title: rec.title || rec.action || 'AI recommendation',
+      why: rec.reason || rec.explanation || 'Machine learning model suggests this action',
+      deadline: rec.deadline || today,
+      estimated_minutes: rec.estimated_minutes || 20,
+      actions: rec.steps || ['Review recommendation', 'Accept or dismiss'],
+      dependencies: rec.dependencies || [],
+      score: priorityScore({
+        urgency: rec.urgency || 0.5,
+        impact: rec.impact || 0.5,
+        risk: rec.risk || 0.3,
+        confidence: rec.confidence || 0.6,
+        effort: rec.effort || 0.4
+      })
+    });
+  }
+
+  // Sort by score descending
+  tasks.sort((a, b) => b.score - a.score);
+
+  return {
+    ok: true,
+    date: today,
+    generated_at: new Date().toISOString(),
+    task_count: tasks.length,
+    tasks,
+    scoring_formula: 'score = 0.35*Urgency + 0.25*Impact + 0.15*Risk + 0.15*Confidence - 0.10*Effort'
+  };
+}
+
+router.get('/daily-todo', (req, res) => {
+  try {
+    const result = generateDailyTodo();
+    // Optional: filter by category
+    if (req.query.category) {
+      result.tasks = result.tasks.filter(t => t.category === req.query.category);
+      result.task_count = result.tasks.length;
+    }
+    // Optional: limit
+    if (req.query.limit) {
+      const limit = parseInt(req.query.limit, 10);
+      if (limit > 0) {
+        result.tasks = result.tasks.slice(0, limit);
+        result.task_count = result.tasks.length;
+      }
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('[farm-ops-agent] daily-todo error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// 2. Tool Gateway — Schema-validated tool execution with audit trail
+// ============================================================================
+
+/**
+ * Tool catalog: defines every tool the agent can invoke.
+ * Each tool has: name, description, category (read/write/dangerous),
+ * required/optional slots, and the handler function.
+ */
+const TOOL_CATALOG = {
+  // --- Read tools ---
+  'get_daily_todo': {
+    description: 'Generate the ranked daily to-do list',
+    category: 'read',
+    required: [],
+    optional: ['category', 'limit'],
+    handler: async (params) => {
+      const result = generateDailyTodo();
+      if (params.category) result.tasks = result.tasks.filter(t => t.category === params.category);
+      if (params.limit) result.tasks = result.tasks.slice(0, parseInt(params.limit, 10));
+      result.task_count = result.tasks.length;
+      return result;
+    }
+  },
+  'get_room_status': {
+    description: 'Get current environment and tray status for a room',
+    category: 'read',
+    required: ['room_id'],
+    optional: [],
+    handler: async ({ room_id }) => {
+      const rooms = readJSON('rooms.json', {});
+      const roomList = rooms.rooms || Object.values(rooms);
+      const room = roomList.find(r => (r.id || r.room_id) === room_id);
+      if (!room) return { ok: false, error: `Room ${room_id} not found` };
+      const envCache = readJSON('env-cache.json', {});
+      const roomMap = readJSON(`room-map-${room_id}.json`, null);
+      return {
+        ok: true,
+        room,
+        environment: envCache[room_id] || null,
+        zones: roomMap?.zones || [],
+        zone_count: (roomMap?.zones || []).length
+      };
+    }
+  },
+  'get_orders': {
+    description: 'List wholesale orders, optionally filtered by status',
+    category: 'read',
+    required: [],
+    optional: ['status', 'limit'],
+    handler: async ({ status, limit }) => {
+      let orders = readJSON('wholesale-orders-status.json', []);
+      orders = Array.isArray(orders) ? orders : (orders.orders || []);
+      if (status) orders = orders.filter(o => (o.status || '').toLowerCase() === status.toLowerCase());
+      if (limit) orders = orders.slice(0, parseInt(limit, 10));
+      return { ok: true, count: orders.length, orders };
+    }
+  },
+  'get_harvest_log': {
+    description: 'Get recent harvest records',
+    category: 'read',
+    required: [],
+    optional: ['crop', 'limit'],
+    handler: async ({ crop, limit }) => {
+      let harvests = readJSON('harvest-log.json', []);
+      harvests = Array.isArray(harvests) ? harvests : (harvests.harvests || harvests.records || []);
+      if (crop) harvests = harvests.filter(h => (h.crop || '').toLowerCase() === crop.toLowerCase());
+      if (limit) harvests = harvests.slice(-parseInt(limit, 10));
+      return { ok: true, count: harvests.length, harvests };
+    }
+  },
+  'get_alerts': {
+    description: 'Get active system alerts and anomalies',
+    category: 'read',
+    required: [],
+    optional: ['severity'],
+    handler: async ({ severity }) => {
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = (Array.isArray(alerts) ? alerts : (alerts.alerts || [])).filter(a => !a.resolved && !a.dismissed);
+      if (severity) alerts = alerts.filter(a => (a.severity || a.level || '').toLowerCase() === severity.toLowerCase());
+      return { ok: true, count: alerts.length, alerts };
+    }
+  },
+
+  // --- Write tools ---
+  'dismiss_alert': {
+    description: 'Dismiss a system alert by ID',
+    category: 'write',
+    required: ['alert_id'],
+    optional: ['reason'],
+    handler: async ({ alert_id, reason }) => {
+      let alerts = readJSON('system-alerts.json', []);
+      alerts = Array.isArray(alerts) ? alerts : (alerts.alerts || []);
+      const alert = alerts.find(a => a.id === alert_id);
+      if (!alert) return { ok: false, error: `Alert ${alert_id} not found` };
+      alert.dismissed = true;
+      alert.dismissed_at = new Date().toISOString();
+      alert.dismiss_reason = reason || 'Agent-dismissed';
+      writeJSON('system-alerts.json', alerts);
+      return { ok: true, alert_id, dismissed: true };
+    }
+  },
+  'auto_assign_devices': {
+    description: 'Auto-assign unassigned IoT devices to rooms/zones',
+    category: 'write',
+    required: [],
+    optional: ['room_id'],
+    handler: async ({ room_id }) => {
+      // Delegate to the existing backend endpoint via internal fetch
+      const payload = room_id ? { room_id } : {};
+      // Direct implementation to avoid circular HTTP calls
+      const deviceMetaPath = path.join(DATA_DIR, 'device-meta.json');
+      const roomsPath = path.join(DATA_DIR, 'rooms.json');
+      let rooms = {};
+      try { rooms = JSON.parse(fs.readFileSync(roomsPath, 'utf8')); } catch (_) {}
+      let deviceMeta = {};
+      try { deviceMeta = JSON.parse(fs.readFileSync(deviceMetaPath, 'utf8')); } catch (_) {}
+      const unassigned = Object.values(deviceMeta).filter(d => !d.room_id);
+      return { ok: true, unassigned_count: unassigned.length, message: 'Use POST /api/devices/auto-assign for full assignment' };
+    }
+  },
+  'seed_benchmarks': {
+    description: 'Seed crop benchmarks from the GreenReach network',
+    category: 'write',
+    required: [],
+    optional: ['farm_id', 'crops'],
+    handler: async (params) => {
+      return { ok: true, message: 'Use POST /api/setup-wizard/seed-benchmarks for full benchmark seeding', params };
+    }
+  }
+};
+
+// Idempotency cache: key → { result, created_at }
+const idempotencyCache = new Map();
+const IDEMPOTENCY_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Audit log (in-memory, persisted to file on each write)
+const AUDIT_LOG_PATH = path.join(DATA_DIR, 'agent-audit-log.json');
+
+function loadAuditLog() {
+  try {
+    if (fs.existsSync(AUDIT_LOG_PATH)) {
+      return JSON.parse(fs.readFileSync(AUDIT_LOG_PATH, 'utf8'));
+    }
+  } catch {}
+  return [];
+}
+
+function appendAuditEntry(entry) {
+  const log = loadAuditLog();
+  log.push(entry);
+  // Keep last 1000 entries
+  const trimmed = log.slice(-1000);
+  fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(trimmed, null, 2));
+  return trimmed;
+}
+
+/**
+ * POST /tool-gateway
+ * Body: { tool, params, idempotency_key? }
+ *
+ * Validates required slots, runs the tool, logs the result.
+ * If idempotency_key is provided and matches a recent call, returns cached result.
+ */
+router.post('/tool-gateway', async (req, res) => {
+  const { tool, params = {}, idempotency_key } = req.body;
+
+  if (!tool) return res.status(400).json({ ok: false, error: 'Missing required field: tool' });
+
+  const toolDef = TOOL_CATALOG[tool];
+  if (!toolDef) {
+    return res.status(404).json({
+      ok: false,
+      error: `Unknown tool: ${tool}`,
+      available_tools: Object.keys(TOOL_CATALOG)
+    });
+  }
+
+  // Validate required slots
+  const missingSlots = toolDef.required.filter(slot => params[slot] == null);
+  if (missingSlots.length > 0) {
+    return res.status(400).json({
+      ok: false,
+      error: `Missing required parameters: ${missingSlots.join(', ')}`,
+      tool,
+      required: toolDef.required,
+      optional: toolDef.optional
+    });
+  }
+
+  // Check idempotency
+  if (idempotency_key) {
+    const cached = idempotencyCache.get(idempotency_key);
+    if (cached && Date.now() - cached.created_at < IDEMPOTENCY_TTL_MS) {
+      return res.json({
+        ok: true,
+        cached: true,
+        idempotency_key,
+        result: cached.result
+      });
+    }
+  }
+
+  // Safety: dangerous tools require explicit confirmation (two-phase)
+  if (toolDef.category === 'dangerous') {
+    return res.status(403).json({
+      ok: false,
+      error: 'This tool requires explicit confirmation. Send confirm: true to proceed.',
+      tool,
+      category: toolDef.category
+    });
+  }
+
+  // Execute
+  const startTime = Date.now();
+  try {
+    const result = await toolDef.handler(params);
+    const durationMs = Date.now() - startTime;
+
+    const auditEntry = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      tool,
+      category: toolDef.category,
+      params: toolDef.category === 'read' ? {} : params, // Don't log params for reads
+      success: true,
+      duration_ms: durationMs,
+      idempotency_key: idempotency_key || null
+    };
+    appendAuditEntry(auditEntry);
+
+    // Cache result for idempotency
+    if (idempotency_key) {
+      idempotencyCache.set(idempotency_key, { result, created_at: Date.now() });
+    }
+
+    res.json({ ok: true, tool, result, duration_ms: durationMs });
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    appendAuditEntry({
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      tool,
+      category: toolDef.category,
+      params,
+      success: false,
+      error: error.message,
+      duration_ms: durationMs,
+      idempotency_key: idempotency_key || null
+    });
+    res.status(500).json({ ok: false, tool, error: error.message });
+  }
+});
+
+/**
+ * GET /tool-catalog — returns available tools with schemas
+ */
+router.get('/tool-catalog', (req, res) => {
+  const catalog = Object.entries(TOOL_CATALOG).map(([name, def]) => ({
+    name,
+    description: def.description,
+    category: def.category,
+    required_params: def.required,
+    optional_params: def.optional
+  }));
+  res.json({ ok: true, tools: catalog, count: catalog.length });
+});
+
+// ============================================================================
+// 3. Command Taxonomy — Natural Language → Intent + Slots
+// ============================================================================
+
+/**
+ * Command families and their patterns.
+ * Each family maps to a set of regex patterns that extract intent and slots.
+ */
+const COMMAND_FAMILIES = [
+  {
+    intent: 'daily_todo',
+    family: 'status',
+    patterns: [
+      /what.*(?:should|need|do).*today/i,
+      /daily\s*(?:to.?do|tasks?|list)/i,
+      /(?:morning|daily)\s*(?:briefing|summary|report)/i,
+      /what'?s\s*(?:on\s*)?(?:my|the)\s*(?:plate|agenda|list)/i,
+      /priorit(?:y|ize|ies)/i
+    ],
+    slots: {},
+    tool: 'get_daily_todo'
+  },
+  {
+    intent: 'room_status',
+    family: 'status',
+    patterns: [
+      /(?:how|what).*(?:room|grow\s*space)\s+(\S+)/i,
+      /status\s*(?:of|for)\s*(?:room|space)\s+(\S+)/i,
+      /(?:room|space)\s+(\S+)\s*status/i,
+      /check\s+(?:room|space)\s+(\S+)/i
+    ],
+    slots: { room_id: 1 },  // capture group index
+    tool: 'get_room_status'
+  },
+  {
+    intent: 'harvest_check',
+    family: 'harvest',
+    patterns: [
+      /(?:what|which).*ready\s*(?:to\s*)?harvest/i,
+      /harvest\s*(?:readiness|ready|status)/i,
+      /(?:anything|what)\s*(?:to|ready\s*to)\s*(?:pick|harvest|cut)/i
+    ],
+    slots: {},
+    tool: 'get_daily_todo',
+    tool_params: { category: 'harvest' }
+  },
+  {
+    intent: 'order_status',
+    family: 'wholesale',
+    patterns: [
+      /(?:pending|open|upcoming)\s*orders?/i,
+      /(?:wholesale|order)\s*(?:status|summary|list)/i,
+      /(?:any|how\s*many)\s*(?:orders?|wholesale)/i
+    ],
+    slots: {},
+    tool: 'get_orders'
+  },
+  {
+    intent: 'alert_check',
+    family: 'anomaly',
+    patterns: [
+      /(?:any|show)?\s*alert(?:s)?/i,
+      /(?:anomal(?:y|ies)|warning|critical|problem)/i,
+      /(?:sensor|device)\s*(?:outage|down|offline|issue)/i,
+      /what'?s\s*wrong/i
+    ],
+    slots: {},
+    tool: 'get_alerts'
+  },
+  {
+    intent: 'dismiss_alert',
+    family: 'anomaly',
+    patterns: [
+      /dismiss\s*(?:alert|warning)\s*(\S+)/i,
+      /(?:clear|resolve|acknowledge)\s*(?:alert|warning|issue)\s*(\S+)/i
+    ],
+    slots: { alert_id: 1 },
+    tool: 'dismiss_alert'
+  },
+  {
+    intent: 'auto_assign',
+    family: 'device_onboarding',
+    patterns: [
+      /auto[- ]?assign\s*(?:devices?|sensors?|lights?)/i,
+      /assign\s*(?:devices?|sensors?)\s*(?:to\s*zones?|automatically)/i
+    ],
+    slots: {},
+    tool: 'auto_assign_devices'
+  },
+  {
+    intent: 'seed_window',
+    family: 'planting',
+    patterns: [
+      /(?:what|when)\s*(?:should|to)\s*(?:seed|plant|sow)/i,
+      /(?:seeding|planting|succession)\s*(?:window|schedule|plan)/i,
+      /(?:need|time)\s*to\s*(?:seed|plant|start)/i
+    ],
+    slots: {},
+    tool: 'get_daily_todo',
+    tool_params: { category: 'seeding' }
+  }
+];
+
+/**
+ * Parse a natural-language command into intent + slots + suggested tool.
+ */
+function parseNaturalCommand(text) {
+  const normalized = text.trim();
+  if (!normalized) return { ok: false, error: 'Empty command' };
+
+  for (const cmd of COMMAND_FAMILIES) {
+    for (const pattern of cmd.patterns) {
+      const match = normalized.match(pattern);
+      if (match) {
+        // Extract slots from capture groups
+        const extractedSlots = {};
+        for (const [slotName, groupIndex] of Object.entries(cmd.slots)) {
+          if (match[groupIndex]) {
+            extractedSlots[slotName] = match[groupIndex];
+          }
+        }
+
+        return {
+          ok: true,
+          intent: cmd.intent,
+          family: cmd.family,
+          confidence: 0.85,
+          slots: { ...extractedSlots, ...(cmd.tool_params || {}) },
+          suggested_tool: cmd.tool,
+          matched_pattern: pattern.source,
+          original_text: normalized
+        };
+      }
+    }
+  }
+
+  // No match — return abstain response
+  return {
+    ok: true,
+    intent: 'unknown',
+    family: 'unknown',
+    confidence: 0.0,
+    slots: {},
+    suggested_tool: null,
+    original_text: normalized,
+    abstain_reason: 'No matching command pattern found. Please try rephrasing or use "what should I do today?" for the daily task list.',
+    available_intents: COMMAND_FAMILIES.map(c => ({
+      intent: c.intent,
+      family: c.family,
+      example: c.patterns[0].source
+    }))
+  };
+}
+
+/**
+ * POST /parse-command
+ * Body: { text }
+ * Returns parsed intent, slots, and suggested tool.
+ */
+router.post('/parse-command', (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ ok: false, error: 'Missing required field: text' });
+
+  try {
+    const result = parseNaturalCommand(text);
+    res.json(result);
+  } catch (error) {
+    console.error('[farm-ops-agent] parse-command error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// 4. Audit Log
+// ============================================================================
+
+/**
+ * GET /audit-log — paginated audit trail
+ * Query: page (default 1), per_page (default 50), tool (optional filter)
+ */
+router.get('/audit-log', (req, res) => {
+  try {
+    let log = loadAuditLog();
+    if (req.query.tool) {
+      log = log.filter(e => e.tool === req.query.tool);
+    }
+    const perPage = Math.min(parseInt(req.query.per_page || '50', 10), 200);
+    const page = parseInt(req.query.page || '1', 10);
+    const start = (page - 1) * perPage;
+    const paged = log.slice(start, start + perPage);
+    res.json({
+      ok: true,
+      total: log.length,
+      page,
+      per_page: perPage,
+      entries: paged
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+export default router;

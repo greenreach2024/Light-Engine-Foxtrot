@@ -4390,10 +4390,11 @@ function closePairingQR() {
 // ============================================================================
 
 let currentSetupStep = 1;
-const totalSetupSteps = 8;
+const totalSetupSteps = 6;
 let setupData = {
     rooms: [],
-    trayFormats: []
+    trayFormats: [],
+    benchmarks: null
 };
 
 /**
@@ -4836,19 +4837,20 @@ async function setupNextStep() {
     
     // Move to next step
     if (currentSetupStep < totalSetupSteps) {
-        // If on Step 5 (tray formats), collect selected formats
+        // If on Step 5 (certifications), collect selected certifications
         if (currentSetupStep === 5) {
-            const selectedFormats = Array.from(document.querySelectorAll('input[name="tray-format"]:checked'))
-                .map(cb => parseInt(cb.value));
-            setupData.trayFormats = selectedFormats;
-            console.log('[Setup] Tray formats selected:', selectedFormats);
+            setupData.certifications = Array.from(document.querySelectorAll('input[name="certification"]:checked'))
+                .map(cb => cb.value);
+            setupData.practices = Array.from(document.querySelectorAll('input[name="practice"]:checked'))
+                .map(cb => cb.value);
+            console.log('[Setup] Certifications collected:', setupData.certifications);
         }
         
         currentSetupStep++;
         
-        // If moving to Step 7 (Activity Hub), generate both QR codes
-        if (currentSetupStep === 7) {
-            await generateWizardActivityHubQRCodes();
+        // If moving to Step 6 (Network Benchmarks), fetch from Central
+        if (currentSetupStep === 6) {
+            await seedBenchmarksStep();
         }
         
         updateSetupStepDisplay();
@@ -4955,17 +4957,12 @@ function validateSetupStep(step) {
             break;
             
         case 5:
-            // Tray formats are optional, always valid
-            isValid = true;
-            break;
-            
-        case 6:
             // Certifications are optional, always valid
             isValid = true;
             break;
             
-        case 7:
-            // QR Label guide is informational only, always valid
+        case 6:
+            // Network benchmarks are informational, always valid
             isValid = true;
             break;
     }
@@ -5007,6 +5004,87 @@ function showSetupSuccess(message) {
     }
     
     showToast(message, 'success');
+}
+
+/**
+ * Fetch and display network benchmarks from Central during Step 6.
+ * Calls POST /api/setup-wizard/seed-benchmarks to pull crop targets,
+ * then renders the results into the #benchmark-results container.
+ */
+async function seedBenchmarksStep() {
+    const resultsContainer = document.getElementById('benchmark-results');
+    const loadingEl = document.getElementById('benchmark-loading');
+    const errorEl = document.getElementById('benchmark-error');
+
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl) errorEl.style.display = 'none';
+    if (resultsContainer) resultsContainer.innerHTML = '';
+
+    try {
+        const farmId = setupData.farmId || localStorage.getItem('farm_id') || 'new-farm';
+        const response = await fetch('/api/setup-wizard/seed-benchmarks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const data = await response.json();
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!data.ok) {
+            if (errorEl) { errorEl.textContent = data.error || 'Failed to load benchmarks'; errorEl.style.display = 'block'; }
+            return;
+        }
+
+        setupData.benchmarks = data;
+
+        if (!data.seeded || !data.benchmarks) {
+            if (resultsContainer) {
+                resultsContainer.innerHTML = `
+                    <div style="text-align:center; padding:30px 20px; color:var(--text-muted);">
+                        <p style="font-size:15px; margin:0 0 8px;">No network benchmarks available yet.</p>
+                        <p style="font-size:13px; margin:0;">Default environmental targets will be used. You can update these later in Settings.</p>
+                    </div>`;
+            }
+            return;
+        }
+
+        // Render benchmark cards
+        let html = '';
+        for (const [crop, bm] of Object.entries(data.benchmarks)) {
+            const targets = (data.environmental_targets || {})[crop] || {};
+            const confidence = bm.confidence || 'low';
+            const confColor = confidence === 'high' ? '#10b981' : confidence === 'medium' ? '#f59e0b' : '#6b7280';
+            html += `
+                <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; font-size:15px; color:var(--text-primary); text-transform:capitalize;">${crop}</h4>
+                        <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:${confColor}22; color:${confColor}; font-weight:600;">${confidence} confidence</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:12px; color:var(--text-secondary);">
+                        <div>Yield: <strong style="color:var(--text-primary);">${bm.avg_yield_oz != null ? bm.avg_yield_oz + ' oz' : '—'}</strong></div>
+                        <div>Cycle: <strong style="color:var(--text-primary);">${bm.avg_cycle_days != null ? bm.avg_cycle_days + ' days' : '—'}</strong></div>
+                        <div>Farms: <strong style="color:var(--text-primary);">${bm.network_farms || 0}</strong></div>
+                        <div>PPFD: <strong style="color:var(--text-primary);">${bm.recommended_ppfd || '—'}</strong></div>
+                        <div>Temp: <strong style="color:var(--text-primary);">${targets.temp_min || '—'}–${targets.temp_max || '—'}°F</strong></div>
+                        <div>RH: <strong style="color:var(--text-primary);">${targets.rh_min || '—'}–${targets.rh_max || '—'}%</strong></div>
+                    </div>
+                </div>`;
+        }
+
+        if (resultsContainer) {
+            resultsContainer.innerHTML = html || '<p style="color:var(--text-muted); text-align:center;">No crop benchmarks returned.</p>';
+        }
+
+        console.log(`[Setup] Benchmarks seeded: ${data.crops_seeded} crops`);
+    } catch (error) {
+        console.error('[Setup] Benchmark seeding error:', error);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) {
+            errorEl.textContent = 'Could not connect to network. Default targets will be used.';
+            errorEl.style.display = 'block';
+        }
+    }
 }
 
 /**
