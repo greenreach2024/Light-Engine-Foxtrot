@@ -24129,7 +24129,26 @@ app.post('/farm', (req, res) => {
   try {
     setCors(req, res);
     const body = req.body || {};
-    // basic shape: store as-is
+    // Preserve existing integrations (SwitchBot/Kasa credentials) that callers
+    // typically don't include. Without this, setup-wizard and farm-settings
+    // saves wipe credentials stored via /switchbot/discover or /api/credential-store.
+    try {
+      const existing = readFarmProfile();
+      if (existing?.integrations) {
+        body.integrations = body.integrations || {};
+        // Merge each integration provider — incoming values win, but don't
+        // overwrite a saved credential with an empty string.
+        for (const [provider, saved] of Object.entries(existing.integrations)) {
+          if (!saved || typeof saved !== 'object') continue;
+          body.integrations[provider] = body.integrations[provider] || {};
+          for (const [key, val] of Object.entries(saved)) {
+            if (val && !body.integrations[provider][key]) {
+              body.integrations[provider][key] = val;
+            }
+          }
+        }
+      }
+    } catch {}
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(FARM_PATH, JSON.stringify(body, null, 2));
     // Reconfigure weather polling when farm coordinates change
