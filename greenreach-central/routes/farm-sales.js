@@ -651,7 +651,8 @@ router.get('/farm-sales/reports/quickbooks-daily-summary', async (req, res) => {
     }
 
     const processingFee = totalCard * 0.029 + orders.length * 0.30;
-    const brokerFee = channels.wholesale * 0.15;
+    const wholesaleCommissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const brokerFee = channels.wholesale * wholesaleCommissionRate;
 
     // QuickBooks IIF-style daily summary CSV
     const header = ['Account', 'Description', 'Debit', 'Credit'].join(',');
@@ -664,7 +665,7 @@ router.get('/farm-sales/reports/quickbooks-daily-summary', async (req, res) => {
       ['Cash on Hand', `Cash payments ${date}`, totalCash.toFixed(2), ''],
       ['Accounts Receivable', `Card payments ${date}`, totalCard.toFixed(2), ''],
       ['Merchant Processing Fees', `Card processing (2.9% + $0.30) ${date}`, processingFee.toFixed(2), ''],
-      ['Broker Fees', `GreenReach commission (15%) ${date}`, brokerFee.toFixed(2), ''],
+      ['Broker Fees', `GreenReach commission (${(wholesaleCommissionRate * 100).toFixed(0)}%) ${date}`, brokerFee.toFixed(2), ''],
     ].map(cols => cols.map(csvEscape).join(','));
 
     const csv = [header, ...rows].join('\n');

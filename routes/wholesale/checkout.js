@@ -123,9 +123,10 @@ router.post('/preview', async (req, res) => {
 
     // Allocate order
     const taxConfig = loadFarmTaxConfig();
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
-      broker_fee_percent: 10.0,
+      broker_fee_percent: commissionRate * 100,
       tax_rate: taxConfig.rate,
       tax_label: taxConfig.label
     });
@@ -222,9 +223,10 @@ router.post('/execute', async (req, res) => {
     // Step 2: Allocate order
     console.log('[Checkout] Step 2: Allocating order...');
     const taxConfig = loadFarmTaxConfig();
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
-      broker_fee_percent: 10.0,
+      broker_fee_percent: commissionRate * 100,
       tax_rate: taxConfig.rate,
       tax_label: taxConfig.label
     });
@@ -301,11 +303,11 @@ router.post('/execute', async (req, res) => {
           farmLocationId: 'demo-location-id', // TODO: Get from farm record
           amountMoney: {
             amount: Math.round(subOrder.total * 100), // Convert to cents
-            currency: 'USD'
+            currency: process.env.PAYMENT_CURRENCY || 'CAD'
           },
           brokerFeeMoney: {
             amount: Math.round(subOrder.broker_fee_amount * 100),
-            currency: 'USD'
+            currency: process.env.PAYMENT_CURRENCY || 'CAD'
           },
           idempotencyKey,
           metadata: {

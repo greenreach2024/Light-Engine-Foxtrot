@@ -1,79 +1,97 @@
 {
-  "version": "2025-12-17-v1",
+  "version": "2026-03-08-v1",
   "farmId": "light-engine-demo",
-  "lastUpdated": "2025-12-17T17:30:00Z",
+  "lastUpdated": "2026-03-08T12:00:00Z",
   "crops": [
     {
       "crop": "Mei Qing Pak Choi",
       "unit": "lb",
-      "retailPrice": 5.50,
-      "wholesalePrice": 3.85,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Lacinato Kale",
       "unit": "lb",
-      "retailPrice": 6.50,
-      "wholesalePrice": 4.55,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Bibb Butterhead",
       "unit": "lb",
-      "retailPrice": 5.00,
-      "wholesalePrice": 3.50,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Frisée Endive",
       "unit": "lb",
-      "retailPrice": 8.00,
-      "wholesalePrice": 5.60,
+      "retailPrice": 25.12,
+      "wholesalePrice": 17.58,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Red Russian Kale",
       "unit": "lb",
-      "retailPrice": 6.50,
-      "wholesalePrice": 4.55,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Buttercrunch Lettuce",
       "unit": "lb",
-      "retailPrice": 5.00,
-      "wholesalePrice": 3.50,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Tatsoi",
       "unit": "lb",
-      "retailPrice": 6.00,
-      "wholesalePrice": 4.20,
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Watercress",
       "unit": "lb",
-      "retailPrice": 7.00,
-      "wholesalePrice": 4.90,
+      "retailPrice": 25.12,
+      "wholesalePrice": 17.58,
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     }
-  ]
+  ],
+  "currency": "CAD",
+  "pricingSource": "greenreach-central"
 }

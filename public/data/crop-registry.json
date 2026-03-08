@@ -1,5 +1,5 @@
 {
-  "version": "2026-02-19-v1",
+  "version": "2026-03-08-v1",
   "description": "Canonical crop metadata registry — single source of truth for all crop data across Light Engine",
   "crops": {
     "Bibb Butterhead": {
@@ -16,7 +16,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 32,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.92,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -24,12 +24,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.31,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Butterhead Lettuce"
@@ -48,7 +51,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 32,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.92,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -56,12 +59,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.31,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Butterhead Lettuce"
@@ -82,7 +88,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 30,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -90,12 +96,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.31,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Oak Leaf Lettuce"
@@ -114,7 +123,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 21,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.92,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -122,12 +131,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 0.42,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Arugula"
@@ -146,7 +158,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 32,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.92,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -154,12 +166,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Butterhead Lettuce"
@@ -179,7 +194,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 35,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -187,12 +202,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.41,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Romaine Lettuce"
@@ -211,7 +229,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 30,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -219,12 +237,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.61,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Red Leaf Lettuce"
@@ -243,7 +264,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 30,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -251,12 +272,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.61,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Oak Leaf Lettuce"
@@ -276,7 +300,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 30,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -284,12 +308,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.61,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Mixed Lettuce"
@@ -308,7 +335,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 32,
-        "retailPricePerLb": 5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -316,12 +343,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.61,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Lettuce"
@@ -342,7 +372,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 40,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.88,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -350,12 +380,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Lacinato Kale"
@@ -374,7 +407,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 38,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.89,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -382,12 +415,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Curly Kale"
@@ -406,7 +442,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 40,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.88,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -414,12 +450,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Dinosaur Kale"
@@ -437,7 +476,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 28,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.92,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -445,12 +484,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Baby Kale"
@@ -470,7 +512,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 38,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.89,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -478,12 +520,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Red Russian Kale"
@@ -501,7 +546,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 38,
-        "retailPricePerLb": 6.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.89,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -509,12 +554,15 @@
         "regrowthYieldFactor": 0.85
       },
       "pricing": {
-        "retailPerOz": 0.76,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Kale"
@@ -536,7 +584,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 30,
-        "retailPricePerLb": 5.5,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -544,12 +592,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 0.34,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": null
@@ -568,7 +619,7 @@
       "nutrientProfile": "brassicas",
       "growth": {
         "daysToHarvest": 28,
-        "retailPricePerLb": 6,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -576,12 +627,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 0.38,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": null
@@ -602,7 +656,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 35,
-        "retailPricePerLb": 8,
+        "retailPricePerLb": 25.12,
         "yieldFactor": 0.87,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -610,12 +664,15 @@
         "regrowthYieldFactor": 0.82
       },
       "pricing": {
-        "retailPerOz": 0.5,
+        "retailPerOz": 1.57,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Frisée Endive"
@@ -633,7 +690,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 25,
-        "retailPricePerLb": 7,
+        "retailPricePerLb": 25.12,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -641,12 +698,15 @@
         "regrowthYieldFactor": 0.82
       },
       "pricing": {
-        "retailPerOz": 0.44,
+        "retailPerOz": 1.57,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Watercress"
@@ -664,7 +724,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 21,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.93,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -672,12 +732,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Baby Arugula"
@@ -695,7 +758,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 24,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -703,12 +766,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Cultivated Arugula"
@@ -727,7 +793,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 28,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.89,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -735,12 +801,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Wild Arugula"
@@ -758,7 +827,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 24,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -766,12 +835,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Wasabi Arugula"
@@ -789,7 +861,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 24,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.9,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -797,12 +869,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Red Arugula"
@@ -821,7 +896,7 @@
       "nutrientProfile": "leafy_greens",
       "growth": {
         "daysToHarvest": 24,
-        "retailPricePerLb": 6.75,
+        "retailPricePerLb": 23.52,
         "yieldFactor": 0.91,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 12,
@@ -829,12 +904,15 @@
         "regrowthYieldFactor": 0.8
       },
       "pricing": {
-        "retailPerOz": 1.35,
+        "retailPerOz": 1.47,
         "wholesaleDiscounts": {
           "tier1": 15,
           "tier2": 25,
           "tier3": 35
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Arugula"
@@ -854,7 +932,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 25,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.88,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -862,12 +940,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Genovese Basil"
@@ -885,7 +966,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 25,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.88,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -893,12 +974,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Thai Basil"
@@ -916,7 +1000,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 25,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.87,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -924,12 +1008,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Purple Basil"
@@ -947,7 +1034,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 24,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.87,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -955,12 +1042,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Lemon Basil"
@@ -979,7 +1069,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 26,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.86,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -987,12 +1077,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Holy Basil"
@@ -1010,7 +1103,7 @@
       "nutrientProfile": "herbs_culinary",
       "growth": {
         "daysToHarvest": 25,
-        "retailPricePerLb": 114.72,
+        "retailPricePerLb": 43.2,
         "yieldFactor": 0.88,
         "harvestStrategy": "cut_and_come_again",
         "regrowthDays": 14,
@@ -1018,12 +1111,15 @@
         "regrowthYieldFactor": 0.9
       },
       "pricing": {
-        "retailPerOz": 7.18,
+        "retailPerOz": 2.7,
         "wholesaleDiscounts": {
           "tier1": 12,
           "tier2": 20,
           "tier3": 30
-        }
+        },
+        "currency": "CAD",
+        "pricingSource": "greenreach-central",
+        "lastUpdated": "2026-03-08"
       },
       "market": {
         "resolveAs": "Basil"
