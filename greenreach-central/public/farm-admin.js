@@ -4455,7 +4455,7 @@ function closePairingQR() {
 // ============================================================================
 
 let currentSetupStep = 1;
-const totalSetupSteps = 6;
+const totalSetupSteps = 7;
 let setupData = {
     rooms: [],
     trayFormats: [],
@@ -4916,6 +4916,11 @@ async function setupNextStep() {
         // If moving to Step 6 (Network Benchmarks), fetch from Central
         if (currentSetupStep === 6) {
             await seedBenchmarksStep();
+        }
+        
+        // If moving to Step 7 (Activity Hub), generate QR codes
+        if (currentSetupStep === 7) {
+            await generateWizardActivityHubQRCodes();
         }
         
         updateSetupStepDisplay();

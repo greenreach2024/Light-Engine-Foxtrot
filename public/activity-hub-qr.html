@@ -255,10 +255,21 @@
   </div>
 
   <script>
-    // Get farm credentials from localStorage (or fetch from server)
-    let farmId = localStorage.getItem('farmId') || localStorage.getItem('farm_id');
-    let farmName = localStorage.getItem('farmName') || localStorage.getItem('farm_name');
-    let token = localStorage.getItem('deviceToken') || localStorage.getItem('token') || localStorage.getItem('auth_token');
+    // Get farm credentials from session object first, then fall back to flat localStorage keys
+    function _getSessionCredentials() {
+      const sessionStr = sessionStorage.getItem('farm_admin_session') || localStorage.getItem('farm_admin_session');
+      if (sessionStr) {
+        try {
+          const s = JSON.parse(sessionStr);
+          if (s.token) return { farmId: s.farmId, farmName: s.farmName, token: s.token };
+        } catch (_) {}
+      }
+      return null;
+    }
+    const _sess = _getSessionCredentials();
+    let farmId = (_sess && _sess.farmId) || localStorage.getItem('farmId') || localStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || sessionStorage.getItem('farm_id');
+    let farmName = (_sess && _sess.farmName) || localStorage.getItem('farmName') || localStorage.getItem('farm_name') || sessionStorage.getItem('farm_name');
+    let token = (_sess && _sess.token) || localStorage.getItem('deviceToken') || localStorage.getItem('token') || localStorage.getItem('auth_token') || sessionStorage.getItem('token');
 
     console.log('[ActivityHub QR] Credentials loaded:', { 
       farmId: farmId ? `${farmId.substring(0, 15)}...` : 'null', 
