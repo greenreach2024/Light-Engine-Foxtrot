@@ -5106,6 +5106,66 @@
     }
 
     // ═══════════ Daily To-Do — Farm Ops Agent ═══════════
+
+    /** Toggle expand/collapse for an individual task detail panel */
+    function toggleTaskDetail(taskId) {
+      const detail = document.getElementById('task-detail-' + taskId);
+      const arrow = document.getElementById('task-arrow-' + taskId);
+      if (!detail) return;
+      const hidden = detail.style.display === 'none';
+      detail.style.display = hidden ? 'block' : 'none';
+      if (arrow) arrow.textContent = hidden ? '▼' : '▶';
+    }
+
+    /** Toggle the collapsed alerts group */
+    function toggleAlertsGroup() {
+      const list = document.getElementById('todo-alerts-list');
+      const arrow = document.getElementById('todo-alerts-arrow');
+      if (!list) return;
+      const hidden = list.style.display === 'none';
+      list.style.display = hidden ? 'flex' : 'none';
+      if (arrow) arrow.textContent = hidden ? '▼' : '▶';
+    }
+
+    /** Dismiss a single alert task from the UI */
+    function dismissTodoAlert(taskId) {
+      const el = document.getElementById('todo-task-' + taskId);
+      if (el) { el.style.opacity = '0.3'; el.style.pointerEvents = 'none'; }
+    }
+
+    /** Render a single expandable task row */
+    function renderTodoTask(task, style) {
+      const s = style;
+      const scorePct = Math.round((task.score || 0) * 100);
+      const scoreColor = scorePct >= 70 ? '#f87171' : scorePct >= 40 ? '#fbbf24' : '#4ade80';
+      const safeId = (task.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const whyText = typeof task.why === 'object' ? (task.why.message || task.why.error || JSON.stringify(task.why)) : (task.why || '');
+      const actions = Array.isArray(task.actions) ? task.actions : [];
+      const severityBadge = task.category === 'anomaly'
+        ? `<span style="font-size:0.65rem;font-weight:700;text-transform:uppercase;padding:1px 5px;border-radius:3px;margin-left:6px;${scorePct >= 70 ? 'background:rgba(239,68,68,0.2);color:#ef4444;' : 'background:rgba(251,191,36,0.2);color:#fbbf24;'}">${scorePct >= 70 ? 'critical' : 'warning'}</span>`
+        : '';
+
+      return `
+        <div id="todo-task-${safeId}" style="background:${s.bg};border:1px solid ${s.border};border-radius:8px;padding:0.6rem 0.85rem;transition:opacity 0.3s;">
+          <div style="display:flex;gap:0.6rem;align-items:center;cursor:pointer;" onclick="toggleTaskDetail('${safeId}')">
+            <span style="font-size:1rem;flex-shrink:0;">${s.icon}</span>
+            <span id="task-arrow-${safeId}" style="font-size:0.65rem;color:#64748b;flex-shrink:0;width:12px;">▶</span>
+            <span style="flex:1;min-width:0;font-weight:600;color:${s.text};font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
+            ${severityBadge}
+            <span style="flex-shrink:0;font-size:0.65rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;" title="Priority score">${scorePct}%</span>
+          </div>
+          <div id="task-detail-${safeId}" style="display:none;margin-top:0.5rem;padding-left:2.2rem;">
+            ${whyText ? `<div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;margin-bottom:0.4rem;">${whyText}</div>` : ''}
+            ${task.estimated_minutes ? `<div style="font-size:0.7rem;color:#64748b;margin-bottom:0.5rem;">⏱ ~${task.estimated_minutes} min</div>` : ''}
+            ${actions.length > 0 ? `
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                ${actions.map(a => `<button onclick="event.stopPropagation();this.textContent='Done ✓';this.disabled=true;this.style.opacity='0.5';" style="font-size:0.7rem;padding:3px 10px;border:1px solid ${s.border};background:${s.bg};color:${s.text};border-radius:5px;cursor:pointer;font-weight:500;">${a}</button>`).join('')}
+                ${task.category === 'anomaly' ? `<button onclick="event.stopPropagation();dismissTodoAlert('${safeId}');" style="font-size:0.7rem;padding:3px 10px;border:1px solid #475569;background:transparent;color:#64748b;border-radius:5px;cursor:pointer;">Dismiss</button>` : ''}
+              </div>` : ''}
+          </div>
+        </div>`;
+    }
+
     async function loadDailyTodo() {
       const container = document.getElementById('dailyTodoContent');
       const card = document.getElementById('dailyTodoCard');
@@ -5134,27 +5194,42 @@
         };
         const defaultStyle = { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.3)', text: '#94a3b8', icon: '📌' };
 
+        // Separate anomaly/alert tasks from actionable tasks
+        const alertTasks = data.tasks.filter(t => t.category === 'anomaly');
+        const actionTasks = data.tasks.filter(t => t.category !== 'anomaly');
+
         let html = '';
-        for (const task of data.tasks.slice(0, 10)) {
+
+        // Render actionable tasks first (wholesale, harvest, seeding, environment, ai-recommendation)
+        for (const task of actionTasks.slice(0, 10)) {
           const s = categoryColors[task.category] || defaultStyle;
-          const scorePct = Math.round((task.score || 0) * 100);
-          const scoreColor = scorePct >= 70 ? '#f87171' : scorePct >= 40 ? '#fbbf24' : '#4ade80';
+          html += renderTodoTask(task, s);
+        }
+
+        // Render alert/anomaly tasks in a collapsible group (hidden by default)
+        if (alertTasks.length > 0) {
+          const criticalCount = alertTasks.filter(t => Math.round((t.score || 0) * 100) >= 70).length;
+          const warningCount = alertTasks.length - criticalCount;
+          const summaryParts = [];
+          if (criticalCount > 0) summaryParts.push(`<span style="color:#ef4444;font-weight:700;">${criticalCount} critical</span>`);
+          if (warningCount > 0) summaryParts.push(`<span style="color:#fbbf24;font-weight:700;">${warningCount} warning</span>`);
+
           html += `
-            <div style="background:${s.bg};border:1px solid ${s.border};border-radius:8px;padding:0.75rem 1rem;display:flex;gap:0.75rem;align-items:flex-start;">
-              <span style="font-size:1.1rem;flex-shrink:0;margin-top:2px;">${s.icon}</span>
-              <div style="flex:1;min-width:0;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
-                  <span style="font-weight:600;color:${s.text};font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${task.title}</span>
-                  <span style="flex-shrink:0;font-size:0.7rem;font-weight:700;color:${scoreColor};background:rgba(0,0,0,0.25);padding:2px 6px;border-radius:4px;" title="Priority score">${scorePct}%</span>
-                </div>
-                <div style="font-size:0.8rem;color:#94a3b8;line-height:1.4;">${typeof task.why === 'object' ? (task.why.message || task.why.error || JSON.stringify(task.why)) : (task.why || '')}</div>
-                ${task.estimated_minutes ? `<span style="font-size:0.7rem;color:#64748b;margin-top:0.25rem;display:inline-block;">~${task.estimated_minutes} min</span>` : ''}
+            <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.25);border-radius:8px;overflow:hidden;">
+              <div onclick="toggleAlertsGroup()" style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.85rem;cursor:pointer;user-select:none;">
+                <span style="font-size:1rem;">⚠️</span>
+                <span id="todo-alerts-arrow" style="font-size:0.65rem;color:#64748b;width:12px;">▶</span>
+                <span style="flex:1;font-weight:600;color:#f87171;font-size:0.85rem;">Alerts (${alertTasks.length})</span>
+                <span style="font-size:0.75rem;color:#94a3b8;">${summaryParts.join(' · ')}</span>
+              </div>
+              <div id="todo-alerts-list" style="display:none;padding:0 0.5rem 0.5rem;display:none;flex-direction:column;gap:0.35rem;">
+                ${alertTasks.map(t => renderTodoTask(t, categoryColors.anomaly)).join('')}
               </div>
             </div>`;
         }
 
-        if (data.task_count > 10) {
-          html += `<div style="text-align:center;padding:0.5rem;color:#64748b;font-size:0.8rem;">${data.task_count - 10} more task(s) not shown</div>`;
+        if (data.task_count > 10 + alertTasks.length) {
+          html += `<div style="text-align:center;padding:0.5rem;color:#64748b;font-size:0.8rem;">${data.task_count - 10 - alertTasks.length} more task(s) not shown</div>`;
         }
 
         container.innerHTML = html;
