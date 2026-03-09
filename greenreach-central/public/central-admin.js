@@ -10276,6 +10276,192 @@ async function submitWholesalePrice(event) {
     }
 }
 
+// ── AI Pricing Assistant — Multi-Crop Scanner ──────────────────
+let pricingScannerCrops = []; // cached from /current-prices
+
+async function loadCurrentPricesIntoScanner() {
+    try {
+        const res = await fetch('/api/admin/pricing/current-prices');
+        const data = res.ok ? await res.json() : { prices: [] };
+        pricingScannerCrops = data.prices || [];
+        // Add every crop as a row, pre-filled with current prices
+        const tbody = document.getElementById('pricing-scanner-tbody');
+        tbody.innerHTML = '';
+        pricingScannerCrops.forEach(c => {
+            addPricingRow({
+                crop: c.crop,
+                retailPerOz: c.retailPerOz,
+                retailPerLb: c.retailPerLb,
+                wholesalePerLb: c.wholesalePerLb,
+                tier: c.tier || 'demand-based'
+            });
+        });
+        updateScannerRowCount();
+    } catch (err) {
+        console.error('[PricingScanner] Load error:', err);
+        alert('Failed to load current prices');
+    }
+}
+
+function addPricingRow(prefill = {}) {
+    const tbody = document.getElementById('pricing-scanner-tbody');
+    const idx = tbody.children.length;
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-scanner-idx', idx);
+
+    const cropOptions = pricingScannerCrops.length
+        ? pricingScannerCrops.map(c => `<option value="${c.crop}" ${c.crop === prefill.crop ? 'selected' : ''}>${c.crop}</option>`).join('')
+        : '';
+
+    tr.innerHTML = `
+        <td>
+            ${pricingScannerCrops.length
+                ? `<select class="sc-crop" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;" onchange="onScannerCropSelect(this)">
+                       <option value="">— select —</option>${cropOptions}
+                   </select>`
+                : `<input class="sc-crop" type="text" value="${prefill.crop || ''}" placeholder="Crop name" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;">`}
+        </td>
+        <td><input class="sc-roz" type="number" step="0.01" min="0" value="${prefill.retailPerOz || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'oz')"></td>
+        <td><input class="sc-rlb" type="number" step="0.01" min="0" value="${prefill.retailPerLb || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'lb')"></td>
+        <td><input class="sc-wlb" type="number" step="0.01" min="0" value="${prefill.wholesalePerLb || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;"></td>
+        <td>
+            <select class="sc-tier" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;">
+                <option value="cost-plus" ${prefill.tier === 'cost-plus' ? 'selected' : ''}>Cost-Plus</option>
+                <option value="demand-based" ${(!prefill.tier || prefill.tier === 'demand-based') ? 'selected' : ''}>Demand</option>
+                <option value="premium" ${prefill.tier === 'premium' ? 'selected' : ''}>Premium</option>
+                <option value="promotional" ${prefill.tier === 'promotional' ? 'selected' : ''}>Promo</option>
+            </select>
+        </td>
+        <td><input class="sc-reason" type="text" value="" placeholder="reason" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;"></td>
+        <td class="sc-status" style="text-align:center;">—</td>
+        <td style="text-align:center;">
+            <button onclick="this.closest('tr').remove(); updateScannerRowCount();" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;" title="Remove row">&times;</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    updateScannerRowCount();
+}
+
+function onScannerCropSelect(sel) {
+    const crop = sel.value;
+    const tr = sel.closest('tr');
+    const match = pricingScannerCrops.find(c => c.crop === crop);
+    if (match) {
+        tr.querySelector('.sc-roz').value = match.retailPerOz || '';
+        tr.querySelector('.sc-rlb').value = match.retailPerLb || '';
+        tr.querySelector('.sc-wlb').value = match.wholesalePerLb || '';
+    }
+}
+
+function syncPricingRow(input, from) {
+    const tr = input.closest('tr');
+    if (from === 'oz') {
+        const oz = parseFloat(input.value);
+        if (!isNaN(oz)) tr.querySelector('.sc-rlb').value = (oz * 16).toFixed(2);
+    } else {
+        const lb = parseFloat(input.value);
+        if (!isNaN(lb)) tr.querySelector('.sc-roz').value = (lb / 16).toFixed(2);
+    }
+}
+
+function updateScannerRowCount() {
+    const n = document.getElementById('pricing-scanner-tbody').children.length;
+    const el = document.getElementById('scanner-row-count');
+    if (el) el.textContent = `${n} crop${n !== 1 ? 's' : ''}`;
+}
+
+function clearPricingScanner() {
+    document.getElementById('pricing-scanner-tbody').innerHTML = '';
+    document.getElementById('batch-update-result').style.display = 'none';
+    updateScannerRowCount();
+}
+
+async function applyBatchPriceUpdate() {
+    const rows = document.querySelectorAll('#pricing-scanner-tbody tr');
+    if (!rows.length) { alert('Add at least one crop row.'); return; }
+
+    const updates = [];
+    rows.forEach(tr => {
+        const cropEl = tr.querySelector('.sc-crop');
+        const crop = cropEl ? (cropEl.value || cropEl.textContent || '').trim() : '';
+        const retailPerOz = parseFloat(tr.querySelector('.sc-roz')?.value) || 0;
+        const retailPerLb = parseFloat(tr.querySelector('.sc-rlb')?.value) || 0;
+        const wholesalePerLb = parseFloat(tr.querySelector('.sc-wlb')?.value) || 0;
+        const tier = tr.querySelector('.sc-tier')?.value || 'demand-based';
+        const reasoning = tr.querySelector('.sc-reason')?.value || '';
+
+        if (crop && (retailPerOz > 0 || retailPerLb > 0)) {
+            updates.push({ crop, retailPerOz, retailPerLb, wholesalePerLb, tier, reasoning });
+        }
+    });
+
+    if (!updates.length) { alert('No valid price entries found. Fill in at least one crop with a price.'); return; }
+
+    const pushToFarms = document.getElementById('push-to-farms-checkbox')?.checked ?? true;
+
+    const btn = document.getElementById('apply-batch-btn');
+    btn.disabled = true;
+    btn.textContent = 'Applying…';
+
+    // Mark all rows as pending
+    rows.forEach(tr => {
+        const st = tr.querySelector('.sc-status');
+        if (st) { st.textContent = '⏳'; st.style.color = 'var(--text-secondary)'; }
+    });
+
+    try {
+        const res = await fetch('/api/admin/pricing/batch-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates, pushToFarms, reasoning: 'AI Pricing Assistant batch scan' })
+        });
+        const data = await res.json();
+
+        // Mark row statuses
+        rows.forEach(tr => {
+            const cropEl = tr.querySelector('.sc-crop');
+            const crop = cropEl ? (cropEl.value || cropEl.textContent || '').trim() : '';
+            const st = tr.querySelector('.sc-status');
+            if (!st) return;
+            const result = (data.results || []).find(r => r.crop === crop);
+            if (result && result.status === 'updated') {
+                st.textContent = '✅'; st.style.color = 'var(--accent-green)';
+            } else if (result && result.status === 'error') {
+                st.textContent = '❌'; st.style.color = '#ef4444'; st.title = result.error || '';
+            } else {
+                st.textContent = '—'; st.style.color = 'var(--text-secondary)';
+            }
+        });
+
+        // Show summary
+        const resultDiv = document.getElementById('batch-update-result');
+        if (data.success) {
+            const n = (data.results || []).filter(r => r.status === 'updated').length;
+            const farms = data.farmsPushed || 0;
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = 'rgba(34,197,94,0.1)';
+            resultDiv.style.border = '1px solid rgba(34,197,94,0.3)';
+            resultDiv.style.color = 'var(--accent-green)';
+            resultDiv.innerHTML = `<strong>${n} crop${n !== 1 ? 's' : ''} updated.</strong> Persisted to pricing files.${farms ? ` Pushed to ${farms} farm${farms !== 1 ? 's' : ''} (POS &amp; online store).` : ''}`;
+        } else {
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = 'rgba(239,68,68,0.1)';
+            resultDiv.style.border = '1px solid rgba(239,68,68,0.3)';
+            resultDiv.style.color = '#ef4444';
+            resultDiv.innerHTML = `<strong>Error:</strong> ${data.error || 'Batch update failed'}`;
+        }
+
+        // Refresh pricing management view
+        await loadPricingManagement();
+    } catch (err) {
+        console.error('[PricingScanner] Batch update error:', err);
+        alert('Failed to apply batch price update');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Apply All Price Changes';
+    }
+}
+
 async function cancelPriceOffer(offerId) {
     const confirmed = await showConfirmModal({
         title: 'Cancel Price Offer',

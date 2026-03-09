@@ -34,39 +34,60 @@ function loadLightingRecipes() {
   return lightingRecipes;
 }
 
+// Load crop pricing from crop-pricing.json (source of truth for prices)
+let cropPricingData = null;
+function loadCropPricing() {
+  const pricingPath = path.join(__dirname, '../../public/data/crop-pricing.json');
+  try {
+    const data = fs.readFileSync(pricingPath, 'utf8');
+    cropPricingData = JSON.parse(data);
+  } catch (error) {
+    console.error('[farm-sales] Failed to load crop-pricing.json:', error);
+    cropPricingData = { crops: {} };
+  }
+  return cropPricingData;
+}
+
 /**
- * Get pricing for crop based on category
+ * Get pricing for crop — reads from crop-pricing.json, 
+ * falls back to lighting-recipes growth-time heuristic only if not found.
  */
 function getCropPricing(cropName) {
+  // 1. Try crop-pricing.json first (canonical pricing)
+  const pricing = loadCropPricing();
+  const crops = pricing.crops || {};
+  const normalised = cropName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const [key, val] of Object.entries(crops)) {
+    if (key.toLowerCase().replace(/[^a-z0-9]/g, '') === normalised) {
+      const retailLb = parseFloat(val.retail_per_lb || val.retailPerLb || 0);
+      const wholesaleLb = parseFloat(val.wholesale_per_lb || val.wholesalePerLb || 0);
+      if (retailLb > 0) {
+        return {
+          unit_price: wholesaleLb || retailLb * 0.7,
+          retail_price: retailLb
+        };
+      }
+    }
+  }
+
+  // 2. Fallback — derive from lighting-recipes growth days
   const recipes = loadLightingRecipes();
   const cropData = recipes.crops[cropName];
   
   if (!cropData || cropData.length === 0) {
-    return { unit_price: 5.00, retail_price: 8.00 };
+    return { unit_price: 16.46, retail_price: 23.52 }; // CAD default (greens)
   }
 
-  // Determine category based on crop characteristics
   const lastStage = cropData[cropData.length - 1];
   const growthDays = lastStage.day || 21;
   
-  // Pricing based on growth time and type
-  let unit_price, retail_price;
-  
   if (growthDays < 14) {
-    // Microgreens - quick turnaround, higher margin
-    unit_price = 3.00;
-    retail_price = 5.50;
+    return { unit_price: 16.46, retail_price: 23.52 };
   } else if (growthDays < 30) {
-    // Baby greens - moderate turnaround
-    unit_price = 4.50;
-    retail_price = 7.00;
+    return { unit_price: 17.58, retail_price: 25.12 };
   } else {
-    // Full-size crops - longer growth
-    unit_price = 5.00;
-    retail_price = 8.50;
+    return { unit_price: 30.24, retail_price: 43.20 };
   }
-
-  return { unit_price, retail_price };
 }
 
 /**

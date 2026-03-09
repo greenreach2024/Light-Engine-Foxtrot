@@ -4058,40 +4058,93 @@
                     </div>
                 </div>
 
-                <!-- Set New Price -->
+                <!-- AI Pricing Assistant — Multi-Crop Scanner -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Set Wholesale Price</div>
+                        <div class="card-title">AI Pricing Assistant</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" onclick="loadCurrentPricesIntoScanner()" style="padding: 6px 14px; font-size: 12px;">Load Current Prices</button>
+                            <button class="btn" onclick="addPricingRow()" style="padding: 6px 14px; font-size: 12px; background: var(--accent-green); color: white;">+ Add Row</button>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <form id="set-price-form" onsubmit="submitWholesalePrice(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
-                            <div>
-                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Crop / Product</label>
-                                <input type="text" id="price-crop" placeholder="e.g. Basil, Lettuce Mix" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+                            Enter multiple crop price corrections below. All changes are applied in a single scan — prices are persisted to the pricing files and pushed to the POS and online store automatically.
+                        </p>
+                        <div class="table-container">
+                            <table id="pricing-scanner-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 22%;">Crop / Product</th>
+                                        <th style="width: 12%;">Retail $/oz</th>
+                                        <th style="width: 12%;">Retail $/lb</th>
+                                        <th style="width: 12%;">Wholesale $/lb</th>
+                                        <th style="width: 10%;">Tier</th>
+                                        <th style="width: 22%;">Reasoning</th>
+                                        <th style="width: 5%;">Status</th>
+                                        <th style="width: 5%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pricing-scanner-tbody">
+                                    <!-- rows added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <label style="font-size: 13px; color: var(--text-secondary);">
+                                    <input type="checkbox" id="push-to-farms-checkbox" checked style="margin-right: 4px;">
+                                    Push to POS &amp; Online Store
+                                </label>
+                                <span id="scanner-row-count" style="font-size: 12px; color: var(--text-secondary); margin-left: 12px;">0 crops</span>
                             </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Wholesale Price ($/lb)</label>
-                                <input type="number" id="price-amount" step="0.01" min="0.01" placeholder="4.50" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn" onclick="clearPricingScanner()" style="padding: 8px 16px; font-size: 13px;">Clear All</button>
+                                <button class="btn" id="apply-batch-btn" onclick="applyBatchPriceUpdate()" style="padding: 8px 24px; font-size: 13px; background: var(--accent-green); color: white; font-weight: 600;">
+                                    Apply All Price Changes
+                                </button>
                             </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Pricing Tier</label>
-                                <select id="price-tier" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
-                                    <option value="cost-plus">Cost-Plus (20% margin)</option>
-                                    <option value="demand-based" selected>Demand-Based</option>
-                                    <option value="premium">Premium</option>
-                                    <option value="promotional">Promotional</option>
-                                </select>
-                            </div>
-                            <div style="grid-column: 1 / -1; display: flex; gap: 12px; align-items: end;">
-                                <div style="flex: 1;">
-                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Reasoning / Notes</label>
-                                    <input type="text" id="price-reasoning" placeholder="Market adjustment, seasonal pricing..." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
-                                </div>
-                                <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white; white-space: nowrap;">Send Price Offer</button>
-                            </div>
-                        </form>
+                        </div>
+                        <div id="batch-update-result" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
                     </div>
                 </div>
+
+                <!-- Single Price Offer (legacy) -->
+                <details style="margin-bottom: 0;">
+                    <summary style="cursor: pointer; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); font-size: 13px;">
+                        Send Individual Price Offer to Farms
+                    </summary>
+                    <div class="card" style="margin-top: 8px;">
+                        <div class="card-body">
+                            <form id="set-price-form" onsubmit="submitWholesalePrice(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Crop / Product</label>
+                                    <input type="text" id="price-crop" placeholder="e.g. Basil, Lettuce Mix" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Wholesale Price ($/lb)</label>
+                                    <input type="number" id="price-amount" step="0.01" min="0.01" placeholder="4.50" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Pricing Tier</label>
+                                    <select id="price-tier" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                        <option value="cost-plus">Cost-Plus (20% margin)</option>
+                                        <option value="demand-based" selected>Demand-Based</option>
+                                        <option value="premium">Premium</option>
+                                        <option value="promotional">Promotional</option>
+                                    </select>
+                                </div>
+                                <div style="grid-column: 1 / -1; display: flex; gap: 12px; align-items: end;">
+                                    <div style="flex: 1;">
+                                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Reasoning / Notes</label>
+                                        <input type="text" id="price-reasoning" placeholder="Market adjustment, seasonal pricing..." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    </div>
+                                    <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white; white-space: nowrap;">Send Price Offer</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </details>
 
                 <!-- Active Price Offers -->
                 <div class="card">

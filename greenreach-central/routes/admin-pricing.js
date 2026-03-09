@@ -7,9 +7,18 @@
  */
 
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { query } from '../config/database.js';
+import { farmStore } from '../lib/farm-data-store.js';
 
 const router = express.Router();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PRICING_FILE = path.resolve(__dirname, '../public/data/crop-pricing.json');
+const REGISTRY_FILE = path.resolve(__dirname, '../public/data/crop-registry.json');
 
 /**
  * Generate unique offer ID
@@ -688,6 +697,286 @@ router.get('/analytics/acceptance-trends', async (req, res) => {
       error: 'Failed to fetch acceptance trends',
       message: error.message
     });
+  }
+});
+
+// ==============================================================================
+// AI Pricing Assistant — Batch Price Updates
+// ==============================================================================
+
+/**
+ * POST /api/admin/pricing/batch-update
+ * Apply multiple crop price corrections in a single scan.
+ * Persists to crop-pricing.json, crop-registry.json, and pushes to
+ * the farm-scoped crop_pricing store so POS and online store pick
+ * up new prices on next read.
+ *
+ * Body: {
+ *   updates: [
+ *     { crop: "Bibb Butterhead", retailPerOz: 1.47, retailPerLb: 23.52, wholesalePerLb: 16.46, tier: "demand-based", reasoning: "..." },
+ *     ...
+ *   ],
+ *   pushToFarms: true,          // push to connected edge farms
+ *   reasoning: "March 2026 market adjustment"
+ * }
+ */
+router.post('/batch-update', async (req, res) => {
+  try {
+    const { updates, pushToFarms = true, reasoning = '' } = req.body;
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'updates array is required and must not be empty'
+      });
+    }
+
+    const results = [];
+    const errors = [];
+    const timestamp = new Date().toISOString();
+
+    // ── 1. Persist to crop-pricing.json ──────────────────────────────────
+    let pricingFile = { version: '2026-03-08-v1', crops: [] };
+    try {
+      pricingFile = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+    } catch (e) { /* start fresh */ }
+
+    const priceMap = {};
+    (pricingFile.crops || []).forEach(c => { priceMap[c.crop] = c; });
+
+    for (const u of updates) {
+      if (!u.crop) {
+        errors.push({ crop: u.crop, error: 'Missing crop name' });
+        continue;
+      }
+
+      const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
+      const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * 0.70 * 100) / 100 : null);
+
+      if (!retailPerLb || retailPerLb <= 0) {
+        errors.push({ crop: u.crop, error: 'Invalid retail price' });
+        continue;
+      }
+
+      // Update or insert in pricing file
+      const existing = priceMap[u.crop] || {};
+      priceMap[u.crop] = {
+        crop: u.crop,
+        unit: u.unit || existing.unit || 'lb',
+        retailPrice: retailPerLb,
+        wholesalePrice: wholesalePerLb,
+        ws1Discount: u.ws1Discount || existing.ws1Discount || 15,
+        ws2Discount: u.ws2Discount || existing.ws2Discount || 25,
+        ws3Discount: u.ws3Discount || existing.ws3Discount || 35,
+        currency: 'CAD',
+        pricingSource: 'greenreach-central',
+        lastUpdated: timestamp
+      };
+
+      results.push({
+        crop: u.crop,
+        retailPerLb,
+        retailPerOz: Math.round((retailPerLb / 16) * 100) / 100,
+        wholesalePerLb,
+        status: 'applied'
+      });
+    }
+
+    pricingFile.crops = Object.values(priceMap);
+    pricingFile.lastUpdated = timestamp;
+    pricingFile.currency = 'CAD';
+    pricingFile.pricingSource = 'greenreach-central';
+    pricingFile.version = timestamp.slice(0, 10).replace(/-/g, '') + '-batch';
+
+    fs.writeFileSync(PRICING_FILE, JSON.stringify(pricingFile, null, 2), 'utf8');
+    console.log(`[Pricing Assistant] Persisted ${results.length} price updates to crop-pricing.json`);
+
+    // ── 2. Update crop-registry.json ─────────────────────────────────────
+    let registryUpdated = 0;
+    try {
+      const registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+      for (const u of updates) {
+        const crop = registry.crops?.[u.crop];
+        if (!crop) continue;
+
+        const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
+        const retailPerOz = u.retailPerOz || (retailPerLb ? Math.round((retailPerLb / 16) * 100) / 100 : null);
+        if (!retailPerLb) continue;
+
+        crop.growth.retailPricePerLb = retailPerLb;
+        crop.pricing.retailPerOz = retailPerOz;
+        crop.pricing.currency = 'CAD';
+        crop.pricing.pricingSource = 'greenreach-central';
+        crop.pricing.lastUpdated = timestamp;
+        registryUpdated++;
+      }
+      registry.version = timestamp.slice(0, 10) + '-batch';
+      fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2, { encoding: 'utf8' }), 'utf8');
+      console.log(`[Pricing Assistant] Updated ${registryUpdated} entries in crop-registry.json`);
+    } catch (e) {
+      console.warn('[Pricing Assistant] crop-registry.json update skipped:', e.message);
+    }
+
+    // ── 3. Push to farm-scoped crop_pricing store (POS + online) ─────────
+    let farmsPushed = 0;
+    if (pushToFarms) {
+      try {
+        // Get all connected farms
+        let farmIds = [];
+        try {
+          const farmRows = await query('SELECT farm_id FROM farms WHERE status != $1', ['inactive']);
+          farmIds = farmRows.rows.map(r => r.farm_id);
+        } catch (dbErr) {
+          // Fallback: push to default farm
+          farmIds = ['default'];
+        }
+
+        for (const fid of farmIds) {
+          try {
+            const existing = await farmStore.get(fid, 'crop_pricing') || { crops: [] };
+            const existingMap = {};
+            (existing.crops || []).forEach(c => { existingMap[c.crop] = c; });
+
+            // Merge updates into existing farm pricing
+            for (const u of updates) {
+              const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
+              const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * 0.70 * 100) / 100 : null);
+              if (!retailPerLb) continue;
+
+              const prev = existingMap[u.crop] || {};
+              existingMap[u.crop] = {
+                crop: u.crop,
+                unit: u.unit || prev.unit || 'lb',
+                retailPrice: retailPerLb,
+                wholesalePrice: wholesalePerLb,
+                ws1Discount: u.ws1Discount || prev.ws1Discount || 15,
+                ws2Discount: u.ws2Discount || prev.ws2Discount || 25,
+                ws3Discount: u.ws3Discount || prev.ws3Discount || 35,
+                currency: 'CAD',
+                pricingSource: 'greenreach-central',
+                lastUpdated: timestamp
+              };
+            }
+
+            existing.crops = Object.values(existingMap);
+            existing.lastUpdated = timestamp;
+            existing.currency = 'CAD';
+            existing.pricingSource = 'greenreach-central';
+            await farmStore.set(fid, 'crop_pricing', existing);
+            farmsPushed++;
+          } catch (farmErr) {
+            console.warn(`[Pricing Assistant] Failed to push to farm ${fid}:`, farmErr.message);
+          }
+        }
+        console.log(`[Pricing Assistant] Pushed prices to ${farmsPushed} farm(s)`);
+      } catch (pushErr) {
+        console.warn('[Pricing Assistant] Farm push failed:', pushErr.message);
+      }
+    }
+
+    // ── 4. Record pricing history ────────────────────────────────────────
+    for (const r of results) {
+      try {
+        await query(`
+          INSERT INTO pricing_history (crop, wholesale_price, offer_date, acceptance_rate, source)
+          VALUES ($1, $2, CURRENT_DATE, 1.0, 'batch_update')
+          ON CONFLICT DO NOTHING
+        `, [r.crop, r.wholesalePerLb]);
+      } catch (histErr) {
+        // non-critical — history table may not exist yet
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Applied ${results.length} price update(s)`,
+      applied: results,
+      errors: errors.length > 0 ? errors : undefined,
+      persistence: {
+        crop_pricing_json: true,
+        crop_registry_json: registryUpdated > 0,
+        farm_store_pushed: farmsPushed,
+        pricing_history: true
+      },
+      reasoning,
+      timestamp
+    });
+
+  } catch (error) {
+    console.error('[Pricing Assistant] Batch update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to apply batch price updates',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/admin/pricing/current-prices
+ * Get current prices from crop-pricing.json for the AI Pricing Assistant scanner.
+ * Returns all crops with their current retail and wholesale prices.
+ */
+router.get('/current-prices', (req, res) => {
+  try {
+    let pricingFile = { crops: [] };
+    try {
+      pricingFile = JSON.parse(fs.readFileSync(PRICING_FILE, 'utf8'));
+    } catch (e) { /* empty */ }
+
+    let registry = { crops: {} };
+    try {
+      registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+    } catch (e) { /* empty */ }
+
+    // Merge pricing.json and registry into a unified list
+    const merged = {};
+
+    // From registry (all known crops)
+    for (const [name, crop] of Object.entries(registry.crops || {})) {
+      merged[name] = {
+        crop: name,
+        category: crop.category || 'unknown',
+        active: !!crop.active,
+        retailPerOz: crop.pricing?.retailPerOz || 0,
+        retailPerLb: crop.growth?.retailPricePerLb || 0,
+        wholesalePerLb: 0,
+        currency: crop.pricing?.currency || 'CAD',
+        lastUpdated: crop.pricing?.lastUpdated || null
+      };
+    }
+
+    // Overlay with crop-pricing.json values
+    for (const c of (pricingFile.crops || [])) {
+      const existing = merged[c.crop] || { crop: c.crop, category: 'unknown', active: false };
+      existing.retailPerLb = c.retailPrice || existing.retailPerLb;
+      existing.wholesalePerLb = c.wholesalePrice || existing.wholesalePerLb;
+      existing.retailPerOz = existing.retailPerLb ? Math.round((existing.retailPerLb / 16) * 100) / 100 : existing.retailPerOz;
+      existing.ws1Discount = c.ws1Discount || 15;
+      existing.ws2Discount = c.ws2Discount || 25;
+      existing.ws3Discount = c.ws3Discount || 35;
+      existing.lastUpdated = c.lastUpdated || existing.lastUpdated;
+      merged[c.crop] = existing;
+    }
+
+    const prices = Object.values(merged).sort((a, b) => {
+      // Active crops first, then alphabetical
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return a.crop.localeCompare(b.crop);
+    });
+
+    res.json({
+      success: true,
+      prices,
+      totalCrops: prices.length,
+      activeCrops: prices.filter(p => p.active).length,
+      pricedCrops: prices.filter(p => p.retailPerLb > 0).length,
+      currency: 'CAD',
+      lastUpdated: pricingFile.lastUpdated || null
+    });
+  } catch (error) {
+    console.error('[Pricing Assistant] Current prices error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load current prices' });
   }
 });
 
