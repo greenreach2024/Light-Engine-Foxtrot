@@ -14,4 +14,4 @@ execute
 login
 preview
 public/videos/
-public/images/
+# public/images/ — DO NOT ignore: images must be deployed for logos & marketing pages
