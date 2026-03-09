@@ -914,8 +914,8 @@ router.post('/batch-update', async (req, res) => {
 
 /**
  * GET /api/admin/pricing/current-prices
- * Get current prices from crop-pricing.json for the AI Pricing Assistant scanner.
- * Returns all crops with their current retail and wholesale prices.
+ * Get current prices merged from crop-pricing.json, crop-registry.json, and lighting-recipes.json.
+ * Returns all crops — recipe-derived crops are included so the scanner can manage them.
  */
 router.get('/current-prices', (req, res) => {
   try {
@@ -929,20 +929,45 @@ router.get('/current-prices', (req, res) => {
       registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
     } catch (e) { /* empty */ }
 
+    // Load lighting-recipes.json for the full crop universe
+    let recipes = { crops: {} };
+    const recipesPath = path.join(path.dirname(REGISTRY_FILE), 'lighting-recipes.json');
+    try {
+      recipes = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+    } catch (e) { /* empty */ }
+
     // Merge pricing.json and registry into a unified list
     const merged = {};
 
-    // From registry (all known crops)
-    for (const [name, crop] of Object.entries(registry.crops || {})) {
-      merged[name] = {
-        crop: name,
-        category: crop.category || 'unknown',
-        active: !!crop.active,
-        retailPerOz: crop.pricing?.retailPerOz || 0,
-        retailPerLb: crop.growth?.retailPricePerLb || 0,
+    // From lighting-recipes (all recipe crops — source of truth for product list)
+    for (const recipeName of Object.keys(recipes.crops || {})) {
+      merged[recipeName] = {
+        crop: recipeName,
+        category: 'recipe',
+        active: false,
+        retailPerOz: 0,
+        retailPerLb: 0,
         wholesalePerLb: 0,
+        currency: 'CAD',
+        source: 'recipe',
+        lastUpdated: null
+      };
+    }
+
+    // From registry (all known crops — overrides recipe stub)
+    for (const [name, crop] of Object.entries(registry.crops || {})) {
+      const existing = merged[name] || { crop: name };
+      merged[name] = {
+        ...existing,
+        crop: name,
+        category: crop.category || existing.category || 'unknown',
+        active: !!crop.active,
+        retailPerOz: crop.pricing?.retailPerOz || existing.retailPerOz || 0,
+        retailPerLb: crop.growth?.retailPricePerLb || existing.retailPerLb || 0,
+        wholesalePerLb: existing.wholesalePerLb || 0,
         currency: crop.pricing?.currency || 'CAD',
-        lastUpdated: crop.pricing?.lastUpdated || null
+        source: 'registry',
+        lastUpdated: crop.pricing?.lastUpdated || existing.lastUpdated || null
       };
     }
 

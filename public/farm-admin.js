@@ -1150,40 +1150,70 @@ const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
 const PRICING_VERSION = '2025-12-09-v2';
 
-// Default pricing (per oz) - Based on organic market research Dec 2025
-// Prices calculated from actual retail packages and converted to per-oz rates
+// Default pricing (per oz, CAD) — Updated March 2026
+// Greens $1.47/oz ($23.52/lb), Specialty greens $1.57/oz ($25.12/lb), Herbs $2.70/oz ($43.20/lb)
 const defaultPricing = {
-    // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
-    'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
-    'Red Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Oak Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Mixed Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },       // Standard lettuce pricing
-    'Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },             // Generic lettuce
-    
-    // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
-    'Thai Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Purple Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },        // Same as Genovese
-    'Lemon Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },         // Same as Genovese
-    'Holy Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },               // Generic basil
-    
-    // Arugula varieties - Specialty green pricing
-    'Baby Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
-    'Cultivated Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // Standard arugula
-    'Wild Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // Standard arugula
-    'Wasabi Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },      // Standard arugula
-    'Red Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },         // Standard arugula
-    'Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },             // Generic arugula
-    
-    // Kale varieties - Standard pricing
-    'Curly Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Lacinato Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Dinosaur kale
-    'Dinosaur Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Same as Lacinato
-    'Baby Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },           // Tender baby leaves
-    'Red Russian Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },    // Standard kale
-    'Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 }                 // Generic kale
+    // Lettuce varieties — standard greens $1.47/oz
+    'Butterhead Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Buttercrunch Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Bibb Butterhead': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Romaine Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Parris Island Cos Romaine': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Leaf Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Oak Leaf Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Salad Bowl Oakleaf': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Mixed Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Basil / Herb varieties — $2.70/oz
+    'Genovese Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Thai Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Purple Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Lemon Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Holy Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Santo Cilantro': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Italian Parsley': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'French Tarragon': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Common Thyme': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Greek Oregano': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Chervil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Dill Bouquet': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Rosemary': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Sage': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Marjoram': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Lemon Balm': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Lovage': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Sorrel': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+    'Kentucky Colonel Spearmint': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
+
+    // Arugula varieties — specialty greens $1.57/oz
+    'Astro Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Cultivated Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Wild Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Wasabi Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Kale varieties — standard greens $1.47/oz
+    'Curly Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Lacinato Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Dinosaur Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Russian Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Asian / Specialty greens — $1.57/oz
+    'Mei Qing Pak Choi': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Tatsoi': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Komatsuna Mustard Spinach': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Mizuna Mustard Greens': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Bloomsdale Spinach': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Frisée Endive': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Escarole Batavian': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Fordhook Giant Swiss Chard': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
+    'Watercress': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 }
 };
 
 /**
@@ -2087,7 +2117,61 @@ function displayRecommendations(recommendations) {
         `;
     }).join('');
     
+    // Add "Apply All" button above recommendations if any have significant changes
+    const significantCount = recommendations.filter(r => Math.abs(((r.recommendedPrice - r.currentPrice) / r.currentPrice * 100)) > 5).length;
+    if (significantCount > 0) {
+        contentDiv.insertAdjacentHTML('afterbegin', `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); border-radius: 8px;">
+                <div>
+                    <strong style="color: var(--accent-green);">${significantCount} crop${significantCount !== 1 ? 's' : ''} with recommended price updates</strong>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Apply all AI-recommended prices at once, then save to persist.</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" onclick="applyAllRecommendedPrices()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--accent-green), #059669); color: white; border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
+                        Apply All ${significantCount} Updates
+                    </button>
+                    <button class="btn" onclick="applyAllRecommendedPricesAndSave()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--accent-purple), #6d28d9); color: white; border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
+                        Apply &amp; Save All
+                    </button>
+                </div>
+            </div>
+        `);
+    }
+
     recommendationsDiv.style.display = 'block';
+}
+
+/**
+ * Apply ALL recommended prices at once (multi-crop batch)
+ */
+function applyAllRecommendedPrices() {
+    const cached = localStorage.getItem(AI_PRICING_KEY);
+    if (!cached) { alert('No recommendations to apply.'); return; }
+    const recommendations = JSON.parse(cached);
+    let applied = 0;
+
+    recommendations.forEach(rec => {
+        const diff = Math.abs(((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100));
+        if (diff > 5) {
+            const index = pricingData.findIndex(item => item.crop === rec.crop);
+            if (index !== -1) {
+                pricingData[index].retail = rec.recommendedPrice;
+                applied++;
+            }
+        }
+    });
+
+    renderPricingTable();
+    alert(`${applied} crop price${applied !== 1 ? 's' : ''} updated from AI recommendations. Don't forget to save!`);
+}
+
+/**
+ * Apply ALL recommended prices and save immediately
+ */
+async function applyAllRecommendedPricesAndSave() {
+    applyAllRecommendedPrices();
+    await savePricing();
+    closeAIPricingAssistant();
 }
 
 /**
@@ -2214,43 +2298,63 @@ function checkForScheduledPriceUpdates() {
 // Growth parameters by crop type (days to harvest and retail price per POUND)
 // Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
-    // Lettuce varieties - 28-35 day cycle, priced per lb
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
-    
-    // Kale varieties - 35-42 day cycle, priced per lb
-    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
-    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    
-    // Asian Greens - priced per lb
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
-    
-    // Specialty Greens - priced per lb
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
-    
-    // Arugula varieties - 21-28 day cycle, priced per lb
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    
-    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
+    // Lettuce varieties — $23.52/lb CAD
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Parris Island Cos Romaine': { daysToHarvest: 35, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Salad Bowl Oakleaf': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+
+    // Kale varieties — $23.52/lb CAD
+    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 23.52, yieldFactor: 0.88 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
+    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 23.52, yieldFactor: 0.88 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
+
+    // Asian / Specialty greens — $25.12/lb CAD
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.91 },
+    'Komatsuna Mustard Spinach': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+    'Mizuna Mustard Greens': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+    'Bloomsdale Spinach': { daysToHarvest: 30, retailPricePerLb: 25.12, yieldFactor: 0.91 },
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
+    'Escarole Batavian': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
+    'Fordhook Giant Swiss Chard': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.88 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+
+    // Arugula varieties — $25.12/lb CAD (specialty)
+    'Astro Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.91 },
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 25.12, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+
+    // Herb varieties — $43.20/lb CAD ($2.70/oz)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.86 },
+    'Santo Cilantro': { daysToHarvest: 22, retailPricePerLb: 43.20, yieldFactor: 0.88 },
+    'Italian Parsley': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'French Tarragon': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
+    'Common Thyme': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
+    'Greek Oregano': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.86 },
+    'Chervil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Dill Bouquet': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Rosemary': { daysToHarvest: 35, retailPricePerLb: 43.20, yieldFactor: 0.84 },
+    'Sage': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
+    'Marjoram': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.86 },
+    'Lemon Balm': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Lovage': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
+    'Sorrel': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Kentucky Colonel Spearmint': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.87 }
 };
 
 // Global crop value data

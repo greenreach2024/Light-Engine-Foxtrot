@@ -10309,17 +10309,16 @@ function addPricingRow(prefill = {}) {
     const tr = document.createElement('tr');
     tr.setAttribute('data-scanner-idx', idx);
 
-    const cropOptions = pricingScannerCrops.length
-        ? pricingScannerCrops.map(c => `<option value="${c.crop}" ${c.crop === prefill.crop ? 'selected' : ''}>${c.crop}</option>`).join('')
+    // Build a datalist for autocomplete — allows both recipe crops and manual entry
+    const listId = `crop-list-${idx}`;
+    const cropOptionTags = pricingScannerCrops.length
+        ? pricingScannerCrops.map(c => `<option value="${c.crop}">`).join('')
         : '';
 
     tr.innerHTML = `
         <td>
-            ${pricingScannerCrops.length
-                ? `<select class="sc-crop" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;" onchange="onScannerCropSelect(this)">
-                       <option value="">— select —</option>${cropOptions}
-                   </select>`
-                : `<input class="sc-crop" type="text" value="${prefill.crop || ''}" placeholder="Crop name" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;">`}
+            <input class="sc-crop" type="text" list="${listId}" value="${prefill.crop || ''}" placeholder="Type or select crop" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;" onchange="onScannerCropSelect(this)">
+            <datalist id="${listId}">${cropOptionTags}</datalist>
         </td>
         <td><input class="sc-roz" type="number" step="0.01" min="0" value="${prefill.retailPerOz || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'oz')"></td>
         <td><input class="sc-rlb" type="number" step="0.01" min="0" value="${prefill.retailPerLb || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'lb')"></td>
