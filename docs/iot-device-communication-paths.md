@@ -1,7 +1,38 @@
 # IoT Device Communication Paths
 
-> **Last updated:** 2026-03-08 (session 4 — SwitchBot credential wipe root cause found, daily tasks fix)  
-> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`, `farm-summary.html`, `routes/farm-ops-agent.js`
+> **Last updated:** 2026-03-09 (session 5 — farm-summary /env stale data fix, Central proxy for live sensor readings)  
+> **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`, `farm-summary.html`, `routes/farm-ops-agent.js`, `greenreach-central/routes/env-proxy.js`
+
+---
+
+## Change Log (2026-03-09)
+
+### Fix: Farm-summary sensor readings not refreshing (Central /env returning stale data)
+
+**Symptoms:**
+- Farm Summary page (`/views/farm-summary.html`) loads sensor data on initial page load but readings never update
+- Sensor `updatedAt` timestamps stuck at last sync time (up to 5 minutes old)
+- GreenReach Central admin pages work fine (different data path)
+
+**Root cause: Central's `GET /env` returned stale synced data instead of proxying to the Light Engine**
+
+The data flow was:
+1. Light Engine's `syncSensorData()` runs every 30s → updates `env.json` and `preEnvStore` ✓
+2. Central's `syncFarmData()` fetches `env.json` from LE flat file every 5 min → stores in DB as `telemetry`
+3. Central's `GET /env` route (L1316) returned `farmStore.get(farmId, 'telemetry')` — the stale DB copy
+4. Farm-summary page fetches `/env?hours=24` → always hit the stale DB route, never the live LE
+
+Three bugs compounded the issue:
+- **Central `GET /env`** returned stale DB data instead of proxying to the LE's live `/env` endpoint
+- **Central `GET /api/env`** (L1326) shadowed the `envProxyRoutes` mounted at `/api/env` (L2696), making the proxy dead code
+- **`env-proxy.js`** referenced `targetFarm.endpoint` but `networkFarmsStore` returns `api_url` — proxy would always fail with "endpoint not configured"
+
+**Architecture note:** `greenreachgreens.com` → CloudFront → Central (`greenreach-central/server.js`). Central serves the LE's `public/` directory via `express.static(path.join(__dirname, '..', 'public'))`. The Light Engine (`server-foxtrot.js`) runs separately on the same VPC and is accessible at the farm's `api_url` (e.g. `http://172.31.12.135:8080`).
+
+**Fixes applied:**
+- **`greenreach-central/server.js`**: Changed `GET /env` to proxy directly to the Light Engine's live `/env` endpoint using `resolveEdgeUrlForProxy()`. Falls back to stale DB data only if the LE is unreachable. Passes `?hours=` query param through.
+- **`greenreach-central/server.js`**: Removed the stale `app.get('/api/env')` compat handler that was shadowing the `envProxyRoutes` proxy mount.
+- **`greenreach-central/routes/env-proxy.js`**: Fixed endpoint field lookup to use `targetFarm.api_url || targetFarm.base_url || targetFarm.url || targetFarm.endpoint` (networkFarmsStore normalizes to `api_url`, not `endpoint`).
 
 ---
 

@@ -1312,26 +1312,38 @@ app.post('/api/debug/track', express.json(), (req, res) => {
   res.json({ success: true, logged: events.length });
 });
 
-// Legacy compatibility routes used by existing farm/admin pages
+// Live environmental data — proxy to LE for real-time readings,
+// fall back to stale DB telemetry only when the LE is unreachable.
 app.get('/env', async (req, res) => {
+  const hours = req.query.hours || 24;
   try {
-    const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
-    return res.status(200).json(data || { zones: [] });
-  } catch (error) {
-    logger.warn('[Compat] /env fallback failed:', error.message);
-    return res.status(200).json({ zones: [] });
+    // resolveEdgeUrlForProxy() is hoisted (function declaration at ~L2715)
+    const leUrl = resolveEdgeUrlForProxy();
+    if (!leUrl) throw new Error('No Light Engine URL configured');
+    const upstream = `${leUrl}/env?hours=${hours}`;
+    logger.info(`[Env] Proxying to Light Engine: ${upstream}`);
+    const response = await fetch(upstream, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) throw new Error(`LE returned ${response.status}`);
+    const data = await response.json();
+    return res.json(data);
+  } catch (proxyErr) {
+    logger.warn(`[Env] LE proxy failed, falling back to DB: ${proxyErr.message}`);
+    try {
+      const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
+      return res.status(200).json(data || { zones: [] });
+    } catch (dbErr) {
+      logger.warn('[Env] DB fallback also failed:', dbErr.message);
+      return res.status(200).json({ zones: [] });
+    }
   }
 });
 
-app.get('/api/env', async (req, res) => {
-  try {
-    const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
-    return res.status(200).json(data || { zones: [] });
-  } catch (error) {
-    logger.warn('[Compat] /api/env fallback failed:', error.message);
-    return res.status(200).json({ zones: [] });
-  }
-});
+// /api/env is handled by envProxyRoutes (mounted later at L~2696).
+// Do NOT add an app.get('/api/env') handler here — it would shadow the proxy.
 
 const COMPAT_DEFAULT_PLANS = [
   {

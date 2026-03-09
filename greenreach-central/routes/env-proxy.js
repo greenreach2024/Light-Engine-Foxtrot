@@ -56,8 +56,9 @@ router.get('/', async (req, res, next) => {
       }
     }
     
-    // Validate farm has endpoint
-    if (!targetFarm.endpoint) {
+    // Validate farm has endpoint (check api_url, base_url, url, or endpoint)
+    const farmEndpoint = targetFarm.api_url || targetFarm.base_url || targetFarm.url || targetFarm.endpoint;
+    if (!farmEndpoint) {
       return res.status(500).json({
         error: 'Farm endpoint not configured',
         message: `Farm ${targetFarm.farm_id || targetFarm.id} does not have an endpoint URL`,
@@ -66,7 +67,7 @@ router.get('/', async (req, res, next) => {
     }
     
     // Proxy request to farm endpoint
-    const farmUrl = `${targetFarm.endpoint}/env?hours=${hours}`;
+    const farmUrl = `${farmEndpoint}/env?hours=${hours}`;
     logger.info(`[ENV Proxy] Fetching from ${farmUrl}`);
     
     const response = await fetch(farmUrl, {
