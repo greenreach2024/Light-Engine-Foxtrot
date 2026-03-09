@@ -7472,13 +7472,23 @@ async function loadAnalyticsForFarm(farmId) {
  * Refresh analytics data
  */
 async function refreshAnalytics() {
-    await loadFarmMetrics(currentAnalyticsFarmId);
+    const farmId = currentAnalyticsFarmId || resolveAnalyticsFarmId();
+    if (!farmId) {
+        console.warn('[Analytics] No farm available for analytics');
+        return;
+    }
+    currentAnalyticsFarmId = farmId;
+    await loadFarmMetrics(farmId);
 }
 
 /**
  * Load farm metrics from API
  */
 async function loadFarmMetrics(farmId, days = 7, isFallback = false) {
+    if (!farmId) {
+        console.warn('[Analytics] No farmId provided — skipping metrics load');
+        return;
+    }
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
         

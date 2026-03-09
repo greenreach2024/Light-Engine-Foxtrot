@@ -21,8 +21,51 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
-// Protect all admin delivery routes: require authenticated admin with 'admin' or 'operations' role
+// All delivery routes require authentication
 router.use(adminAuthMiddleware);
+
+// Read-only readiness endpoint is available to any authenticated admin (dashboard KPI)
+// Write/config routes below are gated to admin + operations roles
+router.get('/readiness', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.json({ success: true, farms: [], summary: { total: 0, enabled: 0, ready: 0 }, message: 'Database unavailable' });
+    }
+
+    const settingsResult = await query(
+      `SELECT s.farm_id, s.enabled, s.base_fee, s.min_order,
+              (SELECT COUNT(*) FROM farm_delivery_windows w WHERE w.farm_id = s.farm_id AND w.active = true) AS active_windows,
+              (SELECT COUNT(*) FROM farm_delivery_zones z WHERE z.farm_id = s.farm_id AND z.status = 'active') AS active_zones
+       FROM farm_delivery_settings s
+       ORDER BY s.enabled DESC, s.farm_id`
+    );
+
+    const farms = settingsResult.rows.map(r => ({
+      farm_id: r.farm_id,
+      enabled: r.enabled,
+      base_fee: Number(r.base_fee),
+      min_order: Number(r.min_order),
+      active_windows: Number(r.active_windows),
+      active_zones: Number(r.active_zones),
+      ready: r.enabled && Number(r.active_windows) > 0 && Number(r.active_zones) > 0
+    }));
+
+    res.json({
+      success: true,
+      farms,
+      summary: {
+        total: farms.length,
+        enabled: farms.filter(f => f.enabled).length,
+        ready: farms.filter(f => f.ready).length
+      }
+    });
+  } catch (error) {
+    console.error('[Admin Delivery] Readiness check failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// All remaining delivery routes require admin or operations role
 router.use(requireAdminRole('admin', 'operations'));
 
 // In-memory fallback for non-DB fields (drivers, fees, stats not yet in DB)
@@ -650,47 +693,7 @@ router.patch('/driver-payouts/:id', async (req, res) => {
   }
 });
 
-/**
- * GET /readiness - Delivery readiness overview across all farms
- * Returns list of farms with delivery enabled status and window counts
- */
-router.get('/readiness', async (req, res) => {
-  try {
-    if (!isDatabaseAvailable()) {
-      return res.json({ success: true, farms: [], message: 'Database unavailable' });
-    }
-
-    const settingsResult = await query(
-      `SELECT s.farm_id, s.enabled, s.base_fee, s.min_order,
-              (SELECT COUNT(*) FROM farm_delivery_windows w WHERE w.farm_id = s.farm_id AND w.active = true) AS active_windows,
-              (SELECT COUNT(*) FROM farm_delivery_zones z WHERE z.farm_id = s.farm_id AND z.status = 'active') AS active_zones
-       FROM farm_delivery_settings s
-       ORDER BY s.enabled DESC, s.farm_id`
-    );
-
-    const farms = settingsResult.rows.map(r => ({
-      farm_id: r.farm_id,
-      enabled: r.enabled,
-      base_fee: Number(r.base_fee),
-      min_order: Number(r.min_order),
-      active_windows: Number(r.active_windows),
-      active_zones: Number(r.active_zones),
-      ready: r.enabled && Number(r.active_windows) > 0 && Number(r.active_zones) > 0
-    }));
-
-    res.json({
-      success: true,
-      farms,
-      summary: {
-        total: farms.length,
-        enabled: farms.filter(f => f.enabled).length,
-        ready: farms.filter(f => f.ready).length
-      }
-    });
-  } catch (error) {
-    console.error('[Admin Delivery] Readiness check failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: /readiness endpoint is defined above the requireAdminRole middleware
+// so all authenticated admins can access it (dashboard KPI, read-only)
 
 export default router;
