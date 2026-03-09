@@ -2078,7 +2078,7 @@ function displayRecommendations(recommendations) {
                 
                 ${hasSignificantChange ? `
                     <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-                        <button class="apply-recommendation-btn" onclick="applyRecommendedPrice('${rec.crop}', ${rec.recommendedPrice})">
+                        <button class="apply-recommendation-btn" onclick="applyRecommendedPrice('${rec.crop}', ${rec.recommendedPrice}, this)">
                             Apply Recommended Price
                         </button>
                     </div>
@@ -2104,18 +2104,38 @@ function displayCachedRecommendations() {
 /**
  * Apply recommended price to a crop
  */
-function applyRecommendedPrice(cropName, recommendedPrice) {
+function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
     const index = pricingData.findIndex(item => item.crop === cropName);
     if (index !== -1) {
         pricingData[index].retail = recommendedPrice;
         renderPricingTable();
         
-        // Show confirmation
-        alert(`Updated ${cropName} price to $${recommendedPrice.toFixed(2)}. Don't forget to save changes!`);
-        
-        // Close modal
-        closeAIPricingAssistant();
+        // Mark button as applied (stay in modal for more crops)
+        if (btnEl) {
+            btnEl.textContent = '✅ Applied';
+            btnEl.disabled = true;
+            btnEl.style.opacity = '0.6';
+            btnEl.style.cursor = 'default';
+        }
+
+        // Non-blocking toast inside the modal
+        showPricingToast(`Updated ${cropName} to $${recommendedPrice.toFixed(2)} — remember to save`);
     }
+}
+
+/** Show a brief non-blocking toast inside the AI Pricing modal */
+function showPricingToast(msg) {
+    let toast = document.getElementById('ai-pricing-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'ai-pricing-toast';
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent-green,#22c55e);color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:100001;box-shadow:0 4px 12px rgba(0,0,0,0.25);transition:opacity 0.3s;pointer-events:none;';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._tid);
+    toast._tid = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
 }
 
 /**
