@@ -43,8 +43,6 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // NOTE: farm-stripe-setup.js lives at root level and can't resolve express
 // from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
-import adminRecipesRoutes from './routes/admin-recipes.js';
-import adminDeliveryRoutes from './routes/admin-delivery.js';
 import driverApplicationsRoutes from './routes/driver-applications.js';
 import { adminAuthMiddleware } from './middleware/adminAuth.js';
 import networkDevicesRoutes from './routes/network-devices.js';
@@ -2690,9 +2688,7 @@ app.use('/api/recipes', recipesRoutes); // Public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
-app.use('/api/admin', adminRoutes); // Admin dashboard API
-app.use('/api/admin/recipes', adminRecipesRoutes); // Admin recipes management
-app.use('/api/admin/delivery', adminDeliveryRoutes); // Admin delivery zone/driver/fee management
+app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/admin/network-devices', networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', reportsRoutes); // Financial exports and reports

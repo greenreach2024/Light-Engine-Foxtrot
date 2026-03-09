@@ -1947,6 +1947,12 @@ router.post('/farms/sync-all-stats', async (req, res) => {
 router.get('/analytics/farms/:farmId/metrics', async (req, res) => {
     try {
         const { farmId } = req.params;
+
+        // Guard: reject obviously invalid farmId values
+        if (!farmId || farmId === 'null' || farmId === 'undefined') {
+            return res.status(400).json({ error: 'Invalid farmId parameter' });
+        }
+
         const days = parseInt(req.query.days) || 7;
         const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
