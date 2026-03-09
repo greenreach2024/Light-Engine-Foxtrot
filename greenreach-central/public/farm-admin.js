@@ -931,6 +931,7 @@ function setupNavigation() {
     
     // Handle header dropdown menus
     setupHeaderDropdowns();
+    setupEmbeddedNavigationFallback();
     
     // Handle initial hash navigation (e.g. LE-farm-admin.html#traceability)
     const urlHash = window.location.hash.replace('#', '');
@@ -940,6 +941,51 @@ function setupNavigation() {
             setTimeout(() => navItem.click(), 200);
         }
     }
+}
+
+/**
+ * Fallback delegated navigation to keep admin links inside iframe view.
+ * This protects against regressions where individual click handlers don't bind.
+ */
+function setupEmbeddedNavigationFallback() {
+    if (window.__embeddedNavFallbackBound) return;
+    window.__embeddedNavFallbackBound = true;
+
+    document.addEventListener('click', (event) => {
+        const anchor = event.target.closest('a');
+        if (!anchor) return;
+
+        if (event.defaultPrevented) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (typeof event.button === 'number' && event.button !== 0) return;
+
+        const href = anchor.getAttribute('href') || '';
+        if (!href || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) return;
+        if (anchor.getAttribute('target') === '_blank') return;
+        if (href === '/farm-vitality.html') return;
+
+        const inAdminNav = anchor.closest('.nav-menu, .sidebar-nav, .header-actions, .action-cards');
+        if (!inAdminNav && anchor.dataset.section !== 'iframe-view') return;
+
+        // Keep internal section links as section navigation
+        if (href.startsWith('#') || (href.includes('#') && !anchor.dataset.url)) return;
+
+        const candidateUrl = anchor.dataset.url || href;
+        const shouldEmbed =
+            anchor.dataset.section === 'iframe-view' ||
+            /^\/(views\/|LE-dashboard\.html|farm-sales-pos\.html)/.test(candidateUrl);
+
+        if (!shouldEmbed) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const matchNav = document.querySelector(`.nav-item[data-section="iframe-view"][data-url="${candidateUrl}"]`);
+        if (matchNav) matchNav.classList.add('active');
+
+        renderEmbeddedView(candidateUrl, anchor.textContent.trim() || 'Embedded View');
+    }, true);
 }
 
 /**
