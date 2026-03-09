@@ -1296,7 +1296,8 @@ function renderContextualSidebar() {
                     title: 'Procurement',
                     items: [
                         { label: 'Catalog Management', view: 'procurement-catalog' },
-                        { label: 'Supplier Management', view: 'procurement-suppliers' }
+                        { label: 'Supplier Management', view: 'procurement-suppliers' },
+                        { label: 'Revenue', view: 'procurement-revenue' }
                     ]
                 },
                 {
@@ -5480,8 +5481,8 @@ async function navigate(view, element) {
             await loadProcurementSuppliers();
             break;
         case 'procurement-revenue':
-            document.getElementById('accounting-view').style.display = 'block';
-            await loadCentralAccounting();
+            document.getElementById('procurement-revenue-view').style.display = 'block';
+            await loadProcurementRevenue();
             break;
 
         case 'pricing-management':
