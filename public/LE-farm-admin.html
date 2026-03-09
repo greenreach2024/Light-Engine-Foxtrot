@@ -3372,6 +3372,27 @@
                                 <p style="color: var(--text-muted); font-size: 11px; margin: 0;">Opt-out to disable wholesale orders from GreenReach Central. All other services (monitoring, updates, support) remain active.</p>
                             </div>
                             
+                            <!-- Activity Hub App Download -->
+                            <div>
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Download Activity Hub</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 15px;">
+                                    Scan this QR code from an iPad or tablet to install the Activity Hub app for farm-floor operations.
+                                </p>
+                                <button class="btn-primary" onclick="showActivityHubDownloadQR()" style="width: 100%; margin-bottom: 15px;">
+                                    Show Download QR Code
+                                </button>
+                                <div id="activityHubDownloadQRContainer" style="display: none; background: white; padding: 20px; border-radius: 8px; text-align: center;">
+                                    <h4 style="color: #1a2332; margin-bottom: 10px;">Scan to Install Activity Hub</h4>
+                                    <div id="activityHubDownloadQRCode" style="display: inline-block;"></div>
+                                    <p style="color: #6b7280; font-size: 0.85rem; margin-top: 10px;">
+                                        Open your iPad camera and point it at this code to install the app.
+                                    </p>
+                                    <button class="btn-secondary" onclick="closeActivityHubDownloadQR()" style="margin-top: 15px; background: #e5e7eb; color: #1a2332;">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Device Pairing for Activity Hub Tablets -->
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Tablet Device Pairing</h3>
