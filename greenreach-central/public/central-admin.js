@@ -10589,27 +10589,33 @@ async function loadDeliveryManagement() {
     }
 }
 
+// Cache zone data for inline editing
+let _deliveryZonesCache = [];
+
 function renderDeliveryZones(zones) {
+    _deliveryZonesCache = zones || [];
     const tbody = document.getElementById('delivery-zones-tbody');
     if (!zones || zones.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No delivery zones configured.</td></tr>';
         return;
     }
-    tbody.innerHTML = zones.map(z => {
-        const windows = Array.isArray(z.windows) ? z.windows.join(', ') : z.windows || 'All';
-        const statusColor = z.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
-        return `<tr data-zone-id="${escapeHtml(String(z.id || ''))}">
-            <td><strong>${z.name || z.id}</strong></td>
-            <td>${z.description || '—'}</td>
-            <td>$${parseFloat(z.fee || 0).toFixed(2)}</td>
-            <td>$${parseFloat(z.min_order || 0).toFixed(2)}</td>
-            <td style="font-size: 12px;">${windows}</td>
-            <td style="color: ${statusColor};">${z.status || 'active'}</td>
-            <td>
-                <button class="btn" onclick="editDeliveryZone('${z.id}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
-            </td>
-        </tr>`;
-    }).join('');
+    tbody.innerHTML = zones.map(z => renderZoneRowDisplay(z)).join('');
+}
+
+function renderZoneRowDisplay(z) {
+    const windows = Array.isArray(z.windows) ? z.windows.join(', ') : z.windows || 'All';
+    const statusColor = z.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+    return `<tr data-zone-id="${escapeHtml(String(z.id || ''))}">
+        <td><strong>${escapeHtml(z.name || z.id)}</strong></td>
+        <td>${escapeHtml(z.description || '—')}</td>
+        <td>$${parseFloat(z.fee || 0).toFixed(2)}</td>
+        <td>$${parseFloat(z.min_order || 0).toFixed(2)}</td>
+        <td style="font-size: 12px;">${escapeHtml(windows)}</td>
+        <td style="color: ${statusColor};">${z.status || 'active'}</td>
+        <td>
+            <button class="btn" onclick="editDeliveryZone('${escapeHtml(String(z.id))}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+        </td>
+    </tr>`;
 }
 
 function renderDrivers(drivers) {
@@ -10783,45 +10789,109 @@ function editDeliveryZone(zoneId) {
         return;
     }
 
+    // Find zone data from cache
+    const zone = _deliveryZonesCache.find(z => z.id === zoneId);
+    if (!zone) {
+        alert('Zone data not found. Please refresh.');
+        return;
+    }
+
     const row = document.querySelector(`#delivery-zones-tbody tr[data-zone-id="${CSS.escape(zoneId)}"]`);
-    const nameDefault = row?.children?.[0]?.innerText || zoneId;
-    const descDefault = row?.children?.[1]?.innerText === '—' ? '' : (row?.children?.[1]?.innerText || '');
-    const feeDefault = (row?.children?.[2]?.innerText || '$0').replace('$', '');
-    const minDefault = (row?.children?.[3]?.innerText || '$25').replace('$', '');
+    if (!row) return;
 
-    const name = prompt(`Zone name (${zoneId}):`, nameDefault);
-    if (name == null) return;
-    const description = prompt('Description:', descDefault);
-    if (description == null) return;
-    const fee = prompt('Delivery fee ($):', feeDefault);
-    if (fee == null) return;
-    const minOrder = prompt('Minimum order ($):', minDefault);
-    if (minOrder == null) return;
+    const windowsArr = Array.isArray(zone.windows) ? zone.windows : (zone.windows || 'morning,afternoon').split(',').map(w => w.trim());
+    const inputStyle = 'width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;';
 
-    (async () => {
-        try {
-            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    farm_id: farmId,
-                    name: name.trim(),
-                    description: description.trim(),
-                    fee: parseFloat(fee),
-                    min_order: parseFloat(minOrder)
-                })
-            });
-            const result = await response.json();
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || `HTTP ${response.status}`);
-            }
-            alert(`Zone ${zoneId} updated successfully.`);
-            await loadDeliveryManagement();
-        } catch (error) {
-            console.error('[Delivery] Edit zone failed:', error);
-            alert(`Failed to update zone: ${error.message}`);
+    row.innerHTML = `
+        <td><input type="text" id="ez-name-${zoneId}" value="${escapeHtml(zone.name || zone.id)}" style="${inputStyle}font-weight:600;"></td>
+        <td><input type="text" id="ez-desc-${zoneId}" value="${escapeHtml(zone.description || '')}" placeholder="Description" style="${inputStyle}"></td>
+        <td><input type="number" id="ez-fee-${zoneId}" value="${parseFloat(zone.fee || 0).toFixed(2)}" step="0.50" min="0" style="${inputStyle}width:80px;"></td>
+        <td><input type="number" id="ez-min-${zoneId}" value="${parseFloat(zone.min_order || 0).toFixed(2)}" step="1" min="0" style="${inputStyle}width:80px;"></td>
+        <td>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:11px;">
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-morning-${zoneId}" ${windowsArr.includes('morning') ? 'checked' : ''} style="margin-right:3px;">Morning</label>
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-afternoon-${zoneId}" ${windowsArr.includes('afternoon') ? 'checked' : ''} style="margin-right:3px;">Afternoon</label>
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-evening-${zoneId}" ${windowsArr.includes('evening') ? 'checked' : ''} style="margin-right:3px;">Evening</label>
+            </div>
+        </td>
+        <td>
+            <select id="ez-status-${zoneId}" style="${inputStyle}width:90px;">
+                <option value="active" ${zone.status === 'active' ? 'selected' : ''}>Active</option>
+                <option value="inactive" ${zone.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                <option value="paused" ${zone.status === 'paused' ? 'selected' : ''}>Paused</option>
+            </select>
+        </td>
+        <td style="white-space:nowrap;">
+            <button class="btn" onclick="saveDeliveryZoneInline('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;background:var(--accent-green);color:white;">Save</button>
+            <button class="btn" onclick="cancelDeliveryZoneEdit('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;margin-left:4px;">Cancel</button>
+            <button class="btn" onclick="deleteDeliveryZone('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;margin-left:4px;background:var(--accent-red);color:white;">Delete</button>
+        </td>
+    `;
+    // Focus the name field
+    document.getElementById(`ez-name-${zoneId}`)?.focus();
+}
+
+async function saveDeliveryZoneInline(zoneId) {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) return;
+
+    const name = document.getElementById(`ez-name-${zoneId}`)?.value?.trim();
+    const description = document.getElementById(`ez-desc-${zoneId}`)?.value?.trim();
+    const fee = parseFloat(document.getElementById(`ez-fee-${zoneId}`)?.value || 0);
+    const min_order = parseFloat(document.getElementById(`ez-min-${zoneId}`)?.value || 0);
+    const status = document.getElementById(`ez-status-${zoneId}`)?.value || 'active';
+
+    const windows = [];
+    if (document.getElementById(`ez-win-morning-${zoneId}`)?.checked) windows.push('morning');
+    if (document.getElementById(`ez-win-afternoon-${zoneId}`)?.checked) windows.push('afternoon');
+    if (document.getElementById(`ez-win-evening-${zoneId}`)?.checked) windows.push('evening');
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId, name, description, fee, min_order, status, windows })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP ${response.status}`);
         }
-    })();
+        showToast(`Zone ${name || zoneId} updated`, 'success');
+        await loadDeliveryManagement();
+    } catch (error) {
+        console.error('[Delivery] Inline save failed:', error);
+        showToast(`Failed to save zone: ${error.message}`, 'error');
+    }
+}
+
+function cancelDeliveryZoneEdit(zoneId) {
+    const zone = _deliveryZonesCache.find(z => z.id === zoneId);
+    if (!zone) { loadDeliveryManagement(); return; }
+    const row = document.querySelector(`#delivery-zones-tbody tr[data-zone-id="${CSS.escape(zoneId)}"]`);
+    if (row) row.outerHTML = renderZoneRowDisplay(zone);
+}
+
+async function deleteDeliveryZone(zoneId) {
+    if (!confirm(`Are you sure you want to delete zone "${zoneId}"? This cannot be undone.`)) return;
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP ${response.status}`);
+        }
+        showToast(`Zone ${zoneId} deleted`, 'success');
+        await loadDeliveryManagement();
+    } catch (error) {
+        console.error('[Delivery] Delete zone failed:', error);
+        showToast(`Failed to delete zone: ${error.message}`, 'error');
+    }
 }
 
 function editDriver(driverId) {
