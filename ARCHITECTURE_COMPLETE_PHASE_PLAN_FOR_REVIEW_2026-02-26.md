@@ -2,7 +2,7 @@
 
 Date: 2026-02-26  
 Project: Light Engine Foxtrot + GreenReach Central  
-Branch baseline: recovery/feb11-clean
+Branch baseline: main
 
 ---
 

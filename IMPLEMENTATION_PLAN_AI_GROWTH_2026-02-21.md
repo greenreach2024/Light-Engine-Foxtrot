@@ -1,7 +1,7 @@
 # AI Growth Implementation Plan
 
 Date: 2026-02-21  
-Branch: recovery/feb11-clean  
+Branch: main  
 Status: REVIEW DRAFT  
 Supersedes: AI_INTEGRATION_PROPOSAL.md, AI_GAPS_AND_OPPORTUNITIES.md (phasing sections), AI_AGENT_OPERATING_ACTION_PLAN_2026-02-21.md  
 Source of truth for all AI agent growth execution.

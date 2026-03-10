@@ -896,7 +896,7 @@ npm run test:farm
 
 **After Deploying to EB (MANDATORY):**
 ```bash
-BASE=http://light-engine-foxtrot-test-recovery.us-east-1.elasticbeanstalk.com
+BASE=http://light-engine-foxtrot-prod-v3.us-east-1.elasticbeanstalk.com
 TOKEN=$(curl -sS -X POST "$BASE/api/auth/login" \
   -H 'content-type: application/json' \
   -d '{"farmId":"FARM-MLTP9LVH-B0B85039","password":"admin123"}' \

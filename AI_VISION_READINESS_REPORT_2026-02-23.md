@@ -1,7 +1,7 @@
 # AI Vision Readiness Report
 
 **Date:** February 23, 2026  
-**Branch:** `recovery/feb11-clean` @ `b235d7e`  
+**Branch:** `main` @ `b235d7e`  
 **Deployed Version:** `app-backup-2026-02-21-55-gb235` (prod-v3)  
 **Environment Health:** ✅ Green / Ready  
 **Platform:** Node.js 20 on Amazon Linux 2023 (t3.small, us-east-1)
@@ -10,7 +10,7 @@
 
 ## 1. Deployment Confirmation
 
-All recent commits on `recovery/feb11-clean` are deployed to production (`light-engine-foxtrot-prod-v3`).
+All recent commits on `main` are deployed to production (`light-engine-foxtrot-prod-v3`).
 
 | Fact | Detail |
 |------|--------|
@@ -19,7 +19,7 @@ All recent commits on `recovery/feb11-clean` are deployed to production (`light-
 | Last deploy time | 2026-02-24 01:06:19 UTC |
 | EB environment | `light-engine-foxtrot-prod-v3` |
 | Health status | **Green** — all instances healthy |
-| Commits ahead of `main` | 39 (recovery/feb11-clean has not been merged to main) |
+| Commits ahead of `main` | 39 (main has not been merged to main) |
 | Deploy method | `eb deploy --staged` (dependencies install on-instance) |
 
 ### Recent Commit Timeline (Feb 23, 2026)
@@ -223,7 +223,7 @@ The AI Vision Report defines **52 AI opportunities** across 5 phases. Implementa
 
 ### Deployment Pipeline
 
-- **Source control:** Git → `recovery/feb11-clean` branch
+- **Source control:** Git → `main` branch
 - **Build:** AWS CodeBuild via buildspec.yml (Node.js 20)
 - **Platform:** AWS Elastic Beanstalk (64bit Amazon Linux 2023)
 - **Deploy method:** `eb deploy --staged` (avoids native binary mismatch)
@@ -235,7 +235,7 @@ The AI Vision Report defines **52 AI opportunities** across 5 phases. Implementa
 
 | Risk | Assessment |
 |------|------------|
-| **39 commits ahead of main** | `recovery/feb11-clean` has diverged significantly from `origin/main`. A merge/rebase to main is needed to keep the mainline current. |
+| **39 commits ahead of main** | `main` has diverged significantly from `origin/main`. A merge/rebase to main is needed to keep the mainline current. |
 | **148 files changed, 21K insertions** | Large diff — merge conflict risk increases with time. Recommend merging soon. |
 | **In-memory data stores** | 9 subsystems still use volatile in-memory storage (orders, audit log, reservations). Production data loss on restart. |
 | **Tier 3 neural network** | Commented out in adaptive-control.js — not blocking but noted. |
@@ -245,7 +245,7 @@ The AI Vision Report defines **52 AI opportunities** across 5 phases. Implementa
 
 ## 8. Recommendations
 
-1. **Merge to main** — The `recovery/feb11-clean` branch is 39 commits ahead with 21K+ lines changed. Merge or rebase to `main` to reduce divergence risk and establish a clean production baseline.
+1. **Merge to main** — The `main` branch is 39 commits ahead with 21K+ lines changed. Merge or rebase to `main` to reduce divergence risk and establish a clean production baseline.
 
 2. **Close 4 partial gaps** (~14h total) — T6, T16, T19, T21 are minor client-side/UX gaps. None block core AI functionality.
 

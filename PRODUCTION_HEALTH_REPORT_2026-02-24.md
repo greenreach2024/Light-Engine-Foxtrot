@@ -1,7 +1,7 @@
 # Production Health & Readiness Report
 
 **Date:** 2026-02-24 (overnight autonomous audit)
-**Branch:** `recovery/feb11-clean` @ commit `710cf66`
+**Branch:** `main` @ commit `710cf66`
 **Trigger:** User-requested full site health review after Phase 4+5 deployment
 
 ---

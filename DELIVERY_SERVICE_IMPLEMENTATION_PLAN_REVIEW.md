@@ -42,7 +42,7 @@ Phase 0.1 dedicates 4 action items to modifying `delivery-platform.html`. The "C
 
 **Actual state:**
 - The file exists **only** on `origin/archive/b2b-delivery-platform` (tag: `backup-main-20260222-131558`)
-- It does **not** exist on `recovery/feb11-clean` (current working branch) or `main`
+- It does **not** exist on `main` (current working branch) or `main`
 - It was never merged into the current branch — it was archived
 
 **Impact:** Phase 0.1 action items 0.1.1–0.1.4 target a file that isn't in the active codebase. If production was deployed from the current branch (commit `b235d7e`), the landing page is already offline.

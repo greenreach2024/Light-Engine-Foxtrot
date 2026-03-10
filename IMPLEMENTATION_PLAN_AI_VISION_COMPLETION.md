@@ -1,7 +1,7 @@
 # AI Vision Completion Plan
 
 **Date**: February 23, 2026  
-**Branch**: `recovery/feb11-clean` @ `5865bca`  
+**Branch**: `main` @ `5865bca`  
 **Deployment**: Foxtrot prod-v3 Green, Central prod-v4 Green  
 **Supersedes**: `IMPLEMENTATION_PLAN_AI_GROWTH_2026-02-21.md` (Phase 0 section)  
 **Source**: Post-deployment audit findings (Feb 23, 2026)

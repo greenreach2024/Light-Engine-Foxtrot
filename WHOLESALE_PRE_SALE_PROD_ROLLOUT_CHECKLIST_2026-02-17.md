@@ -1,7 +1,7 @@
 # Wholesale Market-Readiness Implementation Plan
 
 **Date:** 2026-02-17  
-**Branch:** `recovery/feb11-clean` (head: `48f650d`)  
+**Branch:** `main` (head: `48f650d`)  
 **Scope:** Wholesale portal market-readiness for `GR-wholesale.html` early-adopter enrollment  
 **Production URL:** `https://www.greenreachgreens.com`  
 **Environment:** AWS Elastic Beanstalk `light-engine-foxtrot-prod`
@@ -193,7 +193,7 @@ eb printenv | grep -E "WHOLESALE_JWT_SECRET|JWT_SECRET"
 
 ### 4.1 Prepare release
 ```bash
-git checkout recovery/feb11-clean
+git checkout main
 git add greenreach-central/public/js/wholesale.js \
         greenreach-central/routes/wholesale.js \
         public/js/wholesale.js
@@ -213,7 +213,7 @@ git tag -a wholesale-market-ready-2026-02-17 \
 
 ### 4.2 Push to remote
 ```bash
-git push origin recovery/feb11-clean --tags
+git push origin main --tags
 ```
 
 ### 4.3 Deploy to Elastic Beanstalk
@@ -340,7 +340,7 @@ eb deploy light-engine-foxtrot-prod --version <PREVIOUS_VERSION_LABEL>
 
 # Option C — Git revert + redeploy
 git revert HEAD
-git push origin recovery/feb11-clean
+git push origin main
 eb deploy light-engine-foxtrot-prod
 ```
 

@@ -1,7 +1,7 @@
 # Integration Assistant - Implementation Strategy
 
 Date: 2026-02-22  
-Branch: recovery/feb11-clean  
+Branch: main  
 Status: **REVIEW DRAFT**  
 Related: IMPLEMENTATION_PLAN_AI_GROWTH_2026-02-21.md, AI_INTEGRATION_PROPOSAL.md
 

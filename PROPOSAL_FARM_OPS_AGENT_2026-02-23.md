@@ -161,7 +161,7 @@ Additional AI endpoints:
 | Feedback loops closed | 5/5 |
 | Remaining effort | ~14 hours |
 | Environment health | Green / Ready |
-| Branch | `recovery/feb11-clean` @ `b235d7e` |
+| Branch | `main` @ `b235d7e` |
 | Commits ahead of `main` | 39 |
 
 ### 2.5 Closed Feedback Loops
@@ -518,7 +518,7 @@ Per AI Vision Readiness Report §7 and Rule 9.2 ("Persist, Don't Discard"), migr
 
 ### 7.6 Merge / Rebase 39-Commit Divergence — Engineering Governance
 
-The `recovery/feb11-clean` branch has 39 commits and 148 files changed (21K+ insertions) ahead of `main`. This is not a feature task but an engineering governance item that reduces long-term operational risk. Recommend merging to `main` before beginning Phase 1 feature work to establish a clean baseline.
+The `main` branch has 39 commits and 148 files changed (21K+ insertions) ahead of `main`. This is not a feature task but an engineering governance item that reduces long-term operational risk. Recommend merging to `main` before beginning Phase 1 feature work to establish a clean baseline.
 
 ---
 

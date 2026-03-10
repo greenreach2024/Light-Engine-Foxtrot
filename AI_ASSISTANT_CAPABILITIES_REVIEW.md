@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-28  
 **Version:** 3.0 (merged from Architecture Review + Best Practice Recommendations + UI/Guardrail Update)  
-**Branch:** `recovery/feb11-clean`  
+**Branch:** `main`  
 **Status:** AWAITING APPROVAL
 
 ---

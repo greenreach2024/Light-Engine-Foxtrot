@@ -110,7 +110,7 @@
 | **Farm ID** | — | `FARM-MLTP9LVH-B0B85039` | Active |
 | **Farm Name** | — | The Notable Sprout | — |
 | **Farm Coordinates** | — | lat: 44.2588, lng: -76.3729 (Kingston, ON) | — |
-| **Branch** | — | `recovery/feb11-clean` | — |
+| **Branch** | — | `main` | — |
 
 ---
 

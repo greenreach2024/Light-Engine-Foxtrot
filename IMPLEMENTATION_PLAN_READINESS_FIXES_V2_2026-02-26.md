@@ -1,7 +1,7 @@
 # Implementation Plan v2: Production Readiness Shortfall Corrections
 
 **Date:** 2026-02-26  
-**Branch:** recovery/feb11-clean  
+**Branch:** main  
 **Basis:** Architecture review of readiness findings and prior plan  
 **Status:** Architecture Conditional Approval (execution allowed with phase gates)
 

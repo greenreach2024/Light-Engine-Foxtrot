@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-26  
 **Source:** `END_TO_END_READINESS_REPORT_2026-02-26.md`  
-**Branch:** `recovery/feb11-clean` @ `d403a77`  
+**Branch:** `main` @ `d403a77`  
 **Status:** AWAITING REVIEW
 
 ---

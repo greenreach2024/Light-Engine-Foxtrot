@@ -1,6 +1,6 @@
 # GreenReach Farms — System Readiness Report
 **Date:** 2026-03-07 (UTC)  
-**Branch:** `recovery/feb11-clean`  
+**Branch:** `main`  
 **HEAD:** `f3b2fc0`  
 **Author:** Copilot Audit Agent  
 

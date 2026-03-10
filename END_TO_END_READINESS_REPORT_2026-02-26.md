@@ -1,7 +1,7 @@
 # End-to-End Production Readiness Report
 
 **Date:** 2026-02-26  
-**Branch:** `recovery/feb11-clean` @ `d403a77`  
+**Branch:** `main` @ `d403a77`  
 **Auditor:** AI Agent (full document + code review)  
 **Scope:** Complete system — Foxtrot (edge/farm), Central (cloud), wholesale pipeline, infrastructure
 

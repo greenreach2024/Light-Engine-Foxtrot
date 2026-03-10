@@ -3,7 +3,7 @@
 # AI Agent Operating Action Plan (Seed-to-Table)
 
 Date: 2026-02-21  
-Branch context: recovery/feb11-clean  
+Branch context: main  
 Mission: food security through efficient seed-to-table management, with growers in control and automation reducing manual burden.
 
 ## 1) What the current system already has

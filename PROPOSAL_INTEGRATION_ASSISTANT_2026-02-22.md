@@ -3,7 +3,7 @@
 **Date:** 2026-02-22  
 **Revision:** R3 — Deep Research Review Incorporated  
 **Author:** AI Engineering Review  
-**Branch:** recovery/feb11-clean  
+**Branch:** main  
 **Status:** PROPOSAL — REVISION 3 — DEEP RESEARCH REVIEW INTEGRATED  
 **Constraint:** Research-only audit. No code edits, commits, or deploys were made.
 

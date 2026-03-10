@@ -99,7 +99,7 @@ This phase has no customer-visible output. It exists solely to establish the saf
 
 #### 0.1 Marketing Compliance — Landing Page (Audit F-1, F-5) — ✅ RESOLVED
 
-**Status**: `delivery-platform.html` has been **archived** to git branch `origin/archive/b2b-delivery-platform` (tag `backup-main-20260222-131558`). It does not exist on the active working branch (`recovery/feb11-clean`) or `main`, and is not deployed to production.
+**Status**: `delivery-platform.html` has been **archived** to git branch `origin/archive/b2b-delivery-platform` (tag `backup-main-20260222-131558`). It does not exist on the active working branch (`main`) or `main`, and is not deployed to production.
 
 **Verification**: Confirm the file is not served by either EB environment:
 ```

@@ -777,6 +777,6 @@ Phase 4 (Admin UX + Reporting)
 
 ---
 
-*Original report generated from live code review of `recovery/feb11-clean` branch, commit `a2a4a21`.*
+*Original report generated from live code review of `main` branch, commit `a2a4a21`.*
 *§12 (Revenue Model) added 2026-03-08 from code audit of commits through `495ffc6`.*
 *§13 (Implementation Strategy) added 2026-03-08.*

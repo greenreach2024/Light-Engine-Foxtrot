@@ -1,7 +1,7 @@
 # Implementation Plan: TODO Completion
 
 **Date:** 2026-02-26  
-**Branch:** `recovery/feb11-clean` @ commit `d049919`  
+**Branch:** `main` @ commit `d049919`  
 **Status:** APPROVED (Architecture Agent + Review Agent)  
 **Reference:** `IMPLEMENTATION_PLAN_AI_GROWTH_2026-02-21.md` (canonical roadmap)
 
@@ -113,14 +113,14 @@ Sprint 1 (DB)
 |---|------|-------|--------|
 | S1.1 | **Diagnose Central PostgreSQL** — SSH to Central EB, check RDS connection string, security groups, `pg_isready`. Fix connection or provision new RDS if needed. | EB environment config, RDS console | L |
 | S1.2 | **Verify DB tables auto-create** — Central server.js has `initDatabase()` that creates tables on connect. Confirm all tables exist: `experiment_records`, `crop_benchmarks`, `network_recipe_modifiers`, `ab_experiments`, `recipe_requests`, `delivery_settings`, `delivery_zones`, `delivery_windows`. | `greenreach-central/server.js` (initDatabase) | S |
-| S1.3 | **Git push to remote** — push `recovery/feb11-clean` (11 commits ahead). Resolve any conflicts with upstream. | `.git` | S |
+| S1.3 | **Git push to remote** — push `main` (11 commits ahead). Resolve any conflicts with upstream. | `.git` | S |
 | S1.4 | **Commit uncommitted changes** — 6 modified files + untracked docs. Stage sensible changes, commit. | `.elasticbeanstalk/config.yml`, `.env.example`, `AI_VISION_REPORT.md`, `DELIVERY_SERVICE_IMPLEMENTATION_PLAN.md`, `config/sync-queue.json`, `public/data/env.json` | S |
 
 ### Exit Criteria
 
 - [ ] `curl https://www.greenreachgreens.com/health` returns `databaseReady: true`
 - [ ] `git status` shows clean working tree
-- [ ] `git log origin/recovery/feb11-clean..HEAD` shows 0 commits ahead
+- [ ] `git log origin/main..HEAD` shows 0 commits ahead
 
 ---
 

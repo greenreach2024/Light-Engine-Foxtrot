@@ -10,7 +10,7 @@ This report reviews current readiness across:
 - User friendliness and UX quality
 
 Repository state audited:
-- Branch: recovery/feb11-clean
+- Branch: main
 - Head: a7bac27
 - Previous baseline report: END_TO_END_READINESS_REPORT_2026-02-26.md
 

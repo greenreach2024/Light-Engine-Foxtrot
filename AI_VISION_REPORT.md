@@ -1,7 +1,7 @@
 # Light Engine AI Vision Report
 
 **Date:** February 2026
-**Version:** Foxtrot (recovery/feb11-clean)
+**Version:** Foxtrot (main)
 **Philosophy:** *Each Light Engine is a scientific instrument — studying, learning, and improving. With proper training, future versions will be completely AI. This version is advanced training.*
 
 ---
@@ -1269,7 +1269,7 @@ Complete the network coordination UI for Central admins and buyers.
 
 | Branch | Commit | State |
 |--------|--------|-------|
-| `recovery/feb11-clean` (HEAD) | `b235d7e` | 39 commits ahead of main |
+| `main` (HEAD) | `b235d7e` | 39 commits ahead of main |
 | `origin/main` | `ee86173` | Last: "fix: Use IP-based geolocation fallback for HTTP" |
 | Drift | 148 files, +21K/-20K lines | **Merge recommended** |
 
@@ -1277,7 +1277,7 @@ Complete the network coordination UI for Central admins and buyers.
 
 | Risk | Severity | Mitigation |
 |------|:--------:|------------|
-| 39 commits ahead of main — growing merge conflict risk | HIGH | Merge/rebase `recovery/feb11-clean` → `main` |
+| 39 commits ahead of main — growing merge conflict risk | HIGH | Merge/rebase `main` → `main` |
 | 9 volatile in-memory stores (orders, audit, reservations) | HIGH | Migrate to NeDB or PostgreSQL |
 | SARIMAX retrainer is a stub (mock training) | LOW | Connect real Python backend when needed |
 | Tier 3 neural network adaptive control commented out | LOW | Not blocking — Tiers 1-2 operational |
