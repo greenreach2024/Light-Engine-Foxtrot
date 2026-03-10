@@ -36,12 +36,11 @@
         })();
         
         // Global API_BASE for all scripts - declared once at the top
-        const API_BASE = window.location.hostname.includes('greenreachgreens.com')
+        window.API_BASE = window.location.hostname.includes('greenreachgreens.com')
             ? 'https://greenreachgreens.com'
             : window.location.origin;
     </script>
-    <link rel="stylesheet" href="/styles.foxtrot.css">
-    <link rel="stylesheet" href="/styles/nav-color-palette.css">
+    <link rel="stylesheet" href="./styles.foxtrot.css">
     <style>
         * {
             margin: 0;
@@ -179,6 +178,57 @@
         .btn-primary:hover {
             background: #2563eb;
             border-color: #2563eb;
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+
+        .admin-user-panel {
+            padding: 10px 20px;
+            border-bottom: 1px solid #2d3748;
+            font-size: 0.85rem;
+        }
+
+        .admin-user-info {
+            color: #a0aec0;
+            margin-bottom: 8px;
+        }
+
+        .admin-user-name {
+            font-weight: 500;
+            color: #e5e7eb;
+        }
+
+        .admin-user-email {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .admin-user-action {
+            width: 100%;
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: white;
+        }
+
+        .admin-user-action--green {
+            background: var(--accent-green);
+            margin-bottom: 6px;
+        }
+
+        .admin-user-action--red {
+            background: var(--accent-red);
         }
 
         .search-global {
@@ -646,10 +696,183 @@
             font-size: 13px;
         }
 
+        .chart-container {
+            width: 100%;
+            height: 100%;
+            min-height: 350px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-container canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
         .grid-2col {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
+        }
+
+        .grid-2col-responsive {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .grid-3col {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .compact-card {
+            max-height: 320px;
+        }
+
+        .compact-card .card-body {
+            padding: 14px 16px;
+        }
+
+        .compact-card .metric-row {
+            margin-bottom: 8px;
+        }
+
+        .compact-card .metric-label {
+            font-size: 12px;
+        }
+
+        .compact-card .metric-value {
+            font-size: 13px;
+        }
+
+        .farm-summary-card {
+            margin-bottom: 20px;
+        }
+
+        .farm-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .notes-toggle {
+            margin-top: 16px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+
+        .notes-toggle:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-blue);
+        }
+
+        .notes-toggle-icon {
+            transition: transform 0.2s;
+        }
+
+        .notes-toggle.active .notes-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .notes-content {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .notes-content.active {
+            display: block;
+        }
+
+        .ai-rules-layout {
+            display: grid;
+            grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr);
+            gap: 20px;
+        }
+
+        .ai-rules-search {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .ai-rules-row {
+            cursor: pointer;
+        }
+
+        .ai-rules-row.active {
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .ai-rules-form label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .ai-rules-form input,
+        .ai-rules-form select,
+        .ai-rules-form textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 14px;
+        }
+
+        .ai-rules-form textarea {
+            min-height: 220px;
+            resize: vertical;
+        }
+
+        .ai-rules-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        @media (max-width: 1024px) {
+            .ai-rules-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .grid-2col-responsive {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid-3col {
+                grid-template-columns: 1fr;
+            }
+            
+            .farm-summary-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .loading {
@@ -842,19 +1065,46 @@
         .modal-body {
             padding: 24px;
         }
+
+        .confirm-modal-content {
+            max-width: 480px;
+        }
+
+        .confirm-modal-message {
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .confirm-modal-submessage {
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            line-height: 1.45;
+            white-space: pre-line;
+        }
+
+        .confirm-modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
+    <!-- Delivery Service Banner -->
+    <script src="/js/components/service-intro-banner.js"></script>
+    <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/wholesale-about.html#delivery' });</script>
+
     <div class="main-layout">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="logo">GreenReach Central</div>
             
             <!-- Admin User Info -->
-            <div style="padding: 10px 20px; border-bottom: 1px solid #2d3748; font-size: 0.85rem;">
-                <div id="admin-user-info" style="color: #a0aec0; margin-bottom: 8px;"></div>
-                <button class="btn btn-sm" onclick="openChangePasswordModal()" style="width: 100%; background: #10b981; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; margin-bottom: 6px;">Change Password</button>
-                <button class="btn btn-sm" onclick="logout()" style="width: 100%; background: #ef4444; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem;">Logout</button>
+            <div class="admin-user-panel">
+                <div id="admin-user-info" class="admin-user-info"></div>
+                <button class="btn btn-sm admin-user-action admin-user-action--green" onclick="openChangePasswordModal()">Change Password</button>
+                <button class="btn btn-sm admin-user-action admin-user-action--red" onclick="logout()">Logout</button>
             </div>
             
             <!-- Breadcrumb Navigation -->
@@ -958,6 +1208,43 @@
                     </div>
                 </div>
 
+                <!-- Delivery Readiness -->
+                <div class="card" id="delivery-readiness-card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <div class="card-title">🚚 Delivery Readiness</div>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: flex; gap: 20px; margin-bottom: 12px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: var(--accent-green);" id="dr-ready-count">—</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">Ready</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: var(--accent-blue);" id="dr-enabled-count">—</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">Enabled</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: var(--text-secondary);" id="dr-total-count">—</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">Configured</div>
+                            </div>
+                        </div>
+                        <table class="data-table" style="font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th>Farm</th>
+                                    <th>Status</th>
+                                    <th>Windows</th>
+                                    <th>Zones</th>
+                                    <th>Fee</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dr-farm-rows">
+                                <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Critical Alerts -->
                 <div id="alerts-section" style="display: none;">
                     <div class="alert alert-danger">
@@ -995,8 +1282,8 @@
                                         <th>Status</th>
                                         <th>Tier</th>
                                         <th>Users</th>
-                                        <th>Last Update</th>
                                         <th>Actions</th>
+                                        <th>Delete Farm</th>
                                     </tr>
                                 </thead>
                                 <tbody id="farms-tbody">
@@ -1032,17 +1319,72 @@
                     </div>
                 </div>
 
-                <div class="tab-nav" style="display:flex;gap:0.25rem;padding:0 1.5rem;margin-bottom:1rem;border-bottom:1px solid #334155;">
-                    <button class="tab-btn active" onclick="switchDetailTab('detail-overview',this)" style="background:none;border:none;color:#e2e8f0;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid #3b82f6;font-size:0.85rem;">Overview</button>
-                    <button class="tab-btn" onclick="switchDetailTab('detail-environmental',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Environmental</button>
-                    <button class="tab-btn" onclick="switchDetailTab('detail-energy',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Energy</button>
-                    <button class="tab-btn" onclick="switchDetailTab('detail-recipes',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">Recipes</button>
-                    <button class="tab-btn" onclick="switchDetailTab('detail-experiments',this)" style="background:none;border:none;color:#94a3b8;padding:0.5rem 1rem;cursor:pointer;border-bottom:2px solid transparent;font-size:0.85rem;">A/B Experiments</button>
-                </div>
-
                 <div id="detail-overview" class="tab-content active">
+                    <div class="card farm-summary-card">
+                        <div class="card-header">
+                            <div class="card-title">Farm Summary</div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="edit-farm-info-btn" class="btn" onclick="enableFarmInfoEdit()" style="padding: 6px 12px; font-size: 13px;">Edit Info</button>
+                                <button id="save-farm-info-btn" class="btn btn-primary" onclick="saveFarmInfo()" style="padding: 6px 12px; font-size: 13px; display: none;">Save & Sync</button>
+                                <button id="cancel-farm-info-btn" class="btn" onclick="cancelFarmInfoEdit()" style="padding: 6px 12px; font-size: 13px; display: none;">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="farm-summary-grid">
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Farm Owner</div>
+                                        <div class="metric-value" id="detail-owner">--</div>
+                                        <input type="text" id="detail-owner-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Key Contact</div>
+                                        <div class="metric-value" id="detail-contact">--</div>
+                                        <input type="text" id="detail-contact-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Phone</div>
+                                        <div class="metric-value" id="detail-phone">--</div>
+                                        <input type="tel" id="detail-phone-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Email</div>
+                                        <div class="metric-value" id="detail-email">--</div>
+                                        <input type="email" id="detail-email-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Website</div>
+                                        <div class="metric-value" id="detail-website">--</div>
+                                        <input type="url" id="detail-website-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Address</div>
+                                        <div class="metric-value" id="detail-address">--</div>
+                                        <input type="text" id="detail-address-input" style="display:none; width: 100%; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 13px;" />
+                                    </div>
+                                    <div class="metric-row">
+                                        <div class="metric-label">Deployment Type</div>
+                                        <div class="metric-value" id="detail-deployment-type">--</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="notes-toggle" onclick="toggleFarmNotes()">
+                                <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">Internal Notes</span>
+                                <span class="notes-toggle-icon">▼</span>
+                            </div>
+                            <div class="notes-content" id="farm-notes-section">
+                                <textarea id="detail-notes" rows="3" style="width: 100%; padding: 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; resize: vertical;" placeholder="Add internal notes about this farm..."></textarea>
+                                <button class="btn btn-primary" onclick="saveFarmNotes()" style="margin-top: 8px;">Save Notes</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="grid-2col">
-                        <div class="card">
+                        <div class="card compact-card">
                             <div class="card-header">
                                 <div class="card-title">Farm Metrics</div>
                             </div>
@@ -1066,7 +1408,7 @@
                             </div>
                         </div>
 
-                        <div class="card">
+                        <div class="card compact-card">
                             <div class="card-header">
                                 <div class="card-title">Equipment Status</div>
                             </div>
@@ -1095,9 +1437,9 @@
                         <div class="card-header">
                             <div class="card-title">Environmental Trends (24h)</div>
                         </div>
-                        <div class="card-body">
-                            <div class="chart-placeholder" id="env-chart">
-                                Chart: Temperature, Humidity, CO2, VPD
+                        <div class="card-body" style="padding: 0;">
+                            <div class="chart-container" id="env-chart">
+                                <div style="color: var(--text-muted); font-size: 13px;">Loading trends...</div>
                             </div>
                         </div>
                     </div>
@@ -1291,9 +1633,11 @@
                 </div>
 
                 <div id="detail-recipes" class="tab-content">
-                    <div class="card">
+                    <!-- Active Recipes on This Farm -->
+                    <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
-                            <div class="card-title">Active Grow Recipes</div>
+                            <div class="card-title">Active Recipes on This Farm</div>
+                            <span id="farm-active-recipes-count" style="color: var(--text-secondary); font-size: 0.9rem;"></span>
                         </div>
                         <div class="card-body">
                             <div class="table-container">
@@ -1317,34 +1661,82 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- A/B Experiments Tab (S4.6) -->
-                <div id="detail-experiments" class="tab-content" style="display:none;">
-                    <div class="card">
-                        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-                            <div class="card-title">A/B Recipe Experiments</div>
-                            <button class="btn btn-primary" onclick="showCreateExperiment()">+ New Experiment</button>
-                        </div>
-                        <div class="card-body">
-                            <div id="experiments-list">
-                                <div class="loading">Loading experiments...</div>
+                    <!-- Full Recipe Library (Read-Only) -->
+                    <div class="card" style="margin-bottom: 20px;">
+                        <div class="card-header">
+                            <div class="card-title">GreenReach Recipe Library</div>
+                            <div class="gr-u-flex-center-gap-sm">
+                                <select id="farm-recipe-category-filter" onchange="filterFarmRecipeLibrary()" class="gr-u-control-compact">
+                                    <option value="">All Categories</option>
+                                    <option value="Leafy Greens">Leafy Greens</option>
+                                    <option value="Herbs">Herbs</option>
+                                    <option value="Fruiting Crops">Fruiting Crops</option>
+                                </select>
+                                <input type="text" id="farm-recipe-library-search" placeholder="Search recipes..." onkeyup="filterFarmRecipeLibrary()" class="gr-u-control-compact gr-u-control-compact-search">
+                                <span id="farm-recipe-library-count" class="gr-u-text-secondary-sm"></span>
                             </div>
+                        </div>
+                        <div class="card-body gr-u-card-body-flush">
+                            <p class="gr-u-note-strip">
+                                All recipes are managed by GreenReach Central. Contact your account manager or submit a request below to add new recipes.
+                            </p>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 25%;">Recipe Name</th>
+                                        <th style="width: 15%;">Category</th>
+                                        <th style="width: 10%;">Days</th>
+                                        <th style="width: 10%;">Stages</th>
+                                        <th style="width: 12%;">Avg Temp</th>
+                                        <th style="width: 12%;">Status</th>
+                                        <th style="width: 16%;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="farm-recipe-library-tbody">
+                                    <tr><td colspan="7" class="gr-u-empty-center">Loading recipe library...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <!-- Create experiment form (hidden by default) -->
-                    <div id="create-experiment-form" class="card" style="display:none;">
-                        <div class="card-header"><div class="card-title">Create New Experiment</div></div>
+
+                    <!-- Request New Recipe -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Request a New Recipe</div>
+                        </div>
                         <div class="card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                                <div><label style="color:#94a3b8;font-size:0.85rem;">Experiment Name</label><input id="exp-name" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. Basil Blue Light Test"></div>
-                                <div><label style="color:#94a3b8;font-size:0.85rem;">Crop</label><input id="exp-crop" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. basil"></div>
-                                <div><label style="color:#94a3b8;font-size:0.85rem;">Parameter</label><input id="exp-param" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. blue_spectrum_pct"></div>
-                                <div><label style="color:#94a3b8;font-size:0.85rem;">Variant Value</label><input id="exp-value" type="text" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:0.5rem;border-radius:6px;margin-top:0.25rem;" placeholder="e.g. 25"></div>
+                            <p class="gr-u-text-secondary-md">
+                                Don't see the crop or variety you need? Submit a request and GreenReach Central's recipe team will review it. New recipes are developed with AI-assisted optimization and validated before release.
+                            </p>
+                            <div class="gr-u-grid-2-max">
+                                <div>
+                                    <label class="gr-u-label-compact">Crop / Variety Name *</label>
+                                    <input type="text" id="recipe-request-crop" placeholder="e.g. Red Romaine Lettuce" class="gr-u-field-standard">
+                                </div>
+                                <div>
+                                    <label class="gr-u-label-compact">Category</label>
+                                    <select id="recipe-request-category" class="gr-u-field-standard">
+                                        <option value="Leafy Greens">Leafy Greens</option>
+                                        <option value="Herbs">Herbs</option>
+                                        <option value="Fruiting Crops">Fruiting Crops</option>
+                                        <option value="Microgreens">Microgreens</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="gr-u-grid-span-full">
+                                    <label class="gr-u-label-compact">Notes (optional)</label>
+                                    <textarea id="recipe-request-notes" rows="3" placeholder="Any specific requirements, target yield, preferred growing conditions, etc." class="gr-u-field-standard gr-u-field-resize-vertical"></textarea>
+                                </div>
                             </div>
-                            <div style="margin-top:1rem;display:flex;gap:0.5rem;">
-                                <button class="btn btn-primary" onclick="submitCreateExperiment()">Create</button>
-                                <button class="btn" onclick="document.getElementById('create-experiment-form').style.display='none'">Cancel</button>
+                            <div class="gr-u-actions-row">
+                                <button class="btn btn-primary gr-u-btn-pad" onclick="submitRecipeRequest()">Submit Request</button>
+                                <span id="recipe-request-status" class="gr-u-text-secondary-sm"></span>
+                            </div>
+                            <!-- Previous Requests -->
+                            <div id="recipe-requests-list" class="gr-u-mt-20-hidden">
+                                <h4 class="gr-u-heading-secondary">Your Previous Requests</h4>
+                                <div id="recipe-requests-tbody" class="gr-u-text-secondary-sm"></div>
                             </div>
                         </div>
                     </div>
@@ -1496,6 +1888,309 @@
                     </div>
                 </div>
             </div>
+
+            <!-- AI Rules View -->
+            <div id="ai-rules-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>AI Rules & Safety Policy</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="refreshAiRules()">Refresh</button>
+                        <button class="btn btn-primary" onclick="openNewAiRule()">New Rule</button>
+                    </div>
+                </div>
+
+                <div class="ai-rules-layout">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Rulebook</div>
+                            <div class="ai-rules-meta"><span id="ai-rules-count">0</span> rules</div>
+                        </div>
+                        <div class="card-body">
+                            <input id="ai-rules-search" class="ai-rules-search" type="text" placeholder="Search rules, categories, or tags" oninput="filterAiRules()">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Category</th>
+                                            <th>Priority</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ai-rules-tbody">
+                                        <tr>
+                                            <td colspan="4" class="loading">Loading AI rules...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="ai-rules-editor-card">
+                        <div class="card-header">
+                            <div class="card-title">Rule Editor</div>
+                            <div class="ai-rules-meta" id="ai-rule-meta">Select a rule to edit</div>
+                        </div>
+                        <div class="card-body">
+                            <form class="ai-rules-form" onsubmit="event.preventDefault(); saveAiRule();">
+                                <label for="ai-rule-title">Title</label>
+                                <input id="ai-rule-title" type="text" placeholder="Rule title">
+
+                                <label for="ai-rule-category">Category</label>
+                                <input id="ai-rule-category" type="text" placeholder="Operating role & guardrails">
+
+                                <label for="ai-rule-priority">Priority</label>
+                                <select id="ai-rule-priority">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+
+                                <label for="ai-rule-content">Rule Details</label>
+                                <textarea id="ai-rule-content" placeholder="Enter policy guidance, constraints, and guardrails..."></textarea>
+
+                                <div style="display: flex; gap: 24px; align-items: center; margin-bottom: 24px; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 10px; text-transform: none; font-size: 15px; font-weight: 500; color: var(--text-primary); cursor: pointer;">
+                                        <input id="ai-rule-enabled" type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span>Enabled</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 10px; text-transform: none; font-size: 15px; font-weight: 500; color: var(--text-primary); cursor: pointer;">
+                                        <input id="ai-rule-review" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span>Needs review</span>
+                                    </label>
+                                </div>
+
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                    <button class="btn btn-primary" type="submit" style="padding: 10px 24px; font-weight: 600;">Save Rule</button>
+                                    <button class="btn" type="button" onclick="openNewAiRule()" style="padding: 10px 24px;">New</button>
+                                    <button class="btn" type="button" onclick="deleteAiRule()" style="padding: 10px 24px; background: #ef4444; color: white; border-color: #ef4444; margin-left: auto;">Delete</button>
+                                </div>
+                            </form>
+                            <div id="ai-rules-status" class="ai-rules-meta" style="margin-top: 12px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grant Summary View -->
+            <div id="grant-summary-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Grant Summary</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="loadGrantSummary()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Grant Users</div>
+                        <div class="kpi-value" id="grant-kpi-users">0</div>
+                        <div class="kpi-change neutral" id="grant-kpi-users-month">0 new this month</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Grants Supported</div>
+                        <div class="kpi-value" id="grant-kpi-total-grants">0</div>
+                        <div class="kpi-change neutral" id="grant-kpi-new-grants">0 new this month</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Average Wizard Completion</div>
+                        <div class="kpi-value" id="grant-kpi-avg-complete">0%</div>
+                        <div class="kpi-change neutral" id="grant-kpi-completed-users">0 users completed</div>
+                    </div>
+                </div>
+
+                <div class="grid-2col" style="margin-top: 24px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">New Users Per Month</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Month</th>
+                                            <th>New Users</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="grant-users-month-tbody">
+                                        <tr>
+                                            <td colspan="2" class="loading">Loading...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Wizard Pages by Time Spent</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Page</th>
+                                            <th>Total Time</th>
+                                            <th>Avg Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="grant-pages-time-tbody">
+                                        <tr>
+                                            <td colspan="3" class="loading">Loading...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Wizard Pages by Most Views</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Page</th>
+                                        <th>Views</th>
+                                        <th>Total Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-pages-views-tbody">
+                                    <tr>
+                                        <td colspan="3" class="loading">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                        <div class="card-title">Grant Program Change Alerts</div>
+                        <button class="btn" onclick="loadGrantProgramAlerts()" style="padding: 6px 10px;">Refresh Alerts</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Program</th>
+                                        <th>Alert Type</th>
+                                        <th>Created</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-program-alerts-tbody">
+                                    <tr>
+                                        <td colspan="4" class="loading">Loading alerts...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grant Users View -->
+            <div id="grant-users-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>Grant Users</h1>
+                    <div class="header-actions" style="gap: 8px;">
+                        <input type="text" id="grant-user-search" placeholder="Search users..." class="btn" style="min-width: 260px; text-align: left;" onkeyup="filterGrantUsers()">
+                        <button class="btn" onclick="loadGrantUsers()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">All Grant Users</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Business</th>
+                                        <th>Province</th>
+                                        <th>Last Login</th>
+                                        <th>Last Active Tab</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grant-users-tbody">
+                                    <tr>
+                                        <td colspan="9" class="loading">Loading users...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Reference Sites View -->
+            <div id="ai-reference-view" class="view" style="display: none;">
+                <div class="header">
+                    <h1>AI Reference Sites</h1>
+                    <div class="header-actions">
+                        <button class="btn" onclick="loadAiReferenceSites()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <div class="card-title">Add Reference Site</div>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 0.8fr auto; gap: 12px;">
+                            <input id="ai-ref-title" class="btn" placeholder="Title" style="text-align:left;">
+                            <input id="ai-ref-url" class="btn" placeholder="URL" style="text-align:left;">
+                            <input id="ai-ref-category" class="btn" placeholder="Category" style="text-align:left;">
+                            <button class="btn btn-primary" onclick="addAiReferenceSite()">Add</button>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">Use this list to document AI policies, regulations, and reference material.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Reference Library</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Category</th>
+                                        <th>URL</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ai-reference-tbody">
+                                    <tr>
+                                        <td colspan="4" class="loading">Loading reference sites...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
             <!-- Room Detail View -->
             <div id="room-detail-view" class="view" style="display: none;">
@@ -1514,6 +2209,16 @@
                         <div class="kpi-label">Humidity</div>
                         <div class="kpi-value" id="room-humidity">--</div>
                         <div class="kpi-change" id="room-humidity-change">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Pressure</div>
+                        <div class="kpi-value" id="room-pressure">N/A</div>
+                        <div class="kpi-change" id="room-pressure-change">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Gas</div>
+                        <div class="kpi-value" id="room-gas">N/A</div>
+                        <div class="kpi-change" id="room-gas-change">--</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">CO₂</div>
@@ -1542,24 +2247,9 @@
                     <div class="card-header">
                         <div class="card-title">Environmental Trends (24 Hours)</div>
                     </div>
-                    <div class="card-body">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">Temperature</div>
-                                <canvas id="room-temp-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">Humidity</div>
-                                <canvas id="room-humidity-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">CO₂</div>
-                                <canvas id="room-co2-chart" width="200" height="80"></canvas>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 8px;">VPD</div>
-                                <canvas id="room-vpd-chart" width="200" height="80"></canvas>
-                            </div>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="chart-container" id="room-trends-chart">
+                            <canvas id="room-combined-trends-chart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1581,12 +2271,11 @@
                                             <th>Trays</th>
                                             <th>Temp</th>
                                             <th>Humidity</th>
-                                            <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="room-zones-tbody">
-                                        <tr><td colspan="8" class="loading">Loading zones...</td></tr>
+                                        <tr><td colspan="7" class="loading">Loading zones...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1699,11 +2388,6 @@
                         <div class="kpi-change" id="zone-humidity-change">--</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">PPFD</div>
-                        <div class="kpi-value" id="zone-ppfd">--</div>
-                        <div class="kpi-change" id="zone-ppfd-change">--</div>
-                    </div>
-                    <div class="kpi-card">
                         <div class="kpi-label">Groups</div>
                         <div class="kpi-value" id="zone-groups">--</div>
                         <div class="kpi-change" id="zone-groups-change">--</div>
@@ -1756,8 +2440,8 @@
                                 <table id="zone-sensors-table">
                                     <thead>
                                         <tr>
-                                            <th>Sensor ID</th>
-                                            <th>Type</th>
+                                            <th>Device</th>
+                                            <th>Metric</th>
                                             <th>Current Reading</th>
                                             <th>Status</th>
                                             <th>Last Update</th>
@@ -1791,16 +2475,6 @@
                         <div class="kpi-change" id="group-trays-change">--</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Current Intensity</div>
-                        <div class="kpi-value" id="group-intensity">--</div>
-                        <div class="kpi-change" id="group-intensity-change">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">PPFD</div>
-                        <div class="kpi-value" id="group-ppfd">--</div>
-                        <div class="kpi-change" id="group-ppfd-change">--</div>
-                    </div>
-                    <div class="kpi-card">
                         <div class="kpi-label">Active Recipe</div>
                         <div class="kpi-value" id="group-recipe">--</div>
                         <div class="kpi-change" id="group-recipe-change">--</div>
@@ -1809,6 +2483,16 @@
                         <div class="kpi-label">Schedule Status</div>
                         <div class="kpi-value" id="group-schedule">--</div>
                         <div class="kpi-change" id="group-schedule-change">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Days Since Seed</div>
+                        <div class="kpi-value" id="group-days-since-seed">--</div>
+                        <div class="kpi-change" id="group-days-since-seed-change">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Target PPFD</div>
+                        <div class="kpi-value" id="group-target-ppfd">--</div>
+                        <div class="kpi-change" id="group-target-ppfd-change">From recipe schedule</div>
                     </div>
                 </div>
 
@@ -2284,291 +2968,16 @@
                 </div>
             </div>
 
-            <!-- Wholesale Buyers View -->
-            <div id="wholesale-buyers-view" class="view" style="display: none;">
-                <div class="breadcrumb">
-                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
-                    <span>/</span>
-                    <span>Wholesale</span>
-                    <span>/</span>
-                    <span>Buyers</span>
-                </div>
 
-                <div class="header">
-                    <h1>Wholesale Buyers Management</h1>
-                </div>
-
-                <div class="card">
-                    <div class="card-body" style="padding: 0;">
-                        <iframe id="wholesale-buyers-iframe" src="/GR-wholesale-admin.html" style="width: 100%; height: 80vh; border: none; display: block;"></iframe>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Wholesale Buyer Portal View -->
-            <div id="wholesale-buyer-view" class="view" style="display: none;">
-                <div class="breadcrumb">
-                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
-                    <span>/</span>
-                    <span>Wholesale</span>
-                    <span>/</span>
-                    <span>Buyer Portal</span>
-                </div>
-
-                <div class="header">
-                    <h1>Wholesale Buyer Portal</h1>
-                </div>
-
-                <div class="card">
-                    <div class="card-body" style="padding: 0;">
-                        <iframe id="wholesale-buyer-iframe" src="/GR-wholesale.html" style="width: 100%; height: 80vh; border: none; display: block;"></iframe>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Farm Management View -->
-            <div id="farm-management-view" class="view" style="display: none;">
-                <div class="breadcrumb">
-                    <a href="#" onclick="event.preventDefault(); showView('overview')">Overview</a>
-                    <span>/</span>
-                    <span>Farm Management</span>
-                </div>
-
-                <div class="header">
-                    <h1>Light Engine Farm Management</h1>
-                    <p style="color: var(--text-secondary); margin-top: 8px;">Manage all Light Engine farms, users, passwords, and credentials</p>
-                </div>
-
-                <!-- Farm Management KPIs -->
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Total Farms</div>
-                        <div class="kpi-value" id="farm-mgmt-total">0</div>
-                        <div class="kpi-change neutral"><span id="farm-mgmt-active">0 active</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Total Users</div>
-                        <div class="kpi-value" id="farm-mgmt-users">0</div>
-                        <div class="kpi-change neutral"><span id="farm-mgmt-admins">0 admins</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Suspended Accounts</div>
-                        <div class="kpi-value" id="farm-mgmt-suspended">0</div>
-                        <div class="kpi-change danger" id="farm-mgmt-suspended-change">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Password Resets (30d)</div>
-                        <div class="kpi-value" id="farm-mgmt-resets">0</div>
-                        <div class="kpi-change neutral" id="farm-mgmt-resets-change">--</div>
-                    </div>
-                </div>
-
-                <!-- Farm List -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">All Light Engine Farms</div>
-                        <div class="filter-bar">
-                            <input type="text" id="farm-search" placeholder="Search farms..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterFarmManagement()">
-                            <select id="farm-status-filter" onchange="filterFarmManagement()">
-                                <option value="">All Status</option>
-                                <option value="active">Active</option>
-                                <option value="suspended">Suspended</option>
-                                <option value="pending">Pending</option>
-                            </select>
-                            <select id="farm-tier-filter" onchange="filterFarmManagement()">
-                                <option value="">All Tiers</option>
-                                <option value="starter">Starter</option>
-                                <option value="professional">Professional</option>
-                                <option value="enterprise">Enterprise</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-container">
-                            <table id="farm-management-table">
-                                <thead>
-                                    <tr>
-                                        <th>Farm ID</th>
-                                        <th>Name</th>
-                                        <th>Contact Email</th>
-                                        <th>Status</th>
-                                        <th>Tier</th>
-                                        <th>Users</th>
-                                        <th>Registered</th>
-                                        <th>Last Login</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="farm-management-tbody">
-                                    <tr>
-                                        <td colspan="9" class="loading">Loading farms...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- User Management -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">All Farm Users</div>
-                        <div class="filter-bar">
-                            <input type="text" id="user-search" placeholder="Search users..." style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); width: 250px;" onkeyup="filterUserManagement()">
-                            <select id="user-role-filter" onchange="filterUserManagement()">
-                                <option value="">All Roles</option>
-                                <option value="admin">Admin</option>
-                                <option value="manager">Manager</option>
-                                <option value="user">User</option>
-                                <option value="viewer">Viewer</option>
-                            </select>
-                            <select id="user-farm-filter" onchange="filterUserManagement()">
-                                <option value="">All Farms</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-container">
-                            <table id="user-management-table">
-                                <thead>
-                                    <tr>
-                                        <th>User ID</th>
-                                        <th>Email</th>
-                                        <th>Name</th>
-                                        <th>Farm</th>
-                                        <th>Role</th>
-                                        <th>Status</th>
-                                        <th>Last Login</th>
-                                        <th>Created</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="user-management-tbody">
-                                    <tr>
-                                        <td colspan="9" class="loading">Loading users...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Network Dashboard View -->
-            <div id="network-view" class="view" style="display: none;">
-                <div class="breadcrumb">
-                    <a href="#" onclick="event.preventDefault(); showView('overview')">Overview</a>
-                    <span>/</span>
-                    <span>Network Dashboard</span>
-                </div>
-
-                <div class="header">
-                    <h1>Multi-Farm Network Dashboard</h1>
-                    <div class="header-actions">
-                        <select id="network-timeframe" onchange="loadNetworkDashboard()" style="padding: 8px 12px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
-                            <option value="7">Last 7 Days</option>
-                            <option value="30" selected>Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="exportNetworkReport()">Export Report</button>
-                    </div>
-                </div>
-
-                <!-- Network Health KPIs -->
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Total Farms</div>
-                        <div class="kpi-value" id="network-total-farms">0</div>
-                        <div class="kpi-change positive" id="network-farms-status">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Network Production</div>
-                        <div class="kpi-value" id="network-total-production">0 kg</div>
-                        <div class="kpi-change positive" id="network-production-trend">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Network Revenue</div>
-                        <div class="kpi-value" id="network-total-revenue">$0</div>
-                        <div class="kpi-change positive" id="network-revenue-trend">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Avg QA Score</div>
-                        <div class="kpi-value" id="network-qa-score">0%</div>
-                        <div class="kpi-change" id="network-qa-trend">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Capacity Utilization</div>
-                        <div class="kpi-value" id="network-capacity">0%</div>
-                        <div class="kpi-change" id="network-capacity-details">--</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Active Batches</div>
-                        <div class="kpi-value" id="network-active-batches">0</div>
-                        <div class="kpi-change" id="network-batches-status">--</div>
-                    </div>
-                </div>
-
-                <!-- Network Alerts -->
-                <div id="network-alerts-section" style="margin-bottom: 30px;"></div>
-
-                <!-- Farm Status Grid -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">
-                        <div class="card-title">Farm Network Status</div>
-                        <div class="filter-bar">
-                            <select id="filter-farm-status" onchange="filterNetworkFarms()">
-                                <option value="">All Statuses</option>
-                                <option value="ONLINE">Online</option>
-                                <option value="WARNING">Warning</option>
-                                <option value="OFFLINE">Offline</option>
-                                <option value="MAINTENANCE">Maintenance</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="farm-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
-                            <!-- Farm cards will be inserted here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Comparative Analytics Chart -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">
-                        <div class="card-title">Comparative Farm Performance</div>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="comparison-metric" onchange="loadComparativeAnalytics()" style="padding: 6px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.9rem;">
-                                <option value="production_kg">Production (kg)</option>
-                                <option value="revenue">Revenue ($)</option>
-                                <option value="qa_score">QA Score (%)</option>
-                                <option value="capacity_utilization">Capacity Utilization (%)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="comparativeChart" style="max-height: 350px;"></canvas>
-                    </div>
-                </div>
-
-                <!-- Network Production Trends -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Network Production Trend</div>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="networkTrendChart" style="max-height: 300px;"></canvas>
-                    </div>
-                </div>
-            </div>
 
             <!-- Farm Detail Modal -->
-            <div id="farmDetailModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; padding: 20px;">
-                <div class="card" style="max-width: 900px; margin: 40px auto; background: var(--bg-card);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border);">
-                        <h2 id="farmDetailName" style="font-size: 20px; color: var(--text-primary);">Farm Details</h2>
-                        <button onclick="closeFarmDetail()" style="background: none; border: none; font-size: 28px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+            <div id="farmDetailModal" class="gr-u-modal-overlay">
+                <div class="card gr-u-modal-card-900">
+                    <div class="gr-u-modal-head-row">
+                        <h2 id="farmDetailName" class="gr-u-heading-20">Farm Details</h2>
+                        <button onclick="closeFarmDetail()" class="gr-u-icon-close">&times;</button>
                     </div>
-                    <div style="padding: 20px;">
+                    <div class="gr-u-pad-20">
                         <div id="farmDetailContent">
                             <!-- Farm detail content will be inserted here -->
                         </div>
@@ -2576,8 +2985,28 @@
                 </div>
             </div>
 
+            <!-- Grant User Delete Modal -->
+            <div id="grantUserDeleteModal" class="modal">
+                <div class="modal-content gr-u-modal-content-520">
+                    <div class="modal-header">
+                        <h2>Delete Grant User</h2>
+                        <button class="modal-close" onclick="closeGrantUserDeleteModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger gr-u-mb-16">
+                            <strong>Warning:</strong> This will soft-delete the user and remove their access. Their applications will be marked deleted.
+                        </div>
+                        <p id="grantUserDeleteText" class="gr-u-text-secondary-mb20">Are you sure you want to delete this user?</p>
+                        <div class="gr-u-actions-end-gap12">
+                            <button class="btn" onclick="closeGrantUserDeleteModal()">Cancel</button>
+                            <button class="btn gr-u-btn-danger-solid" onclick="confirmDeleteGrantUser()">Delete User</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Environmental Dashboard View -->
-            <div id="environmental-view" class="view" style="display: none;">
+            <div id="environmental-view" class="view gr-u-view-hidden">
                 <div class="breadcrumb">
                     <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
                     <span>/</span>
@@ -2596,6 +3025,14 @@
                     <div class="kpi-card">
                         <div class="kpi-label">Avg Humidity</div>
                         <div class="kpi-value" id="env-avg-humidity">-- %</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Pressure</div>
+                        <div class="kpi-value" id="env-avg-pressure">N/A</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Gas</div>
+                        <div class="kpi-value" id="env-avg-gas">N/A</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Avg CO₂</div>
@@ -2751,15 +3188,15 @@
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Growers</div>
-                            <div style="display: flex; gap: 10px;">
-                                <select id="grower-status-filter" onchange="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                            <div class="gr-u-flex-gap-10">
+                                <select id="grower-status-filter" onchange="loadGrowerList()" class="gr-u-filter-control-dark">
                                     <option value="">All Status</option>
                                     <option value="active">Active</option>
                                     <option value="pending">Pending</option>
                                     <option value="suspended">Suspended</option>
                                     <option value="inactive">Inactive</option>
                                 </select>
-                                <input type="text" id="grower-search" placeholder="Search growers..." onkeyup="loadGrowerList()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); min-width: 250px;">
+                                <input type="text" id="grower-search" placeholder="Search growers..." onkeyup="loadGrowerList()" class="gr-u-filter-control-dark gr-u-filter-min-250">
                             </div>
                         </div>
                         <div class="card-body">
@@ -2776,7 +3213,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="grower-list-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading growers...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading growers...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -2806,7 +3243,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="farm-assignments-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading farm assignments...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading farm assignments...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -2837,7 +3274,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="contracts-tbody">
-                                    <tr><td colspan="8" style="text-align: center; padding: 20px;">Loading contracts...</td></tr>
+                                    <tr><td colspan="8" class="gr-u-empty-center-sm">Loading contracts...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -2865,7 +3302,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="leaderboard-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading leaderboard...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading leaderboard...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -2875,12 +3312,12 @@
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Performance Details</div>
-                            <select id="performance-grower-select" onchange="loadGrowerPerformance()" style="padding: 8px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                            <select id="performance-grower-select" onchange="loadGrowerPerformance()" class="gr-u-filter-control-dark">
                                 <option value="">Select a grower...</option>
                             </select>
                         </div>
                         <div class="card-body" id="performance-details">
-                            <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <div class="gr-u-empty-center">
                                 Select a grower to view detailed performance metrics
                             </div>
                         </div>
@@ -2910,10 +3347,220 @@
                                     </tr>
                                 </thead>
                                 <tbody id="invitations-tbody">
-                                    <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading invitations...</td></tr>
+                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading invitations...</td></tr>
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Catalog Management View -->
+            <div id="procurement-catalog-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Catalog Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Procurement Catalog</h1>
+                    <button class="btn-primary" onclick="openAddProductModal()">+ Add Product</button>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Products</div>
+                        <div class="kpi-value" id="catalog-total-products">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">In Stock</div>
+                        <div class="kpi-value" id="catalog-in-stock">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Out of Stock</div>
+                        <div class="kpi-value" id="catalog-out-of-stock">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Categories</div>
+                        <div class="kpi-value" id="catalog-categories">--</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Product Catalog</div>
+                        <div class="gr-u-flex-gap-10">
+                            <select id="catalog-category-filter" onchange="loadProcurementCatalog()" class="gr-u-filter-control-dark">
+                                <option value="">All Categories</option>
+                            </select>
+                            <input type="text" id="catalog-search" placeholder="Search products..." onkeyup="loadProcurementCatalog()" class="gr-u-filter-control-dark gr-u-filter-min-250">
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Product Name</th>
+                                    <th>Category</th>
+                                    <th>Supplier</th>
+                                    <th>Unit Price</th>
+                                    <th>Unit</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="catalog-products-tbody">
+                                <tr><td colspan="8" class="gr-u-empty-center-sm">Loading catalog...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Suppliers Management View -->
+            <div id="procurement-suppliers-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Supplier Management</span>
+                </div>
+
+                <div class="header">
+                    <h1>Supplier Management</h1>
+                    <button class="btn-primary" onclick="openAddSupplierModal()">+ Add Supplier</button>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Suppliers</div>
+                        <div class="kpi-value" id="suppliers-total">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active</div>
+                        <div class="kpi-value" id="suppliers-active">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Product Coverage</div>
+                        <div class="kpi-value" id="suppliers-product-count">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Commission</div>
+                        <div class="kpi-value" id="suppliers-avg-commission">--</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Suppliers</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier ID</th>
+                                    <th>Name</th>
+                                    <th>Contact</th>
+                                    <th>Products</th>
+                                    <th>Commission</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="suppliers-list-tbody">
+                                <tr><td colspan="7" class="gr-u-empty-center-sm">Loading suppliers...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Procurement Revenue View -->
+            <div id="procurement-revenue-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Procurement</span>
+                    <span>/</span>
+                    <span>Revenue</span>
+                </div>
+
+                <div class="header">
+                    <h1>Procurement Revenue</h1>
+                    <div class="gr-u-flex-gap-10-center">
+                        <label class="gr-u-text-secondary-sm">Period:</label>
+                        <input type="date" id="revenue-from" class="gr-u-filter-control-dark">
+                        <span class="gr-u-text-secondary-sm">to</span>
+                        <input type="date" id="revenue-to" class="gr-u-filter-control-dark">
+                        <button class="btn-primary" onclick="loadProcurementRevenue()">Apply</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Revenue</div>
+                        <div class="kpi-value" id="revenue-total">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">GreenReach Commission</div>
+                        <div class="kpi-value" id="revenue-commission">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Orders</div>
+                        <div class="kpi-value" id="revenue-orders">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Order Value</div>
+                        <div class="kpi-value" id="revenue-avg-order">--</div>
+                    </div>
+                </div>
+
+                <!-- Revenue by Supplier -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <div class="card-title">Revenue by Supplier</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenue-by-supplier-tbody">
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Revenue by Month -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Monthly Revenue</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenue-by-month-tbody">
+                                <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -2966,8 +3613,8 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 30%;">Variety Name</th>
-                                    <th style="width: 15%;">Category</th>
+                                    <th style="width: 30%; cursor: pointer;" onclick="setRecipeSort('name')">Variety Name <span id="recipe-sort-name" style="margin-left: 6px; color: var(--text-secondary);"></span></th>
+                                    <th style="width: 15%; cursor: pointer;" onclick="setRecipeSort('category')">Category <span id="recipe-sort-category" style="margin-left: 6px; color: var(--text-secondary);"></span></th>
                                     <th style="width: 10%;">Total Days</th>
                                     <th style="width: 10%;">Stages</th>
                                     <th style="width: 15%;">Target Temp</th>
@@ -3138,6 +3785,876 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Wholesale Pricing Management View -->
+            <div id="pricing-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Pricing &amp; Products</span>
+                </div>
+
+                <div class="header">
+                    <h1>Pricing &amp; Product Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Set crop prices, manage product catalog, create mixes &amp; bundles</p>
+                </div>
+
+                <!-- Pricing KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Price Offers</div>
+                        <div class="kpi-value" id="pricing-active-offers">—</div>
+                        <div class="kpi-change neutral"><span>Current offers</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Acceptance Rate</div>
+                        <div class="kpi-value" id="pricing-acceptance-rate">—</div>
+                        <div class="kpi-change neutral"><span>Last 30 days</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Products in Catalog</div>
+                        <div class="kpi-value" id="pricing-product-count">—</div>
+                        <div class="kpi-change neutral"><span>Active SKUs</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Pending Counter-Offers</div>
+                        <div class="kpi-value" id="pricing-counter-offers">—</div>
+                        <div class="kpi-change neutral"><span>Needs review</span></div>
+                    </div>
+                </div>
+
+                <!-- Wholesale Pricing Scanner — GreenReach Central Only -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Set Wholesale Price</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" onclick="loadCurrentPricesIntoScanner()" style="padding: 6px 14px; font-size: 12px;">Load All Crops</button>
+                            <button class="btn" onclick="addPricingRow()" style="padding: 6px 14px; font-size: 12px; background: var(--accent-green); color: white;">+ Add Manual Entry</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+                            GreenReach Central manages all wholesale product pricing. Crops below are sourced from the lighting recipe library. Use <strong>+ Add Manual Entry</strong> to add products not yet in recipes. Prices are persisted and pushed to all connected farm POS &amp; online stores.
+                        </p>
+                        <div class="table-container">
+                            <table id="pricing-scanner-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 22%;">Crop / Product</th>
+                                        <th style="width: 12%;">Retail $/oz</th>
+                                        <th style="width: 12%;">Retail $/lb</th>
+                                        <th style="width: 12%;">Wholesale $/lb</th>
+                                        <th style="width: 10%;">Tier</th>
+                                        <th style="width: 22%;">Reasoning</th>
+                                        <th style="width: 5%;">Status</th>
+                                        <th style="width: 5%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pricing-scanner-tbody">
+                                    <!-- rows added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <label style="font-size: 13px; color: var(--text-secondary);">
+                                    <input type="checkbox" id="push-to-farms-checkbox" checked style="margin-right: 4px;">
+                                    Push to POS &amp; Online Store
+                                </label>
+                                <span id="scanner-row-count" style="font-size: 12px; color: var(--text-secondary); margin-left: 12px;">0 crops</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn" onclick="clearPricingScanner()" style="padding: 8px 16px; font-size: 13px;">Clear All</button>
+                                <button class="btn" id="apply-batch-btn" onclick="applyBatchPriceUpdate()" style="padding: 8px 24px; font-size: 13px; background: var(--accent-green); color: white; font-weight: 600;">
+                                    Apply All Price Changes
+                                </button>
+                            </div>
+                        </div>
+                        <div id="batch-update-result" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+                    </div>
+                </div>
+
+                <!-- Single Price Offer (legacy) -->
+                <details style="margin-bottom: 0;">
+                    <summary style="cursor: pointer; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); font-size: 13px;">
+                        Send Individual Price Offer to Farms
+                    </summary>
+                    <div class="card" style="margin-top: 8px;">
+                        <div class="card-body">
+                            <form id="set-price-form" onsubmit="submitWholesalePrice(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Crop / Product</label>
+                                    <input type="text" id="price-crop" placeholder="e.g. Basil, Lettuce Mix" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Wholesale Price ($/lb)</label>
+                                    <input type="number" id="price-amount" step="0.01" min="0.01" placeholder="4.50" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Pricing Tier</label>
+                                    <select id="price-tier" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                        <option value="cost-plus">Cost-Plus (20% margin)</option>
+                                        <option value="demand-based" selected>Demand-Based</option>
+                                        <option value="premium">Premium</option>
+                                        <option value="promotional">Promotional</option>
+                                    </select>
+                                </div>
+                                <div style="grid-column: 1 / -1; display: flex; gap: 12px; align-items: end;">
+                                    <div style="flex: 1;">
+                                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Reasoning / Notes</label>
+                                        <input type="text" id="price-reasoning" placeholder="Market adjustment, seasonal pricing..." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    </div>
+                                    <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white; white-space: nowrap;">Send Price Offer</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Active Price Offers -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Active Price Offers</div>
+                        <button class="btn" onclick="loadPricingManagement()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Offer ID</th>
+                                        <th>Crop</th>
+                                        <th>Price</th>
+                                        <th>Tier</th>
+                                        <th>Acceptance Rate</th>
+                                        <th>Responses</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pricing-offers-tbody">
+                                    <tr><td colspan="9" class="loading">Loading price offers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Catalog -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Product Catalog</div>
+                        <button class="btn" onclick="showAddProductModal()" style="background: var(--accent-green); color: white;">+ Add Product</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Product Name</th>
+                                        <th>Category</th>
+                                        <th>Type</th>
+                                        <th>Unit</th>
+                                        <th>Current Price</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="product-catalog-tbody">
+                                    <tr><td colspan="8" class="loading">Loading product catalog...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Farm Cost Surveys -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Farm Cost Surveys</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Cost-basis protection: price must exceed max farm cost + 20%</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Farm</th>
+                                        <th>Crop</th>
+                                        <th>Cost/Unit</th>
+                                        <th>Unit</th>
+                                        <th>Survey Date</th>
+                                        <th>Valid Until</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cost-surveys-tbody">
+                                    <tr><td colspan="7" class="loading">Loading cost surveys...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delivery Management View -->
+            <div id="delivery-management-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Wholesale</span>
+                    <span>/</span>
+                    <span>Delivery Services</span>
+                </div>
+
+                <div class="header">
+                    <h1>Delivery Services Management</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Configure delivery zones, rates, drivers, and fee distribution</p>
+                </div>
+
+                <!-- Delivery KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Zones</div>
+                        <div class="kpi-value" id="delivery-zone-count">—</div>
+                        <div class="kpi-change neutral"><span>Configured</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Drivers</div>
+                        <div class="kpi-value" id="delivery-driver-count">—</div>
+                        <div class="kpi-change neutral"><span>Available</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Deliveries (30d)</div>
+                        <div class="kpi-value" id="delivery-count-30d">—</div>
+                        <div class="kpi-change neutral"><span>Completed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Revenue (30d)</div>
+                        <div class="kpi-value" id="delivery-revenue-30d">—</div>
+                        <div class="kpi-change neutral"><span>Delivery fees</span></div>
+                    </div>
+                </div>
+
+                <!-- Delivery Zones -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Delivery Zones &amp; Rates</div>
+                        <button class="btn" onclick="showAddZoneModal()" style="background: var(--accent-green); color: white;">+ Add Zone</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Zone</th>
+                                        <th>Description</th>
+                                        <th>Delivery Fee</th>
+                                        <th>Min Order</th>
+                                        <th>Delivery Windows</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="delivery-zones-tbody">
+                                    <tr><td colspan="7" class="loading">Loading delivery zones...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Global Delivery Settings</div>
+                    </div>
+                    <div class="card-body">
+                        <form id="delivery-settings-form" onsubmit="saveDeliverySettings(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Base Delivery Fee ($)</label>
+                                <input type="number" id="delivery-base-fee" step="0.50" min="0" value="0" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Min Order Amount ($)</label>
+                                <input type="number" id="delivery-min-order" step="1" min="0" value="25" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">Delivery Status</label>
+                                <select id="delivery-enabled" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <option value="true" selected>Enabled</option>
+                                    <option value="false">Disabled</option>
+                                </select>
+                            </div>
+                            <div style="grid-column: 1 / -1;">
+                                <button type="submit" class="btn" style="padding: 10px 24px; background: var(--accent-green); color: white;">Save Settings</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Driver Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Driver Management</div>
+                        <button class="btn" onclick="showAddDriverModal()" style="background: var(--accent-green); color: white;">+ Add Driver</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Driver</th>
+                                        <th>Phone</th>
+                                        <th>Vehicle</th>
+                                        <th>Zones Assigned</th>
+                                        <th>Deliveries (30d)</th>
+                                        <th>Rating</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="drivers-tbody">
+                                    <tr><td colspan="8" class="loading">Loading drivers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fee Collection & Distribution -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Fee Collection &amp; Distribution</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Last 30 days</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 20px;">
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Total Fees Collected</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--accent-green);" id="fees-collected">$0.00</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Driver Payouts</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);" id="driver-payouts">$0.00</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Platform Revenue</div>
+                                <div style="font-size: 24px; font-weight: 600; color: var(--accent-blue);" id="platform-delivery-revenue">$0.00</div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Order ID</th>
+                                        <th>Zone</th>
+                                        <th>Driver</th>
+                                        <th>Fee Charged</th>
+                                        <th>Driver Share</th>
+                                        <th>Platform Share</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fee-distribution-tbody">
+                                    <tr><td colspan="8" class="loading">Loading fee data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Agent Monitoring View -->
+            <div id="ai-monitoring-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>AI Governance</span>
+                    <span>/</span>
+                    <span>Agent Monitoring</span>
+                </div>
+
+                <div class="header">
+                    <h1>AI Agent Monitoring</h1>
+                    <p style="color: var(--text-secondary); margin-top: 8px;">Monitor AI agent activity, recommendation pusher, and usage metrics</p>
+                </div>
+
+                <!-- AI KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">AI Pusher Status</div>
+                        <div class="kpi-value" id="ai-pusher-status">—</div>
+                        <div class="kpi-change neutral"><span>Service health</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Recommendations (24h)</div>
+                        <div class="kpi-value" id="ai-recs-24h">—</div>
+                        <div class="kpi-change neutral"><span>Pushed to farms</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Agent Chat Sessions</div>
+                        <div class="kpi-value" id="ai-chat-sessions">—</div>
+                        <div class="kpi-change neutral"><span>Total sessions</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">API Cost (30d)</div>
+                        <div class="kpi-value" id="ai-api-cost">—</div>
+                        <div class="kpi-change neutral"><span>OpenAI usage</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Farms Covered</div>
+                        <div class="kpi-value" id="ai-farms-covered">—</div>
+                        <div class="kpi-change neutral"><span>Receiving AI insights</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active AI Rules</div>
+                        <div class="kpi-value" id="ai-active-rules">—</div>
+                        <div class="kpi-change neutral"><span>Governance rules</span></div>
+                    </div>
+                </div>
+
+                <!-- AI Recommendations Pusher -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recommendations Pusher Service</div>
+                        <button class="btn" onclick="loadAiMonitoring()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <div>
+                                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-secondary);">Service Configuration</h4>
+                                <div id="ai-pusher-config" style="font-size: 13px; line-height: 2;">
+                                    <div><strong>Model:</strong> <span id="ai-model-name">GPT-4</span></div>
+                                    <div><strong>Push Interval:</strong> <span id="ai-push-interval">30 minutes</span></div>
+                                    <div><strong>OpenAI Key:</strong> <span id="ai-key-status">—</span></div>
+                                    <div><strong>Last Run:</strong> <span id="ai-last-run">—</span></div>
+                                    <div><strong>Next Run:</strong> <span id="ai-next-run">—</span></div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-secondary);">Push Statistics</h4>
+                                <div id="ai-push-stats" style="font-size: 13px; line-height: 2;">
+                                    <div><strong>Total Pushes:</strong> <span id="ai-total-pushes">—</span></div>
+                                    <div><strong>Successful:</strong> <span id="ai-success-pushes">—</span></div>
+                                    <div><strong>Failed:</strong> <span id="ai-failed-pushes">—</span></div>
+                                    <div><strong>Avg Recommendations/Farm:</strong> <span id="ai-avg-recs">—</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent AI Activity Log -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Recent AI Activity</div>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="ai-activity-filter" onchange="filterAiActivity(this.value)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px;">
+                                <option value="all">All Activity</option>
+                                <option value="recommendations">Recommendations</option>
+                                <option value="chat">Chat Sessions</option>
+                                <option value="errors">Errors Only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Type</th>
+                                        <th>Farm</th>
+                                        <th>Details</th>
+                                        <th>Status</th>
+                                        <th>Tokens Used</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ai-activity-tbody">
+                                    <tr><td colspan="6" class="loading">Loading AI activity...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Feedback Loops Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">AI Feedback Loops</div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">5 core feedback loops per AI Vision</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;" id="ai-feedback-loops">
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid var(--accent-green);">
+                                <div style="font-size: 20px; margin-bottom: 4px;">🌾</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Recipe → Yield</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-recipe-yield">Phase 1</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid var(--accent-blue);">
+                                <div style="font-size: 20px; margin-bottom: 4px;">🌡️</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Env → Loss</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-env-loss">Phase 1</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #a855f7;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">💡</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Spectrum → Quality</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-spectrum-quality">Phase 2</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #f59e0b;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏱️</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Timing → Efficiency</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-timing-efficiency">Phase 2</div>
+                            </div>
+                            <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; text-align: center; border-left: 3px solid #ef4444;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">📊</div>
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Demand → Production</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;" id="loop-demand-production">Phase 3</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Opportunities Roadmap -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">AI Opportunities Roadmap</div>
+                    </div>
+                    <div class="card-body" id="ai-roadmap-body">
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: var(--accent-green); margin-bottom: 8px;">Phase 1: Foundation</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Experiment records<br>Cost survey collection<br>Demand signal capture<br>Recipe modifier bounds
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">Phase 2: Learn</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Cross-farm benchmarks<br>Yield predictions<br>Energy optimization<br>Quality scoring
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #a855f7; margin-bottom: 8px;">Phase 3: Optimize</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Auto recipe tuning<br>Demand forecasting<br>Dynamic pricing<br>Spectrum optimization
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #f59e0b; margin-bottom: 8px;">Phase 4: Automate</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Full-cycle automation<br>Predictive maintenance<br>Supply chain AI<br>Market intelligence
+                                </div>
+                            </div>
+                            <div style="padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #ef4444; margin-bottom: 8px;">Phase 5: Network</div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                                    Multi-farm intelligence<br>Regional optimization<br>Carbon trading AI<br>Network-wide learning
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Intelligence View -->
+            <div id="market-intelligence-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Analytics</span>
+                    <span>/</span>
+                    <span>Market Intelligence</span>
+                </div>
+
+                <div class="header">
+                    <h1>Market Intelligence</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="market-alert-threshold" onchange="loadMarketIntelligenceView()" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+                            <option value="5">Alert Threshold: 5%</option>
+                            <option value="7" selected>Alert Threshold: 7%</option>
+                            <option value="10">Alert Threshold: 10%</option>
+                            <option value="15">Alert Threshold: 15%</option>
+                        </select>
+                        <button class="btn" onclick="loadMarketIntelligenceView()" style="padding: 8px 16px;">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Products Monitored</div>
+                        <div class="kpi-value" id="market-products-monitored">0</div>
+                        <div class="kpi-change neutral"><span>Network market feed</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Price Alerts</div>
+                        <div class="kpi-value" id="market-alert-count">0</div>
+                        <div class="kpi-change neutral"><span>Above threshold</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Increasing</div>
+                        <div class="kpi-value" id="market-increasing-count">0</div>
+                        <div class="kpi-change neutral"><span>Products trending up</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Decreasing</div>
+                        <div class="kpi-value" id="market-decreasing-count">0</div>
+                        <div class="kpi-change neutral"><span>Products trending down</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Stable</div>
+                        <div class="kpi-value" id="market-stable-count">0</div>
+                        <div class="kpi-change neutral"><span>Products near flat</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Last Updated</div>
+                        <div class="kpi-value" id="market-last-updated" style="font-size: 18px;">—</div>
+                        <div class="kpi-change neutral"><span>Market snapshot</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Price Alerts</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Change</th>
+                                        <th>Current Price</th>
+                                        <th>Previous Price</th>
+                                        <th>Retailers</th>
+                                        <th>Confidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="market-alerts-tbody">
+                                    <tr><td colspan="6" class="loading">Loading market alerts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Market Overview</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Current Price (CAD/oz)</th>
+                                        <th>Trend</th>
+                                        <th>Trend %</th>
+                                        <th>Retailers Tracked</th>
+                                        <th>Articles</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="market-overview-tbody">
+                                    <tr><td colspan="6" class="loading">Loading market overview...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Central Accounting View -->
+            <div id="accounting-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Finance</span>
+                    <span>/</span>
+                    <span>Network Accounting</span>
+                </div>
+
+                <div class="header">
+                    <h1>Network Revenue &amp; Expenses</h1>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <select id="central-accounting-period" onchange="loadCentralAccounting()" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month" selected>This Month</option>
+                            <option value="quarter">This Quarter</option>
+                            <option value="year">This Year</option>
+                        </select>
+                        <button class="btn" onclick="exportFleetReport()" style="padding: 8px 16px;">Export CSV</button>
+                    </div>
+                </div>
+
+                <!-- KPI Grid -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Revenue</div>
+                        <div class="kpi-value" id="central-total-revenue">$0.00</div>
+                        <div class="kpi-change neutral"><span>All wholesale orders</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Wholesale Revenue</div>
+                        <div class="kpi-value" id="central-wholesale-revenue">$0.00</div>
+                        <div class="kpi-change neutral"><span>B2B channel</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Orders</div>
+                        <div class="kpi-value" id="central-order-count">0</div>
+                        <div class="kpi-change neutral"><span>Total fulfilled</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Order Value</div>
+                        <div class="kpi-value" id="central-avg-order">$0.00</div>
+                        <div class="kpi-change neutral"><span>Per order</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Expenses</div>
+                        <div class="kpi-value" id="central-total-expenses">$0.00</div>
+                        <div class="kpi-change neutral"><span>Accounting ledger</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Net Margin</div>
+                        <div class="kpi-value" id="central-net-margin">&mdash;</div>
+                        <div class="kpi-change neutral"><span>Revenue &minus; Expenses</span></div>
+                    </div>
+                </div>
+
+                <!-- Revenue by Farm Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Network Farms</div>
+                        <button class="btn" onclick="loadCentralAccounting()">Refresh</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Farm Name</th>
+                                        <th>Status</th>
+                                        <th>Rooms</th>
+                                        <th>Capacity</th>
+                                        <th>Farm ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-revenue-by-farm-tbody">
+                                    <tr><td colspan="5" class="loading">Loading farm data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expense Categories Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Expense Breakdown</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Amount</th>
+                                        <th>% of Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-expenses-tbody">
+                                    <tr><td colspan="3" class="loading">Loading expenses...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Procurement Revenue</div>
+                        <div class="gr-u-flex-gap-10-center">
+                            <label class="gr-u-text-secondary-sm">From:</label>
+                            <input type="date" id="central-procurement-from" class="gr-u-filter-control-dark">
+                            <label class="gr-u-text-secondary-sm">To:</label>
+                            <input type="date" id="central-procurement-to" class="gr-u-filter-control-dark">
+                            <button class="btn" onclick="loadCentralAccounting()">Apply</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Procurement Revenue</div>
+                                <div class="kpi-value" id="central-procurement-total">$0.00</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">GreenReach Commission</div>
+                                <div class="kpi-value" id="central-procurement-commission">$0.00</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Procurement Orders</div>
+                                <div class="kpi-value" id="central-procurement-orders">0</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Avg Procurement Order</div>
+                                <div class="kpi-value" id="central-procurement-avg-order">$0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="margin-top: 20px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Supplier</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-procurement-by-supplier-tbody">
+                                    <tr><td colspan="4" class="loading">Loading procurement supplier revenue...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-container" style="margin-top: 20px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="central-procurement-by-month-tbody">
+                                    <tr><td colspan="4" class="loading">Loading procurement monthly revenue...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Outstanding Balance -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Outstanding Balance</div>
+                    </div>
+                    <div class="card-body" style="padding: 24px;">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="font-size: 32px; font-weight: 700; color: var(--accent-yellow);" id="central-outstanding">$0.00</div>
+                            <div style="font-size: 14px; color: var(--text-secondary);">Revenue billed but not yet collected</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -3263,7 +4780,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/lib/chart.umd.js"></script>
     <script>
         // Network Dashboard JavaScript
         const NETWORK_API_URL = window.location.origin;
@@ -3554,49 +5071,67 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/farms/${farmId}`);
                 const data = await response.json();
                 
-                if (data.ok) {
-                    const farm = data.farm;
-                    document.getElementById('farmDetailName').textContent = farm.farm_name;
-                    
-                    const summary = data.summary;
+                const isSuccess = Boolean(data?.ok || data?.success);
+                if (!response.ok || !isSuccess || !data?.farm) {
+                    throw new Error('Failed to load farm detail');
+                }
+
+                const farm = data.farm;
+                const summary = data.summary || {};
+                const farmName = farm.farm_name || farm.name || farm.farmId || farm.farm_id || farmId;
+                const farmIdentifier = farm.farm_id || farm.farmId || farmId;
+                const farmLocation = farm.location || farm.metadata?.location || 'N/A';
+                const farmType = farm.farm_type || farm.type || farm.metadata?.farmType || 'N/A';
+                const operatorName = farm.operator_name || farm.operator || farm.metadata?.operatorName || 'N/A';
+                const farmStatus = (farm.status || 'unknown').toString();
+                const isOnlineStatus = ['online', 'active'].includes(farmStatus.toLowerCase());
+                const farmCapacity = farm.capacity ?? farm.metadata?.capacity ?? 'N/A';
+
+                const totalProduction = Number(summary.total_production ?? summary.totalProduction ?? 0);
+                const totalRevenue = Number(summary.total_revenue ?? summary.totalRevenue ?? 0);
+                const avgQaScore = Number(summary.avg_qa_score ?? summary.avgQaScore ?? 0);
+                const activeBatches = Number(summary.active_batches ?? summary.activeBatches ?? 0);
+                const ordersFulfilled = Number(summary.orders_fulfilled ?? summary.ordersFulfilled ?? 0);
+
+                document.getElementById('farmDetailName').textContent = farmName;
+
                     document.getElementById('farmDetailContent').innerHTML = `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
                             <div class="kpi-card">
                                 <div class="kpi-label">Production (30d)</div>
-                                <div class="kpi-value">${summary.total_production.toFixed(1)} kg</div>
+                                <div class="kpi-value">${totalProduction.toFixed(1)} kg</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Revenue (30d)</div>
-                                <div class="kpi-value">$${summary.total_revenue.toFixed(0)}</div>
+                                <div class="kpi-value">$${totalRevenue.toFixed(0)}</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Avg QA Score</div>
-                                <div class="kpi-value">${summary.avg_qa_score.toFixed(1)}%</div>
+                                <div class="kpi-value">${avgQaScore.toFixed(1)}%</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Capacity</div>
-                                <div class="kpi-value">${farm.capacity} cells</div>
+                                <div class="kpi-value">${farmCapacity} cells</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Active Batches</div>
-                                <div class="kpi-value">${summary.active_batches}</div>
+                                <div class="kpi-value">${activeBatches}</div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Orders Fulfilled</div>
-                                <div class="kpi-value">${summary.orders_fulfilled}</div>
+                                <div class="kpi-value">${ordersFulfilled}</div>
                             </div>
                         </div>
                         <div style="color: var(--text-secondary); font-size: 14px;">
-                            <p><strong>Farm ID:</strong> ${farm.farm_id}</p>
-                            <p><strong>Location:</strong> ${farm.location}</p>
-                            <p><strong>Type:</strong> ${farm.farm_type}</p>
-                            <p><strong>Status:</strong> <span style="color: ${farm.status === 'ONLINE' ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farm.status}</span></p>
-                            <p><strong>Operator:</strong> ${farm.operator_name}</p>
+                            <p><strong>Farm ID:</strong> ${farmIdentifier}</p>
+                            <p><strong>Location:</strong> ${farmLocation}</p>
+                            <p><strong>Type:</strong> ${farmType}</p>
+                            <p><strong>Status:</strong> <span style="color: ${isOnlineStatus ? 'var(--accent-green)' : 'var(--accent-yellow)'};">${farmStatus}</span></p>
+                            <p><strong>Operator:</strong> ${operatorName}</p>
                         </div>
                     `;
                     
                     document.getElementById('farmDetailModal').style.display = 'block';
-                }
             } catch (error) {
                 console.error('Error loading farm detail:', error);
             }
@@ -3993,31 +5528,42 @@
                 
                 const data = await response.json();
                 
-                if (data.ok && data.farm) {
+                const isSuccess = Boolean(data?.ok || data?.success);
+                if (isSuccess && data.farm) {
                     const farm = data.farm;
                     const summary = data.summary || {};
+                    const farmName = farm.farm_name || farm.name || farm.farmId || farm.farm_id || farmId;
+                    const farmLocation = farm.location || farm.metadata?.location || 'N/A';
+                    const farmCapacity = farm.capacity ?? farm.metadata?.capacity ?? 'N/A';
+                    const farmStatus = farm.status || 'unknown';
+                    const certifications = farm.certifications || farm.metadata?.certifications || [];
+                    const totalProduction = Number(summary.total_production ?? summary.totalProduction ?? 0);
+                    const totalRevenue = Number(summary.total_revenue ?? summary.totalRevenue ?? 0);
+                    const activeBatches = Number(summary.active_batches ?? summary.activeBatches ?? 0);
+                    const avgQaScore = Number(summary.avg_qa_score ?? summary.avgQaScore ?? 0);
+                    const apiUrl = farm.api_url || farm.apiUrl || 'Not configured';
                     
                     // Show farm details in a modal or alert
                     const detailsHTML = `
-Farm: ${farm.farm_name}
-Location: ${farm.location || 'N/A'}
-Capacity: ${farm.capacity || 'N/A'} cells
-Status: ${farm.status || 'unknown'}
-Certifications: ${farm.certifications?.join(', ') || 'None'}
+Farm: ${farmName}
+Location: ${farmLocation}
+Capacity: ${farmCapacity} cells
+Status: ${farmStatus}
+Certifications: ${certifications.join(', ') || 'None'}
 
 Recent Performance:
-• Production (30d): ${summary.total_production?.toFixed(1) || 0} kg
-• Revenue (30d): $${summary.total_revenue?.toFixed(0) || 0}
-• Active Batches: ${summary.active_batches || 0}
-• QA Score: ${summary.avg_qa_score?.toFixed(1) || 0}%
+• Production (30d): ${totalProduction.toFixed(1)} kg
+• Revenue (30d): $${totalRevenue.toFixed(0)}
+• Active Batches: ${activeBatches}
+• QA Score: ${avgQaScore.toFixed(1)}%
 
-API URL: ${farm.api_url || 'Not configured'}
+API URL: ${apiUrl}
                     `.trim();
                     
                     if (confirm(`${detailsHTML}\n\nOpen farm dashboard in new window?`)) {
                         // If farm has an API URL, open it
-                        if (farm.api_url) {
-                            window.open(farm.api_url + '/farm-admin.html', '_blank');
+                        if (farm.api_url || farm.apiUrl) {
+                            window.open((farm.api_url || farm.apiUrl) + '/farm-admin.html', '_blank');
                         } else {
                             alert('Farm dashboard URL not configured. Please configure the farm API URL first.');
                         }
@@ -4060,61 +5606,6 @@ API URL: ${farm.api_url || 'Not configured'}
                 console.log('Revoke invitation:', invitationId);
                 alert(`Revoke invitation: ${invitationId}`);
             }
-        }
-
-        // ═══════════ Farm Detail Tab Switching (S4.6) ═══════════
-        function switchDetailTab(tabId, btn) {
-            document.querySelectorAll('#farm-detail-view .tab-content').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('#farm-detail-view .tab-content').forEach(el => el.classList.remove('active'));
-            const target = document.getElementById(tabId);
-            if (target) { target.style.display = ''; target.classList.add('active'); }
-            document.querySelectorAll('#farm-detail-view .tab-nav .tab-btn').forEach(b => { b.style.color = '#94a3b8'; b.style.borderBottom = '2px solid transparent'; });
-            if (btn) { btn.style.color = '#e2e8f0'; btn.style.borderBottom = '2px solid #3b82f6'; }
-            if (tabId === 'detail-experiments') loadExperiments();
-        }
-
-        // ═══════════ A/B Experiments (S4.6) ═══════════
-        async function loadExperiments() {
-            const el = document.getElementById('experiments-list');
-            if (!el) return;
-            try {
-                const resp = await fetch('/api/admin/experiments?t=' + Date.now(), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } });
-                if (!resp.ok) { el.innerHTML = '<div style="color:#94a3b8;padding:1rem;">Could not load experiments</div>'; return; }
-                const data = await resp.json();
-                const exps = data.experiments || [];
-                if (exps.length === 0) { el.innerHTML = '<div style="color:#94a3b8;padding:1rem;">No experiments yet. Click "+ New Experiment" to create one.</div>'; return; }
-                el.innerHTML = '<table style="width:100%;"><thead><tr><th>Name</th><th>Crop</th><th>Parameter</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>' +
-                    exps.map(e => `<tr>
-                        <td>${e.name || e.experiment_name || ''}</td>
-                        <td>${e.crop || ''}</td>
-                        <td>${e.parameter || ''}</td>
-                        <td><span style="background:${e.status === 'active' ? '#22c55e' : e.status === 'completed' ? '#3b82f6' : '#f59e0b'};color:white;padding:0.125rem 0.5rem;border-radius:10px;font-size:0.75rem;">${e.status || 'draft'}</span></td>
-                        <td>${e.created_at ? new Date(e.created_at).toLocaleDateString() : ''}</td>
-                        <td>${e.status === 'draft' ? '<button class="btn" onclick="activateExperiment(\'' + e.id + '\')">Activate</button>' : e.status === 'active' ? '<button class="btn" onclick="analyzeExperiment(\'' + e.id + '\')">Analyze</button>' : ''}</td>
-                    </tr>`).join('') + '</tbody></table>';
-            } catch (err) { el.innerHTML = '<div style="color:#ef4444;padding:1rem;">Error: ' + err.message + '</div>'; }
-        }
-
-        function showCreateExperiment() { document.getElementById('create-experiment-form').style.display = ''; }
-
-        async function submitCreateExperiment() {
-            const body = { name: document.getElementById('exp-name').value, crop: document.getElementById('exp-crop').value, parameter: document.getElementById('exp-param').value, variant_value: document.getElementById('exp-value').value };
-            try {
-                const resp = await fetch('/api/admin/experiments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') }, body: JSON.stringify(body) });
-                if (resp.ok) { document.getElementById('create-experiment-form').style.display = 'none'; loadExperiments(); } else { alert('Failed to create experiment'); }
-            } catch (err) { alert('Error: ' + err.message); }
-        }
-
-        async function activateExperiment(id) {
-            try { await fetch(`/api/admin/experiments/${id}/activate`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } }); loadExperiments(); } catch (err) { alert(err.message); }
-        }
-
-        async function analyzeExperiment(id) {
-            try {
-                const resp = await fetch(`/api/admin/experiments/${id}/analyze`, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || '') } });
-                const data = await resp.json();
-                alert(JSON.stringify(data.analysis || data, null, 2));
-            } catch (err) { alert(err.message); }
         }
 
         // Load network dashboard when view becomes active
@@ -4662,7 +6153,24 @@ API URL: ${farm.api_url || 'Not configured'}
                 </p>
                 <div style="display: flex; gap: 12px; justify-content: flex-end;">
                     <button class="btn" onclick="closeDeleteUserModal()">Cancel</button>
-                    <button class="btn" onclick="confirmDeleteUser()" style="background: var(--accent-red); color: white;">Delete User</button>
+                    <button class="btn btn-danger" onclick="confirmDeleteUser()">Delete User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-action-modal" class="modal" onclick="if(event.target === this) closeConfirmActionModal()">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2 id="confirm-action-title">Confirm Action</h2>
+                <button class="modal-close" onclick="closeConfirmActionModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-action-message" class="confirm-modal-message"></p>
+                <p id="confirm-action-submessage" class="confirm-modal-submessage"></p>
+                <div class="confirm-modal-actions">
+                    <button class="btn" onclick="closeConfirmActionModal()">Cancel</button>
+                    <button id="confirm-action-confirm-btn" class="btn btn-danger" onclick="confirmActionModalApproved()">Confirm</button>
                 </div>
             </div>
         </div>

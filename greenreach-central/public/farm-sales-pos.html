@@ -468,11 +468,23 @@
   <div id="login-screen">
     <div class="login-card">
       <h1>Farm Sales Terminal</h1>
-      <p>Sign in to access your farm's point-of-sale system</p>
+      <p id="login-subtitle">Sign in to access your farm's point-of-sale system</p>
       
       <div id="login-error" class="alert alert-error hidden"></div>
+      <div id="login-farm-context" class="alert" style="background: #e8f5e9; color: #2e7d32; display: none; margin-bottom: 1rem; padding: 0.75rem; border-radius: 4px;">
+        Connecting to: <strong id="login-farm-name"></strong>
+      </div>
       
       <form id="login-form">
+        <!-- Farm Selector (shown when no farm context is available) -->
+        <div class="form-group" id="farm-selector-group" style="display: none;">
+          <label for="farm-select">Select Farm</label>
+          <select id="farm-select" required>
+            <option value="">-- Loading farms... --</option>
+          </select>
+          <small style="color: var(--text-light);">Select the farm to connect to</small>
+        </div>
+        
         <div class="form-group">
           <label for="role-select">Role</label>
           <select id="role-select" required>
@@ -485,7 +497,7 @@
         <button type="submit" class="btn btn-primary">Sign In</button>
       </form>
       
-      <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-light);">
+      <p id="login-testing-mode" style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-light);">
         Testing mode: Connected to current Light Engine farm
       </p>
     </div>
@@ -813,19 +825,40 @@
       e.preventDefault();
       
       const selectedRole = document.getElementById('role-select').value;
+      const farmSelect = document.getElementById('farm-select');
+      const selectorGroup = document.getElementById('farm-selector-group');
       
       try {
-        // Get current farm from Light Engine API
-        const response = await fetch('/api/config/app');
-        const config = await response.json();
+        // Priority: farm selector > URL params > sessionStorage > /api/config/app
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlFarmId = urlParams.get('id') || sessionStorage.getItem('pos_farm_id');
+        const urlFarmName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : sessionStorage.getItem('pos_farm_name');
         
-        farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
-        farmName = config.farmName || config.farm_name || 'Light Engine Farm';
+        // Check if farm selector is visible and has a selection
+        if (selectorGroup && selectorGroup.style.display !== 'none' && farmSelect && farmSelect.value) {
+          const selectedOption = farmSelect.options[farmSelect.selectedIndex];
+          farmId = farmSelect.value;
+          farmName = selectedOption.textContent || farmId;
+          console.log('[Login] Using farm from selector:', farmId);
+        } else if (urlFarmId) {
+          // Use farm from navigation context
+          farmId = urlFarmId;
+          farmName = urlFarmName || urlFarmId;
+          console.log('[Login] Using farm from navigation context:', farmId);
+        } else {
+          // Fallback: Get current farm from Light Engine API
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
+          farmName = config.farmName || config.farm_name || 'Light Engine Farm';
+        }
+        
         userRole = selectedRole;
         
         // Try to get demo tokens (works in dev/demo mode)
         try {
-          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(farmId)}`);
           const tokensData = await tokensResponse.json();
           
           if (tokensData.ok && tokensData.tokens && tokensData.tokens[farmId]) {
@@ -914,10 +947,71 @@
       const urlParams = new URLSearchParams(window.location.search);
       const isDemoMode = urlParams.get('demo') === '1' || urlParams.get('demo') === 'true';
       
+      // Priority 1: URL parameters (from navigation)
+      const urlFarmSlug = urlParams.get('farm');
+      const urlFarmId = urlParams.get('id');
+      const urlFarmName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+      
+      // Store URL params in sessionStorage for this tab
+      if (urlFarmId || urlFarmSlug) {
+        sessionStorage.setItem('pos_farm_id', urlFarmId || urlFarmSlug);
+        sessionStorage.setItem('pos_farm_slug', urlFarmSlug || urlFarmId);
+        if (urlFarmName) sessionStorage.setItem('pos_farm_name', urlFarmName);
+        console.log('[POS] Farm context from URL:', { urlFarmId, urlFarmSlug, urlFarmName });
+        
+        // Update login UI to show which farm we're connecting to
+        const contextDiv = document.getElementById('login-farm-context');
+        const nameSpan = document.getElementById('login-farm-name');
+        const testingNote = document.getElementById('login-testing-mode');
+        if (contextDiv && nameSpan && urlFarmName) {
+          nameSpan.textContent = urlFarmName;
+          contextDiv.style.display = 'block';
+          if (testingNote) testingNote.style.display = 'none';
+        }
+      }
+      
+      // Priority 2: sessionStorage (from previous navigation in this tab)
+      const sessionFarmId = sessionStorage.getItem('pos_farm_id');
+      const sessionFarmSlug = sessionStorage.getItem('pos_farm_slug');
+      const sessionFarmName = sessionStorage.getItem('pos_farm_name');
+      
+      // Determine which farm to use (URL > session > localStorage)
+      const targetFarmId = urlFarmId || sessionFarmId || localStorage.getItem('farm_id');
+      const targetFarmName = urlFarmName || sessionFarmName || localStorage.getItem('farm_name');
+      
       const savedToken = localStorage.getItem('farm_token');
       const savedFarmId = localStorage.getItem('farm_id');
       const savedFarmName = localStorage.getItem('farm_name');
       const savedRole = localStorage.getItem('user_role');
+      
+      // If we have a target farm from URL/session, try to auto-authenticate
+      if (targetFarmId && targetFarmId !== savedFarmId) {
+        console.log('[POS] New farm context detected, authenticating for:', targetFarmId);
+        try {
+          // Get token for the target farm with query param for dynamic token generation
+          const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(targetFarmId)}`);
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.ok && tokensData.tokens && tokensData.tokens[targetFarmId]) {
+            token = tokensData.tokens[targetFarmId]['manager'];
+            farmId = targetFarmId;
+            farmName = targetFarmName || targetFarmId;
+            userRole = 'manager';
+            
+            localStorage.setItem('farm_token', token);
+            localStorage.setItem('farm_id', farmId);
+            localStorage.setItem('farm_name', farmName);
+            localStorage.setItem('user_role', userRole);
+            
+            console.log('[POS] Auto-authenticated for farm:', farmName);
+            showApp();
+            return;
+          }
+        } catch (error) {
+          console.warn('[POS] Auto-auth failed for target farm:', error.message);
+          // Fall through to existing logic
+        }
+      }
       
       if (savedToken && savedFarmId) {
         // Verify farm is still current
@@ -987,7 +1081,69 @@
           console.error('[Demo] Auto-login failed:', error);
         }
       }
+      
+      // Fallback: Show farm selector if no farm context is available
+      if (!targetFarmId && !savedFarmId && !isDemoMode) {
+        console.log('[POS] No farm context, showing farm selector');
+        await loadFarmSelectorFallback();
+      }
     });
+    
+    // Load available farms for selector fallback
+    async function loadFarmSelectorFallback() {
+      const selectorGroup = document.getElementById('farm-selector-group');
+      const farmSelect = document.getElementById('farm-select');
+      const testingNote = document.getElementById('login-testing-mode');
+      const subtitle = document.getElementById('login-subtitle');
+      
+      if (!selectorGroup || !farmSelect) return;
+      
+      // Update subtitle
+      if (subtitle) subtitle.textContent = 'Select a farm to connect to';
+      
+      // Hide testing note
+      if (testingNote) testingNote.style.display = 'none';
+      
+      // Show selector
+      selectorGroup.style.display = 'block';
+      
+      try {
+        // Try to get farms from API
+        const response = await fetch('/api/farms/available');
+        const data = await response.json();
+        
+        farmSelect.innerHTML = '<option value="">-- Select a farm --</option>';
+        
+        if (data.ok && data.farms && data.farms.length > 0) {
+          data.farms.forEach(farm => {
+            const option = document.createElement('option');
+            option.value = farm.farm_id || farm.id;
+            option.textContent = farm.name || farm.farm_name || farm.farm_id;
+            option.dataset.slug = farm.farm_slug || farm.slug || '';
+            farmSelect.appendChild(option);
+          });
+          console.log('[POS] Loaded', data.farms.length, 'farms for selector');
+        } else {
+          // Fallback to demo tokens as farm list
+          const demoResponse = await fetch('/api/farm-auth/demo-tokens');
+          const demoData = await demoResponse.json();
+          
+          if (demoData.ok && demoData.tokens) {
+            Object.entries(demoData.tokens).forEach(([id, info]) => {
+              const option = document.createElement('option');
+              option.value = id;
+              option.textContent = info.farm_name || id;
+              option.dataset.slug = info.slug || '';
+              farmSelect.appendChild(option);
+            });
+            console.log('[POS] Loaded', Object.keys(demoData.tokens).length, 'farms from demo tokens');
+          }
+        }
+      } catch (error) {
+        console.warn('[POS] Failed to load farms for selector:', error.message);
+        farmSelect.innerHTML = '<option value="">-- Failed to load farms --</option>';
+      }
+    }
     
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {

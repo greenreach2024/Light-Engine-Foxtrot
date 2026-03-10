@@ -194,7 +194,7 @@
                     type="email" 
                     id="email" 
                     name="email" 
-                    placeholder="info@greenreachfarms.com" 
+                    placeholder="Enter your email address" 
                     required 
                     autocomplete="email"
                 >
@@ -268,6 +268,25 @@
             }, 5000);
         }
 
+        // Demo mode detection (S3 static hosting or demo domain)
+        const isDemoMode = window.location.hostname.includes('s3-website') || 
+                          window.location.hostname.includes('amazonaws.com') ||
+                          window.location.search.includes('demo=true');
+        let demoAuthEnabled = false;
+
+        // Load runtime env flag for demo auth
+        fetch(`${API_BASE}/data/env.json`)
+            .then(res => res.json())
+            .then(env => {
+                demoAuthEnabled = !!env.demoAuthEnabled;
+                if (isDemoMode && demoAuthEnabled) {
+                    console.log('🎭 Demo mode detected - demo auth enabled');
+                }
+            })
+            .catch(() => {
+                demoAuthEnabled = false;
+            });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -280,7 +299,39 @@
             loginButton.innerHTML = '<span class="loading-spinner"></span>Authenticating...';
             hideAlert();
 
-            // Server-side authentication
+            // DEMO MODE: Client-side authentication for static hosting
+            if (isDemoMode) {
+                if (!demoAuthEnabled) {
+                    showAlert('Demo login is disabled. Contact an administrator.', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
+                // Check demo credentials
+                if (email === 'info@greenreachfarms.com' && password === 'Admin2025!') {
+                    // Create demo token
+                    const demoToken = 'demo-admin-token-' + Date.now();
+                    
+                    localStorage.setItem('admin_token', demoToken);
+                    localStorage.setItem('admin_email', email);
+                    localStorage.setItem('admin_name', 'Demo Administrator');
+                    localStorage.setItem('admin_role', 'admin');
+                    
+                    showAlert('Login successful! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = `${API_BASE}/GR-central-admin.html`;
+                    }, 500);
+                    return;
+                } else {
+                    showAlert('Invalid email or password. Please try again.', 'error');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Login to Admin Portal';
+                    return;
+                }
+            }
+
+            // PRODUCTION MODE: Server-side authentication
             try {
                 const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
                     method: 'POST',

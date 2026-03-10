@@ -846,12 +846,198 @@
       border-bottom: 2px solid var(--border);
     }
 
-    /* Stripe Payment Styles */
+    /* Fulfillment Method Selector */
+    .delivery-method-selector {
+      margin-bottom: 1.5rem;
+    }
+
+    .delivery-method-selector h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--text);
+    }
+
+    .method-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .method-option {
+      display: block;
+      cursor: pointer;
+    }
+
+    .method-option input[type="radio"] {
+      display: none;
+    }
+
+    .method-option .option-content {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .method-option input[type="radio"]:checked + .option-content {
+      border-color: var(--primary);
+      background: #f0f5eb;
+    }
+
+    .method-option:hover .option-content {
+      border-color: var(--primary-light);
+    }
+
+    .option-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .option-text {
+      flex: 1;
+    }
+
+    .option-text strong {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .option-text span {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .option-price {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--success);
+      flex-shrink: 0;
+    }
+
+    /* Delivery details container — hidden when pickup selected */
+    .delivery-fields {
+      transition: opacity 0.2s, max-height 0.3s;
+    }
+
+    .delivery-fields.hidden {
+      display: none;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Zone result display */
+    .zone-result {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .zone-result.zone-success {
+      background: #f0fff4;
+      border: 1px solid var(--success);
+      color: #276749;
+    }
+
+    .zone-result.zone-error {
+      background: #fff5f5;
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+
+    .zone-result.zone-loading {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    /* Time slot grid */
+    .time-slot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .time-slot-btn {
+      padding: 0.625rem 0.75rem;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      cursor: pointer;
+      text-align: center;
+      font-size: 0.85rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .time-slot-btn:hover:not(:disabled) {
+      border-color: var(--primary-light);
+    }
+
+    .time-slot-btn.selected {
+      border-color: var(--primary);
+      background: #f0f5eb;
+      font-weight: 600;
+    }
+
+    .time-slot-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--bg);
+    }
+
+    .time-slot-btn .slot-label {
+      display: block;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .time-slot-btn .slot-time {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .time-slot-btn .slot-full {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--error);
+      margin-top: 2px;
+    }
+
+    /* Pickup info display */
+    .pickup-info {
+      padding: 1rem;
+      background: #f0f5eb;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+    }
+
+    .pickup-info p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+
+    .pickup-info strong {
+      color: var(--text);
+    }
+
+    /* Square Payment Styles */
     .payment-info {
       margin-top: 1rem;
     }
 
-    .stripe-card-element {
+    .square-card-element {
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 12px;
@@ -1665,11 +1851,23 @@
       .form-row {
         grid-template-columns: 1fr;
       }
+
+      .method-options {
+        grid-template-columns: 1fr;
+      }
+
+      .time-slot-grid {
+        grid-template-columns: 1fr 1fr;
+      }
     }
   </style>
   <link rel="stylesheet" href="/styles/farm-assistant.css">
 </head>
 <body>
+  <!-- Delivery Service Banner -->
+  <script src="/js/components/service-intro-banner.js"></script>
+  <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/wholesale-about.html#delivery' });</script>
+
   <header>
     <div>
       <h1>GreenReach Wholesale</h1>
@@ -1803,7 +2001,7 @@
         <h1>Checkout</h1>
         
         <div class="checkout-section">
-          <h2>Delivery Details</h2>
+          <h2>Fulfillment &amp; Delivery</h2>
           <form id="checkout-form">
             <div class="form-group">
               <label for="fulfillment-cadence">Fulfillment Cadence</label>
@@ -1817,6 +2015,43 @@
                 Delivery date sets the first fulfillment date.
               </p>
             </div>
+
+            <!-- Fulfillment Method Cards -->
+            <div class="delivery-method-selector">
+              <h3>Fulfillment Method</h3>
+              <div class="method-options">
+                <label class="method-option" data-method="pickup">
+                  <input type="radio" name="fulfillment" value="pickup">
+                  <div class="option-content">
+                    <div class="option-icon">🏪</div>
+                    <div class="option-text">
+                      <strong>Farm Pickup</strong>
+                      <span>Pick up at farm location</span>
+                    </div>
+                    <div class="option-price">Free</div>
+                  </div>
+                </label>
+                <label class="method-option" data-method="delivery">
+                  <input type="radio" name="fulfillment" value="delivery" checked>
+                  <div class="option-content">
+                    <div class="option-icon">🚚</div>
+                    <div class="option-text">
+                      <strong>Farm Delivery</strong>
+                      <span>Delivered to your location</span>
+                    </div>
+                    <div class="option-price" id="delivery-fee-display">—</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Pickup info (shown when pickup selected) -->
+            <div id="pickup-info" class="pickup-info hidden">
+              <p><strong>Pickup Instructions</strong></p>
+              <p>You'll receive pickup details and farm address after order confirmation.</p>
+              <p>Bring your order confirmation number.</p>
+            </div>
+
             <div class="form-row">
               <div class="form-group">
                 <label for="buyer-name">Business Name</label>
@@ -1827,45 +2062,6 @@
                 <input type="email" id="buyer-email" required />
               </div>
             </div>
-            
-            <div class="form-group">
-              <label for="delivery-address">Delivery Address</label>
-              <input type="text" id="delivery-address" placeholder="Street Address" required />
-            </div>
-            
-            <div class="form-row">
-              <div class="form-group">
-                <label for="delivery-city">City</label>
-                <input type="text" id="delivery-city" required />
-              </div>
-              <div class="form-group">
-                <label for="delivery-province">Province</label>
-                <select id="delivery-province" required>
-                  <option value="BC">British Columbia</option>
-                  <option value="AB">Alberta</option>
-                  <option value="SK">Saskatchewan</option>
-                  <option value="MB">Manitoba</option>
-                  <option value="ON">Ontario</option>
-                  <option value="QC">Quebec</option>
-                  <option value="NB">New Brunswick</option>
-                  <option value="NS">Nova Scotia</option>
-                  <option value="PE">Prince Edward Island</option>
-                  <option value="NL">Newfoundland and Labrador</option>
-                  <option value="YT">Yukon</option>
-                  <option value="NT">Northwest Territories</option>
-                  <option value="NU">Nunavut</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="delivery-postal">Postal Code</label>
-                <input type="text" id="delivery-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" required />
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="delivery-instructions">Delivery Instructions (optional)</label>
-              <textarea id="delivery-instructions" placeholder="Loading dock hours, gate codes, etc."></textarea>
-            </div>
 
             <div class="form-group">
               <label for="po-number">Purchase Order # (optional)</label>
@@ -1875,18 +2071,77 @@
               </p>
             </div>
 
-            <div class="form-group">
-              <label for="delivery-time-slot">Preferred Delivery Time</label>
-              <select id="delivery-time-slot" required>
-                <option value="">Select time slot...</option>
-                <option value="morning">Morning (8am - 12pm)</option>
-                <option value="afternoon">Afternoon (12pm - 4pm)</option>
-                <option value="evening">Evening (4pm - 8pm)</option>
-                <option value="flexible">Flexible - Any time</option>
-              </select>
-              <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                Farms will coordinate delivery within your preferred window
-              </p>
+            <!-- Delivery-specific fields (hidden when pickup selected) -->
+            <div id="delivery-fields" class="delivery-fields">
+              <div class="form-group">
+                <label for="delivery-address">Delivery Address</label>
+                <input type="text" id="delivery-address" placeholder="Street Address" />
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="delivery-city">City</label>
+                  <input type="text" id="delivery-city" />
+                </div>
+                <div class="form-group">
+                  <label for="delivery-province">Province</label>
+                  <select id="delivery-province">
+                    <option value="BC">British Columbia</option>
+                    <option value="AB">Alberta</option>
+                    <option value="SK">Saskatchewan</option>
+                    <option value="MB">Manitoba</option>
+                    <option value="ON" selected>Ontario</option>
+                    <option value="QC">Quebec</option>
+                    <option value="NB">New Brunswick</option>
+                    <option value="NS">Nova Scotia</option>
+                    <option value="PE">Prince Edward Island</option>
+                    <option value="NL">Newfoundland and Labrador</option>
+                    <option value="YT">Yukon</option>
+                    <option value="NT">Northwest Territories</option>
+                    <option value="NU">Nunavut</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="delivery-postal">Postal Code</label>
+                  <input type="text" id="delivery-postal" placeholder="A1A 1A1" pattern="[A-Za-z][0-9][A-Za-z] ?[0-9][A-Za-z][0-9]" />
+                </div>
+              </div>
+
+              <div id="zone-result" class="zone-result hidden"><!-- Populated by quote API --></div>
+
+              <div class="form-group">
+                <label>Preferred Delivery Window</label>
+                <div id="time-slots" class="time-slot-grid">
+                  <button type="button" class="time-slot-btn" data-slot="morning">
+                    <span class="slot-label">Morning</span>
+                    <span class="slot-time">8am – 12pm</span>
+                  </button>
+                  <button type="button" class="time-slot-btn" data-slot="afternoon">
+                    <span class="slot-label">Afternoon</span>
+                    <span class="slot-time">12pm – 4pm</span>
+                  </button>
+                  <button type="button" class="time-slot-btn" data-slot="evening">
+                    <span class="slot-label">Evening</span>
+                    <span class="slot-time">4pm – 8pm</span>
+                  </button>
+                  <button type="button" class="time-slot-btn selected" data-slot="flexible">
+                    <span class="slot-label">Flexible</span>
+                    <span class="slot-time">Any time</span>
+                  </button>
+                </div>
+                <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                  Farms will coordinate delivery within your preferred window
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label for="delivery-instructions">Delivery Instructions (optional)</label>
+                <textarea id="delivery-instructions" placeholder="Loading dock hours, gate codes, etc."></textarea>
+              </div>
+
+              <div class="form-group">
+                <div id="delivery-quote-status" style="font-size: 0.9rem; color: var(--text-secondary);">Delivery quote will appear after allocation preview.</div>
+              </div>
             </div>
           </form>
         </div>
@@ -1905,8 +2160,8 @@
               <strong>Payment Authorization:</strong> Your card will be authorized for the full amount, 
               but <strong>not charged</strong> until farms confirm and you pick up your order.
             </p>
-            <div id="card-element" class="stripe-card-element">
-              <!-- Stripe Card Element mounted here -->
+            <div id="card-element" class="square-card-element">
+              <!-- Square Web Payments card attached here -->
             </div>
             <div id="card-errors" class="card-errors" role="alert"></div>
           </div>
@@ -2011,15 +2266,15 @@
           <form id="password-form">
             <div class="form-group">
               <label for="current-password">Current Password</label>
-              <input type="text" id="current-password" required />
+              <input type="password" id="current-password" required />
             </div>
             <div class="form-group">
               <label for="new-password">New Password</label>
-              <input type="text" id="new-password" required minlength="8" />
+              <input type="password" id="new-password" required minlength="8" />
             </div>
             <div class="form-group">
               <label for="confirm-password">Confirm New Password</label>
-              <input type="text" id="confirm-password" required minlength="8" />
+              <input type="password" id="confirm-password" required minlength="8" />
             </div>
             <div class="checkout-actions">
               <button type="submit" class="btn btn-primary">Update Password</button>
@@ -2154,72 +2409,6 @@
   </div>
 
   <!-- Buyer Auth Modal -->
-  <div id="product-request-modal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 600px;">
-      <div class="modal-header">
-        <h2>Request a Product</h2>
-        <button class="modal-close" data-action="close-product-request">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-          Can't find what you're looking for? Submit a product request and we'll notify farms that can fulfill your order.
-        </p>
-        <form id="product-request-form">
-          <div class="form-group">
-            <label for="request-product-name">Product Name *</label>
-            <input type="text" id="request-product-name" required placeholder="e.g. Cherry Tomatoes" />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="request-quantity">Quantity *</label>
-              <input type="number" id="request-quantity" required min="1" step="0.1" placeholder="50" />
-            </div>
-            <div class="form-group">
-              <label for="request-unit">Unit *</label>
-              <select id="request-unit" required>
-                <option value="lbs">lbs</option>
-                <option value="kg">kg</option>
-                <option value="units">units</option>
-                <option value="bunches">bunches</option>
-                <option value="cases">cases</option>
-                <option value="boxes">boxes</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="request-needed-by">Needed By Date *</label>
-            <input type="date" id="request-needed-by" required />
-          </div>
-
-          <div class="form-group">
-            <label for="request-description">Description (optional)</label>
-            <textarea id="request-description" rows="3" placeholder="Specify variety, size, or other requirements..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="request-max-price">Maximum Price per Unit (optional)</label>
-            <input type="number" id="request-max-price" min="0" step="0.01" placeholder="e.g. 5.00" />
-          </div>
-
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="request-organic" />
-              Organic certification required
-            </label>
-          </div>
-
-          <div class="modal-footer" style="margin-top: 1.5rem;">
-            <button type="submit" class="btn btn-primary">Submit Request</button>
-            <button type="button" class="btn btn-secondary" data-action="close-product-request">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Buyer Auth Modal -->
   <div id="auth-modal" class="auth-modal open">
     <div class="auth-modal-content">
       <div class="welcome-description" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 6px; border-left: 4px solid var(--accent);">
@@ -2244,7 +2433,7 @@
         </div>
         <div class="form-group">
           <label for="sign-in-password">Password</label>
-          <input type="text" id="sign-in-password" required />
+          <input type="password" id="sign-in-password" required />
         </div>
         <div class="auth-actions">
           <button type="submit" class="btn btn-primary">Access Portal</button>
@@ -2268,7 +2457,7 @@
         </div>
         <div class="form-group">
           <label for="register-password">Create Password</label>
-          <input type="text" id="register-password" required minlength="6" />
+          <input type="password" id="register-password" required minlength="8" />
         </div>
         <div class="form-group">
           <label for="register-buyer-type">Buyer Type</label>

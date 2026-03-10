@@ -303,7 +303,7 @@
         if (localStorage.getItem('token')) {
             // Cloud users go to farm-admin, edge users go to LE-dashboard
             const planType = localStorage.getItem('planType') || 'cloud';
-            window.location.href = planType === 'cloud' ? '/LE-dashboard.html' : '/LE-dashboard.html';
+            window.location.href = planType === 'cloud' ? '/farm-admin.html' : '/LE-dashboard.html';
         }
         
         // Check if redirected from successful purchase
@@ -320,13 +320,21 @@
             const farmId = document.getElementById('farmId').value.trim();
             const password = document.getElementById('password').value;
             
+            // Validate required fields
+            if (!farmId || !password) {
+                alertDiv.className = 'alert error';
+                alertDiv.textContent = 'Farm ID and password are required';
+                alertDiv.style.display = 'block';
+                return;
+            }
+            
             // Disable button
             button.disabled = true;
             button.textContent = 'Signing in...';
             alertDiv.style.display = 'none';
             
             try {
-                // Call backend authentication API (farm login endpoint — matches local Light Engine)
+                // Call backend authentication API (farm login endpoint)
                 const response = await fetch('/api/farm/auth/login', {
                     method: 'POST',
                     headers: {
@@ -355,7 +363,7 @@
                 
                 // Store token and farm info (standardized to 'token' and 'farm_id' keys)
                 localStorage.setItem('token', data.token);
-                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Use farm_id consistently
+                localStorage.setItem('farm_id', data.farm_id || data.farmId); // Server returns farm_id
                 localStorage.setItem('farm_name', data.farmName || data.farm_name || '');
                 localStorage.setItem('email', data.email || '');
                 localStorage.setItem('role', data.role || 'admin');
@@ -366,15 +374,30 @@
                 
                 console.log('[Login] Stored planType:', data.planType);
                 
+                // Farm server mode: Skip setup wizard check - go directly to redirect
+                if (data.edgeMode || data.planType === 'edge') {
+                    console.log('[Login] Farm server mode detected - skipping setup wizard check');
+                    
+                    // Show success message
+                    alertDiv.className = 'alert success';
+                    alertDiv.textContent = 'Login successful! Redirecting...';
+                    alertDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/LE-dashboard.html';
+                    }, 1000);
+                    return;
+                }
+                
                 // Show success message
                 alertDiv.className = 'alert success';
                 alertDiv.textContent = 'Login successful! Redirecting...';
                 alertDiv.style.display = 'block';
                 
                 setTimeout(() => {
-                    window.location.href = '/LE-dashboard.html';
+                    window.location.href = '/LE-dashboard.html'; // Use LE dashboard for cloud
                 }, 1000);
-                
+                                
             } catch (error) {
                 console.error('Login error:', error);
                 alertDiv.className = 'alert error';

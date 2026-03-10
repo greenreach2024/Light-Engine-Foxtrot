@@ -1976,6 +1976,18 @@
                     </div>
                 </div>
 
+                <!-- Stripe Connection Status -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2>Stripe Payment Setup</h2>
+                    <div id="stripe-status-container">
+                        <div style="padding: 20px; text-align: center;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">⚡</div>
+                            <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 20px;">Checking Stripe connection...</div>
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Payment Methods -->
                 <div class="card" style="margin-bottom: 30px;">
                     <h2>Connected Payment Methods</h2>
@@ -2605,23 +2617,7 @@
                     <div class="card">
                         <h2 style="margin-bottom: 20px;">System Configuration</h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Data & Backups</h3>
-                                <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="checkbox" id="auto-backup">
-                                        <span>Enable automatic backups</span>
-                                    </label>
-                                    <div style="margin-left: 24px;">
-                                        <label style="display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-secondary);">Backup Frequency</label>
-                                        <select id="backup-frequency" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-size: 12px;">
-                                            <option value="daily">Daily</option>
-                                            <option value="weekly">Weekly</option>
-                                            <option value="monthly">Monthly</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Data & Backups section removed — backups are automatic -->
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Security</h3>
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -3560,8 +3556,17 @@
                 let offlineDevices = 0;
                 
                 groups.forEach(group => {
-                    totalTrays += group.trays || 0;
-                    totalPlants += group.plants || 0;
+                    // Only count groups that are actively growing (not draft with no plan)
+                    const status = (group.status || '').toLowerCase();
+                    const hasPlan = !!(group.plan || group.planId);
+                    const hasCrop = !!(group.recipe || group.crop);
+                    const isActive = status !== 'draft' || hasPlan || hasCrop;
+                    
+                    if (isActive) {
+                        totalTrays += group.trays || 0;
+                        totalPlants += group.plants || 0;
+                    }
+                    
                     const lights = group.lights || [];
                     totalDevices += lights.length;
                     
@@ -3577,8 +3582,8 @@
                 const kpiDevices = document.getElementById('kpi-devices');
                 const kpiHarvest = document.getElementById('kpi-harvest');
                 
-                if (kpiTrays) kpiTrays.textContent = totalTrays || groups.length;
-                if (kpiPlants) kpiPlants.textContent = totalPlants || '--';
+                if (kpiTrays) kpiTrays.textContent = totalTrays > 0 ? totalTrays : '0';
+                if (kpiPlants) kpiPlants.textContent = totalPlants > 0 ? totalPlants.toLocaleString() : '0';
                 if (kpiDevices) kpiDevices.textContent = totalDevices;
                 
                 // Update change indicators with real status
@@ -4264,14 +4269,6 @@
           primary: document.getElementById('primary-api-key').value,
           readonly: document.getElementById('readonly-api-key').value
         },
-        integrations: {
-          square: document.getElementById('enable-square').checked,
-          squareLocationId: document.getElementById('square-location-id').value,
-          email: document.getElementById('enable-email').checked,
-          senderEmail: document.getElementById('sender-email').value,
-          greenreach: document.getElementById('enable-greenreach').checked,
-          webhooks: document.getElementById('enable-webhooks').checked
-        },
         notifications: {
           orders: document.getElementById('notify-order').checked,
           harvest: document.getElementById('notify-harvest').checked,
@@ -4312,15 +4309,6 @@
           document.getElementById('local-server-ip').value = config.network.serverIp || '';
           document.getElementById('http-port').value = config.network.httpPort || '8080';
           document.getElementById('ws-port').value = config.network.wsPort || '8081';
-        }
-        
-        if (config.integrations) {
-          document.getElementById('enable-square').checked = config.integrations.square !== false;
-          document.getElementById('square-location-id').value = config.integrations.squareLocationId || '';
-          document.getElementById('enable-email').checked = config.integrations.email !== false;
-          document.getElementById('sender-email').value = config.integrations.senderEmail || '';
-          document.getElementById('enable-greenreach').checked = config.integrations.greenreach || false;
-          document.getElementById('enable-webhooks').checked = config.integrations.webhooks || false;
         }
         
         if (config.notifications) {
