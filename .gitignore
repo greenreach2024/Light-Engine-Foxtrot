@@ -113,3 +113,8 @@ desktop-app/dist/mac*/
 # greenreach-central/  # COMMENTED OUT - need to track Central API files for AWS EB deployment
 greenreach-central/.elasticbeanstalk/logs/
 .env.local
+
+# Secrets — never commit
+greenreach-central/.db-password
+.env.python
+ecosystem.config.js

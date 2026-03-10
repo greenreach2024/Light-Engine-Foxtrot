@@ -1156,14 +1156,36 @@ app.use(async (req, res, next) => {
     } catch (_) { /* fall through */ }
   }
 
-  // 2. API key header
+  // 2. API key header — validate against GREENREACH_API_KEY
+  if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
+    const expected = process.env.GREENREACH_API_KEY;
+    if (expected) {
+      try {
+        const a = Buffer.from(req.headers['x-api-key'], 'utf8');
+        const b = Buffer.from(expected, 'utf8');
+        if (a.length === b.length && (await import('crypto')).timingSafeEqual(a, b)) {
+          req.farmId = req.headers['x-farm-id'];
+          req.farmAuth = { method: 'api-key' };
+          return next();
+        }
+      } catch (_) { /* invalid key */ }
+    }
+    // Key provided but invalid — still allow farm-id for non-production
+    if (process.env.NODE_ENV !== 'production') {
+      req.farmId = req.headers['x-farm-id'];
+      req.farmAuth = { method: 'api-key-unverified' };
+      return next();
+    }
+  }
+
+  // 3. x-farm-id header only (no API key) — allow for non-mutating requests
   if (req.headers['x-farm-id']) {
     req.farmId = req.headers['x-farm-id'];
-    req.farmAuth = { method: 'api-key' };
+    req.farmAuth = { method: 'header' };
     return next();
   }
 
-  // 3. Subdomain slug (cloud SaaS mode)
+  // 4. Subdomain slug (cloud SaaS mode)
   const slug = req.headers['x-farm-slug'] || _extractSlug(req.headers.host);
   if (slug) {
     const farmId = await _resolveSlug(slug);
@@ -1175,9 +1197,16 @@ app.use(async (req, res, next) => {
     }
   }
 
-  // 4. Env default (single-farm mode)
-  req.farmId = process.env.FARM_ID || null;
-  req.farmAuth = { method: 'default' };
+  // 5. Env default (single-farm mode) — only in non-production
+  if (process.env.FARM_ID && process.env.NODE_ENV !== 'production') {
+    req.farmId = process.env.FARM_ID;
+    req.farmAuth = { method: 'env-default' };
+    return next();
+  }
+
+  // No farm context — null farmId (route handlers should check)
+  req.farmId = null;
+  req.farmAuth = { method: 'none' };
   next();
 });
 
@@ -3353,7 +3382,8 @@ app.post('/api/wholesale/orders/route', async (req, res) => {
     // 1. Get all active network farms with their quality data
     let farms = [];
     try {
-      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+      const { rows } = await db.query("SELECT * FROM farms WHERE status = 'active'");
+      farms = rows;
     } catch (_) {
       // Fallback to registered farms
       farms = [];
@@ -3470,7 +3500,8 @@ app.get('/api/wholesale/quality-scores', async (req, res) => {
     const db = getDatabase();
     let farms = [];
     try {
-      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+      const { rows } = await db.query("SELECT * FROM farms WHERE status = 'active'");
+      farms = rows;
     } catch (_) {}
 
     const scores = {};
@@ -3528,7 +3559,8 @@ app.post('/api/wholesale/dynamic-pricing', async (req, res) => {
     // 1. Gather network supply
     let farms = [];
     try {
-      farms = await db.collection('network_farms').find({ status: 'active' }).toArray();
+      const { rows } = await db.query("SELECT * FROM farms WHERE status = 'active'");
+      farms = rows;
     } catch (_) {}
 
     const supplyMap = {};
@@ -3697,11 +3729,9 @@ app.get('/api/network/trends', async (req, res) => {
     // 1. Yield trends from experiment records
     let yieldTrends = [];
     try {
-      const records = await db.collection('experiment_records')
-        .find({})
-        .sort({ recorded_at: -1 })
-        .limit(200)
-        .toArray();
+      const { rows: records } = await db.query(
+        'SELECT * FROM experiment_records ORDER BY recorded_at DESC LIMIT 200'
+      );
 
       const cropYields = {};
       for (const r of records) {
@@ -3760,9 +3790,9 @@ app.get('/api/network/trends', async (req, res) => {
     // 3. Farm activity trends
     let farmActivity = { active_farms: 0, total_experiments: 0 };
     try {
-      const farmCount = await db.collection('network_farms').countDocuments({ status: 'active' });
-      const expCount = await db.collection('experiment_records').countDocuments({});
-      farmActivity = { active_farms: farmCount, total_experiments: expCount };
+      const { rows: [{ count: farmCountStr }] } = await db.query("SELECT COUNT(*) FROM farms WHERE status = 'active'");
+      const { rows: [{ count: expCountStr }] } = await db.query('SELECT COUNT(*) FROM experiment_records');
+      farmActivity = { active_farms: parseInt(farmCountStr) || 0, total_experiments: parseInt(expCountStr) || 0 };
     } catch (_) {}
 
     res.json({
@@ -4089,7 +4119,40 @@ async function startServer() {
     logger.info(`WebSocket server running on port ${WS_PORT}`);
 
     wss.on('connection', (ws, req) => {
-      logger.info('New WebSocket connection established');
+      // Authenticate WebSocket connection via query param or header
+      let farmId = null;
+      let authMethod = 'none';
+      try {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const token = url.searchParams.get('token');
+        if (token) {
+          const payload = _jwtLib.verify(token, _JWT_SECRET, {
+            issuer: 'greenreach-central',
+            audience: 'greenreach-farms'
+          });
+          farmId = payload.farm_id;
+          authMethod = 'jwt';
+        } else if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
+          // API key auth for edge devices
+          const expected = process.env.GREENREACH_API_KEY;
+          if (expected && req.headers['x-api-key'] === expected) {
+            farmId = req.headers['x-farm-id'];
+            authMethod = 'api-key';
+          }
+        }
+      } catch (err) {
+        logger.warn('[WS] Auth failed:', err.message);
+      }
+
+      if (!farmId && process.env.NODE_ENV === 'production') {
+        logger.warn('[WS] Rejecting unauthenticated connection in production');
+        ws.close(4001, 'Authentication required');
+        return;
+      }
+
+      ws.farmId = farmId;
+      ws.authMethod = authMethod;
+      logger.info(`New WebSocket connection established (farm: ${farmId || 'dev'}, auth: ${authMethod})`);
       
       // Send welcome message
       ws.send(JSON.stringify({
@@ -4215,7 +4278,11 @@ app.post('/api/network/recipe-versions/push', async (req, res) => {
     const mode = push_mode || 'suggest'; // 'suggest' or 'auto_adopt'
 
     // Get active network farms
-    const farms = await db.collection('network_farms').find({ status: 'active' }).toArray().catch(() => []);
+    let farms = [];
+    try {
+      const { rows } = await db.query("SELECT * FROM farms WHERE status = 'active'");
+      farms = rows;
+    } catch (_) {}
 
     const results = [];
     for (const farm of farms) {

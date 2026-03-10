@@ -1,11 +1,15 @@
 /**
  * Auth Middleware
- * Extracts farm context from JWT tokens, API keys, or headers.
+ * Extracts farm context from JWT tokens or validated API keys.
  * Supports multi-tenant SaaS: every request is scoped to a farmId.
+ *
+ * SECURITY: No unauthenticated fallback — all requests must present
+ * a valid JWT or a valid API key. In local dev mode (non-production),
+ * the FARM_ID env var + x-farm-id header are accepted without a key.
  */
 
 import jwt from 'jsonwebtoken';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import logger from '../utils/logger.js';
 
 function getJwtSecret() {
@@ -16,11 +20,27 @@ function getJwtSecret() {
 }
 const JWT_SECRET = getJwtSecret();
 
+/** Validate an API key using timing-safe comparison */
+function isValidApiKey(key) {
+  const expected = process.env.GREENREACH_API_KEY;
+  if (!expected || !key) return false;
+  try {
+    const a = Buffer.from(key, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+const isProduction = () =>
+  process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud';
+
 /**
- * Basic auth middleware — extracts farmId from JWT token, API key header,
- * or falls back to local farm.
+ * Basic auth middleware — extracts farmId from JWT token or validated API key.
  *
- * Sets req.user = { farmId, role, email, name, userId }
+ * Sets req.user = { farmId, role, email, name, userId, authMethod }
  */
 export function authMiddleware(req, res, next) {
   // 1. Try JWT token from Authorization header
@@ -47,8 +67,12 @@ export function authMiddleware(req, res, next) {
     }
   }
 
-  // 2. API key auth (edge devices)
+  // 2. API key auth (edge devices) — key MUST match GREENREACH_API_KEY
   if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
+    if (!isValidApiKey(req.headers['x-api-key'])) {
+      logger.warn('[Auth] Invalid API key from', req.headers['x-farm-id']);
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
     req.user = {
       farmId: req.headers['x-farm-id'],
       role: 'admin',
@@ -57,13 +81,22 @@ export function authMiddleware(req, res, next) {
     return next();
   }
 
-  // 3. Fallback to headers or env (single-farm / local dev mode)
-  req.user = {
-    farmId: req.headers['x-farm-id'] || process.env.FARM_ID || 'FARM-LOCAL',
-    role: 'admin',
-    authMethod: 'fallback'
-  };
-  next();
+  // 3. Local dev mode only — accept x-farm-id header or FARM_ID env
+  if (!isProduction()) {
+    const devFarmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+    if (devFarmId) {
+      req.user = {
+        farmId: devFarmId,
+        role: 'admin',
+        authMethod: 'dev-local'
+      };
+      return next();
+    }
+  }
+
+  // No valid credentials — reject
+  logger.warn('[Auth] Unauthenticated request to', req.path);
+  return res.status(401).json({ error: 'Authentication required' });
 }
 
 /**

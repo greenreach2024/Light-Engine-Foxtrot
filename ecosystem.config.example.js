@@ -1,3 +1,5 @@
+// PM2 ecosystem config — copy to ecosystem.config.js and fill in secrets
+// DO NOT commit the real ecosystem.config.js (it's in .gitignore)
 module.exports = {
   apps: [
     {
@@ -11,10 +13,9 @@ module.exports = {
         PORT: '8091',
         EDGE_MODE: 'true',
         DEMO_MODE: 'false',
-        // Central sync configuration
         GREENREACH_CENTRAL_URL: 'https://greenreachgreens.com',
-        GREENREACH_API_KEY: 'b0bc5dbb5cc038533141651efc52df3f5de5c4570b14c7e13abf124f17b38f15',
-        FARM_ID: 'FARM-MKLOMAT3-A9D8'
+        GREENREACH_API_KEY: '<your-api-key-here>',
+        FARM_ID: '<your-farm-id-here>'
       },
       time: true,
       kill_timeout: 5000,
