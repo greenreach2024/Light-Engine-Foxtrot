@@ -145,6 +145,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const WS_PORT = process.env.WS_PORT || 3001;
 
+// ── Environment config validation (#17) ──
+// Check required env vars at startup in production
+if (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud') {
+  const required = ['JWT_SECRET', 'DATABASE_URL', 'GREENREACH_API_KEY'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`[STARTUP] Missing required environment variables: ${missing.join(', ')}`);
+    console.error('[STARTUP] Server cannot start safely in production without these.');
+    process.exit(1);
+  }
+}
+
 // Trust proxy for AWS ALB/ELB (required for rate limiting and client IP detection)
 app.set('trust proxy', 1);
 app.locals.databaseReady = false;
@@ -161,6 +173,30 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
     next();
   });
 }
+
+// ── Request correlation IDs (#19) ──
+import { randomUUID } from 'crypto';
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
+
+// ── Cookie security (#20) ──
+// Set secure defaults for any cookies set by the application
+app.use((req, res, next) => {
+  const originalCookie = res.cookie.bind(res);
+  res.cookie = (name, value, options = {}) => {
+    const secureDefaults = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      ...options
+    };
+    return originalCookie(name, value, secureDefaults);
+  };
+  next();
+});
 
 // Security middleware
 // Note: the current standalone UI pages include inline <script> and inline event handlers.
@@ -422,9 +458,23 @@ app.use((req, res, next) => {
 });
 
 // Static UI — non-HTML assets (JS, CSS, images, JSON, fonts)
-app.use(express.static(path.join(__dirname, 'public')));
+// ── Static asset caching (#21) ──
+const staticCacheOptions = {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    } else if (filePath.match(/\.(jpg|jpeg|png|gif|svg|woff|woff2|ttf|eot|ico)$/)) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+};
+app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 // Fallback to root public directory for shared assets
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public'), staticCacheOptions));
 
 // =====================================================
 // FARM DATA SYNC: Periodically pull live data from farm servers

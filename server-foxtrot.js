@@ -265,6 +265,28 @@ expressWs(app);
 app.set('trust proxy', true);
 console.log('[Security] Trust proxy enabled - will use X-Forwarded-For for client IP');
 
+// ── Request correlation IDs (#19) ──
+import { randomUUID } from 'crypto';
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
+
+// ── Cookie security (#20) ──
+app.use((req, res, next) => {
+  const originalCookie = res.cookie.bind(res);
+  res.cookie = (name, value, options = {}) => {
+    return originalCookie(name, value, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      ...options
+    });
+  };
+  next();
+});
+
 // Security Headers - Helmet.js
 // Configure helmet for production-ready security headers
 const isProduction = process.env.NODE_ENV === 'production';
