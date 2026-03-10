@@ -231,6 +231,52 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// CSRF protection for state-changing requests (SPA + JSON API)
+// Since this is a pure API server (no server-rendered forms), CSRF is
+// mitigated by: (1) CORS origin whitelist above, (2) Content-Type check,
+// (3) custom auth headers (trigger preflight). This middleware adds an
+// extra Origin/Referer check for mutating requests.
+app.use((req, res, next) => {
+  // Only check state-changing methods
+  if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return next();
+  // Skip for API-key authenticated edge devices (no browser origin)
+  if (req.headers['x-api-key']) return next();
+  // Skip for non-browser clients (no Origin header)
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  // Verify origin against CORS whitelist (same logic)
+  const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+  const serverHost = (process.env.SERVER_HOST || '').replace(/:\d+$/, '');
+  const allowed = host === serverHost ||
+    origin.includes('elasticbeanstalk.com') ||
+    host.endsWith('.greenreachgreens.com') ||
+    host === 'greenreachgreens.com' || host === 'www.greenreachgreens.com' ||
+    host === 'localhost';
+  if (!allowed) {
+    logger.warn('[CSRF] Blocked state-changing request from:', origin);
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  next();
+});
+
+// Input validation middleware — sanitize common request body fields
+app.use((req, res, next) => {
+  // Basic sanitization for string fields in request body
+  if (req.body && typeof req.body === 'object') {
+    const sanitize = (val) => {
+      if (typeof val !== 'string') return val;
+      // Strip null bytes and trim
+      return val.replace(/\0/g, '').trim();
+    };
+    for (const [key, val] of Object.entries(req.body)) {
+      if (typeof val === 'string') {
+        req.body[key] = sanitize(val);
+      }
+    }
+  }
+  next();
+});
+
 // =====================================================
 // MULTI-TENANT FARM DATA MIDDLEWARE
 // Intercepts /data/*.json requests and serves farm-scoped data from
@@ -4064,6 +4110,22 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use(errorHandler);
+
+// Global process error handlers (prevent silent crashes)
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('[Process] Unhandled Promise Rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('[Process] Uncaught Exception — shutting down', {
+    error: error.message,
+    stack: error.stack
+  });
+  process.exit(1);
+});
 
 // Initialize database and start server
 async function startServer() {
