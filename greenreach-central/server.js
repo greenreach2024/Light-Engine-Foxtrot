@@ -175,7 +175,6 @@ if (DEPLOYMENT_MODE === 'cloud' || process.env.NODE_ENV === 'production') {
 }
 
 // ── Request correlation IDs (#19) ──
-import { randomUUID } from 'crypto';
 app.use((req, res, next) => {
   req.id = req.headers['x-request-id'] || randomUUID();
   res.setHeader('X-Request-Id', req.id);
