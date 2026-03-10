@@ -211,6 +211,9 @@ const DELIVERY_ZONE_RULES = {
   ZONE_C: { id: 'zone_c', fee: 12, min_order: 50 }
 };
 
+const farmCatalogSyncCache = new Map();
+const farmPricingSyncCache = new Map();
+
 function parseBooleanEnv(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
   const normalized = String(value).toLowerCase();
@@ -1765,6 +1768,159 @@ router.get('/inventory/check-overselling', async (req, res) => {
   } catch (error) {
     console.error('Overselling check error:', error);
     return res.status(500).json({ status: 'error', message: 'Failed to check overselling' });
+  }
+});
+
+/**
+ * POST /api/wholesale/catalog/sync
+ * Farm -> Central catalog sync endpoint (compat for LE wholesale integration service)
+ */
+router.post('/catalog/sync', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId;
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const timestamp = req.body?.timestamp || new Date().toISOString();
+
+    farmCatalogSyncCache.set(farmId, {
+      farmId,
+      items,
+      count: items.length,
+      syncedAt: timestamp,
+      updatedAt: new Date().toISOString()
+    });
+
+    try {
+      await query(
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'wholesale_catalog', $2::jsonb, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2::jsonb, updated_at = NOW()`,
+        [farmId, JSON.stringify({ items, syncedAt: timestamp })]
+      );
+    } catch (dbError) {
+      console.warn('[wholesale] catalog sync DB write skipped:', dbError.message);
+    }
+
+    return res.json({
+      status: 'ok',
+      farm_id: farmId,
+      synced: items.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[wholesale] catalog sync failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Catalog sync failed' });
+  }
+});
+
+/**
+ * POST /api/wholesale/pricing/sync
+ * Farm -> Central pricing sync endpoint (compat for LE wholesale integration service)
+ */
+router.post('/pricing/sync', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId;
+    const pricing = Array.isArray(req.body?.pricing) ? req.body.pricing : [];
+    const timestamp = req.body?.timestamp || new Date().toISOString();
+
+    farmPricingSyncCache.set(farmId, {
+      farmId,
+      pricing,
+      count: pricing.length,
+      syncedAt: timestamp,
+      updatedAt: new Date().toISOString()
+    });
+
+    try {
+      await query(
+        `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+         VALUES ($1, 'wholesale_pricing', $2::jsonb, NOW())
+         ON CONFLICT (farm_id, data_type)
+         DO UPDATE SET data = $2::jsonb, updated_at = NOW()`,
+        [farmId, JSON.stringify({ pricing, syncedAt: timestamp })]
+      );
+    } catch (dbError) {
+      console.warn('[wholesale] pricing sync DB write skipped:', dbError.message);
+    }
+
+    return res.json({
+      status: 'ok',
+      farm_id: farmId,
+      synced: pricing.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[wholesale] pricing sync failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Pricing sync failed' });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/:orderId/fulfill
+ * Farm callback endpoint to mark order fulfilled.
+ */
+router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
+    const order = await getOrderById(orderId, { includeArchived: true });
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    order.fulfillment_status = 'fulfilled';
+    order.fulfilled_at = req.body?.fulfilledAt || new Date().toISOString();
+    order.tracking_number = req.body?.trackingNumber || order.tracking_number || null;
+    order.tracking_carrier = req.body?.carrier || order.tracking_carrier || null;
+
+    await saveOrder(order).catch(() => {});
+    logOrderEvent(orderId, 'status_changed', {
+      from: 'processing',
+      to: 'fulfilled',
+      farm_id: farmId,
+      tracking_number: order.tracking_number,
+      tracking_carrier: order.tracking_carrier
+    });
+
+    return res.json({ status: 'ok', order_id: orderId, new_status: 'fulfilled' });
+  } catch (error) {
+    console.error('[wholesale] fulfill callback failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to process fulfillment callback' });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/:orderId/cancel-by-farm
+ * Farm callback endpoint to mark order canceled.
+ */
+router.post('/orders/:orderId/cancel-by-farm', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
+    const reason = req.body?.reason || 'farm_canceled';
+    const order = await getOrderById(orderId, { includeArchived: true });
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    order.fulfillment_status = 'canceled';
+    order.canceled_at = req.body?.canceledAt || new Date().toISOString();
+    order.cancel_reason = reason;
+
+    await saveOrder(order).catch(() => {});
+    logOrderEvent(orderId, 'status_changed', {
+      from: 'processing',
+      to: 'canceled',
+      farm_id: farmId,
+      reason
+    });
+
+    return res.json({ status: 'ok', order_id: orderId, new_status: 'canceled' });
+  } catch (error) {
+    console.error('[wholesale] cancel-by-farm callback failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to process cancellation callback' });
   }
 });
 

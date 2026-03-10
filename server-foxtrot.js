@@ -141,7 +141,13 @@ function authenticateToken(req, res, next) {
   const token = authHeader.substring(7);
   
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = process.env.JWT_SECRET || getJwtSecret();
+    if (!jwtSecret) {
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication is not configured'
+      });
+    }
     const decoded = jwt.verify(token, jwtSecret);
     
     // Attach user info to request
@@ -10796,8 +10802,11 @@ async function syncExperimentToCenter(record) {
   if (!centralUrl) return; // No Central configured — farm-only mode
 
   try {
-    const farmData = JSON.parse(fs.readFileSync(FARM_PATH, 'utf-8'));
-    const apiKey = process.env.CENTRAL_API_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const apiKey = process.env.CENTRAL_API_KEY || process.env.GREENREACH_API_KEY;
+    if (!apiKey) {
+      console.warn('[experiment] Central sync skipped: missing CENTRAL_API_KEY/GREENREACH_API_KEY');
+      return;
+    }
 
     const response = await axios.post(`${centralUrl}/api/sync/experiment-records`, {
       farm_id: record.farm_id,

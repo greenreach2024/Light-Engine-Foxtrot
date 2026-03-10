@@ -143,6 +143,7 @@ export default class SyncService extends EventEmitter {
       this.ws = new WebSocket(this.config.wsUrl, {
         headers: {
           'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-API-Key': this.config.apiKey,
           'X-Farm-ID': this.config.farmId
         }
       });
@@ -343,19 +344,22 @@ export default class SyncService extends EventEmitter {
       
       // Get inventory from local database
       const inventory = await this.getLocalInventory();
+      const products = Array.isArray(inventory)
+        ? inventory
+        : (Array.isArray(inventory?.products) ? inventory.products : []);
       
       // Send to Central API
       const response = await this.apiRequest('POST', '/api/sync/inventory', {
         farmId: this.config.farmId,
         timestamp: new Date().toISOString(),
-        inventory
+        products
       });
       
       if (response.ok) {
         this.state.lastSync.inventory = new Date().toISOString();
         this.state.syncErrors.inventory = 0;
         console.log('[sync-service] Inventory synced successfully');
-        this.emit('inventory_synced', inventory);
+        this.emit('inventory_synced', products);
       } else {
         throw new Error(`Inventory sync failed: ${response.status}`);
       }
@@ -366,7 +370,11 @@ export default class SyncService extends EventEmitter {
       this.emit('sync_error', { type: 'inventory', error });
       
       // Queue for retry
-      this.queueSync('inventory', await this.getLocalInventory());
+      const inventory = await this.getLocalInventory();
+      const products = Array.isArray(inventory)
+        ? inventory
+        : (Array.isArray(inventory?.products) ? inventory.products : []);
+      this.queueSync('inventory', products);
     }
   }
   
@@ -379,10 +387,15 @@ export default class SyncService extends EventEmitter {
       const health = await this.getHealthMetrics();
       
       // Send to Central API
-      const response = await this.apiRequest('POST', '/api/sync/health', {
+      const response = await this.apiRequest('POST', '/api/sync/heartbeat', {
         farmId: this.config.farmId,
-        timestamp: new Date().toISOString(),
-        health
+        status: 'active',
+        metadata: {
+          farmId: this.config.farmId,
+          source: 'sync-service'
+        },
+        stats: health,
+        timestamp: new Date().toISOString()
       });
       
       if (response.ok) {
@@ -411,7 +424,7 @@ export default class SyncService extends EventEmitter {
       console.log('[sync-service] Syncing configuration...');
       
       // Get config from Central API
-      const response = await this.apiRequest('GET', `/api/farms/${this.config.farmId}/config`);
+      const response = await this.apiRequest('GET', `/api/sync/${this.config.farmId}/config`);
       
       if (response.ok) {
         const config = await response.json();
@@ -634,16 +647,21 @@ export default class SyncService extends EventEmitter {
             const invResponse = await this.apiRequest('POST', '/api/sync/inventory', {
               farmId: this.config.farmId,
               timestamp: item.timestamp,
-              inventory: item.data
+              products: Array.isArray(item.data) ? item.data : []
             });
             success = invResponse.ok;
             break;
             
           case 'health':
-            const healthResponse = await this.apiRequest('POST', '/api/sync/health', {
+            const healthResponse = await this.apiRequest('POST', '/api/sync/heartbeat', {
               farmId: this.config.farmId,
               timestamp: item.timestamp,
-              health: item.data
+              status: 'active',
+              metadata: {
+                farmId: this.config.farmId,
+                source: 'sync-service-queue'
+              },
+              stats: item.data
             });
             success = healthResponse.ok;
             break;
@@ -730,6 +748,7 @@ export default class SyncService extends EventEmitter {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.config.apiKey}`,
+        'X-API-Key': this.config.apiKey,
         'X-Farm-ID': this.config.farmId,
         'X-API-Secret': this.config.apiSecret
       }

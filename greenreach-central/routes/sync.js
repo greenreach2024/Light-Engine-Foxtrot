@@ -441,7 +441,9 @@ router.post('/config', authenticateFarm, async (req, res) => {
 router.post('/inventory', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req;
-    const { products } = req.body;
+    const products = Array.isArray(req.body?.products)
+      ? req.body.products
+      : (Array.isArray(req.body?.inventory) ? req.body.inventory : null);
     
     if (!Array.isArray(products)) {
       return res.status(400).json({ 
@@ -583,6 +585,46 @@ router.get('/status', authenticateFarm, async (req, res) => {
 });
 
 /**
+ * GET /api/sync/:farmId/config
+ * Retrieve latest synced config for a farm
+ */
+router.get('/:farmId/config', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    let config = null;
+
+    if (await isDatabaseAvailable()) {
+      const result = await query(
+        `SELECT data, updated_at FROM farm_data
+         WHERE farm_id = $1 AND data_type = 'config'
+         LIMIT 1`,
+        [farmId]
+      );
+
+      if (result.rows.length > 0) {
+        config = result.rows[0].data;
+      }
+    } else if (inMemoryStore.config) {
+      config = inMemoryStore.config.get(farmId) || null;
+    }
+
+    return res.json({
+      success: true,
+      farmId,
+      config: config || {},
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[Sync] Error retrieving config:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve config',
+      message: error.message
+    });
+  }
+});
+
+/**
  * POST /api/sync/heartbeat
  * Periodic health check from edge device
  */
@@ -663,6 +705,85 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
       success: false,
       error: 'Failed to process heartbeat',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/sync/health
+ * Backward-compatible alias for heartbeat endpoint.
+ */
+router.post('/health', authenticateFarm, async (req, res) => {
+  try {
+    const { farmId } = req;
+    const normalizedBody = {
+      status: req.body?.status || 'active',
+      metadata: req.body?.metadata || {},
+      stats: req.body?.stats || req.body?.health || {}
+    };
+
+    req.body = normalizedBody;
+
+    // Reuse heartbeat behavior
+    const { status, metadata, stats } = req.body;
+    logger.info(`[Sync] Health alias from farm ${farmId}, status: ${status}`);
+
+    if (await isDatabaseAvailable()) {
+      let dbStatus = 'active';
+      if (status === 'offline' || status === 'suspended') dbStatus = 'suspended';
+      else if (status === 'inactive') dbStatus = 'inactive';
+
+      const farmName = metadata?.farmName || metadata?.name || farmId;
+      const contactName = metadata?.contact_name || metadata?.contactName || metadata?.contact?.name || 'Farm Admin';
+      const planType = metadata?.plan_type || metadata?.planType || 'edge';
+      const apiKeyValue = req.apiKey;
+      const apiSecret = metadata?.api_secret || metadata?.apiSecret || crypto.randomBytes(32).toString('hex');
+      const jwtSecret = crypto.randomBytes(32).toString('hex');
+
+      await query(
+        `INSERT INTO farms (
+           farm_id, name, contact_name, plan_type, api_key, api_secret, jwt_secret,
+           status, last_heartbeat, metadata, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, NOW(), NOW())
+         ON CONFLICT (farm_id)
+         DO UPDATE SET
+           status = EXCLUDED.status,
+           name = COALESCE(EXCLUDED.name, farms.name),
+           contact_name = COALESCE(EXCLUDED.contact_name, farms.contact_name),
+           plan_type = COALESCE(EXCLUDED.plan_type, farms.plan_type),
+           api_key = COALESCE(farms.api_key, EXCLUDED.api_key),
+           api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
+           jwt_secret = COALESCE(farms.jwt_secret, EXCLUDED.jwt_secret),
+           last_heartbeat = NOW(),
+           metadata = EXCLUDED.metadata,
+           updated_at = NOW()`,
+        [
+          farmId,
+          farmName,
+          contactName,
+          planType,
+          apiKeyValue,
+          apiSecret,
+          jwtSecret,
+          dbStatus,
+          JSON.stringify({ ...metadata, stats })
+        ]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Health received',
+      farmId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[Sync] Error processing health alias:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to process health',
+      message: error.message
     });
   }
 });

@@ -492,7 +492,7 @@ class WholesaleIntegrationService extends EventEmitter {
     console.log('[wholesale] Sending cancellation notification:', order.id);
     
     try {
-      const response = await this.makeRequest(`/api/wholesale/orders/${order.id}/cancel`, {
+      const response = await this.makeRequest(`/api/wholesale/orders/${order.id}/cancel-by-farm`, {
         method: 'POST',
         body: {
           farmId: this.farmId,
@@ -562,6 +562,7 @@ class WholesaleIntegrationService extends EventEmitter {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
+        'X-API-Key': this.apiKey,
         'X-Farm-ID': this.farmId,
         'X-API-Secret': this.apiSecret,
         ...options.headers

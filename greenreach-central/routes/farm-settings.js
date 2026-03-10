@@ -7,7 +7,9 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
 import logger from '../utils/logger.js';
+import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
@@ -19,23 +21,55 @@ const changeLog = [];
 /**
  * Middleware: Authenticate farm device
  */
-function authenticateFarm(req, res, next) {
-  const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
-  const farmId = req.headers['x-farm-id'] || req.params.farmId;
-  
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API key required' });
+async function authenticateFarm(req, res, next) {
+  try {
+    const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    const farmId = req.headers['x-farm-id'] || req.params.farmId;
+
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    if (!farmId) {
+      return res.status(400).json({ error: 'Farm ID required' });
+    }
+
+    let isValid = false;
+
+    if (await isDatabaseAvailable()) {
+      const dbResult = await query(
+        `SELECT farm_id FROM farms WHERE farm_id = $1 AND api_key = $2 LIMIT 1`,
+        [farmId, apiKey]
+      );
+      isValid = dbResult.rows.length > 0;
+    }
+
+    if (!isValid) {
+      const expected = process.env.GREENREACH_API_KEY;
+      if (expected) {
+        try {
+          const providedBuf = Buffer.from(String(apiKey), 'utf8');
+          const expectedBuf = Buffer.from(String(expected), 'utf8');
+          if (providedBuf.length === expectedBuf.length && crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+            isValid = true;
+          }
+        } catch {
+          isValid = false;
+        }
+      }
+    }
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    req.farmId = farmId;
+    req.authenticated = true;
+    return next();
+  } catch (error) {
+    logger.error('[Farm Settings] Authentication failed:', error.message);
+    return res.status(500).json({ error: 'Authentication failure' });
   }
-  
-  if (!farmId) {
-    return res.status(400).json({ error: 'Farm ID required' });
-  }
-  
-  // In production, validate API key against database
-  // For now, accept any non-empty key
-  req.farmId = farmId;
-  req.authenticated = true;
-  next();
 }
 
 /**
