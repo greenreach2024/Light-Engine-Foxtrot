@@ -185,7 +185,7 @@
       "type": "new_order",
       "recipient_type": "farm",
       "recipient_id": "TEST-FARM-E2E",
-      "recipient_email": "farm-test@urbanyeild.ca",
+      "recipient_email": "farm-test@greenreachgreens.com",
       "recipient_phone": "+17093983166",
       "subject": "New Order Received",
       "message": "New order E2E-ORDER-1766947345770-TEST-FARM-E2E from The Local Café. Please verify within 24 hours.",

@@ -37,7 +37,7 @@
 - light-engine-demo S3 bucket (http/https)
 - light-engine-foxtrot-prod EB (http/https)
 - greenreachgreens.com (http/https, with/without www)
-- urbanyeild.ca (http/https, with/without www)
+- greenreachgreens.com (http/https, with/without www)
 
 **Testing Results:**
 ```bash

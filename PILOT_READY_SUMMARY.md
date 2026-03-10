@@ -25,7 +25,7 @@ GreenReach Wholesale pilot program is **fully operational and ready for launch**
 
 **Multi-Channel Delivery**:
 - ✅ SMS notifications via Twilio (+1-709-398-3166)
-- ✅ Email notifications via SMTP (orders@urbanyeild.ca)
+- ✅ Email notifications via SMTP (orders@greenreachgreens.com)
 - ✅ Push notifications via Firebase Cloud Messaging
 - ✅ Database logging and tracking
 
@@ -81,7 +81,7 @@ GreenReach Wholesale pilot program is **fully operational and ready for launch**
 - `overselling_detected` - **CRITICAL** - Inventory oversold (critical)
 
 **Notification Channels**:
-- Email: ops@urbanyeild.ca
+- Email: ops@greenreachgreens.com
 - SMS: +1-709-398-3166 (critical alerts only)
 - Slack: Webhook configured
 
@@ -242,7 +242,7 @@ node scripts/onboard-buyer.js
 ### Support Structure
 
 **Operations Team**:
-- Email: ops@urbanyeild.ca (monitored 9am-6pm EST)
+- Email: ops@greenreachgreens.com (monitored 9am-6pm EST)
 - SMS: +1-709-398-3166 (urgent issues only)
 - Response SLA: 4 hours (business days)
 

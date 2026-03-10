@@ -2,7 +2,7 @@
   "farm_id": "TEST-FARM-E2E",
   "name": "End-to-End Test Farm",
   "contact_name": "Test Farm Owner",
-  "email": "farm-test@urbanyeild.ca",
+  "email": "farm-test@greenreachgreens.com",
   "phone": "+17093983166",
   "api_url": "http://localhost:8091",
   "api_key": "test-api-key-f797jlyv2",

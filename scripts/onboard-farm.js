@@ -161,7 +161,7 @@ async function runOnboarding() {
     console.log('   Open: FARM_ONBOARDING_GUIDE.md\n');
     
     console.log('5. Schedule Training Call:');
-    console.log('   Email: ops@urbanyeild.ca\n');
+    console.log('   Email: ops@greenreachgreens.com\n');
     
     console.log('⚠️  Important:');
     console.log(`   - Share API key securely with farm: ${apiKey}`);

@@ -21,7 +21,7 @@
 1. **wholesale-farm-orders.html**
    - Current Title: "Wholesale Orders - Farm Dashboard"
    - Purpose: Farms manage their wholesale orders
-   - **ISSUE**: Farm-facing tool, should be on urbanyeild.ca
+   - **ISSUE**: Farm-facing tool, should be on greenreachgreens.com
    
 2. **wholesale-farm-performance.html**
    - Current Title: "Farm Performance Dashboard - **GreenReach Central**"
@@ -41,7 +41,7 @@
 
 ---
 
-## ✅ CORRECT - Light Engine Pages (www.urbanyeild.ca)
+## ✅ CORRECT - Light Engine Pages (www.greenreachgreens.com)
 
 ### Environmental Control & Monitoring
 1. **index.html** - "Light Engine Foxtrot" ✅
@@ -92,7 +92,7 @@
 1. **wholesale-farm-orders.html**
    - Change API calls from relative to absolute if needed
    - Update any GreenReach branding references
-   - Ensure it's documented as urbanyeild.ca page
+   - Ensure it's documented as greenreachgreens.com page
 
 2. **wholesale-farm-performance.html**
    - Remove "GreenReach Central" from title
@@ -124,7 +124,7 @@
 - farm-sales.html
 - shop.html
 
-**Light Engine (www.urbanyeild.ca)**: 20+ pages
+**Light Engine (www.greenreachgreens.com)**: 20+ pages
 - All monitoring, automation, and farm operations pages
 - **Add**: wholesale-farm-orders, wholesale-farm-performance, wholesale-integrations, wholesale-order-review
 
@@ -139,5 +139,5 @@
 1. ✅ CORS is already configured for both domains
 2. ❌ Fix page titles removing incorrect GreenReach branding
 3. ❌ Fix redirect in wholesale-order-review.html (line 342)
-4. ❌ Update documentation to reflect farm wholesale pages on urbanyeild.ca
+4. ❌ Update documentation to reflect farm wholesale pages on greenreachgreens.com
 5. ❌ Consider adding domain-based routing logic if strict separation is needed

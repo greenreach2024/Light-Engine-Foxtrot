@@ -13,20 +13,16 @@ const ALLOWED_ORIGINS = [
   'https://greenreachgreens.com',
   'http://www.greenreachgreens.com',
   'https://www.greenreachgreens.com',
-  'http://urbanyeild.ca',
-  'https://urbanyeild.ca',
-  'http://www.urbanyeild.ca',
-  'https://www.urbanyeild.ca',
   'http://localhost:8091',
   'http://127.0.0.1:8091',
 ];
 
-// Allow any *.greenreachgreens.com or *.urbanyeild.ca subdomain (farm subdomains)
+// Allow any *.greenreachgreens.com subdomain (farm subdomains)
 function isSubdomainAllowed(origin) {
   try {
     const url = new URL(origin);
     const host = url.hostname;
-    return host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca');
+    return host.endsWith('.greenreachgreens.com');
   } catch { return false; }
 }
 

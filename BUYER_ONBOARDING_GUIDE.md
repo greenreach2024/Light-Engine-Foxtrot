@@ -291,7 +291,7 @@ If there's a problem with your order:
 - Partial refund or credit issued
 
 **Major Issues** (spoiled product, wrong items, large shortage):
-- Contact farm AND ops@urbanyeild.ca immediately
+- Contact farm AND ops@greenreachgreens.com immediately
 - Do not accept delivery if severely incorrect
 - Full refund processed within 48 hours
 
@@ -459,7 +459,7 @@ TOTAL: $216.00
 - Use search bar with specific keywords
 - Try broader category filters
 - Some products seasonal - check back later
-- Request product from ops@urbanyeild.ca
+- Request product from ops@greenreachgreens.com
 
 **Problem: Order not verified by farm**
 - Farms have 24 hours to respond
@@ -478,12 +478,12 @@ TOTAL: $216.00
 - Ensure sufficient funds available
 - Try alternative payment method
 - Contact your bank if card declined
-- Email ops@urbanyeild.ca for payment support
+- Email ops@greenreachgreens.com for payment support
 
 ### Contact Support
 
 **Email Support:**
-- ops@urbanyeild.ca
+- ops@greenreachgreens.com
 - Response within 24 hours (business days)
 - Include order number if order-related
 
@@ -546,7 +546,7 @@ TOTAL: $216.00
 
 ### Support Contacts
 
-- **Email**: ops@urbanyeild.ca
+- **Email**: ops@greenreachgreens.com
 - **SMS**: +1-709-398-3166 (urgent issues only)
 - **Slack**: #greenreach-pilot
 
@@ -578,6 +578,6 @@ TOTAL: $216.00
 
 Thank you for supporting local farms and joining our pilot program. Together we're building a better food system.
 
-Questions? Email ops@urbanyeild.ca
+Questions? Email ops@greenreachgreens.com
 
 Happy ordering! 🌱

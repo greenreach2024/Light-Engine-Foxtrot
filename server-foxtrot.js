@@ -700,19 +700,15 @@ app.use((req, res, next) => {
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
     'https://www.greenreachgreens.com',
-    'http://urbanyeild.ca',
-    'https://urbanyeild.ca',
-    'http://www.urbanyeild.ca',
-    'https://www.urbanyeild.ca',
     'http://localhost:8091',
     'http://127.0.0.1:8091',
   ];
 
-  // Allow any *.greenreachgreens.com or *.urbanyeild.ca subdomain (farm subdomains)
+  // Allow any *.greenreachgreens.com subdomain (farm subdomains)
   const isSubdomain = (() => {
     try {
       const host = new URL(origin || '').hostname;
-      return host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca');
+      return host.endsWith('.greenreachgreens.com');
     } catch { return false; }
   })();
   
@@ -5116,19 +5112,15 @@ function applyCorsHeaders(req, res, methods = 'GET,POST,PATCH,DELETE,OPTIONS') {
     'https://greenreachgreens.com',
     'http://www.greenreachgreens.com',
     'https://www.greenreachgreens.com',
-    'http://urbanyeild.ca',
-    'https://urbanyeild.ca',
-    'http://www.urbanyeild.ca',
-    'https://www.urbanyeild.ca',
     'http://localhost:8091',
     'http://127.0.0.1:8091',
   ];
 
-  // Allow any *.greenreachgreens.com or *.urbanyeild.ca subdomain (farm subdomains)
+  // Allow any *.greenreachgreens.com subdomain (farm subdomains)
   const isSubdomain = (() => {
     try {
       const host = new URL(origin || '').hostname;
-      return host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca');
+      return host.endsWith('.greenreachgreens.com');
     } catch { return false; }
   })();
   

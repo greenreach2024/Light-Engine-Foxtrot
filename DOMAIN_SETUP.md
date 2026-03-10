@@ -1,6 +1,6 @@
-# Domain Configuration - urbanyeild.ca
+# Domain Configuration - greenreachgreens.com
 
-**Domain:** urbanyeild.ca  
+**Domain:** greenreachgreens.com  
 **Registrar:** GoDaddy  
 **Status:** ✅ Configured in CORS settings
 
@@ -12,10 +12,10 @@
 - ✅ [greenreach-central/.env.example](greenreach-central/.env.example) - Example file
 
 **Allowed Origins:**
-- `https://urbanyeild.ca` (primary, HTTPS recommended)
-- `http://urbanyeild.ca` (HTTP fallback)
-- `https://www.urbanyeild.ca` (with www)
-- `http://www.urbanyeild.ca` (with www, HTTP)
+- `https://greenreachgreens.com` (primary, HTTPS recommended)
+- `http://greenreachgreens.com` (HTTP fallback)
+- `https://www.greenreachgreens.com` (with www)
+- `http://www.greenreachgreens.com` (with www, HTTP)
 
 ### 2. Frontend API Configuration
 The frontend already uses flexible API endpoints that work with any domain:
@@ -31,32 +31,32 @@ The frontend already uses flexible API endpoints that work with any domain:
 1. Log into GoDaddy DNS management
 2. Add/Update A Record:
    - **Type:** A
-   - **Name:** @ (for urbanyeild.ca)
+   - **Name:** @ (for greenreachgreens.com)
    - **Value:** [Your EB instance IP address]
    - **TTL:** 600 (or default)
 3. Add CNAME for www:
    - **Type:** CNAME
    - **Name:** www
-   - **Value:** urbanyeild.ca
+   - **Value:** greenreachgreens.com
    - **TTL:** 600
 
 **If using CloudFront + ALB (recommended):**
 1. Get CloudFront distribution domain (e.g., `d123abc.cloudfront.net`)
 2. Add CNAME Record:
    - **Type:** CNAME
-   - **Name:** @ or urbanyeild.ca
+   - **Name:** @ or greenreachgreens.com
    - **Value:** [CloudFront domain]
    - **TTL:** 600
 3. Add www CNAME:
    - **Type:** CNAME
    - **Name:** www
-   - **Value:** urbanyeild.ca
+   - **Value:** greenreachgreens.com
    - **TTL:** 600
 
 **If using AWS Certificate Manager (ACM) for HTTPS:**
 1. Request certificate in AWS ACM for:
-   - `urbanyeild.ca`
-   - `*.urbanyeild.ca` (wildcard for subdomains)
+   - `greenreachgreens.com`
+   - `*.greenreachgreens.com` (wildcard for subdomains)
 2. ACM will provide CNAME records for validation
 3. Add those CNAMEs to GoDaddy DNS
 4. Wait for validation (5-30 minutes)
@@ -71,7 +71,7 @@ sudo apt-get update
 sudo apt-get install certbot python3-certbot-nginx
 
 # Generate certificate
-sudo certbot --nginx -d urbanyeild.ca -d www.urbanyeild.ca
+sudo certbot --nginx -d greenreachgreens.com -d www.greenreachgreens.com
 
 # Auto-renewal
 sudo certbot renew --dry-run
@@ -91,7 +91,7 @@ sudo certbot renew --dry-run
 ## 🚀 Deployment Checklist
 
 ### Pre-Deployment
-- [ ] DNS propagated (check with `dig urbanyeild.ca` or [whatsmydns.net](https://www.whatsmydns.net/))
+- [ ] DNS propagated (check with `dig greenreachgreens.com` or [whatsmydns.net](https://www.whatsmydns.net/))
 - [ ] SSL certificate provisioned and validated
 - [ ] CORS settings updated (already done ✅)
 - [ ] Environment variables configured with production values
@@ -119,16 +119,16 @@ JWT_SECRET=[generate with: openssl rand -base64 64]
 ```nginx
 server {
     listen 80;
-    server_name urbanyeild.ca www.urbanyeild.ca;
+    server_name greenreachgreens.com www.greenreachgreens.com;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name urbanyeild.ca www.urbanyeild.ca;
+    server_name greenreachgreens.com www.greenreachgreens.com;
     
-    ssl_certificate /etc/letsencrypt/live/urbanyeild.ca/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/urbanyeild.ca/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/greenreachgreens.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/greenreachgreens.com/privkey.pem;
     
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -152,22 +152,22 @@ server {
 ### Post-Deployment Testing
 ```bash
 # Test DNS resolution
-dig urbanyeild.ca
-dig www.urbanyeild.ca
+dig greenreachgreens.com
+dig www.greenreachgreens.com
 
 # Test HTTP access
-curl -I http://urbanyeild.ca
-curl -I https://urbanyeild.ca
+curl -I http://greenreachgreens.com
+curl -I https://greenreachgreens.com
 
 # Test API endpoint
-curl https://urbanyeild.ca/api/health
+curl https://greenreachgreens.com/api/health
 
 # Test CORS
-curl -H "Origin: https://urbanyeild.ca" \
+curl -H "Origin: https://greenreachgreens.com" \
      -H "Access-Control-Request-Method: POST" \
      -H "Access-Control-Request-Headers: Content-Type" \
      -X OPTIONS \
-     https://urbanyeild.ca/api/auth/login
+     https://greenreachgreens.com/api/auth/login
 ```
 
 ## 📊 Monitoring
@@ -175,23 +175,23 @@ curl -H "Origin: https://urbanyeild.ca" \
 ### Check Domain Propagation
 ```bash
 # Global DNS propagation checker
-https://www.whatsmydns.net/#A/urbanyeild.ca
+https://www.whatsmydns.net/#A/greenreachgreens.com
 
 # Command line
-dig @8.8.8.8 urbanyeild.ca      # Google DNS
-dig @1.1.1.1 urbanyeild.ca      # Cloudflare DNS
-nslookup urbanyeild.ca
+dig @8.8.8.8 greenreachgreens.com      # Google DNS
+dig @1.1.1.1 greenreachgreens.com      # Cloudflare DNS
+nslookup greenreachgreens.com
 ```
 
 ### SSL Certificate Check
 ```bash
 # Check certificate validity
-echo | openssl s_client -servername urbanyeild.ca \
-      -connect urbanyeild.ca:443 2>/dev/null | \
+echo | openssl s_client -servername greenreachgreens.com \
+      -connect greenreachgreens.com:443 2>/dev/null | \
       openssl x509 -noout -dates
 
 # Check SSL configuration
-https://www.ssllabs.com/ssltest/analyze.html?d=urbanyeild.ca
+https://www.ssllabs.com/ssltest/analyze.html?d=greenreachgreens.com
 ```
 
 ## 🔧 Troubleshooting
@@ -231,10 +231,10 @@ https://www.ssllabs.com/ssltest/analyze.html?d=urbanyeild.ca
 
 | Resource | Current Value | Notes |
 |----------|---------------|-------|
-| Domain | urbanyeild.ca | GoDaddy registered |
-| Primary URL | https://urbanyeild.ca | Recommended |
-| API Base | https://urbanyeild.ca/api | Relative paths |
-| Health Check | https://urbanyeild.ca/api/health | Test endpoint |
+| Domain | greenreachgreens.com | GoDaddy registered |
+| Primary URL | https://greenreachgreens.com | Recommended |
+| API Base | https://greenreachgreens.com/api | Relative paths |
+| Health Check | https://greenreachgreens.com/api/health | Test endpoint |
 | Frontend Files | /public | Static assets |
 | CORS Status | ✅ Configured | Both apps updated |
 
@@ -250,7 +250,7 @@ https://www.ssllabs.com/ssltest/analyze.html?d=urbanyeild.ca
 
 1. **Configure DNS in GoDaddy** pointing to your server IP or CloudFront distribution
 2. **Set up SSL certificate** (Let's Encrypt or AWS ACM recommended)
-3. **Test HTTPS access** at https://urbanyeild.ca
+3. **Test HTTPS access** at https://greenreachgreens.com
 4. **Update environment variables** with production values
 5. **Enable security features** (auth, rate limiting, monitoring)
 6. **Test all pages** work correctly with the custom domain

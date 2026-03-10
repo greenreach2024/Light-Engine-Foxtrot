@@ -246,12 +246,10 @@ const corsOptions = {
       'https://greenreachgreens.com',
       'http://greenreachgreens.com',
       'https://www.greenreachgreens.com',
-      'http://www.greenreachgreens.com',
-      'https://urbanyeild.ca',
-      'http://urbanyeild.ca'
+      'http://www.greenreachgreens.com'
     ];
     const host = origin.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
-    if (host.endsWith('.greenreachgreens.com') || host.endsWith('.urbanyeild.ca')) {
+    if (host.endsWith('.greenreachgreens.com')) {
       return callback(null, true);
     }
     if (allowedOrigins.includes(origin)) {

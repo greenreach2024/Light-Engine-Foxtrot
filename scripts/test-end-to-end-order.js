@@ -29,7 +29,7 @@ const TEST_CONFIG = {
     farm_id: 'TEST-FARM-E2E',
     name: 'End-to-End Test Farm',
     contact: 'Test Farm Owner',
-    email: 'farm-test@urbanyeild.ca',
+    email: 'farm-test@greenreachgreens.com',
     phone: '+17093983166',
     api_url: 'http://localhost:8091',
     inventory: [
@@ -66,7 +66,7 @@ const TEST_CONFIG = {
     buyer_id: 'TEST-BUYER-E2E',
     business_name: 'The Local Café',
     contact_name: 'Jane Smith',
-    email: 'buyer-test@urbanyeild.ca',
+    email: 'buyer-test@greenreachgreens.com',
     phone: '+17093983166',
     buyer_type: 'cafe'
   },

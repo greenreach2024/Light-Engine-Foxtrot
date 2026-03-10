@@ -315,7 +315,7 @@ Schedule 30-minute onboarding call with GreenReach team:
 - Discuss optimization strategies
 - Connect with other pilot farms
 
-**Schedule:** Email ops@urbanyeild.ca
+**Schedule:** Email ops@greenreachgreens.com
 
 ---
 
@@ -331,7 +331,7 @@ Schedule 30-minute onboarding call with GreenReach team:
 
 ### Support Contacts
 
-- **Email**: ops@urbanyeild.ca
+- **Email**: ops@greenreachgreens.com
 - **SMS**: +1-709-398-3166
 - **Slack**: #greenreach-pilot (invitation sent after approval)
 - **Emergency**: +1-709-398-3166 (SMS only, urgent issues)
@@ -365,7 +365,7 @@ Schedule 30-minute onboarding call with GreenReach team:
 2. Verify phone number is correct and can receive SMS
 3. Check spam folder for emails
 4. Reinstall farm app and re-register for push notifications
-5. Contact ops@urbanyeild.ca if issues persist
+5. Contact ops@greenreachgreens.com if issues persist
 
 ### Inventory Not Syncing?
 
@@ -379,7 +379,7 @@ Schedule 30-minute onboarding call with GreenReach team:
 1. Verify bank account details are correct
 2. Check that order was marked as "delivered" and confirmed by buyer
 3. Review 7-day settlement schedule (payments not instant)
-4. Contact ops@urbanyeild.ca with transaction ID
+4. Contact ops@greenreachgreens.com with transaction ID
 
 ---
 

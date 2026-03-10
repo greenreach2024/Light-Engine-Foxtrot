@@ -156,12 +156,12 @@ node scripts/reset-buyer-password.js --buyer=BUYER-123456
 - [ ] Post welcome message and guidelines
 
 **Email Lists**:
-- [ ] Create pilot-farms@urbanyeild.ca distribution list
-- [ ] Create pilot-buyers@urbanyeild.ca distribution list
+- [ ] Create pilot-farms@greenreachgreens.com distribution list
+- [ ] Create pilot-buyers@greenreachgreens.com distribution list
 - [ ] Create weekly update email template
 
 **Support**:
-- [ ] ops@urbanyeild.ca monitored 9am-6pm EST
+- [ ] ops@greenreachgreens.com monitored 9am-6pm EST
 - [ ] +1-709-398-3166 SMS for urgent issues
 - [ ] Response SLA: 4 hours (business days)
 

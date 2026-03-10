@@ -612,7 +612,7 @@ const wholesaleChecklist = {
 7. Return to Activity Hub to record harvest
 
 **Support**:
-- Email: ops@urbanyeild.ca
+- Email: ops@greenreachgreens.com
 - SMS: +1-709-398-3166
 - Slack: #greenreach-pilot
 
@@ -697,7 +697,7 @@ const wholesaleChecklist = {
 
 **Contacts**:
 - Development: GitHub Copilot (this session)
-- Operations: ops@urbanyeild.ca
+- Operations: ops@greenreachgreens.com
 - AWS Support: Elastic Beanstalk console
 - Monitoring: CloudWatch dashboards (if configured)
 
