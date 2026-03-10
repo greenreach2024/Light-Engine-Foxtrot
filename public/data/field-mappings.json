@@ -388,7 +388,7 @@
       "type": "object",
       "source": "scripts/simple-anomaly-detector.py → Isolation Forest + backend/outdoor_influence.py",
       "formula": "Isolation Forest (sklearn) on feature matrix: [indoor_temp, indoor_rh, indoor_vpd, outdoor_temp, outdoor_rh, temp_delta]. Train on 24h history, contamination=0.03 (3% expected anomalies). Outdoor influence: assess_outdoor_influence() returns anomaly_likelihood (0-1). Severity: critical if likelihood>0.7, warning if >0.4, info otherwise. Critical examples: Indoor 28°C when outdoor 15°C (expected 18-22°C) = equipment failure",
-      "validation": "Requires: outdoor sensor online, ≥50 historical samples, scikit-learn installed. Contamination: 0.01-0.1"
+      "validation": "Requires: weather API data (no physical sensor needed), ≥50 historical samples, scikit-learn installed. Contamination: 0.01-0.1"
     },
     {
       "id": 40,
@@ -427,8 +427,8 @@
       "fieldId": "ml.anomaly.outdoor_lag",
       "type": "object",
       "source": "backend/outdoor_influence.py → get_time_lagged_outdoor_data()",
-      "formula": "Retrieves outdoor conditions from 15-60 minutes ago to account for thermal lag (building thermal mass delays indoor response to outdoor changes). Searches env.json history for outdoor sensor readings at timestamps: now - 15min, now - 30min, now - 60min. Returns {temp_lag15, temp_lag30, temp_lag60, rh_lag15, rh_lag30, rh_lag60}. Used as exogenous variables in forecasting models",
-      "validation": "Requires sensor history in env.json; falls back to current outdoor if history unavailable"
+      "formula": "Retrieves outdoor conditions from 15-60 minutes ago to account for thermal lag (building thermal mass delays indoor response to outdoor changes). Uses weather API data (no physical outdoor sensor required) at timestamps: now - 15min, now - 30min, now - 60min. Returns {temp_lag15, temp_lag30, temp_lag60, rh_lag15, rh_lag30, rh_lag60}. Used as exogenous variables in forecasting models",
+      "validation": "Uses weather API history cached in env.json; falls back to current outdoor conditions if history unavailable. No physical sensor required"
     },
     {
       "id": 44,
@@ -457,7 +457,7 @@
       "fieldId": "ml.validation.outdoor_sensor",
       "type": "object",
       "source": "backend/outdoor_sensor_validator.py → OutdoorSensorValidator.validate_outdoor_sensor()",
-      "formula": "Validates outdoor sensor data before ML processing. Temperature range: -40°C to 50°C (rejects 0°C sensor errors). Humidity range: 0-100%. Staleness: timestamp within 15 minutes. Returns {valid: boolean, temp: float, rh: float, source: \"sensor\"|\"weather_api\", validation_warnings: []}. If invalid, automatically falls back to weather API",
+      "formula": "Validates outdoor weather data before ML processing. Primary source: Weather API (no physical sensor required). Temperature range: -40°C to 50°C. Humidity range: 0-100%. Staleness: timestamp within 15 minutes. Returns {valid: boolean, temp: float, rh: float, source: \"weather_api\", validation_warnings: []}. Weather API is the default and only required source",
       "validation": "Staleness threshold: 15 min (configurable); temp sanity: ±5°C vs weather API; RH sanity: ±15% vs API"
     },
     {
@@ -467,7 +467,7 @@
       "fieldId": "ml.validation.weather_fallback",
       "type": "object",
       "source": "backend/outdoor_sensor_validator.py → get_weather_api_fallback()",
-      "formula": "Fetches outdoor conditions from weather API when sensor fails. Endpoint: http://localhost:8091/api/weather?lat={farm_lat}&lng={farm_lng}. Extracts current temperature and relative humidity. Returns {temp: float, rh: float, source: \"weather_api\"}. Prevents corrupted sensor data from degrading ML model accuracy",
+      "formula": "Fetches outdoor conditions from weather API (primary source — no sensor needed). Endpoint: http://localhost:8091/api/weather?lat={farm_lat}&lng={farm_lng}. Extracts current temperature and relative humidity. Returns {temp: float, rh: float, source: \"weather_api\"}. This is the standard data source for all ML outdoor conditions",
       "validation": "Requires farm coordinates in farm.json; API must return current.temperature_2m and current.relative_humidity_2m"
     },
     {
@@ -517,7 +517,7 @@
       "fieldId": "ml.cron.anomaly_detector",
       "type": "scheduled",
       "source": "ecosystem.config.cjs → ml-anomaly-detector, scripts/ml-anomaly-cron.py",
-      "formula": "PM2 cron job runs every 15 minutes. Executes: (1) Validate outdoor sensor with fallback, (2) Run Isolation Forest anomaly detector, (3) Assess outdoor influence for each anomaly, (4) Log to logs/ml-anomalies.jsonl (JSON Lines format), (5) Filter alerts (critical_only if env var set), (6) Send webhooks (Slack/Discord if enabled), (7) POST to /api/alerts endpoint. Timeout: 60 seconds. Auto-restart: false (cron-only)",
+      "formula": "PM2 cron job runs every 15 minutes. Executes: (1) Fetch outdoor conditions from weather API, (2) Run Isolation Forest anomaly detector, (3) Assess outdoor influence for each anomaly, (4) Log to logs/ml-anomalies.jsonl (JSON Lines format), (5) Filter alerts (critical_only if env var set), (6) Send webhooks (Slack/Discord if enabled), (7) POST to /api/alerts endpoint. Timeout: 60 seconds. Auto-restart: false (cron-only). No physical outdoor sensor required — uses weather API",
       "validation": "Cron pattern: */15 * * * * (every 15 min); logs rotated daily; max execution time: 60s"
     },
     {

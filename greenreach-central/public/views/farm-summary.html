@@ -5906,7 +5906,10 @@
       } catch (err) {
         console.error('Failed to load energy forecast:', err);
         loading.style.display = 'none';
-        error.textContent = 'Energy forecast unavailable. ML jobs need sensor data to generate predictions.';
+        // IMPORTANT: No physical outdoor sensor is required. The weather API provides
+        // all outdoor data. Do NOT revert this message to reference sensors.
+        // See: lib/outdoor-sensor-validator.js, server-foxtrot.js line 5351
+        error.textContent = 'Energy forecast unavailable. ML jobs have not yet generated predictions — check PM2 status.';
         error.style.display = 'block';
       }
     }
@@ -6083,8 +6086,11 @@
             widget.style.display = 'none';
           }
         } else {
-          // Show friendly error for other failures
-          error.textContent = 'Temperature forecast unavailable. Outdoor sensor validation required for predictions.';
+          // IMPORTANT: No physical outdoor sensor is required for temperature forecasting.
+          // The weather API (Open-Meteo) provides all outdoor data automatically.
+          // Do NOT revert this message to reference sensors or "outdoor sensor validation".
+          // See: lib/outdoor-sensor-validator.js, server-foxtrot.js line 5351
+          error.textContent = 'Temperature forecast unavailable. Weather API data is used automatically — check ML job status.';
           error.style.display = 'block';
         }
       }
