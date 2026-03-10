@@ -148,8 +148,14 @@ const WS_PORT = process.env.WS_PORT || 3001;
 // ── Environment config validation (#17) ──
 // Check required env vars at startup in production
 if (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud') {
-  const required = ['JWT_SECRET', 'DATABASE_URL', 'GREENREACH_API_KEY'];
-  const missing = required.filter(k => !process.env[k]);
+  const required = [
+    { keys: ['JWT_SECRET'], label: 'JWT_SECRET' },
+    { keys: ['DATABASE_URL', 'RDS_HOSTNAME'], label: 'DATABASE_URL or RDS_HOSTNAME' },
+    { keys: ['GREENREACH_API_KEY'], label: 'GREENREACH_API_KEY' }
+  ];
+  const missing = required
+    .filter(r => !r.keys.some(k => process.env[k]))
+    .map(r => r.label);
   if (missing.length > 0) {
     console.error(`[STARTUP] Missing required environment variables: ${missing.join(', ')}`);
     console.error('[STARTUP] Server cannot start safely in production without these.');
