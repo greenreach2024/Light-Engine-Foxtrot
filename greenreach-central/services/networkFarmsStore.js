@@ -23,8 +23,12 @@ function loadLocalFarmApiKeys() {
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const keysPath = resolve(__dirname, '..', 'public', 'data', 'farm-api-keys.json');
-    return JSON.parse(readFileSync(keysPath, 'utf8'));
-  } catch {
+    console.log(`[NetworkFarmsStore] Loading farm API keys from ${keysPath}`);
+    const keys = JSON.parse(readFileSync(keysPath, 'utf8'));
+    console.log(`[NetworkFarmsStore] Loaded ${Object.keys(keys).length} farm keys: ${Object.keys(keys).join(', ')}`);
+    return keys;
+  } catch (err) {
+    console.warn('[NetworkFarmsStore] Failed to load farm-api-keys.json:', err.message);
     return {};
   }
 }
@@ -209,6 +213,7 @@ export async function upsertNetworkFarm(farmId, farmData) {
         api_url: normalizedFarm.api_url,
         url: normalizedFarm.url,
         auth_farm_id: normalizedFarm.auth_farm_id,
+        api_key: normalizedFarm.api_key || null,
         contact: normalizedFarm.contact || {},
         location: normalizedFarm.location || {},
         certifications: Array.isArray(normalizedFarm.certifications) ? normalizedFarm.certifications : [],
@@ -216,8 +221,8 @@ export async function upsertNetworkFarm(farmId, farmData) {
       };
 
       await query(
-        `INSERT INTO farms (farm_id, name, contact_name, api_url, status, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())
+        `INSERT INTO farms (farm_id, name, contact_name, api_url, status, plan_type, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'network', $6::jsonb, NOW(), NOW())
          ON CONFLICT (farm_id) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), farms.name),
            api_url = COALESCE(NULLIF($4, ''), farms.api_url),

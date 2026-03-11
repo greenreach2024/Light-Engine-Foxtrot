@@ -1561,6 +1561,35 @@ router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
 
 // --- Network admin (DB optional) ---
 
+// Lightweight bootstrap trigger – uses GREENREACH_API_KEY for auth (no session required)
+router.post('/network/bootstrap', async (req, res) => {
+  const apiKey = (req.headers['x-api-key'] || '').trim();
+  const expected = (process.env.GREENREACH_API_KEY || '').trim();
+  if (!apiKey || !expected || apiKey !== expected) {
+    return res.status(401).json({ status: 'error', message: 'invalid api key' });
+  }
+  try {
+    const payload = req.body || {};
+    const farmId = String(payload.farm_id || '').trim();
+    if (!farmId) return res.status(400).json({ status: 'error', message: 'farm_id required' });
+
+    const farm = await upsertNetworkFarm(farmId, {
+      farm_id: farmId,
+      name: payload.name || farmId,
+      api_url: payload.api_url || null,
+      url: payload.api_url || null,
+      status: payload.status || 'active',
+      auth_farm_id: payload.auth_farm_id || null,
+      api_key: payload.api_key || null,
+      contact: payload.contact || {},
+      location: payload.location || {}
+    });
+    return res.json({ status: 'ok', data: { farm } });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 router.get('/network/farms', async (req, res, next) => {
   try {
     const farms = await listNetworkFarms();
