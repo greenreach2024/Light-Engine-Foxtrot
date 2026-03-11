@@ -150,4 +150,24 @@ QUOTE_PICKUP_CODE=$(curl -sS -o /tmp/ci-smoke-quote-pickup.json -w "%{http_code}
 [[ "$QUOTE_PICKUP_CODE" == "200" ]] || fail "Delivery quote (pickup) failed with HTTP ${QUOTE_PICKUP_CODE}"
 assert_json_field "$(cat /tmp/ci-smoke-quote-pickup.json)" "payload?.status === 'ok' && payload?.data?.reason === 'pickup_selected'" "Pickup quote did not return pickup_selected reason"
 
+log "Smoke 4/4: network catalog aggregate"
+CATALOG_CODE=$(curl -sS -o /tmp/ci-smoke-catalog.json -w "%{http_code}" \
+  "${CENTRAL_BASE}/api/wholesale/catalog")
+[[ "$CATALOG_CODE" == "200" ]] || fail "Catalog fetch failed with HTTP ${CATALOG_CODE}"
+CATALOG_JSON="$(cat /tmp/ci-smoke-catalog.json)"
+assert_json_field "$CATALOG_JSON" \
+  "(payload?.data?.skus?.length > 0 || payload?.items?.length > 0 || (payload?.data?.products && payload?.data?.products.length > 0))" \
+  "Catalog should have at least 1 SKU"
+
+AGG_CODE=$(curl -sS -o /tmp/ci-smoke-aggregate.json -w "%{http_code}" \
+  "${CENTRAL_BASE}/api/wholesale/network/aggregate")
+if [[ "$AGG_CODE" == "200" ]]; then
+  AGG_JSON="$(cat /tmp/ci-smoke-aggregate.json)"
+  AGG_ERRORS="$(node -e "const p=JSON.parse(process.argv[1]); process.stdout.write(String(p?.diagnostics?.error_count ?? p?.error_count ?? '?'));" "$AGG_JSON")"
+  AGG_FARMS="$(node -e "const p=JSON.parse(process.argv[1]); process.stdout.write(String(p?.diagnostics?.farms_reporting ?? p?.farms_ok ?? '?'));" "$AGG_JSON")"
+  log "Network aggregate: errors=${AGG_ERRORS} farms_reporting=${AGG_FARMS}"
+else
+  log "WARN: network aggregate returned HTTP ${AGG_CODE} (non-fatal in CI)"
+fi
+
 log "PASS: deterministic wholesale smoke suite"

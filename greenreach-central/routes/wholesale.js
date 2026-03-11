@@ -90,57 +90,9 @@ function sanitizeText(str) {
     .replace(/'/g, '&#x27;');
 }
 
-// ── Farm API-key auth (for farm→Central callbacks) ───────────────────
-// Pre-load farm API keys at startup
-import crypto from 'crypto';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-let _farmApiKeys = null;
-function loadFarmApiKeys() {
-  if (_farmApiKeys !== null) return _farmApiKeys;
-  try {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const keysPath = resolve(__dirname, '..', 'public', 'data', 'farm-api-keys.json');
-    _farmApiKeys = JSON.parse(readFileSync(keysPath, 'utf8'));
-  } catch {
-    _farmApiKeys = {};
-  }
-  return _farmApiKeys;
-}
-
-function requireFarmApiKey(req, res, next) {
-  const farmId = req.headers['x-farm-id'] || req.body?.farm_id;
-  const apiKey = req.headers['x-api-key'];
-
-  if (!farmId || !apiKey) {
-    return res.status(401).json({ status: 'error', message: 'Missing X-Farm-ID or X-API-Key header' });
-  }
-
-  // Validate against env-based key first
-  const envKey = process.env.WHOLESALE_FARM_API_KEY;
-  if (envKey && apiKey === envKey) {
-    req.farmAuth = { farm_id: farmId };
-    return next();
-  }
-
-  // Check farm-api-keys.json (timing-safe comparison)
-  const keys = loadFarmApiKeys();
-  const farmEntry = keys[farmId];
-  if (farmEntry?.api_key && farmEntry?.status === 'active') {
-    try {
-      const keyBuf = Buffer.from(farmEntry.api_key, 'utf8');
-      const inputBuf = Buffer.from(apiKey, 'utf8');
-      if (keyBuf.length === inputBuf.length && crypto.timingSafeEqual(keyBuf, inputBuf)) {
-        req.farmAuth = { farm_id: farmId };
-        return next();
-      }
-    } catch { /* length mismatch or buffer error — fall through to 403 */ }
-  }
-
-  return res.status(403).json({ status: 'error', message: 'Invalid farm credentials' });
-}
+// ── Farm API-key auth (shared middleware) ────────────────────────────
+import { requireFarmApiKey, loadFarmApiKeys } from '../middleware/farmApiKeyAuth.js';
+import { transitionOrderStatus } from '../services/orderStateMachine.js';
 
 function getWholesaleJwtSecret() {
   const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET;
@@ -1061,7 +1013,11 @@ router.post('/orders/:orderId/cancel', requireBuyerAuth, async (req, res) => {
   }
 
   const previousStatus = order.status;
-  order.status = 'cancelled';
+  try {
+    transitionOrderStatus(order, 'cancelled');
+  } catch (err) {
+    return res.status(409).json({ status: 'error', message: err.message });
+  }
   order.cancelled_at = new Date().toISOString();
   order.cancellation_reason = sanitizeText(req.body?.reason || 'Buyer requested cancellation');
 
@@ -1876,130 +1832,8 @@ router.post('/pricing/sync', requireFarmApiKey, express.json(), async (req, res)
   }
 });
 
-/**
- * POST /api/wholesale/orders/:orderId/fulfill
- * Farm callback endpoint to mark order fulfilled.
- */
-router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
-    const order = await getOrderById(orderId, { includeArchived: true });
-
-    if (!order) {
-      return res.status(404).json({ status: 'error', message: 'Order not found' });
-    }
-
-    order.fulfillment_status = 'fulfilled';
-    order.fulfilled_at = req.body?.fulfilledAt || new Date().toISOString();
-    order.tracking_number = req.body?.trackingNumber || order.tracking_number || null;
-    order.tracking_carrier = req.body?.carrier || order.tracking_carrier || null;
-
-    await saveOrder(order).catch(() => {});
-    logOrderEvent(orderId, 'status_changed', {
-      from: 'processing',
-      to: 'fulfilled',
-      farm_id: farmId,
-      tracking_number: order.tracking_number,
-      tracking_carrier: order.tracking_carrier
-    });
-
-    return res.json({ status: 'ok', order_id: orderId, new_status: 'fulfilled' });
-  } catch (error) {
-    console.error('[wholesale] fulfill callback failed:', error);
-    return res.status(500).json({ status: 'error', message: 'Failed to process fulfillment callback' });
-  }
-});
-
-/**
- * POST /api/wholesale/orders/:orderId/cancel-by-farm
- * Farm callback endpoint to mark order canceled.
- */
-router.post('/orders/:orderId/cancel-by-farm', requireFarmApiKey, express.json(), async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
-    const reason = req.body?.reason || 'farm_canceled';
-    const order = await getOrderById(orderId, { includeArchived: true });
-
-    if (!order) {
-      return res.status(404).json({ status: 'error', message: 'Order not found' });
-    }
-
-    order.fulfillment_status = 'canceled';
-    order.canceled_at = req.body?.canceledAt || new Date().toISOString();
-    order.cancel_reason = reason;
-
-    await saveOrder(order).catch(() => {});
-    logOrderEvent(orderId, 'status_changed', {
-      from: 'processing',
-      to: 'canceled',
-      farm_id: farmId,
-      reason
-    });
-
-    return res.json({ status: 'ok', order_id: orderId, new_status: 'canceled' });
-  } catch (error) {
-    console.error('[wholesale] cancel-by-farm callback failed:', error);
-    return res.status(500).json({ status: 'error', message: 'Failed to process cancellation callback' });
-  }
-});
-
-/** * POST /api/wholesale/order-status
- * Receive order status updates from farms (callback endpoint)
- */
-router.post('/order-status', requireFarmApiKey, async (req, res) => {
-  try {
-    const { order_id, status, farm_id, timestamp } = req.body;
-    
-    if (!order_id || !status) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Missing required fields: order_id, status'
-      });
-    }
-    
-    console.log(`📞 [Status Callback] Received from farm ${farm_id}: Order ${order_id} → ${status}`);
-    
-    // Update order status in memory store
-    const order = await getOrderById(order_id, { includeArchived: true });
-    
-    if (order) {
-      const previousStatus = order.fulfillment_status || 'unknown';
-      order.fulfillment_status = status;
-      order.status_updated_at = timestamp || new Date().toISOString();
-
-      await saveOrder(order).catch(() => {});
-      logOrderEvent(order_id, 'status_changed', { from: previousStatus, to: status, farm_id });
-      
-      console.log(`✅ Updated order ${order_id} status to ${status}`);
-      
-      // TODO: Future enhancements:
-      // - Send email notification to buyer when status changes to 'shipped'
-      // - Log to audit trail
-      // - Trigger analytics events
-      
-      return res.json({
-        status: 'ok',
-        message: 'Order status updated',
-        order_id: order.master_order_id,
-        new_status: order.fulfillment_status
-      });
-    } else {
-      console.warn(`⚠️ Order ${order_id} not found in Central registry`);
-      return res.status(404).json({
-        status: 'error',
-        message: 'Order not found'
-      });
-    }
-  } catch (error) {
-    console.error('[Status Callback] Error:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to process status update'
-    });
-  }
-});
+// NOTE: Farm fulfillment callbacks (fulfill, cancel-by-farm, order-status)
+// have been consolidated into wholesale-fulfillment.js
 
 /**
  * GET /api/wholesale/check-overselling

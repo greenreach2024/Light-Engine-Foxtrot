@@ -1,24 +1,36 @@
 /**
  * Wholesale Farm-Side Fulfillment Routes
- * Operations the grower/farm performs to fulfill wholesale orders.
+ * Consolidated fulfillment surface — all farm-side order operations.
  * Used by farm-admin.js wholesale operations section.
  *
- * These supplement the existing wholesale.js buyer-facing routes.
- *
  * Endpoints mounted at /api/wholesale/:
- *   POST /order-statuses         - Bulk update order statuses (requires webhook signature)
- *   POST /tracking-numbers       - Add tracking numbers to orders (requires webhook signature)
- *   POST /order-tracking         - Add tracking event (requires webhook signature)
+ *   POST /order-statuses         - Bulk update order statuses (webhook auth)
+ *   POST /tracking-numbers       - Add tracking numbers to orders (webhook auth)
+ *   POST /order-tracking         - Add tracking event (webhook auth)
  *   GET  /order-events           - List order events for this farm
  *   GET  /farm-performance/alerts - Farm performance alerts
  *   GET  /orders/pending-verification/:farmId - Orders needing verification
- *   POST /orders/farm-verify     - Farm verifies an order (requires webhook signature)
- *   POST /orders/:orderId/verify - Verify specific order (requires webhook signature)
+ *   POST /orders/farm-verify     - Farm verifies an order (webhook auth)
+ *   POST /orders/:orderId/verify - Verify specific order (webhook auth)
  *   GET  /orders/pending         - Pending orders for farm
+ *   POST /orders/:orderId/fulfill      - Farm fulfill callback (API key auth)
+ *   POST /orders/:orderId/cancel-by-farm - Farm cancel callback (API key auth)
+ *   POST /order-status           - Farm status callback (API key auth)
  */
 import { Router } from 'express';
+import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { verifyWebhookSignature } from '../middleware/webhook-signature.js';
+import { requireFarmApiKey } from '../middleware/farmApiKeyAuth.js';
+import {
+  getOrderById,
+  saveOrder,
+  logOrderEvent
+} from '../services/wholesaleMemoryStore.js';
+import {
+  isValidOrderTransition,
+  transitionFulfillmentStatus
+} from '../services/orderStateMachine.js';
 
 const router = Router();
 
@@ -34,6 +46,12 @@ router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
     if (await isDatabaseAvailable()) {
       for (const { order_id, status } of updates) {
         try {
+          // Validate transition if current status is known
+          const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
+          if (current.rows.length && !isValidOrderTransition(current.rows[0].status, status)) {
+            results.push({ order_id, status, updated: false, reason: `invalid transition: ${current.rows[0].status} → ${status}` });
+            continue;
+          }
           await query(
             `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
             [status, order_id]
@@ -65,6 +83,12 @@ router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
     if (await isDatabaseAvailable()) {
       for (const { order_id, tracking_number, carrier } of updates) {
         try {
+          // Validate shipped transition
+          const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
+          if (current.rows.length && !isValidOrderTransition(current.rows[0].status, 'shipped')) {
+            console.warn(`[Wholesale] Skipping shipped transition for ${order_id}: current status ${current.rows[0].status}`);
+            continue;
+          }
           await query(
             `UPDATE wholesale_orders SET 
                tracking_number = $1, carrier = $2, status = 'shipped', updated_at = NOW()
@@ -172,11 +196,16 @@ router.get('/orders/pending-verification/:farmId', async (req, res) => {
 router.post('/orders/farm-verify', verifyWebhookSignature, async (req, res) => {
   try {
     const { order_id, verified, notes } = req.body;
+    const targetStatus = verified ? 'confirmed' : 'rejected';
     if (await isDatabaseAvailable()) {
       try {
+        const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
+        if (current.rows.length && !isValidOrderTransition(current.rows[0].status, targetStatus)) {
+          return res.status(409).json({ success: false, error: `Invalid transition: ${current.rows[0].status} → ${targetStatus}` });
+        }
         await query(
           `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [verified ? 'confirmed' : 'rejected', order_id]
+          [targetStatus, order_id]
         );
       } catch { /* table may not exist */ }
     }
@@ -191,11 +220,16 @@ router.post('/orders/:orderId/verify', verifyWebhookSignature, async (req, res) 
   try {
     const { orderId } = req.params;
     const { verified = true, notes } = req.body;
+    const targetStatus = verified ? 'confirmed' : 'rejected';
     if (await isDatabaseAvailable()) {
       try {
+        const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [orderId]);
+        if (current.rows.length && !isValidOrderTransition(current.rows[0].status, targetStatus)) {
+          return res.status(409).json({ success: false, error: `Invalid transition: ${current.rows[0].status} → ${targetStatus}` });
+        }
         await query(
           `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [verified ? 'confirmed' : 'rejected', orderId]
+          [targetStatus, orderId]
         );
       } catch { /* table may not exist */ }
     }
@@ -224,6 +258,150 @@ router.get('/orders/pending', async (req, res) => {
     res.json({ success: true, orders, total: orders.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Farm callback endpoints (moved from wholesale.js for consolidation) ──
+
+/**
+ * POST /api/wholesale/orders/:orderId/fulfill
+ * Farm callback endpoint to mark order fulfilled.
+ */
+router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
+    const order = await getOrderById(orderId, { includeArchived: true });
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    try {
+      transitionFulfillmentStatus(order, 'fulfilled');
+    } catch (err) {
+      return res.status(409).json({ status: 'error', message: err.message });
+    }
+
+    order.fulfilled_at = req.body?.fulfilledAt || new Date().toISOString();
+    order.tracking_number = req.body?.trackingNumber || order.tracking_number || null;
+    order.tracking_carrier = req.body?.carrier || order.tracking_carrier || null;
+
+    await saveOrder(order).catch(() => {});
+    logOrderEvent(orderId, 'status_changed', {
+      from: 'processing',
+      to: 'fulfilled',
+      farm_id: farmId,
+      tracking_number: order.tracking_number,
+      tracking_carrier: order.tracking_carrier
+    });
+
+    return res.json({ status: 'ok', order_id: orderId, new_status: 'fulfilled' });
+  } catch (error) {
+    console.error('[wholesale] fulfill callback failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to process fulfillment callback' });
+  }
+});
+
+/**
+ * POST /api/wholesale/orders/:orderId/cancel-by-farm
+ * Farm callback endpoint to mark order canceled.
+ */
+router.post('/orders/:orderId/cancel-by-farm', requireFarmApiKey, express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const farmId = req.farmAuth?.farm_id || req.body?.farmId || req.body?.farm_id;
+    const reason = req.body?.reason || 'farm_canceled';
+    const order = await getOrderById(orderId, { includeArchived: true });
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found' });
+    }
+
+    try {
+      transitionFulfillmentStatus(order, 'canceled');
+    } catch (err) {
+      return res.status(409).json({ status: 'error', message: err.message });
+    }
+
+    order.canceled_at = req.body?.canceledAt || new Date().toISOString();
+    order.cancel_reason = reason;
+
+    await saveOrder(order).catch(() => {});
+    logOrderEvent(orderId, 'status_changed', {
+      from: 'processing',
+      to: 'canceled',
+      farm_id: farmId,
+      reason
+    });
+
+    return res.json({ status: 'ok', order_id: orderId, new_status: 'canceled' });
+  } catch (error) {
+    console.error('[wholesale] cancel-by-farm callback failed:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to process cancellation callback' });
+  }
+});
+
+/**
+ * POST /api/wholesale/order-status
+ * Receive order status updates from farms (callback endpoint)
+ */
+router.post('/order-status', requireFarmApiKey, async (req, res) => {
+  try {
+    const { order_id, status, farm_id, timestamp } = req.body;
+
+    if (!order_id || !status) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required fields: order_id, status'
+      });
+    }
+
+    console.log(`[Status Callback] Received from farm ${farm_id}: Order ${order_id} → ${status}`);
+
+    const order = await getOrderById(order_id, { includeArchived: true });
+
+    if (order) {
+      const previousStatus = order.fulfillment_status || 'unknown';
+
+      try {
+        transitionFulfillmentStatus(order, status);
+      } catch (err) {
+        return res.status(409).json({
+          status: 'error',
+          message: err.message,
+          order_id,
+          current_status: previousStatus,
+          requested_status: status
+        });
+      }
+
+      order.status_updated_at = timestamp || new Date().toISOString();
+
+      await saveOrder(order).catch(() => {});
+      logOrderEvent(order_id, 'status_changed', { from: previousStatus, to: status, farm_id });
+
+      console.log(`Updated order ${order_id} status to ${status}`);
+
+      return res.json({
+        status: 'ok',
+        message: 'Order status updated',
+        order_id: order.master_order_id,
+        new_status: order.fulfillment_status
+      });
+    } else {
+      console.warn(`Order ${order_id} not found in Central registry`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found'
+      });
+    }
+  } catch (error) {
+    console.error('[Status Callback] Error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to process status update'
+    });
   }
 });
 
