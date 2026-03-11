@@ -2,13 +2,52 @@
  * Network Farms Store Service
  * Manages network farm registry
  * Auto-seeds from database on first access so catalog survives restarts
+ * Self-heals missing auth credentials from farm-api-keys.json
  */
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 const networkFarms = new Map();
 let seeded = false;
 let lastDbSyncAt = 0;
+let bootstrapDone = false;
 const DB_SYNC_INTERVAL_MS = 60 * 1000;
+
+/**
+ * Load farm API keys from the local keys file (same file GC uses for inbound auth).
+ * Used to auto-populate auth credentials for farms missing them in the DB.
+ */
+function loadLocalFarmApiKeys() {
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const keysPath = resolve(__dirname, '..', 'public', 'data', 'farm-api-keys.json');
+    return JSON.parse(readFileSync(keysPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Parse WHOLESALE_FARM_URL_OVERRIDES env var.
+ * Format: "FARM_ID=http://url,FARM_ID_2=http://url2"
+ * Used to fix stale private IPs in the DB with stable EB CNAME URLs.
+ */
+function parseFarmUrlOverrides() {
+  const raw = process.env.WHOLESALE_FARM_URL_OVERRIDES || '';
+  if (!raw) return {};
+  const overrides = {};
+  for (const pair of raw.split(',')) {
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx > 0) {
+      const farmId = pair.substring(0, eqIdx).trim();
+      const url = pair.substring(eqIdx + 1).trim();
+      if (farmId && url) overrides[farmId] = url;
+    }
+  }
+  return overrides;
+}
 
 function normalizeNetworkFarm(farmId, farmData = {}) {
   const name = farmData.farm_name || farmData.name || farmId;
@@ -77,6 +116,77 @@ async function seedFromDatabase() {
     }
   } catch (err) {
     console.warn('[NetworkFarmsStore] DB seed failed (non-fatal):', err.message);
+  }
+
+  // ── Self-healing bootstrap: fill missing auth + fix stale URLs ──
+  if (!bootstrapDone) {
+    bootstrapDone = true;
+    try {
+      const localKeys = loadLocalFarmApiKeys();
+      const urlOverrides = parseFarmUrlOverrides();
+      let patched = 0;
+
+      for (const [farmId, farm] of networkFarms.entries()) {
+        let needsUpdate = false;
+        const updates = {};
+
+        // Fill missing auth from local farm-api-keys.json
+        if (!farm.api_key && localKeys[farmId]?.api_key) {
+          updates.auth_farm_id = farmId;
+          updates.api_key = localKeys[farmId].api_key;
+          needsUpdate = true;
+          console.log(`[NetworkFarmsStore] Bootstrap: filling auth for farm ${farmId} from farm-api-keys.json`);
+        }
+
+        // Apply URL overrides (replaces stale private IPs)
+        if (urlOverrides[farmId] && urlOverrides[farmId] !== farm.api_url) {
+          updates.api_url = urlOverrides[farmId];
+          updates.url = urlOverrides[farmId];
+          updates.base_url = urlOverrides[farmId];
+          needsUpdate = true;
+          console.log(`[NetworkFarmsStore] Bootstrap: overriding URL for farm ${farmId} → ${urlOverrides[farmId]}`);
+        }
+
+        if (needsUpdate) {
+          // Update in-memory immediately
+          const updated = normalizeNetworkFarm(farmId, { ...farm, ...updates });
+          networkFarms.set(farmId, updated);
+
+          // Persist to DB (best-effort)
+          try {
+            if (await isDatabaseAvailable()) {
+              const metadata = {
+                auth_farm_id: updated.auth_farm_id,
+                api_key: updated.api_key,
+                api_url: updated.api_url,
+                url: updated.api_url,
+                contact: updated.contact || {},
+                location: updated.location || {},
+                certifications: updated.certifications || [],
+                practices: updated.practices || []
+              };
+              await query(
+                `UPDATE farms SET
+                   api_url = COALESCE(NULLIF($2, ''), farms.api_url),
+                   metadata = COALESCE(farms.metadata, '{}'::jsonb) || $3::jsonb,
+                   updated_at = NOW()
+                 WHERE farm_id = $1`,
+                [farmId, updated.api_url, JSON.stringify(metadata)]
+              );
+              patched++;
+            }
+          } catch (dbErr) {
+            console.warn(`[NetworkFarmsStore] Bootstrap DB update failed for ${farmId}:`, dbErr.message);
+          }
+        }
+      }
+
+      if (patched > 0) {
+        console.log(`[NetworkFarmsStore] Bootstrap: patched ${patched} farms in DB`);
+      }
+    } catch (bootstrapErr) {
+      console.warn('[NetworkFarmsStore] Bootstrap failed (non-fatal):', bootstrapErr.message);
+    }
   }
 }
 
