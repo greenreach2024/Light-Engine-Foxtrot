@@ -768,9 +768,10 @@ router.get('/schedule', async (req, res) => {
   try {
     console.log('[Wholesale Sync] GreenReach requesting pickup schedule');
 
+    const farmInfo = readFarmInfo();
     const farmSchedule = {
-      farm_id: 'demo-farm-1',
-      farm_name: 'Light Engine Demo Farm',
+      farm_id: farmInfo.farmId,
+      farm_name: farmInfo.name,
       pickup_windows: [
         {
           day: 'Monday',
@@ -844,8 +845,9 @@ router.get('/pricing', async (req, res) => {
   try {
     console.log('[Wholesale Sync] GreenReach requesting pricing data');
 
+    const farmInfo = readFarmInfo();
     const pricingData = {
-      farm_id: 'demo-farm-1',
+      farm_id: farmInfo.farmId,
       pricing: [
         {
           sku_id: 'SKU-ROMAINE-5LB',

@@ -92,6 +92,7 @@ function sanitizeText(str) {
 
 // ── Farm API-key auth (for farm→Central callbacks) ───────────────────
 // Pre-load farm API keys at startup
+import crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -124,12 +125,18 @@ function requireFarmApiKey(req, res, next) {
     return next();
   }
 
-  // Check farm-api-keys.json
+  // Check farm-api-keys.json (timing-safe comparison)
   const keys = loadFarmApiKeys();
   const farmEntry = keys[farmId];
-  if (farmEntry?.api_key === apiKey && farmEntry?.status === 'active') {
-    req.farmAuth = { farm_id: farmId };
-    return next();
+  if (farmEntry?.api_key && farmEntry?.status === 'active') {
+    try {
+      const keyBuf = Buffer.from(farmEntry.api_key, 'utf8');
+      const inputBuf = Buffer.from(apiKey, 'utf8');
+      if (keyBuf.length === inputBuf.length && crypto.timingSafeEqual(keyBuf, inputBuf)) {
+        req.farmAuth = { farm_id: farmId };
+        return next();
+      }
+    } catch { /* length mismatch or buffer error — fall through to 403 */ }
   }
 
   return res.status(403).json({ status: 'error', message: 'Invalid farm credentials' });
@@ -199,9 +206,9 @@ function shouldUseNetworkAllocation(req) {
   if (override === 'true' || override === '1') return true;
   if (override === 'false' || override === '0') return false;
 
-  // Default to network allocation to match the catalog hotfix behavior
-  // until farm_inventory schema parity is restored.
-  return true;
+  // Mirror the catalog mode flag — when catalog uses network, allocation should too.
+  const catalogMode = (process.env.WHOLESALE_CATALOG_MODE || 'network').toLowerCase();
+  return catalogMode === 'network' || req.app?.locals?.databaseReady === false;
 }
 
 const DELIVERY_WINDOWS = ['morning', 'afternoon', 'evening'];
@@ -380,10 +387,11 @@ router.post('/delivery/quote', requireBuyerAuth, async (req, res) => {
  */
 router.get('/catalog', async (req, res, next) => {
   try {
-    // HOTFIX: Always use in-memory catalog until farm_inventory schema is properly deployed
-    // farm_inventory table exists but with wrong schema - missing columns like product_name, category, etc.
-    // Use in-memory network catalog (pulled from farms) which is the proven working approach
-    if (true || req.app?.locals?.databaseReady === false) {
+    // Use network aggregation when env flag is set or DB is not ready.
+    // Set WHOLESALE_CATALOG_MODE=network in production to use farm-network catalog;
+    // omit or set to 'db' to use the database catalog path.
+    const catalogMode = (process.env.WHOLESALE_CATALOG_MODE || 'network').toLowerCase();
+    if (catalogMode === 'network' || req.app?.locals?.databaseReady === false) {
       const nearLat = req.query.nearLat ?? req.query.lat;
       const nearLng = req.query.nearLng ?? req.query.lng;
       const buyerLocation = (nearLat && nearLng)
@@ -1288,150 +1296,134 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
         payment.notes = `Payment error: ${error.message}`;
       }
 
-      // Best-effort: notify each farm (Light Engine) about its sub-order.
-      // Additive only; failure does not block checkout.
+      // ── Synchronous inventory reservation before responding ──
+      // Reserve inventory at each farm BEFORE confirming the order to the buyer.
+      // If any reservation fails, roll back all previous reservations and fail the checkout.
       order.payment = payment;
+
+      const farms = await listNetworkFarms();
+      const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
+      const farmApiKeys = loadFarmApiKeys();
+
+      // Resolve auth credentials: prefer stored farm credentials, fall back to farm-api-keys.json
+      const resolveAuth = (farmObj, farmId) => {
+        if (farmObj?.api_key) return { farmId: farmObj.auth_farm_id || farmId, apiKey: farmObj.api_key };
+        if (farmObj?.auth_farm_id && farmApiKeys[farmObj.auth_farm_id]?.api_key) {
+          return { farmId: farmObj.auth_farm_id, apiKey: farmApiKeys[farmObj.auth_farm_id].api_key };
+        }
+        if (farmApiKeys[farmId]?.api_key) return { farmId, apiKey: farmApiKeys[farmId].api_key };
+        const envKey = process.env.WHOLESALE_FARM_API_KEY;
+        if (envKey) return { farmId, apiKey: envKey };
+        const entry = Object.entries(farmApiKeys).find(([, v]) => v?.status === 'active' && v?.api_key);
+        if (entry) return { farmId: entry[0], apiKey: entry[1].api_key };
+        return { farmId, apiKey: null };
+      };
+
+      const farmCallWithTimeout = async (farmBaseUrl, urlPath, body, farmId, farmObj, timeoutMs = 8000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const auth = resolveAuth(farmObj, farmId);
+          const headers = { 'Content-Type': 'application/json' };
+          if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
+          if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
+          const resp = await fetch(new URL(urlPath, farmBaseUrl).toString(), {
+            method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal
+          });
+          const json = await resp.json().catch(() => null);
+          return { ok: resp.ok && json?.ok !== false, status: resp.status, json };
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      // Phase 1: Reserve inventory at every farm (synchronous, with rollback on failure)
+      const reservedFarms = []; // track successful reservations for rollback
+      let reservationError = null;
+
+      for (const sub of order.farm_sub_orders || []) {
+        const farm = byId.get(String(sub.farm_id));
+        const farmUrl = farm?.api_url || farm?.url;
+        if (!farmUrl) continue;
+
+        try {
+          const reserveResult = await farmCallWithTimeout(farmUrl, '/api/wholesale/inventory/reserve', {
+            order_id: order.master_order_id,
+            items: (sub.items || []).map((it) => ({ sku_id: it.sku_id, quantity: it.quantity }))
+          }, sub.farm_id, farm);
+
+          if (reserveResult.ok) {
+            reservedFarms.push({ farm_id: sub.farm_id, farmUrl, farm });
+            console.log(`[Checkout] Reserved inventory at farm ${sub.farm_id}`);
+          } else {
+            console.warn(`[Checkout] Reservation rejected by farm ${sub.farm_id}:`, reserveResult.json?.error || reserveResult.status);
+            reservationError = `Farm ${sub.farm_id} rejected reservation: ${reserveResult.json?.error || 'HTTP ' + reserveResult.status}`;
+            break;
+          }
+        } catch (err) {
+          console.warn(`[Checkout] Reservation failed for farm ${sub.farm_id}:`, err.message);
+          reservationError = `Farm ${sub.farm_id} reservation failed: ${err.message}`;
+          break;
+        }
+      }
+
+      // Rollback all reservations if any farm failed
+      if (reservationError) {
+        for (const reserved of reservedFarms) {
+          try {
+            await farmCallWithTimeout(reserved.farmUrl, '/api/wholesale/inventory/release', {
+              order_id: order.master_order_id
+            }, reserved.farm_id, reserved.farm, 5000);
+            console.log(`[Checkout] Rolled back reservation at farm ${reserved.farm_id}`);
+          } catch (rollbackErr) {
+            console.error(`[Checkout] Rollback failed for farm ${reserved.farm_id}:`, rollbackErr.message);
+          }
+        }
+        return res.status(409).json({
+          status: 'error',
+          message: 'Inventory reservation failed — order not placed',
+          detail: reservationError
+        });
+      }
+
+      // Phase 2: If payment succeeded, confirm (convert reservations to permanent deductions)
+      if (paymentSuccess) {
+        for (const reserved of reservedFarms) {
+          try {
+            await farmCallWithTimeout(reserved.farmUrl, '/api/wholesale/inventory/confirm', {
+              order_id: order.master_order_id,
+              payment_id: payment.payment_id
+            }, reserved.farm_id, reserved.farm);
+            console.log(`[Checkout] Inventory confirmed at farm ${reserved.farm_id}`);
+          } catch (confirmErr) {
+            console.warn(`[Checkout] Confirm failed for farm ${reserved.farm_id} (reservation still held):`, confirmErr.message);
+          }
+        }
+      }
+
       await saveOrder(order).catch(() => {});
 
+      // Phase 3 (async/best-effort): Notify farms + send confirmation email
       (async () => {
         try {
-          const farms = await listNetworkFarms();
-          const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
-
-          const farmApiKeys = loadFarmApiKeys();
-
-          // Resolve auth credentials: prefer stored farm credentials, fall back to farm-api-keys.json
-          const resolveAuth = (farmObj, farmId) => {
-            // 1. Stored credentials on the network farm entry
-            if (farmObj?.api_key) return { farmId: farmObj.auth_farm_id || farmId, apiKey: farmObj.api_key };
-            // 2. Look up by auth_farm_id in farm-api-keys.json
-            if (farmObj?.auth_farm_id && farmApiKeys[farmObj.auth_farm_id]?.api_key) {
-              return { farmId: farmObj.auth_farm_id, apiKey: farmApiKeys[farmObj.auth_farm_id].api_key };
-            }
-            // 3. Look up by network farm_id in farm-api-keys.json
-            if (farmApiKeys[farmId]?.api_key) return { farmId, apiKey: farmApiKeys[farmId].api_key };
-            // 4. Env-based key
-            const envKey = process.env.WHOLESALE_FARM_API_KEY;
-            if (envKey) return { farmId, apiKey: envKey };
-            // 5. Last resort: first active key entry (handles single-farm setups with mismatched IDs)
-            const entry = Object.entries(farmApiKeys).find(([, v]) => v?.status === 'active' && v?.api_key);
-            if (entry) return { farmId: entry[0], apiKey: entry[1].api_key };
-            return { farmId, apiKey: null };
-          };
-
-          const notify = async (farmBaseUrl, body, farmId, farmObj) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 3000);
-            try {
-              const auth = resolveAuth(farmObj, farmId);
-              const headers = { 'Content-Type': 'application/json' };
-              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
-              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
-              await fetch(new URL('/api/wholesale/order-events', farmBaseUrl).toString(), {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body),
-                signal: controller.signal
-              });
-            } catch {
-              // ignore
-            } finally {
-              clearTimeout(timer);
-            }
-          };
-
-          const reserve = async (farmBaseUrl, body, farmId, farmObj) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 3000);
-            try {
-              const auth = resolveAuth(farmObj, farmId);
-              const headers = { 'Content-Type': 'application/json' };
-              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
-              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
-              const res = await fetch(new URL('/api/wholesale/inventory/reserve', farmBaseUrl).toString(), {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body),
-                signal: controller.signal
-              });
-              const json = await res.json().catch(() => null);
-              if (!res.ok || !json?.ok) {
-                console.warn(`[Wholesale] Reservation failed for farm ${body.order_id}:`, json?.error || res.status);
-              }
-            } catch (err) {
-              console.warn(`[Wholesale] Failed to reserve inventory at farm:`, err.message);
-            } finally {
-              clearTimeout(timer);
-            }
-          };
-
-          const confirm = async (farmBaseUrl, body, farmId, farmObj) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 3000);
-            try {
-              const auth = resolveAuth(farmObj, farmId);
-              const headers = { 'Content-Type': 'application/json' };
-              if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
-              if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
-              const res = await fetch(new URL('/api/wholesale/inventory/confirm', farmBaseUrl).toString(), {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body),
-                signal: controller.signal
-              });
-              const json = await res.json().catch(() => null);
-              if (!res.ok || !json?.ok) {
-                console.warn(`[Wholesale] Inventory confirmation failed for order ${body.order_id}:`, json?.error || res.status);
-              } else {
-                console.log(`[Wholesale] Inventory confirmed and deducted for order ${body.order_id}`);
-              }
-            } catch (err) {
-              console.warn(`[Wholesale] Failed to confirm inventory at farm:`, err.message);
-            } finally {
-              clearTimeout(timer);
-            }
-          };
-
           for (const sub of order.farm_sub_orders || []) {
             const farm = byId.get(String(sub.farm_id));
             const farmUrl = farm?.api_url || farm?.url;
             if (!farmUrl) continue;
-
-            // Send order notification
-            await notify(farmUrl, {
-              type: 'wholesale_order_created',
-              order_id: order.master_order_id,
-              farm_id: sub.farm_id,
-              delivery_date: order.delivery_date,
-              created_at: order.created_at,
-              items: (sub.items || []).map((it) => ({
-                sku_id: it.sku_id,
-                product_name: it.product_name,
-                quantity: it.quantity,
-                unit: it.unit
-              }))
-            }, sub.farm_id, farm);
-
-            // Reserve inventory (temporary hold)
-            await reserve(farmUrl, {
-              order_id: order.master_order_id,
-              items: (sub.items || []).map((it) => ({
-                sku_id: it.sku_id,
-                quantity: it.quantity
-              }))
-            }, sub.farm_id, farm);
-
-            // CRITICAL: Confirm inventory deduction if payment succeeded
-            if (paymentSuccess) {
-              await confirm(farmUrl, {
+            try {
+              await farmCallWithTimeout(farmUrl, '/api/wholesale/order-events', {
+                type: 'wholesale_order_created',
                 order_id: order.master_order_id,
-                payment_id: payment.payment_id
-              }, sub.farm_id, farm);
-            }
+                farm_id: sub.farm_id,
+                delivery_date: order.delivery_date,
+                created_at: order.created_at,
+                items: (sub.items || []).map((it) => ({
+                  sku_id: it.sku_id, product_name: it.product_name, quantity: it.quantity, unit: it.unit
+                }))
+              }, sub.farm_id, farm, 3000);
+            } catch { /* notification is best-effort */ }
           }
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       })();
 
       // Order confirmation email + audit (non-blocking)
