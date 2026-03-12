@@ -1380,6 +1380,71 @@ async function runMigrations(client) {
     }
   }
 
+  // Migration 022 – Market Intelligence + ESG scoring tables
+  {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS market_price_observations (
+          id SERIAL PRIMARY KEY,
+          product VARCHAR(128) NOT NULL,
+          retailer VARCHAR(128) NOT NULL,
+          price_cad NUMERIC(10,2) NOT NULL,
+          unit VARCHAR(32) DEFAULT 'per_kg',
+          source VARCHAR(64) DEFAULT 'manual',
+          observed_at TIMESTAMPTZ DEFAULT NOW(),
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_mpo_product ON market_price_observations(product);
+        CREATE INDEX IF NOT EXISTS idx_mpo_observed ON market_price_observations(observed_at);
+
+        CREATE TABLE IF NOT EXISTS market_price_trends (
+          id SERIAL PRIMARY KEY,
+          product VARCHAR(128) NOT NULL,
+          avg_price_7d NUMERIC(10,2),
+          avg_price_30d NUMERIC(10,2),
+          min_price_30d NUMERIC(10,2),
+          max_price_30d NUMERIC(10,2),
+          trend VARCHAR(16) DEFAULT 'stable',
+          trend_percent NUMERIC(6,2) DEFAULT 0,
+          observation_count INT DEFAULT 0,
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(product)
+        );
+
+        CREATE TABLE IF NOT EXISTS esg_assessments (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(64) NOT NULL,
+          energy_score NUMERIC(5,2) DEFAULT 0,
+          water_score NUMERIC(5,2) DEFAULT 0,
+          carbon_score NUMERIC(5,2) DEFAULT 0,
+          food_miles_score NUMERIC(5,2) DEFAULT 0,
+          waste_score NUMERIC(5,2) DEFAULT 0,
+          employment_score NUMERIC(5,2) DEFAULT 0,
+          community_score NUMERIC(5,2) DEFAULT 0,
+          food_access_score NUMERIC(5,2) DEFAULT 0,
+          traceability_score NUMERIC(5,2) DEFAULT 0,
+          transparency_score NUMERIC(5,2) DEFAULT 0,
+          compliance_score NUMERIC(5,2) DEFAULT 0,
+          environmental_composite NUMERIC(5,2) DEFAULT 0,
+          social_composite NUMERIC(5,2) DEFAULT 0,
+          governance_composite NUMERIC(5,2) DEFAULT 0,
+          overall_score NUMERIC(5,2) DEFAULT 0,
+          grade VARCHAR(2) DEFAULT 'C',
+          metrics_json JSONB DEFAULT '{}',
+          assessed_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_esg_farm ON esg_assessments(farm_id);
+        CREATE INDEX IF NOT EXISTS idx_esg_date ON esg_assessments(assessed_at);
+      `);
+
+      logger.info('Market intelligence & ESG tables ready (migration 022)');
+    } catch (err) {
+      logger.warn('Market intelligence & ESG migration warning:', err.message);
+    }
+  }
+
   logger.info('Database migrations completed');
 }
 

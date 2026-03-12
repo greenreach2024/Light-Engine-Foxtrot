@@ -3,6 +3,7 @@
  * Aggregates real inventory data across registered network farms
  */
 import { listNetworkFarms } from './networkFarmsStore.js';
+import { generatePredictedInventoryEnhanced } from './harvest-prediction-engine.js';
 import logger from '../utils/logger.js';
 
 // In-memory cache for aggregated inventory (refreshed by wholesaleNetworkSync)
@@ -247,7 +248,8 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
   // Load quality scores from crop benchmarks (Central DB) for each farm×crop
   let qualityScores = {};
   try {
-    const { pool } = await import('../db.js');
+    const { getDatabase: getDB } = await import('../config/database.js');
+    const pool = getDB();
     const { rows } = await pool.query(`
       SELECT farm_id, crop,
              AVG(quality_score) AS avg_quality,
@@ -336,12 +338,19 @@ export async function buildAggregateCatalog() {
     await refreshNetworkInventory();
   }
 
-  // ── Phase 5 Ticket 5.6: Include predicted inventory ──
+  // ── Phase 5 Ticket 5.6: Include predicted inventory (enhanced with statistical engine) ──
   let predictedInventory = [];
   try {
-    predictedInventory = await generatePredictedInventory();
+    const { getDatabase: getDB } = await import('../config/database.js');
+    const dbPool = getDB();
+    predictedInventory = await generatePredictedInventoryEnhanced(dbPool);
   } catch {
-    // Non-fatal — predicted inventory is best-effort
+    // Fallback to legacy prediction if enhanced engine fails
+    try {
+      predictedInventory = await generatePredictedInventory();
+    } catch {
+      // Non-fatal — predicted inventory is best-effort
+    }
   }
 
   return {
@@ -376,7 +385,8 @@ export async function buildAggregateCatalog() {
  */
 export async function generatePredictedInventory() {
   try {
-    const { pool } = await import('../db.js');
+    const { getDatabase: getDB } = await import('../config/database.js');
+    const pool = getDB();
 
     // Get active crops across network with estimated harvest dates
     const { rows } = await pool.query(`

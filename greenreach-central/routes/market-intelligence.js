@@ -2,11 +2,30 @@
  * Market Intelligence API
  * Monitors North American retail produce pricing and market events
  * Provides real-time price anomaly detection for wholesale buyers
+ *
+ * Enhanced: DB-backed price tracking with real trend computation,
+ * price history, retailer comparison, and anomaly detection.
  */
 
 import express from 'express';
+import {
+  recordPriceObservation,
+  recordPriceObservationsBatch,
+  refreshPriceTrends,
+  getMarketDataFromDB,
+  getPriceHistory,
+  getRetailerComparison,
+  detectPriceAnomalies,
+  seedInitialPrices
+} from '../services/market-intelligence-service.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
+
+// Cache for getMarketData() — refreshed from DB periodically
+let _cachedMarketData = null;
+let _cacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * North American Retail Market Data Sources
@@ -285,11 +304,151 @@ router.get('/product/:productName', async (req, res) => {
   }
 });
 
+// ── NEW DB-BACKED ENDPOINTS ─────────────────────────────────────────────
+
 /**
- * Export market data for internal use by other routes
+ * POST /api/market-intelligence/observations
+ * Record price observations (manual entry, scrape results, or bulk import)
+ */
+router.post('/observations', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const { observations } = req.body;
+    if (Array.isArray(observations)) {
+      const results = await recordPriceObservationsBatch(pool, observations);
+      return res.json({ ok: true, results, recorded: results.filter(r => r.ok).length });
+    }
+
+    // Single observation
+    const { product, retailer, price_cad, unit, source } = req.body;
+    if (!product || !retailer || !price_cad) {
+      return res.status(400).json({ ok: false, error: 'product, retailer, and price_cad required' });
+    }
+
+    const obs = await recordPriceObservation(pool, { product, retailer, price_cad, unit, source });
+    return res.json({ ok: true, observation: obs });
+  } catch (error) {
+    logger.error('[Market Intelligence] Record observation error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/market-intelligence/refresh-trends
+ * Recompute price trends from observation history
+ */
+router.post('/refresh-trends', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const result = await refreshPriceTrends(pool);
+    _cachedMarketData = null; // invalidate cache
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error('[Market Intelligence] Refresh trends error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/market-intelligence/price-history/:product
+ * Get daily price time-series for a product (for charts)
+ */
+router.get('/price-history/:product', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const days = parseInt(req.query.days) || 90;
+    const history = await getPriceHistory(pool, req.params.product, days);
+    return res.json({ ok: true, product: req.params.product, days, history });
+  } catch (error) {
+    logger.error('[Market Intelligence] Price history error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/market-intelligence/retailer-comparison/:product
+ * Compare prices across retailers for a product
+ */
+router.get('/retailer-comparison/:product', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const comparison = await getRetailerComparison(pool, req.params.product);
+    return res.json({ ok: true, product: req.params.product, retailers: comparison });
+  } catch (error) {
+    logger.error('[Market Intelligence] Retailer comparison error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/market-intelligence/anomalies
+ * Detect statistically significant price changes
+ */
+router.get('/anomalies', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const threshold = parseInt(req.query.threshold) || 10;
+    const anomalies = await detectPriceAnomalies(pool, threshold);
+    return res.json({ ok: true, anomalies, threshold });
+  } catch (error) {
+    logger.error('[Market Intelligence] Anomalies error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/market-intelligence/seed
+ * Seed initial price data (run once to populate DB with historical data)
+ */
+router.post('/seed', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const result = await seedInitialPrices(pool);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error('[Market Intelligence] Seed error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * Export market data for internal use by other routes.
+ * Now returns DB-backed data when available, falls back to hardcoded seed data.
  */
 export function getMarketData() {
+  // Synchronous — return cached DB data or fallback to static
+  if (_cachedMarketData && (Date.now() - _cacheTime) < CACHE_TTL) {
+    return _cachedMarketData;
+  }
   return MARKET_DATA_SOURCES;
+}
+
+/**
+ * Async version — fetches fresh data from DB
+ */
+export async function getMarketDataAsync(pool) {
+  if (!pool) return MARKET_DATA_SOURCES;
+
+  try {
+    const data = await getMarketDataFromDB(pool);
+    _cachedMarketData = data;
+    _cacheTime = Date.now();
+    return data;
+  } catch {
+    return MARKET_DATA_SOURCES;
+  }
 }
 
 export default router;

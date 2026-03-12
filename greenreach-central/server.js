@@ -104,6 +104,8 @@ import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
 import { startAwsCostExplorerScheduler } from './services/awsCostExplorerSync.js';
 import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
+import { generateHarvestPredictions } from './services/harvest-prediction-engine.js';
+import { getCoordinatedPlantingRecommendations } from './services/network-planting-coordinator.js';
 import { initExperimentTables, createExperiment, activateExperiment, recordObservation, analyzeExperiment, completeExperiment, listExperiments, getExperiment, getExperimentsForFarm } from './jobs/experiment-orchestrator.js';
 import { generateWeeklyPlan, generateAndDistributePlan, gatherDemandForecast, getNetworkSupply } from './jobs/production-planner.js';
 import { generateGovernanceReport, formatReportText } from './reports/governance-review.js';
@@ -3355,6 +3357,56 @@ app.get('/api/network/planting-suggestions', async (req, res) => {
   }
 });
 
+// ─── Harvest Prediction Engine (Claim #17) ─────────────────────────────
+// Statistical harvest predictions with confidence intervals, std dev, and probability windows
+app.get('/api/harvest/predictions', async (req, res) => {
+  try {
+    const db = getDatabase();
+    if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
+
+    const pool = getDatabase();
+    const farmId = req.query.farm_id || null;
+    const horizonDays = parseInt(req.query.horizon) || 45;
+    const minHarvests = parseInt(req.query.min_harvests) || 3;
+
+    const result = await generateHarvestPredictions(pool, {
+      farmId,
+      horizonDays,
+      minHarvests
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[harvest-predictions] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ─── Network Planting Coordinator (Claim #19) ──────────────────────────
+// Cross-farm demand coordination with saturation index and stagger recommendations
+app.get('/api/network/coordinated-planting', async (req, res) => {
+  try {
+    const db = getDatabase();
+    if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
+
+    const pool = getDatabase();
+    const farmId = req.query.farm_id;
+
+    if (!farmId) {
+      return res.status(400).json({ ok: false, error: 'farm_id query parameter required' });
+    }
+
+    const result = await getCoordinatedPlantingRecommendations(pool, farmId, {
+      forecastDays: parseInt(req.query.forecast_days) || 30
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[coordinated-planting] Error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // S4.8: Unified Multi-Farm Benchmarking Dashboard API
 app.get('/api/network/benchmarking', async (req, res) => {
   try {
@@ -4188,6 +4240,7 @@ async function startServer() {
     try {
       await initDatabase();
       app.locals.databaseReady = true;
+      app.locals.dbPool = getDatabase();
       logger.info('Database connected successfully');
       
       // Hydrate in-memory Maps from farm_data table (multi-tenant SaaS)

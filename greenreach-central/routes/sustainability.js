@@ -1,8 +1,11 @@
 // routes/sustainability.js — Sustainability & ESG Dashboard  (Page 9)
 // Replaces inline zero-stubs in server.js.
 // Stores utility bills via farmStore; derives metrics from bills + harvest data.
+// Enhanced: Real ESG scoring via esg-scoring-engine service.
 
 import { Router } from 'express';
+import { calculateESGScore, getESGHistory } from '../services/esg-scoring-engine.js';
+import logger from '../utils/logger.js';
 
 const router = Router();
 
@@ -280,12 +283,27 @@ router.get('/food-miles', async (req, res) => {
 // GET /api/sustainability/esg-report
 router.get('/esg-report', async (req, res) => {
   try {
-    // Fetch metrics internally
-    const metricsUrl = `${req.protocol}://${req.get('host')}/api/sustainability/metrics?days=30`;
+    const pool = req.app?.locals?.dbPool;
+    const fid = farmId(req);
+    const days = parseInt(req.query.days) || 30;
+    const store = getFarmStore(req);
+
+    if (pool) {
+      // Use real ESG scoring engine
+      try {
+        const assessment = await calculateESGScore(pool, fid, { days, farmStore: store });
+        return res.json({ ok: true, esg_score: assessment });
+      } catch (esgErr) {
+        logger.warn('[sustainability] ESG engine error, using fallback:', esgErr.message);
+      }
+    }
+
+    // Fallback: derive from metrics if ESG engine unavailable
+    const metricsUrl = `${req.protocol}://${req.get('host')}/api/sustainability/metrics?days=${days}`;
     let metrics;
     try {
       const r = await fetch(metricsUrl, {
-        headers: { 'x-farm-id': farmId(req) },
+        headers: { 'x-farm-id': fid },
         signal: AbortSignal.timeout(5000)
       });
       metrics = await r.json();
@@ -295,18 +313,35 @@ router.get('/esg-report', async (req, res) => {
 
     const hasBills = metrics.ok && (metrics.energy?.bill_count > 0 || metrics.water?.bill_count > 0);
 
+    // Improved fallback scoring (still better than pure placeholder)
+    let score = 0, grade = 'N/A';
+    const breakdown = { energy: 0, water: 0, carbon: 0, nutrients: 0, waste: 0 };
+
+    if (hasBills) {
+      if (metrics.energy?.total_kwh > 0) breakdown.energy = 60;
+      if (metrics.water?.total_liters > 0) breakdown.water = 60;
+      if (metrics.carbon?.total_kg > 0) breakdown.carbon = 50;
+      // Vertical farms: no soil nutrients needed, inherently low waste
+      breakdown.nutrients = 70;
+      breakdown.waste = 65;
+
+      score = Math.round(
+        breakdown.energy * 0.25 +
+        breakdown.water * 0.25 +
+        breakdown.carbon * 0.25 +
+        breakdown.nutrients * 0.10 +
+        breakdown.waste * 0.15
+      );
+      grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
+    }
+
     return res.json({
       ok: true,
       esg_score: {
-        total_score: hasBills ? 50 : 0,
-        grade: hasBills ? 'C' : 'N/A',
-        breakdown: {
-          energy: hasBills ? Math.min(100, metrics.energy?.total_kwh > 0 ? 60 : 0) : 0,
-          water: hasBills ? Math.min(100, metrics.water?.total_liters > 0 ? 60 : 0) : 0,
-          nutrients: 0,
-          waste: 0,
-          carbon: hasBills ? Math.min(100, metrics.carbon?.total_kg > 0 ? 50 : 0) : 0
-        },
+        total_score: score,
+        grade,
+        source: 'fallback',
+        breakdown,
         metrics: {
           renewable_energy_percent: 0,
           water_recycling_percent: 0,
@@ -314,6 +349,21 @@ router.get('/esg-report', async (req, res) => {
         }
       }
     });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/sustainability/esg-history — ESG score trend over time
+router.get('/esg-history', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.json({ ok: true, history: [] });
+
+    const fid = farmId(req);
+    const limit = parseInt(req.query.limit) || 12;
+    const history = await getESGHistory(pool, fid, limit);
+    return res.json({ ok: true, history });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
