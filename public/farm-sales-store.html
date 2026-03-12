@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Online Store</title>
+  <meta name="description" content="Order farm-fresh produce online. Browse our selection of seasonal vegetables, herbs, and greens with convenient checkout and delivery options.">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Farm Online Store">
+  <meta property="og:description" content="Order farm-fresh produce online. Browse our seasonal selection with convenient checkout and delivery.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Farm Online Store">
+  <meta name="twitter:description" content="Order farm-fresh produce online from your local farm.">
   <script src="https://web.squarecdn.com/v1/square.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -455,7 +463,7 @@
       
       <div id="login-error" class="alert alert-error hidden"></div>
       
-      <form id="login-form">
+      <form id="login-form" aria-label="Sign in to your account">
         <div class="form-group">
           <label for="customer-email">Email</label>
           <input type="email" id="customer-email" required placeholder="your@email.com">
@@ -477,7 +485,7 @@
   
   <!-- Main App -->
   <div id="app">
-    <header class="header">
+    <header class="header" role="banner">
       <h1>🌱 Farm Store</h1>
       <div class="user-info">
         <span class="farm-badge" id="farm-name">Loading...</span>
@@ -486,12 +494,12 @@
       </div>
     </header>
     
-    <nav class="tabs">
-      <button class="tab active" data-tab="shop">Shop</button>
-      <button class="tab" data-tab="subscriptions">My Subscriptions</button>
+    <nav class="tabs" aria-label="Store navigation">
+      <button class="tab active" data-tab="shop" aria-selected="true">Shop</button>
+      <button class="tab" data-tab="subscriptions" aria-selected="false">My Subscriptions</button>
     </nav>
-    
-    <main class="content">
+
+    <main class="content" role="main">
       <!-- Shop Tab -->
       <div id="tab-shop" class="tab-content active">
         <div class="shop-grid">
@@ -561,13 +569,13 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2>Complete Order</h2>
-        <button class="modal-close" onclick="closeCheckoutModal()">×</button>
+        <button class="modal-close" onclick="closeCheckoutModal()" aria-label="Close checkout">×</button>
       </div>
       
       <div id="checkout-success" class="alert alert-success hidden"></div>
       <div id="checkout-error" class="alert alert-error hidden"></div>
       
-      <form id="checkout-form">
+      <form id="checkout-form" aria-label="Checkout form">
         <!-- Delivery Selection -->
         <div class="form-group">
           <label for="delivery-option">Delivery Option</label>
@@ -665,13 +673,13 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2>Create Subscription</h2>
-        <button class="modal-close" onclick="closeSubscriptionModal()">×</button>
+        <button class="modal-close" onclick="closeSubscriptionModal()" aria-label="Close subscription dialog">×</button>
       </div>
       
       <div id="subscription-success" class="alert alert-success hidden"></div>
       <div id="subscription-error" class="alert alert-error hidden"></div>
       
-      <form id="subscription-form">
+      <form id="subscription-form" aria-label="Create subscription">
         <div class="form-group">
           <label for="sub-product">Farm Box</label>
           <select id="sub-product" required>
@@ -743,6 +751,7 @@
     let subscriptions = [];
     let deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
     let selectedTipAmount = 0;
+    let FARM_TAX_RATE = 0.08; // Default; updated from farm config if available
     
     // Square Payment State
     let squarePayments = null;
@@ -791,8 +800,9 @@
           const response = await fetch('/api/config/app');
           const config = await response.json();
           
-          farmId = config.farmId || 'FARM-001';
-          farmName = config.farmName || 'Demo Farm';
+          farmId = config.farmId || 'FARM-MLTP9LVH-B0B85039';
+          farmName = config.farmName || 'The Notable Sprout';
+          if (config.taxRate !== undefined) FARM_TAX_RATE = Number(config.taxRate);
         }
         customerEmail = email;
         customerName = email.split('@')[0]; // Simple name extraction
@@ -895,9 +905,10 @@
           const response = await fetch('/api/config/app');
           const config = await response.json();
           
-          farmId = config.farmId || 'GR-00001';
-          farmName = config.farmName || 'Demo Farm';
-          customerEmail = 'customer@demo.com';
+          farmId = config.farmId || 'FARM-MLTP9LVH-B0B85039';
+          farmName = config.farmName || 'The Notable Sprout';
+          if (config.taxRate !== undefined) FARM_TAX_RATE = Number(config.taxRate);
+          customerEmail = `demo-${Date.now()}@${window.location.hostname}`;
           customerName = 'Demo Customer';
           
           // Try to get demo tokens (works in dev/demo mode)
@@ -1038,7 +1049,7 @@
       const taxableSubtotal = cart.reduce((sum, item) => {
         return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
       }, 0);
-      const tax = taxableSubtotal * 0.08;
+      const tax = taxableSubtotal * FARM_TAX_RATE;
       const total = subtotal + tax;
       
       document.getElementById('cart-subtotal').textContent = `$${subtotal.toFixed(2)}`;
@@ -1054,7 +1065,7 @@
       const taxableSubtotal = cart.reduce((sum, item) => {
         return sum + (item.is_taxable ? (item.retail_price * item.quantity) : 0);
       }, 0);
-      return taxableSubtotal * 0.08;
+      return taxableSubtotal * FARM_TAX_RATE;
     }
 
     function refreshCheckoutTotals() {

@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farm Shop - Fresh Local Produce</title>
+  <meta name="description" content="Shop fresh, locally grown produce direct from the farm. Seasonal vegetables, herbs, and greens available for pickup and delivery.">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Farm Shop - Fresh Local Produce">
+  <meta property="og:description" content="Shop fresh, locally grown produce direct from the farm. Seasonal vegetables, herbs, and greens available for pickup and delivery.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Farm Shop - Fresh Local Produce">
+  <meta name="twitter:description" content="Shop fresh, locally grown produce direct from the farm.">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -692,15 +700,15 @@
   </section>
   
   <!-- Navigation -->
-  <nav class="navbar">
+  <nav class="navbar" aria-label="Main navigation">
     <div class="nav-links">
       <a href="#products" class="nav-link">Shop</a>
       <a href="#subscriptions" class="nav-link">CSA Subscriptions</a>
       <a href="#about" class="nav-link">About</a>
     </div>
-    <button class="cart-button" onclick="toggleCart()">
+    <button class="cart-button" onclick="toggleCart()" aria-label="Open shopping cart">
       Cart
-      <span class="cart-badge" id="cart-count">0</span>
+      <span class="cart-badge" id="cart-count" aria-live="polite">0</span>
     </button>
   </nav>
   
@@ -710,12 +718,12 @@
     <section id="products">
       <h2 class="section-title">Shop Fresh Produce</h2>
       
-      <div class="category-filter">
-        <button class="category-btn active" onclick="filterCategory('all')">All Products</button>
-        <button class="category-btn" onclick="filterCategory('leafy_greens')">Leafy Greens</button>
-        <button class="category-btn" onclick="filterCategory('herbs')">Herbs</button>
-        <button class="category-btn" onclick="filterCategory('microgreens')">Microgreens</button>
-        <button class="category-btn" onclick="filterCategory('produce')">Produce</button>
+      <div class="category-filter" role="toolbar" aria-label="Filter by category">
+        <button class="category-btn active" onclick="filterCategory('all')" aria-pressed="true">All Products</button>
+        <button class="category-btn" onclick="filterCategory('leafy_greens')" aria-pressed="false">Leafy Greens</button>
+        <button class="category-btn" onclick="filterCategory('herbs')" aria-pressed="false">Herbs</button>
+        <button class="category-btn" onclick="filterCategory('microgreens')" aria-pressed="false">Microgreens</button>
+        <button class="category-btn" onclick="filterCategory('produce')" aria-pressed="false">Produce</button>
       </div>
       
       <div id="products-grid" class="products-grid">
@@ -743,10 +751,10 @@
   </div>
   
   <!-- Cart Sidebar -->
-  <div id="cart-sidebar" class="cart-sidebar">
+  <div id="cart-sidebar" class="cart-sidebar" role="complementary" aria-label="Shopping cart">
     <div class="cart-header">
       <h2>Your Cart</h2>
-      <button class="close-cart" onclick="toggleCart()">×</button>
+      <button class="close-cart" onclick="toggleCart()" aria-label="Close cart">×</button>
     </div>
     
     <div id="cart-items" class="cart-items">
@@ -788,14 +796,14 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2>Checkout</h2>
-        <button class="modal-close" onclick="closeCheckoutModal()">×</button>
+        <button class="modal-close" onclick="closeCheckoutModal()" aria-label="Close checkout">×</button>
       </div>
       
       <div class="modal-body">
         <div id="checkout-success" class="alert alert-success hidden"></div>
         <div id="checkout-error" class="alert alert-error hidden"></div>
         
-        <form id="checkout-form">
+        <form id="checkout-form" aria-label="Checkout form">
           <h3 style="margin-bottom: 1rem; color: var(--primary);">Contact Information</h3>
           <div class="form-row">
             <div class="form-group">
@@ -909,6 +917,7 @@
     let currentCategory = 'all';
     let deliveryQuote = { fee: 0, minimum_order: 0, eligible: true, reason: null };
     let selectedTipAmount = 0;
+    let FARM_TAX_RATE = 0.08; // Default; updated from farm config if available
     
     // Category icons removed
     const categoryIcons = {};
@@ -941,8 +950,9 @@
           const response = await fetch('/api/config/app');
           const config = await response.json();
           
-          selectedFarm = config.farmId || 'FARM-001';
-          farmName = config.farmName || 'Demo Farm';
+          selectedFarm = config.farmId || 'FARM-MLTP9LVH-B0B85039';
+          farmName = config.farmName || 'The Notable Sprout';
+          if (config.taxRate !== undefined) FARM_TAX_RATE = Number(config.taxRate);
         }
         
         document.getElementById('farm-name').textContent = farmName;
@@ -989,7 +999,7 @@
     }
 
     function getCartTax(subtotal) {
-      return subtotal * 0.08;
+      return subtotal * FARM_TAX_RATE;
     }
 
     async function refreshDeliveryQuote() {

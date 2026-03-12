@@ -163,8 +163,9 @@ router.post('/reserve', (req, res) => {
     const failures = [];
 
     // Check availability for all items first
+    const farmId = req.farm_id;
     for (const item of items) {
-      const product = inventory.get(item.sku_id);
+      const product = farmStores.inventory.get(farmId, item.sku_id);
       
       if (!product) {
         failures.push({
@@ -199,11 +200,11 @@ router.post('/reserve', (req, res) => {
     const expires_at = new Date(Date.now() + ttl_seconds * 1000).toISOString();
 
     for (const item of items) {
-      const product = inventory.get(item.sku_id);
+      const product = farmStores.inventory.get(farmId, item.sku_id);
       product.reserved += item.quantity;
       product.available = product.quantity - product.reserved;
       product.updated_at = timestamp;
-      inventory.set(item.sku_id, product);
+      farmStores.inventory.set(farmId, item.sku_id, product);
 
       reservations.push({
         sku_id: item.sku_id,
@@ -257,8 +258,9 @@ router.post('/release', (req, res) => {
     const released = [];
     const timestamp = new Date().toISOString();
 
+    const farmId = req.farm_id;
     for (const item of items) {
-      const product = inventory.get(item.sku_id);
+      const product = farmStores.inventory.get(farmId, item.sku_id);
       
       if (!product) {
         continue; // Skip if product doesn't exist
@@ -268,7 +270,7 @@ router.post('/release', (req, res) => {
       product.reserved = Math.max(0, product.reserved - item.quantity);
       product.available = product.quantity - product.reserved;
       product.updated_at = timestamp;
-      inventory.set(item.sku_id, product);
+      farmStores.inventory.set(farmId, item.sku_id, product);
 
       released.push({
         sku_id: item.sku_id,
@@ -317,8 +319,9 @@ router.post('/confirm', (req, res) => {
     const confirmed = [];
     const timestamp = new Date().toISOString();
 
+    const farmId = req.farm_id;
     for (const item of items) {
-      const product = inventory.get(item.sku_id);
+      const product = farmStores.inventory.get(farmId, item.sku_id);
       
       if (!product) {
         continue; // Skip if product doesn't exist
@@ -329,7 +332,7 @@ router.post('/confirm', (req, res) => {
       product.reserved = Math.max(0, product.reserved - item.quantity);
       product.available = product.quantity - product.reserved;
       product.updated_at = timestamp;
-      inventory.set(item.sku_id, product);
+      farmStores.inventory.set(farmId, item.sku_id, product);
 
       confirmed.push({
         sku_id: item.sku_id,
@@ -371,7 +374,8 @@ router.patch('/:skuId', (req, res) => {
   try {
     const { skuId } = req.params;
     const updates = req.body;
-    const product = inventory.get(skuId);
+    const farmId = req.farm_id;
+    const product = farmStores.inventory.get(farmId, skuId);
 
     if (!product) {
       return res.status(404).json({
@@ -399,7 +403,7 @@ router.patch('/:skuId', (req, res) => {
     }
 
     product.updated_at = timestamp;
-    inventory.set(skuId, product);
+    farmStores.inventory.set(farmId, skuId, product);
 
     res.json({
       ok: true,
@@ -421,7 +425,8 @@ router.patch('/:skuId', (req, res) => {
  * Get list of product categories
  */
 router.get('/categories/list', (req, res) => {
-  const products = Array.from(inventory.values());
+  const farmId = req.farm_id;
+  const products = farmStores.inventory.getAllForFarm(farmId);
   const categories = {};
 
   products.forEach(product => {

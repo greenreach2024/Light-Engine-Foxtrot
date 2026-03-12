@@ -118,3 +118,4 @@ greenreach-central/.elasticbeanstalk/logs/
 greenreach-central/.db-password
 .env.python
 ecosystem.config.js
+data/pos-inventory.json
