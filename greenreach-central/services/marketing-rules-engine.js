@@ -43,7 +43,7 @@ export async function loadAllRules() {
  */
 export async function toggleRule(ruleId, enabled) {
   const result = await query(
-    'UPDATE marketing_rules SET enabled = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    'UPDATE marketing_rules SET enabled = $1, updated_at = NOW() WHERE rule_name = $2 RETURNING *',
     [enabled, ruleId]
   );
   return result.rows[0] || null;
@@ -72,7 +72,7 @@ export async function updateRule(ruleId, updates) {
   values.push(ruleId);
 
   const result = await query(
-    `UPDATE marketing_rules SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+    `UPDATE marketing_rules SET ${fields.join(', ')} WHERE rule_name = $${idx} RETURNING *`,
     values
   );
   return result.rows[0] || null;

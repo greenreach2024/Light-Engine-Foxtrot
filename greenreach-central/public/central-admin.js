@@ -11148,13 +11148,13 @@ async function loadMarketingDashboard() {
         const settings = settingsRes?.ok ? await settingsRes.json() : {};
 
         // KPI cards
-        document.getElementById('mkt-kpi-drafts').textContent = metrics.stats?.draft || 0;
-        document.getElementById('mkt-kpi-approved').textContent = metrics.stats?.approved || 0;
-        document.getElementById('mkt-kpi-published').textContent = metrics.stats?.published || 0;
-        document.getElementById('mkt-kpi-scheduled').textContent = metrics.stats?.scheduled || 0;
-        document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.stats?.total_cost || 0).toFixed(2);
+        document.getElementById('mkt-kpi-drafts').textContent = metrics.summary?.total_drafts || 0;
+        document.getElementById('mkt-kpi-approved').textContent = metrics.summary?.total_approved || 0;
+        document.getElementById('mkt-kpi-published').textContent = metrics.summary?.total_published || 0;
+        document.getElementById('mkt-kpi-scheduled').textContent = metrics.summary?.total_scheduled || 0;
+        document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.summary?.total_cost || 0).toFixed(2);
         document.getElementById('mkt-kpi-provider').textContent =
-            settings.ai_provider?.claude ? 'Claude' : (settings.ai_provider?.openai ? 'OpenAI' : 'None');
+            settings.ai?.anthropic?.configured ? 'Claude' : (settings.ai?.openai?.configured ? 'OpenAI' : 'None');
     } catch (err) {
         console.error('[Marketing AI] Dashboard load error:', err);
     }
@@ -11170,19 +11170,19 @@ function switchMarketingTab(tabName, el) {
     mktCurrentTab = tabName;
 
     // Update tab button active states
-    document.querySelectorAll('#marketing-ai-view .tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#marketing-ai-view .mkt-tab').forEach(btn => btn.classList.remove('active'));
     if (el) {
         el.classList.add('active');
     } else {
-        document.querySelectorAll('#marketing-ai-view .tab-btn').forEach(btn => {
+        document.querySelectorAll('#marketing-ai-view .mkt-tab').forEach(btn => {
             if (btn.textContent.toLowerCase().includes(tabName.replace('-', ' ').split(' ')[0])) btn.classList.add('active');
         });
     }
 
     // Show/hide tab content
-    document.querySelectorAll('#marketing-ai-view .tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('#marketing-ai-view .mkt-tab-content').forEach(c => c.style.display = 'none');
     const target = document.getElementById(`mkt-tab-${tabName}`);
-    if (target) target.classList.add('active');
+    if (target) target.style.display = 'block';
 
     // Load tab data
     switch (tabName) {
@@ -11197,14 +11197,16 @@ function switchMarketingTab(tabName, el) {
  * Generate a single-platform marketing post
  */
 async function generateMarketingPost() {
-    const platform = document.getElementById('mkt-platform-select').value;
+    const platform = document.getElementById('mkt-platform').value;
     const sourceType = document.getElementById('mkt-source-type').value;
     const instructions = document.getElementById('mkt-custom-instructions').value;
     const preview = document.getElementById('mkt-preview-area');
     const btn = document.querySelector('#mkt-tab-generate .btn-primary');
 
     if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
-    preview.innerHTML = '<div class="loading">Generating content with AI...</div>';
+    preview.style.display = 'block';
+    const previewContent = document.getElementById('mkt-preview-content') || preview;
+    previewContent.innerHTML = '<div class="loading">Generating content with AI...</div>';
 
     try {
         const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
@@ -11213,17 +11215,19 @@ async function generateMarketingPost() {
             body: JSON.stringify({ platform, sourceType, customInstructions: instructions })
         });
         const data = res?.ok ? await res.json() : null;
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
         if (data && data.posts && data.posts.length > 0) {
             const post = data.posts[0];
-            preview.innerHTML = renderMarketingPostPreview(post);
+            previewContent.innerHTML = renderMarketingPostPreview(post);
             loadMarketingDashboard();
         } else {
             const errMsg = data?.error || 'Failed to generate content';
-            preview.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+            previewContent.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
         }
     } catch (err) {
         console.error('[Marketing AI] Generate error:', err);
-        preview.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed. Check console for details.</div>';
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        previewContent.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed. Check console for details.</div>';
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Generate Draft'; }
     }
@@ -11239,7 +11243,9 @@ async function generateMarketingPostAllPlatforms() {
     const btn = document.querySelectorAll('#mkt-tab-generate .btn-secondary');
 
     btn.forEach(b => { b.disabled = true; b.textContent = 'Generating...'; });
-    preview.innerHTML = '<div class="loading">Generating content for all platforms...</div>';
+    preview.style.display = 'block';
+    const previewContent = document.getElementById('mkt-preview-content') || preview;
+    previewContent.innerHTML = '<div class="loading">Generating content for all platforms...</div>';
 
     try {
         const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
@@ -11252,16 +11258,18 @@ async function generateMarketingPostAllPlatforms() {
             })
         });
         const data = res?.ok ? await res.json() : null;
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
         if (data && data.posts && data.posts.length > 0) {
-            preview.innerHTML = data.posts.map(p => renderMarketingPostPreview(p)).join('');
+            previewContent.innerHTML = data.posts.map(p => renderMarketingPostPreview(p)).join('');
             loadMarketingDashboard();
         } else {
             const errMsg = data?.error || 'Failed to generate content';
-            preview.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+            previewContent.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
         }
     } catch (err) {
         console.error('[Marketing AI] Multi-generate error:', err);
-        preview.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed.</div>';
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        previewContent.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed.</div>';
     } finally {
         btn.forEach(b => { b.disabled = false; b.textContent = 'Generate All Platforms'; });
     }
@@ -11274,8 +11282,9 @@ function renderMarketingPostPreview(post) {
     const statusBadge = post.status === 'approved'
         ? '<span class="badge badge-success">Auto-Approved</span>'
         : '<span class="badge badge-warning">Draft</span>';
-    const complianceHtml = post.compliance_issues?.length > 0
-        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">⚠ Compliance: ${post.compliance_issues.join(', ')}</div>`
+    const violations = post.complianceViolations || post.compliance_issues || [];
+    const complianceHtml = violations.length > 0
+        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">⚠ Compliance: ${violations.join(', ')}</div>`
         : '<div style="color:var(--accent-green);margin-top:8px;font-size:12px;">✓ Compliance clear</div>';
 
     return `<div class="stat-card" style="margin-bottom:12px;">
@@ -11286,7 +11295,7 @@ function renderMarketingPostPreview(post) {
         <div style="white-space:pre-wrap;font-size:14px;line-height:1.5;background:var(--bg-primary);padding:12px;border-radius:6px;border:1px solid var(--border-color);">${post.content}</div>
         ${complianceHtml}
         <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
-            ${post.char_count || post.content?.length || 0} chars | Model: ${post.model || 'unknown'} | Cost: $${Number(post.estimated_cost || 0).toFixed(4)}
+            ${post.content?.length || 0} chars | Model: ${post.model_used || post.model || 'unknown'} | Cost: $${Number(post.generation_cost_usd || post.cost || 0).toFixed(4)}
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;">
             ${post.status === 'draft' ? `<button class="btn btn-sm btn-primary" onclick="marketingPostAction('${post.id}', 'approve')">Approve</button>
@@ -11347,7 +11356,7 @@ async function loadMarketingQueue() {
 
         // Update status filter counts
         if (data.counts) {
-            document.querySelectorAll('#mkt-tab-queue .tab-btn').forEach(btn => {
+            document.querySelectorAll('#mkt-tab-queue .mkt-status-filter').forEach(btn => {
                 const text = btn.textContent.toLowerCase().trim();
                 if (text === 'all') btn.textContent = `All (${Object.values(data.counts).reduce((a, b) => a + b, 0)})`;
             });
@@ -11363,7 +11372,7 @@ async function loadMarketingQueue() {
  */
 function filterMarketingQueue(status, el) {
     mktQueueFilter = status;
-    document.querySelectorAll('#mkt-tab-queue .tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#mkt-tab-queue .mkt-status-filter').forEach(btn => btn.classList.remove('active'));
     if (el) el.classList.add('active');
     loadMarketingQueue();
 }
@@ -11395,7 +11404,7 @@ async function loadMarketingPublished() {
                 </div>
                 <div style="font-size:13px;line-height:1.4;">${post.content}</div>
                 <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
-                    ${post.external_id ? `ID: ${post.external_id}` : ''} | Cost: $${Number(post.estimated_cost || 0).toFixed(4)}
+                    ${post.platform_post_id ? `ID: ${post.platform_post_id}` : ''} | Model: ${post.model_used || 'unknown'} | Cost: $${Number(post.generation_cost_usd || 0).toFixed(4)}
                 </div>
             </div>`;
         }).join('');
@@ -11463,7 +11472,7 @@ async function marketingSchedulePost(postId) {
         const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId, action: 'schedule', scheduledFor })
+            body: JSON.stringify({ postId, action: 'schedule', scheduled_for: scheduledFor })
         });
         const data = res?.ok ? await res.json() : null;
         if (data?.success) {
@@ -11482,8 +11491,10 @@ async function marketingSchedulePost(postId) {
 async function marketingDeletePost(postId) {
     if (!confirm('Delete this post?')) return;
     try {
-        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?postId=${postId}`, {
-            method: 'DELETE'
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
         });
         const data = res?.ok ? await res.json() : null;
         if (data?.success) {
@@ -11517,10 +11528,11 @@ async function loadMarketingRules() {
         container.innerHTML = rules.map(rule => {
             const enabledClass = rule.enabled ? 'badge-success' : 'badge-neutral';
             const enabledText = rule.enabled ? 'Enabled' : 'Disabled';
+            const description = rule.conditions?.description || '';
             return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);">
                 <div>
                     <strong>${rule.rule_name.replace(/_/g, ' ')}</strong>
-                    <div style="font-size:12px;color:var(--text-secondary);">${rule.description || ''}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);">${description}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span class="badge ${enabledClass}">${enabledText}</span>
@@ -11542,7 +11554,7 @@ async function toggleMarketingRule(ruleName, enabled) {
         await authenticatedFetch(`${API_BASE}/api/admin/marketing/rules`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ruleName, enabled })
+            body: JSON.stringify({ ruleId: ruleName, enabled })
         });
         loadMarketingRules();
     } catch (err) {
@@ -11616,7 +11628,7 @@ async function toggleMarketingSkill(skillName, enabled) {
  * Load marketing settings (platform connections)
  */
 async function loadMarketingSettings() {
-    const container = document.getElementById('mkt-platform-connections');
+    const container = document.getElementById('mkt-settings-platforms');
     if (!container) return;
     container.innerHTML = '<div class="loading">Loading settings...</div>';
 
@@ -11625,18 +11637,18 @@ async function loadMarketingSettings() {
         const data = res?.ok ? await res.json() : {};
 
         const platforms = data.platforms || {};
-        const ai = data.ai_provider || {};
+        const ai = data.ai || {};
 
         let html = '<div style="margin-bottom:16px;">';
         html += '<h4 style="margin-bottom:8px;">AI Provider</h4>';
         html += `<div style="display:flex;gap:12px;">
             <div class="stat-card" style="flex:1;text-align:center;">
                 <div style="font-size:12px;color:var(--text-secondary);">Claude (Anthropic)</div>
-                <div style="font-size:18px;font-weight:600;color:${ai.claude ? 'var(--accent-green)' : '#ef4444'};">${ai.claude ? 'Configured' : 'Not Set'}</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.anthropic?.configured ? 'var(--accent-green)' : '#ef4444'};">${ai.anthropic?.configured ? 'Configured' : 'Not Set'}</div>
             </div>
             <div class="stat-card" style="flex:1;text-align:center;">
                 <div style="font-size:12px;color:var(--text-secondary);">OpenAI (Fallback)</div>
-                <div style="font-size:18px;font-weight:600;color:${ai.openai ? 'var(--accent-green)' : '#ef4444'};">${ai.openai ? 'Configured' : 'Not Set'}</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.openai?.configured ? 'var(--accent-green)' : '#ef4444'};">${ai.openai?.configured ? 'Configured' : 'Not Set'}</div>
             </div>
         </div></div>`;
 
