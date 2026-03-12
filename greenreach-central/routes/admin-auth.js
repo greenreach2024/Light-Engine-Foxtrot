@@ -56,6 +56,7 @@ router.post('/login', async (req, res) => {
           email,
           password_hash,
           name,
+          role,
           active,
           mfa_enabled,
           mfa_secret,
@@ -172,6 +173,7 @@ router.post('/login', async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role || 'admin',
       permissions: user.permissions
     });
 
