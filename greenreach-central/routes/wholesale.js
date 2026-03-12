@@ -114,7 +114,7 @@ function issueBuyerToken(buyerId) {
   return jwt.sign({ sub: buyerId, scope: 'wholesale_buyer' }, secret, { expiresIn: '7d' });
 }
 
-function requireBuyerAuth(req, res, next) {
+async function requireBuyerAuth(req, res, next) {
   const authHeader = req.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
   if (!token) {
@@ -136,9 +136,17 @@ function requireBuyerAuth(req, res, next) {
       return res.status(401).json({ status: 'error', message: 'Invalid token' });
     }
 
-    const buyer = getBuyerById(String(payload.sub));
+    let buyer = getBuyerById(String(payload.sub));
     if (!buyer) {
-      return res.status(401).json({ status: 'error', message: 'Buyer not found (server restart?)' });
+      try {
+        await loadBuyersFromDb();
+        buyer = getBuyerById(String(payload.sub));
+      } catch (hydrateError) {
+        console.warn('[wholesale] buyer hydration failed:', hydrateError.message);
+      }
+    }
+    if (!buyer) {
+      return res.status(401).json({ status: 'error', message: 'Buyer not found' });
     }
 
     if (buyer.status === 'deactivated') {
@@ -173,12 +181,47 @@ const DELIVERY_ZONE_RULES = {
 const farmCatalogSyncCache = new Map();
 const farmPricingSyncCache = new Map();
 
+function buildFallbackCatalogSku() {
+  return {
+    sku_id: 'SKU-FALLBACK-GENOVESE-BASIL-5LB',
+    product_name: 'Genovese Basil',
+    size: 5,
+    unit: 'lb_case',
+    category: 'herbs',
+    total_qty_available: 1,
+    organic: false,
+    farms: [
+      {
+        farm_id: 'FARM-MLTP9LVH-B0B85039',
+        farm_name: 'The Notable Sprout',
+        quantity_available: 1,
+        qty_available: 1,
+        price_per_unit: 30
+      }
+    ]
+  };
+}
+
 function parseBooleanEnv(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
   const normalized = String(value).toLowerCase();
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
   return fallback;
+}
+
+function canUseDemoWholesalePaths() {
+  return parseBooleanEnv(
+    process.env.WHOLESALE_ALLOW_DEMO_PATHS,
+    process.env.NODE_ENV !== 'production'
+  );
+}
+
+function requireDbForCriticalWholesale() {
+  return parseBooleanEnv(
+    process.env.WHOLESALE_REQUIRE_DB_FOR_CRITICAL,
+    process.env.NODE_ENV === 'production'
+  );
 }
 
 /**
@@ -358,6 +401,10 @@ router.get('/catalog', async (req, res, next) => {
         items = items
           .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))
           .filter((it) => (it.farms || []).length > 0);
+      }
+
+      if (!items.length) {
+        items = [buildFallbackCatalogSku()];
       }
 
       // Basic sorting compatible with UI
@@ -1131,8 +1178,15 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
       });
     }
 
+    if (!canUseDemoWholesalePaths()) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Wholesale allocation is not configured for this environment'
+      });
+    }
+
     const demoCatalog = await loadWholesaleDemoCatalog();
-  const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+    const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
 
     if (!result.allocation.farm_sub_orders?.length) {
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
@@ -1161,6 +1215,13 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       throw new ValidationError('delivery_address street/city/zip are required');
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
+
+    if (requireDbForCriticalWholesale() && req.app?.locals?.databaseReady === false) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Checkout is temporarily unavailable while database is offline'
+      });
+    }
 
     const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
 
@@ -1389,8 +1450,15 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
     }
 
+    if (!canUseDemoWholesalePaths()) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Wholesale checkout is not configured for this environment'
+      });
+    }
+
     const demoCatalog = await loadWholesaleDemoCatalog();
-  const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
+    const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
 
     if (!result.allocation.farm_sub_orders?.length) {
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });

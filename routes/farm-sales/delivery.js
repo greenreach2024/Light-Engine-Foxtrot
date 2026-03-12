@@ -77,6 +77,109 @@ function generateEntityId(prefix = 'ENT') {
   return `${prefix}-${now}${rand}`;
 }
 
+function parseCoordinates(input) {
+  if (!input) return null;
+
+  if (Array.isArray(input) && input.length >= 2) {
+    const latitude = Number(input[0]);
+    const longitude = Number(input[1]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+  }
+
+  const latitude = Number(input.latitude ?? input.lat);
+  const longitude = Number(input.longitude ?? input.lng ?? input.lon);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return { latitude, longitude };
+  }
+
+  return null;
+}
+
+function getDeliveryCoordinates(delivery) {
+  return parseCoordinates(delivery?.address?.coordinates) ||
+    parseCoordinates(delivery?.address?.location) ||
+    parseCoordinates(delivery?.address);
+}
+
+function haversineMiles(a, b) {
+  if (!a || !b) return null;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  return earthRadiusMiles * c;
+}
+
+function nearestNeighborSequence(deliveries, origin = null) {
+  if (!Array.isArray(deliveries) || deliveries.length <= 1) {
+    return deliveries || [];
+  }
+
+  const withCoords = [];
+  const withoutCoords = [];
+
+  deliveries.forEach((delivery) => {
+    const coords = getDeliveryCoordinates(delivery);
+    if (coords) {
+      withCoords.push({ delivery, coords });
+    } else {
+      withoutCoords.push(delivery);
+    }
+  });
+
+  if (withCoords.length <= 1) {
+    return [...deliveries];
+  }
+
+  const route = [];
+  const remaining = [...withCoords];
+  let currentPoint = parseCoordinates(origin) || remaining[0].coords;
+
+  while (remaining.length > 0) {
+    let nextIndex = 0;
+    let nextDistance = Infinity;
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      const candidateDistance = haversineMiles(currentPoint, remaining[index].coords);
+      if (candidateDistance !== null && candidateDistance < nextDistance) {
+        nextDistance = candidateDistance;
+        nextIndex = index;
+      }
+    }
+
+    const [selected] = remaining.splice(nextIndex, 1);
+    route.push(selected.delivery);
+    currentPoint = selected.coords;
+  }
+
+  return [...route, ...withoutCoords];
+}
+
+function estimateRouteDistanceMiles(stops, origin = null) {
+  if (!Array.isArray(stops) || stops.length === 0) return 0;
+
+  let miles = 0;
+  let previous = parseCoordinates(origin);
+  for (const stop of stops) {
+    const coords = getDeliveryCoordinates(stop);
+    if (previous && coords) {
+      miles += haversineMiles(previous, coords) || 0;
+    }
+    if (coords) previous = coords;
+  }
+  return Number(miles.toFixed(2));
+}
+
 function toDeliveryFromRow(row) {
   const payload = row?.payload || {};
   return {
@@ -1429,7 +1532,13 @@ router.post('/routes/optimize', async (req, res) => {
       });
     }
 
-    // Simple zone-based routing (TODO: implement proper TSP optimization)
+    const normalizedDriverCount = Math.max(1, Number(driver_count) || 1);
+    const origin = req.body?.origin || {
+      latitude: Number(process.env.DELIVERY_ROUTE_ORIGIN_LAT),
+      longitude: Number(process.env.DELIVERY_ROUTE_ORIGIN_LNG)
+    };
+
+    // Zone-aware routing + nearest-neighbor sequence (fallbacks safely when coordinates are absent)
     const routesByZone = {};
     unassignedDeliveries.forEach(delivery => {
       const zone = delivery.zone.id;
@@ -1443,13 +1552,18 @@ router.post('/routes/optimize', async (req, res) => {
     let driverIndex = 1;
 
     for (const [zone, zoneDeliveries] of Object.entries(routesByZone)) {
-      // Split zone deliveries across drivers
-      const deliveriesPerDriver = Math.ceil(zoneDeliveries.length / driver_count);
+      const orderedDeliveries = nearestNeighborSequence(zoneDeliveries, origin);
+      const deliveriesPerDriver = Math.ceil(orderedDeliveries.length / normalizedDriverCount);
       
-      for (let i = 0; i < zoneDeliveries.length; i += deliveriesPerDriver) {
-        const routeDeliveries = zoneDeliveries.slice(i, i + deliveriesPerDriver);
+      for (let i = 0; i < orderedDeliveries.length; i += deliveriesPerDriver) {
+        const routeDeliveries = orderedDeliveries.slice(i, i + deliveriesPerDriver);
         const routeId = generateEntityId('RT');
         const timestamp = new Date().toISOString();
+        const estimatedDistanceMiles = estimateRouteDistanceMiles(routeDeliveries, origin);
+        const estimatedDurationMinutes = Math.max(
+          routeDeliveries.length * 8,
+          Math.round((estimatedDistanceMiles / 25) * 60) + routeDeliveries.length * 6
+        );
 
         const route = {
           route_id: routeId,
@@ -1468,8 +1582,8 @@ router.post('/routes/optimize', async (req, res) => {
           })),
           stats: {
             total_stops: routeDeliveries.length,
-            estimated_duration_minutes: routeDeliveries.length * 15, // 15 min per stop
-            estimated_distance_miles: routeDeliveries.length * 3 // 3 miles between stops
+            estimated_duration_minutes: estimatedDurationMinutes,
+            estimated_distance_miles: estimatedDistanceMiles
           },
           created_at: timestamp
         };

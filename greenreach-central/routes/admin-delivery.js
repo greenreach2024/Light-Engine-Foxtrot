@@ -81,6 +81,28 @@ const deliveryConfig = {
   }
 };
 
+const inMemoryDeliverySettingsByFarm = new Map();
+const inMemoryDeliveryZonesByFarm = new Map();
+
+function getInMemoryDeliverySettings(farmId) {
+  if (!inMemoryDeliverySettingsByFarm.has(farmId)) {
+    inMemoryDeliverySettingsByFarm.set(farmId, {
+      enabled: false,
+      base_fee: 8,
+      min_order: 25,
+      updated_at: new Date().toISOString()
+    });
+  }
+  return inMemoryDeliverySettingsByFarm.get(farmId);
+}
+
+function getInMemoryDeliveryZones(farmId) {
+  if (!inMemoryDeliveryZonesByFarm.has(farmId)) {
+    inMemoryDeliveryZonesByFarm.set(farmId, []);
+  }
+  return inMemoryDeliveryZonesByFarm.get(farmId);
+}
+
 function extractFarmId(req) {
   return req.query.farm_id || req.body?.farm_id || req.headers['x-farm-id'] || null;
 }
@@ -185,8 +207,8 @@ router.get('/config', async (req, res) => {
       return res.status(400).json({ success: false, error: 'farm_id query parameter is required' });
     }
 
-    let settings = { enabled: false, base_fee: 0, min_order: 25 };
-    let zones = [];
+    let settings = getInMemoryDeliverySettings(farmId);
+    let zones = getInMemoryDeliveryZones(farmId);
 
     if (isDatabaseAvailable()) {
       const settingsResult = await query(
@@ -212,7 +234,8 @@ router.get('/config', async (req, res) => {
 
     res.json({
       success: true,
-      config: { ...settings, zones, drivers, stats }
+      config: { ...settings, zones, drivers, stats },
+      mode: isDatabaseAvailable() ? 'database' : 'in-memory'
     });
   } catch (error) {
     console.error('[Admin Delivery] Config get failed:', error);
@@ -252,7 +275,20 @@ router.put('/config', async (req, res) => {
       });
     }
 
-    res.status(503).json({ success: false, error: 'Database unavailable' });
+    const current = getInMemoryDeliverySettings(farm_id);
+    const next = {
+      enabled: enabled !== undefined ? Boolean(enabled) : current.enabled,
+      base_fee: base_fee !== undefined ? Math.max(0, Number(base_fee) || 0) : current.base_fee,
+      min_order: min_order !== undefined ? Math.max(0, Number(min_order) || 0) : current.min_order,
+      updated_at: new Date().toISOString()
+    };
+    inMemoryDeliverySettingsByFarm.set(farm_id, next);
+
+    return res.json({
+      success: true,
+      config: next,
+      mode: 'in-memory'
+    });
   } catch (error) {
     console.error('[Admin Delivery] Config update failed:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -283,7 +319,11 @@ router.get('/zones', async (req, res) => {
       return res.json({ success: true, zones });
     }
 
-    res.status(503).json({ success: false, error: 'Database unavailable' });
+    return res.json({
+      success: true,
+      zones: getInMemoryDeliveryZones(farmId),
+      mode: 'in-memory'
+    });
   } catch (error) {
     console.error('[Admin Delivery] Zones list failed:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -319,7 +359,26 @@ router.post('/zones', async (req, res) => {
       return res.json({ success: true, zone: { id, name, description: description || '', fee: parseFloat(fee || 0), min_order: parseFloat(min_order || 25), postal_prefix: postal_prefix || null, status: 'active' } });
     }
 
-    res.status(503).json({ success: false, error: 'Database unavailable' });
+    const zones = getInMemoryDeliveryZones(farm_id);
+    const existing = zones.find(z => z.id === id);
+    if (existing) {
+      return res.status(409).json({ success: false, error: `Zone ${id} already exists for farm ${farm_id}` });
+    }
+
+    const zone = {
+      id,
+      name,
+      description: description || '',
+      fee: Math.max(0, Number(fee) || 0),
+      min_order: Math.max(0, Number(min_order) || 25),
+      postal_prefix: postal_prefix || null,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    zones.push(zone);
+
+    return res.json({ success: true, zone, mode: 'in-memory' });
   } catch (error) {
     console.error('[Admin Delivery] Zone create failed:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -366,7 +425,21 @@ router.put('/zones/:id', async (req, res) => {
       return res.json({ success: true, zone_id: zoneId, updated: true });
     }
 
-    res.status(503).json({ success: false, error: 'Database unavailable' });
+    const zones = getInMemoryDeliveryZones(farm_id);
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) {
+      return res.status(404).json({ success: false, error: 'Zone not found' });
+    }
+
+    if (name !== undefined) zone.name = name;
+    if (description !== undefined) zone.description = description;
+    if (fee !== undefined) zone.fee = Math.max(0, Number(fee) || 0);
+    if (min_order !== undefined) zone.min_order = Math.max(0, Number(min_order) || 0);
+    if (postal_prefix !== undefined) zone.postal_prefix = postal_prefix;
+    if (status !== undefined) zone.status = status;
+    zone.updated_at = new Date().toISOString();
+
+    return res.json({ success: true, zone_id: zoneId, updated: true, mode: 'in-memory' });
   } catch (error) {
     console.error('[Admin Delivery] Zone update failed:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -397,7 +470,16 @@ router.delete('/zones/:id', async (req, res) => {
       return res.json({ success: true, deleted: zoneId });
     }
 
-    res.status(503).json({ success: false, error: 'Database unavailable' });
+    const zones = getInMemoryDeliveryZones(farmId);
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) {
+      return res.status(404).json({ success: false, error: 'Zone not found' });
+    }
+
+    zone.status = 'inactive';
+    zone.updated_at = new Date().toISOString();
+
+    return res.json({ success: true, deleted: zoneId, mode: 'in-memory' });
   } catch (error) {
     console.error('[Admin Delivery] Zone delete failed:', error);
     res.status(500).json({ success: false, error: error.message });

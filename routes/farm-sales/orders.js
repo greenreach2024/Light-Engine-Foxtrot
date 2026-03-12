@@ -24,6 +24,20 @@ const ORDER_CHANNELS = {
   DELIVERY: 'delivery'  // Home delivery service
 };
 
+function resolveTaxRate(reqBody = {}) {
+  const requested = Number(reqBody?.pricing?.tax_rate);
+  if (Number.isFinite(requested) && requested >= 0) {
+    return requested > 1 ? requested / 100 : requested;
+  }
+
+  const envRate = Number(process.env.FARM_SALES_TAX_RATE ?? process.env.SALES_TAX_RATE ?? 0.08);
+  if (Number.isFinite(envRate) && envRate >= 0) {
+    return envRate > 1 ? envRate / 100 : envRate;
+  }
+
+  return 0.08;
+}
+
 /**
  * POST /api/farm-sales/orders
  * Create new order across any channel
@@ -78,7 +92,8 @@ router.post('/', async (req, res) => {
       finalTotal = subtotal - subsidy;
     }
 
-    const tax = finalTotal * 0.08; // 8% sales tax (configurable by jurisdiction)
+    const taxRate = resolveTaxRate(req.body);
+    const tax = finalTotal * taxRate;
     const requestedDeliveryFee = Math.max(
       0,
       Number(
@@ -120,6 +135,7 @@ router.post('/', async (req, res) => {
       pricing: {
         subtotal,
         subsidy,
+        tax_rate: taxRate,
         tax,
         delivery_fee: deliveryFee,
         tip: tipAmount,
