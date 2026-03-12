@@ -143,11 +143,26 @@ async function requireBuyerAuth(req, res, next) {
       return res.status(401).json({ status: 'error', message: 'Invalid token' });
     }
 
-    let buyer = getBuyerById(String(payload.sub));
-    if (!buyer) {
+    const buyerId = String(payload.sub);
+    const dbCritical = requireDbForCriticalWholesale();
+
+    if (dbCritical) {
       try {
         await loadBuyersFromDb();
-        buyer = getBuyerById(String(payload.sub));
+      } catch (hydrateError) {
+        console.warn('[wholesale] buyer hydration failed (critical mode):', hydrateError.message);
+        return res.status(503).json({
+          status: 'error',
+          message: 'Wholesale authentication is temporarily unavailable while buyer records cannot be verified'
+        });
+      }
+    }
+
+    let buyer = getBuyerById(buyerId);
+    if (!buyer && !dbCritical) {
+      try {
+        await loadBuyersFromDb();
+        buyer = getBuyerById(buyerId);
       } catch (hydrateError) {
         console.warn('[wholesale] buyer hydration failed:', hydrateError.message);
       }
@@ -249,11 +264,13 @@ function requireWholesaleDbForCriticalPaths(req, res, next) {
   return next();
 }
 
+const requireBuyerPortalAuth = [requireWholesaleDbForCriticalPaths, requireBuyerAuth];
+
 /**
  * POST /api/wholesale/delivery/quote
  * Buyer-auth delivery quote endpoint for checkout UX.
  */
-router.post('/delivery/quote', requireBuyerAuth, async (req, res) => {
+router.post('/delivery/quote', requireBuyerPortalAuth, async (req, res) => {
   try {
     const {
       subtotal = 0,
@@ -874,7 +891,7 @@ router.post('/buyers/login', loginLimiter, requireWholesaleDbForCriticalPaths, a
 
 import { createPasswordResetToken, consumePasswordResetToken } from '../services/wholesaleMemoryStore.js';
 
-router.post('/buyers/change-password', requireBuyerAuth, async (req, res, next) => {
+router.post('/buyers/change-password', requireBuyerPortalAuth, async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) {
@@ -943,7 +960,7 @@ router.post('/buyers/reset-password', passwordResetLimiter, requireWholesaleDbFo
   return res.json({ status: 'ok', message: 'Password has been reset. You can now log in.' });
 });
 
-router.get('/orders', requireBuyerAuth, async (req, res) => {
+router.get('/orders', requireBuyerPortalAuth, async (req, res) => {
   const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
   const { status: statusFilter, from, to, search } = req.query;
 
@@ -980,11 +997,11 @@ router.get('/orders', requireBuyerAuth, async (req, res) => {
 
 // ── Buyer session / profile routes ───────────────────────────────────
 
-router.get('/buyers/me', requireBuyerAuth, (req, res) => {
+router.get('/buyers/me', requireBuyerPortalAuth, (req, res) => {
   return res.json({ status: 'ok', data: { buyer: req.wholesaleBuyer } });
 });
 
-router.put('/buyers/me', requireBuyerAuth, async (req, res, next) => {
+router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
   try {
     const { businessName, contactName, email, phone, buyerType, address, city, province, postalCode, country } = req.body || {};
 
@@ -1020,14 +1037,14 @@ router.put('/buyers/me', requireBuyerAuth, async (req, res, next) => {
   }
 });
 
-router.post('/auth/logout', requireBuyerAuth, (req, res) => {
+router.post('/auth/logout', requireBuyerPortalAuth, (req, res) => {
   blacklistToken(req.wholesaleToken);
   return res.json({ status: 'ok', message: 'Logged out' });
 });
 
 // ── Buyer order detail ───────────────────────────────────────────────
 
-router.get('/orders/:orderId', requireBuyerAuth, async (req, res) => {
+router.get('/orders/:orderId', requireBuyerPortalAuth, async (req, res) => {
   const order = await getOrderById(req.params.orderId, { includeArchived: true });
 
   if (!order || order.buyer_id !== req.wholesaleBuyer.id) {
@@ -1051,14 +1068,14 @@ router.get('/orders/:orderId', requireBuyerAuth, async (req, res) => {
 
 // ── Buyer payment history ────────────────────────────────────────────
 
-router.get('/buyers/payments', requireBuyerAuth, (req, res) => {
+router.get('/buyers/payments', requireBuyerPortalAuth, (req, res) => {
   const payments = listPaymentsForBuyer(req.wholesaleBuyer.id);
   return res.json({ status: 'ok', data: { payments } });
 });
 
 // ── Order cancellation ───────────────────────────────────────────────
 
-router.post('/orders/:orderId/cancel', requireBuyerAuth, async (req, res) => {
+router.post('/orders/:orderId/cancel', requireBuyerPortalAuth, async (req, res) => {
   const order = await getOrderById(req.params.orderId, { includeArchived: false });
 
   if (!order || order.buyer_id !== req.wholesaleBuyer.id) {
@@ -1104,7 +1121,7 @@ router.post('/orders/:orderId/cancel', requireBuyerAuth, async (req, res) => {
 });
 
 // Get invoice for a specific order
-router.get('/orders/:orderId/invoice', requireBuyerAuth, async (req, res) => {
+router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) => {
   const orderId = req.params.orderId;
   const order = await getOrderById(orderId, { includeArchived: true });
 
