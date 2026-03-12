@@ -1370,7 +1370,16 @@ async function runMigrations(client) {
            ARRAY['send-external-message','change-account-status']),
           ('schedule-optimizer', 'Recommend optimal posting times from engagement data', 'scheduling', 1, 'spot-check',
            ARRAY['recommend-time','analyze-engagement-patterns','suggest-frequency'],
-           ARRAY['auto-schedule-without-review','delete-scheduled-posts'])
+           ARRAY['auto-schedule-without-review','delete-scheduled-posts']),
+          ('content-planner', 'Build content themes, weekly calendars, and test ideas based on campaign goals and performance data', 'content', 1, 'spot-check',
+           ARRAY['build-calendar','suggest-topics','plan-test','audit-content-mix'],
+           ARRAY['publish-post','modify-campaign']),
+          ('learning-engine', 'Convert performance outcomes into updated strategy patterns and learning records', 'analytics', 0, 'none',
+           ARRAY['update-patterns','retire-patterns','generate-learning-record','recommend-next-test'],
+           ARRAY['override-brand-rules','auto-apply-strategy']),
+          ('blog-writer', 'Draft blog articles optimized for clarity, search intent, and downstream social repurposing', 'content', 2, 'required',
+           ARRAY['draft-article','suggest-internal-links','extract-social-posts','outline-article'],
+           ARRAY['publish-article','invent-data'])
         ON CONFLICT (skill_name) DO NOTHING;
       `);
 
