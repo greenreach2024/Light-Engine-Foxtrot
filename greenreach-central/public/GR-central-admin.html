@@ -4531,12 +4531,145 @@
 
                 <!-- ═══ SETTINGS TAB ═══ -->
                 <div id="mkt-tab-settings" class="mkt-tab-content" style="display: none;">
+                    <!-- Connection Status Overview -->
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Platform Connections</div>
                         </div>
                         <div class="card-body" id="mkt-settings-platforms">
                             <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading settings...</div>
+                        </div>
+                    </div>
+
+                    <!-- Facebook Credentials -->
+                    <div class="card" style="margin-top: 16px;">
+                        <div class="card-header" style="cursor:pointer;" onclick="toggleMktCredentialSection('facebook')">
+                            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:20px;">📘</span> Facebook Pages
+                                <span id="mkt-cred-status-facebook" style="font-size:12px;padding:2px 8px;border-radius:4px;margin-left:auto;">—</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="mkt-cred-section-facebook" style="display:none;">
+                            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                                Obtain from <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--accent-green);">Graph API Explorer</a> or your app's Page Token. Requires <code>pages_manage_posts</code> and <code>pages_read_engagement</code> permissions.
+                            </p>
+                            <div style="display:grid;gap:12px;">
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Page ID</label>
+                                    <input type="text" id="mkt-cred-facebook_page_id" placeholder="e.g. 123456789012345" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Page Access Token</label>
+                                    <input type="password" id="mkt-cred-facebook_page_access_token" placeholder="Page access token" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button class="btn" onclick="clearMktCredentials('facebook')" style="background:#ef4444;">Disconnect</button>
+                                    <button class="btn btn-secondary" onclick="testMktConnection('facebook')">Test Connection</button>
+                                    <button class="btn btn-primary" onclick="saveMktCredentials('facebook')">Save &amp; Connect</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instagram Credentials -->
+                    <div class="card" style="margin-top: 16px;">
+                        <div class="card-header" style="cursor:pointer;" onclick="toggleMktCredentialSection('instagram')">
+                            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:20px;">📷</span> Instagram Business
+                                <span id="mkt-cred-status-instagram" style="font-size:12px;padding:2px 8px;border-radius:4px;margin-left:auto;">—</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="mkt-cred-section-instagram" style="display:none;">
+                            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                                Requires an <a href="https://developers.facebook.com/docs/instagram-api/getting-started" target="_blank" style="color:var(--accent-green);">Instagram Business Account</a> connected to a Facebook Page. Uses the Instagram Graph API via Facebook.
+                            </p>
+                            <div style="display:grid;gap:12px;">
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Business Account ID</label>
+                                    <input type="text" id="mkt-cred-instagram_business_account" placeholder="e.g. 17841400123456789" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Access Token</label>
+                                    <input type="password" id="mkt-cred-instagram_access_token" placeholder="Instagram Graph API access token" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button class="btn" onclick="clearMktCredentials('instagram')" style="background:#ef4444;">Disconnect</button>
+                                    <button class="btn btn-secondary" onclick="testMktConnection('instagram')">Test Connection</button>
+                                    <button class="btn btn-primary" onclick="saveMktCredentials('instagram')">Save &amp; Connect</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LinkedIn Credentials -->
+                    <div class="card" style="margin-top: 16px;">
+                        <div class="card-header" style="cursor:pointer;" onclick="toggleMktCredentialSection('linkedin')">
+                            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:20px;">💼</span> LinkedIn
+                                <span id="mkt-cred-status-linkedin" style="font-size:12px;padding:2px 8px;border-radius:4px;margin-left:auto;">—</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="mkt-cred-section-linkedin" style="display:none;">
+                            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                                Generate a token from the <a href="https://www.linkedin.com/developers/apps" target="_blank" style="color:var(--accent-green);">LinkedIn Developer Portal</a>. Requires <code>w_member_social</code> scope. Person URN format: <code>urn:li:person:XXXXXXXXXX</code>
+                            </p>
+                            <div style="display:grid;gap:12px;">
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Person URN</label>
+                                    <input type="text" id="mkt-cred-linkedin_person_urn" placeholder="urn:li:person:AbCdEf1234" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div>
+                                    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Access Token</label>
+                                    <input type="password" id="mkt-cred-linkedin_access_token" placeholder="LinkedIn OAuth 2.0 access token" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                </div>
+                                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button class="btn" onclick="clearMktCredentials('linkedin')" style="background:#ef4444;">Disconnect</button>
+                                    <button class="btn btn-secondary" onclick="testMktConnection('linkedin')">Test Connection</button>
+                                    <button class="btn btn-primary" onclick="saveMktCredentials('linkedin')">Save &amp; Connect</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Twitter / X Credentials -->
+                    <div class="card" style="margin-top: 16px;">
+                        <div class="card-header" style="cursor:pointer;" onclick="toggleMktCredentialSection('twitter')">
+                            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:20px;">🐦</span> Twitter / X
+                                <span id="mkt-cred-status-twitter" style="font-size:12px;padding:2px 8px;border-radius:4px;margin-left:auto;">—</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="mkt-cred-section-twitter" style="display:none;">
+                            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                                From the <a href="https://developer.twitter.com/en/portal/dashboard" target="_blank" style="color:var(--accent-green);">X Developer Portal</a>. Requires a project with OAuth 1.0a User Context (read + write).
+                            </p>
+                            <div style="display:grid;gap:12px;">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">API Key</label>
+                                        <input type="password" id="mkt-cred-twitter_api_key" placeholder="Consumer API key" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                    </div>
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">API Secret</label>
+                                        <input type="password" id="mkt-cred-twitter_api_secret" placeholder="Consumer API secret" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                    </div>
+                                </div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Access Token</label>
+                                        <input type="password" id="mkt-cred-twitter_access_token" placeholder="OAuth 1.0a access token" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                    </div>
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text-secondary);">Access Secret</label>
+                                        <input type="password" id="mkt-cred-twitter_access_secret" placeholder="OAuth 1.0a access secret" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:13px;">
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                    <button class="btn" onclick="clearMktCredentials('twitter')" style="background:#ef4444;">Disconnect</button>
+                                    <button class="btn btn-secondary" onclick="testMktConnection('twitter')">Test Connection</button>
+                                    <button class="btn btn-primary" onclick="saveMktCredentials('twitter')">Save &amp; Connect</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

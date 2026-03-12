@@ -11660,19 +11660,172 @@ async function loadMarketingSettings() {
             const connected = status?.connected;
             const icon = connected ? '✓' : '✗';
             const color = connected ? 'var(--accent-green)' : '#ef4444';
-            const missing = status?.missing || [];
+            const mode = status?.mode || 'stub';
             html += `<div class="stat-card" style="text-align:center;">
                 <div style="font-size:14px;font-weight:600;text-transform:capitalize;">${name}</div>
                 <div style="font-size:20px;color:${color};margin:4px 0;">${icon}</div>
-                <div style="font-size:11px;color:var(--text-secondary);">${connected ? 'Connected' : `Missing: ${missing.join(', ')}`}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">${connected ? `Connected (${mode})` : 'Not Connected'}</div>
             </div>`;
         });
         html += '</div>';
 
         container.innerHTML = html;
+
+        // Update credential section status badges
+        platformNames.forEach(name => {
+            const badge = document.getElementById(`mkt-cred-status-${name}`);
+            if (badge) {
+                const connected = platforms[name]?.connected;
+                badge.textContent = connected ? 'Connected' : 'Not Connected';
+                badge.style.background = connected ? 'rgba(72,187,120,0.15)' : 'rgba(239,68,68,0.15)';
+                badge.style.color = connected ? 'var(--accent-green)' : '#ef4444';
+            }
+        });
     } catch (err) {
         console.error('[Marketing AI] Settings load error:', err);
         container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load settings</div>';
+    }
+}
+
+/** Toggle credential section visibility */
+function toggleMktCredentialSection(platform) {
+    const section = document.getElementById(`mkt-cred-section-${platform}`);
+    if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+/** Save credentials for a platform */
+async function saveMktCredentials(platform) {
+    const keyMap = {
+        facebook:  ['facebook_page_id', 'facebook_page_access_token'],
+        instagram: ['instagram_business_account', 'instagram_access_token'],
+        linkedin:  ['linkedin_person_urn', 'linkedin_access_token'],
+        twitter:   ['twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_secret'],
+    };
+
+    const keys = keyMap[platform];
+    if (!keys) return;
+
+    const settings = {};
+    let hasEmpty = false;
+    for (const key of keys) {
+        const input = document.getElementById(`mkt-cred-${key}`);
+        const val = input?.value?.trim();
+        if (!val) { hasEmpty = true; }
+        settings[key] = val || '';
+    }
+
+    if (hasEmpty) {
+        showToast(`Please fill in all ${platform} credential fields`, 'warning');
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings }),
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully`, 'success');
+            // Clear input fields for security
+            keys.forEach(key => {
+                const input = document.getElementById(`mkt-cred-${key}`);
+                if (input) input.value = '';
+            });
+            // Refresh status display
+            await loadMarketingSettings();
+        } else {
+            showToast(`Failed to save ${platform} credentials`, 'error');
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Save ${platform} credentials error:`, err);
+        showToast(`Error saving ${platform} credentials: ${err.message}`, 'error');
+    }
+}
+
+/** Clear/disconnect credentials for a platform */
+async function clearMktCredentials(platform) {
+    if (!confirm(`Disconnect ${platform}? This will remove all stored credentials.`)) return;
+
+    const keyMap = {
+        facebook:  ['facebook_page_id', 'facebook_page_access_token'],
+        instagram: ['instagram_business_account', 'instagram_access_token'],
+        linkedin:  ['linkedin_person_urn', 'linkedin_access_token'],
+        twitter:   ['twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_secret'],
+    };
+
+    const keys = keyMap[platform];
+    if (!keys) return;
+
+    // Send null values to delete
+    const settings = {};
+    keys.forEach(key => { settings[key] = null; });
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings }),
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} disconnected`, 'success');
+            await loadMarketingSettings();
+        } else {
+            showToast(`Failed to disconnect ${platform}`, 'error');
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Clear ${platform} credentials error:`, err);
+        showToast(`Error disconnecting ${platform}: ${err.message}`, 'error');
+    }
+}
+
+/** Test connection for a platform (calls saved credentials) */
+async function testMktConnection(platform) {
+    const badge = document.getElementById(`mkt-cred-status-${platform}`);
+    if (badge) {
+        badge.textContent = 'Testing...';
+        badge.style.background = 'rgba(234,179,8,0.15)';
+        badge.style.color = '#eab308';
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform }),
+        });
+        const data = res?.ok ? await res.json() : null;
+
+        if (data?.connected) {
+            const details = data.details || {};
+            const info = details.pageName || details.username || details.name || details.id || '';
+            showToast(`${platform} connection verified${info ? ': ' + info : ''}`, 'success');
+            if (badge) {
+                badge.textContent = 'Verified ✓';
+                badge.style.background = 'rgba(72,187,120,0.15)';
+                badge.style.color = 'var(--accent-green)';
+            }
+        } else {
+            const errMsg = data?.details?.error || data?.error || 'Connection failed';
+            showToast(`${platform} test failed: ${errMsg}`, 'error');
+            if (badge) {
+                badge.textContent = 'Test Failed';
+                badge.style.background = 'rgba(239,68,68,0.15)';
+                badge.style.color = '#ef4444';
+            }
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Test ${platform} connection error:`, err);
+        showToast(`Error testing ${platform}: ${err.message}`, 'error');
+        if (badge) {
+            badge.textContent = 'Error';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#ef4444';
+        }
     }
 }
 

@@ -541,6 +541,7 @@ router.patch('/skills', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
 // GET /settings — Get marketing-related settings
 // ════════════════════════════════════════════════════════════════════
 router.get('/settings', async (req, res) => {
@@ -562,6 +563,116 @@ router.get('/settings', async (req, res) => {
     });
   } catch (error) {
     console.error('[admin-marketing] Settings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// POST /settings/test — Test platform connection
+// ════════════════════════════════════════════════════════════════════
+router.post('/settings/test', async (req, res) => {
+  try {
+    const { platform } = req.body;
+    if (!platform) {
+      return res.status(400).json({ success: false, error: 'platform is required' });
+    }
+
+    const validPlatforms = ['facebook', 'instagram', 'linkedin', 'twitter'];
+    if (!validPlatforms.includes(platform)) {
+      return res.status(400).json({ success: false, error: `Invalid platform: ${platform}` });
+    }
+
+    // Check credentials first
+    const credCheck = await checkPlatformCredentials(platform);
+    if (!credCheck.configured) {
+      return res.json({ success: false, error: `${platform} credentials not configured` });
+    }
+
+    // Platform-specific validation
+    let testResult = { reachable: false, details: null };
+
+    if (platform === 'facebook') {
+      const token = await getSetting('facebook_page_access_token');
+      const pageId = await getSetting('facebook_page_id');
+      try {
+        const resp = await fetch(`https://graph.facebook.com/v18.0/${pageId}?fields=name,id&access_token=${token}`);
+        const data = await resp.json();
+        testResult = {
+          reachable: resp.ok && !!data.id,
+          details: resp.ok ? { pageName: data.name, pageId: data.id } : { error: data.error?.message || 'Unknown error' },
+        };
+      } catch (e) {
+        testResult = { reachable: false, details: { error: e.message } };
+      }
+    } else if (platform === 'instagram') {
+      const token = await getSetting('instagram_access_token');
+      const accountId = await getSetting('instagram_business_account');
+      try {
+        const resp = await fetch(`https://graph.facebook.com/v18.0/${accountId}?fields=id,username&access_token=${token}`);
+        const data = await resp.json();
+        testResult = {
+          reachable: resp.ok && !!data.id,
+          details: resp.ok ? { username: data.username, accountId: data.id } : { error: data.error?.message || 'Unknown error' },
+        };
+      } catch (e) {
+        testResult = { reachable: false, details: { error: e.message } };
+      }
+    } else if (platform === 'linkedin') {
+      const token = await getSetting('linkedin_access_token');
+      try {
+        const resp = await fetch('https://api.linkedin.com/v2/me', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await resp.json();
+        testResult = {
+          reachable: resp.ok && !!(data.id || data.sub),
+          details: resp.ok
+            ? { name: `${data.localizedFirstName || ''} ${data.localizedLastName || ''}`.trim() || data.name, id: data.id || data.sub }
+            : { error: data.message || 'Unknown error' },
+        };
+      } catch (e) {
+        testResult = { reachable: false, details: { error: e.message } };
+      }
+    } else if (platform === 'twitter') {
+      // Twitter test: verify credentials by hitting /2/users/me
+      const { getSettings: getMultiSettings } = await import('../services/marketing-settings.js');
+      const creds = await getMultiSettings(['twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_secret']);
+      try {
+        const { createHmac, randomBytes } = await import('crypto');
+        const url = 'https://api.twitter.com/2/users/me';
+        const oauthParams = {
+          oauth_consumer_key: creds.twitter_api_key,
+          oauth_nonce: randomBytes(16).toString('hex'),
+          oauth_signature_method: 'HMAC-SHA1',
+          oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+          oauth_token: creds.twitter_access_token,
+          oauth_version: '1.0',
+        };
+        const sortedKeys = Object.keys(oauthParams).sort();
+        const paramString = sortedKeys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`).join('&');
+        const baseString = `GET&${encodeURIComponent(url)}&${encodeURIComponent(paramString)}`;
+        const signingKey = `${encodeURIComponent(creds.twitter_api_secret)}&${encodeURIComponent(creds.twitter_access_secret)}`;
+        oauthParams.oauth_signature = createHmac('sha1', signingKey).update(baseString).digest('base64');
+        const headerParts = Object.keys(oauthParams).sort().map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`).join(', ');
+        const resp = await fetch(url, { headers: { 'Authorization': `OAuth ${headerParts}` } });
+        const data = await resp.json();
+        testResult = {
+          reachable: resp.ok && !!data.data?.id,
+          details: resp.ok ? { username: data.data?.username, id: data.data?.id } : { error: data.detail || JSON.stringify(data.errors || data) },
+        };
+      } catch (e) {
+        testResult = { reachable: false, details: { error: e.message } };
+      }
+    }
+
+    res.json({
+      success: true,
+      platform,
+      connected: testResult.reachable,
+      details: testResult.details,
+    });
+  } catch (error) {
+    console.error('[admin-marketing] Settings test error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
