@@ -180,6 +180,16 @@ function estimateRouteDistanceMiles(stops, origin = null) {
   return Number(miles.toFixed(2));
 }
 
+function estimateRouteDurationMinutes(stops, options = {}) {
+  const averageMph = Math.max(5, Number(options.averageMph || 25));
+  const stopServiceMinutes = Math.max(1, Number(options.stopServiceMinutes || 8));
+  const travelMinutes = Math.round((estimateRouteDistanceMiles(stops, options.origin) / averageMph) * 60);
+  return Math.max(
+    stops.length * stopServiceMinutes,
+    travelMinutes + stops.length * Math.max(1, stopServiceMinutes - 2)
+  );
+}
+
 function toDeliveryFromRow(row) {
   const payload = row?.payload || {};
   return {
@@ -1509,7 +1519,17 @@ router.patch('/:deliveryId', async (req, res) => {
  */
 router.post('/routes/optimize', async (req, res) => {
   try {
-    const { date, time_slot, driver_count = 2 } = req.body;
+    const {
+      date,
+      time_slot,
+      driver_count = 2,
+      origin: originOverride,
+      max_stops_per_route,
+      max_route_duration_minutes,
+      driver_capacities,
+      service_minutes_per_stop,
+      average_mph
+    } = req.body || {};
     const farmId = req.farm_id;
 
     if (!date || !time_slot) {
@@ -1532,16 +1552,53 @@ router.post('/routes/optimize', async (req, res) => {
       });
     }
 
+    const settings = await getFarmDeliverySettings(farmId);
+    const deliveryWindows = await getFarmDeliveryWindows(farmId);
+    const selectedWindow = deliveryWindows.find((window) => window.id === normalizedTimeSlot);
+
+    if (!selectedWindow || selectedWindow.active === false) {
+      return res.status(400).json({
+        ok: false,
+        error: 'inactive_time_slot',
+        message: `time_slot '${normalizedTimeSlot}' is not active for this farm`
+      });
+    }
+
+    const leadTimeHours = Math.max(0, Number(settings.lead_time_hours || 0));
+    if (leadTimeHours > 0 && selectedWindow.start) {
+      const [hourPart, minutePart] = String(selectedWindow.start).split(':');
+      const deliveryWindowStart = new Date(`${date}T${String(hourPart || '00').padStart(2, '0')}:${String(minutePart || '00').padStart(2, '0')}:00`);
+      const earliestAllowed = new Date(Date.now() + (leadTimeHours * 60 * 60 * 1000));
+      if (Number.isFinite(deliveryWindowStart.getTime()) && deliveryWindowStart < earliestAllowed) {
+        return res.status(400).json({
+          ok: false,
+          error: 'lead_time_not_met',
+          message: `Route optimization requires at least ${leadTimeHours} hours of lead time for this window`
+        });
+      }
+    }
+
     const normalizedDriverCount = Math.max(1, Number(driver_count) || 1);
-    const origin = req.body?.origin || {
+    const origin = originOverride || {
       latitude: Number(process.env.DELIVERY_ROUTE_ORIGIN_LAT),
       longitude: Number(process.env.DELIVERY_ROUTE_ORIGIN_LNG)
     };
 
+    const parsedDriverCapacities = Array.isArray(driver_capacities)
+      ? driver_capacities.map((value) => Math.max(1, Number(value) || 1)).filter(Number.isFinite)
+      : [];
+    const maxStopsPerRoute = Math.max(
+      1,
+      Number(max_stops_per_route) || Math.ceil(Number(settings.max_deliveries_per_window || 20) / normalizedDriverCount)
+    );
+    const maxRouteDurationMinutes = Math.max(30, Number(max_route_duration_minutes) || 180);
+    const stopServiceMinutes = Math.max(1, Number(service_minutes_per_stop) || 8);
+    const averageMph = Math.max(5, Number(average_mph) || 25);
+
     // Zone-aware routing + nearest-neighbor sequence (fallbacks safely when coordinates are absent)
     const routesByZone = {};
     unassignedDeliveries.forEach(delivery => {
-      const zone = delivery.zone.id;
+      const zone = String(delivery?.zone?.id || 'zone_unassigned');
       if (!routesByZone[zone]) {
         routesByZone[zone] = [];
       }
@@ -1553,17 +1610,45 @@ router.post('/routes/optimize', async (req, res) => {
 
     for (const [zone, zoneDeliveries] of Object.entries(routesByZone)) {
       const orderedDeliveries = nearestNeighborSequence(zoneDeliveries, origin);
-      const deliveriesPerDriver = Math.ceil(orderedDeliveries.length / normalizedDriverCount);
-      
-      for (let i = 0; i < orderedDeliveries.length; i += deliveriesPerDriver) {
-        const routeDeliveries = orderedDeliveries.slice(i, i + deliveriesPerDriver);
+      const remainingDeliveries = [...orderedDeliveries];
+      let zoneRouteIndex = 0;
+
+      while (remainingDeliveries.length > 0) {
+        const capacityForRoute = parsedDriverCapacities.length
+          ? parsedDriverCapacities[zoneRouteIndex % parsedDriverCapacities.length]
+          : maxStopsPerRoute;
+
+        const routeDeliveries = [];
+        while (remainingDeliveries.length > 0 && routeDeliveries.length < capacityForRoute) {
+          const candidate = remainingDeliveries[0];
+          const projected = [...routeDeliveries, candidate];
+          const projectedDuration = estimateRouteDurationMinutes(projected, {
+            origin,
+            averageMph,
+            stopServiceMinutes
+          });
+
+          if (routeDeliveries.length > 0 && projectedDuration > maxRouteDurationMinutes) {
+            break;
+          }
+
+          routeDeliveries.push(candidate);
+          remainingDeliveries.shift();
+        }
+
+        if (!routeDeliveries.length && remainingDeliveries.length) {
+          routeDeliveries.push(remainingDeliveries.shift());
+        }
+
+        zoneRouteIndex += 1;
         const routeId = generateEntityId('RT');
         const timestamp = new Date().toISOString();
         const estimatedDistanceMiles = estimateRouteDistanceMiles(routeDeliveries, origin);
-        const estimatedDurationMinutes = Math.max(
-          routeDeliveries.length * 8,
-          Math.round((estimatedDistanceMiles / 25) * 60) + routeDeliveries.length * 6
-        );
+        const estimatedDurationMinutes = estimateRouteDurationMinutes(routeDeliveries, {
+          origin,
+          averageMph,
+          stopServiceMinutes
+        });
 
         const route = {
           route_id: routeId,
@@ -1583,7 +1668,13 @@ router.post('/routes/optimize', async (req, res) => {
           stats: {
             total_stops: routeDeliveries.length,
             estimated_duration_minutes: estimatedDurationMinutes,
-            estimated_distance_miles: estimatedDistanceMiles
+            estimated_distance_miles: estimatedDistanceMiles,
+            constraints: {
+              max_stops_per_route: capacityForRoute,
+              max_route_duration_minutes: maxRouteDurationMinutes,
+              stop_service_minutes: stopServiceMinutes,
+              average_mph: averageMph
+            }
           },
           created_at: timestamp
         };

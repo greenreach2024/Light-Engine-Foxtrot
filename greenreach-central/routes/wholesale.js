@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { query } from '../config/database.js';
+import { isDatabaseAvailable, query } from '../config/database.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 
@@ -115,6 +115,13 @@ function issueBuyerToken(buyerId) {
 }
 
 async function requireBuyerAuth(req, res, next) {
+  if (requireDbForCriticalWholesale() && !isWholesaleDatabaseReady(req)) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Wholesale authentication is temporarily unavailable while database is offline'
+    });
+  }
+
   const authHeader = req.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
   if (!token) {
@@ -222,6 +229,24 @@ function requireDbForCriticalWholesale() {
     process.env.WHOLESALE_REQUIRE_DB_FOR_CRITICAL,
     process.env.NODE_ENV === 'production'
   );
+}
+
+function isWholesaleDatabaseReady(req) {
+  if (!isDatabaseAvailable()) return false;
+  return req.app?.locals?.databaseReady !== false;
+}
+
+function requireWholesaleDbForCriticalPaths(req, res, next) {
+  if (!requireDbForCriticalWholesale()) return next();
+
+  if (!isWholesaleDatabaseReady(req)) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Wholesale buyer services are temporarily unavailable while database is offline'
+    });
+  }
+
+  return next();
 }
 
 /**
@@ -778,7 +803,7 @@ router.get('/farms', async (req, res, next) => {
 
 // --- Buyer portal (DB-less dev mode) ---
 
-router.post('/buyers/register', registerLimiter, async (req, res, next) => {
+router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPaths, async (req, res, next) => {
   try {
     const { businessName, contactName, email, password, buyerType, location } = req.body || {};
 
@@ -819,7 +844,7 @@ router.post('/buyers/register', registerLimiter, async (req, res, next) => {
   }
 });
 
-router.post('/buyers/login', loginLimiter, async (req, res, next) => {
+router.post('/buyers/login', loginLimiter, requireWholesaleDbForCriticalPaths, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
@@ -872,7 +897,7 @@ router.post('/buyers/change-password', requireBuyerAuth, async (req, res, next) 
   }
 });
 
-router.post('/buyers/forgot-password', passwordResetLimiter, async (req, res) => {
+router.post('/buyers/forgot-password', passwordResetLimiter, requireWholesaleDbForCriticalPaths, async (req, res) => {
   const { email } = req.body || {};
   if (!email) {
     return res.status(400).json({ status: 'error', message: 'Email is required' });
@@ -894,7 +919,7 @@ router.post('/buyers/forgot-password', passwordResetLimiter, async (req, res) =>
   return res.json({ status: 'ok', message: 'If that email is registered, a reset link has been sent.' });
 });
 
-router.post('/buyers/reset-password', passwordResetLimiter, async (req, res) => {
+router.post('/buyers/reset-password', passwordResetLimiter, requireWholesaleDbForCriticalPaths, async (req, res) => {
   const { token, newPassword } = req.body || {};
   if (!token || !newPassword) {
     return res.status(400).json({ status: 'error', message: 'token and newPassword are required' });
@@ -1149,7 +1174,7 @@ router.get('/orders/:orderId/invoice', requireBuyerAuth, async (req, res) => {
   });
 });
 
-router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
+router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
     const { cart, recurrence, sourcing } = req.body || {};
     if (!Array.isArray(cart) || cart.length === 0) {
@@ -1205,7 +1230,7 @@ router.post('/checkout/preview', requireBuyerAuth, async (req, res, next) => {
   }
 });
 
-router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
+router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
     const { buyer_account, delivery_date, delivery_address, recurrence, cart, payment_provider, sourcing, po_number } = req.body || {};
 
@@ -1215,13 +1240,6 @@ router.post('/checkout/execute', requireBuyerAuth, async (req, res, next) => {
       throw new ValidationError('delivery_address street/city/zip are required');
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
-
-    if (requireDbForCriticalWholesale() && req.app?.locals?.databaseReady === false) {
-      return res.status(503).json({
-        status: 'error',
-        message: 'Checkout is temporarily unavailable while database is offline'
-      });
-    }
 
     const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
 
