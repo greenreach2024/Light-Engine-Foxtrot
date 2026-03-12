@@ -11,6 +11,7 @@ import adminRecipesRoutes from './admin-recipes.js';
 import adminPricingRoutes from './admin-pricing.js';
 import adminDeliveryRoutes from './admin-delivery.js';
 import adminAiMonitoringRoutes from './admin-ai-monitoring.js';
+import adminMarketingRoutes from './admin-marketing.js';
 import { getInMemoryGroups, getInMemoryStore } from './sync.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
@@ -404,6 +405,9 @@ router.use('/delivery', adminDeliveryRoutes);
 
 // Mount AI monitoring routes
 router.use('/ai', adminAiMonitoringRoutes);
+
+// Mount Marketing AI routes
+router.use('/marketing', adminMarketingRoutes);
 
 /**
  * GET /api/admin/ai-rules

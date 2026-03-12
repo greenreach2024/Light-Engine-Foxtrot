@@ -1323,6 +1323,12 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
+                    title: 'Marketing',
+                    items: [
+                        { label: 'Marketing AI', view: 'marketing-ai' }
+                    ]
+                },
+                {
                     title: 'AI Governance',
                     items: [
                         { label: 'AI Rules', view: 'ai-rules' },
@@ -5498,6 +5504,11 @@ async function navigate(view, element) {
         case 'ai-monitoring':
             document.getElementById('ai-monitoring-view').style.display = 'block';
             await loadAiMonitoring();
+            break;
+
+        case 'marketing-ai':
+            document.getElementById('marketing-ai-view').style.display = 'block';
+            await loadMarketingDashboard();
             break;
 
         case 'market-intelligence':
@@ -11113,6 +11124,544 @@ function filterAiActivity(filter) {
             }
         }
     });
+}
+
+// ==================== MARKETING AI ====================
+
+/**
+ * Marketing AI Dashboard - state
+ */
+let mktCurrentTab = 'generate';
+let mktQueueFilter = 'all';
+
+/**
+ * Load Marketing AI Dashboard - KPIs + default tab
+ */
+async function loadMarketingDashboard() {
+    console.log('[Marketing AI] Loading dashboard');
+    try {
+        const [metricsRes, settingsRes] = await Promise.all([
+            authenticatedFetch(`${API_BASE}/api/admin/marketing/metrics`),
+            authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`)
+        ]);
+        const metrics = metricsRes?.ok ? await metricsRes.json() : {};
+        const settings = settingsRes?.ok ? await settingsRes.json() : {};
+
+        // KPI cards
+        document.getElementById('mkt-kpi-drafts').textContent = metrics.stats?.draft || 0;
+        document.getElementById('mkt-kpi-approved').textContent = metrics.stats?.approved || 0;
+        document.getElementById('mkt-kpi-published').textContent = metrics.stats?.published || 0;
+        document.getElementById('mkt-kpi-scheduled').textContent = metrics.stats?.scheduled || 0;
+        document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.stats?.total_cost || 0).toFixed(2);
+        document.getElementById('mkt-kpi-provider').textContent =
+            settings.ai_provider?.claude ? 'Claude' : (settings.ai_provider?.openai ? 'OpenAI' : 'None');
+    } catch (err) {
+        console.error('[Marketing AI] Dashboard load error:', err);
+    }
+
+    // Load default tab
+    switchMarketingTab('generate');
+}
+
+/**
+ * Switch between marketing tabs
+ */
+function switchMarketingTab(tabName, el) {
+    mktCurrentTab = tabName;
+
+    // Update tab button active states
+    document.querySelectorAll('#marketing-ai-view .tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (el) {
+        el.classList.add('active');
+    } else {
+        document.querySelectorAll('#marketing-ai-view .tab-btn').forEach(btn => {
+            if (btn.textContent.toLowerCase().includes(tabName.replace('-', ' ').split(' ')[0])) btn.classList.add('active');
+        });
+    }
+
+    // Show/hide tab content
+    document.querySelectorAll('#marketing-ai-view .tab-content').forEach(c => c.classList.remove('active'));
+    const target = document.getElementById(`mkt-tab-${tabName}`);
+    if (target) target.classList.add('active');
+
+    // Load tab data
+    switch (tabName) {
+        case 'queue': loadMarketingQueue(); break;
+        case 'published': loadMarketingPublished(); break;
+        case 'rules': loadMarketingRules(); loadMarketingSkills(); break;
+        case 'settings': loadMarketingSettings(); break;
+    }
+}
+
+/**
+ * Generate a single-platform marketing post
+ */
+async function generateMarketingPost() {
+    const platform = document.getElementById('mkt-platform-select').value;
+    const sourceType = document.getElementById('mkt-source-type').value;
+    const instructions = document.getElementById('mkt-custom-instructions').value;
+    const preview = document.getElementById('mkt-preview-area');
+    const btn = document.querySelector('#mkt-tab-generate .btn-primary');
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+    preview.innerHTML = '<div class="loading">Generating content with AI...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform, sourceType, customInstructions: instructions })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data && data.posts && data.posts.length > 0) {
+            const post = data.posts[0];
+            preview.innerHTML = renderMarketingPostPreview(post);
+            loadMarketingDashboard();
+        } else {
+            const errMsg = data?.error || 'Failed to generate content';
+            preview.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Generate error:', err);
+        preview.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed. Check console for details.</div>';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate Draft'; }
+    }
+}
+
+/**
+ * Generate posts for all platforms
+ */
+async function generateMarketingPostAllPlatforms() {
+    const sourceType = document.getElementById('mkt-source-type').value;
+    const instructions = document.getElementById('mkt-custom-instructions').value;
+    const preview = document.getElementById('mkt-preview-area');
+    const btn = document.querySelectorAll('#mkt-tab-generate .btn-secondary');
+
+    btn.forEach(b => { b.disabled = true; b.textContent = 'Generating...'; });
+    preview.innerHTML = '<div class="loading">Generating content for all platforms...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                platforms: ['twitter', 'linkedin', 'instagram', 'facebook'],
+                sourceType,
+                customInstructions: instructions
+            })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data && data.posts && data.posts.length > 0) {
+            preview.innerHTML = data.posts.map(p => renderMarketingPostPreview(p)).join('');
+            loadMarketingDashboard();
+        } else {
+            const errMsg = data?.error || 'Failed to generate content';
+            preview.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Multi-generate error:', err);
+        preview.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed.</div>';
+    } finally {
+        btn.forEach(b => { b.disabled = false; b.textContent = 'Generate All Platforms'; });
+    }
+}
+
+/**
+ * Render a preview card for a generated post
+ */
+function renderMarketingPostPreview(post) {
+    const statusBadge = post.status === 'approved'
+        ? '<span class="badge badge-success">Auto-Approved</span>'
+        : '<span class="badge badge-warning">Draft</span>';
+    const complianceHtml = post.compliance_issues?.length > 0
+        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">⚠ Compliance: ${post.compliance_issues.join(', ')}</div>`
+        : '<div style="color:var(--accent-green);margin-top:8px;font-size:12px;">✓ Compliance clear</div>';
+
+    return `<div class="stat-card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <strong style="text-transform:capitalize;">${post.platform}</strong>
+            ${statusBadge}
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px;line-height:1.5;background:var(--bg-primary);padding:12px;border-radius:6px;border:1px solid var(--border-color);">${post.content}</div>
+        ${complianceHtml}
+        <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
+            ${post.char_count || post.content?.length || 0} chars | Model: ${post.model || 'unknown'} | Cost: $${Number(post.estimated_cost || 0).toFixed(4)}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;">
+            ${post.status === 'draft' ? `<button class="btn btn-sm btn-primary" onclick="marketingPostAction('${post.id}', 'approve')">Approve</button>
+            <button class="btn btn-sm btn-secondary" onclick="marketingPostAction('${post.id}', 'reject')">Reject</button>` : ''}
+            ${post.status === 'approved' ? `<button class="btn btn-sm btn-primary" onclick="marketingPublishPost('${post.id}')">Publish Now</button>
+            <button class="btn btn-sm btn-secondary" onclick="marketingSchedulePost('${post.id}')">Schedule</button>` : ''}
+            <button class="btn btn-sm" onclick="marketingDeletePost('${post.id}')">Delete</button>
+        </div>
+    </div>`;
+}
+
+/**
+ * Load the marketing queue
+ */
+async function loadMarketingQueue() {
+    const container = document.getElementById('mkt-queue-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading queue...</div>';
+
+    try {
+        const params = new URLSearchParams({ limit: '50' });
+        if (mktQueueFilter !== 'all') params.set('status', mktQueueFilter);
+
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?${params}`);
+        const data = res?.ok ? await res.json() : { posts: [] };
+        const posts = data.posts || [];
+
+        if (posts.length === 0) {
+            container.innerHTML = '<div class="loading">No posts in queue</div>';
+            return;
+        }
+
+        container.innerHTML = posts.map(post => {
+            const statusColors = { draft: 'warning', approved: 'success', rejected: 'danger', scheduled: 'info', published: 'success', failed: 'danger' };
+            const badge = `<span class="badge badge-${statusColors[post.status] || 'neutral'}">${post.status}</span>`;
+            const date = new Date(post.created_at).toLocaleDateString();
+            const scheduledInfo = post.scheduled_for ? `<br><small>Scheduled: ${new Date(post.scheduled_for).toLocaleString()}</small>` : '';
+
+            return `<div class="stat-card" style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <strong style="text-transform:capitalize;">${post.platform}</strong>
+                    <div>${badge} <small style="color:var(--text-secondary);">${date}</small></div>
+                </div>
+                <div style="font-size:13px;line-height:1.4;max-height:80px;overflow:hidden;">${post.content}</div>
+                ${scheduledInfo}
+                <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                    ${post.status === 'draft' ? `
+                        <button class="btn btn-sm btn-primary" onclick="marketingPostAction('${post.id}', 'approve')">Approve</button>
+                        <button class="btn btn-sm btn-secondary" onclick="marketingPostAction('${post.id}', 'reject')">Reject</button>` : ''}
+                    ${post.status === 'approved' ? `
+                        <button class="btn btn-sm btn-primary" onclick="marketingPublishPost('${post.id}')">Publish</button>
+                        <button class="btn btn-sm btn-secondary" onclick="marketingSchedulePost('${post.id}')">Schedule</button>` : ''}
+                    ${['draft', 'rejected'].includes(post.status) ? `
+                        <button class="btn btn-sm" onclick="marketingDeletePost('${post.id}')">Delete</button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Update status filter counts
+        if (data.counts) {
+            document.querySelectorAll('#mkt-tab-queue .tab-btn').forEach(btn => {
+                const text = btn.textContent.toLowerCase().trim();
+                if (text === 'all') btn.textContent = `All (${Object.values(data.counts).reduce((a, b) => a + b, 0)})`;
+            });
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Queue load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load queue</div>';
+    }
+}
+
+/**
+ * Filter marketing queue by status
+ */
+function filterMarketingQueue(status, el) {
+    mktQueueFilter = status;
+    document.querySelectorAll('#mkt-tab-queue .tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (el) el.classList.add('active');
+    loadMarketingQueue();
+}
+
+/**
+ * Load published marketing posts
+ */
+async function loadMarketingPublished() {
+    const container = document.getElementById('mkt-published-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading published posts...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?status=published&limit=50`);
+        const data = res?.ok ? await res.json() : { posts: [] };
+        const posts = data.posts || [];
+
+        if (posts.length === 0) {
+            container.innerHTML = '<div class="loading">No published posts yet</div>';
+            return;
+        }
+
+        container.innerHTML = posts.map(post => {
+            const publishDate = post.published_at ? new Date(post.published_at).toLocaleString() : 'Unknown';
+            return `<div class="stat-card" style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <strong style="text-transform:capitalize;">${post.platform}</strong>
+                    <small style="color:var(--text-secondary);">Published ${publishDate}</small>
+                </div>
+                <div style="font-size:13px;line-height:1.4;">${post.content}</div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
+                    ${post.external_id ? `ID: ${post.external_id}` : ''} | Cost: $${Number(post.estimated_cost || 0).toFixed(4)}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Published load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load published posts</div>';
+    }
+}
+
+/**
+ * Perform action on a marketing post (approve/reject)
+ */
+async function marketingPostAction(postId, action) {
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, action })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || `Failed to ${action} post`);
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] ${action} error:`, err);
+        alert(`Failed to ${action} post`);
+    }
+}
+
+/**
+ * Publish a marketing post to its platform
+ */
+async function marketingPublishPost(postId) {
+    if (!confirm('Publish this post now?')) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/publish`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            if (data.stubbed) {
+                alert('Post published in STUB mode (no real API keys configured). Post marked as published.');
+            }
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to publish post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Publish error:', err);
+        alert('Failed to publish post');
+    }
+}
+
+/**
+ * Schedule a marketing post
+ */
+async function marketingSchedulePost(postId) {
+    const scheduledFor = prompt('Schedule for (YYYY-MM-DD HH:MM):');
+    if (!scheduledFor) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, action: 'schedule', scheduledFor })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to schedule post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Schedule error:', err);
+    }
+}
+
+/**
+ * Delete a marketing post
+ */
+async function marketingDeletePost(postId) {
+    if (!confirm('Delete this post?')) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?postId=${postId}`, {
+            method: 'DELETE'
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to delete post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Delete error:', err);
+    }
+}
+
+/**
+ * Load marketing rules
+ */
+async function loadMarketingRules() {
+    const container = document.getElementById('mkt-rules-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading rules...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/rules`);
+        const data = res?.ok ? await res.json() : { rules: [] };
+        const rules = data.rules || [];
+
+        if (rules.length === 0) {
+            container.innerHTML = '<div class="loading">No rules configured. Run migration 018.</div>';
+            return;
+        }
+
+        container.innerHTML = rules.map(rule => {
+            const enabledClass = rule.enabled ? 'badge-success' : 'badge-neutral';
+            const enabledText = rule.enabled ? 'Enabled' : 'Disabled';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);">
+                <div>
+                    <strong>${rule.rule_name.replace(/_/g, ' ')}</strong>
+                    <div style="font-size:12px;color:var(--text-secondary);">${rule.description || ''}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="badge ${enabledClass}">${enabledText}</span>
+                    <button class="btn btn-sm" onclick="toggleMarketingRule('${rule.rule_name}', ${!rule.enabled})">${rule.enabled ? 'Disable' : 'Enable'}</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Rules load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load rules</div>';
+    }
+}
+
+/**
+ * Toggle a marketing rule
+ */
+async function toggleMarketingRule(ruleName, enabled) {
+    try {
+        await authenticatedFetch(`${API_BASE}/api/admin/marketing/rules`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ruleName, enabled })
+        });
+        loadMarketingRules();
+    } catch (err) {
+        console.error('[Marketing AI] Toggle rule error:', err);
+    }
+}
+
+/**
+ * Load marketing skills
+ */
+async function loadMarketingSkills() {
+    const container = document.getElementById('mkt-skills-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading skills...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/skills`);
+        const data = res?.ok ? await res.json() : { skills: [] };
+        const skills = data.skills || [];
+
+        if (skills.length === 0) {
+            container.innerHTML = '<div class="loading">No skills configured</div>';
+            return;
+        }
+
+        const riskColors = { 0: '#22c55e', 1: '#3b82f6', 2: '#f59e0b', 3: '#ef4444' };
+        const riskLabels = { 0: 'Observe', 1: 'Suggest', 2: 'Assist', 3: 'Guard' };
+
+        container.innerHTML = skills.map(skill => {
+            const enabledClass = skill.enabled ? 'badge-success' : 'badge-neutral';
+            const riskColor = riskColors[skill.risk_tier] || '#888';
+            const riskLabel = riskLabels[skill.risk_tier] || 'Unknown';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);">
+                <div>
+                    <strong>${skill.skill_name.replace(/-/g, ' ')}</strong>
+                    <div style="font-size:12px;color:var(--text-secondary);">${skill.description || ''}</div>
+                    <div style="font-size:11px;margin-top:2px;">
+                        <span style="color:${riskColor};">●</span> Tier ${skill.risk_tier} (${riskLabel})
+                        ${skill.requires_approval ? ' | <span style="color:#f59e0b;">Requires Approval</span>' : ''}
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="badge ${enabledClass}">${skill.enabled ? 'On' : 'Off'}</span>
+                    <button class="btn btn-sm" onclick="toggleMarketingSkill('${skill.skill_name}', ${!skill.enabled})">${skill.enabled ? 'Disable' : 'Enable'}</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Skills load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load skills</div>';
+    }
+}
+
+/**
+ * Toggle a marketing skill
+ */
+async function toggleMarketingSkill(skillName, enabled) {
+    try {
+        await authenticatedFetch(`${API_BASE}/api/admin/marketing/skills`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skillName, enabled })
+        });
+        loadMarketingSkills();
+    } catch (err) {
+        console.error('[Marketing AI] Toggle skill error:', err);
+    }
+}
+
+/**
+ * Load marketing settings (platform connections)
+ */
+async function loadMarketingSettings() {
+    const container = document.getElementById('mkt-platform-connections');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading settings...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`);
+        const data = res?.ok ? await res.json() : {};
+
+        const platforms = data.platforms || {};
+        const ai = data.ai_provider || {};
+
+        let html = '<div style="margin-bottom:16px;">';
+        html += '<h4 style="margin-bottom:8px;">AI Provider</h4>';
+        html += `<div style="display:flex;gap:12px;">
+            <div class="stat-card" style="flex:1;text-align:center;">
+                <div style="font-size:12px;color:var(--text-secondary);">Claude (Anthropic)</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.claude ? 'var(--accent-green)' : '#ef4444'};">${ai.claude ? 'Configured' : 'Not Set'}</div>
+            </div>
+            <div class="stat-card" style="flex:1;text-align:center;">
+                <div style="font-size:12px;color:var(--text-secondary);">OpenAI (Fallback)</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.openai ? 'var(--accent-green)' : '#ef4444'};">${ai.openai ? 'Configured' : 'Not Set'}</div>
+            </div>
+        </div></div>`;
+
+        html += '<h4 style="margin-bottom:8px;">Social Platforms</h4>';
+        const platformNames = ['twitter', 'linkedin', 'instagram', 'facebook'];
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        platformNames.forEach(name => {
+            const status = platforms[name];
+            const connected = status?.connected;
+            const icon = connected ? '✓' : '✗';
+            const color = connected ? 'var(--accent-green)' : '#ef4444';
+            const missing = status?.missing || [];
+            html += `<div class="stat-card" style="text-align:center;">
+                <div style="font-size:14px;font-weight:600;text-transform:capitalize;">${name}</div>
+                <div style="font-size:20px;color:${color};margin:4px 0;">${icon}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">${connected ? 'Connected' : `Missing: ${missing.join(', ')}`}</div>
+            </div>`;
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('[Marketing AI] Settings load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load settings</div>';
+    }
 }
 
 // ==================== CENTRAL ACCOUNTING ====================
