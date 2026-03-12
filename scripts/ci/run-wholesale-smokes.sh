@@ -112,9 +112,27 @@ FARM_ID="$(printf '%s' "$FARM_AUTH" | awk '{print $1}')"
 API_KEY="$(printf '%s' "$FARM_AUTH" | awk '{print $2}')"
 ORDER_ID="ci-smoke-$(date +%s)"
 
+# Cleanup any stale active reservations from prior runs so reserve checks stay deterministic.
+RES_CLEAN_CODE=$(curl -sS -o /tmp/ci-smoke-reservations-preclean.json -w "%{http_code}" \
+  -H "X-Farm-ID: ${FARM_ID}" \
+  -H "X-API-Key: ${API_KEY}" \
+  "${FOXTROT_BASE}/api/wholesale/inventory/reservations")
+if [[ "$RES_CLEAN_CODE" == "200" ]]; then
+  node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('/tmp/ci-smoke-reservations-preclean.json','utf8')); const ids=[...new Set((p?.reservations||[]).map((r)=>String(r?.order_id||'').trim()).filter(Boolean))]; fs.writeFileSync('/tmp/ci-smoke-active-orders.txt', ids.join('\\n'));"
+  while IFS= read -r existing_order_id; do
+    [[ -n "${existing_order_id}" ]] || continue
+    curl -sS -o /tmp/ci-smoke-release.json -w "%{http_code}" \
+      -X POST "${FOXTROT_BASE}/api/wholesale/inventory/release" \
+      -H 'content-type: application/json' \
+      -H "X-Farm-ID: ${FARM_ID}" \
+      -H "X-API-Key: ${API_KEY}" \
+      -d "{\"order_id\":\"${existing_order_id}\",\"reason\":\"ci_smoke_preclean\"}" >/dev/null || true
+  done < /tmp/ci-smoke-active-orders.txt
+fi
+
 INV_CODE=$(curl -sS -o /tmp/ci-smoke-inventory.json -w "%{http_code}" "${FOXTROT_BASE}/api/wholesale/inventory")
 [[ "$INV_CODE" == "200" ]] || fail "Foxtrot inventory fetch failed with HTTP ${INV_CODE}"
-RESERVE_SKU="$(node -e "const payload = JSON.parse(require('fs').readFileSync('/tmp/ci-smoke-inventory.json','utf8')); const lot = (payload?.lots || []).find((item) => Number(item?.qty_available || 0) > 0); if (!lot?.sku_id) process.exit(3); process.stdout.write(String(lot.sku_id));")"
+RESERVE_SKU="$(node -e "const payload = JSON.parse(require('fs').readFileSync('/tmp/ci-smoke-inventory.json','utf8')); const lot = (payload?.lots || []).find((item) => Number(item?.qty_available || 0) > 0); if (!lot?.sku_id) process.exit(3); process.stdout.write(String(lot.sku_id));")" || fail "No reservable SKU found in wholesale inventory after pre-clean; see /tmp/ci-smoke-inventory.json"
 
 RESERVE_CODE=$(curl -sS -o /tmp/ci-smoke-reserve.json -w "%{http_code}" \
   -X POST "${FOXTROT_BASE}/api/wholesale/inventory/reserve" \
