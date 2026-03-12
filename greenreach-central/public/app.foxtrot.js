@@ -10,7 +10,7 @@ function fetchWithFarmAuth(url, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (!headers['Authorization']) {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       if (token) headers['Authorization'] = `Bearer ${token}`;
     } catch (_) {}
   }
@@ -6584,8 +6584,12 @@ async function persistLightSetups() {
 // Load light setups from /data/light-setups.json on page init
 async function loadLightSetups() {
   try {
-    const resp = await fetch('/data/light-setups.json', { cache: 'no-store' });
-    if (!resp.ok) return; // File doesn't exist yet — that's fine
+    const resp = await fetchWithFarmAuth('/data/light-setups.json', { cache: 'no-store' });
+    if (resp.status === 404) return; // File doesn't exist yet — that's fine
+    if (!resp.ok) {
+      console.warn('[lightSetups] Unable to load persisted setups:', resp.status);
+      return;
+    }
     const data = await resp.json();
     const setups = Array.isArray(data?.lightSetups) ? data.lightSetups : [];
     if (!setups.length) return;
@@ -13249,6 +13253,7 @@ async function loadAllData() {
     }
     const backendRooms = Array.isArray(STATE.rooms) ? STATE.rooms : [];
     const fileRooms = rooms?.rooms || [];
+    const farmRooms = Array.isArray(STATE.farm?.rooms) ? STATE.farm.rooms : [];
     const localRooms = (() => {
       try {
         const raw = localStorage.getItem('gr.rooms');
