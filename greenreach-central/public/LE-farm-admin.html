@@ -859,6 +859,22 @@
             border-color: #06b6d4;
         }
 
+        /* Getting Started - Green/Blue gradient */
+        .nav-button.getting-started {
+            background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(59,130,246,0.2));
+            border-color: #10b981;
+            color: #6ee7b7;
+        }
+
+        .nav-button.getting-started:hover {
+            background: linear-gradient(135deg, rgba(16,185,129,0.35), rgba(59,130,246,0.35));
+            border-color: #34d399;
+        }
+
+        .nav-item.getting-started .dropdown-menu {
+            border-color: #10b981;
+        }
+
         .nav-item.sales .dropdown-item:hover {
             background: rgba(6, 182, 212, 0.3);
         }
@@ -1131,6 +1147,20 @@
         </div>
         <div class="header-actions">
             <nav class="nav-menu">
+                <!-- Getting Started AI Assist -->
+                <div class="nav-item getting-started" id="ai-assist-getting-started">
+                    <button class="nav-button getting-started" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(16,185,129,0.3);">
+                        🚀 Getting Started
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu" style="width: 320px;">
+                        <div id="ai-assist-steps" style="padding: 12px 16px;">
+                            <p style="margin: 0 0 10px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Recommended Next Steps</p>
+                            <div id="ai-assist-items" style="display: flex; flex-direction: column; gap: 4px;">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Dropdown 1: Inventory Management (Amber) -->
                 <div class="nav-item inventory">
                     <button class="nav-button inventory active">
@@ -3765,6 +3795,82 @@
     <script src="/farm-admin.js?v=20260309-embedded-nav-fix"></script>
     <script src="/js/plan-features.js?v=20260313"></script>
     <script src="/js/onboarding-checklist.js?v=20260313"></script>
+
+    <!-- AI Assist Getting Started Dropdown -->
+    <script>
+    (function initAiAssistGettingStarted() {
+      const container = document.getElementById('ai-assist-items');
+      if (!container) return;
+
+      async function loadSteps() {
+        try {
+          const headers = {};
+          const token = window.currentSession?.token || localStorage.getItem('auth_token');
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const res = await fetch('/api/setup/onboarding-status', { headers });
+          if (!res.ok) { container.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Unable to load steps</span>'; return; }
+          const data = await res.json();
+          if (!data.success || !data.tasks) return;
+
+          // Client-side check for display_prefs
+          const farmSettings = localStorage.getItem('farmSettings');
+          data.tasks.forEach(t => { if (t.id === 'display_prefs' && farmSettings) t.completed = true; });
+
+          const incomplete = data.tasks.filter(t => !t.completed);
+          const complete = data.tasks.filter(t => t.completed);
+          const pct = data.tasks.length > 0 ? Math.round((complete.length / data.tasks.length) * 100) : 0;
+
+          // Update the button badge
+          const btn = document.querySelector('#ai-assist-getting-started .nav-button');
+          if (btn && complete.length === data.tasks.length) {
+            btn.innerHTML = '✅ All Set Up <span class="nav-arrow">▼</span>';
+          }
+
+          // Build contextual suggestions — show up to 4 most important next steps
+          let html = `<div style="margin-bottom:10px;">
+            <div style="background:var(--bg-secondary);border-radius:4px;height:5px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:var(--accent-green);border-radius:4px;transition:width 0.5s ease;"></div>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted);">${complete.length} of ${data.tasks.length} complete</span>
+          </div>`;
+
+          if (incomplete.length === 0) {
+            html += '<div style="padding:8px 0;font-size:13px;color:var(--accent-green);">🎉 All setup steps complete! You\'re ready to grow.</div>';
+          } else {
+            const top = incomplete.slice(0, 4);
+            top.forEach(task => {
+              const badge = task.edgeOnly ? ' <span style="font-size:9px;background:rgba(139,92,246,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px;">Edge</span>' : '';
+              html += `<a href="#" onclick="event.preventDefault();navigateOnboardingTask('${task.link}','${task.linkUrl||''}');return false;"
+                style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
+                onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
+                <span style="font-size:16px;">${task.icon || '○'}</span>
+                <span style="flex:1;">${task.label}${badge}</span>
+                <span style="color:var(--text-muted);font-size:12px;">→</span>
+              </a>`;
+            });
+            if (incomplete.length > 4) {
+              html += `<div style="padding:6px 10px;font-size:11px;color:var(--text-muted);">+ ${incomplete.length - 4} more in Settings → Getting Started</div>`;
+            }
+          }
+
+          container.innerHTML = html;
+        } catch (e) {
+          console.warn('[AI Assist] Failed to load steps:', e);
+          container.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Setup guide unavailable</span>';
+        }
+      }
+
+      // Load on first open (lazy) and refresh periodically
+      let loaded = false;
+      const trigger = document.querySelector('#ai-assist-getting-started .nav-button');
+      if (trigger) {
+        trigger.addEventListener('click', () => { if (!loaded) { loaded = true; loadSteps(); } });
+      }
+      // Also load after page is ready
+      setTimeout(() => { if (!loaded) { loaded = true; loadSteps(); } }, 2000);
+    })();
+    </script>
     
     <!-- Production Planning JS REMOVED — consolidated into Planting Scheduler -->
 
@@ -5014,6 +5120,7 @@
           <div class="setup-progress-step" data-step="4" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="5" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="6" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="7" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
         </div>
       </div>
       
@@ -5137,6 +5244,15 @@
               <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;">
                 No rooms added yet. Add at least one room to continue.
               </div>
+            </div>
+
+            <!-- Room Mapper Tip -->
+            <div id="setup-room-mapper-tip" style="display: none; margin-top: 16px; padding: 14px 18px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px;">
+              <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+                <strong style="color: var(--accent-blue);">💡 Tip:</strong> After setup, use the
+                <a href="/views/room-mapper.html" target="_blank" style="color: var(--accent-blue); text-decoration: underline;">Room Mapper</a>
+                to visually place sensors and equipment in each room for accurate heat maps and monitoring.
+              </p>
             </div>
           </div>
         </div>

@@ -5503,6 +5503,10 @@ function addSetupRoom() {
     
     renderSetupRooms();
     showSetupSuccess(`Room "${roomName}" added`);
+
+    // Show Room Mapper tip once a room is added
+    const tip = document.getElementById('setup-room-mapper-tip');
+    if (tip) tip.style.display = 'block';
 }
 
 /**

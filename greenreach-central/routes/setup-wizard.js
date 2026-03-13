@@ -1062,11 +1062,20 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
     // FarmStore data
     let storeProfile = {};
     let storeRoomCount = 0;
+    let storeSeedCount = 0;
+    let storeGroupCount = 0;
+    let storeTrayCount = 0;
     if (req.farmStore) {
       try {
         storeProfile = await req.farmStore.get(farmId, 'farm_profile') || {};
         const storeRooms = await req.farmStore.get(farmId, 'rooms');
         if (Array.isArray(storeRooms)) storeRoomCount = storeRooms.length;
+        const storeSeeds = await req.farmStore.get(farmId, 'inventory_seeds');
+        if (Array.isArray(storeSeeds)) storeSeedCount = storeSeeds.length;
+        const storeGroups = await req.farmStore.get(farmId, 'groups');
+        if (Array.isArray(storeGroups)) storeGroupCount = storeGroups.length;
+        const storeTrays = await req.farmStore.get(farmId, 'trays');
+        if (Array.isArray(storeTrays)) storeTrayCount = storeTrays.length;
       } catch (e) { /* non-fatal */ }
     }
 
@@ -1134,6 +1143,29 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         completed: storeProfile.activity_hub_installed === true,
         link: '#settings',
         icon: '📱'
+      },
+      {
+        id: 'tray_setup',
+        label: 'Set up trays for grow tracking',
+        completed: storeTrayCount > 0,
+        link: '#iframe-view',
+        linkUrl: '/views/tray-setup.html',
+        icon: '🗂️'
+      },
+      {
+        id: 'seed_inventory',
+        label: 'Add seed inventory',
+        completed: storeSeedCount > 0,
+        link: '#inventory-mgmt',
+        icon: '🌱'
+      },
+      {
+        id: 'first_recipe',
+        label: 'Create first grow recipe',
+        completed: storeGroupCount > 0,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html',
+        icon: '📋'
       }
     ];
 
