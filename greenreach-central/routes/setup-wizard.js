@@ -236,6 +236,29 @@ router.get('/status', authenticateToken, async (req, res) => {
     // Determine setup completion: Primary = setup_completed flag, Fallback = has rooms
     let setupCompleted = farm?.setup_completed === true || roomCount > 0;
 
+    // Additional heuristic: if the farm has data in farm_data table, it's been set up
+    // This catches farms that were set up before setup_completed column was added
+    if (!setupCompleted && pool) {
+      try {
+        const dataResult = await pool.query(
+          'SELECT COUNT(*) as count FROM farm_data WHERE farm_id = $1',
+          [farmId]
+        );
+        const dataCount = parseInt(dataResult.rows[0]?.count) || 0;
+        if (dataCount > 0) {
+          setupCompleted = true;
+          console.log(`[Setup Wizard] Farm ${farmId} has ${dataCount} farm_data entries — treating as setup complete`);
+          // Auto-fix the stale flag in the DB
+          pool.query('UPDATE farms SET setup_completed = true WHERE farm_id = $1 AND (setup_completed IS NULL OR setup_completed = false)', [farmId]).catch(() => {});
+        }
+      } catch (fdErr) {
+        // farm_data table may not exist — non-fatal
+        if (!fdErr.message?.includes('does not exist')) {
+          console.warn('[Setup Wizard] farm_data check error:', fdErr.message);
+        }
+      }
+    }
+
     // In DB mode, fall back to farmStore values when DB flags are stale/empty
     // (common for synced farms where room data lives in farm_data).
     let storeRoomCount = 0;
@@ -390,6 +413,48 @@ router.post('/complete', authenticateToken, async (req, res) => {
       success: false,
       error: 'Failed to complete setup' 
     });
+  }
+});
+
+/**
+ * PATCH /api/setup/mark-complete
+ * Admin endpoint to mark a farm's setup as complete
+ * Fixes farms that were set up before the setup_completed column was actively set
+ */
+router.patch('/mark-complete', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const pool = req.db;
+
+    if (pool) {
+      await pool.query(
+        'UPDATE farms SET setup_completed = true, setup_completed_at = COALESCE(setup_completed_at, NOW()) WHERE farm_id = $1',
+        [farmId]
+      );
+      // Also clear must_change_password
+      await pool.query(
+        'UPDATE farm_users SET must_change_password = false WHERE farm_id = $1',
+        [farmId]
+      ).catch(() => {});
+    }
+
+    // Also update farmStore
+    if (req.farmStore) {
+      try {
+        const profile = await req.farmStore.get(farmId, 'farm_profile') || {};
+        profile.setup_completed = true;
+        profile.setup_completed_at = profile.setup_completed_at || new Date().toISOString();
+        await req.farmStore.set(farmId, 'farm_profile', profile);
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore update error:', e.message);
+      }
+    }
+
+    console.log(`[Setup Wizard] Farm ${farmId} manually marked as setup complete`);
+    res.json({ success: true, message: 'Farm marked as setup complete', farmId });
+  } catch (error) {
+    console.error('[Setup Wizard] Mark complete error:', error);
+    res.status(500).json({ success: false, error: 'Failed to mark setup complete' });
   }
 });
 

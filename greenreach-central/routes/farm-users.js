@@ -165,6 +165,39 @@ router.post('/delete', async (req, res) => {
   }
 });
 
+// POST /reset-password — Admin resets another user's password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Email and new password required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+    }
+
+    const bcrypt = await import('bcryptjs');
+    const hash = await bcrypt.default.hash(newPassword, 10);
+
+    if (await isDatabaseAvailable()) {
+      const { rowCount } = await query(
+        'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE farm_id = $2 AND email = $3',
+        [hash, farmId, email.toLowerCase()]
+      );
+      if (rowCount === 0) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+    }
+    console.log(`[FarmUsers] Password reset for ${email} by farm admin (farm ${farmId})`);
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('[FarmUsers] Reset password error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to reset password' });
+  }
+});
+
 // Separate router for /api/user/* (singular)
 export const userRouter = Router();
 

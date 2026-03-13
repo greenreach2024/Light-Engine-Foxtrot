@@ -226,16 +226,17 @@ router.post('/login', async (req, res) => {
       user = { ...FALLBACK_FARM };
 
       // If a specific farm_id was requested and it exists in the farms table,
-      // use that farm's name so the JWT and response are accurate.
+      // use that farm's name and setup_completed so the JWT and response are accurate.
       if (farm_id && req.db) {
         try {
           const farmRow = await req.db.query(
-            'SELECT farm_id, name, status FROM farms WHERE farm_id = $1',
+            'SELECT farm_id, name, status, COALESCE(setup_completed, false) as setup_completed FROM farms WHERE farm_id = $1',
             [farm_id]
           );
           if (farmRow.rows.length > 0) {
             user.farm_id = farmRow.rows[0].farm_id;
             user.farm_name = farmRow.rows[0].name;
+            user.setup_completed = farmRow.rows[0].setup_completed;
           }
         } catch (_) { /* best-effort */ }
       }

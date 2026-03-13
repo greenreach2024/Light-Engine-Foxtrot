@@ -3186,6 +3186,15 @@
                                         <option value="suspended">Suspended</option>
                                     </select>
                                 </div>
+                                <!-- Reset Password Section -->
+                                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: rgba(59, 130, 246, 0.05);">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Reset Password</label>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="password" id="edit-user-new-password" placeholder="New password (min 8 chars)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <button type="button" class="btn" onclick="resetUserPassword()" style="background: var(--accent-blue); color: white; white-space: nowrap;">Reset Password</button>
+                                    </div>
+                                    <small style="color: var(--text-muted); display: block; margin-top: 6px;">Leave blank if you don't want to change the password.</small>
+                                </div>
                                 <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 12px;">
                                     <button type="button" class="btn" onclick="removeUser()" style="background: var(--accent-red); color: white;">Remove User</button>
                                     <div style="display: flex; gap: 12px;">

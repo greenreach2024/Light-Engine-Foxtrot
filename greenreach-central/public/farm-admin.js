@@ -338,7 +338,15 @@ async function handleLogin(e) {
             showAlert('success', 'Login successful! Redirecting...');
             
             // Check if user needs first-time setup (password change + farm profile)
-            const needsSetup = data.mustChangePassword || data.setupCompleted === false;
+            // mustChangePassword forces wizard; setupCompleted===false does too
+            // unless localStorage already shows setup was done (prevents re-trigger for established farms)
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            const needsSetup = data.mustChangePassword || (data.setupCompleted === false && !localSetupDone);
+            
+            // Store setupCompleted in localStorage to prevent future false redirects
+            if (data.setupCompleted) {
+                localStorage.setItem('setup_completed', 'true');
+            }
             
             setTimeout(() => {
                 if (needsSetup) {
@@ -4598,7 +4606,19 @@ async function checkFirstTimeSetup() {
         console.log('[setup-wizard] API status:', data);
         
         // If setup not complete or force wizard, redirect to standalone wizard
-        if (!data.setupCompleted || forceWizard) {
+        if (forceWizard) {
+            console.log('[setup-wizard] Force wizard requested, redirecting');
+            window.location.href = '/setup-wizard.html';
+            return;
+        }
+        if (!data.setupCompleted) {
+            // Double-check: if localStorage has setup_completed=true, don't redirect
+            // This prevents redirect loops for farms that completed setup but DB flag is stale
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            if (localSetupDone) {
+                console.log('[setup-wizard] DB says not complete but localStorage says done — skipping redirect');
+                return;
+            }
             console.log('[setup-wizard] Setup not complete, redirecting to wizard');
             window.location.href = '/setup-wizard.html';
             return;
@@ -6065,11 +6085,15 @@ async function removeUser() {
     }
     
     try {
-        // In production, would call API
-        // await fetch(`/api/users/${userId}`, {
-        //     method: 'DELETE',
-        //     headers: { 'X-Farm-ID': localStorage.getItem('farm_id') }
-        // });
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        await fetch('/api/users/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ email: user.email })
+        });
         
         window.allUsers = window.allUsers.filter(u => u.id !== userId);
         
@@ -6080,6 +6104,51 @@ async function removeUser() {
     } catch (error) {
         console.error('Error removing user:', error);
         showToast('Error removing user', 'error');
+    }
+}
+
+/**
+ * Reset password for a farm user (admin action)
+ */
+async function resetUserPassword() {
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const user = window.allUsers.find(u => u.id === userId);
+    const newPassword = document.getElementById('edit-user-new-password').value.trim();
+
+    if (!newPassword) {
+        showToast('Please enter a new password', 'error');
+        return;
+    }
+    if (newPassword.length < 8) {
+        showToast('Password must be at least 8 characters', 'error');
+        return;
+    }
+
+    if (!confirm(`Reset password for ${user.name} (${user.email})?`)) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch('/api/users/reset-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ email: user.email, newPassword })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Password reset for ${user.email}`, 'success');
+            document.getElementById('edit-user-new-password').value = '';
+        } else {
+            showToast(data.error || 'Failed to reset password', 'error');
+        }
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        showToast('Error resetting password', 'error');
     }
 }
 
