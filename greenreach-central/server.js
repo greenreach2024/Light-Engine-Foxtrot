@@ -4255,6 +4255,12 @@ async function startServer() {
       app.locals.databaseReady = true;
       app.locals.dbPool = getDatabase();
       logger.info('Database connected successfully');
+
+      // Sync marketing skill system prompts with correct brand identity
+      try {
+        const { syncSkillPrompts } = await import('./services/marketing-ai-agent.js');
+        await syncSkillPrompts();
+      } catch (e) { /* marketing module may not be loaded yet */ }
       
       // Hydrate in-memory Maps from farm_data table (multi-tenant SaaS)
       const hydrationResult = await hydrateFromDatabase();
