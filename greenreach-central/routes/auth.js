@@ -417,6 +417,89 @@ router.post('/logout', (req, res) => {
  * Headers: Authorization: Bearer <token>
  * Returns: { farm_id, email, role, name }
  */
+/**
+ * POST /api/auth/change-password
+ * Authenticated password change (requires current password verification)
+ * Body: { currentPassword: string, newPassword: string }
+ */
+router.post('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ status: 'error', message: 'No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    let payload;
+    try {
+      payload = jwt.verify(token, JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+    } catch (err) {
+      return res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ status: 'error', message: 'Current and new passwords are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: 'error', message: 'New password must be at least 8 characters' });
+    }
+
+    const pool = req.db;
+    if (!pool) {
+      return res.status(500).json({ status: 'error', message: 'Database not configured' });
+    }
+
+    // Look up user in farm_users
+    const farmId = payload.farm_id;
+    const email = payload.email;
+    const userId = payload.user_id;
+
+    let userRow;
+    if (farmId && email) {
+      const result = await pool.query(
+        'SELECT id, password_hash FROM farm_users WHERE farm_id = $1 AND email = $2',
+        [farmId, email]
+      );
+      userRow = result.rows[0];
+    }
+    if (!userRow && userId) {
+      const result = await pool.query(
+        'SELECT id, password_hash FROM farm_users WHERE id = $1',
+        [userId]
+      );
+      userRow = result.rows[0];
+    }
+
+    if (!userRow) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    // Verify current password
+    const validPassword = await bcrypt.compare(currentPassword, userRow.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ status: 'error', message: 'Current password is incorrect' });
+    }
+
+    // Hash and update
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
+      [newHash, userRow.id]
+    );
+
+    console.log('[Auth] Password changed for user:', userRow.id, 'farm:', farmId);
+    res.json({ status: 'success', message: 'Password changed successfully' });
+
+  } catch (error) {
+    console.error('[Auth] Change password error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to change password' });
+  }
+});
+
 router.get('/me', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;

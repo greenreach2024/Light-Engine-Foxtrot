@@ -1405,7 +1405,9 @@ router.get('/farms/users', async (req, res) => {
         const result = await query(
             `SELECT fu.id, fu.farm_id, fu.email, fu.first_name, fu.last_name,
                     fu.role, fu.status, fu.last_login, fu.created_at,
-                    f.name as farm_name
+                    COALESCE(fu.must_change_password, false) as must_change_password,
+                    f.name as farm_name,
+                    COALESCE(f.setup_completed, false) as setup_completed
              FROM farm_users fu
              LEFT JOIN farms f ON f.farm_id = fu.farm_id
              ORDER BY fu.created_at DESC`
@@ -1420,6 +1422,8 @@ router.get('/farms/users', async (req, res) => {
             last_name: row.last_name || '',
             role: row.role || 'operator',
             status: row.status || 'active',
+            must_change_password: row.must_change_password || false,
+            setup_completed: row.setup_completed || false,
             last_login: row.last_login,
             created_at: row.created_at
         }));
