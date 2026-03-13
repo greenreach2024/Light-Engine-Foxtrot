@@ -73,6 +73,7 @@ import { runYieldRegression } from './jobs/yield-regression.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
+import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
@@ -3246,6 +3247,7 @@ app.get('/api/wholesale/demand-analysis', async (req, res) => {
   }
 });
 
+app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square)
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 app.use('/api/farm-ops', farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
 

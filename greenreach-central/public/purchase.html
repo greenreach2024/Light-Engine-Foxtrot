@@ -935,15 +935,15 @@
             </div>
 
             <!-- Cloud Service -->
-            <div class="product-card">
+            <div class="product-card featured">
                 <img src="images/cloud.png" alt="Light Engine Cloud Service" class="product-image">
                 <div class="product-content">
                     <span class="product-badge badge-cloud">Cloud Platform</span>
                     <h2 class="product-title">The Cloud</h2>
                     <p class="product-subtitle">Manage your farm operations from anywhere with cloud-based inventory and sales management</p>
                     
-                    <div class="product-price" style="font-size: 2rem;">Launching Wednesday, April 22, 2026</div>
-                    <p class="price-note">Pre-order now - Schedule a call with our team</p>
+                    <div class="product-price" style="font-size: 1.5rem; color: #10b981;">Available Now</div>
+                    <p class="price-note">Start managing your farm today</p>
 
                     <ul class="features-list">
                         <li>
@@ -977,6 +977,26 @@
                     </ul>
 
                     <a href="/landing-cloud.html" class="btn-learn-more">Learn More →</a>
+                    <div style="margin-top: 16px; text-align: center;">
+                        <button onclick="purchaseProduct('cloud')" style="
+                            display: inline-block;
+                            background: linear-gradient(135deg, #3b82f6, #2563eb);
+                            color: white;
+                            padding: 14px 36px;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(59, 130, 246, 0.4)'"
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.3)'"
+                        >Get Started</button>
+                    </div>
+                    <div style="margin-top: 12px; text-align: center;">
+                        <a href="/login.html" style="color: #3b82f6; text-decoration: none; font-size: 14px;">Already subscribed? Sign In →</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1212,7 +1232,7 @@
                             Cancel
                         </button>
                         <button type="submit" class="btn-modal btn-modal-submit" id="modalSubmitBtn">
-                            Schedule a Call
+                            Continue to Payment
                         </button>
                     </div>
                 </form>
@@ -1324,8 +1344,8 @@
                 // If Farm ID provided, verify it first
                 if (farmId) {
                     // Validate Farm ID format
-                    if (!farmId.match(/^GR-[A-Z0-9]{10,}$/i)) {
-                        showModalError('Invalid Farm ID format. Farm IDs start with "GR-" followed by alphanumeric characters (e.g., GR-1234567890ABCD)');
+                    if (!farmId.match(/^(GR-[A-Z0-9]{10,}|FARM-[A-Z0-9]{8,})$/i)) {
+                        showModalError('Invalid Farm ID format. Farm IDs start with "GR-" or "FARM-" followed by alphanumeric characters.');
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalText;
                         return;
@@ -1400,7 +1420,55 @@
                     return;
                 }
                 
-                // No Farm ID - submit to CRM for pre-order/lead capture
+                // No Farm ID - For cloud plan, go directly to checkout. For edge, capture as lead.
+                if (currentPlan === 'cloud') {
+                    // Cloud plan - proceed directly to payment
+                    console.log('[Purchase] Cloud plan - proceeding to payment');
+                    submitBtn.textContent = 'Creating checkout session...';
+                    
+                    const response = await fetch('/api/farms/create-checkout-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            plan: currentPlan,
+                            farm_name: farmName,
+                            contact_name: contactName,
+                            email: email,
+                            farm_id: null
+                        })
+                    });
+                    
+                    console.log('[Purchase] Payment response status:', response.status);
+                    
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        console.error('[Purchase] Payment error:', errData);
+                        throw new Error(errData.error || errData.message || `Payment system error: ${response.status}`);
+                    }
+                    
+                    const checkoutData = await response.json();
+                    console.log('[Purchase] Checkout session created:', checkoutData);
+                    
+                    if (!checkoutData.url) {
+                        throw new Error('No payment URL received. Please try again or contact support.');
+                    }
+                    
+                    // Store session info
+                    localStorage.setItem('pendingPurchase', JSON.stringify({
+                        sessionId: checkoutData.sessionId,
+                        plan: currentPlan,
+                        farmName: farmName,
+                        farmId: null,
+                        email: email
+                    }));
+                    
+                    sessionStorage.setItem('checkoutSessionId', checkoutData.sessionId);
+                    console.log('[Purchase] Redirecting to payment:', checkoutData.url);
+                    window.location.href = checkoutData.url;
+                    return;
+                }
+                
+                // Edge plan without Farm ID - submit to CRM for pre-order/lead capture
                 console.log('[Purchase] No Farm ID - submitting to CRM:', { plan: currentPlan, email, farmName });
                 submitBtn.textContent = 'Submitting...';
                 
