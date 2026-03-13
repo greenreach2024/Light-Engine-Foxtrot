@@ -447,6 +447,7 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
@@ -781,14 +782,38 @@
             // Display URL
             document.getElementById('activity-hub-url').textContent = hubUrl;
             
-            // Generate QR code using Google Charts API
+            // Generate QR code using qrcodejs (client-side)
             const qrContainer = document.getElementById('activity-hub-qr');
-            const qrSize = 200;
-            const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=${qrSize}x${qrSize}&chl=${encodeURIComponent(hubUrl)}&choe=UTF-8`;
+            qrContainer.innerHTML = '';
             
-            qrContainer.innerHTML = `
-                <img src="${qrUrl}" alt="Activity Hub QR Code" style="border: 2px solid var(--border); border-radius: 8px; padding: 10px; background: white;" />
-            `;
+            try {
+                new QRCode(qrContainer, {
+                    text: hubUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                // Style the generated elements
+                const img = qrContainer.querySelector('img');
+                const canvas = qrContainer.querySelector('canvas');
+                if (img) {
+                    img.style.border = '2px solid var(--border)';
+                    img.style.borderRadius = '8px';
+                    img.style.padding = '10px';
+                    img.style.background = 'white';
+                }
+                if (canvas) {
+                    canvas.style.border = '2px solid var(--border)';
+                    canvas.style.borderRadius = '8px';
+                    canvas.style.padding = '10px';
+                    canvas.style.background = 'white';
+                }
+            } catch (e) {
+                console.error('QR code generation failed:', e);
+                qrContainer.innerHTML = `<p style="color: var(--text-muted);">QR code unavailable. Use the manual URL below.</p>`;
+            }
         }
 
         function copyHubUrl() {
