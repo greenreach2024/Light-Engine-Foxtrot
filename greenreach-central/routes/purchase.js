@@ -169,20 +169,20 @@ ensureLeadsTable().catch(() => {});
 // ═══════════════════════════════════════════════════════════════
 const PLANS = {
   cloud: {
-    name: 'Light Engine Cloud',
+    name: 'Light Engine Base',
     type: 'cloud',
-    amount_cents: 100, // $1.00 CAD — soft launch pricing
+    amount_cents: 2900, // $29.00 CAD/mo — base plan
     currency: 'CAD',
-    description: 'Light Engine Cloud — Farm Management Platform',
-    line_item_name: 'Light Engine Cloud Subscription',
+    description: 'Light Engine Base — Monitoring, Inventory, POS, AI',
+    line_item_name: 'Light Engine Base Subscription',
   },
   edge: {
     name: 'Light Engine Farm Server',
     type: 'edge',
-    amount_cents: 100, // $1.00 CAD — soft launch pricing
+    amount_cents: 2900, // $29.00 CAD/mo — base plan (same; hardware priced separately)
     currency: 'CAD',
     description: 'Light Engine Farm Server — On-Premises Automation',
-    line_item_name: 'Light Engine Farm Server',
+    line_item_name: 'Light Engine Farm Server Subscription',
   },
 };
 
