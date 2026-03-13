@@ -3124,8 +3124,8 @@
         try {
           const iotResponse = await fetchWithFarmAuth('/data/iot-devices.json');
           if (iotResponse.ok) {
-            iotDevices = await iotResponse.json();
-            if (!Array.isArray(iotDevices)) iotDevices = [];
+            const raw = await iotResponse.json();
+            iotDevices = Array.isArray(raw) ? raw : (raw.devices || []);
           }
         } catch (err) {
           console.warn('Failed to load IoT devices:', err);
@@ -3184,18 +3184,18 @@
               vpd = calculateVPD(temp, humidity);
             }
             
-            console.log(`[Farm Summary] ${zone.name} aggregated: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
-          } else {
-            console.log(`[Farm Summary] No sensors found in IoT devices for ${zone.name} (zone ${zone.zone}), trying envData...`);
-            
-            // Fallback to envData if no IoT sensors found
-            // Try matching by zone ID (e.g., "zone-1" matches zone 1)
+            if (temp != null || humidity != null) {
+              console.log(`[Farm Summary] ${zone.name} aggregated: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
+            } else {
+              console.log(`[Farm Summary] IoT devices in ${zone.name} have no readings, trying envData...`);
+            }
+          }
+
+          // Fallback to envData if IoT devices didn't yield values
+          if (temp == null && humidity == null) {
             const envZone = envData?.zones?.find(z => {
-              // Match by zone-N pattern
               if (z.id === `zone-${zone.zone}`) return true;
-              // Match by name
               if (z.name === zone.name || z.location === zone.name) return true;
-              // Match by numeric zone ID
               if (z.id === String(zone.zone)) return true;
               return false;
             });
@@ -3213,8 +3213,7 @@
               if (temp != null || humidity != null || vpd != null) {
                 console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
               }
-            } else {
-              }
+            }
           }
 
           // Find groups in this zone, excluding cannabis
