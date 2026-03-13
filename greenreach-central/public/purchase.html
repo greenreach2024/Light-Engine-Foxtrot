@@ -1242,9 +1242,54 @@
                     <button type="button" class="btn-signin" onclick="window.location.href='/login.html'">
                         Sign In to Light Engine
                     </button>
+                    <p class="existing-account-text" style="margin-top: 12px;">Already paid but didn't get redirected?</p>
+                    <button type="button" class="btn-signin" onclick="closePurchaseModal(); showRecoveryModal();" style="background: #f59e0b; color: #78350f;">
+                        Recover My Payment
+                    </button>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Payment Recovery Modal -->
+    <div id="recoveryModal" class="modal-overlay">
+        <div class="purchase-modal" style="max-width: 480px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <h2 style="color: white;">Recover Your Payment</h2>
+                <button class="modal-close" onclick="closeRecoveryModal()" style="color: white;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #4b5563; margin-bottom: 16px;">If you completed payment but weren't redirected back, enter your email below and we'll find your account.</p>
+                
+                <div class="error-message" id="recoveryError"></div>
+                <div id="recoverySuccess" style="display:none; background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: left;">
+                    <h3 style="color: #166534; margin-bottom: 12px;">Account Found!</h3>
+                    <div id="recoveryCredentials"></div>
+                </div>
+
+                <form id="recoveryForm" onsubmit="handleRecovery(event)">
+                    <div class="form-group">
+                        <label for="recoveryEmail" class="form-label">Email Address Used at Checkout</label>
+                        <input type="email" id="recoveryEmail" class="form-input" placeholder="your@email.com" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal btn-modal-cancel" onclick="closeRecoveryModal()">Cancel</button>
+                        <button type="submit" class="btn-modal btn-modal-submit" id="recoverySubmitBtn" style="background: #f59e0b;">Find My Account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Payment Banner -->
+    <div id="pendingBanner" style="display:none; position:fixed; bottom:20px; right:20px; background:white; border:2px solid #f59e0b; border-radius:12px; padding:16px 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index:9999; max-width:340px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+            <span style="font-size:20px;">⚠️</span>
+            <strong style="color:#92400e;">Pending Payment Detected</strong>
+        </div>
+        <p style="color:#78350f; font-size:13px; margin-bottom:12px;">It looks like you started a purchase but weren't redirected back. Click below to check your payment status.</p>
+        <button onclick="showRecoveryModal()" style="background:#f59e0b; color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:600; cursor:pointer; width:100%; font-size:14px;">Recover My Payment</button>
+        <button onclick="dismissBanner()" style="background:none; border:none; color:#9ca3af; font-size:12px; cursor:pointer; margin-top:6px; width:100%;">Dismiss</button>
     </div>
 
     <script>
@@ -1260,6 +1305,144 @@
                 description: 'Farm server with touchscreen interface for on-site operation and local control'
             }
         };
+
+        // ── Recovery Modal Functions ──
+        function showRecoveryModal() {
+            const modal = document.getElementById('recoveryModal');
+            document.getElementById('recoveryForm').reset();
+            document.getElementById('recoveryError').classList.remove('show');
+            document.getElementById('recoveryError').textContent = '';
+            document.getElementById('recoverySuccess').style.display = 'none';
+            document.getElementById('recoverySubmitBtn').textContent = 'Find My Account';
+            document.getElementById('recoverySubmitBtn').disabled = false;
+
+            // Pre-fill email from pending purchase
+            const pending = localStorage.getItem('pendingPurchase');
+            if (pending) {
+                try {
+                    const p = JSON.parse(pending);
+                    if (p.email) document.getElementById('recoveryEmail').value = p.email;
+                } catch (e) { /* ignore */ }
+            }
+
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('show'), 10);
+        }
+
+        function closeRecoveryModal() {
+            const modal = document.getElementById('recoveryModal');
+            modal.classList.remove('show');
+            setTimeout(() => modal.style.display = 'none', 300);
+        }
+
+        async function handleRecovery(event) {
+            event.preventDefault();
+            const btn = document.getElementById('recoverySubmitBtn');
+            const email = document.getElementById('recoveryEmail').value.trim();
+            if (!email) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+            document.getElementById('recoveryError').classList.remove('show');
+
+            try {
+                const response = await fetch('/api/purchase/recover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Already provisioned — just show farm ID
+                    if (data.already_provisioned) {
+                        document.getElementById('recoverySuccess').style.display = 'block';
+                        document.getElementById('recoveryCredentials').innerHTML = `
+                            <p style="margin-bottom:10px;">Your farm account <strong>${data.farm_name}</strong> already exists.</p>
+                            <p><strong>Farm ID:</strong> <code style="background:#e5e7eb;padding:2px 8px;border-radius:4px;">${data.farm_id}</code></p>
+                            <div style="margin-top:16px;">
+                                <a href="/farm-admin-login.html" style="display:inline-block;background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Go to Login</a>
+                            </div>
+                        `;
+                        localStorage.removeItem('pendingPurchase');
+                        document.getElementById('pendingBanner').style.display = 'none';
+                        btn.textContent = 'Account Found!';
+                        return;
+                    }
+
+                    // Newly provisioned — show credentials
+                    localStorage.removeItem('pendingPurchase');
+                    document.getElementById('pendingBanner').style.display = 'none';
+
+                    if (data.token) {
+                        localStorage.setItem('token', data.token);
+                        sessionStorage.setItem('token', data.token);
+                        localStorage.setItem('farmId', data.farm_id);
+                        localStorage.setItem('farm_id', data.farm_id);
+                        localStorage.setItem('email', data.email);
+                        localStorage.setItem('isNewUser', 'true');
+                        if (data.farm_name) localStorage.setItem('farm_name', data.farm_name);
+                    }
+
+                    document.getElementById('recoverySuccess').style.display = 'block';
+                    document.getElementById('recoveryCredentials').innerHTML = `
+                        <p style="color:#166534; margin-bottom:12px;">Your farm account has been created!</p>
+                        <div style="background:white; padding:10px 14px; border-radius:8px; margin-bottom:8px; border:1px solid #d1fae5;">
+                            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;">Farm ID</div>
+                            <div style="font-family:monospace;font-size:15px;font-weight:600;">${data.farm_id}</div>
+                        </div>
+                        <div style="background:white; padding:10px 14px; border-radius:8px; margin-bottom:8px; border:1px solid #d1fae5;">
+                            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;">Temporary Password</div>
+                            <div style="font-family:monospace;font-size:15px;font-weight:600;">${data.temp_password || '(check your email)'}</div>
+                        </div>
+                        <div style="background:white; padding:10px 14px; border-radius:8px; border:1px solid #d1fae5;">
+                            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;">Email</div>
+                            <div style="font-size:15px;font-weight:600;">${data.email}</div>
+                        </div>
+                        <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:8px;margin-top:12px;">
+                            <strong style="color:#92400e;font-size:13px;">Save these credentials now!</strong>
+                        </div>
+                        <div style="margin-top:16px; display:flex; gap:8px;">
+                            <a href="/setup-wizard.html" style="flex:1;display:block;background:#10b981;color:white;padding:10px;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Start Farm Setup</a>
+                            <a href="/farm-admin-login.html" style="flex:1;display:block;background:#6b7280;color:white;padding:10px;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Go to Login</a>
+                        </div>
+                    `;
+                    btn.textContent = 'Account Created!';
+                    btn.style.background = '#10b981';
+                } else {
+                    const errMsg = data.error || data.message || 'Unable to recover payment.';
+                    document.getElementById('recoveryError').textContent = errMsg;
+                    document.getElementById('recoveryError').classList.add('show');
+                    btn.disabled = false;
+                    btn.textContent = 'Find My Account';
+                }
+            } catch (error) {
+                console.error('[Recovery] Error:', error);
+                document.getElementById('recoveryError').textContent = 'Unable to connect to server. Please try again.';
+                document.getElementById('recoveryError').classList.add('show');
+                btn.disabled = false;
+                btn.textContent = 'Find My Account';
+            }
+        }
+
+        function dismissBanner() {
+            document.getElementById('pendingBanner').style.display = 'none';
+            sessionStorage.setItem('bannerDismissed', 'true');
+        }
+
+        // Show pending payment banner if there's a pending purchase
+        (function checkPendingPurchase() {
+            const pending = localStorage.getItem('pendingPurchase');
+            if (pending && !sessionStorage.getItem('bannerDismissed')) {
+                try {
+                    const p = JSON.parse(pending);
+                    if (p.sessionId) {
+                        document.getElementById('pendingBanner').style.display = 'block';
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        })();
 
         function openPurchaseModal(plan) {
             currentPlan = plan;

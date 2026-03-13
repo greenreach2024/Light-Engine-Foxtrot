@@ -777,6 +777,358 @@ router.delete('/api/purchase/farm/:farmId', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GET /api/purchase/sessions — List checkout sessions (admin diagnostic)
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/purchase/sessions', async (req, res) => {
+  const adminKey = req.query.admin_key;
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ success: false, error: 'Database not available' });
+  }
+  try {
+    const result = await query(
+      `SELECT session_id, square_order_id, square_payment_link_id, plan_type, amount_cents, currency, 
+              farm_name, contact_name, email, status, provisioned_farm_id, payment_id, error_message, created_at, completed_at
+       FROM checkout_sessions ORDER BY created_at DESC`
+    );
+    res.json({ success: true, sessions: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/purchase/manual-verify/:sessionId — Admin: force-verify a session
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/purchase/manual-verify/:sessionId', async (req, res) => {
+  const adminKey = req.query.admin_key;
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    await ensureTables();
+    const { sessionId } = req.params;
+
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const sessionResult = await query('SELECT * FROM checkout_sessions WHERE session_id = $1', [sessionId]);
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Checkout session not found' });
+    }
+
+    const session = sessionResult.rows[0];
+
+    // If already completed, return existing info
+    if (session.status === 'completed' && session.provisioned_farm_id) {
+      return res.json({ success: true, already_completed: true, farm_id: session.provisioned_farm_id });
+    }
+
+    // Check Square order status
+    const client = await getSquareClient();
+    let orderPaid = false;
+    let paymentId = null;
+
+    if (client && session.square_order_id) {
+      try {
+        const orderResponse = await client.orders.get({ orderId: session.square_order_id });
+        const order = orderResponse.order;
+        console.log(`[Purchase] Manual verify — Square order ${session.square_order_id} state: ${order?.state}`);
+
+        if (order?.state === 'COMPLETED') {
+          orderPaid = true;
+          if (order.tenders && order.tenders.length > 0) {
+            paymentId = order.tenders[0].paymentId || order.tenders[0].id;
+          }
+        } else if (order?.state === 'OPEN') {
+          if (order.netAmountDueMoney?.amount === 0n || order.netAmountDueMoney?.amount === BigInt(0)) {
+            orderPaid = true;
+          }
+        }
+      } catch (sqErr) {
+        console.error(`[Purchase] Manual verify — Square order check failed:`, sqErr.message);
+      }
+    }
+
+    if (!orderPaid) {
+      // Admin force override if ?force=true
+      if (req.query.force === 'true') {
+        console.log(`[Purchase] Manual verify — FORCE provisioning session ${sessionId} (payment not confirmed)`);
+      } else {
+        return res.status(402).json({
+          success: false,
+          error: 'Payment not confirmed by Square. Add ?force=true to override.',
+          square_order_id: session.square_order_id,
+        });
+      }
+    }
+
+    // Update payment info
+    if (paymentId) {
+      await query(`UPDATE checkout_sessions SET payment_id = $1, status = 'paid' WHERE session_id = $2`, [paymentId, sessionId]);
+    }
+
+    // Provision the farm
+    const result = await provisionFarmAndUser(session);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    // Send welcome email
+    if (!result.existing_account && result.temp_password) {
+      try {
+        const emailResult = await sendWelcomeEmail({
+          email: result.email,
+          farmId: result.farm_id,
+          farmName: result.farm_name,
+          contactName: session.contact_name,
+          tempPassword: result.temp_password,
+          planType: result.plan_type,
+        });
+        result.email_sent = emailResult.sent;
+      } catch (emailErr) {
+        console.error(`[Purchase] Manual verify — email error:`, emailErr.message);
+        result.email_sent = false;
+      }
+    }
+
+    console.log(`[Purchase] Manual verify — farm provisioned: ${result.farm_id} (${result.farm_name})`);
+    res.json(result);
+  } catch (error) {
+    console.error('[Purchase] manual-verify error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/purchase/recover — User-facing: recover a payment session by email
+// (For when Square redirect fails — user can re-trigger verification)
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/purchase/recover', async (req, res) => {
+  try {
+    await ensureTables();
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    // Find the most recent pending/paid session for this email
+    const sessionResult = await query(
+      `SELECT * FROM checkout_sessions 
+       WHERE email = $1 AND status IN ('pending', 'paid')
+       ORDER BY created_at DESC LIMIT 1`,
+      [email.toLowerCase()]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No pending payment found for this email. Please contact support if you believe this is an error.',
+      });
+    }
+
+    const session = sessionResult.rows[0];
+
+    // Check if already provisioned under a different session
+    const existingFarm = await query('SELECT farm_id, name FROM farms WHERE email = $1', [email.toLowerCase()]);
+    if (existingFarm.rows.length > 0) {
+      return res.json({
+        success: true,
+        already_provisioned: true,
+        farm_id: existingFarm.rows[0].farm_id,
+        farm_name: existingFarm.rows[0].name,
+        message: 'Your farm account already exists. Please log in with your Farm ID.',
+      });
+    }
+
+    // Try to verify with Square
+    const client = await getSquareClient();
+    let orderPaid = false;
+    let paymentId = null;
+
+    if (client && session.square_order_id) {
+      try {
+        const orderResponse = await client.orders.get({ orderId: session.square_order_id });
+        const order = orderResponse.order;
+        console.log(`[Purchase] Recovery — Square order ${session.square_order_id} state: ${order?.state}`);
+
+        if (order?.state === 'COMPLETED') {
+          orderPaid = true;
+          if (order.tenders && order.tenders.length > 0) {
+            paymentId = order.tenders[0].paymentId || order.tenders[0].id;
+          }
+        } else if (order?.state === 'OPEN') {
+          if (order.netAmountDueMoney?.amount === 0n || order.netAmountDueMoney?.amount === BigInt(0)) {
+            orderPaid = true;
+          }
+        }
+      } catch (sqErr) {
+        console.error(`[Purchase] Recovery — Square check failed:`, sqErr.message);
+      }
+    }
+
+    if (!orderPaid) {
+      return res.status(402).json({
+        success: false,
+        error: 'Payment not yet confirmed. If you completed payment, please wait a few minutes and try again.',
+        status: 'payment_pending',
+      });
+    }
+
+    // Payment is confirmed — provision
+    console.log(`[Purchase] Recovery — payment confirmed, provisioning farm for ${email}`);
+
+    if (paymentId) {
+      await query(`UPDATE checkout_sessions SET payment_id = $1, status = 'paid' WHERE session_id = $2`, [paymentId, session.session_id]);
+    }
+
+    const result = await provisionFarmAndUser(session);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    // Send welcome email
+    if (!result.existing_account && result.temp_password) {
+      try {
+        const emailResult = await sendWelcomeEmail({
+          email: result.email,
+          farmId: result.farm_id,
+          farmName: result.farm_name,
+          contactName: session.contact_name,
+          tempPassword: result.temp_password,
+          planType: result.plan_type,
+        });
+        result.email_sent = emailResult.sent;
+      } catch (emailErr) {
+        console.error(`[Purchase] Recovery email error:`, emailErr.message);
+        result.email_sent = false;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Purchase] recover error:', error);
+    res.status(500).json({ success: false, error: 'Recovery failed. Please contact support.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/purchase/webhook — Square webhook for payment.completed events
+// (Reliable server-side fallback when browser redirect fails)
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/purchase/webhook', async (req, res) => {
+  try {
+    const event = req.body;
+    const eventType = event?.type;
+
+    console.log(`[Webhook] Received Square event: ${eventType}`);
+
+    // Acknowledge receipt immediately (Square expects 200 within 10s)
+    res.status(200).json({ received: true });
+
+    // Only process payment.completed and order.updated events
+    if (eventType !== 'payment.completed' && eventType !== 'order.updated') {
+      return;
+    }
+
+    if (!isDatabaseAvailable()) {
+      console.error('[Webhook] Database unavailable — cannot process event');
+      return;
+    }
+
+    await ensureTables();
+
+    let orderId = null;
+    let paymentId = null;
+
+    if (eventType === 'payment.completed') {
+      const payment = event?.data?.object?.payment;
+      orderId = payment?.orderId || payment?.order_id;
+      paymentId = payment?.id;
+      console.log(`[Webhook] Payment completed: ${paymentId}, Order: ${orderId}`);
+    } else if (eventType === 'order.updated') {
+      const order = event?.data?.object?.order;
+      orderId = order?.id;
+      if (order?.state !== 'COMPLETED') {
+        console.log(`[Webhook] Order ${orderId} state: ${order?.state} — skipping`);
+        return;
+      }
+      console.log(`[Webhook] Order completed: ${orderId}`);
+    }
+
+    if (!orderId) {
+      console.log('[Webhook] No order ID in event — skipping');
+      return;
+    }
+
+    // Find the checkout session by Square order ID
+    const sessionResult = await query(
+      `SELECT * FROM checkout_sessions WHERE square_order_id = $1 AND status IN ('pending', 'paid')`,
+      [orderId]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      console.log(`[Webhook] No pending session found for order ${orderId}`);
+      return;
+    }
+
+    const session = sessionResult.rows[0];
+
+    // Check if farm already provisioned
+    if (session.provisioned_farm_id) {
+      console.log(`[Webhook] Session ${session.session_id} already provisioned: ${session.provisioned_farm_id}`);
+      return;
+    }
+
+    console.log(`[Webhook] Provisioning farm for session ${session.session_id} (${session.farm_name})`);
+
+    // Update payment info
+    if (paymentId) {
+      await query(`UPDATE checkout_sessions SET payment_id = $1, status = 'paid' WHERE session_id = $2`, [paymentId, session.session_id]);
+    }
+
+    // Provision the farm
+    const result = await provisionFarmAndUser(session);
+    if (!result.success) {
+      console.error(`[Webhook] Provisioning failed for ${session.session_id}:`, result.error);
+      return;
+    }
+
+    // Send welcome email
+    if (!result.existing_account && result.temp_password) {
+      try {
+        const emailResult = await sendWelcomeEmail({
+          email: result.email,
+          farmId: result.farm_id,
+          farmName: result.farm_name,
+          contactName: session.contact_name,
+          tempPassword: result.temp_password,
+          planType: result.plan_type,
+        });
+        console.log(`[Webhook] Welcome email sent: ${emailResult.sent}`);
+      } catch (emailErr) {
+        console.error(`[Webhook] Email error:`, emailErr.message);
+      }
+    }
+
+    console.log(`[Webhook] Farm provisioned via webhook: ${result.farm_id} (${result.farm_name})`);
+  } catch (error) {
+    console.error('[Webhook] Processing error:', error);
+    // Don't return error — we already sent 200
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/purchase/farms — List all provisioned farms (admin diagnostic)
 // ═══════════════════════════════════════════════════════════════
 router.get('/api/purchase/farms', async (req, res) => {
