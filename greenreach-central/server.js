@@ -90,7 +90,7 @@ if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
-import { authMiddleware } from './middleware/auth.js';
+import { authMiddleware, authOrAdminMiddleware } from './middleware/auth.js';
 import { farmDataMiddleware, farmDataWriteMiddleware } from './middleware/farm-data.js';
 
 // Phase 3 — Unified tenant-scoped data access layer
@@ -3113,8 +3113,8 @@ app.get('/api/bus/:busId/scan', (req, res) => edgeProxy(req, res, `/api/bus/${re
 
 app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (Light Engine feature)
 app.use('/api/billing', billingRoutes); // Billing usage (cloud)
-app.use('/api/accounting', authMiddleware, accountingRoutes); // Canonical accounting ledger + close controls
-app.use('/api/procurement', authMiddleware, procurementAdminRoutes); // GRC catalog & suppliers
+app.use('/api/accounting', authOrAdminMiddleware, accountingRoutes); // Canonical accounting ledger + close controls (accepts farm OR admin auth)
+app.use('/api/procurement', authOrAdminMiddleware, procurementAdminRoutes); // GRC catalog & suppliers (accepts farm OR admin auth)
 app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
 app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)

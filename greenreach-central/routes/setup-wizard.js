@@ -306,12 +306,21 @@ router.post('/complete', authenticateToken, async (req, res) => {
     const farmId = req.farmId;
     const { farmName, contact, location, rooms, certifications, credentials, endpoints } = req.body;
 
+    // Accept both nested contact object AND flat fields from wizard
+    // Wizard sends: ownerName, contactEmail, contactPhone (flat)
+    // Structured clients send: contact: { name, email, phone }
+    const normalizedContact = {
+      name: contact?.name || req.body.ownerName || req.body.contactName || '',
+      email: contact?.email || req.body.contactEmail || '',
+      phone: contact?.phone || req.body.contactPhone || ''
+    };
+
     // Build farm profile from submitted data
     const farmProfile = {
       farmId,
       name: farmName || 'New Farm',
       farmName: farmName || 'New Farm',
-      contact: contact || {},
+      contact: normalizedContact,
       location: location || {},
       certifications: certifications || {},
       credentials: credentials || {},
@@ -342,9 +351,19 @@ router.post('/complete', authenticateToken, async (req, res) => {
     const pool = req.db;
     if (pool) {
       try {
+        // Add contact_phone column if it doesn't exist yet
+        await pool.query('ALTER TABLE farms ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50)').catch(() => {});
+
         await pool.query(
-          'UPDATE farms SET setup_completed = true, setup_completed_at = NOW(), name = COALESCE($2, name) WHERE farm_id = $1',
-          [farmId, farmName || null]
+          `UPDATE farms SET 
+            setup_completed = true, 
+            setup_completed_at = NOW(), 
+            name = COALESCE($2, name),
+            contact_name = COALESCE($3, contact_name),
+            email = COALESCE($4, email),
+            contact_phone = COALESCE($5, contact_phone)
+          WHERE farm_id = $1`,
+          [farmId, farmName || null, normalizedContact.name || null, normalizedContact.email || null, normalizedContact.phone || null]
         );
         // Also clear must_change_password for all users of this farm
         await pool.query(

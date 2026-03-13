@@ -132,3 +132,93 @@ export async function checkFarmOwnership(req, res, next) {
   req.farmId = requestedFarmId;
   next();
 }
+
+/**
+ * Combined auth middleware — accepts EITHER farm JWT/API-key OR admin JWT.
+ * Used for routes like /api/accounting and /api/procurement that are accessed
+ * by both farm-level clients and the GreenReach Central admin panel.
+ *
+ * Tries farm auth first (JWT with issuer/audience or API key), then falls back
+ * to admin JWT (no issuer/audience constraints). If neither succeeds, returns 401.
+ */
+export function authOrAdminMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  // 1. Try farm JWT (has issuer/audience)
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const payload = jwt.verify(token, JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+      req.user = {
+        farmId: payload.farm_id,
+        userId: payload.user_id || 'jwt-user',
+        role: payload.role || 'admin',
+        email: payload.email,
+        name: payload.name,
+        authMethod: 'jwt'
+      };
+      return next();
+    } catch (err) {
+      logger.debug('[Auth] Farm JWT validation failed, trying admin JWT:', err.message);
+    }
+
+    // 2. Try admin JWT (no issuer/audience constraints)
+    try {
+      const token = authHeader.substring(7);
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload && (payload.adminId || payload.email)) {
+        req.user = {
+          farmId: 'ADMIN',
+          userId: payload.adminId || payload.email,
+          role: payload.role || 'admin',
+          email: payload.email,
+          name: payload.name,
+          authMethod: 'admin-jwt'
+        };
+        req.admin = {
+          id: payload.adminId,
+          email: payload.email,
+          name: payload.name,
+          role: payload.role || 'admin'
+        };
+        return next();
+      }
+    } catch (adminErr) {
+      logger.debug('[Auth] Admin JWT validation also failed:', adminErr.message);
+    }
+  }
+
+  // 3. API key auth (edge devices)
+  if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
+    if (!isValidApiKey(req.headers['x-api-key'])) {
+      logger.warn('[Auth] Invalid API key from', req.headers['x-farm-id']);
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+    req.user = {
+      farmId: req.headers['x-farm-id'],
+      role: 'admin',
+      authMethod: 'api-key'
+    };
+    return next();
+  }
+
+  // 4. Local dev mode only
+  if (!isProduction()) {
+    const devFarmId = req.headers['x-farm-id'] || process.env.FARM_ID;
+    if (devFarmId) {
+      req.user = {
+        farmId: devFarmId,
+        role: 'admin',
+        authMethod: 'dev-local'
+      };
+      return next();
+    }
+  }
+
+  // No valid credentials
+  logger.warn('[Auth] authOrAdmin: no valid credentials for', req.path);
+  return res.status(401).json({ error: 'Authentication required' });
+}
