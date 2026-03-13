@@ -34,8 +34,13 @@ export async function loadRules() {
  * Load all rules (enabled and disabled) for display.
  */
 export async function loadAllRules() {
-  const result = await query('SELECT * FROM marketing_rules ORDER BY rule_type, rule_name');
-  return result.rows;
+  try {
+    const result = await query('SELECT * FROM marketing_rules ORDER BY rule_type, rule_name');
+    return result.rows;
+  } catch (err) {
+    console.warn('[Marketing Rules] loadAllRules failed (table may not exist):', err.message);
+    return [];
+  }
 }
 
 /**

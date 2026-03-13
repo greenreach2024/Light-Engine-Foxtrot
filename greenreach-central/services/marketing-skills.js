@@ -12,11 +12,16 @@ import { query } from '../config/database.js';
  * @returns {Promise<Array>}
  */
 export async function listSkills({ enabledOnly = false } = {}) {
-  const sql = enabledOnly
-    ? 'SELECT * FROM marketing_skills WHERE enabled = true ORDER BY category, skill_name'
-    : 'SELECT * FROM marketing_skills ORDER BY category, skill_name';
-  const result = await query(sql);
-  return result.rows;
+  try {
+    const sql = enabledOnly
+      ? 'SELECT * FROM marketing_skills WHERE enabled = true ORDER BY category, skill_name'
+      : 'SELECT * FROM marketing_skills ORDER BY category, skill_name';
+    const result = await query(sql);
+    return result.rows;
+  } catch (err) {
+    console.warn('[Marketing Skills] listSkills failed (table may not exist):', err.message);
+    return [];
+  }
 }
 
 /**

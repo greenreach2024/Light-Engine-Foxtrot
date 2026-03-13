@@ -1261,6 +1261,16 @@ async function runMigrations(client) {
     }
   }
 
+  // Ensure pgcrypto extension for gen_random_uuid() on PostgreSQL < 13
+  {
+    try {
+      await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+    } catch (err) {
+      // Extension may already exist or require superuser — non-fatal
+      logger.warn('pgcrypto extension check:', err.message);
+    }
+  }
+
   // Migration 021: Marketing AI Agent tables (site_settings, marketing_posts, marketing_post_history, marketing_rules, marketing_skills)
   {
     try {
