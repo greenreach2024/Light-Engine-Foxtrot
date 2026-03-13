@@ -5979,8 +5979,8 @@ API URL: ${apiUrl}
                 const farmsData = await farmsResponse.json();
                 allManagedFarms = farmsData.farms || [];
                 
-                // Load users
-                const usersResponse = await adminFetch(`${FARM_API_URL}/api/admin/users`);
+                // Load farm users (not admin employees)
+                const usersResponse = await adminFetch(`${FARM_API_URL}/api/admin/farms/users`);
                 const usersData = await usersResponse.json();
                 allManagedUsers = usersData.users || [];
                 

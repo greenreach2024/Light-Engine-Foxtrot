@@ -1347,15 +1347,28 @@ router.get('/farms', async (req, res) => {
         const countResult = await query(countQuery, countParams);
         const total = parseInt(countResult.rows[0].count);
         
+        // Get user counts per farm
+        let userCounts = {};
+        try {
+            const ucResult = await query('SELECT farm_id, COUNT(*) as cnt FROM farm_users GROUP BY farm_id');
+            ucResult.rows.forEach(r => { userCounts[r.farm_id] = parseInt(r.cnt); });
+        } catch (e) { /* farm_users table may not exist yet */ }
+
         // Format farms data
         const farms = result.rows.map(farm => ({
             id: farm.id,
+            farm_id: farm.farm_id,
             farmId: farm.farm_id,
             name: farm.name,
+            email: farm.email || (farm.metadata && farm.metadata.email) || null,
             status: farm.status,
+            tier: farm.tier || (farm.metadata && farm.metadata.tier) || 'starter',
+            user_count: userCounts[farm.farm_id] || 0,
             lastUpdate: farm.last_heartbeat,
+            last_login: farm.last_login || null,
             metadata: farm.metadata || {},
             createdAt: farm.created_at,
+            created_at: farm.created_at,
             updatedAt: farm.updated_at
         }));
         
@@ -1376,6 +1389,94 @@ router.get('/farms', async (req, res) => {
             error: 'Failed to fetch farms',
             message: error.message
         });
+    }
+});
+
+/**
+ * GET /api/admin/farms/users
+ * List all farm users across all farms (for central admin user management)
+ */
+router.get('/farms/users', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.json({ success: true, users: [], message: 'Database not available' });
+        }
+
+        const result = await query(
+            `SELECT fu.id, fu.farm_id, fu.email, fu.first_name, fu.last_name,
+                    fu.role, fu.status, fu.last_login, fu.created_at,
+                    f.name as farm_name
+             FROM farm_users fu
+             LEFT JOIN farms f ON f.farm_id = fu.farm_id
+             ORDER BY fu.created_at DESC`
+        );
+
+        const users = result.rows.map(row => ({
+            user_id: row.id,
+            farm_id: row.farm_id,
+            farm_name: row.farm_name || row.farm_id,
+            email: row.email,
+            first_name: row.first_name || '',
+            last_name: row.last_name || '',
+            role: row.role || 'operator',
+            status: row.status || 'active',
+            last_login: row.last_login,
+            created_at: row.created_at
+        }));
+
+        res.json({ success: true, users });
+    } catch (error) {
+        console.error('[Admin API] Error fetching farm users:', error);
+        res.status(500).json({ success: false, error: 'Failed to load farm users', message: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/farms/reset-user-password
+ * Reset a farm user's password (generates temp password)
+ */
+router.post('/farms/reset-user-password', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ status: 'error', message: 'Database not available' });
+        }
+
+        const { farmId, email } = req.body || {};
+        if (!farmId || !email) {
+            return res.status(400).json({ status: 'error', message: 'farmId and email are required' });
+        }
+
+        // Verify user exists
+        const userCheck = await query(
+            'SELECT id FROM farm_users WHERE farm_id = $1 AND email = $2',
+            [farmId, email]
+        );
+        if (!userCheck.rows.length) {
+            return res.status(404).json({ status: 'error', message: 'Farm user not found' });
+        }
+
+        // Generate temp password
+        const tempPassword = 'Temp' + Math.random().toString(36).slice(2, 8) + '!' + Math.floor(Math.random() * 90 + 10);
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+        await query(
+            `UPDATE farm_users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+             WHERE farm_id = $2 AND email = $3`,
+            [passwordHash, farmId, email]
+        );
+
+        console.log(`[Admin API] Password reset for farm user ${email} on farm ${farmId}`);
+
+        res.json({
+            status: 'success',
+            farmId,
+            email,
+            tempPassword,
+            message: 'Password reset successfully. User must change password on next login.'
+        });
+    } catch (error) {
+        console.error('[Admin API] Error resetting farm user password:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to reset password: ' + error.message });
     }
 });
 
