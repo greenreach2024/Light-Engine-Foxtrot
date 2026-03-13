@@ -1272,18 +1272,24 @@ async function runMigrations(client) {
     }
   }
 
-  // Migration 021: Marketing AI Agent tables (site_settings, marketing_posts, marketing_post_history, marketing_rules, marketing_skills)
+  // Migration 021: Marketing AI Agent tables — individual queries to avoid connection state issues
   {
+    // site_settings
     try {
-      await client.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS site_settings (
           key         TEXT PRIMARY KEY,
           value       TEXT NOT NULL,
           updated_at  TIMESTAMPTZ DEFAULT NOW()
-        );
+        )
+      `);
+    } catch (err) { logger.warn('site_settings create warning:', err.message); }
 
+    // marketing_posts
+    try {
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS marketing_posts (
-          id              UUID PRIMARY KEY DEFAULT _gr_uuid(),
+          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           platform        TEXT NOT NULL CHECK (platform IN ('twitter','linkedin','instagram','facebook')),
           content         TEXT NOT NULL,
           image_url       TEXT,
@@ -1307,29 +1313,44 @@ async function runMigrations(client) {
           approved_by     TEXT,
           created_at      TIMESTAMPTZ DEFAULT NOW(),
           updated_at      TIMESTAMPTZ DEFAULT NOW()
-        );
+        )
+      `);
+    } catch (err) { logger.warn('marketing_posts create warning:', err.message); }
 
+    // marketing_post_history
+    try {
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS marketing_post_history (
-          id          UUID PRIMARY KEY DEFAULT _gr_uuid(),
+          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           post_id     UUID NOT NULL REFERENCES marketing_posts(id) ON DELETE CASCADE,
           action      TEXT NOT NULL CHECK (action IN ('created','approved','rejected','published','failed','edited','auto_approved','scheduled')),
           actor_id    TEXT,
           details     JSONB DEFAULT '{}',
           created_at  TIMESTAMPTZ DEFAULT NOW()
-        );
+        )
+      `);
+    } catch (err) { logger.warn('marketing_post_history create warning:', err.message); }
 
+    // marketing_rules
+    try {
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS marketing_rules (
-          id          UUID PRIMARY KEY DEFAULT _gr_uuid(),
+          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           rule_name   TEXT UNIQUE NOT NULL,
           rule_type   TEXT NOT NULL CHECK (rule_type IN ('auto_approve','always_block','rate_limit','content_filter','skill_gate')),
           conditions  JSONB DEFAULT '{}',
           enabled     BOOLEAN DEFAULT true,
           created_at  TIMESTAMPTZ DEFAULT NOW(),
           updated_at  TIMESTAMPTZ DEFAULT NOW()
-        );
+        )
+      `);
+    } catch (err) { logger.warn('marketing_rules create warning:', err.message); }
 
+    // marketing_skills
+    try {
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS marketing_skills (
-          id              UUID PRIMARY KEY DEFAULT _gr_uuid(),
+          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           skill_name      TEXT UNIQUE NOT NULL,
           description     TEXT,
           category        TEXT CHECK (category IN ('content','analytics','engagement','scheduling','compliance')),
@@ -1341,19 +1362,24 @@ async function runMigrations(client) {
           enabled         BOOLEAN DEFAULT true,
           created_at      TIMESTAMPTZ DEFAULT NOW(),
           updated_at      TIMESTAMPTZ DEFAULT NOW()
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_marketing_posts_status ON marketing_posts(status);
-        CREATE INDEX IF NOT EXISTS idx_marketing_posts_platform ON marketing_posts(platform);
-        CREATE INDEX IF NOT EXISTS idx_marketing_posts_scheduled ON marketing_posts(scheduled_for) WHERE status = 'scheduled';
-        CREATE INDEX IF NOT EXISTS idx_marketing_posts_created ON marketing_posts(created_at);
-        CREATE INDEX IF NOT EXISTS idx_marketing_post_history_post ON marketing_post_history(post_id);
-        CREATE INDEX IF NOT EXISTS idx_marketing_rules_enabled ON marketing_rules(enabled) WHERE enabled = true;
-        CREATE INDEX IF NOT EXISTS idx_marketing_skills_enabled ON marketing_skills(enabled) WHERE enabled = true;
+        )
       `);
+    } catch (err) { logger.warn('marketing_skills create warning:', err.message); }
 
-      // Seed default rules
-      await client.query(`
+    // Indexes
+    try {
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_posts_status ON marketing_posts(status)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_posts_platform ON marketing_posts(platform)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_posts_scheduled ON marketing_posts(scheduled_for) WHERE status = 'scheduled'`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_posts_created ON marketing_posts(created_at)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_post_history_post ON marketing_post_history(post_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_rules_enabled ON marketing_rules(enabled) WHERE enabled = true`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_marketing_skills_enabled ON marketing_skills(enabled) WHERE enabled = true`);
+    } catch (err) { logger.warn('marketing indexes warning:', err.message); }
+
+    // Seed default rules
+    try {
+      await pool.query(`
         INSERT INTO marketing_rules (rule_name, rule_type, conditions, enabled) VALUES
           ('require_approval_all', 'always_block', '{"description":"Stage 1: all posts require human approval before publishing"}', true),
           ('rate_limit_daily', 'rate_limit', '{"max_per_day":10,"description":"Maximum 10 posts per day per platform"}', true),
@@ -1363,9 +1389,11 @@ async function runMigrations(client) {
           ('auto_approve_low_risk', 'auto_approve', '{"allowed_source_types":["market","milestone"],"min_published":50,"max_rejection_rate":0.05,"description":"Stage 2: auto-approve low-risk content types after trust threshold"}', false)
         ON CONFLICT (rule_name) DO NOTHING;
       `);
+    } catch (err) { logger.warn('marketing rules seed warning:', err.message); }
 
-      // Seed default skills
-      await client.query(`
+    // Seed default skills
+    try {
+      await pool.query(`
         INSERT INTO marketing_skills (skill_name, description, category, risk_tier, approval_mode, allowed_actions, blocked_actions) VALUES
           ('content-drafter', 'Draft social media content from farm data, market intelligence, and seasonal context', 'content', 2, 'required',
            ARRAY['draft-caption','generate-calendar','repurpose-content','summarize-performance'],
@@ -1393,11 +1421,9 @@ async function runMigrations(client) {
            ARRAY['publish-article','invent-data'])
         ON CONFLICT (skill_name) DO NOTHING;
       `);
+    } catch (err) { logger.warn('marketing skills seed warning:', err.message); }
 
-      logger.info('Marketing AI agent tables ready (migration 021)');
-    } catch (err) {
-      logger.warn('Marketing AI agent migration warning:', err.message);
-    }
+    logger.info('Marketing AI agent tables ready (migration 021)');
   }
 
   // Migration 022 – Market Intelligence + ESG scoring tables
