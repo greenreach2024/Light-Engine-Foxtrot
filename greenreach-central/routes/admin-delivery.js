@@ -61,6 +61,9 @@ router.get('/readiness', async (req, res) => {
     });
   } catch (error) {
     console.error('[Admin Delivery] Readiness check failed:', error);
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({ success: true, farms: [], summary: { total: 0, enabled: 0, ready: 0 }, message: 'Delivery tables not yet initialized' });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });

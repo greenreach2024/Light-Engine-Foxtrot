@@ -100,6 +100,17 @@ export async function initDatabase() {
 async function runMigrations(client) {
   logger.info('Running database migrations...');
 
+  // Portable UUID v4 generator — works on ALL PostgreSQL versions without extensions
+  try {
+    await client.query(`
+      CREATE OR REPLACE FUNCTION _gr_uuid() RETURNS UUID AS $$
+        SELECT md5(random()::text || ':' || clock_timestamp()::text)::uuid;
+      $$ LANGUAGE SQL VOLATILE;
+    `);
+  } catch (err) {
+    logger.warn('_gr_uuid helper creation warning:', err.message);
+  }
+
   // Create farms table
   await client.query(`
     CREATE TABLE IF NOT EXISTS farms (
@@ -983,7 +994,7 @@ async function runMigrations(client) {
     try {
       await client.query(`
         CREATE TABLE IF NOT EXISTS farm_users (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          id UUID PRIMARY KEY DEFAULT _gr_uuid(),
           farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
           email VARCHAR(255) NOT NULL,
           first_name VARCHAR(255),
@@ -1261,16 +1272,6 @@ async function runMigrations(client) {
     }
   }
 
-  // Ensure pgcrypto extension for gen_random_uuid() on PostgreSQL < 13
-  {
-    try {
-      await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-    } catch (err) {
-      // Extension may already exist or require superuser — non-fatal
-      logger.warn('pgcrypto extension check:', err.message);
-    }
-  }
-
   // Migration 021: Marketing AI Agent tables (site_settings, marketing_posts, marketing_post_history, marketing_rules, marketing_skills)
   {
     try {
@@ -1282,7 +1283,7 @@ async function runMigrations(client) {
         );
 
         CREATE TABLE IF NOT EXISTS marketing_posts (
-          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          id              UUID PRIMARY KEY DEFAULT _gr_uuid(),
           platform        TEXT NOT NULL CHECK (platform IN ('twitter','linkedin','instagram','facebook')),
           content         TEXT NOT NULL,
           image_url       TEXT,
@@ -1309,7 +1310,7 @@ async function runMigrations(client) {
         );
 
         CREATE TABLE IF NOT EXISTS marketing_post_history (
-          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          id          UUID PRIMARY KEY DEFAULT _gr_uuid(),
           post_id     UUID NOT NULL REFERENCES marketing_posts(id) ON DELETE CASCADE,
           action      TEXT NOT NULL CHECK (action IN ('created','approved','rejected','published','failed','edited','auto_approved','scheduled')),
           actor_id    TEXT,
@@ -1318,7 +1319,7 @@ async function runMigrations(client) {
         );
 
         CREATE TABLE IF NOT EXISTS marketing_rules (
-          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          id          UUID PRIMARY KEY DEFAULT _gr_uuid(),
           rule_name   TEXT UNIQUE NOT NULL,
           rule_type   TEXT NOT NULL CHECK (rule_type IN ('auto_approve','always_block','rate_limit','content_filter','skill_gate')),
           conditions  JSONB DEFAULT '{}',
@@ -1328,7 +1329,7 @@ async function runMigrations(client) {
         );
 
         CREATE TABLE IF NOT EXISTS marketing_skills (
-          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          id              UUID PRIMARY KEY DEFAULT _gr_uuid(),
           skill_name      TEXT UNIQUE NOT NULL,
           description     TEXT,
           category        TEXT CHECK (category IN ('content','analytics','engagement','scheduling','compliance')),

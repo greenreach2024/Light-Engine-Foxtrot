@@ -111,6 +111,9 @@ router.post('/generate', async (req, res) => {
     });
   } catch (error) {
     console.error('[admin-marketing] Generate error:', error);
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({ success: false, error: 'Marketing tables not yet initialized. Please restart the server or wait for migrations to complete.', posts: [], count: 0 });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -162,6 +165,9 @@ router.get('/queue', async (req, res) => {
     });
   } catch (error) {
     console.error('[admin-marketing] Queue error:', error);
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({ success: true, posts: [], total: 0, counts: {} });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -444,6 +450,15 @@ router.get('/metrics', async (req, res) => {
     });
   } catch (error) {
     console.error('[admin-marketing] Metrics error:', error);
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({
+        success: true,
+        summary: { total_published: 0, total_drafts: 0, total_approved: 0, total_rejected: 0, total_scheduled: 0, total_failed: 0, total_cost: 0, total_prompt_tokens: 0, total_output_tokens: 0 },
+        platforms: [],
+        recentPublished: [],
+        costTrend: [],
+      });
+    }
     res.status(500).json({ success: false, error: error.message });
   }
 });
