@@ -776,4 +776,24 @@ router.delete('/api/purchase/farm/:farmId', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// GET /api/purchase/farms — List all provisioned farms (admin diagnostic)
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/purchase/farms', async (req, res) => {
+  const adminKey = req.query.admin_key;
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ success: false, error: 'Database not available' });
+  }
+  try {
+    const result = await query('SELECT farm_id, name, email, contact_name, plan_type, status, setup_completed, created_at FROM farms ORDER BY created_at DESC');
+    res.json({ success: true, farms: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
