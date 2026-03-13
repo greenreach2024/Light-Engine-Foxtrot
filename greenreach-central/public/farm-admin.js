@@ -3952,6 +3952,29 @@ async function loadSettings() {
         } catch (error) {
             console.log('Setup API not available, using fallback data');
         }
+
+        // Load profile data from API (contact, name, plan)
+        let profileData = {};
+        try {
+            const headers = {};
+            if (currentSession?.token) {
+                headers['Authorization'] = `Bearer ${currentSession.token}`;
+            }
+            const profileResponse = await fetch('/api/setup/profile', { headers });
+            if (profileResponse.ok) {
+                const pResult = await profileResponse.json();
+                if (pResult.success) profileData = pResult.profile || {};
+            }
+        } catch (error) {
+            console.log('[Farm Settings] Profile API not available');
+        }
+
+        // Store plan_type for feature gating
+        if (profileData.planType) {
+            localStorage.setItem('plan_type', profileData.planType);
+        } else if (setupData.farm?.planType) {
+            localStorage.setItem('plan_type', setupData.farm.planType);
+        }
         
         // Use fallback data sources (localStorage, session)
         const storedFarmData = JSON.parse(localStorage.getItem('farmData') || '{}');
@@ -3966,6 +3989,39 @@ async function loadSettings() {
         document.getElementById('settings-farm-id').value = farmId;
         document.getElementById('settings-registration-code').value = registrationCode;
         document.getElementById('network-type').textContent = networkType;
+
+        // Populate editable profile fields
+        const farmName = profileData.name || farmData.name || setupData.farm?.name || authFarmName || '';
+        document.getElementById('settings-farm-name').value = farmName;
+        document.getElementById('settings-contact-name').value = profileData.contactName || farmData.contact?.name || '';
+        document.getElementById('settings-contact-email').value = profileData.email || farmData.contact?.email || '';
+        document.getElementById('settings-contact-phone').value = profileData.phone || farmData.contact?.phone || '';
+        document.getElementById('settings-website').value = profileData.website || farmData.contact?.website || '';
+        const city = profileData.address?.city || (typeof profileData.address === 'string' ? profileData.address : '') || profileData.location || '';
+        document.getElementById('settings-city').value = typeof city === 'object' ? (city.city || '') : city;
+
+        // Plan type badge
+        const planType = profileData.planType || setupData.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
+        const badgeEl = document.getElementById('plan-type-badge');
+        if (badgeEl) {
+            if (planType === 'edge') {
+                badgeEl.textContent = '⚡ Edge';
+                badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);';
+            } else {
+                badgeEl.textContent = '☁️ Cloud';
+                badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
+            }
+        }
+
+        // Apply feature gating after settings load
+        if (typeof applyPlanFeatureGating === 'function') {
+            applyPlanFeatureGating(planType);
+        }
+
+        // Load onboarding checklist
+        if (typeof loadOnboardingChecklist === 'function') {
+            loadOnboardingChecklist();
+        }
         
         // If we have complete setup data, use it
         if (setupData.completed) {
@@ -4374,6 +4430,53 @@ async function saveOperationDefaults() {
     } catch (error) {
         console.error('Error saving operation defaults:', error);
         showToast('Error saving operation defaults', 'error');
+    }
+}
+
+/**
+ * Save farm profile (contact/identity) to the API
+ */
+async function saveProfileSettings() {
+    try {
+        const profileData = {
+            name: document.getElementById('settings-farm-name').value.trim(),
+            contactName: document.getElementById('settings-contact-name').value.trim(),
+            email: document.getElementById('settings-contact-email').value.trim(),
+            phone: document.getElementById('settings-contact-phone').value.trim(),
+            website: document.getElementById('settings-website').value.trim(),
+            address: { city: document.getElementById('settings-city').value.trim() }
+        };
+
+        // Basic validation
+        if (profileData.email && !profileData.email.includes('@')) {
+            showToast('Please enter a valid email address', 'error');
+            return;
+        }
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentSession?.token) {
+            headers['Authorization'] = `Bearer ${currentSession.token}`;
+        }
+
+        const response = await fetch('/api/setup/profile', {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify(profileData)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showToast('Farm profile saved successfully', 'success');
+            // Update localStorage farm_name for nav header
+            if (profileData.name) {
+                localStorage.setItem('farm_name', profileData.name);
+            }
+        } else {
+            showToast(result.error || 'Failed to save profile', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        showToast('Error saving profile', 'error');
     }
 }
 

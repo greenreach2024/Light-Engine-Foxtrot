@@ -772,4 +772,344 @@ router.post('/zones', authenticateToken, async (req, res) => {
 // the first matching handler registered above at line ~209). The first handler
 // now saves all body data via farmStore and works in both DB and no-DB modes.
 
+/**
+ * GET /api/setup/profile
+ * Returns full farm profile data for the Settings page
+ */
+router.get('/profile', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+
+    // LOCAL-FARM fallback
+    if (farmId === 'LOCAL-FARM') {
+      return res.json({
+        success: true,
+        profile: {
+          farmId: 'LOCAL-FARM',
+          name: 'Local Development Farm',
+          contactName: '',
+          email: '',
+          phone: '',
+          website: '',
+          address: { street: '', city: '', province: '', country: 'CA' },
+          planType: 'edge',
+          setupCompleted: false
+        }
+      });
+    }
+
+    const pool = req.db;
+    let profile = {
+      farmId,
+      name: '',
+      contactName: '',
+      email: '',
+      phone: '',
+      website: '',
+      address: { street: '', city: '', province: '', country: 'CA' },
+      planType: 'cloud',
+      setupCompleted: false
+    };
+
+    if (pool) {
+      try {
+        const result = await pool.query(
+          `SELECT name, contact_name, email, contact_phone, plan_type, location,
+                  setup_completed, created_at
+           FROM farms WHERE farm_id = $1`,
+          [farmId]
+        );
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          profile.name = row.name || '';
+          profile.contactName = row.contact_name || '';
+          profile.email = row.email || '';
+          profile.phone = row.contact_phone || '';
+          profile.planType = row.plan_type || 'cloud';
+          profile.setupCompleted = row.setup_completed || false;
+          profile.location = row.location || '';
+          profile.createdAt = row.created_at;
+        }
+      } catch (dbErr) {
+        console.warn('[Setup Wizard] Profile DB query failed:', dbErr.message);
+      }
+    }
+
+    // Merge with farmStore data (may have website, address, etc.)
+    if (req.farmStore) {
+      try {
+        const storeProfile = await req.farmStore.get(farmId, 'farm_profile');
+        if (storeProfile) {
+          profile.website = storeProfile.website || storeProfile.contact?.website || profile.website;
+          profile.address = storeProfile.address || storeProfile.location || profile.address;
+          if (!profile.name && storeProfile.name) profile.name = storeProfile.name;
+          if (!profile.contactName && storeProfile.contact?.name) profile.contactName = storeProfile.contact.name;
+          if (!profile.email && storeProfile.contact?.email) profile.email = storeProfile.contact.email;
+          if (!profile.phone && storeProfile.contact?.phone) profile.phone = storeProfile.contact.phone;
+        }
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore profile read error:', e.message);
+      }
+    }
+
+    res.json({ success: true, profile });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Profile fetch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch profile' });
+  }
+});
+
+/**
+ * PATCH /api/setup/profile
+ * Update farm contact/profile from Settings page
+ * Accepts partial updates — only provided fields are changed
+ *
+ * Body: { name, contactName, email, phone, website, address: { street, city, province, country } }
+ */
+router.patch('/profile', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const { name, contactName, email, phone, website, address } = req.body;
+
+    const hasUpdate = name || contactName || email || phone || website || address;
+    if (!hasUpdate) {
+      return res.status(400).json({ success: false, error: 'At least one field is required' });
+    }
+
+    // Sanitize
+    const clean = {
+      name: name ? validator.escape(validator.trim(name)) : undefined,
+      contactName: contactName ? validator.escape(validator.trim(contactName)) : undefined,
+      email: email ? validator.trim(email) : undefined,
+      phone: phone ? validator.trim(phone) : undefined,
+      website: website ? validator.trim(website) : undefined,
+      address: address || undefined
+    };
+
+    // Validate email format if provided
+    if (clean.email && !validator.isEmail(clean.email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email format' });
+    }
+
+    const pool = req.db;
+    if (pool) {
+      const updates = [];
+      const values = [];
+      let p = 1;
+
+      if (clean.name) { updates.push(`name = $${p++}`); values.push(clean.name); }
+      if (clean.contactName) { updates.push(`contact_name = $${p++}`); values.push(clean.contactName); }
+      if (clean.email) { updates.push(`email = $${p++}`); values.push(clean.email); }
+      if (clean.phone) { updates.push(`contact_phone = $${p++}`); values.push(clean.phone); }
+      if (clean.address && typeof clean.address === 'object') {
+        updates.push(`location = $${p++}`);
+        values.push(typeof clean.address === 'string' ? clean.address : JSON.stringify(clean.address));
+      }
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(farmId);
+
+      if (updates.length > 1) {
+        try {
+          await pool.query(
+            `UPDATE farms SET ${updates.join(', ')} WHERE farm_id = $${p}`,
+            values
+          );
+        } catch (dbErr) {
+          console.warn('[Setup Wizard] Profile DB update failed:', dbErr.message);
+        }
+      }
+    }
+
+    // Also persist in farmStore for offline / edge use
+    if (req.farmStore) {
+      try {
+        const existing = await req.farmStore.get(farmId, 'farm_profile') || {};
+        const updated = {
+          ...existing,
+          ...(clean.name && { name: clean.name, farmName: clean.name }),
+          contact: {
+            ...(existing.contact || {}),
+            ...(clean.contactName && { name: clean.contactName }),
+            ...(clean.email && { email: clean.email }),
+            ...(clean.phone && { phone: clean.phone }),
+            ...(clean.website && { website: clean.website })
+          },
+          ...(clean.website && { website: clean.website }),
+          ...(clean.address && { address: clean.address })
+        };
+        await req.farmStore.set(farmId, 'farm_profile', updated);
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore profile write error:', e.message);
+      }
+    }
+
+    console.log('[Setup Wizard] Profile updated for farm:', farmId);
+    res.json({ success: true, message: 'Profile updated successfully' });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Profile update error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * GET /api/setup/onboarding-status
+ * Returns onboarding checklist completion status
+ */
+router.get('/onboarding-status', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    let planType = 'cloud';
+    let tasks = [];
+
+    // Gather completion data from DB and farmStore
+    let dbData = {};
+    const pool = req.db;
+    if (pool) {
+      try {
+        const farmResult = await pool.query(
+          `SELECT name, contact_name, email, plan_type, setup_completed FROM farms WHERE farm_id = $1`,
+          [farmId]
+        );
+        if (farmResult.rows.length > 0) {
+          dbData = farmResult.rows[0];
+          planType = dbData.plan_type || 'cloud';
+        }
+      } catch (e) { /* non-fatal */ }
+
+      // Count rooms
+      try {
+        const roomsResult = await pool.query('SELECT COUNT(*) as count FROM rooms WHERE farm_id = $1', [farmId]);
+        dbData.roomCount = parseInt(roomsResult.rows[0]?.count) || 0;
+      } catch (e) { dbData.roomCount = 0; }
+
+      // Count inventory items
+      try {
+        const invResult = await pool.query(
+          `SELECT COUNT(*) as count FROM inventory WHERE farm_id = $1`,
+          [farmId]
+        );
+        dbData.inventoryCount = parseInt(invResult.rows[0]?.count) || 0;
+      } catch (e) { dbData.inventoryCount = 0; }
+    }
+
+    // FarmStore data
+    let storeProfile = {};
+    let storeRoomCount = 0;
+    if (req.farmStore) {
+      try {
+        storeProfile = await req.farmStore.get(farmId, 'farm_profile') || {};
+        const storeRooms = await req.farmStore.get(farmId, 'rooms');
+        if (Array.isArray(storeRooms)) storeRoomCount = storeRooms.length;
+      } catch (e) { /* non-fatal */ }
+    }
+
+    const effectiveRoomCount = Math.max(dbData.roomCount || 0, storeRoomCount);
+
+    // Build tasks
+    tasks = [
+      {
+        id: 'setup_wizard',
+        label: 'Complete setup wizard',
+        completed: dbData.setup_completed === true || storeProfile.setup_completed === true,
+        link: '/setup-wizard.html',
+        icon: '✅'
+      },
+      {
+        id: 'farm_profile',
+        label: 'Update farm profile (contact & location)',
+        completed: !!(dbData.contact_name || storeProfile.contact?.name),
+        link: '#settings',
+        icon: '👤'
+      },
+      {
+        id: 'grow_rooms',
+        label: 'Add at least one grow room',
+        completed: effectiveRoomCount > 0,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html',
+        icon: '🌱'
+      },
+      {
+        id: 'display_prefs',
+        label: 'Set display preferences (units, timezone)',
+        completed: !!localStorage, // checked client-side
+        clientCheck: 'farmSettings',
+        link: '#settings',
+        icon: '⚙️'
+      },
+      {
+        id: 'payment_processing',
+        label: 'Configure payment processing',
+        completed: storeProfile.payment_configured === true,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html',
+        icon: '💳'
+      },
+      {
+        id: 'online_store',
+        label: 'Set up online store',
+        completed: storeProfile.store_configured === true,
+        link: '#iframe-view',
+        linkUrl: '/LE-dashboard.html',
+        icon: '🛒'
+      },
+      {
+        id: 'inventory',
+        label: 'Add inventory items',
+        completed: (dbData.inventoryCount || 0) > 0,
+        link: '#iframe-view',
+        linkUrl: '/views/farm-inventory.html',
+        icon: '📦'
+      },
+      {
+        id: 'activity_hub',
+        label: 'Install Activity Hub (iPad)',
+        completed: storeProfile.activity_hub_installed === true,
+        link: '#settings',
+        icon: '📱'
+      }
+    ];
+
+    // Add edge-only tasks
+    if (planType === 'edge') {
+      tasks.push(
+        {
+          id: 'controllers',
+          label: 'Connect light controllers',
+          completed: storeProfile.controllers_connected === true,
+          link: '#iframe-view',
+          linkUrl: '/LE-dashboard.html',
+          icon: '💡',
+          edgeOnly: true
+        },
+        {
+          id: 'bus_mapping',
+          label: 'Run bus mapping',
+          completed: storeProfile.bus_mapped === true,
+          link: '#iframe-view',
+          linkUrl: '/LE-dashboard.html',
+          icon: '🔌',
+          edgeOnly: true
+        }
+      );
+    }
+
+    const completedCount = tasks.filter(t => t.completed).length;
+
+    res.json({
+      success: true,
+      planType,
+      completedCount,
+      totalCount: tasks.length,
+      tasks
+    });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Onboarding status error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch onboarding status' });
+  }
+});
+
 export default router;

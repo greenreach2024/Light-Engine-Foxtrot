@@ -361,13 +361,27 @@
                 </p>
 
                 <!-- Device Discovery Section -->
-                <div class="card" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
+                <div class="card" id="device-discovery-section" style="margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.2);">
                     <h3 style="color: var(--accent-green); margin-bottom: 1rem;">🔍 Auto-Discover Light Controllers</h3>
                     <p style="color: var(--text-muted); margin-bottom: 1rem;">
                         Scan your network to find GROW3 and DMX light controllers automatically - no manual IP entry needed!
                     </p>
                     <div id="device-scanner-container"></div>
                     <div id="device-results" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Cloud info panel (shown instead of auto-discover for cloud users) -->
+                <div class="card" id="cloud-info-panel" style="display: none; margin-bottom: 2rem; background: rgba(59, 130, 246, 0.05); border: 2px solid rgba(59, 130, 246, 0.2);">
+                    <h3 style="color: #60a5fa; margin-bottom: 1rem;">☁️ Light Engine Cloud</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                        Light controller management requires Light Engine Edge hardware. Your Cloud plan includes environment monitoring, inventory, POS, and online sales.
+                    </p>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+                        You can still add grow rooms below for inventory tracking, planting schedules, and crop management.
+                    </p>
+                    <a href="/purchase.html?upgrade=edge" style="display: inline-block; padding: 8px 16px; background: #8b5cf6; color: white; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 500;">
+                        Upgrade to Edge →
+                    </a>
                 </div>
 
                 <div id="rooms-container"></div>
@@ -840,6 +854,31 @@
 
         // Initialize
         updateUI();
+
+        // Detect plan type and gate cloud/edge features
+        (async function detectPlanType() {
+            try {
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                const resp = await fetch('/api/setup/status', { headers });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const planType = data.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
+                    localStorage.setItem('plan_type', planType);
+
+                    if (planType === 'cloud') {
+                        // Hide auto-discover, show cloud info
+                        const discoverSection = document.getElementById('device-discovery-section');
+                        const cloudPanel = document.getElementById('cloud-info-panel');
+                        if (discoverSection) discoverSection.style.display = 'none';
+                        if (cloudPanel) cloudPanel.style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.warn('[Setup Wizard] Could not detect plan type:', e);
+            }
+        })();
         
         // Initialize device scanner
         function initDeviceScanner() {

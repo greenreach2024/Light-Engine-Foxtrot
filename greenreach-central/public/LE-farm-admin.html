@@ -3205,11 +3205,21 @@
                     <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
                 </div>
 
+                <!-- Onboarding Checklist Banner -->
+                <div id="onboarding-checklist-container" style="display: none; margin-top: 20px;"></div>
+
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Farm Profile -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Farm Profile</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Farm Profile</h2>
+                            <span id="plan-type-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;"></span>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm Name</label>
+                                <input type="text" id="settings-farm-name" placeholder="Your farm name" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm ID</label>
                                 <input type="text" id="settings-farm-id" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
@@ -3232,6 +3242,38 @@
                                         <span id="network-status" style="color: var(--accent-green);">Connected</span>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Contact Information</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Contact Name</label>
+                                <input type="text" id="settings-contact-name" placeholder="e.g., John Smith" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Email</label>
+                                <input type="email" id="settings-contact-email" placeholder="e.g., john@farm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Phone</label>
+                                <input type="tel" id="settings-contact-phone" placeholder="e.g., (555) 123-4567" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Website</label>
+                                <input type="url" id="settings-website" placeholder="e.g., https://yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">City / Region</label>
+                                <input type="text" id="settings-city" placeholder="e.g., Toronto, ON" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div style="padding-top: 8px; border-top: 1px solid var(--border);">
+                                <button class="btn" onclick="saveProfileSettings()" style="width: 100%; background: var(--accent-green); color: white; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                    Save Profile
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -3712,6 +3754,8 @@
       })();
     </script>
     <script src="/farm-admin.js?v=20260309-embedded-nav-fix"></script>
+    <script src="/js/plan-features.js?v=20260313"></script>
+    <script src="/js/onboarding-checklist.js?v=20260313"></script>
     
     <!-- Production Planning JS REMOVED — consolidated into Planting Scheduler -->
 

@@ -2831,6 +2831,17 @@ app.use('/api/farms', farmRoutes);
 app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', setupWizardRoutes); // First-time farm setup wizard
 app.use('/api/setup', setupWizardRoutes); // Legacy setup API alias used by dashboard/app.foxtrot
+
+// Device scanner endpoint — cloud stub returns empty, edge would scan network
+app.get('/api/devices/scan', authMiddleware, (req, res) => {
+  if (process.env.DEPLOYMENT_MODE === 'cloud') {
+    return res.json({ devices: [], message: 'Device scanning requires Light Engine Edge hardware.' });
+  }
+  // Edge mode: placeholder for network scan (mDNS / ARP discovery)
+  // In production edge deployment, this would use mdns/bonjour to discover controllers
+  res.json({ devices: [], message: 'No devices discovered. Ensure controllers are powered on and connected to the same network.' });
+});
+
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 
 // Path alias: frontend calls /api/inventory/tray-formats but handler is at /api/tray-formats

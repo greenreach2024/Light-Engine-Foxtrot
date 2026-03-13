@@ -25,6 +25,84 @@ class FarmAssistant {
     this.loadHistory();
     this.injectHomeButton();
     this.initNavigationTracking();
+    this.checkProactiveGreeting();
+    this.showContextHint();
+  }
+
+  /**
+   * Proactive first-time greeting — fires once if setup was completed recently (< 24 h)
+   * or if the user has never received a greeting.
+   */
+  checkProactiveGreeting() {
+    const greeted = localStorage.getItem('cheo_greeted');
+    if (greeted) return;  // Already shown
+
+    setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/setup/onboarding-status', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success) return;
+
+        const incomplete = (data.tasks || []).filter(t => !t.completed);
+        const total = data.totalCount || 0;
+        const done = data.completedCount || 0;
+
+        // Auto-expand the assistant
+        const container = document.querySelector('.assistant-container');
+        if (container && container.classList.contains('minimized')) {
+          this.toggleMinimize();
+        }
+
+        if (incomplete.length === 0) {
+          this.addMessage(
+            `🎉 Welcome back! Everything is set up and your farm is ready to grow. Ask me anything — I&rsquo;m here to help!`
+          );
+        } else {
+          const nextItems = incomplete.slice(0, 3).map(t => `${t.icon || '○'} ${t.label}`).join('<br>');
+          this.addMessage(
+            `🌱 <strong>Welcome to GreenReach Central!</strong><br>
+            I'm Cheo, your farm assistant. You've completed <strong>${done} of ${total}</strong> setup tasks.
+            <br><br>Here's what I'd suggest next:<br>${nextItems}
+            <br><br>Type <em>"what should I do next"</em> anytime to see your full checklist!`
+          );
+        }
+
+        localStorage.setItem('cheo_greeted', Date.now().toString());
+      } catch (e) {
+        console.debug('[Farm Assistant] Proactive greeting skipped:', e.message);
+      }
+    }, 2000);  // Delay 2 s so the page settles first
+  }
+
+  /**
+   * Context-aware first-visit suggestions.
+   * Shows a tooltip hint the first time user visits Inventory, POS, or Settings.
+   */
+  showContextHint() {
+    const page = this.currentContext.page;
+    const hintKey = `cheo_hint_${page.replace(/\s+/g, '_').toLowerCase()}`;
+    if (localStorage.getItem(hintKey)) return;
+
+    const hints = {
+      'Inventory': '📦 <strong>First time in Inventory?</strong> Start by adding your crops — click "Add Crop" to begin tracking what you grow.',
+      'POS Terminal': '💰 <strong>Welcome to the POS!</strong> Set up Square payment processing in Setup/Update before creating your first order.',
+      'Tray Management': '🌱 <strong>Tray Management</strong> lets you track seeding, germination, and transplanting. Add a tray to get started!',
+      'Planting Schedule': '📅 <strong>Planting Scheduler</strong> helps you plan successive plantings. Create your first planting event to begin.',
+      'Wholesale': '🏢 <strong>Wholesale Module</strong> — manage B2B orders, buyer accounts, and compliance documents here.'
+    };
+
+    const hint = hints[page];
+    if (!hint) return;
+
+    setTimeout(() => {
+      this.addMessage(hint);
+      localStorage.setItem(hintKey, Date.now().toString());
+    }, 3000);
   }
 
   initNavigationTracking() {
@@ -649,6 +727,9 @@ class FarmAssistant {
   async processQuery(query) {
     const lowerQuery = query.toLowerCase();
     
+    // Setup / onboarding queries (highest priority for new users)
+    if (await this.matchSetupQuery(lowerQuery)) return;
+
     // Fun facts (educational and engaging for kids!)
     if (this.matchFunFactRequest(lowerQuery)) return;
     
@@ -690,6 +771,127 @@ class FarmAssistant {
         <li>📅 "Show planting schedule"</li>
       </ul>`
     );
+  }
+
+  /**
+   * Setup / Onboarding query handler
+   * Responds to "how do I set up", "what should I do next", "help me get started", etc.
+   */
+  async matchSetupQuery(query) {
+    const setupPatterns = /set\s*up|get\s*started|first\s*time|new\s*here|help\s*me\s*start|onboard|getting started/i;
+    const nextPatterns = /what.*next|what.*do|todo|to-do|next\s*step/i;
+    const addRoomPattern = /add.*room|create.*room|new.*room/i;
+    const paymentPattern = /payment|square|pay|checkout/i;
+    const storePattern = /store|online.*sale|e-?commerce|shop/i;
+    const inventoryPattern = /add.*inventory|add.*stock|add.*product|manage.*inventory/i;
+    const upgradePattern = /upgrade|edge|light.*engine.*edge/i;
+    const profilePattern = /profile|contact|my.*info|update.*name|change.*email|my.*phone/i;
+
+    if (setupPatterns.test(query) || nextPatterns.test(query)) {
+      await this.showOnboardingStatus();
+      return true;
+    }
+
+    if (addRoomPattern.test(query)) {
+      this.addMessage(
+        `🌱 <strong>Adding a Grow Room</strong><br>Go to <strong>Setup/Update</strong> → <strong>Farm Setup</strong> → <strong>Grow Rooms</strong> to add your growing spaces.`,
+        'assistant',
+        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+      );
+      return true;
+    }
+
+    if (paymentPattern.test(query)) {
+      this.addMessage(
+        `💳 <strong>Payment Processing</strong><br>Go to <strong>Setup/Update</strong> to configure Square payment processing, or check <strong>Settings → Payment Methods</strong>.`,
+        'assistant',
+        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+      );
+      return true;
+    }
+
+    if (storePattern.test(query)) {
+      this.addMessage(
+        `🛒 <strong>Online Store</strong><br>Set up your farm's online store through the <strong>Setup/Update</strong> section. Customers will be able to browse and order your produce!`,
+        'assistant',
+        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+      );
+      return true;
+    }
+
+    if (inventoryPattern.test(query)) {
+      this.addMessage(
+        `📦 <strong>Inventory Management</strong><br>Head to <strong>Inventory</strong> in the sidebar to add crops and track what you're growing.`,
+        'assistant',
+        `<button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">Open Inventory</button>`
+      );
+      return true;
+    }
+
+    if (upgradePattern.test(query)) {
+      const planType = localStorage.getItem('plan_type') || 'cloud';
+      if (planType === 'edge') {
+        this.addMessage(`⚡ You're already on the <strong>Edge</strong> plan with full hardware control! All features are available to you.`);
+      } else {
+        this.addMessage(
+          `☁️ You're on the <strong>Cloud</strong> plan. Upgrading to <strong>Edge</strong> adds light control, environment management, nutrient dosing, and hardware auto-discovery.`,
+          'assistant',
+          `<button onclick="window.open('/purchase.html?upgrade=edge','_self')" class="action-btn primary">Learn about Edge</button>`
+        );
+      }
+      return true;
+    }
+
+    if (profilePattern.test(query)) {
+      this.addMessage(
+        `👤 <strong>Farm Profile</strong><br>Go to <strong>Settings</strong> to update your farm name, contact name, email, phone, and website.`,
+        'assistant',
+        `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=settings]')){window.parent.document.querySelector('[data-section=settings]').click()}else{window.location.href='/LE-farm-admin.html#settings'}" class="action-btn primary">Open Settings</button>`
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  async showOnboardingStatus() {
+    try {
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('/api/setup/onboarding-status', { headers });
+      if (!response.ok) throw new Error('Could not fetch onboarding status');
+      const data = await response.json();
+
+      if (!data.success || !data.tasks) {
+        this.addMessage(`I couldn't load your setup status. Try going to <strong>Settings</strong> to see your progress.`);
+        return;
+      }
+
+      const incomplete = data.tasks.filter(t => !t.completed);
+      const completed = data.tasks.filter(t => t.completed);
+
+      if (incomplete.length === 0) {
+        this.addMessage(
+          `🎉 <strong>You're all set!</strong> All ${data.totalCount} setup tasks are complete. Your farm is fully configured and ready to grow!`
+        );
+        return;
+      }
+
+      let nextTasks = incomplete.slice(0, 3).map(t => `<li>${t.icon || '○'} ${t.label}</li>`).join('');
+      this.addMessage(
+        `🚀 <strong>Setup Progress: ${data.completedCount} of ${data.totalCount} complete</strong>
+        <br><br>Here's what to do next:
+        <ul>${nextTasks}</ul>
+        ${incomplete.length > 3 ? `<em>...and ${incomplete.length - 3} more</em>` : ''}`,
+        'assistant',
+        `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=settings]')){window.parent.document.querySelector('[data-section=settings]').click()}else{window.location.href='/LE-farm-admin.html#settings'}" class="action-btn primary">View Full Checklist</button>`
+      );
+    } catch (error) {
+      console.error('[Farm Assistant] Onboarding status error:', error);
+      this.addMessage(`I had trouble checking your setup progress. Go to <strong>Settings</strong> to see the onboarding checklist.`);
+    }
   }
 
   matchNavigation(query) {
