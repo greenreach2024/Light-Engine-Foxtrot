@@ -4194,45 +4194,48 @@ async function scanHardware() {
  */
 async function saveSettings() {
     try {
+        const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        const chk = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+
         const settings = {
             // Display Preferences
-            tempUnit: document.getElementById('settings-temp-unit').value,
-            weightUnit: document.getElementById('settings-weight-unit').value,
-            currency: document.getElementById('settings-currency').value,
-            timezone: document.getElementById('settings-timezone').value,
+            tempUnit: val('settings-temp-unit'),
+            weightUnit: val('settings-weight-unit'),
+            currency: val('settings-currency'),
+            timezone: val('settings-timezone'),
             
             // Notifications
-            notifNewOrder: document.getElementById('notif-new-order').checked,
-            notifOrderShipped: document.getElementById('notif-order-shipped').checked,
-            notifLowInventory: document.getElementById('notif-low-inventory').checked,
-            notifHarvestReady: document.getElementById('notif-harvest-ready').checked,
-            notifEquipmentIssue: document.getElementById('notif-equipment-issue').checked,
-            notifAiRecommend: document.getElementById('notif-ai-recommend').checked,
-            notifEmail: document.getElementById('settings-notif-email').value,
+            notifNewOrder: chk('notif-new-order'),
+            notifOrderShipped: chk('notif-order-shipped'),
+            notifLowInventory: chk('notif-low-inventory'),
+            notifHarvestReady: chk('notif-harvest-ready'),
+            notifEquipmentIssue: chk('notif-equipment-issue'),
+            notifAiRecommend: chk('notif-ai-recommend'),
+            notifEmail: val('settings-notif-email'),
             
             // Integration Settings
-            greenreachSync: document.getElementById('greenreach-sync-enabled').checked,
-            greenreachEndpoint: document.getElementById('greenreach-endpoint').value,
-            apiKey: document.getElementById('settings-api-key').value,
+            greenreachSync: chk('greenreach-sync-enabled'),
+            greenreachEndpoint: val('greenreach-endpoint'),
+            apiKey: val('settings-api-key'),
             
             // System Configuration
-            autoBackup: document.getElementById('auto-backup').checked,
-            backupFrequency: document.getElementById('backup-frequency').value,
-            require2fa: document.getElementById('require-2fa').checked,
-            passwordExpiry: document.getElementById('password-expiry').checked,
-            sessionTimeout: document.getElementById('session-timeout').value,
+            autoBackup: chk('auto-backup'),
+            backupFrequency: val('backup-frequency'),
+            require2fa: chk('require-2fa'),
+            passwordExpiry: chk('password-expiry'),
+            sessionTimeout: val('session-timeout'),
             
-            defaultWS1Discount: document.getElementById('default-ws1-discount').value,
-            defaultWS2Discount: document.getElementById('default-ws2-discount').value,
-            defaultWS3Discount: document.getElementById('default-ws3-discountmarkup').value,
-            retailMarkup: document.getElementById('default-retail-markup').value,
-            lowStockThreshold: document.getElementById('low-stock-threshold').value,
+            defaultWS1Discount: val('default-ws1-discount'),
+            defaultWS2Discount: val('default-ws2-discount'),
+            defaultWS3Discount: val('default-ws3-discount'),
+            retailMarkup: val('default-retail-markup'),
+            lowStockThreshold: val('low-stock-threshold'),
             
             // API & Webhooks
-            webhookUrl: document.getElementById('webhook-url').value,
-            webhookOrders: document.getElementById('webhook-orders').checked,
-            webhookInventory: document.getElementById('webhook-inventory').checked,
-            webhookHarvest: document.getElementById('webhook-harvest').checked,
+            webhookUrl: val('webhook-url'),
+            webhookOrders: chk('webhook-orders'),
+            webhookInventory: chk('webhook-inventory'),
+            webhookHarvest: chk('webhook-harvest'),
             
             lastUpdated: new Date().toISOString()
         };
@@ -4240,24 +4243,24 @@ async function saveSettings() {
         // Save to localStorage
         localStorage.setItem('farmSettings', JSON.stringify(settings));
         
-        // In production, would also save to API:
-        // const response = await fetch('/api/farm/settings', {
-        //     method: 'POST',
-        //     headers: { 
-        //         'Content-Type': 'application/json',
-        //         'X-Farm-ID': localStorage.getItem('farmId') || 'demo-farm'
-        //     },
-        //     body: JSON.stringify(settings)
-        // });
-        // 
-        // if (!response.ok) {
-        //     throw new Error('Failed to save settings to server');
-        // }
+        // Also persist to server
+        try {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            await fetch('/data/farm-settings.json', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(settings)
+            });
+        } catch (_) { /* server save is best-effort */ }
         
-        showToast('Settings saved successfully', 'success');
+        const notify = typeof showNotification === 'function' ? showNotification : typeof showToast === 'function' ? showToast : (msg) => alert(msg);
+        notify('Settings saved successfully', 'success');
     } catch (error) {
         console.error('Error saving settings:', error);
-        showToast('Error saving settings', 'error');
+        const notify = typeof showNotification === 'function' ? showNotification : typeof showToast === 'function' ? showToast : (msg) => alert(msg);
+        notify('Error saving settings', 'error');
     }
 }
 

@@ -56,6 +56,7 @@ const FILE_TO_DATA_TYPE = {
   'light-setups.json': 'light_setups',
   'room-map.json': 'room_map',
   'switchbot-devices.json': 'switchbot_devices',
+  'farm-settings.json': 'farm_settings',
 };
 
 // Default empty responses for each data type (prevent frontend errors)
@@ -72,6 +73,7 @@ const EMPTY_DEFAULTS = {
   'light-setups.json': { lightSetups: [] },
   'room-map.json': { zones: [], devices: [] },
   'switchbot-devices.json': { devices: [], summary: null },
+  'farm-settings.json': {},
 };
 
 /**
