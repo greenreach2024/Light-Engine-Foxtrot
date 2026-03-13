@@ -1336,6 +1336,43 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Diagnostic: check marketing table existence (no auth required, read-only)
+app.get('/health/marketing-tables', async (req, res) => {
+  try {
+    const { query: dbQuery, isDatabaseAvailable } = await import('./config/database.js');
+    if (!isDatabaseAvailable()) {
+      return res.json({ status: 'no-db', tables: {} });
+    }
+    const result = await dbQuery(`
+      SELECT tablename FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename IN ('marketing_posts','marketing_rules','marketing_skills','marketing_post_history','site_settings','farm_delivery_settings','farm_delivery_zones','farm_delivery_windows')
+      ORDER BY tablename
+    `);
+    const found = result.rows.map(r => r.tablename);
+    const expected = ['marketing_posts','marketing_rules','marketing_skills','marketing_post_history','site_settings','farm_delivery_settings','farm_delivery_zones','farm_delivery_windows'];
+    const tables = {};
+    for (const t of expected) { tables[t] = found.includes(t); }
+
+    // Check if _gr_uuid function exists
+    const fnResult = await dbQuery(`SELECT routine_name FROM information_schema.routines WHERE routine_name = '_gr_uuid' AND routine_schema = 'public'`);
+
+    // Check PG version
+    const vResult = await dbQuery('SHOW server_version');
+
+    res.json({
+      status: found.length === expected.length ? 'ok' : 'missing-tables',
+      pg_version: vResult.rows[0]?.server_version,
+      _gr_uuid_exists: fnResult.rows.length > 0,
+      tables,
+      found_count: found.length,
+      expected_count: expected.length
+    });
+  } catch (error) {
+    res.json({ status: 'error', error: error.message });
+  }
+});
+
 // Version endpoint (lightweight alternative to /health)
 app.get('/api/version', (req, res) => {
   res.json({
