@@ -1205,4 +1205,47 @@ router.get('/api/purchase/farms', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// POST /api/purchase/fix-admin-role — Fix admin_users role (one-time diagnostic)
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/purchase/fix-admin-role', async (req, res) => {
+  const adminKey = req.query.admin_key;
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ success: false, error: 'Database not available' });
+  }
+  try {
+    const { email, role } = req.body;
+    if (!email || !role) {
+      return res.status(400).json({ success: false, error: 'email and role are required' });
+    }
+    const validRoles = ['admin', 'operations', 'support', 'viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ success: false, error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+    }
+
+    // Check current role
+    const current = await query('SELECT id, email, name, role FROM admin_users WHERE email = $1', [email.toLowerCase()]);
+    if (current.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Admin user not found' });
+    }
+
+    const oldRole = current.rows[0].role;
+    await query('UPDATE admin_users SET role = $1 WHERE email = $2', [role, email.toLowerCase()]);
+    
+    // Also clear any existing sessions so user gets a fresh token with the new role
+    try {
+      await query('DELETE FROM admin_sessions WHERE admin_id = $1', [current.rows[0].id]);
+    } catch (e) { /* non-critical */ }
+
+    console.log(`[Purchase] Admin role fix: ${email} changed from '${oldRole}' to '${role}'`);
+    res.json({ success: true, email, oldRole, newRole: role, message: 'Role updated. Please log out and log back in.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
