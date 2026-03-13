@@ -3,17 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Complete - Light Engine</title>
+    <title>Welcome to Light Engine - Account Created</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -25,152 +21,118 @@
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
+            max-width: 640px;
             width: 100%;
             padding: 48px;
             text-align: center;
         }
 
         .success-icon {
-            width: 80px;
-            height: 80px;
+            width: 80px; height: 80px;
             margin: 0 auto 24px;
             background: #10b981;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             animation: scaleIn 0.5s ease-out;
         }
+        .success-icon svg { width: 48px; height: 48px; stroke: white; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 
-        .success-icon svg {
-            width: 48px;
-            height: 48px;
-            stroke: white;
-            stroke-width: 3;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            fill: none;
-        }
+        @keyframes scaleIn { 0% { transform: scale(0); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-        @keyframes scaleIn {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
+        h1 { color: #1a202c; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .subtitle { color: #4a5568; font-size: 16px; margin-bottom: 24px; }
 
-        h1 {
-            color: #1a202c;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
-
-        .subtitle {
-            color: #4a5568;
-            font-size: 18px;
-            margin-bottom: 32px;
-        }
-
-        .info-box {
-            background: #f7fafc;
-            border: 2px solid #e2e8f0;
+        /* Credentials Card */
+        .credentials-card {
+            background: #f0fdf4;
+            border: 2px solid #86efac;
             border-radius: 12px;
             padding: 24px;
-            margin: 24px 0;
+            margin: 20px 0;
             text-align: left;
         }
+        .credentials-card h2 { color: #166534; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .credentials-card h2 svg { width: 20px; height: 20px; stroke: #166534; fill: none; stroke-width: 2; }
 
-        .info-box h2 {
-            color: #2d3748;
-            font-size: 20px;
-            margin-bottom: 16px;
+        .credential-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; background: white; border-radius: 8px;
+            margin-bottom: 8px; border: 1px solid #d1fae5;
         }
-
-        .info-box p {
-            color: #4a5568;
-            line-height: 1.6;
-            margin-bottom: 12px;
+        .credential-row:last-child { margin-bottom: 0; }
+        .credential-label { font-size: 13px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+        .credential-value { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 15px; color: #1a202c; font-weight: 600; user-select: all; word-break: break-all; }
+        .copy-btn {
+            background: #e5e7eb; border: none; border-radius: 6px; padding: 4px 10px;
+            font-size: 12px; cursor: pointer; color: #374151; font-weight: 500;
+            transition: all 0.2s;
         }
+        .copy-btn:hover { background: #d1d5db; }
+        .copy-btn.copied { background: #10b981; color: white; }
 
-        .info-box strong {
-            color: #1a202c;
-        }
-
+        /* Alert box */
         .alert {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 24px 0;
-            text-align: left;
+            background: #fef3c7; border-left: 4px solid #f59e0b;
+            padding: 14px 16px; border-radius: 8px; margin: 20px 0; text-align: left;
         }
+        .alert strong { color: #92400e; display: block; margin-bottom: 4px; font-size: 14px; }
+        .alert p { color: #78350f; line-height: 1.5; font-size: 14px; }
 
-        .alert strong {
-            color: #92400e;
-            display: block;
-            margin-bottom: 8px;
+        /* Email status */
+        .email-status {
+            background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+            padding: 12px 16px; margin: 16px 0; text-align: left;
+            display: flex; align-items: center; gap: 10px;
         }
+        .email-status svg { width: 20px; height: 20px; stroke: #2563eb; fill: none; stroke-width: 2; flex-shrink: 0; }
+        .email-status p { color: #1e40af; font-size: 14px; line-height: 1.4; }
+        .email-status.email-failed { background: #fef2f2; border-color: #fecaca; }
+        .email-status.email-failed svg { stroke: #dc2626; }
+        .email-status.email-failed p { color: #991b1b; }
 
-        .alert p {
-            color: #78350f;
-            line-height: 1.5;
+        /* Next Steps */
+        .next-steps {
+            background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px;
+            padding: 24px; margin: 20px 0; text-align: left;
         }
+        .next-steps h2 { color: #2d3748; font-size: 18px; margin-bottom: 16px; }
+        .step { display: flex; gap: 12px; margin-bottom: 14px; }
+        .step:last-child { margin-bottom: 0; }
+        .step-num {
+            width: 28px; height: 28px; background: #3b82f6; color: white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+        }
+        .step-text { color: #4a5568; font-size: 15px; line-height: 1.5; }
+        .step-text strong { color: #1a202c; }
 
+        /* Login URL */
+        .login-url {
+            background: #f1f5f9; border-radius: 8px; padding: 12px 16px;
+            margin: 16px 0; text-align: center; font-size: 14px; color: #475569;
+        }
+        .login-url a { color: #3b82f6; font-weight: 600; text-decoration: none; }
+        .login-url a:hover { text-decoration: underline; }
+
+        /* CTA Button */
         .button {
-            display: inline-block;
-            background: #10b981;
-            color: white;
-            padding: 16px 32px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            margin-top: 24px;
+            display: inline-block; background: #10b981; color: white;
+            padding: 16px 32px; border-radius: 8px; text-decoration: none;
+            font-weight: 600; font-size: 16px; transition: all 0.3s ease; margin-top: 16px;
+            border: none; cursor: pointer;
         }
+        .button:hover { background: #059669; transform: translateY(-2px); box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3); }
+        .button-secondary { background: #6b7280; margin-left: 12px; }
+        .button-secondary:hover { background: #4b5563; }
 
-        .button:hover {
-            background: #059669;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
-        }
+        .spinner { border: 3px solid #e2e8f0; border-top: 3px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .spinner {
-            border: 3px solid #e2e8f0;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
+        .hidden { display: none; }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .support {
-            margin-top: 32px;
-            padding-top: 32px;
-            border-top: 1px solid #e2e8f0;
-            color: #718096;
-            font-size: 14px;
-        }
-
-        .support a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        .support a:hover {
-            text-decoration: underline;
-        }
+        .support { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #718096; font-size: 13px; }
+        .support a { color: #3b82f6; text-decoration: none; }
+        .support a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -178,38 +140,126 @@
         <!-- Loading State -->
         <div id="loading">
             <div class="spinner"></div>
-            <p style="color: #4a5568; margin-top: 16px;">Verifying payment and creating your account...</p>
+            <p style="color: #94a3b8; margin-top: 16px; font-size: 16px;">Verifying payment and creating your account...</p>
         </div>
 
         <!-- Success State -->
         <div id="success" class="hidden">
             <div class="success-icon">
-                <svg viewBox="0 0 24 24">
-                    <polyline points="20 6 9 17 4 12"></polyline>
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+
+            <h1>Welcome to Light Engine!</h1>
+            <p class="subtitle">Your payment is confirmed and your farm account is ready.</p>
+
+            <!-- Credentials Card -->
+            <div class="credentials-card">
+                <h2>
+                    <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+                    Your Login Credentials
+                </h2>
+                <div class="credential-row">
+                    <div>
+                        <div class="credential-label">Farm ID</div>
+                        <div class="credential-value" id="cred-farm-id">—</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyCredential('cred-farm-id', this)">Copy</button>
+                </div>
+                <div class="credential-row">
+                    <div>
+                        <div class="credential-label">Temporary Password</div>
+                        <div class="credential-value" id="cred-password">—</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyCredential('cred-password', this)">Copy</button>
+                </div>
+                <div class="credential-row">
+                    <div>
+                        <div class="credential-label">Email</div>
+                        <div class="credential-value" id="cred-email">—</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyCredential('cred-email', this)">Copy</button>
+                </div>
+            </div>
+
+            <!-- Important Warning -->
+            <div class="alert">
+                <strong>Save these credentials now</strong>
+                <p>You will need your <strong>Farm ID</strong> and <strong>Temporary Password</strong> to log in from other devices. We've also sent these to your email.</p>
+            </div>
+
+            <!-- Email status -->
+            <div class="email-status" id="email-status">
+                <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                <p>A welcome email with your login credentials has been sent to <strong id="email-dest">your email</strong>.</p>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="next-steps">
+                <h2>Getting Started</h2>
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-text"><strong>Open Your Dashboard</strong> — Click the button below to go to your Light Engine farm admin panel. You're already logged in on this device.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-text"><strong>Set Up Your Farm</strong> — Add your grow rooms, zones, and crops from the Farm Settings section.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-text"><strong>Log In on Other Devices</strong> — Visit the login page and enter your Farm ID and temporary password shown above.</div>
+                </div>
+            </div>
+
+            <!-- Login URL reminder -->
+            <div class="login-url">
+                Login page for other devices: <a href="/farm-admin-login.html">greenreachgreens.com/farm-admin-login.html</a>
+            </div>
+
+            <!-- CTA Buttons -->
+            <div style="margin-top: 20px;">
+                <a href="/farm-admin.html" class="button" id="go-to-dashboard">Go to Your Farm Dashboard</a>
+            </div>
+
+            <div class="support">
+                <p>Need help? Contact <a href="mailto:info@greenreachfarms.com">info@greenreachfarms.com</a></p>
+            </div>
+        </div>
+
+        <!-- Existing Account State -->
+        <div id="existing-account" class="hidden">
+            <div class="success-icon" style="background: #3b82f6;">
+                <svg viewBox="0 0 24 24" style="width: 48px; height: 48px; stroke: white; stroke-width: 3; fill: none;">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
                 </svg>
             </div>
 
-            <h1>Payment Successful!</h1>
-            <p class="subtitle">Your Light Engine account is ready. Logging you in...</p>
+            <h1>Welcome Back!</h1>
+            <p class="subtitle">You already have a Light Engine account. We've logged you in.</p>
 
-            <div class="info-box">
-                <h2>What happens next?</h2>
-                <p><strong>1. Automatic Login</strong> - You're being signed in automatically.</p>
-                <p><strong>2. Setup Wizard</strong> - Complete your farm profile and create your first password.</p>
-                <p><strong>3. Configure Your Farm</strong> - Add grow rooms and zones.</p>
-                <p><strong>4. Start Growing!</strong> - Begin managing your farm operations.</p>
+            <div class="credentials-card" style="background: #eff6ff; border-color: #93c5fd;">
+                <h2 style="color: #1e40af;">
+                    <svg viewBox="0 0 24 24" style="stroke: #1e40af;"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Your Account
+                </h2>
+                <div class="credential-row" style="border-color: #bfdbfe;">
+                    <div>
+                        <div class="credential-label">Farm ID</div>
+                        <div class="credential-value" id="existing-farm-id">—</div>
+                    </div>
+                </div>
+                <div class="credential-row" style="border-color: #bfdbfe;">
+                    <div>
+                        <div class="credential-label">Farm Name</div>
+                        <div class="credential-value" id="existing-farm-name">—</div>
+                    </div>
+                </div>
             </div>
 
-            <div class="alert">
-                <strong>Note</strong>
-                <p>We've sent a backup email with login credentials for other devices. You'll set your own password in the setup wizard.</p>
-            </div>
-
-            <div class="spinner" style="margin-top: 24px;"></div>
-            <p style="color: #4a5568; margin-top: 12px;">Redirecting to your farm dashboard...</p>
+            <a href="/farm-admin.html" class="button">Go to Your Farm Dashboard</a>
 
             <div class="support">
-                <p>Didn't receive the email? Check your spam folder or <a href="mailto:info@greenreachfarms.com">contact support</a></p>
+                <p>Need help? Contact <a href="mailto:info@greenreachfarms.com">info@greenreachfarms.com</a></p>
             </div>
         </div>
 
@@ -222,53 +272,67 @@
                 </svg>
             </div>
 
-            <h1>Oops! Something went wrong</h1>
+            <h1>Something Went Wrong</h1>
             <p class="subtitle" id="errorMessage">Unable to verify payment</p>
 
-            <div class="info-box">
+            <div class="next-steps">
                 <h2>What to do:</h2>
-                <p>1. Check if payment was charged to your card</p>
-                <p>2. Wait 5 minutes and check your email</p>
-                <p>3. If issue persists, contact support with your order ID</p>
+                <div class="step">
+                    <div class="step-num" style="background: #ef4444;">1</div>
+                    <div class="step-text">Check if a payment was charged to your card</div>
+                </div>
+                <div class="step">
+                    <div class="step-num" style="background: #ef4444;">2</div>
+                    <div class="step-text">Wait a few minutes, then check your email for a confirmation</div>
+                </div>
+                <div class="step">
+                    <div class="step-num" style="background: #ef4444;">3</div>
+                    <div class="step-text">If the issue persists, contact support with your session ID</div>
+                </div>
             </div>
 
-            <a href="/purchase.html" class="button" style="background: #6b7280;">Try Again</a>
-            <a href="mailto:info@greenreachfarms.com" class="button" style="background: #3b82f6;">Contact Support</a>
+            <div style="margin-top: 20px;">
+                <a href="/purchase.html" class="button" style="background: #6b7280;">Try Again</a>
+                <a href="mailto:info@greenreachfarms.com" class="button" style="background: #3b82f6;">Contact Support</a>
+            </div>
         </div>
     </div>
 
     <script>
-        // Get session ID from URL, sessionStorage, or localStorage
+        // ── Copy to clipboard helper ──
+        function copyCredential(elementId, btn) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.textContent.trim();
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            }).catch(() => {
+                // Fallback: select text
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+            });
+        }
+
+        // ── Get session ID from URL, sessionStorage, or localStorage ──
         const urlParams = new URLSearchParams(window.location.search);
         let sessionId = urlParams.get('session_id');
-        
-        // If not in URL, try sessionStorage first (more reliable than localStorage)
+
         if (!sessionId) {
-            console.log('[Verify] Checking sessionStorage for checkoutSessionId');
             sessionId = sessionStorage.getItem('checkoutSessionId');
-            
-            if (sessionId) {
-                console.log('[Verify] Retrieved session from sessionStorage:', sessionId);
-            } else {
-                // Fall back to localStorage
-                console.log('[Verify] Checking localStorage for pendingPurchase');
+            if (!sessionId) {
                 const pendingPurchase = localStorage.getItem('pendingPurchase');
                 if (pendingPurchase) {
-                    try {
-                        const purchase = JSON.parse(pendingPurchase);
-                        sessionId = purchase.sessionId;
-                        console.log('[Verify] Retrieved session ID from localStorage:', sessionId);
-                    } catch (e) {
-                        console.error('[Verify] Failed to parse pendingPurchase from localStorage:', e);
-                    }
+                    try { sessionId = JSON.parse(pendingPurchase).sessionId; } catch (e) { /* ignore */ }
                 }
             }
-        } else {
-            console.log('[Verify] Retrieved session from URL:', sessionId);
         }
 
         if (!sessionId) {
-            showError('No payment session found. This page should only be accessed after completing payment on Square. Please return to the purchase page to start a new order.');
+            showError('No payment session found. Please return to the purchase page to start a new order.');
         } else {
             verifyPayment(sessionId);
         }
@@ -279,57 +343,64 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Clear pending purchase from localStorage and sessionStorage
+                    // Clear pending purchase state
                     localStorage.removeItem('pendingPurchase');
                     sessionStorage.removeItem('checkoutSessionId');
-                    
-                    // Store JWT token for automatic login
+
+                    // Store JWT for auto-login
                     if (data.token) {
                         localStorage.setItem('token', data.token);
+                        sessionStorage.setItem('token', data.token);
                         localStorage.setItem('farmId', data.farm_id);
-                        localStorage.setItem('farm_id', data.farm_id); // Also store as farm_id for consistency
+                        localStorage.setItem('farm_id', data.farm_id);
                         localStorage.setItem('email', data.email);
-                        localStorage.setItem('planType', data.plan_type || 'Cloud'); // Store plan type
-                        localStorage.setItem('plan_type', data.plan_type || 'Cloud'); // Also store as plan_type
-                        localStorage.setItem('isNewUser', 'true'); // Flag for first-time setup
-                        console.log('[Verify] JWT token stored, user auto-authenticated');
+                        localStorage.setItem('planType', data.plan_type || 'cloud');
+                        localStorage.setItem('plan_type', data.plan_type || 'cloud');
+                        localStorage.setItem('isNewUser', 'true');
                     }
-                    
-                    // Account created successfully
-                    setTimeout(() => {
-                        document.getElementById('loading').classList.add('hidden');
-                        document.getElementById('success').classList.remove('hidden');
-                        
-                        // Redirect to Farm Admin after 3 seconds
-                        setTimeout(() => {
-                            window.location.href = '/farm-admin.html';
-                        }, 3000);
-                    }, 1500); // Small delay for better UX
+
+                    // Hide loading
+                    document.getElementById('loading').classList.add('hidden');
+
+                    // Existing account — different UI
+                    if (data.existing_account) {
+                        document.getElementById('existing-farm-id').textContent = data.farm_id || '—';
+                        document.getElementById('existing-farm-name').textContent = data.farm_name || '—';
+                        document.getElementById('existing-account').classList.remove('hidden');
+                        return;
+                    }
+
+                    // New account — show credentials and next steps
+                    document.getElementById('cred-farm-id').textContent = data.farm_id || '—';
+                    document.getElementById('cred-password').textContent = data.temp_password || '(check your email)';
+                    document.getElementById('cred-email').textContent = data.email || '—';
+                    document.getElementById('email-dest').textContent = data.email || 'your email';
+
+                    // Show email delivery status
+                    if (data.email_sent === false) {
+                        const emailStatus = document.getElementById('email-status');
+                        emailStatus.classList.add('email-failed');
+                        emailStatus.querySelector('p').innerHTML = 
+                            'We could not send the welcome email. Please <strong>save your credentials above</strong> — you will need them to log in.';
+                    }
+
+                    document.getElementById('success').classList.remove('hidden');
+
+                    // NO auto-redirect — user must click the button after saving credentials
                 } else {
-                    // Handle specific error codes
                     let errorMsg = data.message || data.error || 'Payment verification failed';
-                    
-                    // Special handling for duplicate email (409 conflict)
-                    if (response.status === 409) {
-                        console.log('[Verify] Email already registered:', data);
-                        errorMsg = `This email address is already registered${data.existing_farm ? ' to ' + data.existing_farm : ''}. Please sign in to your existing account or use a different email address.`;
-                        
-                        // Clear the pending purchase since it can't be completed
-                        localStorage.removeItem('pendingPurchase');
-                        sessionStorage.removeItem('checkoutSessionId');
-                        
-                        // Add login link to error message
-                        setTimeout(() => {
-                            const errorDiv = document.querySelector('.error-message');
-                            if (errorDiv) {
-                                const loginLink = document.createElement('div');
-                                loginLink.style.marginTop = '20px';
-                                loginLink.innerHTML = '<a href="/login.html" class="button" style="background: #3b82f6;">Sign In to Existing Account</a>';
-                                errorDiv.appendChild(loginLink);
-                            }
-                        }, 100);
+
+                    if (response.status === 409 && data.existing_farm) {
+                        // Duplicate email — store token if provided and show existing account UI
+                        if (data.token) {
+                            localStorage.setItem('token', data.token);
+                            sessionStorage.setItem('token', data.token);
+                            localStorage.setItem('farmId', data.farm_id || data.existing_farm);
+                            localStorage.setItem('farm_id', data.farm_id || data.existing_farm);
+                        }
+                        errorMsg = `This email is already registered. Please sign in to your existing account.`;
                     }
-                    
+
                     showError(errorMsg);
                 }
             } catch (error) {
@@ -343,8 +414,6 @@
             document.getElementById('errorMessage').textContent = message;
             document.getElementById('error').classList.remove('hidden');
         }
-
-        // Auto-redirect handled in verifyPayment() success callback
     </script>
 </body>
 </html>

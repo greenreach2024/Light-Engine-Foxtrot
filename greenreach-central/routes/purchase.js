@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { sendWelcomeEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -395,6 +396,29 @@ router.get('/api/farms/verify-session/:sessionId', async (req, res) => {
     const result = await provisionFarmAndUser(session);
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
+    }
+
+    // Send welcome email for new accounts (non-blocking)
+    if (!result.existing_account && result.temp_password) {
+      try {
+        const emailResult = await sendWelcomeEmail({
+          email: result.email,
+          farmId: result.farm_id,
+          farmName: result.farm_name,
+          contactName: session.contact_name,
+          tempPassword: result.temp_password,
+          planType: result.plan_type,
+        });
+        result.email_sent = emailResult.sent;
+        if (!emailResult.sent) {
+          console.warn(`[Purchase] Welcome email failed for ${result.email}: ${emailResult.error}`);
+        }
+      } catch (emailErr) {
+        console.error(`[Purchase] Welcome email error:`, emailErr.message);
+        result.email_sent = false;
+      }
+    } else {
+      result.email_sent = false;
     }
 
     res.json(result);
