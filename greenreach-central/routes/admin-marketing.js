@@ -256,13 +256,15 @@ router.patch('/queue', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// DELETE /queue — Delete draft/rejected posts
+// DELETE /queue and DELETE /queue/:postId — Delete draft/rejected posts
+// Accept postId from: URL param, query string, or request body
+// (many proxies/ALBs strip body from DELETE requests)
 // ════════════════════════════════════════════════════════════════════
-router.delete('/queue', async (req, res) => {
+async function handleDeletePost(req, res) {
   try {
-    const { postId } = req.body;
+    const postId = req.params.postId || req.query.postId || req.body?.postId;
     if (!postId) {
-      return res.status(400).json({ success: false, error: 'postId is required' });
+      return res.status(400).json({ success: false, error: 'postId is required (pass as URL param, query param, or body)' });
     }
 
     const post = await query('SELECT status FROM marketing_posts WHERE id = $1', [postId]);
@@ -274,13 +276,17 @@ router.delete('/queue', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Only draft or rejected posts can be deleted' });
     }
 
+    // Delete history first (cascade should handle this but be explicit)
+    await query('DELETE FROM marketing_post_history WHERE post_id = $1', [postId]);
     await query('DELETE FROM marketing_posts WHERE id = $1', [postId]);
     res.json({ success: true, deleted: postId });
   } catch (error) {
     console.error('[admin-marketing] Queue DELETE error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
+}
+router.delete('/queue/:postId', handleDeletePost);
+router.delete('/queue', handleDeletePost);
 
 // ════════════════════════════════════════════════════════════════════
 // POST /publish — Publish to social platform

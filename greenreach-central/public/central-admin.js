@@ -11159,8 +11159,9 @@ async function loadMarketingDashboard() {
         console.error('[Marketing AI] Dashboard load error:', err);
     }
 
-    // Load default tab
-    switchMarketingTab('generate');
+    // Load current tab (or default to 'generate' on first load)
+    const activeTab = mktCurrentTab || 'generate';
+    switchMarketingTab(activeTab);
 }
 
 /**
@@ -11424,15 +11425,16 @@ async function marketingPostAction(postId, action) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ postId, action })
         });
-        const data = res?.ok ? await res.json() : null;
+        if (!res) { alert('Authentication error - please log in again'); return; }
+        const data = await res.json().catch(() => null);
         if (data?.success) {
             loadMarketingDashboard();
         } else {
-            alert(data?.error || `Failed to ${action} post`);
+            alert(data?.error || `Failed to ${action} post (HTTP ${res.status})`);
         }
     } catch (err) {
         console.error(`[Marketing AI] ${action} error:`, err);
-        alert(`Failed to ${action} post`);
+        alert(`Failed to ${action} post: ${err.message}`);
     }
 }
 
@@ -11491,10 +11493,9 @@ async function marketingSchedulePost(postId) {
 async function marketingDeletePost(postId) {
     if (!confirm('Delete this post?')) return;
     try {
-        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId })
+        // Use URL param — DELETE body is stripped by some proxies/ALBs
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue/${postId}`, {
+            method: 'DELETE'
         });
         const data = res?.ok ? await res.json() : null;
         if (data?.success) {
@@ -11504,6 +11505,7 @@ async function marketingDeletePost(postId) {
         }
     } catch (err) {
         console.error('[Marketing AI] Delete error:', err);
+        alert('Failed to delete post');
     }
 }
 
