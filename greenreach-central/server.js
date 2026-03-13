@@ -1360,13 +1360,25 @@ app.get('/health/marketing-tables', async (req, res) => {
     // Check PG version
     const vResult = await dbQuery('SHOW server_version');
 
+    // Try creating site_settings to diagnose the actual error
+    let createError = null;
+    if (!found.includes('site_settings')) {
+      try {
+        await dbQuery(`CREATE TABLE IF NOT EXISTS site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`);
+        createError = 'success — table created now';
+      } catch (e) {
+        createError = e.message;
+      }
+    }
+
     res.json({
       status: found.length === expected.length ? 'ok' : 'missing-tables',
       pg_version: vResult.rows[0]?.server_version,
       _gr_uuid_exists: fnResult.rows.length > 0,
       tables,
       found_count: found.length,
-      expected_count: expected.length
+      expected_count: expected.length,
+      create_test: createError
     });
   } catch (error) {
     res.json({ status: 'error', error: error.message });
