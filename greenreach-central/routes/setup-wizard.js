@@ -1102,7 +1102,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         label: 'Add at least one grow room',
         completed: effectiveRoomCount > 0,
         link: '#iframe-view',
-        linkUrl: '/LE-dashboard.html',
+        linkUrl: '/LE-dashboard.html?panel=grow-rooms',
         icon: '🌱'
       },
       {
@@ -1117,8 +1117,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         id: 'payment_processing',
         label: 'Configure payment processing',
         completed: storeProfile.payment_configured === true,
-        link: '#iframe-view',
-        linkUrl: '/LE-dashboard.html',
+        link: '#payments',
         icon: '💳'
       },
       {
@@ -1126,7 +1125,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         label: 'Set up online store',
         completed: storeProfile.store_configured === true,
         link: '#iframe-view',
-        linkUrl: '/LE-dashboard.html',
+        linkUrl: '/LE-dashboard.html?wizard=store-setup',
         icon: '🛒'
       },
       {
@@ -1164,7 +1163,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         label: 'Create first grow recipe',
         completed: storeGroupCount > 0,
         link: '#iframe-view',
-        linkUrl: '/LE-dashboard.html',
+        linkUrl: '/LE-dashboard.html?panel=groups-v2',
         icon: '📋'
       }
     ];
@@ -1177,7 +1176,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
           label: 'Connect light controllers',
           completed: storeProfile.controllers_connected === true,
           link: '#iframe-view',
-          linkUrl: '/LE-dashboard.html',
+          linkUrl: '/LE-dashboard.html?panel=iot-devices',
           icon: '💡',
           edgeOnly: true
         },
@@ -1186,7 +1185,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
           label: 'Run bus mapping',
           completed: storeProfile.bus_mapped === true,
           link: '#iframe-view',
-          linkUrl: '/LE-dashboard.html',
+          linkUrl: '/LE-dashboard.html?panel=bus-mapping',
           icon: '🔌',
           edgeOnly: true
         }

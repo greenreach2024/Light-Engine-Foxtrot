@@ -135,10 +135,20 @@ function navigateOnboardingTask(link, linkUrl) {
     return;
   }
   if (link === '#iframe-view' && linkUrl) {
-    // Navigate via the sidebar system
-    const navItem = document.querySelector(`.nav-item[data-url="${linkUrl}"]`);
+    // Extract base path for nav-item matching (strip query params)
+    const basePath = linkUrl.split('?')[0];
+    // Navigate via the sidebar system — try exact match first, then base path
+    const navItem = document.querySelector(`.nav-item[data-url="${linkUrl}"]`)
+                 || document.querySelector(`.nav-item[data-url="${basePath}"]`);
     if (navItem) {
-      navItem.click();
+      // If linkUrl has query params, use renderEmbeddedView for deep-linking
+      if (linkUrl.includes('?') && typeof renderEmbeddedView === 'function') {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        navItem.classList.add('active');
+        renderEmbeddedView(linkUrl, navItem.textContent.trim() || 'Setup');
+      } else {
+        navItem.click();
+      }
       return;
     }
   }

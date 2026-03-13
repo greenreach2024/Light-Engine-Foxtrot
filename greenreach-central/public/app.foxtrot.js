@@ -21916,6 +21916,44 @@ function initializeSidebarNavigation() {
   });
 
   setActivePanel('overview');
+
+  // Deep-link support: check for ?panel= or ?wizard= query params
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const deepPanel = params.get('panel');
+    const deepWizard = params.get('wizard');
+    if (deepPanel) {
+      // Expand the parent group and activate the panel
+      const link = document.querySelector(`[data-sidebar-link][data-target="${deepPanel}"]`);
+      if (link) {
+        const group = link.closest('.sidebar-group');
+        if (group) {
+          const trigger = group.querySelector('.sidebar-group__trigger');
+          const items = group.querySelector('.sidebar-group__items');
+          group.classList.add('is-expanded');
+          if (trigger) trigger.setAttribute('aria-expanded', 'true');
+          if (items) items.hidden = false;
+        }
+        setActivePanel(deepPanel);
+      }
+    } else if (deepWizard) {
+      const wizardBtn = document.querySelector(`[data-sidebar-link][data-wizard="${deepWizard}"]`);
+      if (wizardBtn) {
+        const group = wizardBtn.closest('.sidebar-group');
+        if (group) {
+          const trigger = group.querySelector('.sidebar-group__trigger');
+          const items = group.querySelector('.sidebar-group__items');
+          group.classList.add('is-expanded');
+          if (trigger) trigger.setAttribute('aria-expanded', 'true');
+          if (items) items.hidden = false;
+        }
+        // Trigger the wizard after a short delay to ensure DOM is ready
+        setTimeout(() => wizardBtn.click(), 200);
+      }
+    }
+  } catch (e) {
+    console.warn('[Dashboard] Deep-link navigation failed', e);
+  }
 }
 
 function ensureFieldMappingLink() {
