@@ -91,13 +91,42 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     // Hash new password
     const password_hash = await bcrypt.hash(newPassword, 10);
 
-    // Update user password and mark email as verified
-    await pool.query(
-      'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
-      [password_hash, userId]
-    );
+    // Update password in farm_users and clear must_change_password flag
+    const farmId = req.farmId;
+    const userEmail = req.userEmail;
 
-    console.log('[Setup Wizard] Password changed for user:', userId);
+    // Try farm_users first (primary auth table for purchased farms)
+    let updated = false;
+    if (farmId && userEmail) {
+      const result = await pool.query(
+        'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE farm_id = $2 AND email = $3',
+        [password_hash, farmId, userEmail]
+      );
+      updated = result.rowCount > 0;
+    }
+    
+    // Fallback: try by user ID in farm_users
+    if (!updated && userId) {
+      const result = await pool.query(
+        'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
+        [password_hash, userId]
+      );
+      updated = result.rowCount > 0;
+    }
+
+    // Legacy fallback: update users table if it exists
+    if (!updated) {
+      try {
+        await pool.query(
+          'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
+          [password_hash, userId]
+        );
+      } catch (e) {
+        // users table may not exist — that's fine
+      }
+    }
+
+    console.log('[Setup Wizard] Password changed for user:', userId, 'farm:', farmId);
 
     res.json({
       success: true,
@@ -316,6 +345,11 @@ router.post('/complete', authenticateToken, async (req, res) => {
         await pool.query(
           'UPDATE farms SET setup_completed = true, setup_completed_at = NOW(), name = COALESCE($2, name) WHERE farm_id = $1',
           [farmId, farmName || null]
+        );
+        // Also clear must_change_password for all users of this farm
+        await pool.query(
+          'UPDATE farm_users SET must_change_password = false WHERE farm_id = $1',
+          [farmId]
         );
       } catch (dbErr) {
         console.warn('[Setup Wizard] DB update failed (non-fatal):', dbErr.message);

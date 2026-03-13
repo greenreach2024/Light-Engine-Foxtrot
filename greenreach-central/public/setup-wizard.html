@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Light Engine Setup</title>
     <script>
-        window.location.replace('/LE-dashboard.html');
+        // Auth check — ensure user has a valid token
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        if (!token || token === 'local-access') {
+            window.location.replace('/farm-admin-login.html');
+        }
     </script>
     <style>
         * {
@@ -278,6 +282,9 @@
                 <div class="progress-dot active" id="dot-0"></div>
                 <div class="progress-dot" id="dot-1"></div>
                 <div class="progress-dot" id="dot-2"></div>
+                <div class="progress-dot" id="dot-3"></div>
+                <div class="progress-dot" id="dot-4"></div>
+                <div class="progress-dot" id="dot-5"></div>
             </div>
         </div>
 
@@ -292,8 +299,31 @@
             </div>
         </div>
 
-        <!-- Step 2: Farm Profile -->
+        <!-- Step 2: Set Your Password -->
         <div class="step" id="step-1">
+            <div class="step-content">
+                <h2 class="step-title">Set Your Password</h2>
+                <p class="step-description">
+                    Your account was created with a temporary password. Please set a secure password you'll remember.
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label required">New Password</label>
+                    <input type="password" class="form-input" id="new-password" placeholder="At least 8 characters" required minlength="8">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label required">Confirm Password</label>
+                    <input type="password" class="form-input" id="confirm-password" placeholder="Re-enter your password" required>
+                </div>
+
+                <div id="password-error" class="alert alert-error" style="display: none;"></div>
+                <div id="password-success" class="alert alert-success" style="display: none;">Password updated successfully!</div>
+            </div>
+        </div>
+
+        <!-- Step 3: Farm Profile -->
+        <div class="step" id="step-2">
             <div class="step-content">
                 <h2 class="step-title">Farm Profile</h2>
                 <p class="step-description">
@@ -322,8 +352,8 @@
             </div>
         </div>
 
-        <!-- Step 3: Grow Rooms -->
-        <div class="step" id="step-2">
+        <!-- Step 4: Grow Rooms -->
+        <div class="step" id="step-3">
             <div class="step-content">
                 <h2 class="step-title">Grow Rooms & Light Controllers</h2>
                 <p class="step-description">
@@ -348,8 +378,8 @@
             </div>
         </div>
 
-        <!-- Step 4: Activity Hub Setup -->
-        <div class="step" id="step-3">
+        <!-- Step 5: Activity Hub Setup -->
+        <div class="step" id="step-4">
             <div class="step-content">
                 <h2 class="step-title">📱 Activity Hub</h2>
                 <p class="step-description">
@@ -392,8 +422,8 @@
             </div>
         </div>
 
-        <!-- Step 5: Complete -->
-        <div class="step" id="step-4">
+        <!-- Step 6: Complete -->
+        <div class="step" id="step-5">
             <div class="step-content">
                 <h2 class="step-title">Setup Complete</h2>
                 <p class="step-description">
@@ -420,33 +450,49 @@
     <script src="device-scanner.js"></script>
     <script>
         let currentStep = 0;
-        const totalSteps = 5;
+        const totalSteps = 6;
         let roomCounter = 0;
         let deviceScanner = null;
         let discoveredDevices = [];
+        let passwordChanged = false;
 
-        // Extract farmId from JWT token
-        function getFarmIdFromToken() {
-            const token = localStorage.getItem('token');
-            if (!token) return null;
+        // Extract data from JWT token
+        function getDataFromToken() {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            if (!token) return {};
             
             try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                return payload.farmId;
+                return {
+                    farmId: payload.farm_id || payload.farmId,
+                    email: payload.email,
+                    name: payload.name
+                };
             } catch (e) {
                 console.error('Failed to decode token:', e);
-                return null;
+                return {};
             }
         }
 
+        const tokenData = getDataFromToken();
         const farmData = {
-            farmId: getFarmIdFromToken() || localStorage.getItem('farmId'),
-            farmName: '',
-            contactName: '',
-            contactEmail: '',
+            farmId: tokenData.farmId || localStorage.getItem('farmId') || localStorage.getItem('farm_id'),
+            farmName: localStorage.getItem('farm_name') || '',
+            contactName: tokenData.name || '',
+            contactEmail: tokenData.email || localStorage.getItem('email') || '',
             contactPhone: '',
             rooms: []
         };
+        
+        // Pre-populate farm profile fields when DOM is ready
+        setTimeout(() => {
+            const farmNameEl = document.getElementById('farm-name');
+            const contactNameEl = document.getElementById('contact-name');
+            const contactEmailEl = document.getElementById('contact-email');
+            if (farmData.farmName && farmNameEl) farmNameEl.value = farmData.farmName;
+            if (farmData.contactName && contactNameEl) contactNameEl.value = farmData.contactName;
+            if (farmData.contactEmail && contactEmailEl) contactEmailEl.value = farmData.contactEmail;
+        }, 100);
 
         function updateUI() {
             // Hide all steps
@@ -479,19 +525,22 @@
         async function nextStep() {
             // Validate current step
             if (currentStep === 1) {
-                if (!validateFarmProfile()) return;
+                // Password change step
+                if (!await validateAndChangePassword()) return;
             } else if (currentStep === 2) {
+                if (!validateFarmProfile()) return;
+            } else if (currentStep === 3) {
                 if (!validateRooms()) return;
             }
 
-            // Save and complete on last data collection step
-            if (currentStep === 2) {
+            // Save and complete on last data collection step (rooms)
+            if (currentStep === 3) {
                 await saveSetup();
             }
 
             if (currentStep < totalSteps - 1) {
                 currentStep++;
-                if (currentStep === 2 && farmData.rooms.length === 0) {
+                if (currentStep === 3 && farmData.rooms.length === 0) {
                     addRoom(); // Add default room
                 }
                 updateUI();
@@ -670,7 +719,58 @@
         }
 
         function goToDashboard() {
-            window.location.href = '/farm-admin.html';
+            window.location.href = '/LE-farm-admin.html';
+        }
+
+        async function validateAndChangePassword() {
+            const newPass = document.getElementById('new-password').value;
+            const confirmPass = document.getElementById('confirm-password').value;
+            const errorEl = document.getElementById('password-error');
+            const successEl = document.getElementById('password-success');
+            
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+
+            if (!newPass || newPass.length < 8) {
+                errorEl.textContent = 'Password must be at least 8 characters long.';
+                errorEl.style.display = 'block';
+                return false;
+            }
+            if (newPass !== confirmPass) {
+                errorEl.textContent = 'Passwords do not match.';
+                errorEl.style.display = 'block';
+                return false;
+            }
+
+            // If already changed this session, skip API call
+            if (passwordChanged) return true;
+
+            try {
+                const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+                const response = await fetch('/api/setup-wizard/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ newPassword: newPass })
+                });
+                
+                const data = await response.json();
+                if (!data.success) {
+                    errorEl.textContent = data.error || 'Failed to update password.';
+                    errorEl.style.display = 'block';
+                    return false;
+                }
+
+                passwordChanged = true;
+                successEl.style.display = 'block';
+                return true;
+            } catch (err) {
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.style.display = 'block';
+                return false;
+            }
         }
 
         // Activity Hub functions
@@ -782,12 +882,12 @@
             mutations.forEach((mutation) => {
                 if (mutation.target.classList.contains('active')) {
                     const stepId = mutation.target.id;
-                    if (stepId === 'step-2') {
+                    if (stepId === 'step-3') {
                         // Initialize device scanner when room setup step loads
                         if (!deviceScanner) {
                             initDeviceScanner();
                         }
-                    } else if (stepId === 'step-3') {
+                    } else if (stepId === 'step-4') {
                         generateActivityHubQR();
                     }
                 }

@@ -337,8 +337,15 @@ async function handleLogin(e) {
             
             showAlert('success', 'Login successful! Redirecting...');
             
+            // Check if user needs first-time setup (password change + farm profile)
+            const needsSetup = data.mustChangePassword || data.setupCompleted === false;
+            
             setTimeout(() => {
-                window.location.href = getPostLoginRedirectPath();
+                if (needsSetup) {
+                    window.location.href = '/setup-wizard.html';
+                } else {
+                    window.location.href = getPostLoginRedirectPath();
+                }
             }, 1000);
             
         } else {
@@ -4466,20 +4473,10 @@ let setupData = {
  * Check if first-time setup is needed
  */
 async function checkFirstTimeSetup() {
-    return;
     try {
-        // Cloud users use standalone wizard (redirected from login.html)
-        // Only check for embedded wizard on edge devices
-        const planType = (localStorage.getItem('planType') || 'cloud').toLowerCase();
-        
-        if (planType === 'cloud') {
-            console.log('[setup-wizard] Cloud user - skipping embedded wizard check (uses standalone wizard)');
-            return;
-        }
-        
-        const token = localStorage.getItem('token');
-        if (!token) {
-            console.log('[setup-wizard] No token found, skipping setup check');
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token || token === 'local-access') {
+            console.log('[setup-wizard] No real token, skipping setup check');
             return;
         }
         
@@ -4487,7 +4484,7 @@ async function checkFirstTimeSetup() {
         const urlParams = new URLSearchParams(window.location.search);
         const forceWizard = urlParams.get('wizard') === 'true' || urlParams.get('setup') === 'true';
         
-        // Always check API status (don't trust localStorage alone)
+        // Check API status
         const response = await fetch('/api/setup-wizard/status', {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -4497,21 +4494,17 @@ async function checkFirstTimeSetup() {
         const data = await response.json();
         console.log('[setup-wizard] API status:', data);
         
-        // If API says setup NOT complete, clear any stale localStorage and show wizard
+        // If setup not complete or force wizard, redirect to standalone wizard
         if (!data.setupCompleted || forceWizard) {
-            // Clear stale localStorage flags
-            localStorage.removeItem('setup_completed');
-            
-            console.log('[setup-wizard] Showing wizard - setupCompleted:', data.setupCompleted, 'forceWizard:', forceWizard);
-            showFirstTimeSetup();
-        } else {
-            // Mark as completed in localStorage to prevent future wizard displays
-            localStorage.setItem('setup_completed', 'true');
-            console.log('[setup-wizard] Setup already completed');
+            console.log('[setup-wizard] Setup not complete, redirecting to wizard');
+            window.location.href = '/setup-wizard.html';
+            return;
         }
+        
+        console.log('[setup-wizard] Setup already completed');
     } catch (error) {
         console.error('[setup-wizard] Setup status check failed:', error);
-        // Don't show wizard on error - prevents annoying users
+        // Don't redirect on error — prevents annoying users
     }
 }
 

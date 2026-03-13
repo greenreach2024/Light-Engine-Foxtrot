@@ -105,9 +105,11 @@ router.post('/login', async (req, res) => {
             fu.password_hash,
             COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
             fu.role,
+            COALESCE(fu.must_change_password, false) as must_change_password,
             CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
             f.name as farm_name,
-            f.status as farm_status
+            f.status as farm_status,
+            COALESCE(f.setup_completed, false) as setup_completed
           FROM farm_users fu
           JOIN farms f ON fu.farm_id = f.farm_id
           WHERE fu.email = $1
@@ -125,9 +127,11 @@ router.post('/login', async (req, res) => {
             fu.password_hash,
             COALESCE(fu.first_name || ' ' || fu.last_name, fu.first_name, fu.email) as name,
             fu.role,
+            COALESCE(fu.must_change_password, false) as must_change_password,
             CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
             f.name as farm_name,
-            f.status as farm_status
+            f.status as farm_status,
+            COALESCE(f.setup_completed, false) as setup_completed
           FROM farm_users fu
           JOIN farms f ON fu.farm_id = f.farm_id
           WHERE fu.farm_id = $1
@@ -257,6 +261,8 @@ router.post('/login', async (req, res) => {
       name: user.name,
       role: user.role || FARM_ROLES.ADMIN,
       planType: 'cloud',
+      must_change_password: user.must_change_password || false,
+      setup_completed: user.setup_completed || false,
       expires_in: JWT_EXPIRES_IN
     });
 

@@ -2811,7 +2811,9 @@ app.post('/api/farm/auth/login', (req, res, next) => {
         farmName: data.farm_name || data.name || data.farm_id,
         email: data.email,
         role: data.role,
-        planType: data.planType || 'cloud'
+        planType: data.planType || 'cloud',
+        mustChangePassword: data.must_change_password || false,
+        setupCompleted: data.setup_completed || false
       });
     }
     return origJson({

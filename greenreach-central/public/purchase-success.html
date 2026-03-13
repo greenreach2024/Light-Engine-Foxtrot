@@ -198,11 +198,11 @@
                 <h2>Getting Started</h2>
                 <div class="step">
                     <div class="step-num">1</div>
-                    <div class="step-text"><strong>Open Your Dashboard</strong> — Click the button below to go to your Light Engine farm admin panel. You're already logged in on this device.</div>
+                    <div class="step-text"><strong>Complete Setup</strong> — Click the button below to start the setup wizard. You'll set a permanent password and configure your farm profile.</div>
                 </div>
                 <div class="step">
                     <div class="step-num">2</div>
-                    <div class="step-text"><strong>Set Up Your Farm</strong> — Add your grow rooms, zones, and crops from the Farm Settings section.</div>
+                    <div class="step-text"><strong>Configure Your Farm</strong> — Add your grow rooms, zones, and light controllers during the guided setup.</div>
                 </div>
                 <div class="step">
                     <div class="step-num">3</div>
@@ -217,7 +217,7 @@
 
             <!-- CTA Buttons -->
             <div style="margin-top: 20px;">
-                <a href="/farm-admin.html" class="button" id="go-to-dashboard">Go to Your Farm Dashboard</a>
+                <a href="/setup-wizard.html" class="button" id="go-to-dashboard">Start Farm Setup</a>
             </div>
 
             <div class="support">
@@ -256,7 +256,7 @@
                 </div>
             </div>
 
-            <a href="/farm-admin.html" class="button">Go to Your Farm Dashboard</a>
+            <a href="/LE-farm-admin.html" class="button">Go to Your Farm Dashboard</a>
 
             <div class="support">
                 <p>Need help? Contact <a href="mailto:info@greenreachfarms.com">info@greenreachfarms.com</a></p>
@@ -357,6 +357,7 @@
                         localStorage.setItem('planType', data.plan_type || 'cloud');
                         localStorage.setItem('plan_type', data.plan_type || 'cloud');
                         localStorage.setItem('isNewUser', 'true');
+                        if (data.farm_name) localStorage.setItem('farm_name', data.farm_name);
                     }
 
                     // Hide loading

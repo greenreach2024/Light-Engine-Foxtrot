@@ -516,13 +516,14 @@ async function provisionFarmAndUser(session) {
     const lastName = nameParts.slice(1).join(' ') || '';
 
     await query(
-      `INSERT INTO farm_users (id, farm_id, email, first_name, last_name, role, password_hash, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'admin', $6, 'active', NOW(), NOW())
+      `INSERT INTO farm_users (id, farm_id, email, first_name, last_name, role, password_hash, status, must_change_password, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'admin', $6, 'active', true, NOW(), NOW())
        ON CONFLICT (farm_id, email) DO UPDATE SET
          first_name = EXCLUDED.first_name,
          last_name = EXCLUDED.last_name,
          role = 'admin',
          password_hash = EXCLUDED.password_hash,
+         must_change_password = true,
          updated_at = NOW()`,
       [crypto.randomUUID(), farmId, email.toLowerCase(), firstName, lastName, passwordHash]
     );
@@ -719,6 +720,60 @@ router.get('/api/purchase/status', async (req, res) => {
   }
 
   res.json(status);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DELETE /api/purchase/farm/:farmId — Delete a test farm and its user
+// (admin diagnostic endpoint — requires admin_key query param)
+// ═══════════════════════════════════════════════════════════════
+router.delete('/api/purchase/farm/:farmId', async (req, res) => {
+  const { farmId } = req.params;
+  const adminKey = req.query.admin_key;
+
+  // Simple admin key check (use JWT_SECRET as admin key)
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+
+  if (!farmId || !farmId.startsWith('FARM-')) {
+    return res.status(400).json({ success: false, error: 'Invalid farm ID format' });
+  }
+
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ success: false, error: 'Database not available' });
+  }
+
+  try {
+    // Delete in order: farm_users → checkout_sessions → payment_records → farms
+    const results = {};
+
+    try {
+      const r = await query('DELETE FROM farm_users WHERE farm_id = $1', [farmId]);
+      results.farm_users_deleted = r.rowCount;
+    } catch (e) { results.farm_users_error = e.message; }
+
+    try {
+      const r = await query('DELETE FROM checkout_sessions WHERE provisioned_farm_id = $1', [farmId]);
+      results.checkout_sessions_deleted = r.rowCount;
+    } catch (e) { results.checkout_sessions_error = e.message; }
+
+    try {
+      const r = await query('DELETE FROM payment_records WHERE metadata::text LIKE $1', [`%${farmId}%`]);
+      results.payment_records_deleted = r.rowCount;
+    } catch (e) { results.payment_records_error = e.message; }
+
+    try {
+      const r = await query('DELETE FROM farms WHERE farm_id = $1', [farmId]);
+      results.farms_deleted = r.rowCount;
+    } catch (e) { results.farms_error = e.message; }
+
+    console.log(`[Purchase] Farm deleted: ${farmId}`, results);
+    res.json({ success: true, farmId, results });
+  } catch (error) {
+    console.error('[Purchase] Farm delete error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 export default router;

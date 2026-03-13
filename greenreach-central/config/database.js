@@ -1491,6 +1491,16 @@ async function runMigrations(client) {
     }
   }
 
+  // Migration 023: Add must_change_password to farm_users + setup_completed to farms
+  try {
+    await pool.query(`ALTER TABLE farm_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS setup_completed BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS setup_completed_at TIMESTAMPTZ`);
+    logger.info('must_change_password + setup_completed columns ready (migration 023)');
+  } catch (err) {
+    logger.warn('Migration 023 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
