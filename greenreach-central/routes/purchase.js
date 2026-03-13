@@ -1140,6 +1140,52 @@ router.post('/api/purchase/webhook', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// PATCH /api/purchase/farm/:farmId — Update farm details (admin)
+// ═══════════════════════════════════════════════════════════════
+router.patch('/api/purchase/farm/:farmId', async (req, res) => {
+  const adminKey = req.query.admin_key;
+  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+  if (adminKey !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
+  const { farmId } = req.params;
+  const { name, contact_name, email } = req.body;
+
+  if (!isDatabaseAvailable()) {
+    return res.status(503).json({ success: false, error: 'Database not available' });
+  }
+  try {
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (name) { updates.push(`name = $${idx++}`); values.push(name); }
+    if (contact_name) { updates.push(`contact_name = $${idx++}`); values.push(contact_name); }
+    if (email) { updates.push(`email = $${idx++}`); values.push(email.toLowerCase()); }
+    updates.push(`updated_at = NOW()`);
+
+    if (updates.length <= 1) {
+      return res.status(400).json({ success: false, error: 'No fields to update' });
+    }
+
+    values.push(farmId);
+    const result = await query(
+      `UPDATE farms SET ${updates.join(', ')} WHERE farm_id = $${idx}`,
+      values
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'Farm not found' });
+    }
+
+    console.log(`[Purchase] Farm ${farmId} updated:`, { name, contact_name, email });
+    res.json({ success: true, farmId, updated: { name, contact_name, email } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/purchase/farms — List all provisioned farms (admin diagnostic)
 // ═══════════════════════════════════════════════════════════════
 router.get('/api/purchase/farms', async (req, res) => {
