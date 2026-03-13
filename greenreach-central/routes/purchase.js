@@ -148,6 +148,17 @@ async function ensureTables() {
   if (_tablesReady) return;
   await ensureCheckoutTable();
   await ensureLeadsTable();
+  
+  // Ensure farm_users + farms columns from migration 023 exist
+  try {
+    await query(`ALTER TABLE farm_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false`);
+    await query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS setup_completed BOOLEAN DEFAULT false`);
+    await query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS setup_completed_at TIMESTAMPTZ`);
+    console.log('[Purchase] Migration 023 columns verified');
+  } catch (e) {
+    console.warn('[Purchase] Migration 023 column check:', e.message);
+  }
+  
   _tablesReady = true;
 }
 ensureCheckoutTable().catch(() => {});
