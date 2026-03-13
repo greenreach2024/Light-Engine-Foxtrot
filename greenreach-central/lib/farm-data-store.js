@@ -24,8 +24,13 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import logger from '../utils/logger.js';
+
+// JWT secret for token parsing (same logic as middleware/farm-data.js)
+const _JWT_SECRET = process.env.JWT_SECRET || randomBytes(32).toString('hex');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -280,6 +285,20 @@ async function getGlobal(fileName) {
 function farmIdFromReq(req) {
   // Already extracted by auth middleware
   if (req.farmId) return req.farmId;
+
+  // Authorization: Bearer <token> — parse JWT for farm_id
+  // (This handler may run before the farmId-resolution middleware,
+  //  so we must parse the token ourselves to get the correct farm ID.)
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(authHeader.substring(7), _JWT_SECRET, {
+        issuer: 'greenreach-central',
+        audience: 'greenreach-farms'
+      });
+      if (payload.farm_id) return payload.farm_id;
+    } catch (_) { /* token invalid/expired — fall through */ }
+  }
 
   // X-Farm-ID header
   if (req.headers['x-farm-id']) return req.headers['x-farm-id'];

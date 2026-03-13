@@ -1099,7 +1099,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       {
         id: 'display_prefs',
         label: 'Set display preferences (units, timezone)',
-        completed: !!localStorage, // checked client-side
+        completed: false, // deferred to client-side check
         clientCheck: 'farmSettings',
         link: '#settings',
         icon: '⚙️'

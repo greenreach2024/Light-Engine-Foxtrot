@@ -55,6 +55,7 @@ const FILE_TO_DATA_TYPE = {
   'plans.json': 'plans',
   'light-setups.json': 'light_setups',
   'room-map.json': 'room_map',
+  'switchbot-devices.json': 'switchbot_devices',
 };
 
 // Default empty responses for each data type (prevent frontend errors)
@@ -70,6 +71,7 @@ const EMPTY_DEFAULTS = {
   'plans.json': { plans: [] },
   'light-setups.json': { lightSetups: [] },
   'room-map.json': { zones: [], devices: [] },
+  'switchbot-devices.json': { devices: [], summary: null },
 };
 
 /**

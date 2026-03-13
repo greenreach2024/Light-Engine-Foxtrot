@@ -37,7 +37,7 @@ import inventoryMgmtRoutes from './routes/inventory-mgmt.js';
 import ordersRoutes from './routes/orders.js';
 import alertsRoutes from './routes/alerts.js';
 import syncRoutes from './routes/sync.js';
-import { hydrateFromDatabase, getInMemoryStore } from './routes/sync.js';
+import { hydrateFromDatabase, migrateDefaultFarmData, getInMemoryStore } from './routes/sync.js';
 import wholesaleRoutes from './routes/wholesale.js';
 import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // NOTE: farm-stripe-setup.js lives at root level and can't resolve express
@@ -4282,6 +4282,9 @@ async function startServer() {
       if (hydrationResult.hydrated) {
         logger.info(`[SaaS] Hydrated ${hydrationResult.datasets} datasets for ${hydrationResult.farms} farm(s)`);
       }
+
+      // Migrate data stored under farm_id='default' to the real farm ID
+      await migrateDefaultFarmData();
       
       // Seed demo farm data in development
       if (process.env.NODE_ENV !== 'production') {

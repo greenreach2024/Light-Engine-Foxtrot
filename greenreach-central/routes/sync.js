@@ -103,6 +103,65 @@ export async function hydrateFromDatabase() {
 }
 
 /**
+ * One-time migration: move farm_data rows stored under farm_id='default'
+ * to the correct farm ID. This fixes data written before farmIdFromReq
+ * was updated to parse JWT tokens.
+ */
+export async function migrateDefaultFarmData() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    // Find all data stored under 'default'
+    const defaultRows = await query(
+      `SELECT data_type, data FROM farm_data WHERE farm_id = 'default'`
+    );
+    if (defaultRows.rows.length === 0) return;
+
+    // Find the real farm ID(s) from the farms table
+    const farmsResult = await query(`SELECT farm_id FROM farms LIMIT 10`);
+    if (farmsResult.rows.length === 0) {
+      logger.warn('[Migration] No farms found in DB — skipping default data migration');
+      return;
+    }
+
+    // For single-farm setups, migrate to the one farm. For multi-farm,
+    // only migrate if there's exactly one farm (can't guess which one).
+    const farmIds = farmsResult.rows.map(r => r.farm_id).filter(id => id && id !== 'default');
+    if (farmIds.length !== 1) {
+      logger.info(`[Migration] ${farmIds.length} farms found — skipping ambiguous default data migration`);
+      return;
+    }
+
+    const realFarmId = farmIds[0];
+    let migrated = 0;
+
+    for (const row of defaultRows.rows) {
+      // Only migrate if no data exists under the real farm ID for this data_type
+      const existing = await query(
+        `SELECT 1 FROM farm_data WHERE farm_id = $1 AND data_type = $2`,
+        [realFarmId, row.data_type]
+      );
+      if (existing.rows.length === 0) {
+        await query(
+          `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+           VALUES ($1, $2, $3, NOW())`,
+          [realFarmId, row.data_type, JSON.stringify(row.data)]
+        );
+        migrated++;
+        logger.info(`[Migration] Copied default/${row.data_type} → ${realFarmId}`);
+      }
+    }
+
+    // Clean up default rows after successful migration
+    if (migrated > 0) {
+      await query(`DELETE FROM farm_data WHERE farm_id = 'default'`);
+      logger.info(`[Migration] Migrated ${migrated} data set(s) from 'default' to '${realFarmId}', cleaned up default rows`);
+    }
+  } catch (err) {
+    logger.warn('[Migration] Default farm data migration failed (non-fatal):', err.message);
+  }
+}
+
+/**
  * Get the in-memory store reference (used by farm-data middleware).
  */
 export function getInMemoryStore() {
