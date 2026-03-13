@@ -141,9 +141,16 @@ async function ensureLeadsTable() {
   }
 }
 
-// Initialize tables on import
-ensureCheckoutTable();
-ensureLeadsTable();
+// Initialize tables on import (best-effort) and track if done
+let _tablesReady = false;
+async function ensureTables() {
+  if (_tablesReady) return;
+  await ensureCheckoutTable();
+  await ensureLeadsTable();
+  _tablesReady = true;
+}
+ensureCheckoutTable().catch(() => {});
+ensureLeadsTable().catch(() => {});
 
 // ═══════════════════════════════════════════════════════════════
 // Plan definitions (internal — not exposed publicly)
@@ -173,6 +180,7 @@ const PLANS = {
 // ═══════════════════════════════════════════════════════════════
 router.post('/api/farms/create-checkout-session', async (req, res) => {
   try {
+    await ensureTables();
     const { plan, farm_name, contact_name, email, farm_id } = req.body;
 
     // Validate required fields
@@ -287,6 +295,7 @@ router.post('/api/farms/create-checkout-session', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 router.get('/api/farms/verify-session/:sessionId', async (req, res) => {
   try {
+    await ensureTables();
     const { sessionId } = req.params;
     if (!sessionId) {
       return res.status(400).json({ success: false, error: 'Session ID is required' });
@@ -584,6 +593,7 @@ router.post('/api/farms/verify-id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 router.post('/api/purchase/leads', async (req, res) => {
   try {
+    await ensureTables();
     const { farmName, contactName, email, plan, farmId } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, error: 'Email is required' });
