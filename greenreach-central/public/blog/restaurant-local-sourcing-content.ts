@@ -1,0 +1,63 @@
+export const restaurantLocalSourcingContent = `
+<p>There's a version of "locally sourced" that's become a menu cliché — a line item that sounds good but means little. The produce comes from a distributor who may have bought it from a regional packer who sourced it from a farm three provinces away. The word "local" stretches until it breaks.</p>
+
+<p>And then there's the version that actually changes what's on the plate: produce harvested within 50 kilometres, within the last 48 hours, with the farm's name and harvest date attached. That version is rare — and increasingly, it's what the customers who choose independent restaurants are looking for.</p>
+
+<h2>The Real Differentiation Problem for Independent Restaurants</h2>
+
+<p>Independent restaurants compete on food quality, atmosphere, and experience. They cannot compete on price with chains. They cannot match the marketing budgets of national brands. What they can offer — and what chains structurally cannot — is authenticity.</p>
+
+<p>The problem is that "authentic" has also been commodified. Every chain restaurant now has a "farm-to-table" story somewhere in their branding. Consumers have grown appropriately skeptical.</p>
+
+<p>What cuts through skepticism is specificity. Not "we source locally when possible" — but "the butter lettuce in this salad was grown at [Farm], 18 kilometres from this kitchen, and harvested yesterday morning." That claim is verifiable. It's concrete. It's the kind of thing a guest mentions to the person they came with, and then mentions again when they recommend the restaurant.</p>
+
+<p>Local vertical farm produce gives you that specificity — because the traceability is built into how the product is grown and sold.</p>
+
+<h2>Why Vertically Farmed Produce Is a Menu Differentiator</h2>
+
+<p>Vertically farmed produce isn't just a sourcing decision. It's a different product with properties that matter to restaurants specifically.</p>
+
+<p><strong>Consistency, week after week.</strong> Field crops are seasonal. Weather affects flavor, texture, and availability. A drought year means different lettuce than a wet year. Vertically farmed crops are grown in controlled environments — the same light spectrum, the same temperature, the same nutrient profile — every cycle, regardless of what's happening outside. The product your kitchen receives in February is the same product you'll receive in July.</p>
+
+<p><strong>Extended shelf life from the buyer's side.</strong> Because vertically farmed produce reaches you within 24–72 hours of harvest (rather than 10–21 days post-harvest for most imported field produce), it has significantly more shelf life remaining when it arrives. Less waste, fewer unexpected substitutions on busy service nights.</p>
+
+<p><strong>No pesticide residue.</strong> The controlled growing environment eliminates the need for pesticides entirely. For chefs who wash and plate greens without heavy processing, this matters. For restaurants marketing clean, minimally processed food, it's a genuine claim rather than a hoped-for one.</p>
+
+<p><strong>Varieties that don't exist in distributor catalogs.</strong> Vertical farms can grow specialized varieties — particular lettuce cultivars, unusual herbs, specialty microgreens — that don't survive the logistics of long-haul distribution. When a vertical farm partner grows something specifically for your kitchen, you have a product that is genuinely not available to the chain restaurant down the street.</p>
+
+<h2>Telling the Story at the Table</h2>
+
+<p>The sourcing decision only delivers its full value if the story reaches the guest. Here's where most restaurants leave the most value uncaptured — they make a great sourcing decision and then say nothing about it.</p>
+
+<p>The story doesn't need to be elaborate. It needs to be specific and true.</p>
+
+<p><strong>On the menu:</strong> "Butter lettuce from [Farm Name], [City] — harvested [day]." That's it. Four words more than a generic salad description, and they change how the dish lands.</p>
+
+<p><strong>In server training:</strong> When a guest asks about a dish featuring locally sourced produce, your server should be able to say: "The greens come from a vertical farm about 20 minutes from here — they're grown without pesticides and we get them the day after harvest." That's one sentence. It's confident, factual, and it makes an impression.</p>
+
+<p><strong>On social media:</strong> A photo of the actual product with the farm name and distance from your restaurant is content that performs well because it's verifiable and unusual. "We picked up this week's butter lettuce from [Farm], 15km away" is more interesting than a standard dish photo — and it tags a partner who will share it.</p>
+
+<p><strong>At the pass:</strong> If your kitchen does any kind of open-kitchen interaction or tableside presentation, incorporating the provenance of what's on the plate is an opportunity that chains cannot replicate. A guest who hears a chef describe where an ingredient came from — by name, by distance — becomes an advocate.</p>
+
+<h2>The Economics of Premium Positioning</h2>
+
+<p>There's a straightforward financial argument here that often gets overlooked in conversations about "supporting local."</p>
+
+<p>When you source vertically farmed produce directly through a wholesale marketplace, you're typically paying less than retail and somewhat more than rock-bottom commodity pricing — but you're buying a product that justifies a higher menu price. The margin math often works in your favour: a premium ingredient that supports a premium dish price.</p>
+
+<p>More concretely: a restaurant that sources locally and tells that story credibly can price the relevant dishes 10–20% higher than a comparable dish at a chain, and guests will pay it. They're not just paying for the food — they're paying for the experience, the authenticity, and the story. Local vertical farm produce, when it's framed correctly, delivers all three.</p>
+
+<p>The restaurants that do this well don't treat local sourcing as a cost centre. They treat it as part of the product they're selling — and they price accordingly.</p>
+
+<h2>Finding Vertical Farm Partners Near You</h2>
+
+<p>The practical obstacle has always been discovery and logistics. Finding a farm, negotiating terms, managing a direct relationship alongside everything else a restaurant manages — it adds up.</p>
+
+<p>The GreenReach wholesale marketplace removes most of that friction. You browse available inventory from farms in your region, see harvest dates and upcoming availability for menu planning, place orders directly, and receive product within 24–72 hours of harvest. The traceability documentation — farm name, harvest date, batch records — comes with the order.</p>
+
+<p>No broker. No distributor markup. Direct pricing that reflects the actual cost of growing premium, local produce — not the cost of moving it across a continent.</p>
+
+<p>If your restaurant's identity is built around quality, authenticity, and the kind of experience chains cannot replicate, local vertical farm sourcing is one of the clearest expressions of that identity you can put on a plate.</p>
+
+<p><a href="/wholesale-landing.html">Browse the GreenReach wholesale marketplace</a> or <a href="mailto:wholesale@greenreachfarms.com">get in touch</a> to find out which farms are operating in your area.</p>
+`;

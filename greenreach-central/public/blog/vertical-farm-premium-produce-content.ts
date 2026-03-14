@@ -1,0 +1,125 @@
+export const verticalFarmPremiumProduceContent = `
+<p>Somewhere along the way, produce became a commodity. A head of lettuce is a head of lettuce. A bunch of basil is a bunch of basil. The goal became price and availability, not quality or origin.</p>
+
+<p>That framing made sense when produce was uniformly undifferentiated — when everything came from the same centralized supply chain and there was genuinely nothing meaningful to say about it. That's no longer true.</p>
+
+<p>Vertically farmed produce grown locally is a fundamentally different product from field-grown imports. The difference isn't marketing language. It's physics, chemistry, and time.</p>
+
+<h2>The Problem With the Standard Produce Supply Chain</h2>
+
+<p>The conventional produce supply chain was designed for one thing: moving large volumes of perishable product across long distances at low cost. It's remarkably effective at that specific job.</p>
+
+<p>What it cannot do is deliver freshness. Not because the logistics operators don't try — they do — but because the physics of time and biology work against them. A head of lettuce harvested in California and shipped to Ontario has been cut off from its roots for 10 to 21 days by the time it reaches a consumer. Cellular degradation starts at harvest. Nothing in the cold chain stops it; it only slows it.</p>
+
+<p>The result is produce that is technically safe and edible, but nutritionally and texturally diminished from what it was at harvest. Consumers buying field-grown imports are buying the product of a supply chain, not a farm.</p>
+
+<h2>What Makes Vertically Farmed Produce Different</h2>
+
+<p>Vertical farms are controlled environment facilities — sealed growing rooms where every variable that affects plant development is managed precisely: light spectrum and intensity, temperature, humidity, CO₂ levels, nutrient delivery, and vapor pressure deficit. The growing environment is dialed to exactly what the crop requires at each stage of development.</p>
+
+<p>The result is produce grown to a specification, not to the tolerance of whatever weather the field happened to produce. Every batch of butterhead lettuce grows under the same conditions as every previous batch. The weight, texture, and flavor profile are repeatable in a way that field agriculture, subject to weather and soil variation, physically cannot match.</p>
+
+<p>And because the farm is local — within 50 kilometres of the buyer in most cases — the product reaches the shelf 24 to 72 hours after harvest. Not 10 days. Not 21 days. Yesterday.</p>
+
+<p>That gap in time is the most important difference. Everything else — the precision growing, the traceability, the zero pesticides — amplifies a product that is already better at the most fundamental level: it's fresh.</p>
+
+<h2>Why These Are Not the Same Product</h2>
+
+<p>Treating vertically farmed local produce and field-grown imports as equivalent is a pricing and positioning mistake made throughout the retail and food service industry — one that leaves significant margin uncaptured.</p>
+
+<p>Consider what you're actually comparing:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Field-Grown Import</th>
+      <th>Local Vertical Farm</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Time from harvest to shelf</td>
+      <td>10–21 days</td>
+      <td>24–72 hours</td>
+    </tr>
+    <tr>
+      <td>Origin traceability</td>
+      <td>Region/country of origin</td>
+      <td>Named farm, harvest date, batch number</td>
+    </tr>
+    <tr>
+      <td>Pesticide use</td>
+      <td>Typically treated, pre and post-harvest</td>
+      <td>None — controlled environment eliminates pest pressure</td>
+    </tr>
+    <tr>
+      <td>Growing conditions</td>
+      <td>Variable — weather, soil, season</td>
+      <td>Controlled — same conditions every cycle</td>
+    </tr>
+    <tr>
+      <td>Water use</td>
+      <td>Standard field irrigation</td>
+      <td>~95% less water through closed-loop systems</td>
+    </tr>
+    <tr>
+      <td>Post-harvest treatment</td>
+      <td>Often treated to extend shelf life</td>
+      <td>None required — sold at peak freshness</td>
+    </tr>
+    <tr>
+      <td>Distance from consumer</td>
+      <td>Hundreds to thousands of kilometres</td>
+      <td>Within 50km in most cases</td>
+    </tr>
+    <tr>
+      <td>Seasonal availability</td>
+      <td>Seasonal or imported off-season</td>
+      <td>Year-round — weather independent</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>These differences are real and verifiable. A buyer who understands them and communicates them to their customers is not spinning a story — they're accurately describing the product they've chosen to carry.</p>
+
+<h2>The Premium That's Already There</h2>
+
+<p>The premium for locally grown, traceable, chemically clean produce already exists in consumer demand. It doesn't need to be manufactured.</p>
+
+<p>Survey after survey of Canadian grocery shoppers shows willingness to pay more for local produce — consistently 15–30% more when the claim is specific and credible. Not "locally grown" on a generic sticker. Specific: a named farm, a real distance, an actual harvest date.</p>
+
+<p>The reason most independent grocers haven't fully captured this premium is that their sourcing hasn't caught up with their customers' preferences. They're sourcing through the same distributor channels as the chains, then trying to compete on price — at which they will always lose. The chains have volume advantages that independent grocers cannot match.</p>
+
+<p>The path is different: source products the chains cannot carry, tell stories the chains cannot tell, and price accordingly.</p>
+
+<h2>Novel Varieties as a True Differentiator</h2>
+
+<p>One of the least-discussed advantages of local vertical farm sourcing is access to varieties that don't exist in standard distribution channels.</p>
+
+<p>Field agriculture selects for yield, uniformity, and shipping durability. The varieties that dominate commercial supply chains are engineered to survive 3,000-kilometre journeys, not to taste extraordinary. Flavor and texture are secondary to logistics performance.</p>
+
+<p>Vertical farms can grow varieties selected entirely for eating quality, because they don't need to ship far. The crop goes from grow room to buyer in 24 hours — shipping durability is irrelevant. That opens up categories that conventional distribution has made essentially unavailable:</p>
+
+<ul>
+  <li>Specialty microgreens with distinct flavors: wasabi arugula, shiso, nasturtium, amaranth</li>
+  <li>Heirloom lettuce varieties — speckled, red-tipped, butter types — that bruise in transit and therefore never appear in distributor catalogs</li>
+  <li>Living herbs delivered with roots intact, extending shelf life significantly beyond cut product</li>
+  <li>Edible flowers grown to food safety standards</li>
+  <li>Baby greens harvested at peak tenderness — a product that simply doesn't exist in long-haul distribution</li>
+</ul>
+
+<p>When your store or menu features products your competitors genuinely cannot source, the differentiation is real and durable. A customer who comes to you for a product they can't get anywhere else is not a customer you lose to a competitor running a sale.</p>
+
+<h2>Sourcing Through GreenReach Wholesale</h2>
+
+<p>GreenReach connects grocers and restaurants directly with local vertical farms through the wholesale marketplace. You browse available and upcoming inventory from farms near you, order directly, and receive product within 24–72 hours of harvest.</p>
+
+<p>Every order includes traceability documentation: farm name, harvest date, batch number, growing records. There's no distributor in the middle taking the margin, so pricing reflects the actual farm-to-buyer relationship.</p>
+
+<p>The platform shows future harvest windows, so you can plan purchasing around actual availability rather than hoping your distributor has product when you need it. When a farm is harvesting a specialty variety that week, you see it. When they're sold out, you know that too.</p>
+
+<p>If you're an independent grocer or restaurant wanting to source in a way that actually differentiates your business — not just claims to — <a href="/wholesale-landing.html">start with the wholesale marketplace</a> or <a href="/growing-made-easy.html">learn more about how the platform works</a>.</p>
+
+<p>The farms growing what your customers want, within range of where they live, are already there. The connection is the missing piece.</p>
+`;
