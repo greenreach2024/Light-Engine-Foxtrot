@@ -1,7 +1,7 @@
 {
   "started_at": "2026-03-02T01:28:13.724Z",
-  "last_sampled_at": "2026-03-14T01:35:53.807Z",
-  "last_persisted_at": "2026-03-14T01:35:23.806Z",
+  "last_sampled_at": "2026-03-14T01:50:23.839Z",
+  "last_persisted_at": "2026-03-14T01:49:53.839Z",
   "health": {
     "status": "stale",
     "stale": true,
@@ -37,7 +37,7 @@
   "operations_by_type": {},
   "farms_count": 0,
   "farms": [],
-  "persisted_at": "2026-03-14T01:35:53.807Z",
+  "persisted_at": "2026-03-14T01:50:23.839Z",
   "persist_reason": "sample",
   "last_success_at": null,
   "last_failure_at": null

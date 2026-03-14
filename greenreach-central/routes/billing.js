@@ -19,30 +19,43 @@ router.get('/receipts', async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const statusFilter = req.query.status || null;
 
+    const farmId = req.farmId || null;
     const payments = listPayments() || [];
     const orders = await listAllOrders({ page: 1, limit: 50000 });
     const orderMap = new Map((orders || []).map(o => [o.master_order_id, o]));
 
-    // Build receipt objects from payments
-    let receipts = payments.map(p => {
-      const order = orderMap.get(p.order_id) || {};
-      return {
-        receipt_id: p.payment_id,
-        order_id: p.order_id,
-        date: p.created_at,
-        amount: p.amount,
-        currency: p.currency || 'CAD',
-        status: p.status,
-        provider: p.provider,
-        broker_fee: p.broker_fee_amount || 0,
-        net_to_farms: p.net_to_farms_total || 0,
-        buyer_id: order.buyer_id || null,
-        order_status: order.status || null,
-        items_count: (order.farm_sub_orders || []).reduce(
-          (sum, sub) => sum + (sub.items || []).length, 0
-        ),
-      };
-    });
+    // Build receipt objects from payments, filtered to logged-in farm
+    let receipts = payments
+      .filter(p => {
+        if (!farmId) return true;
+        // Purchase payments store farm_id in metadata
+        if (p.farm_id) return p.farm_id === farmId;
+        // Wholesale payments: check if order has a sub-order for this farm
+        const order = orderMap.get(p.order_id);
+        if (order && order.farm_sub_orders) {
+          return order.farm_sub_orders.some(sub => sub.farm_id === farmId);
+        }
+        return false;
+      })
+      .map(p => {
+        const order = orderMap.get(p.order_id) || {};
+        return {
+          receipt_id: p.payment_id,
+          order_id: p.order_id,
+          date: p.created_at,
+          amount: p.amount,
+          currency: p.currency || 'CAD',
+          status: p.status,
+          provider: p.provider,
+          broker_fee: p.broker_fee_amount || 0,
+          net_to_farms: p.net_to_farms_total || 0,
+          buyer_id: order.buyer_id || null,
+          order_status: order.status || null,
+          items_count: (order.farm_sub_orders || []).reduce(
+            (sum, sub) => sum + (sub.items || []).length, 0
+          ),
+        };
+      });
 
     if (statusFilter) {
       receipts = receipts.filter(r => r.status === statusFilter);

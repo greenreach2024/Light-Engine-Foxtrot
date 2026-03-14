@@ -377,6 +377,7 @@ export async function loadPaymentsFromDb() {
         broker_fee_amount: row.metadata?.broker_fee_amount || 0,
         net_to_farms_total: row.metadata?.net_to_farms_total || 0,
         split: row.metadata?.split || null,
+        farm_id: row.metadata?.farm_id || null,
         created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
       };
       if (!paymentsById.has(payment.payment_id)) {
