@@ -1,32 +1,32 @@
 export const greenreachBlogPosts = [
   {
-    slug: 'vpd-guide-indoor-growing',
-    title: 'The Complete VPD Guide for Indoor Growers: Optimize by Growth Stage',
+    slug: 'local-produce-differentiation-grocers',
+    title: 'Why Independent Grocers Can Source in Ways Chains Never Will',
     excerpt:
-      'VPD is the single most important environmental variable in indoor farming — and most growers are managing it wrong. Stage-by-stage targets, common mistakes, and how automation helps.',
-    tag: 'Growing Science',
+      'Local vertical farm produce isn\'t a variation on commodity produce — it\'s a different product. Here\'s how independent grocers can use that difference to build loyalty and margin that large chains cannot match.',
+    tag: 'For Grocers',
     published_at: '2026-03-13',
-    cover_image: '/blog/vpd-guide-indoor-growing/01-hero.png',
+    cover_image: '/blog/local-produce-differentiation-grocers/01-hero.png',
     author: 'GreenReach Team',
   },
   {
-    slug: 'light-engine-farm-server-april-22',
-    title: 'Light Engine Farm Server: What\'s Launching April 22',
+    slug: 'restaurant-local-sourcing-story',
+    title: 'The Sourcing Story Your Restaurant Can Tell — and Chains Cannot',
     excerpt:
-      'Complete indoor farm automation — recipe-driven environmental control, ML predictions, AI agents, QR traceability, and wholesale integration — launching April 22, 2026.',
-    tag: 'Product',
+      'Independent restaurants compete on authenticity. Local vertically farmed produce — named farm, harvest date, 50km radius — gives you a specific, verifiable story that large chain restaurants structurally cannot replicate.',
+    tag: 'For Restaurants',
     published_at: '2026-03-13',
-    cover_image: '/blog/light-engine-farm-server-april-22/01-hero.png',
+    cover_image: '/blog/restaurant-local-sourcing-story/01-hero.png',
     author: 'GreenReach Team',
   },
   {
-    slug: 'canadian-farm-grants-2026',
-    title: 'How Canadian Farmers Are Leaving Thousands in Grant Money on the Table',
+    slug: 'vertical-farm-produce-not-a-commodity',
+    title: 'Vertical Farm Produce Is Not a Commodity — Here\'s Why That Matters',
     excerpt:
-      'Over 60 Canadian agricultural programs are currently accepting applications. Most farmers know about one or two. Here\'s what\'s available and how to find what you qualify for.',
-    tag: 'Funding',
+      'A head of romaine from a California field and a head of romaine harvested yesterday from a local vertical farm are not the same product. The food industry\'s habit of treating them as equivalent is leaving real value uncaptured.',
+    tag: 'Buyers',
     published_at: '2026-03-13',
-    cover_image: '/blog/canadian-farm-grants-2026/01-hero.png',
+    cover_image: '/blog/vertical-farm-produce-not-a-commodity/01-hero.png',
     author: 'GreenReach Team',
   },
 ];
