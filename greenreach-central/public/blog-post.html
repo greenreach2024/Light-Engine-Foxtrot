@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog - GreenReach</title>
+    <meta name="description" content="">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="GreenReach">
+    <meta property="twitter:card" content="summary_large_image">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6; color: #1d1d1f; background: #f8f9fb;
+        }
+        header { background: white; border-bottom: 1px solid #e5e7eb; padding: 20px 40px; position: sticky; top: 0; z-index: 1000; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 700; color: #10b981; text-decoration: none; }
+        .nav-links { display: flex; gap: 30px; align-items: center; }
+        .nav-links a { color: #6e6e73; text-decoration: none; font-size: 14px; transition: color 0.3s; }
+        .nav-links a:hover { color: #10b981; }
+
+        .article-header {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white; padding: 60px 20px 50px; text-align: center;
+        }
+        .article-header .tag {
+            display: inline-block; font-size: 12px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;
+            margin-bottom: 16px; background: rgba(255,255,255,0.15);
+            padding: 4px 14px; border-radius: 12px;
+        }
+        .article-header h1 { font-size: 2.5rem; font-weight: 700; max-width: 800px; margin: 0 auto 16px; letter-spacing: -0.5px; line-height: 1.2; }
+        .article-meta { font-size: 0.95rem; opacity: 0.85; }
+        .article-meta span + span::before { content: '·'; margin: 0 8px; }
+
+        .article-content {
+            max-width: 740px; margin: 0 auto; padding: 50px 20px 80px;
+            font-size: 1.05rem; line-height: 1.8; color: #1f2937;
+        }
+        .article-content h2 { font-size: 1.6rem; font-weight: 700; color: #111827; margin: 40px 0 16px; }
+        .article-content h3 { font-size: 1.25rem; font-weight: 600; color: #1f2937; margin: 32px 0 12px; }
+        .article-content p { margin-bottom: 18px; }
+        .article-content ul, .article-content ol { margin: 0 0 18px 24px; }
+        .article-content li { margin-bottom: 8px; }
+        .article-content table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 0.95rem; }
+        .article-content th { background: #f3f4f6; font-weight: 600; text-align: left; padding: 12px 14px; border-bottom: 2px solid #e5e7eb; }
+        .article-content td { padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+        .article-content tr:hover td { background: #f9fafb; }
+        .article-content a { color: #059669; text-decoration: underline; }
+        .article-content a:hover { color: #047857; }
+        .article-content strong { font-weight: 600; }
+        .article-content em { font-style: italic; }
+
+        .back-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            max-width: 740px; margin: 30px auto 0; padding: 0 20px;
+            font-size: 0.9rem; color: #10b981; text-decoration: none;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        .related-posts {
+            max-width: 740px; margin: 0 auto; padding: 0 20px 60px;
+            border-top: 1px solid #e5e7eb; padding-top: 40px;
+        }
+        .related-posts h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; color: #374151; }
+        .related-link {
+            display: block; padding: 14px 0; border-bottom: 1px solid #f3f4f6;
+            text-decoration: none; color: #1f2937; transition: color 0.2s;
+        }
+        .related-link:hover { color: #10b981; }
+        .related-link .rel-tag { font-size: 11px; color: #10b981; text-transform: uppercase; font-weight: 600; }
+        .related-link .rel-title { font-size: 0.95rem; font-weight: 500; margin-top: 2px; }
+
+        .not-found { max-width: 740px; margin: 80px auto; text-align: center; padding: 0 20px; }
+        .not-found h2 { font-size: 1.5rem; margin-bottom: 12px; color: #374151; }
+        .not-found a { color: #10b981; }
+
+        footer { background: #111827; color: #9ca3af; padding: 60px 20px 30px; font-size: 14px; }
+        .footer-content { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 40px; }
+        .footer-column h4 { color: white; margin-bottom: 15px; font-size: 15px; }
+        .footer-column ul { list-style: none; }
+        .footer-column li { margin-bottom: 8px; }
+        .footer-column a { color: #9ca3af; text-decoration: none; transition: color 0.2s; }
+        .footer-column a:hover { color: #10b981; }
+        .footer-bottom { max-width: 1200px; margin: 40px auto 0; padding-top: 20px; border-top: 1px solid #1f2937; text-align: center; }
+        .footer-bottom p { color: #6b7280; }
+        .footer-bottom a { color: #9ca3af; text-decoration: none; }
+
+        @media (max-width: 640px) {
+            header { padding: 14px 20px; }
+            .nav-links { gap: 16px; }
+            .nav-links a { font-size: 12px; }
+            .article-header h1 { font-size: 1.75rem; }
+            .article-header { padding: 40px 16px 36px; }
+            .article-content { font-size: 1rem; padding: 30px 16px 60px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/purchase.html" class="logo">GreenReach</a>
+            <div class="nav-links">
+                <a href="/purchase.html">Products</a>
+                <a href="/about.html">About</a>
+                <a href="/blog.html" style="color:#10b981;">Blog</a>
+                <a href="/wholesale-landing.html">Wholesale</a>
+                <a href="/">Sign In</a>
+            </div>
+        </nav>
+    </header>
+
+    <div id="articleHeader" class="article-header" style="display:none;">
+        <span class="tag" id="articleTag"></span>
+        <h1 id="articleTitle"></h1>
+        <div class="article-meta">
+            <span id="articleAuthor"></span>
+            <span id="articleDate"></span>
+            <span id="articleReadTime"></span>
+        </div>
+    </div>
+
+    <a href="/blog.html" class="back-link" id="backLink" style="display:none;">← Back to all articles</a>
+    <div class="article-content" id="articleContent" style="display:none;"></div>
+
+    <div class="related-posts" id="relatedPosts" style="display:none;">
+        <h3>More from GreenReach</h3>
+        <div id="relatedList"></div>
+    </div>
+
+    <div class="not-found" id="notFound" style="display:none;">
+        <h2>Article not found</h2>
+        <p>The article you're looking for doesn't exist. <a href="/blog.html">Browse all articles</a>.</p>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>GreenReach</h4>
+                <ul>
+                    <li><a href="/purchase.html">Products</a></li>
+                    <li><a href="/about.html">About</a></li>
+                    <li><a href="/blog.html">Blog</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Light Engine</h4>
+                <ul>
+                    <li><a href="/purchase.html">Management Platform</a></li>
+                    <li><a href="/purchase.html">Farm Server</a></li>
+                    <li><a href="/landing.html">Features</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/grant-wizard.html">Grant Wizard</a></li>
+                    <li><a href="/wholesale-landing.html">GreenReach Wholesale</a></li>
+                    <li><a href="/about.html">About</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:info@greenreachfarms.com">Email Support</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 GreenReach. All rights reserved. | <a href="/privacy">Privacy</a> | <a href="/terms">Terms</a></p>
+        </div>
+    </footer>
+
+    <script src="/blog/blog-data.js"></script>
+    <script>
+    (function() {
+        const params = new URLSearchParams(window.location.search);
+        const slug = params.get('slug');
+
+        if (!slug) { document.getElementById('notFound').style.display = 'block'; return; }
+
+        // Slug-to-content-file mapping
+        const contentMap = {
+            'local-produce-differentiation-grocers': '/blog/local-produce-differentiation-content.html',
+            'restaurant-local-sourcing-story': '/blog/restaurant-local-sourcing-content.html',
+            'vertical-farm-produce-not-a-commodity': '/blog/vertical-farm-produce-premium-content.html',
+            'vertical-farm-premium-positioning': '/blog/vertical-farm-premium-produce-content.html',
+            'vpd-guide-indoor-growing': '/blog/vpd-guide-indoor-growing/content.html',
+            'light-engine-farm-server-april-22': '/blog/light-engine-farm-server-april-22/content.html',
+            'canadian-farm-grants-2026': '/blog/canadian-farm-grants-2026/content.html'
+        };
+
+        const post = greenreachBlogPosts.find(p => p.slug === slug);
+        if (!post || !contentMap[slug]) { document.getElementById('notFound').style.display = 'block'; return; }
+
+        // Set page metadata
+        document.title = post.title + ' - GreenReach Blog';
+        document.querySelector('meta[name="description"]').content = post.excerpt;
+
+        // Populate header
+        document.getElementById('articleTag').textContent = post.tag;
+        document.getElementById('articleTitle').textContent = post.title;
+        document.getElementById('articleAuthor').textContent = post.author;
+        document.getElementById('articleDate').textContent = new Date(post.published_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        document.getElementById('articleReadTime').textContent = post.reading_time;
+        document.getElementById('articleHeader').style.display = 'block';
+        document.getElementById('backLink').style.display = 'inline-flex';
+
+        // Load article HTML content
+        fetch(contentMap[slug])
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(html => {
+                document.getElementById('articleContent').innerHTML = html;
+                document.getElementById('articleContent').style.display = 'block';
+            })
+            .catch(() => {
+                document.getElementById('articleContent').innerHTML = '<p>Failed to load article content. <a href="/blog.html">Return to blog</a>.</p>';
+                document.getElementById('articleContent').style.display = 'block';
+            });
+
+        // Related posts — show up to 3 other articles
+        const related = greenreachBlogPosts.filter(p => p.slug !== slug).slice(0, 3);
+        if (related.length) {
+            document.getElementById('relatedList').innerHTML = related.map(r => `
+                <a class="related-link" href="/blog-post.html?slug=${encodeURIComponent(r.slug)}">
+                    <div class="rel-tag">${r.tag}</div>
+                    <div class="rel-title">${r.title}</div>
+                </a>
+            `).join('');
+            document.getElementById('relatedPosts').style.display = 'block';
+        }
+    })();
+    </script>
+</body>
+</html>

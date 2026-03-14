@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog - GreenReach</title>
+    <meta name="description" content="Articles on indoor farming, vertical farm produce, wholesale sourcing, and agricultural technology from the GreenReach team.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://greenreachgreens.com/blog.html">
+    <meta property="og:title" content="Blog - GreenReach">
+    <meta property="og:description" content="Articles on indoor farming, vertical farm produce, wholesale sourcing, and agricultural technology from the GreenReach team.">
+    <meta property="twitter:card" content="summary_large_image">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6; color: #1d1d1f; background: #f8f9fb;
+        }
+        header { background: white; border-bottom: 1px solid #e5e7eb; padding: 20px 40px; position: sticky; top: 0; z-index: 1000; }
+        nav { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 700; color: #10b981; text-decoration: none; }
+        .nav-links { display: flex; gap: 30px; align-items: center; }
+        .nav-links a { color: #6e6e73; text-decoration: none; font-size: 14px; transition: color 0.3s; }
+        .nav-links a:hover { color: #10b981; }
+
+        .hero {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white; padding: 80px 20px; text-align: center;
+        }
+        .hero h1 { font-size: 3rem; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px; }
+        .hero p { font-size: 1.2rem; max-width: 700px; margin: 0 auto; opacity: 0.95; }
+
+        .filter-bar {
+            max-width: 1000px; margin: 0 auto; padding: 30px 20px 0;
+            display: flex; gap: 10px; flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 6px 16px; border-radius: 20px; border: 1px solid #d1d5db;
+            background: white; color: #374151; font-size: 13px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active { background: #10b981; color: white; border-color: #10b981; }
+
+        .blog-grid {
+            max-width: 1000px; margin: 0 auto; padding: 30px 20px 80px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px;
+        }
+        .blog-card {
+            background: white; border-radius: 14px; overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s;
+            display: flex; flex-direction: column;
+        }
+        .blog-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        .blog-card a { text-decoration: none; color: inherit; display: flex; flex-direction: column; height: 100%; }
+        .card-body { padding: 28px; flex: 1; display: flex; flex-direction: column; }
+        .card-tag {
+            display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; color: #10b981; margin-bottom: 12px;
+        }
+        .card-title { font-size: 1.15rem; font-weight: 600; color: #111827; margin-bottom: 10px; line-height: 1.35; }
+        .card-excerpt { font-size: 0.9rem; color: #6b7280; flex: 1; margin-bottom: 16px; }
+        .card-meta { font-size: 0.8rem; color: #9ca3af; display: flex; gap: 16px; }
+
+        footer { background: #111827; color: #9ca3af; padding: 60px 20px 30px; font-size: 14px; }
+        .footer-content { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 40px; }
+        .footer-column h4 { color: white; margin-bottom: 15px; font-size: 15px; }
+        .footer-column ul { list-style: none; }
+        .footer-column li { margin-bottom: 8px; }
+        .footer-column a { color: #9ca3af; text-decoration: none; transition: color 0.2s; }
+        .footer-column a:hover { color: #10b981; }
+        .footer-bottom { max-width: 1200px; margin: 40px auto 0; padding-top: 20px; border-top: 1px solid #1f2937; text-align: center; }
+        .footer-bottom p { color: #6b7280; }
+        .footer-bottom a { color: #9ca3af; text-decoration: none; }
+
+        @media (max-width: 640px) {
+            header { padding: 14px 20px; }
+            .nav-links { gap: 16px; }
+            .nav-links a { font-size: 12px; }
+            .hero h1 { font-size: 2rem; }
+            .hero { padding: 50px 20px; }
+            .blog-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/purchase.html" class="logo">GreenReach</a>
+            <div class="nav-links">
+                <a href="/purchase.html">Products</a>
+                <a href="/about.html">About</a>
+                <a href="/blog.html" style="color:#10b981;">Blog</a>
+                <a href="/wholesale-landing.html">Wholesale</a>
+                <a href="/">Sign In</a>
+            </div>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <h1>GreenReach Blog</h1>
+        <p>Practical articles on indoor farming, wholesale sourcing, and building a better food supply chain.</p>
+    </section>
+
+    <div class="filter-bar" id="filterBar"></div>
+    <div class="blog-grid" id="blogGrid"></div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-column">
+                <h4>GreenReach</h4>
+                <ul>
+                    <li><a href="/purchase.html">Products</a></li>
+                    <li><a href="/about.html">About</a></li>
+                    <li><a href="/blog.html">Blog</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Light Engine</h4>
+                <ul>
+                    <li><a href="/purchase.html">Management Platform</a></li>
+                    <li><a href="/purchase.html">Farm Server</a></li>
+                    <li><a href="/landing.html">Features</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="/grant-wizard.html">Grant Wizard</a></li>
+                    <li><a href="/wholesale-landing.html">GreenReach Wholesale</a></li>
+                    <li><a href="/about.html">About</a></li>
+                </ul>
+            </div>
+            <div class="footer-column">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="mailto:info@greenreachfarms.com">Email Support</a></li>
+                    <li><a href="/status">System Status</a></li>
+                    <li><a href="/security">Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 GreenReach. All rights reserved. | <a href="/privacy">Privacy</a> | <a href="/terms">Terms</a></p>
+        </div>
+    </footer>
+
+    <script src="/blog/blog-data.js"></script>
+    <script>
+    (function() {
+        const grid = document.getElementById('blogGrid');
+        const filterBar = document.getElementById('filterBar');
+
+        // Build tag filters
+        const tags = [...new Set(greenreachBlogPosts.map(p => p.tag))];
+        let activeTag = null;
+
+        const allBtn = document.createElement('button');
+        allBtn.className = 'filter-btn active';
+        allBtn.textContent = 'All';
+        allBtn.onclick = () => { activeTag = null; render(); };
+        filterBar.appendChild(allBtn);
+
+        tags.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn';
+            btn.textContent = tag;
+            btn.onclick = () => { activeTag = tag; render(); };
+            filterBar.appendChild(btn);
+        });
+
+        function render() {
+            const posts = activeTag
+                ? greenreachBlogPosts.filter(p => p.tag === activeTag)
+                : greenreachBlogPosts;
+
+            // Update active filter button
+            filterBar.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active',
+                    activeTag ? btn.textContent === activeTag : btn.textContent === 'All');
+            });
+
+            grid.innerHTML = posts.map(post => `
+                <article class="blog-card">
+                    <a href="/blog-post.html?slug=${encodeURIComponent(post.slug)}">
+                        <div class="card-body">
+                            <span class="card-tag">${post.tag}</span>
+                            <h2 class="card-title">${post.title}</h2>
+                            <p class="card-excerpt">${post.excerpt}</p>
+                            <div class="card-meta">
+                                <span>${post.author}</span>
+                                <span>${post.reading_time}</span>
+                                <span>${new Date(post.published_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            </div>
+                        </div>
+                    </a>
+                </article>
+            `).join('');
+        }
+
+        render();
+    })();
+    </script>
+</body>
+</html>
