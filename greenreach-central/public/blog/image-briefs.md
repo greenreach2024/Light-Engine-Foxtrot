@@ -1,49 +1,45 @@
-# GreenReach Blog — Image Briefs (Content Pack 2: Buyer-Facing)
+# GreenReach Blog — Image Briefs (Buyer-Facing Content Pack)
 
-Brand palette: deep forest green (#2d5016), accent green (#82c341), warm off-white (#fbfbfd), dark text (#1d1d1f).
-Photography style: clean, natural light, warm. Real food, real environments. No stock photo cheese.
-
----
-
-## Article 1: Why Independent Grocers Should Source Local
-
-**Slug:** `why-independent-grocers-should-source-local-vertical-farm-produce`
-**Folder:** `greenreach-central/public/blog/why-independent-grocers-should-source-local-vertical-farm-produce/`
-
-| Filename | Alt Text | Description |
-|---|---|---|
-| `01-hero.png` | Independent grocery store produce section with locally grown lettuce and farm signage | Warm, inviting independent grocery display. Local farm signage visible on shelf. Dense, vibrant leafy greens. Natural light. Feels authentic, not corporate. |
-| `02-farm-label.png` | Produce label showing farm name, harvest date, and 23km distance from store | Close-up of a produce label on a head of lettuce. Key details visible: farm name, "Harvested [date]", distance in km. Clean, designed label — not generic. |
-| `03-comparison.png` | Side-by-side comparison of imported lettuce and locally grown vertical farm lettuce | Two heads of lettuce side by side. Left: slightly tired, generic romaine. Right: vivid, crisp local vertical farm lettuce. Harvest date card visible on right. |
-| `04-staff-customer.png` | Grocery store staff member explaining local produce to a customer | Staff in apron pointing to a local farm display. Customer engaged, listening. Natural conversation. Independent store feel, not corporate. |
-| `05-farm-proximity-map.png` | Simple map showing farm location within 50km of a city store | Minimal map illustration. Farm pin 15-25km from city centre pin. Green radius circle. Clean, infographic style. |
+Brand palette: deep forest green (#2d5016), accent green (#82c341), warm cream/off-white. Clean, premium photography. No stock-photo cheese. Think: Whole Foods editorial meets farm documentary.
 
 ---
 
-## Article 2: The Restaurant Case for Local Vertical Farm Produce
+## Article 1: Why Independent Grocers Can Source in Ways Chains Never Will
 
-**Slug:** `local-produce-restaurant-menu-differentiation`
-**Folder:** `greenreach-central/public/blog/local-produce-restaurant-menu-differentiation/`
+**Folder:** `public/blog/local-produce-differentiation-grocers/`
 
-| Filename | Alt Text | Description |
+| Filename | Alt Text | Description for Designer |
 |---|---|---|
-| `01-hero.png` | Restaurant kitchen chef plating a salad with locally grown microgreens | Chef's hands plating a dish. Fresh microgreens being placed. Professional kitchen. Natural light if possible. Farm name card visible nearby on prep station. |
-| `02-menu-card.png` | Restaurant menu highlighting local farm sourcing with farm name and harvest date | Menu detail shot. Entry reads: "Butter lettuce from [Farm Name], harvested this morning." Elegant typography, natural light, slightly blurred background. |
-| `03-produce-delivery.png` | Fresh produce delivery arriving at restaurant back door from local farm | Crates of fresh leafy greens being brought in. Farm branding on crate or delivery bag. Clean, professional. Not a generic stock produce image. |
-| `04-mise-en-place.png` | Restaurant prep station with fresh local herbs and greens ready for service | Beautiful mise en place. Basil, arugula, specialty microgreens. Clearly fresh — dewy, vivid color. Natural light. Real kitchen environment. |
-| `05-variety-spread.png` | Array of specialty vertical farm produce varieties not available through conventional distribution | Flat lay or spread: wasabi arugula, shiso, baby kale, microgreens, edible flowers, purple basil, pea shoots. Vibrant colors. Farm label or card in frame. |
+| `01-hero.png` | Independent grocer produce section with locally labelled vertically farmed greens | Premium produce section with warm lighting. A small handwritten or printed card visible: "[Farm Name], harvested [date]". Lush greens in foreground. |
+| `02-farm-label.png` | Close-up of a produce label showing farm name, harvest date, and distance from store | Macro shot of a label or tag attached to packaged greens. Key info visible: farm name, harvest date "March 12", distance "18km". |
+| `03-grocer-staff.png` | Grocery store staff member discussing locally sourced produce with a customer | Natural interaction between a staff member and customer in the produce section. Both looking at a product. Warm, genuine — not posed. |
+| `04-produce-comparison.png` | Side-by-side comparison of fresh local vertical farm lettuce versus wilted imported lettuce | Two heads of lettuce side by side on a clean surface. Left: vibrant, fresh, crisp vertical farm product. Right: slightly wilted, paler field import. |
+| `05-farm-to-store.png` | Infographic showing the direct route from local vertical farm to store shelf in 24-72 hours | Simple clean graphic: vertical farm icon → delivery → store shelf. Timeline: "harvested Monday → on your shelf Tuesday." Minimal, branded. |
 
 ---
 
-## Article 3: Vertical Farm Produce vs. Field-Grown — Not the Same Product
+## Article 2: The Sourcing Story Your Restaurant Can Tell — and Chains Cannot
 
-**Slug:** `vertical-farm-produce-vs-field-grown-not-the-same-product`
-**Folder:** `greenreach-central/public/blog/vertical-farm-produce-vs-field-grown-not-the-same-product/`
+**Folder:** `public/blog/restaurant-local-sourcing-story/`
 
-| Filename | Alt Text | Description |
+| Filename | Alt Text | Description for Designer |
 |---|---|---|
-| `01-hero.png` | Lush vertical farm growing room with rows of lettuce under LED lighting | Wide shot of a vertical grow room. Dense canopy of lettuce under warm LED light. Clean, organized, precise. A clear "this is not a field" visual. |
-| `02-time-comparison.png` | Infographic showing 24-hour local harvest vs 21-day import supply chain timeline | Clean horizontal timeline infographic. Left side: seed → grow → harvest → 24hrs → shelf. Right side: field → harvest → pack → truck → warehouse → store → 14-21 days. Brand colors. |
-| `03-freshness-closeup.png` | Close-up of fresh vertically farmed lettuce with harvest date tag showing yesterday's date | Extreme close-up of vivid, crisp lettuce leaves. Harvest date tag in focus: "[Yesterday's date]". Dewy texture. No sign of aging. |
-| `04-controlled-environment.png` | Sensor display and environmental monitoring equipment in a vertical farm grow room | Tablet or monitor showing temperature, humidity, VPD readings in a grow room. Green "optimal" indicators. Farm visible behind. Precision and control visible. |
-| `05-no-pesticides.png` | Hands holding a head of vertically farmed lettuce — clean, no chemical residue | Two hands holding a single head of butter lettuce. Clean, almost sculptural. "Grown without pesticides" card/badge visible. Natural light. Simple. |
+| `01-hero.png` | Beautifully plated salad at an independent restaurant table with a small farm provenance card | Elegant table setting. A fresh salad with visible high-quality greens. Small card beside the plate: "Grown at [Farm], 15km away." Candlelight ambience. |
+| `02-chef-produce.png` | Chef in kitchen examining freshly delivered local vertical farm greens | Chef (back-of-house setting) holding and inspecting a fresh head of lettuce or herbs. Focused, professional. Crates of produce visible in background. |
+| `03-menu-callout.png` | Restaurant menu featuring a dish with local farm sourcing called out by name | Close-up of a printed or chalkboard menu. One item highlighted: "Butter lettuce from [Farm Name], [City] — harvested this week." Upscale typography. |
+| `04-server-tableside.png` | Server explaining local produce sourcing to guests at a restaurant table | Natural moment: server gesturing toward a dish while explaining something. Guests engaged and interested. Warm restaurant lighting. |
+| `05-delivery-kitchen.png` | Fresh delivery of local vertical farm produce arriving at restaurant back door | Crates of fresh greens being unloaded or handed off at a kitchen entrance. "Harvested yesterday" feel — bright, crisp, abundant. |
+
+---
+
+## Article 3: Vertical Farm Produce Is Not a Commodity
+
+**Folder:** `public/blog/vertical-farm-produce-not-a-commodity/`
+
+| Filename | Alt Text | Description for Designer |
+|---|---|---|
+| `01-hero.png` | Lush vertical farm growing room with rows of lettuce under LED lights | Wide-angle shot of a vertical farm interior. Multiple tiers of growing trays. Pink-white LED light. Dense, healthy canopy. Industrial but beautiful. |
+| `02-supply-chain-contrast.png` | Infographic contrasting continental import supply chain vs. local vertical farm delivery | Two-column comparison. Left (imports): truck → warehouse → distribution → store (21 days). Right (local): farm → store (48 hours). Simple, clean, branded. |
+| `03-traceability-label.png` | Product label showing lot ID, harvest date, farm name, and growing method | Clear product label with: Lot ID, Harvest Date, Farm Name, "Zero Pesticides", "Grown Locally". Professional packaging but human and warm. |
+| `04-fresh-vs-old.png` | Visual comparison of produce freshness at point of purchase | Same crop, two states. Left: vibrant, perky, just-harvested vertical farm product. Right: slightly aged field product after long transit. Side by side, clean background. |
+| `05-buyer-browsing.png` | Restaurant or grocery buyer browsing the GreenReach wholesale marketplace on a laptop or tablet | Person at a desk or in a commercial kitchen looking at a clean marketplace UI. GreenReach branding visible. Professional, relaxed setting. |
