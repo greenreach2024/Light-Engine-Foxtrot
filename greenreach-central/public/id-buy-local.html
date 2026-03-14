@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>If You Grow It, I'd Buy It | GreenReach</title>
+  <meta name="description" content="Show your community wants fresh, local produce. Add your name to the demand map and help bring four-season farming to your neighbourhood.">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://greenreachgreens.com/id-buy-local.html">
+  <meta property="og:title" content="If You Grow It, I'd Buy It — Field of Dreams Campaign">
+  <meta property="og:description" content="Canadians are putting themselves on the map for local food. Join the movement — the greater the local demand, the greater the investment in four-season farming.">
+  <meta property="og:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="If You Grow It, I'd Buy It — Field of Dreams Campaign">
+  <meta name="twitter:description" content="Canadians are putting themselves on the map for local food. Join the movement.">
+  <meta name="twitter:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GBPD0VBEF2"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GBPD0VBEF2');
+  </script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img { height: 32px; width: auto; }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+    }
+
+    .nav-links a:hover { opacity: 1; }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white !important;
+      padding: 6px 16px;
+      border-radius: 980px;
+      opacity: 1 !important;
+      font-weight: 500;
+      transition: background 0.3s !important;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .nav-cta:hover { background: var(--accent) !important; }
+
+    /* Hero */
+    .hero {
+      padding: 120px 24px 80px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(130, 195, 65, 0.10) 0%, var(--bg) 100%);
+      position: relative;
+    }
+
+    .hero-tag {
+      display: inline-block;
+      background: rgba(45, 80, 22, 0.08);
+      color: var(--primary);
+      padding: 6px 16px;
+      border-radius: 980px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero h1 {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      color: var(--text);
+      max-width: 900px;
+      margin: 0 auto 12px;
+    }
+
+    .hero h1 em {
+      color: var(--primary);
+      font-style: normal;
+    }
+
+    .hero .tagline {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 21px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 640px;
+      margin: 0 auto 40px;
+    }
+
+    /* Live counter banner */
+    .live-banner {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    .live-stat {
+      text-align: center;
+    }
+
+    .live-stat .number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--primary);
+      display: block;
+      line-height: 1.2;
+    }
+
+    .live-stat .label {
+      font-size: 13px;
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    .pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    /* Signup Form */
+    .signup-section {
+      padding: 80px 24px;
+      background: var(--surface);
+    }
+
+    .signup-container {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .signup-container h2 {
+      font-size: 36px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .signup-container .subtitle {
+      text-align: center;
+      font-size: 17px;
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1.5px solid #d2d2d7;
+      border-radius: 12px;
+      font-size: 17px;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(130, 195, 65, 0.15);
+    }
+
+    .form-group input::placeholder { color: #b4b4b9; }
+
+    .btn-signup {
+      width: 100%;
+      padding: 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 980px;
+      font-size: 18px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 8px;
+    }
+
+    .btn-signup:hover {
+      background: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .btn-signup:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .form-note {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-light);
+      margin-top: 14px;
+    }
+
+    .form-success {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .form-success .check-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 32px;
+      color: white;
+    }
+
+    .form-success h3 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .form-success p {
+      font-size: 17px;
+      color: var(--text-light);
+      margin-bottom: 24px;
+    }
+
+    .form-error {
+      display: none;
+      background: #fef2f2;
+      color: #b91c1c;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    /* Map Section */
+    .map-section {
+      padding: 80px 24px;
+    }
+
+    .map-section .section-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+
+    .map-section .section-header h2 {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.08;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .map-section .section-header p {
+      font-size: 19px;
+      color: var(--text-light);
+    }
+
+    .map-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 24px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .map-canvas {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      position: relative;
+      background: #f0f4e8;
+    }
+
+    .map-canvas svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-legend {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      padding: 16px 24px;
+      background: rgba(45, 80, 22, 0.04);
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-light);
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    /* Leaderboard */
+    .leaderboard-section {
+      padding: 80px 24px;
+      background: var(--surface);
+    }
+
+    .leaderboard-section .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .leaderboard-section .section-header h2 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .leaderboard-section .section-header p {
+      font-size: 19px;
+      color: var(--text-light);
+    }
+
+    .leaderboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .leaderboard-card {
+      background: var(--bg);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+
+    .leaderboard-card h3 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lb-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .lb-row:last-child { border-bottom: none; }
+
+    .lb-rank {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      width: 28px;
+    }
+
+    .lb-community {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .lb-count {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--primary);
+      background: rgba(130, 195, 65, 0.12);
+      padding: 4px 12px;
+      border-radius: 980px;
+    }
+
+    /* Why Section */
+    .why-section {
+      padding: 100px 24px;
+    }
+
+    .why-section .section-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .why-section .section-header h2 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .why-section .section-header p {
+      font-size: 19px;
+      color: var(--text-light);
+    }
+
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .why-card {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 40px 32px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .why-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .why-card .icon { font-size: 40px; margin-bottom: 16px; }
+
+    .why-card h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .why-card p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-light);
+    }
+
+    /* Share Section */
+    .share-section {
+      padding: 80px 24px;
+      background: var(--primary);
+      text-align: center;
+      color: white;
+    }
+
+    .share-section h2 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .share-section p {
+      font-size: 19px;
+      opacity: 0.85;
+      max-width: 600px;
+      margin: 0 auto 36px;
+    }
+
+    .share-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 980px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+
+    .share-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+    .share-btn-facebook { background: #1877F2; color: white; }
+    .share-btn-facebook:hover { background: #0d65d9; }
+
+    .share-btn-x { background: #000; color: white; }
+    .share-btn-x:hover { background: #333; }
+
+    .share-btn-linkedin { background: #0A66C2; color: white; }
+    .share-btn-linkedin:hover { background: #084e96; }
+
+    .share-btn-copy { background: white; color: var(--primary); }
+    .share-btn-copy:hover { background: var(--accent); color: white; }
+
+    .share-btn-email { background: var(--accent); color: white; }
+    .share-btn-email:hover { background: white; color: var(--primary); }
+
+    /* CTA bottom */
+    .cta-bottom {
+      padding: 100px 24px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--bg) 0%, rgba(130, 195, 65, 0.08) 100%);
+    }
+
+    .cta-bottom h2 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .cta-bottom p {
+      font-size: 19px;
+      color: var(--text-light);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .cta-bottom .btn-signup {
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    /* Footer */
+    footer {
+      background: #1d1d1f;
+      color: #86868b;
+      padding: 60px 24px 30px;
+      font-size: 12px;
+    }
+
+    .footer-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 32px;
+      margin-bottom: 40px;
+    }
+
+    .footer-about h3 { color: white; font-size: 16px; margin-bottom: 12px; }
+    .footer-about p { line-height: 1.6; color: #86868b; }
+
+    .footer-links h4 {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .footer-links ul { list-style: none; }
+    .footer-links li { margin-bottom: 8px; }
+    .footer-links a { color: #86868b; text-decoration: none; transition: color 0.3s; }
+    .footer-links a:hover { color: white; }
+
+    .footer-bottom {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Province label tooltip on map */
+    .province-label {
+      font-size: 11px;
+      font-weight: 600;
+      fill: var(--text);
+      pointer-events: none;
+      text-anchor: middle;
+    }
+
+    .province-count {
+      font-size: 10px;
+      fill: var(--primary);
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 40px; }
+      .hero .tagline { font-size: 22px; }
+      .hero p { font-size: 18px; }
+      .map-section .section-header h2,
+      .leaderboard-section .section-header h2,
+      .why-section .section-header h2,
+      .share-section h2,
+      .cta-bottom h2 { font-size: 32px; }
+      .leaderboard-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .footer-content { grid-template-columns: 1fr; }
+      .live-banner { gap: 24px; }
+      .live-stat .number { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo"><img src="/images/greenreach-clr.png" alt="GreenReach" /></a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-org.html">Home</a></li>
+        <li><a href="/greenreach-grow.html">GROW</a></li>
+        <li><a href="/growing-made-easy.html">Growing</a></li>
+        <li><a href="/grow-and-sell.html">Buying/Selling</a></li>
+        <li><a href="/wholesale-landing.html">Wholesale</a></li>
+        <li><a href="/blog.html">Blog</a></li>
+        <li><a href="/GR-wholesale.html" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-tag">Field of Dreams Campaign</span>
+    <h1><em>If You Grow It,</em> I'd Buy It</h1>
+    <p class="tagline">Put your community on the map for local food.</p>
+    <p>Canadians are showing demand for fresh, locally grown produce year-round. The greater the demand in your area, the greater the investment in four-season agriculture. Add your voice — it takes 10 seconds.</p>
+
+    <div class="live-banner">
+      <div class="live-stat">
+        <span class="number" id="statTotal">—</span>
+        <span class="label"><span class="pulse-dot"></span>Total Supporters</span>
+      </div>
+      <div class="live-stat">
+        <span class="number" id="stat24h">—</span>
+        <span class="label">New in Last 24 Hours</span>
+      </div>
+      <div class="live-stat">
+        <span class="number" id="statCommunities">—</span>
+        <span class="label">Communities Represented</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Signup Form -->
+  <section class="signup-section" id="signup">
+    <div class="signup-container">
+      <h2>Add Your Voice</h2>
+      <p class="subtitle">Tell your community: you'd buy local if they grew it.</p>
+
+      <div id="signupForm">
+        <div class="form-error" id="formError"></div>
+        <div class="form-group">
+          <label for="name">Your Name</label>
+          <input type="text" id="name" placeholder="First and last name" autocomplete="name" required>
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label for="postalCode">Postal Code</label>
+          <input type="text" id="postalCode" placeholder="K7L 3N6" autocomplete="postal-code" maxlength="7" required>
+        </div>
+        <button class="btn-signup" id="submitBtn" onclick="submitSignup()">I'd Buy Local</button>
+        <p class="form-note">Your postal code places you on the demand map. We'll never share your info.</p>
+      </div>
+
+      <div class="form-success" id="formSuccess">
+        <div class="check-icon">✓</div>
+        <h3>You're on the map!</h3>
+        <p>Thank you for supporting local agriculture. Share the campaign to strengthen your community's voice.</p>
+        <div class="share-buttons" style="justify-content: center;">
+          <button class="share-btn share-btn-x" onclick="shareX()"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>Share</button>
+          <button class="share-btn share-btn-facebook" onclick="shareFacebook()"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Share</button>
+          <button class="share-btn share-btn-linkedin" onclick="shareLinkedIn()"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>Share</button>
+          <button class="share-btn share-btn-copy" onclick="copyLink()"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Copy Link</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Demand Map -->
+  <section class="map-section">
+    <div class="section-header">
+      <h2>The Demand Map</h2>
+      <p>Every dot is a Canadian who wants fresh, local food in their community. Which neighbourhood will lead the charge?</p>
+    </div>
+    <div class="map-container">
+      <div class="map-canvas" id="mapCanvas">
+        <svg viewBox="0 0 800 600" id="canadaMap">
+          <!-- Simplified Canada province outlines -->
+          <defs>
+            <linearGradient id="mapBg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#f0f4e8;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#e8f0dc;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <rect width="800" height="600" fill="url(#mapBg)" rx="0"/>
+
+          <!-- Province shapes (simplified polygons) -->
+          <!-- British Columbia -->
+          <path id="prov-BC" d="M60,200 L60,420 L120,440 L140,380 L130,320 L120,260 L100,200 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="BC"/>
+          <!-- Alberta -->
+          <path id="prov-AB" d="M120,210 L120,420 L190,420 L190,210 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="AB"/>
+          <!-- Saskatchewan -->
+          <path id="prov-SK" d="M190,210 L190,420 L260,420 L260,210 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="SK"/>
+          <!-- Manitoba -->
+          <path id="prov-MB" d="M260,210 L260,420 L330,440 L340,380 L330,300 L330,210 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="MB"/>
+          <!-- Ontario -->
+          <path id="prov-ON" d="M330,240 L340,380 L380,450 L450,480 L520,460 L530,400 L500,340 L460,300 L430,260 L380,230 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="ON"/>
+          <!-- Quebec -->
+          <path id="prov-QC" d="M460,180 L430,260 L460,300 L500,340 L530,400 L560,420 L620,380 L650,320 L640,260 L600,200 L540,170 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="QC"/>
+          <!-- New Brunswick -->
+          <path id="prov-NB" d="M620,380 L640,420 L670,430 L680,400 L660,370 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NB"/>
+          <!-- Nova Scotia -->
+          <path id="prov-NS" d="M670,400 L680,430 L720,450 L740,430 L720,410 L690,390 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NS"/>
+          <!-- PEI -->
+          <path id="prov-PE" d="M680,380 L700,375 L710,385 L690,390 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="PE"/>
+          <!-- Newfoundland & Labrador -->
+          <path id="prov-NL" d="M640,180 L620,250 L640,260 L680,300 L720,320 L740,280 L720,220 L680,180 Z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NL"/>
+          <!-- Northern territories (simplified) -->
+          <path id="prov-NT" d="M140,60 L140,210 L330,210 L380,180 L350,120 L280,80 L200,60 Z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="NT"/>
+          <path id="prov-YT" d="M60,60 L60,200 L120,210 L140,210 L140,60 Z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="YT"/>
+          <path id="prov-NU" d="M330,30 L280,80 L350,120 L380,180 L460,180 L540,170 L560,120 L520,70 L440,40 Z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="NU"/>
+
+          <!-- Province labels -->
+          <text x="95" y="330" class="province-label">BC</text>
+          <text x="155" y="330" class="province-label">AB</text>
+          <text x="225" y="330" class="province-label">SK</text>
+          <text x="295" y="330" class="province-label">MB</text>
+          <text x="430" y="370" class="province-label">ON</text>
+          <text x="560" y="310" class="province-label">QC</text>
+          <text x="650" y="410" class="province-label">NB</text>
+          <text x="710" y="430" class="province-label">NS</text>
+          <text x="695" y="375" class="province-label" style="font-size:9px">PE</text>
+          <text x="700" y="260" class="province-label">NL</text>
+
+          <!-- Province supporter counts (dynamically updated) -->
+          <text x="95" y="345" class="province-count" id="count-BC">0</text>
+          <text x="155" y="345" class="province-count" id="count-AB">0</text>
+          <text x="225" y="345" class="province-count" id="count-SK">0</text>
+          <text x="295" y="345" class="province-count" id="count-MB">0</text>
+          <text x="430" y="385" class="province-count" id="count-ON">0</text>
+          <text x="560" y="325" class="province-count" id="count-QC">0</text>
+          <text x="650" y="425" class="province-count" id="count-NB">0</text>
+          <text x="710" y="445" class="province-count" id="count-NS">0</text>
+          <text x="695" y="388" class="province-count" id="count-PE" style="font-size:8px">0</text>
+          <text x="700" y="275" class="province-count" id="count-NL">0</text>
+
+          <!-- Heatmap dots will be injected here -->
+          <g id="heatDots"></g>
+        </svg>
+      </div>
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.3);"></div> 1–10 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.6);"></div> 11–50 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.7);"></div> 51–200 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.95);"></div> 200+ supporters</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Community Leaderboard -->
+  <section class="leaderboard-section">
+    <div class="section-header">
+      <h2>Community Leaderboard</h2>
+      <p>Which communities are leading the demand for local food? This is a friendly competition — rally your neighbours.</p>
+    </div>
+    <div class="leaderboard-grid">
+      <div class="leaderboard-card">
+        <h3>🏆 Top Communities</h3>
+        <div id="topCommunities">
+          <div class="lb-row"><span class="lb-rank">—</span><span class="lb-community">Loading...</span><span class="lb-count">0</span></div>
+        </div>
+      </div>
+      <div class="leaderboard-card">
+        <h3>🔥 Trending Now (24h)</h3>
+        <div id="trendingCommunities">
+          <div class="lb-row"><span class="lb-rank">—</span><span class="lb-community">Loading...</span><span class="lb-count">0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why It Matters -->
+  <section class="why-section">
+    <div class="section-header">
+      <h2>Why This Matters</h2>
+      <p>Canada imports billions in produce that could be grown locally year-round. Here's what changes when communities show demand.</p>
+    </div>
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="icon">🌱</div>
+        <h3>Investment Follows Demand</h3>
+        <p>Local vertical farms need to see community interest before they invest. Your signup is a signal that your area is ready for year-round local produce.</p>
+      </div>
+      <div class="why-card">
+        <div class="icon">🏡</div>
+        <h3>Fresher Food, Less Travel</h3>
+        <p>Field produce from California or Mexico travels 5,000+ km over 10–21 days. Local vertical farm produce travels under 50 km and arrives within 24 hours of harvest.</p>
+      </div>
+      <div class="why-card">
+        <div class="icon">❄️</div>
+        <h3>Four-Season Agriculture</h3>
+        <p>Canada's growing season is short, but indoor farming changes that. Year-round production means year-round local jobs and food security in every community.</p>
+      </div>
+      <div class="why-card">
+        <div class="icon">🤝</div>
+        <h3>Strengthen Your Community</h3>
+        <p>Every dollar spent on local food circulates 3x more in your community. Your signup tells growers the demand is real — and worth investing in.</p>
+      </div>
+      <div class="why-card">
+        <div class="icon">📊</div>
+        <h3>Data-Driven Decisions</h3>
+        <p>We connect this demand data with local growers, investors, and agricultural planners to direct resources where they'll have the greatest impact.</p>
+      </div>
+      <div class="why-card">
+        <div class="icon">🏆</div>
+        <h3>Community Competition</h3>
+        <p>Which neighbourhood will lead the charge? Rally your neighbours, share the campaign, and put your community at the top of the leaderboard.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Share Section -->
+  <section class="share-section" id="share">
+    <h2>Spread the Word</h2>
+    <p>The more people in your community who sign up, the stronger the signal to growers. Share the campaign and rally your neighbourhood.</p>
+    <div class="share-buttons">
+      <button class="share-btn share-btn-x" onclick="shareX()">
+        <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        Share on X
+      </button>
+      <button class="share-btn share-btn-facebook" onclick="shareFacebook()">
+        <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        Share on Facebook
+      </button>
+      <button class="share-btn share-btn-linkedin" onclick="shareLinkedIn()">
+        <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        Share on LinkedIn
+      </button>
+      <button class="share-btn share-btn-email" onclick="shareEmail()">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+        Email Friends
+      </button>
+      <button class="share-btn share-btn-copy" onclick="copyLink()">
+        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        Copy Link
+      </button>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="cta-bottom">
+    <h2>Your Voice Matters</h2>
+    <p>Every signup strengthens the case for local investment in four-season farming. It takes 10 seconds.</p>
+    <button class="btn-signup" onclick="document.getElementById('signup').scrollIntoView({behavior:'smooth'})">I'd Buy Local — Sign Up Now</button>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.</p>
+      </div>
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/greenreach-grow.html">GROW</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
+          <li><a href="/grant-wizard.html">Funding Support</a></li>
+          <li><a href="/blog.html">Blog</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+          <li><a href="mailto:info@greenreachfarms.com">Contact Us</a></li>
+          <li><a href="https://calendly.com/greenreachfarms">Schedule a Call</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Farm Server</a></li>
+          <li><a href="/landing-cloud.html">Management Platform</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Delivery</h4>
+        <ul>
+          <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+          <li><a href="/delivery.html">Delivery Info</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-social" style="margin-bottom: 12px;">
+        <a href="https://linkedin.com/company/greenreach" target="_blank" rel="noopener" aria-label="LinkedIn" style="display:inline-block;margin:0 8px;color:#9ca3af;transition:color .2s;"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+        <a href="https://instagram.com/greenreachgreens" target="_blank" rel="noopener" aria-label="Instagram" style="display:inline-block;margin:0 8px;color:#9ca3af;transition:color .2s;"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+      </div>
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+
+  <script>
+  (function() {
+    'use strict';
+
+    const SHARE_URL = 'https://greenreachgreens.com/id-buy-local.html';
+    const SHARE_TEXT = "I just told my community I'd buy local produce if someone grew it nearby. Join the Field of Dreams campaign — the more demand we show, the more investment in local four-season farming. 🌱";
+
+    // ── FSA (Forward Sortation Area) approximate positions on map ──
+    // Maps first letter of postal code to province center coordinates on our SVG
+    const provinceCenters = {
+      'BC': { x: 95, y: 320 },
+      'AB': { x: 155, y: 320 },
+      'SK': { x: 225, y: 320 },
+      'MB': { x: 295, y: 320 },
+      'ON': { x: 430, y: 360 },
+      'QC': { x: 555, y: 300 },
+      'NB': { x: 650, y: 400 },
+      'NS': { x: 710, y: 425 },
+      'PE': { x: 693, y: 382 },
+      'NL': { x: 695, y: 250 },
+      'NT': { x: 260, y: 150 },
+      'YT': { x: 100, y: 130 },
+      'NU': { x: 430, y: 100 }
+    };
+
+    // Postal first letter → province mapping
+    const letterToProvince = {
+      'A': 'NL', 'B': 'NS', 'C': 'PE', 'E': 'NB',
+      'G': 'QC', 'H': 'QC', 'J': 'QC',
+      'K': 'ON', 'L': 'ON', 'M': 'ON', 'N': 'ON', 'P': 'ON',
+      'R': 'MB', 'S': 'SK', 'T': 'AB', 'V': 'BC',
+      'X': 'NT', 'Y': 'YT'
+    };
+
+    // ── Load Stats ──────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/campaign/stats');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        document.getElementById('statTotal').textContent = (data.total || 0).toLocaleString();
+        document.getElementById('stat24h').textContent = (data.last24h || 0).toLocaleString();
+        document.getElementById('statCommunities').textContent =
+          (data.topCommunities ? data.topCommunities.length : 0).toLocaleString();
+
+        renderLeaderboard('topCommunities', data.topCommunities || []);
+        renderLeaderboard('trendingCommunities', data.recentCommunities || []);
+      } catch (e) {
+        console.warn('[campaign] Stats load failed:', e.message);
+      }
+    }
+
+    function renderLeaderboard(elId, rows) {
+      const el = document.getElementById(elId);
+      if (!rows.length) {
+        el.innerHTML = '<div class="lb-row"><span class="lb-community" style="color:var(--text-light);font-style:italic">Be the first in your community!</span></div>';
+        return;
+      }
+      el.innerHTML = rows.slice(0, 10).map((r, i) => `
+        <div class="lb-row">
+          <span class="lb-rank">${i + 1}</span>
+          <span class="lb-community">${escapeHtml(r.postal_prefix)} · ${escapeHtml(r.province || '')}</span>
+          <span class="lb-count">${parseInt(r.supporters, 10).toLocaleString()}</span>
+        </div>
+      `).join('');
+    }
+
+    // ── Load Heatmap ────────────────────────────────────────────
+    async function loadHeatmap() {
+      try {
+        const res = await fetch('/api/campaign/heatmap');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const dotsGroup = document.getElementById('heatDots');
+        dotsGroup.innerHTML = '';
+
+        // Aggregate by province for counts
+        const provinceTotals = {};
+        (data.regions || []).forEach(r => {
+          const prov = r.province || letterToProvince[r.prefix.charAt(0)] || 'ON';
+          provinceTotals[prov] = (provinceTotals[prov] || 0) + parseInt(r.count, 10);
+        });
+
+        // Update province count labels
+        Object.entries(provinceTotals).forEach(([prov, count]) => {
+          const el = document.getElementById('count-' + prov);
+          if (el) el.textContent = count.toLocaleString();
+        });
+
+        // Color provinces by intensity
+        Object.entries(provinceTotals).forEach(([prov, count]) => {
+          const path = document.getElementById('prov-' + prov);
+          if (!path) return;
+          let fill;
+          if (count >= 200) fill = 'rgba(45, 80, 22, 0.55)';
+          else if (count >= 50) fill = 'rgba(45, 80, 22, 0.35)';
+          else if (count >= 10) fill = 'rgba(130, 195, 65, 0.45)';
+          else if (count > 0) fill = 'rgba(130, 195, 65, 0.25)';
+          else return;
+          path.setAttribute('fill', fill);
+        });
+
+        // Draw dots for each FSA region
+        (data.regions || []).forEach(r => {
+          const prov = r.province || letterToProvince[r.prefix.charAt(0)] || 'ON';
+          const center = provinceCenters[prov];
+          if (!center) return;
+
+          const count = parseInt(r.count, 10);
+          // Scatter dots slightly around province center based on prefix hash
+          const hash = r.prefix.charCodeAt(1) * 17 + r.prefix.charCodeAt(2) * 31;
+          const offsetX = ((hash % 40) - 20);
+          const offsetY = (((hash * 7) % 40) - 20);
+          const x = center.x + offsetX;
+          const y = center.y + offsetY;
+
+          let radius, opacity;
+          if (count >= 200) { radius = 12; opacity = 0.8; }
+          else if (count >= 50) { radius = 9; opacity = 0.7; }
+          else if (count >= 10) { radius = 6; opacity = 0.6; }
+          else { radius = 4; opacity = 0.5; }
+
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', x);
+          circle.setAttribute('cy', y);
+          circle.setAttribute('r', radius);
+          circle.setAttribute('fill', `rgba(130, 195, 65, ${opacity})`);
+          circle.setAttribute('stroke', 'rgba(45, 80, 22, 0.3)');
+          circle.setAttribute('stroke-width', '1');
+
+          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          title.textContent = `${r.prefix} — ${count} supporter${count !== 1 ? 's' : ''}`;
+          circle.appendChild(title);
+
+          dotsGroup.appendChild(circle);
+        });
+      } catch (e) {
+        console.warn('[campaign] Heatmap load failed:', e.message);
+      }
+    }
+
+    // ── Signup ───────────────────────────────────────────────────
+    window.submitSignup = async function() {
+      const btn = document.getElementById('submitBtn');
+      const errorEl = document.getElementById('formError');
+      errorEl.style.display = 'none';
+
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const postalCode = document.getElementById('postalCode').value.trim();
+
+      if (!name || name.length < 2) {
+        errorEl.textContent = 'Please enter your name.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      const cleanPostal = postalCode.replace(/\s/g, '').toUpperCase();
+      if (!cleanPostal || !/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(cleanPostal)) {
+        errorEl.textContent = 'Please enter a valid Canadian postal code (e.g., K7L 3N6).';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Adding you to the map...';
+
+      try {
+        const res = await fetch('/api/campaign/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, postalCode: cleanPostal, referralSource: document.referrer || '' })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          errorEl.textContent = data.error || 'Something went wrong. Please try again.';
+          errorEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = "I'd Buy Local";
+          return;
+        }
+
+        // Success
+        document.getElementById('signupForm').style.display = 'none';
+        document.getElementById('formSuccess').style.display = 'block';
+
+        // Refresh stats and map
+        loadStats();
+        loadHeatmap();
+      } catch (e) {
+        errorEl.textContent = 'Network error. Please check your connection and try again.';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = "I'd Buy Local";
+      }
+    };
+
+    // ── Social Sharing ──────────────────────────────────────────
+    window.shareX = function() {
+      window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(SHARE_TEXT)}&url=${encodeURIComponent(SHARE_URL)}`, '_blank', 'width=600,height=400');
+    };
+
+    window.shareFacebook = function() {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(SHARE_URL)}`, '_blank', 'width=600,height=400');
+    };
+
+    window.shareLinkedIn = function() {
+      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(SHARE_URL)}`, '_blank', 'width=600,height=400');
+    };
+
+    window.shareEmail = function() {
+      const subject = encodeURIComponent("I'd buy local — join the Field of Dreams campaign");
+      const body = encodeURIComponent(SHARE_TEXT + '\n\n' + SHARE_URL);
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    };
+
+    window.copyLink = function() {
+      navigator.clipboard.writeText(SHARE_URL).then(() => {
+        const btn = event.target.closest('.share-btn');
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
+        setTimeout(() => { btn.innerHTML = origHTML; }, 2000);
+      });
+    };
+
+    // ── Utilities ────────────────────────────────────────────────
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ── Auto-format postal code input ────────────────────────────
+    document.getElementById('postalCode').addEventListener('input', function(e) {
+      let val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      if (val.length > 3) val = val.slice(0, 3) + ' ' + val.slice(3, 6);
+      e.target.value = val;
+    });
+
+    // Enter key submits form
+    document.querySelectorAll('#signupForm input').forEach(input => {
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitSignup(); }
+      });
+    });
+
+    // ── Initialize ──────────────────────────────────────────────
+    loadStats();
+    loadHeatmap();
+
+    // Refresh every 60 seconds
+    setInterval(() => { loadStats(); loadHeatmap(); }, 60000);
+  })();
+  </script>
+
+</body>
+</html>

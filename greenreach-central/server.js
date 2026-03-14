@@ -44,6 +44,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
 import driverApplicationsRoutes from './routes/driver-applications.js';
+import campaignRoutes from './routes/campaign.js';
 import { adminAuthMiddleware } from './middleware/adminAuth.js';
 import networkDevicesRoutes from './routes/network-devices.js';
 import reportsRoutes from './routes/reports.js';
@@ -2859,6 +2860,7 @@ app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to f
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
+app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
