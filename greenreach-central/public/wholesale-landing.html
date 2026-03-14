@@ -67,7 +67,7 @@
     }
 
     .nav-content {
-      max-width: 1000px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 0 22px;
       height: 44px;
@@ -89,8 +89,10 @@
 
     .nav-links {
       display: flex;
-      gap: 32px;
+      gap: 20px;
       list-style: none;
+      flex-wrap: nowrap;
+      align-items: center;
     }
 
     .nav-links a {
@@ -100,6 +102,7 @@
       font-weight: 400;
       opacity: 0.8;
       transition: opacity 0.3s;
+      white-space: nowrap;
     }
 
     .nav-links a:hover {
@@ -115,6 +118,8 @@
       font-size: 12px;
       font-weight: 500;
       transition: background 0.3s;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .nav-cta:hover {
