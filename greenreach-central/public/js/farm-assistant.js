@@ -60,15 +60,15 @@ class FarmAssistant {
 
         if (incomplete.length === 0) {
           this.addMessage(
-            `🎉 Welcome back! Everything is set up and your farm is ready to grow. Ask me anything — I&rsquo;m here to help!`
+            `🎉 <strong>Your farm is fully set up.</strong> All onboarding tasks are complete — your grow rooms, inventory, payments, and store are configured and ready. Ask me anything about your crops, environment, or operations.`
           );
         } else {
           const nextItems = incomplete.slice(0, 3).map(t => `${t.icon || '○'} ${t.label}`).join('<br>');
           this.addMessage(
             `🌱 <strong>Welcome to GreenReach Central!</strong><br>
-            I'm Cheo, your farm assistant. You've completed <strong>${done} of ${total}</strong> setup tasks.
-            <br><br>Here's what I'd suggest next:<br>${nextItems}
-            <br><br>Type <em>"what should I do next"</em> anytime to see your full checklist!`
+            I'm Cheo — I'll walk you through getting your farm operational. You've completed <strong>${done} of ${total}</strong> setup tasks so far.
+            <br><br><strong>Here's what I'd recommend next and why:</strong><br>${nextItems}
+            <br><br>Each step builds on the last — completing them in order means every feature works when you need it. Type <em>"what should I do next"</em> anytime and I'll pick up where you left off.`
           );
         }
 
@@ -89,11 +89,11 @@ class FarmAssistant {
     if (localStorage.getItem(hintKey)) return;
 
     const hints = {
-      'Inventory': '📦 <strong>First time in Inventory?</strong> Start by adding your crops — click "Add Crop" to begin tracking what you grow.',
-      'POS Terminal': '💰 <strong>Welcome to the POS!</strong> Set up Square payment processing in Setup/Update before creating your first order.',
-      'Tray Management': '🌱 <strong>Tray Management</strong> lets you track seeding, germination, and transplanting. Add a tray to get started!',
-      'Planting Schedule': '📅 <strong>Planting Scheduler</strong> helps you plan successive plantings. Create your first planting event to begin.',
-      'Wholesale': '🏢 <strong>Wholesale Module</strong> — manage B2B orders, buyer accounts, and compliance documents here.'
+      'Inventory': '📦 <strong>This is your Crop Inventory.</strong> Everything starts here — the crops you add become available in your online store, POS, pricing tools, and harvest tracking. Click <strong>"Add Crop"</strong> to register what you grow, including variety, expected yield, and growing location.',
+      'POS Terminal': '💰 <strong>This is your Point-of-Sale terminal.</strong> Before you can ring up sales, you need Square connected for payment processing. Head to <strong>Settings → Payment Methods</strong> to link your Square account — once that\'s done, you can accept card and tap payments here.',
+      'Tray Management': '🌱 <strong>Tray Management tracks every plant from seed to harvest.</strong> Each tray gets a QR code for scanning on the farm floor. Add a tray to start logging seeding dates, germination rates, and transplant moves — this builds the traceability record your buyers may require.',
+      'Planting Schedule': '📅 <strong>The Planting Scheduler helps you plan successive plantings</strong> so you always have crops coming to harvest. Create a planting event to set a crop, target date, and quantity — the system will forecast your harvest window and help avoid gaps in supply.',
+      'Wholesale': '🏢 <strong>The Wholesale Module manages your B2B business.</strong> Here you\'ll see incoming orders from wholesale buyers, track fulfillment status, and manage compliance documents like food safety certificates. Buyers place orders through the wholesale portal and they appear here for you to fulfill.'
     };
 
     const hint = hints[page];
@@ -249,18 +249,18 @@ class FarmAssistant {
             <div class="mascot-welcome">
               <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
-                <strong>Hi I'm Cheo, your farm Assistant!</strong>
-                <strong class="love-to-help">I love to help!</strong>
+                <strong>I'm Cheo — your farm operations assistant.</strong>
+                <strong class="love-to-help">Ask me anything or try one of these:</strong>
                 <div class="example-queries">
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What should I do next?')">What should I do next?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\'s ready to harvest?')">What's ready to harvest?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show me the temperature')">Show me the temperature</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Tell me a joke')">Tell me a joke</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
                 </div>
-                <strong>Or type your own question below!</strong>
+                <strong>Or type your own question below.</strong>
               </div>
             </div>
           </div>
@@ -762,13 +762,14 @@ class FarmAssistant {
     
     // Fallback with encouragement
     this.addMessage(
-      `🤔 I'm not sure about that one! Here are some fun things to try:
+      `🤔 I didn't catch that one, but I can help with a lot. Here's what I'd suggest:
       <ul>
-        <li>🌱 "What's ready to harvest?"</li>
-        <li>🌡️ "Show me the temperature"</li>
-        <li>🥬 "Do we have lettuce?"</li>
-        <li>💡 "Blink lights for basil"</li>
-        <li>📅 "Show planting schedule"</li>
+        <li>🌱 <strong>Harvest readiness</strong> — "What's ready to harvest?" so you know what to pick today</li>
+        <li>🌡️ <strong>Environment check</strong> — "Show me the temperature" to spot any climate issues</li>
+        <li>🥬 <strong>Crop lookup</strong> — "Where is the basil?" to find which zone a crop is in</li>
+        <li>💡 <strong>Identify hardware</strong> — "Blink lights for basil" to visually locate a group</li>
+        <li>📅 <strong>Scheduling</strong> — "Show planting schedule" to review upcoming plantings</li>
+        <li>🚀 <strong>Setup help</strong> — "What should I do next?" and I'll guide you through onboarding</li>
       </ul>`
     );
   }
@@ -794,34 +795,34 @@ class FarmAssistant {
 
     if (addRoomPattern.test(query)) {
       this.addMessage(
-        `🌱 <strong>Adding a Grow Room</strong><br>Go to <strong>Setup/Update</strong> → <strong>Farm Setup</strong> → <strong>Grow Rooms</strong> to add your growing spaces.`,
+        `🌱 <strong>Let's add a grow room.</strong><br>Grow rooms are the foundation of your farm layout — every zone, sensor, and light group lives inside a room. Once you create one, you can assign crops to it, track environmental conditions, and run grow recipes.<br><br>Go to <strong>Setup/Update → Farm Setup → Grow Rooms</strong> to define your first space.`,
         'assistant',
-        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+        `<button onclick="window.location.href='/LE-dashboard.html?panel=grow-rooms'" class="action-btn primary">Open Grow Rooms</button>`
       );
       return true;
     }
 
     if (paymentPattern.test(query)) {
       this.addMessage(
-        `💳 <strong>Payment Processing</strong><br>Go to <strong>Setup/Update</strong> to configure Square payment processing, or check <strong>Settings → Payment Methods</strong>.`,
+        `💳 <strong>Let's connect payment processing.</strong><br>GreenReach uses Square to handle farm payments — this covers your online store checkout, POS terminal, and wholesale order billing. Without it connected, customers can browse but can't complete purchases.<br><br>You'll need a Square account (free to create). Go to <strong>Settings → Payment Methods</strong> to start the connection.`,
         'assistant',
-        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+        `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=payments]')){window.parent.document.querySelector('[data-section=payments]').click()}else{window.location.href='/LE-farm-admin.html#payments'}" class="action-btn primary">Open Payment Settings</button>`
       );
       return true;
     }
 
     if (storePattern.test(query)) {
       this.addMessage(
-        `🛒 <strong>Online Store</strong><br>Set up your farm's online store through the <strong>Setup/Update</strong> section. Customers will be able to browse and order your produce!`,
+        `🛒 <strong>Let's set up your online store.</strong><br>Your store lets customers browse your available crops and place orders directly. It pulls from your crop inventory and pricing — so make sure you've added crops and set prices first.<br><br>The store wizard will walk you through branding, delivery options, and payment setup.`,
         'assistant',
-        `<button onclick="window.location.href='/LE-dashboard.html'" class="action-btn primary">Open Setup</button>`
+        `<button onclick="window.location.href='/LE-dashboard.html?wizard=store-setup'" class="action-btn primary">Open Store Wizard</button>`
       );
       return true;
     }
 
     if (inventoryPattern.test(query)) {
       this.addMessage(
-        `📦 <strong>Inventory Management</strong><br>Head to <strong>Inventory</strong> in the sidebar to add crops and track what you're growing.`,
+        `📦 <strong>Let's add crops to your inventory.</strong><br>Your inventory is the single source of truth for everything you grow. Each crop you add here becomes available in your store, POS, pricing tools, and planting scheduler. Include the variety, growing zone, and expected yield for the most accurate tracking.`,
         'assistant',
         `<button onclick="window.location.href='/views/farm-inventory.html'" class="action-btn primary">Open Inventory</button>`
       );
@@ -831,10 +832,10 @@ class FarmAssistant {
     if (upgradePattern.test(query)) {
       const planType = localStorage.getItem('plan_type') || 'cloud';
       if (planType === 'edge') {
-        this.addMessage(`⚡ You're already on the <strong>Edge</strong> plan with full hardware control! All features are available to you.`);
+        this.addMessage(`⚡ <strong>You're on the Edge plan</strong> — that's the full hardware suite. You have light control, environment management, nutrient dosing, and auto-discovery all active. Every feature in the platform is available to you.`);
       } else {
         this.addMessage(
-          `☁️ You're on the <strong>Cloud</strong> plan. Upgrading to <strong>Edge</strong> adds light control, environment management, nutrient dosing, and hardware auto-discovery.`,
+          `☁️ <strong>You're currently on the Cloud plan.</strong><br>Cloud gives you inventory, store, POS, wholesale, and environment monitoring. Upgrading to <strong>Edge</strong> adds direct hardware control — automated light recipes, nutrient dosing, and auto-discovery of controllers on your farm network. Edge requires a reTerminal device on-site.`,
           'assistant',
           `<button onclick="window.open('/purchase.html?upgrade=edge','_self')" class="action-btn primary">Learn about Edge</button>`
         );
@@ -844,7 +845,7 @@ class FarmAssistant {
 
     if (profilePattern.test(query)) {
       this.addMessage(
-        `👤 <strong>Farm Profile</strong><br>Go to <strong>Settings</strong> to update your farm name, contact name, email, phone, and website.`,
+        `👤 <strong>Let's update your farm profile.</strong><br>Your profile information — farm name, contact name, email, phone, and address — appears on customer receipts, invoices, your online store, and wholesale communications. Keeping it accurate ensures your buyers and customers can reach you.`,
         'assistant',
         `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=settings]')){window.parent.document.querySelector('[data-section=settings]').click()}else{window.location.href='/LE-farm-admin.html#settings'}" class="action-btn primary">Open Settings</button>`
       );
@@ -874,7 +875,7 @@ class FarmAssistant {
 
       if (incomplete.length === 0) {
         this.addMessage(
-          `🎉 <strong>You're all set!</strong> All ${data.totalCount} setup tasks are complete. Your farm is fully configured and ready to grow!`
+          `🎉 <strong>All ${data.totalCount} setup tasks are complete.</strong> Your farm is fully configured — grow rooms, inventory, payments, store, and recipes are all in place. You're ready for daily operations. Ask me about harvests, environment, or anything else you need.`
         );
         return;
       }
@@ -882,9 +883,10 @@ class FarmAssistant {
       let nextTasks = incomplete.slice(0, 3).map(t => `<li>${t.icon || '○'} ${t.label}</li>`).join('');
       this.addMessage(
         `🚀 <strong>Setup Progress: ${data.completedCount} of ${data.totalCount} complete</strong>
-        <br><br>Here's what to do next:
+        <br><br>Here's what to focus on next — I've ordered these so each step unlocks the features that follow:
         <ul>${nextTasks}</ul>
-        ${incomplete.length > 3 ? `<em>...and ${incomplete.length - 3} more</em>` : ''}`,
+        ${incomplete.length > 3 ? `<em>...and ${incomplete.length - 3} more after these</em>` : ''}
+        <br>Click any task in the <strong>Getting Started</strong> checklist in Settings to jump straight to it.`,
         'assistant',
         `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=settings]')){window.parent.document.querySelector('[data-section=settings]').click()}else{window.location.href='/LE-farm-admin.html#settings'}" class="action-btn primary">View Full Checklist</button>`
       );
@@ -1430,16 +1432,17 @@ class FarmAssistant {
     
     if (helpPatterns.test(query)) {
       this.addMessage(`
-        <strong>🎯 Here's what I can do for you:</strong>
+        <strong>🎯 Here's what I can help you with:</strong>
         <ul>
-          <li><strong>🌱 Harvest Info:</strong><br>"What's ready to harvest?", "Ready crops today"</li>
-          <li><strong>🌡️ Environment:</strong><br>"Show temperature", "What's the humidity?"</li>
-          <li><strong>🥬 Find Crops:</strong><br>"Where is the basil?", "Do we have lettuce?"</li>
-          <li><strong>💡 Hardware Control:</strong><br>"Blink lights for romaine", "Identify zone A"</li>
-          <li><strong>📊 Farm Status:</strong><br>"How is the farm?", "Any alerts?"</li>
-          <li><strong>🗺️ Navigation:</strong><br>"Show planting schedule", "Open wholesale"</li>
+          <li><strong>🌱 Harvest Readiness:</strong><br>"What's ready to harvest?" — I'll check all crops and tell you what to pick today</li>
+          <li><strong>🌡️ Environment:</strong><br>"Show temperature" — real-time climate data from your sensors to catch problems early</li>
+          <li><strong>🥬 Crop Lookup:</strong><br>"Where is the basil?" — find which zone and tray any crop is growing in</li>
+          <li><strong>💡 Hardware ID:</strong><br>"Blink lights for romaine" — flash the lights in a zone so you can physically locate it</li>
+          <li><strong>📊 Farm Status:</strong><br>"Any alerts?" — check for environmental warnings or equipment issues</li>
+          <li><strong>🗺️ Navigation:</strong><br>"Open planting schedule" — I'll take you directly to any page</li>
+          <li><strong>🚀 Setup Guide:</strong><br>"What should I do next?" — I'll walk you through onboarding step by step</li>
         </ul>
-        <br><em>💡 Tip: Just ask naturally - I understand many ways of asking the same thing!</em>
+        <br><em>Just ask naturally — I understand many ways of phrasing the same question.</em>
       `);
       return true;
     }

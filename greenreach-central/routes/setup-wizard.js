@@ -1085,21 +1085,21 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
     tasks = [
       {
         id: 'setup_wizard',
-        label: 'Complete setup wizard',
+        label: 'Run the setup wizard — set your password and farm profile in one pass',
         completed: dbData.setup_completed === true || storeProfile.setup_completed === true,
         link: '/setup-wizard.html',
         icon: '✅'
       },
       {
         id: 'farm_profile',
-        label: 'Update farm profile (contact & location)',
+        label: 'Add your contact info and farm location — this appears on receipts, invoices, and your online store',
         completed: !!(dbData.contact_name || storeProfile.contact?.name),
         link: '#settings',
         icon: '👤'
       },
       {
         id: 'grow_rooms',
-        label: 'Add at least one grow room',
+        label: 'Create a grow room — rooms organize your zones, sensors, and lights so everything maps to a physical space',
         completed: effectiveRoomCount > 0,
         link: '#iframe-view',
         linkUrl: '/LE-dashboard.html?panel=grow-rooms',
@@ -1107,7 +1107,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       },
       {
         id: 'display_prefs',
-        label: 'Set display preferences (units, timezone)',
+        label: 'Set your units and timezone — this controls how temperatures, weights, and dates display everywhere',
         completed: false, // deferred to client-side check
         clientCheck: 'farmSettings',
         link: '#settings',
@@ -1115,14 +1115,14 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       },
       {
         id: 'payment_processing',
-        label: 'Configure payment processing',
+        label: 'Connect Square for payments — required before you can accept orders through POS or your online store',
         completed: storeProfile.payment_configured === true,
         link: '#payments',
         icon: '💳'
       },
       {
         id: 'online_store',
-        label: 'Set up online store',
+        label: 'Launch your online store — customers will browse your inventory and place orders directly',
         completed: storeProfile.store_configured === true,
         link: '#iframe-view',
         linkUrl: '/LE-dashboard.html?wizard=store-setup',
@@ -1130,7 +1130,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       },
       {
         id: 'inventory',
-        label: 'Add inventory items',
+        label: 'Add your first crop to inventory — this is what feeds your store, pricing, and harvest tracking',
         completed: (dbData.inventoryCount || 0) > 0,
         link: '#iframe-view',
         linkUrl: '/views/farm-inventory.html',
@@ -1138,14 +1138,14 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       },
       {
         id: 'activity_hub',
-        label: 'Install Activity Hub (iPad)',
+        label: 'Install the Activity Hub on your iPad — a farm-floor app for scanning trays, recording harvests, and daily tasks',
         completed: storeProfile.activity_hub_installed === true,
         link: '#settings',
         icon: '📱'
       },
       {
         id: 'tray_setup',
-        label: 'Set up trays for grow tracking',
+        label: 'Set up your tray types — trays track every plant from seed to harvest with full traceability',
         completed: storeTrayCount > 0,
         link: '#iframe-view',
         linkUrl: '/views/tray-setup.html',
@@ -1153,14 +1153,14 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       },
       {
         id: 'seed_inventory',
-        label: 'Add seed inventory',
+        label: 'Add your seeds to inventory — seed tracking powers planting schedules and supply forecasting',
         completed: storeSeedCount > 0,
         link: '#inventory-mgmt',
         icon: '🌱'
       },
       {
         id: 'first_recipe',
-        label: 'Create first grow recipe',
+        label: 'Create a grow recipe — recipes define light schedules, environment targets, and growth stages for each crop',
         completed: storeGroupCount > 0,
         link: '#iframe-view',
         linkUrl: '/LE-dashboard.html?panel=groups-v2',
@@ -1173,7 +1173,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
       tasks.push(
         {
           id: 'controllers',
-          label: 'Connect light controllers',
+          label: 'Discover your light controllers — auto-scan finds GROW3 and DMX hardware on your network',
           completed: storeProfile.controllers_connected === true,
           link: '#iframe-view',
           linkUrl: '/LE-dashboard.html?panel=iot-devices',
@@ -1182,7 +1182,7 @@ router.get('/onboarding-status', authenticateToken, async (req, res) => {
         },
         {
           id: 'bus_mapping',
-          label: 'Run bus mapping',
+          label: 'Map your lighting bus — connects physical light channels to zones so recipes can control them',
           completed: storeProfile.bus_mapped === true,
           link: '#iframe-view',
           linkUrl: '/LE-dashboard.html?panel=bus-mapping',
