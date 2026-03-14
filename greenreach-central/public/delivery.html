@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm-to-Door Delivery | GreenReach</title>
+  <meta name="description" content="Fresh, locally grown produce delivered directly to your business or home. Same-day harvest, local coverage, and flexible scheduling from GreenReach.">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://greenreachgreens.com/delivery.html">
+  <meta property="og:title" content="Farm-to-Door Delivery | GreenReach">
+  <meta property="og:description" content="Fresh, locally grown produce delivered directly to your business or home. Same-day harvest, local coverage, and flexible scheduling.">
+  <meta property="og:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Farm-to-Door Delivery | GreenReach">
+  <meta name="twitter:description" content="Fresh, locally grown produce delivered directly to your business or home. Same-day harvest, local coverage, and flexible scheduling.">
+  <meta name="twitter:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GBPD0VBEF2"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GBPD0VBEF2');
+  </script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2d5016;
+      --accent: #82c341;
+      --text: #1d1d1f;
+      --text-light: #86868b;
+      --bg: #fbfbfd;
+      --surface: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.47059;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(251, 251, 253, 0.92);
+      backdrop-filter: saturate(180%) blur(20px);
+      z-index: 1000;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .nav-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 22px;
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-logo img {
+      height: 32px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      list-style: none;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white !important;
+      padding: 6px 16px;
+      border-radius: 980px;
+      opacity: 1 !important;
+      font-weight: 500;
+      transition: background 0.3s !important;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent) !important;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 140px 24px 100px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(130, 195, 65, 0.08) 0%, var(--bg) 100%);
+    }
+
+    .hero-tag {
+      display: inline-block;
+      background: rgba(45, 80, 22, 0.08);
+      color: var(--primary);
+      padding: 6px 16px;
+      border-radius: 980px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.07143;
+      letter-spacing: -0.005em;
+      color: var(--text);
+      max-width: 800px;
+      margin: 0 auto 20px;
+    }
+
+    .hero h1 span {
+      color: var(--primary);
+    }
+
+    .hero p {
+      font-size: 21px;
+      line-height: 1.381;
+      color: var(--text-light);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      padding: 14px 32px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 17px;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      display: inline-block;
+      background: transparent;
+      color: var(--primary);
+      padding: 14px 32px;
+      border-radius: 980px;
+      text-decoration: none;
+      font-size: 17px;
+      font-weight: 500;
+      border: 2px solid var(--primary);
+      transition: all 0.3s;
+    }
+
+    .btn-secondary:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+    }
+
+    /* Section Base */
+    section {
+      padding: 100px 24px;
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 60px;
+    }
+
+    .section-header h2 {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.08349;
+      letter-spacing: -0.003em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .section-header p {
+      font-size: 19px;
+      line-height: 1.4211;
+      color: var(--text-light);
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 40px 32px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-light);
+    }
+
+    /* How It Works */
+    .how-it-works {
+      background: linear-gradient(180deg, var(--bg) 0%, rgba(130, 195, 65, 0.06) 100%);
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 32px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 56px;
+      height: 56px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 auto 20px;
+    }
+
+    .step h3 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .step p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-light);
+    }
+
+    /* Coverage Section */
+    .coverage-section {
+      background: var(--surface);
+    }
+
+    .coverage-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .coverage-card {
+      padding: 32px;
+    }
+
+    .coverage-card h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .coverage-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .coverage-card ul li {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      font-size: 15px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .coverage-card ul li::before {
+      content: "✓";
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Pricing Section */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .pricing-card {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 40px 32px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      text-align: center;
+      position: relative;
+    }
+
+    .pricing-card.featured {
+      border: 2px solid var(--accent);
+    }
+
+    .pricing-card.featured::before {
+      content: "Most Popular";
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: white;
+      padding: 4px 16px;
+      border-radius: 980px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pricing-card h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .pricing-card .price {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .pricing-card .price-note {
+      font-size: 14px;
+      color: var(--text-light);
+      margin-bottom: 24px;
+    }
+
+    .pricing-card ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+
+    .pricing-card ul li {
+      padding: 8px 0;
+      font-size: 15px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pricing-card ul li::before {
+      content: "✓";
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      text-align: center;
+      background: var(--primary);
+      color: white;
+      padding: 100px 24px;
+    }
+
+    .cta-section h2 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 19px;
+      line-height: 1.4211;
+      opacity: 0.85;
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .cta-section .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .cta-section .btn-primary:hover {
+      background: white;
+      color: var(--primary);
+    }
+
+    .cta-section .btn-secondary {
+      border-color: white;
+      color: white;
+    }
+
+    .cta-section .btn-secondary:hover {
+      background: white;
+      color: var(--primary);
+    }
+
+    /* FAQ */
+    .faq-list {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .faq-question {
+      width: 100%;
+      padding: 20px 0;
+      background: none;
+      border: none;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: inherit;
+    }
+
+    .faq-question::after {
+      content: "+";
+      font-size: 24px;
+      color: var(--text-light);
+      transition: transform 0.3s;
+    }
+
+    .faq-question.active::after {
+      transform: rotate(45deg);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .faq-answer p {
+      padding: 0 0 20px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-light);
+    }
+
+    /* Footer */
+    footer {
+      background: #1d1d1f;
+      color: #86868b;
+      padding: 60px 24px 30px;
+      font-size: 12px;
+    }
+
+    .footer-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+      gap: 32px;
+      margin-bottom: 40px;
+    }
+
+    .footer-about h3 {
+      color: white;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .footer-about p {
+      line-height: 1.6;
+      color: #86868b;
+    }
+
+    .footer-links h4 {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 8px;
+    }
+
+    .footer-links a {
+      color: #86868b;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .footer-links a:hover {
+      color: white;
+    }
+
+    .footer-bottom {
+      max-width: 1000px;
+      margin: 0 auto;
+      text-align: center;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .hero p {
+        font-size: 18px;
+      }
+
+      .section-header h2 {
+        font-size: 32px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .footer-content {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-cta {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .cta-section h2 {
+        font-size: 32px;
+      }
+
+      .pricing-card.featured::before {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-content">
+      <a href="/greenreach-org.html" class="nav-logo">
+        <img src="/images/greenreach-clr.png" alt="GreenReach" />
+      </a>
+      <ul class="nav-links">
+        <li><a href="/greenreach-grow.html">GROW</a></li>
+        <li><a href="/growing-made-easy.html">Growing</a></li>
+        <li><a href="/grow-and-sell.html">Buying/Selling</a></li>
+        <li><a href="/wholesale-landing.html">Wholesale</a></li>
+        <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+        <li><a href="/GR-wholesale.html" class="nav-cta">Order Now</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-tag">Delivery Service</span>
+    <h1>Farm-to-Door <span>Delivery</span></h1>
+    <p>Fresh produce delivered directly to your business or home — harvested the morning of your delivery for maximum freshness and nutrition.</p>
+    <div class="hero-cta">
+      <a href="/GR-wholesale.html" class="btn-primary">Set Up Delivery</a>
+      <a href="/driver-enrollment.html" class="btn-secondary">Become a Driver</a>
+    </div>
+  </section>
+
+  <!-- Core Features -->
+  <section>
+    <div class="section-header">
+      <h2>Why GreenReach Delivery</h2>
+      <p>From harvest to your door in hours, not days. Our delivery network connects you directly with local farms.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🌿</div>
+        <h3>Same-Day Harvest</h3>
+        <p>Produce is harvested the morning of your delivery, ensuring peak freshness, nutrition, and flavour that grocery stores simply can't match.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📍</div>
+        <h3>Local Coverage</h3>
+        <p>Serving Kingston and surrounding areas within 50km of our network farms. Supporting local agriculture while reducing food miles.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📅</div>
+        <h3>Flexible Scheduling</h3>
+        <p>Choose your preferred delivery window with availability Monday through Saturday. Set up recurring orders or order on demand.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">♻️</div>
+        <h3>Sustainable Delivery</h3>
+        <p>Reduced food miles, efficient delivery routes, and returnable packaging options. Every delivery supports a greener food system.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3>Real-Time Tracking</h3>
+        <p>Know exactly when your order will arrive. Receive notifications from harvest through delivery with full transparency.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤝</div>
+        <h3>Direct Farm Connection</h3>
+        <p>Know exactly where your food comes from. Every delivery includes the farm of origin and harvest details for complete traceability.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-it-works">
+    <div class="section-header">
+      <h2>How It Works</h2>
+      <p>Getting fresh, local produce delivered is simple.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Browse & Order</h3>
+        <p>Explore available produce from local farms through our wholesale portal. Select what you need and choose a delivery window.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Morning Harvest</h3>
+        <p>Your order triggers a harvest at the farm. Produce is picked fresh the morning of your scheduled delivery day.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Quality Check</h3>
+        <p>Every item is inspected and carefully packed to maintain freshness, quality, and food safety standards during transit.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <h3>Delivered to You</h3>
+        <p>A local GreenReach driver delivers your order to your door. Track the delivery in real time from farm to table.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Coverage & Scheduling -->
+  <section class="coverage-section">
+    <div class="section-header">
+      <h2>Coverage & Scheduling</h2>
+      <p>Reliable delivery built around your needs.</p>
+    </div>
+    <div class="coverage-grid">
+      <div class="coverage-card">
+        <h3>Delivery Areas</h3>
+        <ul>
+          <li>Kingston and greater Kingston area</li>
+          <li>Surrounding communities within 50km</li>
+          <li>Institutional and commercial addresses</li>
+          <li>Residential delivery available</li>
+          <li>Expanding coverage regularly</li>
+        </ul>
+      </div>
+      <div class="coverage-card">
+        <h3>Delivery Schedule</h3>
+        <ul>
+          <li>Monday through Saturday delivery</li>
+          <li>Morning and afternoon windows</li>
+          <li>Recurring weekly orders available</li>
+          <li>On-demand ordering supported</li>
+          <li>Custom schedules for wholesale buyers</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section>
+    <div class="section-header">
+      <h2>Delivery Options</h2>
+      <p>Transparent pricing for every order size.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>Standard Delivery</h3>
+        <div class="price">$8</div>
+        <div class="price-note">per delivery</div>
+        <ul>
+          <li>Same-day harvest guarantee</li>
+          <li>Next-day delivery window</li>
+          <li>Real-time tracking</li>
+          <li>Residential or commercial</li>
+        </ul>
+        <a href="/GR-wholesale.html" class="btn-primary" style="width: 100%; text-align: center;">Get Started</a>
+      </div>
+      <div class="pricing-card featured">
+        <h3>Weekly Subscription</h3>
+        <div class="price">$5</div>
+        <div class="price-note">per delivery</div>
+        <ul>
+          <li>Everything in Standard</li>
+          <li>Recurring weekly schedule</li>
+          <li>Priority harvest selection</li>
+          <li>Reduced per-delivery cost</li>
+        </ul>
+        <a href="/GR-wholesale.html" class="btn-primary" style="width: 100%; text-align: center;">Subscribe</a>
+      </div>
+      <div class="pricing-card">
+        <h3>Wholesale / Bulk</h3>
+        <div class="price">Custom</div>
+        <div class="price-note">volume-based pricing</div>
+        <ul>
+          <li>Everything in Subscription</li>
+          <li>Custom delivery windows</li>
+          <li>Dedicated account support</li>
+          <li>Volume discounts</li>
+        </ul>
+        <a href="https://calendly.com/greenreachfarms" class="btn-primary" style="width: 100%; text-align: center;">Contact Sales</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="how-it-works">
+    <div class="section-header">
+      <h2>Frequently Asked Questions</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-question">What areas do you deliver to?</button>
+        <div class="faq-answer">
+          <p>We currently deliver to Kingston and surrounding areas within 50km of our network farms. Our coverage area is expanding regularly — contact us if you're outside our current zone and we'll let you know when we can reach you.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">How fresh is the produce?</button>
+        <div class="faq-answer">
+          <p>Extremely fresh. Your produce is harvested the same morning it's delivered. Unlike grocery store produce that may travel for days, our farm-to-door model means you receive food at peak nutrition and flavour.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Can I set up recurring deliveries?</button>
+        <div class="faq-answer">
+          <p>Yes. Our Weekly Subscription plan allows you to set a recurring delivery schedule. Choose your preferred day and delivery window, and we'll handle the rest. You can adjust or pause at any time through the wholesale portal.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">What happens if I'm not home during delivery?</button>
+        <div class="faq-answer">
+          <p>You'll receive real-time tracking notifications so you can plan accordingly. If no one is available, we can leave the delivery in a designated safe spot, or reschedule for a time that works better.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Do you deliver to businesses and institutions?</button>
+        <div class="faq-answer">
+          <p>Absolutely. We serve restaurants, cafeterias, hospitals, schools, and other institutions. Our Wholesale/Bulk plan provides custom scheduling and volume-based pricing tailored to your needs.</p>
+        </div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">How do I become a delivery driver?</button>
+        <div class="faq-answer">
+          <p>Visit our <a href="/driver-enrollment.html" style="color: var(--accent);">Driver Enrollment page</a> to learn about requirements and submit your application. We're always looking for reliable drivers to join our team.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <h2>Ready for Fresh, Local Delivery?</h2>
+    <p>Join the growing number of homes and businesses enjoying same-day harvest produce delivered right to their door.</p>
+    <div class="hero-cta">
+      <a href="/GR-wholesale.html" class="btn-primary">Set Up Delivery</a>
+      <a href="https://calendly.com/greenreachfarms" class="btn-secondary">Schedule a Call</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-about">
+        <h3>GreenReach</h3>
+        <p>
+          Building practical tools to strengthen Canadian food sovereignty. Research-driven solutions for local growers, institutions, and community organizations.
+        </p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Main Sites</h4>
+        <ul>
+          <li><a href="/greenreach-org.html">Home</a></li>
+          <li><a href="/greenreach-grow.html">GROW</a></li>
+          <li><a href="/growing-made-easy.html">Growing Made Easy</a></li>
+          <li><a href="/grow-and-sell.html">Buying/Selling Made Easy</a></li>
+          <li><a href="/grant-wizard.html">Funding Support</a></li>
+          <li><a href="/blog.html">Blog</a></li>
+          <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
+          <li><a href="mailto:info@greenreachfarms.com">Contact Us</a></li>
+          <li><a href="https://calendly.com/greenreachfarms">Schedule a Call</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Light Engine</h4>
+        <ul>
+          <li><a href="/purchase.html">Light Engine Home</a></li>
+          <li><a href="/landing-edge.html">Farm Server</a></li>
+          <li><a href="/landing-cloud.html">Management Platform</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Wholesale</h4>
+        <ul>
+          <li><a href="/wholesale-landing.html">Buyer Portal</a></li>
+          <li><a href="/wholesale-learn-more.html">Learn More</a></li>
+          <li><a href="/GR-wholesale.html">Buyer Login</a></li>
+          <li><a href="/farm-sales-landing.html">Farm Sales</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Delivery</h4>
+        <ul>
+          <li><a href="/driver-enrollment.html">Drive With Us</a></li>
+          <li><a href="/delivery.html">Delivery Info</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-social" style="margin-bottom: 12px;">
+        <a href="https://linkedin.com/company/greenreach" target="_blank" rel="noopener" aria-label="LinkedIn" style="display:inline-block;margin:0 8px;color:#9ca3af;transition:color .2s;"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+        <a href="https://instagram.com/greenreachgreens" target="_blank" rel="noopener" aria-label="Instagram" style="display:inline-block;margin:0 8px;color:#9ca3af;transition:color .2s;"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
+      </div>
+      <p>&copy; 2026 GreenReach. Building Canadian food sovereignty through research and innovation.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('.faq-question').forEach(button => {
+      button.addEventListener('click', () => {
+        const answer = button.nextElementSibling;
+        const isActive = button.classList.contains('active');
+        document.querySelectorAll('.faq-question').forEach(q => {
+          q.classList.remove('active');
+          q.nextElementSibling.style.maxHeight = null;
+        });
+        if (!isActive) {
+          button.classList.add('active');
+          answer.style.maxHeight = answer.scrollHeight + 'px';
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

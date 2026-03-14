@@ -129,7 +129,7 @@ class ServiceIntroBanner {
       title: 'New: Farm-to-Door Delivery',
       description: 'Fresh, locally-grown produce delivered directly to your business or home.',
       ctaText: 'Learn More',
-      ctaUrl: options.ctaUrl || '/wholesale-about.html#delivery',
+      ctaUrl: options.ctaUrl || '/delivery.html',
       ...options
     });
 
