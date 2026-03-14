@@ -45,8 +45,10 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@svg-maps/canada": "^2.0.0",
     "jest": "^29.7.0",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "simplify-js": "^1.2.4"
   },
   "engines": {
     "node": ">=18.0.0",
