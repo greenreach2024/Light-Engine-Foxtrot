@@ -3885,22 +3885,55 @@ function navigateToPaymentWizard() {
 /**
  * Load receipts and invoices
  */
+let _loadedReceipts = [];
+
+function receiptTypeLabel(receipt) {
+    const p = (receipt.provider || '').toLowerCase();
+    if (p === 'square' && !receipt.buyer_id) return 'Subscription';
+    if (receipt.buyer_id || receipt.order_status) return 'Wholesale Fee';
+    if (p === 'stripe') return 'Processing';
+    if (p === 'demo') return 'Wholesale Fee';
+    return 'Processing';
+}
+
+function receiptTypeKey(receipt) {
+    const label = receiptTypeLabel(receipt);
+    if (label === 'Wholesale Fee') return 'wholesale';
+    if (label === 'Subscription') return 'support';
+    return 'processing';
+}
+
+function receiptDescription(receipt) {
+    if (receipt.description) return receipt.description;
+    const type = receiptTypeLabel(receipt);
+    if (type === 'Subscription') return `Light Engine subscription payment`;
+    if (type === 'Wholesale Fee') return `Order ${(receipt.order_id || '').substring(0, 16)}`;
+    return `Payment via ${receipt.provider || 'unknown'}`;
+}
+
 async function loadReceipts() {
     const tbody = document.getElementById('receipts-tbody');
     
     // Fetch real receipt/invoice data from billing API
-    let receipts = [];
+    _loadedReceipts = [];
     try {
         const resp = await fetch(`${API_BASE}/api/billing/receipts`, {
             headers: { 'Authorization': `Bearer ${currentSession.token}` }
         });
         if (resp.ok) {
             const data = await resp.json();
-            receipts = data.receipts || data || [];
+            _loadedReceipts = data.receipts || data || [];
         }
     } catch (e) {
         console.warn('Receipts API not available:', e.message);
     }
+
+    renderReceiptRows(_loadedReceipts);
+}
+
+function renderReceiptRows(receipts) {
+    const tbody = document.getElementById('receipts-tbody');
+    if (!tbody) return;
 
     if (receipts.length === 0) {
         tbody.innerHTML = `
@@ -3914,20 +3947,22 @@ async function loadReceipts() {
         return;
     }
     
-    tbody.innerHTML = receipts.map(receipt => `
+    tbody.innerHTML = receipts.map((receipt, idx) => {
+        const statusColor = receipt.status === 'completed' ? 'var(--accent-green)' : 'var(--accent-blue)';
+        return `
         <tr>
             <td>${new Date(receipt.date).toLocaleDateString()}</td>
-            <td>${receipt.type === 'wholesale' ? 'Wholesale Fee' : receipt.type === 'support' ? 'Support' : 'Processing'}</td>
-            <td>${receipt.description}</td>
-            <td>$${(receipt.amount || 0).toFixed(2)}</td>
-            <td><span style="padding: 4px 8px; background: var(--accent-green); border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
+            <td>${receiptTypeLabel(receipt)}</td>
+            <td>${receiptDescription(receipt)}</td>
+            <td>$${(receipt.amount || 0).toFixed(2)} ${receipt.currency || ''}</td>
+            <td><span style="padding: 4px 8px; background: ${statusColor}; border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
             <td>
-                <button class="btn" onclick="downloadReceipt('${receipt.date}')" style="padding: 6px 12px; font-size: 12px;">
+                <button class="btn" onclick="downloadReceipt(${idx})" style="padding: 6px 12px; font-size: 12px;">
                     Download
                 </button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 /**
@@ -3935,24 +3970,97 @@ async function loadReceipts() {
  */
 function filterReceipts() {
     const filter = document.getElementById('receiptFilter').value;
-    // Would filter the loaded receipts
-    console.log('Filtering receipts by:', filter);
+    if (filter === 'all') {
+        renderReceiptRows(_loadedReceipts);
+    } else {
+        renderReceiptRows(_loadedReceipts.filter(r => receiptTypeKey(r) === filter));
+    }
 }
 
 /**
- * Download single receipt
+ * Generate receipt text content for download
  */
-function downloadReceipt(date) {
-    showToast('Receipt downloaded', 'success');
-    // Would generate and download PDF receipt
+function buildReceiptText(receipt) {
+    const date = new Date(receipt.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const lines = [
+        '═══════════════════════════════════════════',
+        '           GREENREACH CENTRAL',
+        '              RECEIPT',
+        '═══════════════════════════════════════════',
+        '',
+        `  Receipt #:  ${receipt.receipt_id || 'N/A'}`,
+        `  Date:       ${date}`,
+        `  Provider:   ${(receipt.provider || 'N/A').toUpperCase()}`,
+        `  Status:     ${(receipt.status || 'paid').toUpperCase()}`,
+        '',
+        '───────────────────────────────────────────',
+        `  Type:       ${receiptTypeLabel(receipt)}`,
+        `  Description:${receiptDescription(receipt)}`,
+        '',
+        `  Amount:     $${(receipt.amount || 0).toFixed(2)} ${receipt.currency || 'CAD'}`,
+    ];
+    if (receipt.broker_fee) {
+        lines.push(`  Broker Fee: $${receipt.broker_fee.toFixed(2)}`);
+        lines.push(`  Net Amount: $${(receipt.net_to_farms || 0).toFixed(2)}`);
+    }
+    if (receipt.order_id) {
+        lines.push('', `  Order ID:   ${receipt.order_id}`);
+    }
+    lines.push(
+        '',
+        '───────────────────────────────────────────',
+        '  GreenReach Central — greenreachgreens.com',
+        '═══════════════════════════════════════════',
+        ''
+    );
+    return lines.join('\n');
 }
 
 /**
- * Download all receipts
+ * Download single receipt as text file
+ */
+function downloadReceipt(idx) {
+    const receipt = _loadedReceipts[idx];
+    if (!receipt) {
+        showToast('Receipt not found', 'error');
+        return;
+    }
+    const text = buildReceiptText(receipt);
+    const dateStr = new Date(receipt.date).toISOString().split('T')[0];
+    const filename = `receipt-${dateStr}-${(receipt.receipt_id || 'unknown').substring(0, 12)}.txt`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Receipt downloaded to your Downloads folder', 'success');
+}
+
+/**
+ * Download all receipts as a single text file
  */
 function downloadAllReceipts() {
-    showToast('All receipts downloaded', 'success');
-    // Would generate and download all receipts as ZIP
+    if (_loadedReceipts.length === 0) {
+        showToast('No receipts to download', 'info');
+        return;
+    }
+    const allText = _loadedReceipts.map(r => buildReceiptText(r)).join('\n\n');
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `all-receipts-${today}.txt`;
+    const blob = new Blob([allText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`${_loadedReceipts.length} receipt(s) downloaded to your Downloads folder`, 'success');
 }
 
 // ============================================================================
