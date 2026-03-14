@@ -217,6 +217,19 @@ app.use(helmet({
   // are set to restrictive defaults.
   crossOriginResourcePolicy: { policy: 'same-site' },
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  // HSTS — enforce HTTPS for 1 year, include subdomains
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+  },
+  // Prevent MIME-type sniffing
+  xContentTypeOptions: true,     // X-Content-Type-Options: nosniff (helmet default)
+  // Prevent clickjacking
+  xFrameOptions: { action: 'sameorigin' },
+  // Control Referer header leakage
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  // Restrict browser features
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -427,6 +440,46 @@ app.post('/data/iot-devices.json', async (req, res) => {
 // Serves HTML pages with injected config/auth scripts so every page gets
 // environment detection + the enhanced fetch wrapper without editing 160+ files.
 // Non-HTML requests fall through to express.static below.
+// ── Server-side access control for admin pages ──────────────────────────────
+// Prevent search engine indexing of internal/admin pages and add
+// X-Robots-Tag: noindex to discourage crawling. Client-side auth-guard.js
+// handles the actual redirect-to-login check (tokens are in localStorage).
+const ADMIN_PAGES = new Set([
+  '/GR-central-admin.html',
+  '/GR-admin.html',
+  '/GR-wholesale.html',
+  '/GR-wholesale-integrations.html',
+  '/GR-wholesale-order-review.html',
+  '/GR-wholesale-farm-performance.html',
+  '/GR-wholesale-legacy.html',
+  '/GR-farm-performance.html',
+  '/LE-dashboard.html',
+  '/LE-dashboard-consolidated.html',
+  '/LE-farm-admin.html',
+  '/LE-qr-generator.html',
+  '/LE-wholesale-orders.html',
+  '/LEMarketing-downloads.html',
+  '/farm-admin.html',
+  '/farm-vitality.html',
+  '/farm-sales-pos.html',
+  '/farm-sales-store.html',
+  '/farm-wall-cad-renderer.html',
+  '/setup-wizard.html',
+  '/schedule.html',
+  '/activity-hub-qr.html',
+  '/farm-admin-login.html',
+  '/GR-central-admin-login.html',
+  '/login.html',
+]);
+
+app.use((req, res, next) => {
+  if (ADMIN_PAGES.has(req.path)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Cache-Control', 'no-store, private');
+  }
+  next();
+});
+
 const _CONFIG_TAG = '<script src="/js/api-config.js"></script>';
 const _GUARD_TAG  = '<script src="/auth-guard.js"></script>';
 const _INJECT_MARK = '<!-- api-config-injected -->';
@@ -1156,7 +1209,7 @@ scheduleDailySync();
 logger.info(`[FarmSync] Sync interval: ${FARM_SYNC_INTERVAL / 1000}s, Daily sync hour: ${DAILY_SYNC_HOUR}:00`);
 
 // Manual sync endpoint
-app.post('/api/sync/pull-farm-data', async (req, res) => {
+app.post('/api/sync/pull-farm-data', authMiddleware, async (req, res) => {
   try {
     const result = await syncFarmData({ manual: true });
     res.json({ ok: true, message: 'Farm data sync complete', ...result });
@@ -1166,7 +1219,7 @@ app.post('/api/sync/pull-farm-data', async (req, res) => {
 });
 
 // Sync status endpoint
-app.get('/api/sync/status', (req, res) => {
+app.get('/api/sync/status', authMiddleware, (req, res) => {
   res.json({
     ok: true,
     config: {
@@ -1459,7 +1512,7 @@ app.post('/api/debug/track', express.json(), (req, res) => {
 
 // Live environmental data — proxy to LE for real-time readings,
 // fall back to stale DB telemetry only when the LE is unreachable.
-app.get('/env', async (req, res) => {
+app.get('/env', authMiddleware, async (req, res) => {
   const hours = req.query.hours || 24;
   try {
     // resolveEdgeUrlForProxy() is hoisted (function declaration at ~L2715)
@@ -1559,7 +1612,7 @@ function mergeCompatibilityPlans(plans) {
   return merged;
 }
 
-app.get('/plans', async (req, res) => {
+app.get('/plans', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     let plans = await farmStore.get(fid, 'plans');
@@ -1576,7 +1629,7 @@ app.get('/plans', async (req, res) => {
   }
 });
 
-app.get('/api/farm/profile', async (req, res) => {
+app.get('/api/farm/profile', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     let farm = await farmStore.get(fid, 'farm_profile');
@@ -1636,7 +1689,7 @@ app.get('/api/farm/profile', async (req, res) => {
 });
 
 // ── Credential Store (SwitchBot / Kasa integration credentials) ────────────
-app.get('/api/credential-store', (req, res) => {
+app.get('/api/credential-store', authMiddleware, (req, res) => {
   try {
     const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
     const farm = JSON.parse(fs.readFileSync(farmJsonPath, 'utf8'));
@@ -1652,7 +1705,7 @@ app.get('/api/credential-store', (req, res) => {
   }
 });
 
-app.post('/api/credential-store', express.json(), (req, res) => {
+app.post('/api/credential-store', authMiddleware, express.json(), (req, res) => {
   try {
     const farmJsonPath = path.join(FARM_DATA_DIR, 'farm.json');
     let farm = {};
@@ -1787,9 +1840,9 @@ async function switchBotDiscover(req, res) {
   }
 }
 
-app.post('/api/switchbot/discover', express.json(), switchBotDiscover);
-app.post('/switchbot/discover', express.json(), switchBotDiscover);
-app.get('/farm', async (req, res) => {
+app.post('/api/switchbot/discover', authMiddleware, express.json(), switchBotDiscover);
+app.post('/switchbot/discover', authMiddleware, express.json(), switchBotDiscover);
+app.get('/farm', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const farm = await farmStore.get(fid, 'farm_profile');
@@ -1811,7 +1864,7 @@ app.get('/farm', async (req, res) => {
   }
 });
 
-app.post('/farm', async (req, res) => {
+app.post('/farm', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const payload = req.body && typeof req.body === 'object' ? req.body : {};
@@ -1823,7 +1876,7 @@ app.post('/farm', async (req, res) => {
   }
 });
 
-app.get('/api/setup/data', async (req, res) => {
+app.get('/api/setup/data', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const farmDoc = await farmStore.get(fid, 'farm_profile') || {};
@@ -1847,7 +1900,7 @@ app.get('/api/setup/data', async (req, res) => {
   }
 });
 
-app.post('/api/setup/save-rooms', async (req, res) => {
+app.post('/api/setup/save-rooms', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const payload = req.body || {};
@@ -1860,7 +1913,7 @@ app.post('/api/setup/save-rooms', async (req, res) => {
   }
 });
 
-app.get('/api/reverse-geocode', (req, res) => {
+app.get('/api/reverse-geocode', authMiddleware, (req, res) => {
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -1879,7 +1932,7 @@ app.get('/api/reverse-geocode', (req, res) => {
   });
 });
 
-app.get('/forwarder/network/wifi/scan', (_req, res) => {
+app.get('/forwarder/network/wifi/scan', authMiddleware, (_req, res) => {
   return res.json({
     ok: true,
     networks: [
@@ -1889,7 +1942,7 @@ app.get('/forwarder/network/wifi/scan', (_req, res) => {
   });
 });
 
-app.get('/forwarder/network/scan', (_req, res) => {
+app.get('/forwarder/network/scan', authMiddleware, (_req, res) => {
   return res.json({
     ok: true,
     devices: []
@@ -1913,11 +1966,11 @@ app.get('/api/admin/farms/:farmId/devices', adminAuthMiddleware, async (req, res
   }
 });
 
-app.get('/api/audit/recent', (_req, res) => {
+app.get('/api/audit/recent', authMiddleware, (_req, res) => {
   return res.json({ ok: true, activities: [] });
 });
 
-app.get('/api/activity-hub/orders/pending', (_req, res) => {
+app.get('/api/activity-hub/orders/pending', authMiddleware, (_req, res) => {
   return res.json({ ok: true, orders: [] });
 });
 
@@ -1934,7 +1987,7 @@ async function getFirstActiveFarmUrl() {
   } catch { return null; }
 }
 
-app.get('/api/traceability', async (req, res) => {
+app.get('/api/traceability', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: true, records: [] });
   try {
@@ -1943,7 +1996,7 @@ app.get('/api/traceability', async (req, res) => {
   } catch { return res.json({ ok: true, records: [] }); }
 });
 
-app.get('/api/traceability/stats', async (req, res) => {
+app.get('/api/traceability/stats', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } });
   try {
@@ -1952,7 +2005,7 @@ app.get('/api/traceability/stats', async (req, res) => {
   } catch { return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } }); }
 });
 
-app.get('/api/traceability/lot/:lotCode', async (req, res) => {
+app.get('/api/traceability/lot/:lotCode', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
   try {
@@ -1961,7 +2014,7 @@ app.get('/api/traceability/lot/:lotCode', async (req, res) => {
   } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
 
-app.get('/api/traceability/sfcr-export', async (req, res) => {
+app.get('/api/traceability/sfcr-export', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
   try {
@@ -1977,15 +2030,15 @@ app.get('/api/traceability/sfcr-export', async (req, res) => {
 
 // Sustainability stubs — MOVED to routes/sustainability.js
 
-app.get('/api/automation/rules', (_req, res) => {
+app.get('/api/automation/rules', authMiddleware, (_req, res) => {
   return res.json({ success: true, rules: [] });
 });
 
-app.get('/api/automation/history', (_req, res) => {
+app.get('/api/automation/history', authMiddleware, (_req, res) => {
   return res.json({ success: true, history: [] });
 });
 
-app.get('/api/schedule-executor/status', (_req, res) => {
+app.get('/api/schedule-executor/status', authMiddleware, (_req, res) => {
   return res.json({
     success: true,
     enabled: false,
@@ -1994,11 +2047,11 @@ app.get('/api/schedule-executor/status', (_req, res) => {
   });
 });
 
-app.get('/api/schedule-executor/ml-anomalies', (_req, res) => {
+app.get('/api/schedule-executor/ml-anomalies', authMiddleware, (_req, res) => {
   return res.json({ success: true, anomalies: [], count: 0 });
 });
 
-app.get('/api/ml/anomalies/statistics', (_req, res) => {
+app.get('/api/ml/anomalies/statistics', authMiddleware, (_req, res) => {
   const now = Date.now();
   const hourly_buckets = [];
   for (let index = 23; index >= 0; index -= 1) {
@@ -2019,7 +2072,7 @@ app.get('/api/ml/anomalies/statistics', (_req, res) => {
   });
 });
 
-app.get('/api/ml/energy-forecast', (_req, res) => {
+app.get('/api/ml/energy-forecast', authMiddleware, (_req, res) => {
   const now = new Date();
   const predictions = [];
   for (let index = 0; index < 12; index += 1) {
@@ -2043,7 +2096,7 @@ app.get('/api/ml/energy-forecast', (_req, res) => {
   });
 });
 
-app.get('/api/ml/insights/forecast/:zone', (_req, res) => {
+app.get('/api/ml/insights/forecast/:zone', authMiddleware, (_req, res) => {
   const now = new Date();
   const predictions = [];
   for (let index = 0; index < 6; index += 1) {
@@ -2059,7 +2112,7 @@ app.get('/api/ml/insights/forecast/:zone', (_req, res) => {
 });
 
 // ── P0.1: Harvest Readiness compat (parity with LE /api/harvest/readiness) ──
-app.get('/api/harvest/readiness', async (req, res) => {
+app.get('/api/harvest/readiness', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const groups = await farmStore.get(fid, 'groups') || [];
@@ -2112,7 +2165,7 @@ app.get('/api/harvest/readiness', async (req, res) => {
 });
 
 // ── P0.1: Loss Prediction compat (parity with LE /api/losses/predict) ──
-app.get('/api/losses/predict', async (req, res) => {
+app.get('/api/losses/predict', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const envData = await farmStore.get(fid, 'telemetry') || {};
@@ -2214,7 +2267,7 @@ app.get('/api/kpis', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/health/insights', async (req, res) => {
+app.get('/api/health/insights', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const envData = await farmStore.get(fid, 'telemetry') || { zones: [] };
@@ -2260,7 +2313,7 @@ app.get('/api/health/insights', async (req, res) => {
   }
 });
 
-app.get('/api/health/vitality', async (req, res) => {
+app.get('/api/health/vitality', authMiddleware, async (req, res) => {
   const scoreToStatus = (score) => {
     if (score >= 85) return 'excellent';
     if (score >= 70) return 'good';
@@ -2336,7 +2389,7 @@ app.get('/api/health/vitality', async (req, res) => {
   }
 });
 
-app.get('/api/ai/status', async (_req, res) => {
+app.get('/api/ai/status', authMiddleware, async (_req, res) => {
   try {
     // Count experiment records
     let experimentCount = 0;
@@ -2401,7 +2454,7 @@ app.get('/api/ai/status', async (_req, res) => {
   }
 });
 
-app.get('/api/inventory/current', async (req, res) => {
+app.get('/api/inventory/current', authMiddleware, async (req, res) => {
   try {
     const trays = await getInventoryTraysForCompat(req.farmId);
     const activeTrays = trays.filter((tray) => (tray.status || '').toLowerCase() !== 'harvested');
@@ -2425,7 +2478,7 @@ app.get('/api/inventory/current', async (req, res) => {
   }
 });
 
-app.get('/api/inventory/forecast', async (req, res) => {
+app.get('/api/inventory/forecast', authMiddleware, async (req, res) => {
   try {
     const trays = await getInventoryTraysForCompat(req.farmId);
     const buckets = splitForecastBuckets(trays);
@@ -2449,7 +2502,7 @@ app.get('/api/inventory/forecast', async (req, res) => {
   }
 });
 
-app.get('/api/tray-formats', async (req, res) => {
+app.get('/api/tray-formats', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const formats = await farmStore.get(fid, 'tray_formats') || [];
@@ -2460,7 +2513,7 @@ app.get('/api/tray-formats', async (req, res) => {
   }
 });
 
-app.post('/api/tray-formats', async (req, res) => {
+app.post('/api/tray-formats', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const formats = await farmStore.get(fid, 'tray_formats') || [];
@@ -2489,7 +2542,7 @@ app.post('/api/tray-formats', async (req, res) => {
   }
 });
 
-app.put('/api/tray-formats/:formatId', async (req, res) => {
+app.put('/api/tray-formats/:formatId', authMiddleware, async (req, res) => {
   try {
     const { formatId } = req.params;
     const fid = farmStore.farmIdFromReq(req);
@@ -2514,7 +2567,7 @@ app.put('/api/tray-formats/:formatId', async (req, res) => {
   }
 });
 
-app.delete('/api/tray-formats/:formatId', async (req, res) => {
+app.delete('/api/tray-formats/:formatId', authMiddleware, async (req, res) => {
   try {
     const { formatId } = req.params;
     const fid = farmStore.farmIdFromReq(req);
@@ -2529,7 +2582,7 @@ app.delete('/api/tray-formats/:formatId', async (req, res) => {
   }
 });
 
-app.get('/api/trays', async (req, res) => {
+app.get('/api/trays', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const trays = await farmStore.get(fid, 'trays') || [];
@@ -2540,7 +2593,7 @@ app.get('/api/trays', async (req, res) => {
   }
 });
 
-app.post('/api/trays/register', async (req, res) => {
+app.post('/api/trays/register', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const trays = await farmStore.get(fid, 'trays') || [];
@@ -2583,7 +2636,7 @@ app.get('/data/equipment-metadata', async (req, res) => {
 
 // Weather API — proxy to Light Engine (which calls Open-Meteo)
 // Previously returned hardcoded stub data; now forwards to LE for real weather.
-app.get('/api/weather', async (req, res) => {
+app.get('/api/weather', authMiddleware, async (req, res) => {
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -2638,7 +2691,7 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-app.get('/configuration', async (req, res) => {
+app.get('/configuration', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const config = await farmStore.get(fid, 'config');
@@ -2653,7 +2706,7 @@ app.get('/configuration', async (req, res) => {
   }
 });
 
-app.get('/api/farm/configuration', async (req, res) => {
+app.get('/api/farm/configuration', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const config = await farmStore.get(fid, 'config');
@@ -2668,7 +2721,7 @@ app.get('/api/farm/configuration', async (req, res) => {
   }
 });
 
-app.post('/api/farm/configuration', async (req, res) => {
+app.post('/api/farm/configuration', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     await farmStore.set(fid, 'config', req.body || {});
@@ -2679,7 +2732,7 @@ app.post('/api/farm/configuration', async (req, res) => {
   }
 });
 
-app.get('/devices', async (req, res) => {
+app.get('/devices', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const devices = await farmStore.get(fid, 'devices') || [];
@@ -2690,7 +2743,7 @@ app.get('/devices', async (req, res) => {
   }
 });
 
-app.post('/devices', async (req, res) => {
+app.post('/devices', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const devices = await farmStore.get(fid, 'devices') || [];
@@ -2709,7 +2762,7 @@ app.post('/devices', async (req, res) => {
   }
 });
 
-app.patch('/devices/:deviceId', async (req, res) => {
+app.patch('/devices/:deviceId', authMiddleware, async (req, res) => {
   try {
     const { deviceId } = req.params;
     const fid = farmStore.farmIdFromReq(req);
@@ -2732,7 +2785,7 @@ app.patch('/devices/:deviceId', async (req, res) => {
 // Groups endpoint — returns full canonical records so all pages see identical data
 // Keeps: lights[], room, zone, status, schedule, plan, planConfig
 // Drops deprecated: crop, recipe, roomId, zoneId (per DATA_FORMAT_STANDARDS)
-app.get('/api/groups', async (req, res) => {
+app.get('/api/groups', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const groups = await farmStore.get(fid, 'groups') || [];
@@ -2766,7 +2819,7 @@ app.get('/api/groups', async (req, res) => {
   }
 });
 
-app.get('/api/rooms', async (req, res) => {
+app.get('/api/rooms', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const rooms = await farmStore.get(fid, 'rooms') || [];
@@ -2828,10 +2881,10 @@ app.post('/api/farm/auth/login', (req, res, next) => {
 
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
-app.use('/api/farms', farmRoutes);
-app.use('/api/farm', farmRoutes); // Singular route for profile endpoint
-app.use('/api/setup-wizard', setupWizardRoutes); // First-time farm setup wizard
-app.use('/api/setup', setupWizardRoutes); // Legacy setup API alias used by dashboard/app.foxtrot
+app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
+app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
+app.use('/api/setup-wizard', authMiddleware, setupWizardRoutes); // First-time farm setup wizard
+app.use('/api/setup', authMiddleware, setupWizardRoutes); // Legacy setup API alias used by dashboard/app.foxtrot
 
 // Device scanner endpoint — cloud stub returns empty, edge would scan network
 app.get('/api/devices/scan', authMiddleware, (req, res) => {
@@ -2854,19 +2907,19 @@ app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
 app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Central and Light Engine (API key auth)
-app.use('/api/recipes', recipesRoutes); // Public recipes API
+app.use('/api/recipes', recipesRoutes); // Read-only public recipes API
 app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
-app.use('/api/admin/network-devices', networkDevicesRoutes); // I-3.11: Network device analytics
-app.use('/api/reports', reportsRoutes); // Financial exports and reports
-app.use('/api/ai-insights', aiInsightsRoutes); // GPT-4 powered AI insights
-app.use('/api/env', envProxyRoutes); // Environmental data proxy to farm devices
-app.use('/discovery/devices', discoveryProxyRoutes); // Device discovery proxy to farm devices
-app.use('/api/discovery/devices', discoveryProxyRoutes); // API alias for discovery proxy
+app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
+app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
+app.use('/api/ai-insights', authMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
+app.use('/api/env', authMiddleware, envProxyRoutes); // Environmental data proxy to farm devices
+app.use('/discovery/devices', authMiddleware, discoveryProxyRoutes); // Device discovery proxy to farm devices
+app.use('/api/discovery/devices', authMiddleware, discoveryProxyRoutes); // API alias for discovery proxy
 
 // ── Light Engine Proxy — forwards IoT/device API calls to the Light Engine ──
 function resolveEdgeUrlForProxy() {
@@ -2910,7 +2963,7 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeou
 }
 
 // Discovery endpoints
-app.get('/discovery/capabilities', (req, res) => edgeProxy(req, res, '/discovery/capabilities'));
+app.get('/discovery/capabilities', authMiddleware, (req, res) => edgeProxy(req, res, '/discovery/capabilities'));
 
 // ─── Cloud-native Discovery Scanner (SwitchBot) ────────────────────────
 // Tries the Light Engine first; if unreachable, queries SwitchBot API
@@ -3022,8 +3075,8 @@ async function cloudNativeScan(req, res) {
     timestamp: new Date().toISOString()
   });
 }
-app.post('/discovery/scan', express.json(), cloudNativeScan);
-app.get('/discovery/scan', cloudNativeScan);
+app.post('/discovery/scan', authMiddleware, express.json(), cloudNativeScan);
+app.get('/discovery/scan', authMiddleware, cloudNativeScan);
 
 
 // ─── Cloud-native SwitchBot Device Status ────────────────────────────────
@@ -3110,36 +3163,36 @@ async function cloudSwitchBotStatus(req, res) {
 // NOTE: POST /api/switchbot/discover is handled by switchBotDiscover() (registered earlier)
 // which saves credentials to the DB AND forwards them to the Light Engine.
 // No edge proxy needed here — the switchBotDiscover handler is the single entry point.
-app.get('/switchbot/devices', (req, res) => edgeProxy(req, res, '/switchbot/devices'));
-app.get('/api/switchbot/devices/:id/status', cloudSwitchBotStatus);
-app.post('/api/switchbot/devices/:id/commands', express.json(), (req, res) => edgeProxy(req, res, `/api/switchbot/devices/${req.params.id}/commands`, 'POST', req.body));
+app.get('/switchbot/devices', authMiddleware, (req, res) => edgeProxy(req, res, '/switchbot/devices'));
+app.get('/api/switchbot/devices/:id/status', authMiddleware, cloudSwitchBotStatus);
+app.post('/api/switchbot/devices/:id/commands', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, `/api/switchbot/devices/${req.params.id}/commands`, 'POST', req.body));
 
 // Kasa endpoints
-app.post('/api/kasa/discover', express.json(), (req, res) => edgeProxy(req, res, '/api/kasa/discover', 'POST', req.body));
-app.post('/api/kasa/configure', express.json(), (req, res) => edgeProxy(req, res, '/api/kasa/configure', 'POST', req.body));
-app.post('/api/kasa/device/:host/power', express.json(), (req, res) => edgeProxy(req, res, `/api/kasa/device/${req.params.host}/power`, 'POST', req.body));
+app.post('/api/kasa/discover', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, '/api/kasa/discover', 'POST', req.body));
+app.post('/api/kasa/configure', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, '/api/kasa/configure', 'POST', req.body));
+app.post('/api/kasa/device/:host/power', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, `/api/kasa/device/${req.params.host}/power`, 'POST', req.body));
 
 // Bus/DMX endpoints
-app.get('/api/bus-mappings', (req, res) => edgeProxy(req, res, '/api/bus-mappings'));
-app.post('/api/bus-mapping', express.json(), (req, res) => edgeProxy(req, res, '/api/bus-mapping', 'POST', req.body));
-app.get('/api/bus/:busId/scan', (req, res) => edgeProxy(req, res, `/api/bus/${req.params.busId}/scan`));
+app.get('/api/bus-mappings', authMiddleware, (req, res) => edgeProxy(req, res, '/api/bus-mappings'));
+app.post('/api/bus-mapping', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, '/api/bus-mapping', 'POST', req.body));
+app.get('/api/bus/:busId/scan', authMiddleware, (req, res) => edgeProxy(req, res, `/api/bus/${req.params.busId}/scan`));
 
-app.use('/api/ml/insights', mlForecastRoutes); // ML temperature forecast (Light Engine feature)
-app.use('/api/billing', billingRoutes); // Billing usage (cloud)
+app.use('/api/ml/insights', authMiddleware, mlForecastRoutes); // ML temperature forecast (Light Engine feature)
+app.use('/api/billing', authOrAdminMiddleware, billingRoutes); // Billing usage (cloud)
 app.use('/api/accounting', authOrAdminMiddleware, accountingRoutes); // Canonical accounting ledger + close controls (accepts farm OR admin auth)
 app.use('/api/procurement', authOrAdminMiddleware, procurementAdminRoutes); // GRC catalog & suppliers (accepts farm OR admin auth)
-app.use('/api/remote', remoteSupportRoutes); // Remote support / diagnostics proxy to farms
+app.use('/api/remote', authOrAdminMiddleware, remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
-app.use('/api/planning', planningRoutes); // Production planning (integrates market + crop pricing)
-app.use('/api/market-intelligence', marketIntelligenceRoutes); // North American market data + price alerts
-app.use('/api/crop-pricing', cropPricingRoutes); // Farm-specific crop pricing
-app.use('/api/quality', qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
-app.use('/api/sustainability', sustainabilityRoutes);          // Sustainability & ESG dashboard
+app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
+app.use('/api/market-intelligence', authMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
+app.use('/api/crop-pricing', authMiddleware, cropPricingRoutes); // Farm-specific crop pricing
+app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
+app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
 
 // ─── Crop Weight Analytics (cross-farm aggregation) ────────────────────
 import { listNetworkFarms as listWeightNetworkFarms } from './services/networkFarmsStore.js';
 
-app.get('/api/crop-weights/network-analytics', async (req, res) => {
+app.get('/api/crop-weights/network-analytics', authMiddleware, async (req, res) => {
   try {
     const allFarms = await listWeightNetworkFarms();
     const farms = allFarms.filter(f => f.status === 'active' && f.api_url);
@@ -3238,13 +3291,13 @@ app.use('/api/users', authMiddleware, farmUsersRouter);     // Farm-scoped user 
 app.use('/api/user', authMiddleware, userRouter);            // /api/user/change-password
 app.use('/api/auth', deviceTokenRouter);                     // /api/auth/generate-device-token
 app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
-app.use('/api', networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
-app.use('/api', experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
-app.use('/api/wholesale', wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
-app.use('/api/wholesale/exports', wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
+app.use('/api', authMiddleware, networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
+app.use('/api', authMiddleware, experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
+app.use('/api/wholesale', authMiddleware, wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
+app.use('/api/wholesale/exports', authOrAdminMiddleware, wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
 
 // Phase 2 Task 2.8: Demand analysis endpoint
-app.get('/api/wholesale/demand-analysis', async (req, res) => {
+app.get('/api/wholesale/demand-analysis', authMiddleware, async (req, res) => {
   try {
     const { analyzeDemandPatterns } = await import('./services/wholesaleMemoryStore.js');
     const patterns = await analyzeDemandPatterns();
@@ -3264,10 +3317,10 @@ app.get('/api/wholesale/demand-analysis', async (req, res) => {
 
 app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square)
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
-app.use('/api/farm-ops', farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
+app.use('/api/farm-ops', authMiddleware, farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
 
 // ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
-app.get('/api/network/harvest-conflicts', async (req, res) => {
+app.get('/api/network/harvest-conflicts', authMiddleware, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 14;
     const conflicts = await detectHarvestConflicts(days);
@@ -3278,7 +3331,7 @@ app.get('/api/network/harvest-conflicts', async (req, res) => {
 });
 
 // ── Phase 4 Ticket 4.3: Supply/demand balance analysis ────────────────
-app.get('/api/network/supply-demand', async (req, res) => {
+app.get('/api/network/supply-demand', authMiddleware, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const analysis = await analyzeSupplyDemand(days);
@@ -3288,7 +3341,7 @@ app.get('/api/network/supply-demand', async (req, res) => {
   }
 });
 
-app.get('/api/network/risk-alerts', async (req, res) => {
+app.get('/api/network/risk-alerts', authMiddleware, async (req, res) => {
   try {
     const alerts = await generateNetworkRiskAlerts();
     res.json({ ok: true, alerts, count: alerts.length });
@@ -3301,7 +3354,7 @@ app.get('/api/network/risk-alerts', async (req, res) => {
 // ── Sprint 4 Central additions: S4.1 + S4.2 receive + S4.8 ──────────────
 
 // S4.2: Receive farm-reported harvest projections
-app.post('/api/network/harvest-projections', async (req, res) => {
+app.post('/api/network/harvest-projections', authMiddleware, async (req, res) => {
   try {
     const { farm_id, projections, reported_at } = req.body;
     if (!farm_id || !projections) {
@@ -3328,7 +3381,7 @@ app.post('/api/network/harvest-projections', async (req, res) => {
 });
 
 // S4.1: Generate planting suggestions for farms based on supply/demand analysis
-app.get('/api/network/planting-suggestions', async (req, res) => {
+app.get('/api/network/planting-suggestions', authMiddleware, async (req, res) => {
   try {
     const farmId = req.query.farm_id || null;
 
@@ -3389,7 +3442,7 @@ app.get('/api/network/planting-suggestions', async (req, res) => {
 
 // ─── Harvest Prediction Engine (Claim #17) ─────────────────────────────
 // Statistical harvest predictions with confidence intervals, std dev, and probability windows
-app.get('/api/harvest/predictions', async (req, res) => {
+app.get('/api/harvest/predictions', authMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
     if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
@@ -3414,7 +3467,7 @@ app.get('/api/harvest/predictions', async (req, res) => {
 
 // ─── Network Planting Coordinator (Claim #19) ──────────────────────────
 // Cross-farm demand coordination with saturation index and stagger recommendations
-app.get('/api/network/coordinated-planting', async (req, res) => {
+app.get('/api/network/coordinated-planting', authMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
     if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });

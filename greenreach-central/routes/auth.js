@@ -6,6 +6,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 
 const router = express.Router();
 
@@ -13,7 +14,6 @@ const router = express.Router();
 const isProductionRuntime =
   process.env.NODE_ENV === 'production' ||
   String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
-const DEV_JWT_SECRET = 'greenreach-jwt-secret-2025';
 
 const JWT_SECRET = (() => {
   const configured = process.env.JWT_SECRET;
@@ -25,8 +25,10 @@ const JWT_SECRET = (() => {
     throw new Error('JWT_SECRET environment variable is required in production');
   }
 
-  console.warn('[Auth] JWT_SECRET not set; using development fallback secret');
-  return DEV_JWT_SECRET;
+  // Generate a random secret for dev so tokens are ephemeral per restart
+  const devSecret = randomBytes(32).toString('hex');
+  console.warn('[Auth] JWT_SECRET not set; generated random dev-only secret (tokens will not survive restarts)');
+  return devSecret;
 })();
 const JWT_EXPIRES_IN = '24h';
 
