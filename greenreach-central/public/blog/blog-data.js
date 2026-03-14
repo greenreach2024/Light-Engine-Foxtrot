@@ -36,7 +36,7 @@ const greenreachBlogPosts = [
   {
     slug: 'vertical-farm-premium-positioning',
     title: "Why Vertical Farm Produce Isn't a Commodity — And What That Means for Buyers",
-    excerpt: 'Field-grown imports and locally grown vertical farm produce are not the same product. Here's why the framing matters for grocers and restaurants.',
+    excerpt: "Field-grown imports and locally grown vertical farm produce are not the same product. Here's why the framing matters for grocers and restaurants.",
     tag: 'Buyers',
     published_at: '2026-03-13',
     author: 'GreenReach Team',
@@ -55,7 +55,7 @@ const greenreachBlogPosts = [
   {
     slug: 'light-engine-farm-server-april-22',
     title: 'Light Engine Farm Server: Everything You Need to Know Before April 22',
-    excerpt: 'The complete on-premise automation platform for indoor vertical farms launches April 22, 2026. Here's what it does, who it's for, and how it compares to Cloud.',
+    excerpt: "The complete on-premise automation platform for indoor vertical farms launches April 22, 2026. Here's what it does, who it's for, and how it compares to Cloud.",
     tag: 'Product',
     published_at: '2026-03-13',
     author: 'GreenReach Team',
@@ -63,8 +63,8 @@ const greenreachBlogPosts = [
   },
   {
     slug: 'canadian-farm-grants-2026',
-    title: 'Canadian Agricultural Grants and Funding: What You're Missing in 2026',
-    excerpt: 'Over 60 Canadian agricultural funding programs are currently accepting applications. Most farmers know about one or two. Here's the rest.',
+    title: "Canadian Agricultural Grants and Funding: What You're Missing in 2026",
+    excerpt: "Over 60 Canadian agricultural funding programs are currently accepting applications. Most farmers know about one or two. Here's the rest.",
     tag: 'Funding',
     published_at: '2026-03-13',
     author: 'GreenReach Team',
