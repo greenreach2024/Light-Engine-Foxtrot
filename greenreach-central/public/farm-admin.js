@@ -3737,15 +3737,15 @@ async function syncQuickBooksCustomers() {
  */
 async function loadPaymentMethods() {
     try {
-        // Check Square connection status
-        const statusResponse = await fetch(`${API_BASE}/api/farm/square/status`, {
+        // Check Square connection status via proxy
+        const statusResponse = await fetch(`${API_BASE}/api/square-proxy/`, {
             headers: { 'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM' }
         });
         const statusData = await statusResponse.json();
         
         const statusContainer = document.getElementById('square-status-container');
         
-        if (statusData.connected) {
+        if (statusData.configured && statusData.connected) {
             statusContainer.innerHTML = `
                 <div style="padding: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3754,8 +3754,8 @@ async function loadPaymentMethods() {
                                 ✓ Square Connected
                             </div>
                             <div style="color: var(--text-secondary);">
-                                <div>Merchant: ${statusData.data.merchantId}</div>
-                                <div>Location: ${statusData.data.locationName || 'Default'}</div>
+                                <div>Merchant: ${statusData.merchantId || 'Configured'}</div>
+                                <div>Location: ${statusData.locationName || 'Default'}</div>
                             </div>
                         </div>
                         <button class="btn" onclick="reconnectSquare()" style="background: var(--accent-blue);">
@@ -3764,14 +3764,32 @@ async function loadPaymentMethods() {
                     </div>
                 </div>
             `;
-        } else {
+        } else if (statusData.configured) {
             statusContainer.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
                     <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
                         Square Payment Processing Not Connected
                     </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Click below to authorize your Square account.</p>
                     <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
                         Connect Square Account
+                    </button>
+                </div>
+            `;
+        } else {
+            // Square not configured on the server
+            statusContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">💳</div>
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
+                        Square Integration Available
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        Square payment processing lets you accept credit cards, debit cards, and digital payments from your customers. 
+                        To connect, open <strong>Setup &amp; Update → Business Setup → Payment Processing</strong> and follow the setup wizard.
+                    </p>
+                    <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                        Open Payment Setup Wizard
                     </button>
                 </div>
             `;
@@ -3799,22 +3817,22 @@ async function refreshPaymentMethods() {
  */
 async function connectSquare() {
     try {
-        // Get Square OAuth URL from backend
-        const response = await fetch('/api/farm/square/authorize', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                farmId: 'FARM-001', // TODO: Get from session/config
-                farmName: 'Light Engine Farm'
-            })
-        });
+        const farmId = currentSession?.farmId || 'LOCAL-FARM';
+        // Check if Square is configured first
+        const proxyStatus = await fetch(`${API_BASE}/api/square-proxy/`);
+        const proxyData = await proxyStatus.json();
         
+        if (!proxyData.configured) {
+            showToast('Square is not yet configured. Use the Payment Setup wizard in Setup & Update to get started.', 'info');
+            return;
+        }
+        
+        // Get Square OAuth URL from proxy
+        const response = await fetch(`${API_BASE}/api/square-proxy/authorize?farm_id=${encodeURIComponent(farmId)}`);
         const data = await response.json();
         
-        if (!data.ok) {
-            showToast('Failed to initialize Square connection', 'error');
+        if (!data.success || !data.authUrl) {
+            showToast(data.error || 'Failed to initialize Square connection', 'error');
             return;
         }
         
@@ -3825,7 +3843,7 @@ async function connectSquare() {
         const top = (screen.height - height) / 2;
         
         const popup = window.open(
-            data.data.authorizationUrl,
+            data.authUrl,
             'square-oauth',
             `width=${width},height=${height},left=${left},top=${top}`
         );
@@ -3835,7 +3853,7 @@ async function connectSquare() {
             if (event.data.type === 'square-connected') {
                 window.removeEventListener('message', handleSquareCallback);
                 showToast('Square account connected successfully!', 'success');
-                loadPaymentMethods(); // Refresh payment methods display
+                loadPaymentMethods();
             }
         });
         
@@ -3850,6 +3868,18 @@ async function connectSquare() {
  */
 function reconnectSquare() {
     connectSquare();
+}
+
+/**
+ * Navigate to the Payment Setup wizard in Setup & Update
+ */
+function navigateToPaymentWizard() {
+    if (typeof renderEmbeddedView === 'function') {
+        const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        if (navItem) navItem.classList.add('active');
+        renderEmbeddedView('/LE-dashboard.html?wizard=payment-setup', 'Setup & Update');
+    }
 }
 
 /**
