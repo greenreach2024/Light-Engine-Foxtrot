@@ -1501,6 +1501,30 @@ async function runMigrations(client) {
     logger.warn('Migration 023 warning:', err.message);
   }
 
+  // Migration 024: Campaign supporters (Field of Dreams)
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS campaign_supporters (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        email VARCHAR(320) NOT NULL UNIQUE,
+        postal_code VARCHAR(7) NOT NULL,
+        postal_prefix VARCHAR(3) NOT NULL,
+        city VARCHAR(100),
+        province VARCHAR(30),
+        ip_address VARCHAR(45),
+        referral_source VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_campaign_postal_prefix ON campaign_supporters(postal_prefix);
+      CREATE INDEX IF NOT EXISTS idx_campaign_created_at ON campaign_supporters(created_at);
+      CREATE INDEX IF NOT EXISTS idx_campaign_email ON campaign_supporters(email);
+    `);
+    logger.info('Campaign supporters table ready (migration 024)');
+  } catch (err) {
+    logger.warn('Campaign supporters migration warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

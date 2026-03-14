@@ -277,7 +277,13 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('[campaign] Stats error:', error.message);
-    return res.status(500).json({ error: 'Failed to load stats.' });
+    // Fall back to seed-only data on DB error (e.g. table not yet created)
+    return res.json({
+      total: getSeedTotal(),
+      last24h: getSeedLast24h(),
+      topCommunities: getSeedTopCommunities(15),
+      recentCommunities: getSeedTopCommunities(10)
+    });
   }
 });
 
@@ -301,7 +307,8 @@ router.get('/heatmap', async (req, res) => {
     return res.json({ regions: mergeRegions(result.rows, getSeedHeatmap()) });
   } catch (error) {
     console.error('[campaign] Heatmap error:', error.message);
-    return res.status(500).json({ error: 'Failed to load heatmap data.' });
+    // Fall back to seed-only data on DB error
+    return res.json({ regions: getSeedHeatmap() });
   }
 });
 
