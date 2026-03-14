@@ -201,6 +201,21 @@ export async function listNetworkFarms() {
 
 export async function upsertNetworkFarm(farmId, farmData) {
   await seedFromDatabase();
+
+  // Apply URL overrides so heartbeats can't overwrite with stale private IPs
+  const urlOverrides = parseFarmUrlOverrides();
+  if (urlOverrides[farmId]) {
+    farmData = { ...farmData, api_url: urlOverrides[farmId], url: urlOverrides[farmId], base_url: urlOverrides[farmId] };
+  }
+
+  // Fill missing auth from local farm-api-keys.json
+  if (!farmData.api_key) {
+    const localKeys = loadLocalFarmApiKeys();
+    if (localKeys[farmId]?.api_key) {
+      farmData = { ...farmData, auth_farm_id: farmId, api_key: localKeys[farmId].api_key };
+    }
+  }
+
   const normalizedFarm = normalizeNetworkFarm(farmId, {
     ...farmData,
     updated_at: new Date().toISOString()

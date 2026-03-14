@@ -2162,7 +2162,7 @@ app.get('/api/losses/predict', async (req, res) => {
 });
 
 // ── P0.2: KPI endpoint compat (parity with LE /api/kpis) ──
-app.get('/api/kpis', async (req, res) => {
+app.get('/api/kpis', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const trays = await farmStore.get(fid, 'trays') || [];
@@ -2854,7 +2854,7 @@ app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
 app.use('/api/farm-settings', farmSettingsRoutes); // Settings sync between Central and Light Engine (API key auth)
 app.use('/api/recipes', recipesRoutes); // Public recipes API
-app.use('/api/wholesale', wholesaleRoutes); // Re-enabled with stubbed Square service
+app.use('/api/wholesale', wholesaleRoutes); // Core wholesale: catalog, orders, payments, network farms
 app.use('/api/square-proxy', squareOAuthProxyRoutes); // Square OAuth proxy to farms
 // Stripe setup proxied to farm server (root-level routes can't resolve express from central node_modules)
 app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesale, /recipes, /pricing, /delivery, /ai)
