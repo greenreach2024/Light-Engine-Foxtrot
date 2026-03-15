@@ -278,9 +278,13 @@ router.get('/stats', async (req, res) => {
     if (!isDatabaseAvailable()) {
       const memTotal = memoryStore.length;
       const mem24h = memoryStore.filter(s => (Date.now() - s.createdAt.getTime()) < 86400000).length;
+      const memPrefixes = new Set(memoryStore.map(s => s.prefix));
+      const seedPrefixes = new Set(SEED_REGIONS.map(r => r.prefix));
+      const allPrefixes = new Set([...memPrefixes, ...seedPrefixes]);
       return res.json({
         total: memTotal + getSeedTotal(),
         last24h: mem24h + getSeedLast24h(),
+        communityCount: allPrefixes.size,
         topCommunities: getSeedTopCommunities(15),
         topPerCapita: [],
         recentCommunities: getSeedTopCommunities(10)
@@ -308,10 +312,11 @@ router.get('/stats', async (req, res) => {
 
     // Merge DB communities with seed data
     const seedHeatmap = getSeedHeatmap();
-    const topMerged = mergeRegions(
+    const allMerged = mergeRegions(
       topR.rows.map(r => ({ prefix: r.postal_prefix, province: r.province, count: r.supporters })),
       seedHeatmap
-    ).slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }));
+    );
+    const topMerged = allMerged.slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }));
 
     const recentMerged = mergeRegions(
       recentR.rows.map(r => ({ prefix: r.postal_prefix, province: r.province, count: r.supporters })),
@@ -321,6 +326,7 @@ router.get('/stats', async (req, res) => {
     return res.json({
       total: dbTotal + getSeedTotal(),
       last24h: dbLast24h + getSeedLast24h(),
+      communityCount: allMerged.length,
       topCommunities: topMerged,
       recentCommunities: recentMerged
     });
@@ -339,6 +345,7 @@ router.get('/stats', async (req, res) => {
     return res.json({
       total: memTotal + getSeedTotal(),
       last24h: mem24h + getSeedLast24h(),
+      communityCount: merged.length,
       topCommunities: merged.slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count })),
       recentCommunities: merged.slice(0, 10).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }))
     });

@@ -1054,7 +1054,7 @@
         document.getElementById('statTotal').textContent = (data.total || 0).toLocaleString();
         document.getElementById('stat24h').textContent = (data.last24h || 0).toLocaleString();
         document.getElementById('statCommunities').textContent =
-          (data.topCommunities ? data.topCommunities.length : 0).toLocaleString();
+          (data.communityCount || (data.topCommunities ? data.topCommunities.length : 0)).toLocaleString();
 
         renderLeaderboard('topCommunities', data.topCommunities || []);
         renderLeaderboard('trendingCommunities', data.recentCommunities || []);
