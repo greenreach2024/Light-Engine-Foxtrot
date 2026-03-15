@@ -27,8 +27,8 @@
   </script>
 
   <!-- Leaflet.js -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin=""/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin=""></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1151,30 +1151,40 @@
     }
 
     // ── Initialize Leaflet Map ────────────────────────────────────
-    const map = L.map('demandMap', {
-      center: [50, -90],
-      zoom: 4,
-      minZoom: 3,
-      maxZoom: 12,
-      scrollWheelZoom: true,
-    });
+    let map, heatLayer, labelLayer;
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 18,
-    }).addTo(map);
+    function initMap() {
+      map = L.map('demandMap', {
+        center: [50, -90],
+        zoom: 4,
+        minZoom: 3,
+        maxZoom: 12,
+        scrollWheelZoom: true,
+      });
 
-    // Fit bounds to show populated Canada
-    map.fitBounds([[42, -140], [55, -52]]);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        maxZoom: 18,
+        subdomains: 'abcd',
+      }).addTo(map);
 
-    // Ensure tiles render correctly after layout settles
-    setTimeout(function() { map.invalidateSize(); }, 100);
-    setTimeout(function() { map.invalidateSize(); }, 500);
-    window.addEventListener('load', function() { map.invalidateSize(); });
+      heatLayer = L.layerGroup().addTo(map);
+      labelLayer = L.layerGroup().addTo(map);
 
-    // Layer group for heatmap markers so we can clear/redraw
-    let heatLayer = L.layerGroup().addTo(map);
-    let labelLayer = L.layerGroup().addTo(map);
+      // Recalculate size then fit bounds
+      map.invalidateSize();
+      map.fitBounds([[42, -140], [55, -52]]);
+
+      // Load data once map is ready
+      loadHeatmap();
+    }
+
+    // Defer map creation until layout is complete
+    if (document.readyState === 'complete') {
+      initMap();
+    } else {
+      window.addEventListener('load', initMap);
+    }
 
     // ── Load Heatmap ────────────────────────────────────────────
     async function loadHeatmap() {
@@ -1362,10 +1372,9 @@
 
     // ── Initialize ──────────────────────────────────────────────
     loadStats();
-    loadHeatmap();
 
     // Refresh every 60 seconds
-    setInterval(() => { loadStats(); loadHeatmap(); }, 60000);
+    setInterval(() => { loadStats(); if (map) loadHeatmap(); }, 60000);
   })();
   </script>
 
