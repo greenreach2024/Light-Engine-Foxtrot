@@ -8,6 +8,7 @@
  */
 
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
@@ -78,7 +79,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'All agreements must be acknowledged.' });
     }
 
-    const applicationId = 'APP-' + Date.now().toString(36).toUpperCase();
+    const applicationId = `APP-${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
     const applicationData = {
       applicationId,
@@ -183,7 +184,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const applicationId = req.params.id;
-    if (!applicationId || !applicationId.startsWith('APP-')) {
+    if (!applicationId || !/^APP-[A-Z0-9]{10,20}$/.test(applicationId)) {
       return res.status(400).json({ success: false, error: 'Invalid application ID format.' });
     }
 

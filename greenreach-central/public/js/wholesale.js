@@ -997,14 +997,15 @@
           method: 'POST',
           body: JSON.stringify({ zone, subtotal })
         });
-        if (response.ok && json?.ok) {
-          this.deliveryQuote = json;
-          if (feeDisplayEl) feeDisplayEl.textContent = `$${Number(json.fee).toFixed(2)}`;
+        const quote = json?.data || json;
+        if (response.ok && quote?.ok) {
+          this.deliveryQuote = quote;
+          if (feeDisplayEl) feeDisplayEl.textContent = `$${Number(quote.fee).toFixed(2)}`;
           if (zoneResultEl) {
             zoneResultEl.className = 'zone-result zone-success';
-            zoneResultEl.textContent = `${json.zone_name || zone} — $${Number(json.fee).toFixed(2)} delivery fee`;
-            if (json.min_order && subtotal < json.min_order) {
-              zoneResultEl.textContent += ` (min order $${json.min_order})`;
+            zoneResultEl.textContent = `${quote.zone_name || zone} — $${Number(quote.fee).toFixed(2)} delivery fee`;
+            if (quote.minimum_order && subtotal < quote.minimum_order) {
+              zoneResultEl.textContent += ` (min order $${quote.minimum_order})`;
               zoneResultEl.className = 'zone-result zone-error';
             }
           }
@@ -1149,6 +1150,7 @@
               city: document.getElementById('delivery-city').value,
               province: document.getElementById('delivery-province')?.value || 'ON',
               postalCode: document.getElementById('delivery-postal').value,
+              zip: document.getElementById('delivery-postal').value,
               country: 'Canada',
               instructions: document.getElementById('delivery-instructions').value
             },

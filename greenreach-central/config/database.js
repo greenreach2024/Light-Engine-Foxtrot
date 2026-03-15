@@ -1551,6 +1551,161 @@ async function runMigrations(client) {
     logger.warn('Campaign supporters index warning:', err.message);
   }
 
+  // Migration 025: Eager creation of checkout_sessions, purchase_leads, procurement tables,
+  // API metering, and token blacklist / login lockout persistence
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS checkout_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id VARCHAR(255) UNIQUE NOT NULL,
+        square_order_id VARCHAR(255),
+        square_payment_link_id VARCHAR(255),
+        square_payment_link_url TEXT,
+        plan_type VARCHAR(50) NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        currency VARCHAR(3) DEFAULT 'CAD',
+        farm_name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        existing_farm_id VARCHAR(255),
+        provisioned_farm_id VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_id VARCHAR(255),
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        metadata JSONB DEFAULT '{}'
+      );
+      CREATE INDEX IF NOT EXISTS idx_checkout_sessions_email ON checkout_sessions(email);
+      CREATE INDEX IF NOT EXISTS idx_checkout_sessions_status ON checkout_sessions(status);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS purchase_leads (
+        id SERIAL PRIMARY KEY,
+        farm_name VARCHAR(255),
+        contact_name VARCHAR(255),
+        email VARCHAR(255) NOT NULL,
+        plan VARCHAR(50),
+        farm_id VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'new',
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_purchase_leads_email ON purchase_leads(email);
+    `);
+    logger.info('checkout_sessions + purchase_leads tables ready (migration 025a)');
+  } catch (err) {
+    logger.warn('Migration 025a warning:', err.message);
+  }
+
+  // 025b: Procurement dedicated tables
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS procurement_catalog (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        sku VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
+        category VARCHAR(120),
+        supplier_id VARCHAR(255),
+        price NUMERIC(10,2) DEFAULT 0,
+        in_stock BOOLEAN DEFAULT TRUE,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(farm_id, sku)
+      );
+      CREATE INDEX IF NOT EXISTS idx_procurement_catalog_farm ON procurement_catalog(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_procurement_catalog_sku ON procurement_catalog(sku);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS procurement_suppliers (
+        id VARCHAR(255) PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'active',
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_procurement_suppliers_farm ON procurement_suppliers(farm_id);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS procurement_orders (
+        id VARCHAR(255) PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        supplier_id VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        items JSONB DEFAULT '[]',
+        subtotal NUMERIC(10,2) DEFAULT 0,
+        commission NUMERIC(10,2) DEFAULT 0,
+        payment_method VARCHAR(50) DEFAULT 'invoice',
+        payment_status VARCHAR(50) DEFAULT 'pending',
+        shipping_address JSONB,
+        notes TEXT,
+        received_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_procurement_orders_farm ON procurement_orders(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_procurement_orders_status ON procurement_orders(status);
+    `);
+    logger.info('Procurement dedicated tables ready (migration 025b)');
+  } catch (err) {
+    logger.warn('Migration 025b warning:', err.message);
+  }
+
+  // 025c: API metering table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS api_usage_daily (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        usage_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        api_calls INTEGER DEFAULT 0,
+        storage_bytes BIGINT DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(farm_id, usage_date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_api_usage_daily_farm ON api_usage_daily(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_api_usage_daily_date ON api_usage_daily(usage_date);
+    `);
+    logger.info('API metering table ready (migration 025c)');
+  } catch (err) {
+    logger.warn('Migration 025c warning:', err.message);
+  }
+
+  // 025d: Token blacklist + login lockout persistence
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS token_blacklist (
+        id SERIAL PRIMARY KEY,
+        token_hash VARCHAR(64) NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_token_blacklist_hash ON token_blacklist(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS login_lockouts (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        attempt_count INTEGER DEFAULT 0,
+        locked_until TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_login_lockouts_email ON login_lockouts(email);
+    `);
+    logger.info('Token blacklist + login lockouts tables ready (migration 025d)');
+  } catch (err) {
+    logger.warn('Migration 025d warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

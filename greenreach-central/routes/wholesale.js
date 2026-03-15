@@ -128,7 +128,7 @@ async function requireBuyerAuth(req, res, next) {
     return res.status(401).json({ status: 'error', message: 'Missing bearer token' });
   }
 
-  if (isTokenBlacklisted(token)) {
+  if (await isTokenBlacklisted(token)) {
     return res.status(401).json({ status: 'error', message: 'Token has been revoked' });
   }
 
@@ -230,6 +230,155 @@ function parseBooleanEnv(value, fallback) {
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
   return fallback;
+}
+
+function normalizeDeliveryAddress(rawAddress) {
+  const address = rawAddress && typeof rawAddress === 'object' ? { ...rawAddress } : {};
+  if (!address.zip && address.postalCode) {
+    address.zip = address.postalCode;
+  }
+  if (!address.postalCode && address.zip) {
+    address.postalCode = address.zip;
+  }
+  return address;
+}
+
+function toDeliveryFee(value, fulfillmentMethod) {
+  if (String(fulfillmentMethod || '').toLowerCase() === 'pickup') return 0;
+  return Math.max(0, Number(value) || 0);
+}
+
+async function persistDeliveryLedger({ order, allocation, deliveryFee, deliveryDate, deliveryAddress, fulfillmentMethod }) {
+  if (!isDatabaseAvailable()) return;
+  if (String(fulfillmentMethod || '').toLowerCase() !== 'delivery') return;
+  if (!(deliveryFee > 0)) return;
+
+  const subOrders = Array.isArray(order?.farm_sub_orders) ? order.farm_sub_orders : [];
+  const subtotal = Number(allocation?.subtotal || 0);
+
+  for (const sub of subOrders) {
+    const farmId = String(sub?.farm_id || '').trim();
+    if (!farmId) continue;
+
+    const farmSubtotal = Number(sub?.subtotal || 0);
+    const share = subtotal > 0 ? (farmSubtotal / subtotal) : (1 / Math.max(subOrders.length, 1));
+    const farmDeliveryFee = Number((deliveryFee * share).toFixed(2));
+
+    let assignedDriver = null;
+    try {
+      const driverResult = await query(
+        `SELECT driver_id, pay_per_delivery, cold_chain_bonus, cold_chain_certified
+           FROM delivery_drivers
+          WHERE farm_id = $1
+            AND status = 'active'
+          ORDER BY deliveries_30d ASC, cold_chain_certified DESC, updated_at ASC
+          LIMIT 1`,
+        [farmId]
+      );
+      assignedDriver = driverResult.rows[0] || null;
+    } catch (driverErr) {
+      console.warn('[Wholesale] Driver lookup failed for delivery ledger:', driverErr.message);
+    }
+
+    const basePayout = Number(assignedDriver?.pay_per_delivery || 0);
+    const coldChainBonus = Boolean(assignedDriver?.cold_chain_certified)
+      ? Number(assignedDriver?.cold_chain_bonus || 0)
+      : 0;
+    const tipAmount = 0;
+    const driverPayoutAmount = Number((basePayout + coldChainBonus + tipAmount).toFixed(2));
+    const platformMargin = Number((farmDeliveryFee - driverPayoutAmount).toFixed(2));
+    const deliveryId = `dlv-${order.master_order_id}-${farmId}`.replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 96);
+
+    await query(
+      `INSERT INTO delivery_orders (
+         farm_id, delivery_id, order_id, delivery_date, time_slot, zone_id, route_id, driver_id,
+         status, address, contact, instructions, delivery_fee, tip_amount, driver_payout_amount,
+         platform_margin, payload, updated_at
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, NULL, $7,
+         'scheduled', $8::jsonb, $9::jsonb, $10, $11, $12, $13,
+         $14, $15::jsonb, NOW()
+       )
+       ON CONFLICT (farm_id, delivery_id)
+       DO UPDATE SET
+         delivery_date = EXCLUDED.delivery_date,
+         driver_id = EXCLUDED.driver_id,
+         address = EXCLUDED.address,
+         contact = EXCLUDED.contact,
+         instructions = EXCLUDED.instructions,
+         delivery_fee = EXCLUDED.delivery_fee,
+         tip_amount = EXCLUDED.tip_amount,
+         driver_payout_amount = EXCLUDED.driver_payout_amount,
+         platform_margin = EXCLUDED.platform_margin,
+         payload = EXCLUDED.payload,
+         updated_at = NOW()`,
+      [
+        farmId,
+        deliveryId,
+        order.master_order_id,
+        deliveryDate,
+        'flexible',
+        null,
+        assignedDriver?.driver_id || null,
+        JSON.stringify(deliveryAddress || {}),
+        JSON.stringify({
+          name: order?.buyer_account?.name || order?.buyer_account?.contact_name || null,
+          email: order?.buyer_account?.email || null
+        }),
+        deliveryAddress?.instructions || null,
+        farmDeliveryFee,
+        tipAmount,
+        driverPayoutAmount,
+        platformMargin,
+        JSON.stringify({
+          fulfillment_method: 'delivery',
+          farm_sub_order: sub,
+          order_total: order?.grand_total || null
+        })
+      ]
+    );
+
+    if (assignedDriver?.driver_id) {
+      await query(
+        `INSERT INTO driver_payouts (
+           farm_id, driver_id, delivery_id, order_id,
+           base_amount, cold_chain_bonus, tip_amount, total_payout,
+           payout_status, created_at, updated_at
+         )
+         SELECT
+           $1, $2, $3, $4,
+           $5, $6, $7, $8,
+           'pending', NOW(), NOW()
+         WHERE NOT EXISTS (
+           SELECT 1
+             FROM driver_payouts
+            WHERE farm_id = $1
+              AND driver_id = $2
+              AND delivery_id = $3
+         )`,
+        [
+          farmId,
+          assignedDriver.driver_id,
+          deliveryId,
+          order.master_order_id,
+          basePayout,
+          coldChainBonus,
+          tipAmount,
+          driverPayoutAmount
+        ]
+      );
+
+      await query(
+        `UPDATE delivery_drivers
+            SET deliveries_30d = COALESCE(deliveries_30d, 0) + 1,
+                updated_at = NOW()
+          WHERE farm_id = $1
+            AND driver_id = $2`,
+        [farmId, assignedDriver.driver_id]
+      );
+    }
+  }
 }
 
 function canUseDemoWholesalePaths() {
@@ -873,7 +1022,7 @@ router.post('/buyers/login', loginLimiter, requireWholesaleDbForCriticalPaths, a
     }
 
     // Check lockout before authenticating
-    if (isAccountLocked(email)) {
+    if (await isAccountLocked(email)) {
       return res.status(423).json({ status: 'error', message: 'Account temporarily locked due to too many failed attempts. Try again in 30 minutes.' });
     }
 
@@ -1253,11 +1402,25 @@ router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuye
 
 router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
-    const { buyer_account, delivery_date, delivery_address, recurrence, cart, payment_provider, sourcing, po_number } = req.body || {};
+    const {
+      buyer_account,
+      delivery_date,
+      delivery_address,
+      recurrence,
+      cart,
+      payment_provider,
+      sourcing,
+      po_number,
+      fulfillment_method,
+      delivery_fee
+    } = req.body || {};
+
+    const normalizedDeliveryAddress = normalizeDeliveryAddress(delivery_address);
+    const deliveryFee = toDeliveryFee(delivery_fee, fulfillment_method);
 
     if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
-    if (!delivery_address?.street || !delivery_address?.city || !delivery_address?.zip) {
+    if (!normalizedDeliveryAddress?.street || !normalizedDeliveryAddress?.city || !normalizedDeliveryAddress?.zip) {
       throw new ValidationError('delivery_address street/city/zip are required');
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
@@ -1274,22 +1437,30 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
         return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
       }
 
+      const orderTotals = {
+        ...result.allocation,
+        delivery_fee: deliveryFee,
+        grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
+      };
+
       const order = createOrder({
         buyerId: req.wholesaleBuyer.id,
         buyerAccount: buyer_account,
         poNumber: po_number,
         deliveryDate: delivery_date,
-        deliveryAddress: delivery_address,
+        deliveryAddress: normalizedDeliveryAddress,
         recurrence: recurrence || { cadence: 'one_time' },
         farmSubOrders: result.allocation.farm_sub_orders,
-        totals: result.allocation
+        totals: orderTotals
       });
+      order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
+      order.delivery_fee = deliveryFee;
 
       const payment = createPayment({
         orderId: order.master_order_id,
         provider: payment_provider || 'square',
         split: result.payment_split,
-        totals: result.allocation
+        totals: orderTotals
       });
 
       // Attempt Square payment if farms have Square connected
@@ -1458,6 +1629,16 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
       }
 
       await saveOrder(order).catch(() => {});
+      await persistDeliveryLedger({
+        order,
+        allocation: result.allocation,
+        deliveryFee,
+        deliveryDate: delivery_date,
+        deliveryAddress: normalizedDeliveryAddress,
+        fulfillmentMethod: order.fulfillment_method
+      }).catch((err) => {
+        console.warn('[Wholesale] Delivery ledger persistence failed:', err.message);
+      });
 
       // Phase 3 (async/best-effort): Notify farms + send confirmation email
       (async () => {
@@ -1503,25 +1684,43 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
       return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
     }
 
+    const orderTotals = {
+      ...result.allocation,
+      delivery_fee: deliveryFee,
+      grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
+    };
+
     const order = createOrder({
       buyerId: req.wholesaleBuyer.id,
       buyerAccount: buyer_account,
       deliveryDate: delivery_date,
-      deliveryAddress: delivery_address,
+      deliveryAddress: normalizedDeliveryAddress,
       recurrence: recurrence || { cadence: 'one_time' },
       farmSubOrders: result.allocation.farm_sub_orders,
-      totals: result.allocation
+      totals: orderTotals
     });
+    order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
+    order.delivery_fee = deliveryFee;
 
     const payment = createPayment({
       orderId: order.master_order_id,
       provider: payment_provider || 'demo',
       split: result.payment_split,
-      totals: result.allocation
+      totals: orderTotals
     });
     payment.status = 'completed';
     order.payment = payment;
     await saveOrder(order).catch(() => {});
+    await persistDeliveryLedger({
+      order,
+      allocation: result.allocation,
+      deliveryFee,
+      deliveryDate: delivery_date,
+      deliveryAddress: normalizedDeliveryAddress,
+      fulfillmentMethod: order.fulfillment_method
+    }).catch((err) => {
+      console.warn('[Wholesale] Delivery ledger persistence failed:', err.message);
+    });
 
     // Notify farms (dev stub): broadcast over WS if available.
     const wss = req.app?.locals?.wss;

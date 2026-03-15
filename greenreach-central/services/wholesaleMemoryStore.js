@@ -1,8 +1,12 @@
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { isDatabaseAvailable, query } from '../config/database.js';
+
+function hashToken(token) {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 const buyersByEmail = new Map();
 const buyersById = new Map();
@@ -227,10 +231,35 @@ export function blacklistToken(token) {
     const iter = tokenBlacklist.values();
     tokenBlacklist.delete(iter.next().value);
   }
+  // Persist to DB
+  if (isDatabaseAvailable()) {
+    const hash = hashToken(token);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    query(
+      `INSERT INTO token_blacklist (token_hash, expires_at) VALUES ($1, $2)
+       ON CONFLICT (token_hash) DO NOTHING`,
+      [hash, expiresAt]
+    ).catch(err => console.error('[Blacklist] DB persist error:', err.message));
+  }
 }
 
-export function isTokenBlacklisted(token) {
-  return tokenBlacklist.has(token);
+export async function isTokenBlacklisted(token) {
+  if (tokenBlacklist.has(token)) return true;
+  if (!isDatabaseAvailable()) return false;
+  try {
+    const hash = hashToken(token);
+    const result = await query(
+      'SELECT 1 FROM token_blacklist WHERE token_hash = $1 AND expires_at > NOW()',
+      [hash]
+    );
+    if (result.rows.length > 0) {
+      tokenBlacklist.add(token); // cache for future checks
+      return true;
+    }
+  } catch (err) {
+    console.error('[Blacklist] DB check error:', err.message);
+  }
+  return false;
 }
 
 export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals }) {
@@ -459,14 +488,36 @@ export function listRefundsForOrder(orderId) {
 
 // ── Login lockout helpers ────────────────────────────────────────────
 
-export function isAccountLocked(email) {
+export async function isAccountLocked(email) {
   const key = String(email || '').trim().toLowerCase();
   const entry = loginAttempts.get(key);
-  if (!entry) return false;
-  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
-  // Lock expired — reset
-  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
-    loginAttempts.delete(key);
+  if (entry) {
+    if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
+    if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+      loginAttempts.delete(key);
+    }
+  }
+  // Fall back to DB if no in-memory entry
+  if (!entry && isDatabaseAvailable()) {
+    try {
+      const result = await query(
+        'SELECT attempt_count, locked_until FROM login_lockouts WHERE email = $1',
+        [key]
+      );
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        if (row.locked_until && new Date(row.locked_until) > new Date()) {
+          loginAttempts.set(key, { count: row.attempt_count, lockedUntil: new Date(row.locked_until).getTime() });
+          return true;
+        }
+        // Lock expired — clean up
+        if (row.locked_until && new Date(row.locked_until) <= new Date()) {
+          query('DELETE FROM login_lockouts WHERE email = $1', [key]).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('[Lockout] DB check error:', err.message);
+    }
   }
   return false;
 }
@@ -475,6 +526,10 @@ export function recordLoginAttempt(email, success) {
   const key = String(email || '').trim().toLowerCase();
   if (success) {
     loginAttempts.delete(key);
+    if (isDatabaseAvailable()) {
+      query('DELETE FROM login_lockouts WHERE email = $1', [key])
+        .catch(err => console.error('[Lockout] DB clear error:', err.message));
+    }
     return;
   }
   const entry = loginAttempts.get(key) || { count: 0, lockedUntil: null };
@@ -484,10 +539,25 @@ export function recordLoginAttempt(email, success) {
     console.warn(`[Lockout] Account ${key} locked until ${new Date(entry.lockedUntil).toISOString()}`);
   }
   loginAttempts.set(key, entry);
+  // Persist to DB
+  if (isDatabaseAvailable()) {
+    query(
+      `INSERT INTO login_lockouts (email, attempt_count, locked_until, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (email) DO UPDATE
+       SET attempt_count = $2, locked_until = $3, updated_at = NOW()`,
+      [key, entry.count, entry.lockedUntil ? new Date(entry.lockedUntil) : null]
+    ).catch(err => console.error('[Lockout] DB persist error:', err.message));
+  }
 }
 
 export function resetLoginAttempts(email) {
-  loginAttempts.delete(String(email || '').trim().toLowerCase());
+  const key = String(email || '').trim().toLowerCase();
+  loginAttempts.delete(key);
+  if (isDatabaseAvailable()) {
+    query('DELETE FROM login_lockouts WHERE email = $1', [key])
+      .catch(err => console.error('[Lockout] DB reset error:', err.message));
+  }
 }
 
 // ── Buyer helpers ────────────────────────────────────────────────────

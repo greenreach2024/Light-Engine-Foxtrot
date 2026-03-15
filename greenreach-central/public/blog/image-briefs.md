@@ -1,45 +1,44 @@
-# GreenReach Blog — Image Briefs (Buyer-Facing Content Pack)
+# GreenReach Blog — Image Briefs
 
-Brand palette: deep forest green (#2d5016), accent green (#82c341), warm cream/off-white. Clean, premium photography. No stock-photo cheese. Think: Whole Foods editorial meets farm documentary.
-
----
-
-## Article 1: Why Independent Grocers Can Source in Ways Chains Never Will
-
-**Folder:** `public/blog/local-produce-differentiation-grocers/`
-
-| Filename | Alt Text | Description for Designer |
-|---|---|---|
-| `01-hero.png` | Independent grocer produce section with locally labelled vertically farmed greens | Premium produce section with warm lighting. A small handwritten or printed card visible: "[Farm Name], harvested [date]". Lush greens in foreground. |
-| `02-farm-label.png` | Close-up of a produce label showing farm name, harvest date, and distance from store | Macro shot of a label or tag attached to packaged greens. Key info visible: farm name, harvest date "March 12", distance "18km". |
-| `03-grocer-staff.png` | Grocery store staff member discussing locally sourced produce with a customer | Natural interaction between a staff member and customer in the produce section. Both looking at a product. Warm, genuine — not posed. |
-| `04-produce-comparison.png` | Side-by-side comparison of fresh local vertical farm lettuce versus wilted imported lettuce | Two heads of lettuce side by side on a clean surface. Left: vibrant, fresh, crisp vertical farm product. Right: slightly wilted, paler field import. |
-| `05-farm-to-store.png` | Infographic showing the direct route from local vertical farm to store shelf in 24-72 hours | Simple clean graphic: vertical farm icon → delivery → store shelf. Timeline: "harvested Monday → on your shelf Tuesday." Minimal, branded. |
+Images should use GreenReach's brand palette: deep forest green, warm cream/off-white, natural lighting. Photography style: clean, clinical but warm. No stock-photo cheese.
 
 ---
 
-## Article 2: The Sourcing Story Your Restaurant Can Tell — and Chains Cannot
+## Article 1: VPD Guide for Indoor Growers
 
-**Folder:** `public/blog/restaurant-local-sourcing-story/`
+**Folder:** `public/blog/vpd-guide-indoor-growing/`
 
 | Filename | Alt Text | Description for Designer |
 |---|---|---|
-| `01-hero.png` | Beautifully plated salad at an independent restaurant table with a small farm provenance card | Elegant table setting. A fresh salad with visible high-quality greens. Small card beside the plate: "Grown at [Farm], 15km away." Candlelight ambience. |
-| `02-chef-produce.png` | Chef in kitchen examining freshly delivered local vertical farm greens | Chef (back-of-house setting) holding and inspecting a fresh head of lettuce or herbs. Focused, professional. Crates of produce visible in background. |
-| `03-menu-callout.png` | Restaurant menu featuring a dish with local farm sourcing called out by name | Close-up of a printed or chalkboard menu. One item highlighted: "Butter lettuce from [Farm Name], [City] — harvested this week." Upscale typography. |
-| `04-server-tableside.png` | Server explaining local produce sourcing to guests at a restaurant table | Natural moment: server gesturing toward a dish while explaining something. Guests engaged and interested. Warm restaurant lighting. |
-| `05-delivery-kitchen.png` | Fresh delivery of local vertical farm produce arriving at restaurant back door | Crates of fresh greens being unloaded or handed off at a kitchen entrance. "Harvested yesterday" feel — bright, crisp, abundant. |
+| `01-hero.png` | Lush lettuce canopy under LED grow lights in a vertical farm | Wide shot of healthy leafy greens under pink/white LED arrays. Dense, vibrant canopy. Droplets of condensation on leaves to imply humidity. |
+| `02-vpd-chart.png` | VPD chart showing optimal ranges across growth stages | Clean infographic: x-axis temperature (16–28°C), y-axis humidity (40–90%), color zones for VPD ranges 0.4–1.5 kPa. Growth stage bands overlaid. |
+| `03-stomata.png` | Diagram of plant stomata opening and closing in response to VPD | Simple scientific illustration: cross-section of a leaf showing open vs closed stomata. Two panels side by side: low VPD (open) vs high VPD (closed). |
+| `04-sensor-display.png` | Digital environmental monitor showing temperature, humidity, and VPD readings | Close-up of a sensor display or tablet screen showing real-time VPD data. Green "optimal" indicator visible. |
+| `05-tip-burn-lettuce.png` | Lettuce leaf showing tip burn from calcium deficiency caused by high VPD | Close-up of lettuce leaf margin showing brown tip burn discoloration. Educational context — shows what goes wrong. |
 
 ---
 
-## Article 3: Vertical Farm Produce Is Not a Commodity
+## Article 2: Farm Server April 22 Launch
 
-**Folder:** `public/blog/vertical-farm-produce-not-a-commodity/`
+**Folder:** `public/blog/light-engine-farm-server-april-22/`
 
 | Filename | Alt Text | Description for Designer |
 |---|---|---|
-| `01-hero.png` | Lush vertical farm growing room with rows of lettuce under LED lights | Wide-angle shot of a vertical farm interior. Multiple tiers of growing trays. Pink-white LED light. Dense, healthy canopy. Industrial but beautiful. |
-| `02-supply-chain-contrast.png` | Infographic contrasting continental import supply chain vs. local vertical farm delivery | Two-column comparison. Left (imports): truck → warehouse → distribution → store (21 days). Right (local): farm → store (48 hours). Simple, clean, branded. |
-| `03-traceability-label.png` | Product label showing lot ID, harvest date, farm name, and growing method | Clear product label with: Lot ID, Harvest Date, Farm Name, "Zero Pesticides", "Grown Locally". Professional packaging but human and warm. |
-| `04-fresh-vs-old.png` | Visual comparison of produce freshness at point of purchase | Same crop, two states. Left: vibrant, perky, just-harvested vertical farm product. Right: slightly aged field product after long transit. Side by side, clean background. |
-| `05-buyer-browsing.png` | Restaurant or grocery buyer browsing the GreenReach wholesale marketplace on a laptop or tablet | Person at a desk or in a commercial kitchen looking at a clean marketplace UI. GreenReach branding visible. Professional, relaxed setting. |
+| `01-hero.png` | Light Engine Farm Server hardware setup in a vertical farm control room | Industrial mini-PC or dedicated hardware unit mounted in a clean server panel. Cables organized. Green status LEDs visible. Farm grow room blurred in background. |
+| `02-dashboard.png` | Light Engine farm management dashboard showing crop groups and environmental controls | Screenshot or mockup of the Light Engine admin dashboard. Multiple growing groups visible with status indicators. Clean dark UI theme. |
+| `03-qr-scan.png` | Farm worker scanning a QR code tray label with a mobile phone | Person in apron holding phone to a tray QR label in a grow room. Activity Hub interface visible on screen. Trays of microgreens in background. |
+| `04-edge-vs-cloud.png` | Diagram comparing Farm Server edge deployment to cloud platform | Simple two-column illustration: left = edge device + farm hardware; right = cloud + desktop. Arrows showing sync relationship between them. |
+| `05-harvest-prediction.png` | AI harvest prediction badge showing days to harvest and expected yield | Close-up of a harvest prediction UI element: crop name, days remaining countdown, weight estimate with confidence bar. Clean card design. |
+
+---
+
+## Article 3: Canadian Farm Grants 2026
+
+**Folder:** `public/blog/canadian-farm-grants-2026/`
+
+| Filename | Alt Text | Description for Designer |
+|---|---|---|
+| `01-hero.png` | Canadian farmer reviewing grant documents at a desk with a laptop | Person at a clean desk, papers and laptop visible. Natural light from window. Relaxed, thoughtful expression. Could be any farm type — universal. |
+| `02-grant-wizard.png` | Grant Wizard interface showing matched funding programs for a farm | Screenshot or mockup of the Grant Wizard results page. List of 5-6 matched programs with category badges (Hiring, Equipment, Clean Tech, etc.) and match percentage indicators. |
+| `03-programs-overview.png` | Overview of Canadian agricultural grant program categories | Clean infographic grid: 6-8 program categories as icon cards (insurance, clean tech, marketing, stability, equipment, new farmers). Brand-colored. |
+| `04-application-checklist.png` | Grant application checklist on a clipboard | Flat-lay of clipboard with checklist, pen, and a few documents. Some items checked off. Implies process/organization without complexity. |

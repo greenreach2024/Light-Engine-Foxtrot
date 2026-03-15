@@ -4,19 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Drive With GreenReach | Delivery Driver Enrollment</title>
-  <meta name="description" content="Join our delivery team and help bring fresh, locally grown produce from farm to table. Apply to become a GreenReach delivery driver today.">
+  <meta name="description" content="Apply to support GreenReach wholesale delivery operations in enabled service zones. Driver onboarding is based on operational demand and compliance review.">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://greenreachgreens.com/driver-enrollment.html">
   <meta property="og:title" content="Drive With GreenReach | Delivery Driver Enrollment">
-  <meta property="og:description" content="Join our delivery team and help bring fresh, locally grown produce from farm to table. Apply to become a GreenReach driver today.">
+  <meta property="og:description" content="Apply to support GreenReach wholesale delivery operations in enabled service zones.">
   <meta property="og:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Drive With GreenReach | Delivery Driver Enrollment">
-  <meta name="twitter:description" content="Join our delivery team and help bring fresh, locally grown produce from farm to table. Apply to become a GreenReach driver today.">
+  <meta name="twitter:description" content="Apply to support GreenReach wholesale delivery operations in enabled service zones.">
   <meta name="twitter:image" content="https://greenreachgreens.com/images/plant-farm/IMG_5581.jpeg">
 
   <style>
@@ -210,7 +210,18 @@
     }
 
     .benefit-icon {
-      font-size: 36px;
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--primary);
+      border: 1px solid rgba(45, 80, 22, 0.18);
+      background: linear-gradient(135deg, rgba(130, 195, 65, 0.16) 0%, rgba(45, 80, 22, 0.10) 100%);
       margin-bottom: 16px;
     }
 
@@ -792,20 +803,20 @@
   <section class="hero">
     <h1>Drive With GreenReach</h1>
     <p class="subtitle">
-      Deliver fresh, locally grown produce from farm to table. Set your own schedule, earn competitive pay, and make a real difference in your community's food system.
+      Support wholesale delivery operations for local farms and buyers. Scheduling, route volume, and onboarding are based on active zones and current operational demand.
     </p>
     <div class="hero-stats">
       <div class="hero-stat">
-        <div class="hero-stat-value">50km</div>
-        <div class="hero-stat-label">Local Delivery Radius</div>
+        <div class="hero-stat-value">Zone-Based</div>
+        <div class="hero-stat-label">Coverage Set by Farm Rules</div>
       </div>
       <div class="hero-stat">
         <div class="hero-stat-value">Mon–Sat</div>
         <div class="hero-stat-label">Flexible Scheduling</div>
       </div>
       <div class="hero-stat">
-        <div class="hero-stat-value">Same Day</div>
-        <div class="hero-stat-label">Harvest-to-Delivery</div>
+        <div class="hero-stat-value">Variable</div>
+        <div class="hero-stat-label">Route Timing by Dispatch</div>
       </div>
     </div>
   </section>
@@ -818,34 +829,34 @@
     </p>
     <div class="benefits-grid">
       <div class="benefit-card">
-        <div class="benefit-icon">📅</div>
+        <div class="benefit-icon">TIME</div>
         <h3>Flexible Hours</h3>
         <p>Choose when you want to deliver. Pick morning, afternoon, or evening shifts that fit your life — no minimum hours required.</p>
       </div>
       <div class="benefit-card">
-        <div class="benefit-icon">💰</div>
+        <div class="benefit-icon">PAY</div>
         <h3>Competitive Earnings</h3>
         <p>Earn per delivery with transparent pay. Base pay plus tips, with no hidden fees deducted from your earnings.</p>
       </div>
       <div class="benefit-card">
-        <div class="benefit-icon">🌱</div>
+        <div class="benefit-icon">LOCAL</div>
         <h3>Support Local Food</h3>
-        <p>Deliver produce harvested the same morning. Help strengthen Kingston's local food economy and reduce food miles.</p>
+        <p>Support local supply chains by delivering verified wholesale orders from participating farms to buyers in active delivery zones.</p>
       </div>
       <div class="benefit-card">
-        <div class="benefit-icon">🚗</div>
+        <div class="benefit-icon">VEH</div>
         <h3>Use Your Own Vehicle</h3>
         <p>Car, van, truck, bicycle, or e-bike — deliver with whatever vehicle works best for you and your community.</p>
       </div>
       <div class="benefit-card">
-        <div class="benefit-icon">📱</div>
+        <div class="benefit-icon">APP</div>
         <h3>Easy-to-Use App</h3>
         <p>Manage deliveries, track routes, and communicate with customers using our streamlined driver dashboard.</p>
       </div>
       <div class="benefit-card">
-        <div class="benefit-icon">🛡️</div>
+        <div class="benefit-icon">SAFE</div>
         <h3>Safety First</h3>
-        <p>Comprehensive food safety training, insulated delivery bags provided, and 24/7 driver support when you need it.</p>
+        <p>Food safety onboarding, route handling standards, and operational support are provided through approved delivery workflows.</p>
       </div>
     </div>
   </section>
@@ -1035,7 +1046,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="city">City <span class="required">*</span></label>
-              <input type="text" id="city" name="city" required autocomplete="address-level2" value="Kingston">
+              <input type="text" id="city" name="city" required autocomplete="address-level2" placeholder="e.g., Your city">
             </div>
             <div class="form-group">
               <label for="postal-code">Postal Code</label>
@@ -1117,7 +1128,7 @@
           <div class="form-row full">
             <div class="form-group">
               <label for="preferred-zones">Areas you'd like to cover</label>
-              <textarea id="preferred-zones" name="preferredZones" placeholder="e.g., Downtown Kingston, Kingston West, Cataraqui, Collins Bay…"></textarea>
+              <textarea id="preferred-zones" name="preferredZones" placeholder="e.g., Downtown core, west end, industrial district"></textarea>
             </div>
           </div>
         </div>
@@ -1186,7 +1197,7 @@
     <div class="faq-list">
       <div class="faq-item">
         <div class="faq-question">How much can I earn delivering with GreenReach?</div>
-        <div class="faq-answer"><p>Earnings vary based on number of deliveries, distance, and tips. Drivers earn a base rate per delivery plus 100% of customer tips. Most active drivers in the Kingston area earn competitive rates comparable to other delivery platforms, with shorter average delivery distances.</p></div>
+        <div class="faq-answer"><p>Earnings vary by route demand, distance, service window, and delivery completion volume. Approved drivers receive payout details during onboarding and can review current compensation terms before accepting routes.</p></div>
       </div>
       <div class="faq-item">
         <div class="faq-question">Do I need prior delivery experience?</div>
@@ -1206,7 +1217,7 @@
       </div>
       <div class="faq-item">
         <div class="faq-question">What areas does GreenReach deliver to?</div>
-        <div class="faq-answer"><p>We currently serve Kingston and surrounding areas within approximately 50 km of our network farms. This includes downtown Kingston, the west end, east end, Cataraqui, Bath, Gananoque, and other nearby communities. Coverage areas are expanding as we grow.</p></div>
+        <div class="faq-answer"><p>Delivery coverage is based on farm-configured zones and active dispatch capacity. Service areas can change by season, farm participation, and operational requirements.</p></div>
       </div>
       <div class="faq-item">
         <div class="faq-question">How long does the application process take?</div>
@@ -1423,7 +1434,7 @@
             We'll review your application and contact you within 3–5 business days at <strong>${applicationData.email}</strong>.
           `;
           form.reset();
-          document.getElementById('city').value = 'Kingston';
+          document.getElementById('city').value = '';
           statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           throw new Error(result.error || 'Submission failed');

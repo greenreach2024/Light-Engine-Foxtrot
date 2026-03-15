@@ -352,6 +352,21 @@ app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB
 // Inject farmStore into every request for route files
 app.use((req, _res, next) => { req.farmStore = farmStore; next(); });
 
+// ── API metering middleware — count calls per farm per day ──────────
+app.use((req, _res, next) => {
+  const farmId = req.headers['x-farm-id'] || req.farmId;
+  if (farmId && isDatabaseAvailable()) {
+    query(
+      `INSERT INTO api_usage_daily (farm_id, usage_date, api_calls, updated_at)
+       VALUES ($1, CURRENT_DATE, 1, NOW())
+       ON CONFLICT (farm_id, usage_date) DO UPDATE
+       SET api_calls = api_usage_daily.api_calls + 1, updated_at = NOW()`,
+      [farmId]
+    ).catch(() => {}); // fire-and-forget; never block request
+  }
+  next();
+});
+
 // ── Room-map routes MUST be before express.static to avoid flat-file fallback ──
 // These handle farm-scoped room-map data via PostgreSQL farm_data table.
 app.get('/data/room-map.json', async (req, res) => {

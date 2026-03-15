@@ -92,6 +92,8 @@ router.get('/usage/:farmId', async (req, res) => {
   try {
     let deviceCount = 0;
     let dataTypes = 0;
+    let apiCallsToday = 0;
+    let storageBytes = 0;
 
     // Count devices and data types from farmStore
     if (req.farmStore) {
@@ -108,7 +110,27 @@ router.get('/usage/:farmId', async (req, res) => {
         );
         dataTypes = parseInt(dtResult.rows[0]?.count || 0);
       } catch { /* table may not exist */ }
+
+      // API call count for today
+      try {
+        const callResult = await query(
+          'SELECT api_calls FROM api_usage_daily WHERE farm_id = $1 AND usage_date = CURRENT_DATE',
+          [farmId]
+        );
+        apiCallsToday = parseInt(callResult.rows[0]?.api_calls || 0);
+      } catch { /* table may not exist yet */ }
+
+      // Storage: sum JSONB data size for this farm
+      try {
+        const storageResult = await query(
+          'SELECT COALESCE(SUM(pg_column_size(data)), 0)::bigint AS total_bytes FROM farm_data WHERE farm_id = $1',
+          [farmId]
+        );
+        storageBytes = parseInt(storageResult.rows[0]?.total_bytes || 0);
+      } catch { /* table may not exist */ }
     }
+
+    const storageGb = Math.round((storageBytes / (1024 * 1024 * 1024)) * 1000) / 1000;
 
     return res.json({
       status: 'ok',
@@ -122,10 +144,15 @@ router.get('/usage/:farmId', async (req, res) => {
       usage: {
         devices: deviceCount,
         data_types: dataTypes,
+        api_calls_today: apiCallsToday,
+        storage_gb: storageGb,
       },
-      metering_available: false,
-      metering_note: 'API call counting and storage metering not yet wired',
-      overages: { devices: 0 },
+      metering_available: true,
+      overages: {
+        devices: Math.max(0, deviceCount - 50),
+        api_calls: Math.max(0, apiCallsToday - 10000),
+        storage_gb: Math.max(0, storageGb - 5),
+      },
     });
   } catch (err) {
     console.error('[Billing] Usage error:', err.message);

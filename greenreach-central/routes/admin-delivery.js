@@ -13,6 +13,7 @@
  *   POST   /api/admin/delivery/drivers    - Add driver
  *   PUT    /api/admin/delivery/drivers/:id - Update driver
  *   GET    /api/admin/delivery/fees       - Get fee distribution data
+ *   GET    /api/admin/delivery/reconciliation - Reconcile delivery fees vs payouts by farm/day
  */
 
 import express from 'express';
@@ -774,6 +775,283 @@ router.patch('/driver-payouts/:id', async (req, res) => {
     return res.json({ success: true, payout: result.rows[0] });
   } catch (error) {
     console.error('[Admin Delivery] Driver payout update failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /reconciliation - Reconcile delivery totals vs payout totals by farm/day
+ * Query: farm_id?, from?, to?, threshold?
+ */
+router.get('/reconciliation', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const { farm_id, from, to } = req.query;
+    const threshold = Math.max(0, Number(req.query.threshold || 0.01));
+
+    const values = [];
+    const deliveryClauses = [];
+    const payoutClauses = [];
+
+    if (farm_id) {
+      values.push(String(farm_id));
+      deliveryClauses.push(`farm_id = $${values.length}`);
+      payoutClauses.push(`farm_id = $${values.length}`);
+    }
+    if (from) {
+      values.push(from);
+      deliveryClauses.push(`created_at >= $${values.length}::timestamptz`);
+      payoutClauses.push(`created_at >= $${values.length}::timestamptz`);
+    }
+    if (to) {
+      values.push(to);
+      deliveryClauses.push(`created_at <= $${values.length}::timestamptz`);
+      payoutClauses.push(`created_at <= $${values.length}::timestamptz`);
+    }
+
+    const deliveryWhere = deliveryClauses.length ? `WHERE ${deliveryClauses.join(' AND ')}` : '';
+    const payoutWhere = payoutClauses.length ? `WHERE ${payoutClauses.join(' AND ')}` : '';
+
+    const result = await query(
+      `WITH delivery AS (
+         SELECT
+           farm_id,
+           DATE(created_at) AS day,
+           COUNT(*)::int AS delivery_count,
+           COALESCE(SUM(delivery_fee), 0)::numeric AS delivery_fee_total,
+           COALESCE(SUM(driver_payout_amount), 0)::numeric AS driver_payout_total_orders,
+           COALESCE(SUM(platform_margin), 0)::numeric AS platform_margin_total
+         FROM delivery_orders
+         ${deliveryWhere}
+         GROUP BY farm_id, DATE(created_at)
+       ),
+       payouts AS (
+         SELECT
+           farm_id,
+           DATE(created_at) AS day,
+           COUNT(*)::int AS payout_count,
+           COALESCE(SUM(total_payout), 0)::numeric AS payout_total_ledger
+         FROM driver_payouts
+         ${payoutWhere}
+         GROUP BY farm_id, DATE(created_at)
+       )
+       SELECT
+         COALESCE(d.farm_id, p.farm_id) AS farm_id,
+         COALESCE(d.day, p.day) AS day,
+         COALESCE(d.delivery_count, 0) AS delivery_count,
+         COALESCE(p.payout_count, 0) AS payout_count,
+         COALESCE(d.delivery_fee_total, 0)::numeric AS delivery_fee_total,
+         COALESCE(d.driver_payout_total_orders, 0)::numeric AS driver_payout_total_orders,
+         COALESCE(p.payout_total_ledger, 0)::numeric AS payout_total_ledger,
+         COALESCE(d.platform_margin_total, 0)::numeric AS platform_margin_total,
+         (COALESCE(d.delivery_fee_total, 0) - COALESCE(p.payout_total_ledger, 0))::numeric AS expected_margin,
+         (COALESCE(d.driver_payout_total_orders, 0) - COALESCE(p.payout_total_ledger, 0))::numeric AS payout_delta,
+         (COALESCE(d.platform_margin_total, 0) - (COALESCE(d.delivery_fee_total, 0) - COALESCE(p.payout_total_ledger, 0)))::numeric AS margin_delta
+       FROM delivery d
+       FULL OUTER JOIN payouts p
+         ON d.farm_id = p.farm_id
+        AND d.day = p.day
+       ORDER BY day DESC, farm_id ASC`,
+      values
+    );
+
+    const rows = result.rows.map((r) => {
+      const payoutDelta = Number(r.payout_delta || 0);
+      const marginDelta = Number(r.margin_delta || 0);
+      const expectedMargin = Number(r.expected_margin || 0);
+      const recordedMargin = Number(r.platform_margin_total || 0);
+
+      const flags = [];
+      if (Math.abs(payoutDelta) > threshold) flags.push('payout_mismatch');
+      if (Math.abs(marginDelta) > threshold) flags.push('margin_mismatch');
+      if (expectedMargin < -threshold) flags.push('negative_expected_margin');
+      if (recordedMargin < -threshold) flags.push('negative_recorded_margin');
+      if (Number(r.delivery_count || 0) !== Number(r.payout_count || 0)) flags.push('count_mismatch');
+
+      return {
+        farm_id: r.farm_id,
+        day: r.day,
+        delivery_count: Number(r.delivery_count || 0),
+        payout_count: Number(r.payout_count || 0),
+        delivery_fee_total: Number(r.delivery_fee_total || 0),
+        driver_payout_total_orders: Number(r.driver_payout_total_orders || 0),
+        payout_total_ledger: Number(r.payout_total_ledger || 0),
+        platform_margin_total: Number(r.platform_margin_total || 0),
+        expected_margin: expectedMargin,
+        payout_delta: payoutDelta,
+        margin_delta: marginDelta,
+        anomaly: flags.length > 0,
+        flags
+      };
+    });
+
+    const anomalies = rows.filter((r) => r.anomaly);
+    return res.json({
+      success: true,
+      threshold,
+      summary: {
+        rows: rows.length,
+        anomalies: anomalies.length,
+        anomaly_rate: rows.length ? Number((anomalies.length / rows.length).toFixed(4)) : 0
+      },
+      rows,
+      anomalies
+    });
+  } catch (error) {
+    console.error('[Admin Delivery] Reconciliation failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /applications - List driver applications for review
+ * Query: status?, from?, to?, limit?
+ */
+router.get('/applications', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.json({ success: true, applications: [], mode: 'in-memory' });
+    }
+
+    const { status, from, to } = req.query;
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
+
+    const values = [];
+    const clauses = [];
+
+    if (status) {
+      values.push(String(status).toLowerCase());
+      clauses.push(`status = $${values.length}`);
+    }
+    if (from) {
+      values.push(from);
+      clauses.push(`submitted_at >= $${values.length}::timestamptz`);
+    }
+    if (to) {
+      values.push(to);
+      clauses.push(`submitted_at <= $${values.length}::timestamptz`);
+    }
+
+    values.push(limit);
+    const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const result = await query(
+      `SELECT application_id, name, email, phone, city, vehicle_type,
+              availability, preferred_zones, food_cert_status, experience,
+              status, reviewer_notes, reviewed_at, reviewed_by, submitted_at
+         FROM driver_applications
+         ${whereSql}
+         ORDER BY submitted_at DESC
+         LIMIT $${values.length}`,
+      values
+    );
+
+    return res.json({ success: true, applications: result.rows });
+  } catch (error) {
+    console.error('[Admin Delivery] Driver applications list failed:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /applications/:applicationId - Review driver application
+ * Body: { status, reviewer_notes?, farm_id?, create_driver?, pay_per_delivery?, cold_chain_bonus?, cold_chain_certified? }
+ */
+router.patch('/applications/:applicationId', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const applicationId = String(req.params.applicationId || '').trim();
+    if (!applicationId || !applicationId.startsWith('APP-')) {
+      return res.status(400).json({ success: false, error: 'Invalid application id' });
+    }
+
+    const nextStatus = String(req.body?.status || '').toLowerCase();
+    const allowedStatuses = new Set(['pending', 'under_review', 'approved', 'rejected']);
+    if (!allowedStatuses.has(nextStatus)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    const reviewerNotes = String(req.body?.reviewer_notes || '').trim();
+    const reviewedBy = req.admin?.email || 'admin';
+
+    const current = await query(
+      `SELECT * FROM driver_applications WHERE application_id = $1 LIMIT 1`,
+      [applicationId]
+    );
+    if (!current.rows.length) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    const appRow = current.rows[0];
+    const updated = await query(
+      `UPDATE driver_applications
+          SET status = $2,
+              reviewer_notes = $3,
+              reviewed_at = NOW(),
+              reviewed_by = $4,
+              updated_at = NOW()
+        WHERE application_id = $1
+      RETURNING application_id, status, reviewer_notes, reviewed_at, reviewed_by`,
+      [applicationId, nextStatus, reviewerNotes, reviewedBy]
+    );
+
+    let onboardedDriver = null;
+    const shouldCreateDriver = Boolean(req.body?.create_driver) && nextStatus === 'approved';
+    if (shouldCreateDriver) {
+      const farmId = String(req.body?.farm_id || '').trim();
+      if (!farmId) {
+        return res.status(400).json({ success: false, error: 'farm_id is required when create_driver=true' });
+      }
+
+      const existing = await query(
+        `SELECT driver_id FROM delivery_drivers WHERE farm_id = $1 AND email = $2 LIMIT 1`,
+        [farmId, appRow.email]
+      );
+
+      if (existing.rows.length) {
+        onboardedDriver = { driver_id: existing.rows[0].driver_id, reused: true };
+      } else {
+        const driverId = `DRV-${Date.now().toString(36).toUpperCase()}`;
+        const payPerDelivery = Math.max(0, Number(req.body?.pay_per_delivery) || 5.5);
+        const coldChainBonus = Math.max(0, Number(req.body?.cold_chain_bonus) || 2);
+        const coldChainCertified = Boolean(req.body?.cold_chain_certified);
+
+        await query(
+          `INSERT INTO delivery_drivers (
+             farm_id, driver_id, name, phone, email, vehicle, zones,
+             pay_per_delivery, cold_chain_bonus, cold_chain_certified,
+             deliveries_30d, rating, status, hired_at, updated_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7::jsonb,
+             $8, $9, $10,
+             0, NULL, 'active', NOW(), NOW()
+           )`,
+          [
+            farmId,
+            driverId,
+            appRow.name,
+            appRow.phone,
+            appRow.email,
+            appRow.vehicle_type || '',
+            JSON.stringify([]),
+            payPerDelivery,
+            coldChainBonus,
+            coldChainCertified
+          ]
+        );
+
+        onboardedDriver = { driver_id: driverId, reused: false };
+      }
+    }
+
+    return res.json({ success: true, application: updated.rows[0], driver: onboardedDriver });
+  } catch (error) {
+    console.error('[Admin Delivery] Driver application review failed:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
