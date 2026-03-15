@@ -13,6 +13,51 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 
 const router = express.Router();
 
+// ── Ensure campaign_supporters table exists (self-healing) ───────
+let tableVerified = false;
+async function ensureTable() {
+  if (tableVerified || !isDatabaseAvailable()) return;
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS campaign_supporters (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        email VARCHAR(320) NOT NULL UNIQUE,
+        postal_code VARCHAR(7) NOT NULL,
+        postal_prefix VARCHAR(3) NOT NULL,
+        city VARCHAR(100),
+        province VARCHAR(30),
+        ip_address VARCHAR(45),
+        referral_source VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_campaign_postal_prefix ON campaign_supporters(postal_prefix)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_campaign_created_at ON campaign_supporters(created_at)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_campaign_email ON campaign_supporters(email)`);
+    tableVerified = true;
+    console.log('[campaign] campaign_supporters table verified/created');
+    // Flush any in-memory signups to the DB
+    if (memoryStore.length > 0) {
+      console.log(`[campaign] Flushing ${memoryStore.length} in-memory signups to DB`);
+      const toFlush = [...memoryStore];
+      memoryStore.length = 0;
+      for (const s of toFlush) {
+        try {
+          await query(
+            `INSERT INTO campaign_supporters (name, email, postal_code, postal_prefix, province)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (email) DO NOTHING`,
+            [s.name, s.email, s.postalCode, s.prefix, s.province]
+          );
+        } catch (e) { /* duplicate or constraint — skip */ }
+      }
+    }
+  } catch (err) {
+    console.error('[campaign] ensureTable failed:', err.message);
+  }
+}
+
 // ── Rate limiting (10 signups per IP per hour) ───────────────────
 const rateMap = new Map();
 const RATE_WINDOW = 60 * 60 * 1000;
@@ -172,6 +217,8 @@ function mergeRegions(dbRegions, seedRegions) {
 // ── POST /signup ─────────────────────────────────────────────────
 router.post('/signup', async (req, res) => {
   try {
+    await ensureTable();
+
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
     if (!checkRate(clientIp)) {
       return res.status(429).json({ success: false, error: 'Too many requests. Please try again later.' });
@@ -226,6 +273,8 @@ router.post('/signup', async (req, res) => {
 // ── GET /stats ───────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
+    await ensureTable();
+
     if (!isDatabaseAvailable()) {
       const memTotal = memoryStore.length;
       const mem24h = memoryStore.filter(s => (Date.now() - s.createdAt.getTime()) < 86400000).length;
@@ -277,12 +326,21 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('[campaign] Stats error:', error.message);
-    // Fall back to seed-only data on DB error (e.g. table not yet created)
+    // Fall back to seed + in-memory data on DB error
+    const memTotal = memoryStore.length;
+    const mem24h = memoryStore.filter(s => (Date.now() - s.createdAt.getTime()) < 86400000).length;
+    const memCounts = {};
+    memoryStore.forEach(s => { memCounts[s.prefix] = (memCounts[s.prefix] || 0) + 1; });
+    const memRegions = Object.entries(memCounts).map(([prefix, count]) => {
+      const prov = memoryStore.find(s => s.prefix === prefix)?.province || 'ON';
+      return { prefix, province: prov, count };
+    });
+    const merged = mergeRegions(memRegions, getSeedHeatmap());
     return res.json({
-      total: getSeedTotal(),
-      last24h: getSeedLast24h(),
-      topCommunities: getSeedTopCommunities(15),
-      recentCommunities: getSeedTopCommunities(10)
+      total: memTotal + getSeedTotal(),
+      last24h: mem24h + getSeedLast24h(),
+      topCommunities: merged.slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count })),
+      recentCommunities: merged.slice(0, 10).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }))
     });
   }
 });
@@ -290,6 +348,7 @@ router.get('/stats', async (req, res) => {
 // ── GET /heatmap ─────────────────────────────────────────────────
 router.get('/heatmap', async (req, res) => {
   try {
+    await ensureTable();
     if (!isDatabaseAvailable()) {
       const counts = {};
       memoryStore.forEach(s => { counts[s.prefix] = (counts[s.prefix] || 0) + 1; });
@@ -307,8 +366,14 @@ router.get('/heatmap', async (req, res) => {
     return res.json({ regions: mergeRegions(result.rows, getSeedHeatmap()) });
   } catch (error) {
     console.error('[campaign] Heatmap error:', error.message);
-    // Fall back to seed-only data on DB error
-    return res.json({ regions: getSeedHeatmap() });
+    // Fall back to seed + in-memory data on DB error
+    const counts = {};
+    memoryStore.forEach(s => { counts[s.prefix] = (counts[s.prefix] || 0) + 1; });
+    const memRegions = Object.entries(counts).map(([prefix, count]) => {
+      const prov = memoryStore.find(s => s.prefix === prefix)?.province || 'ON';
+      return { prefix, province: prov, count };
+    });
+    return res.json({ regions: mergeRegions(memRegions, getSeedHeatmap()) });
   }
 });
 
