@@ -299,6 +299,66 @@
       margin-top: 2px;
     }
 
+    /* How You Get Paid Section */
+    .pay-section {
+      padding: 100px 22px;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    }
+
+    .pay-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .pay-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 28px;
+      margin-bottom: 40px;
+    }
+
+    .pay-card {
+      background: var(--surface);
+      padding: 36px 28px;
+      border-radius: 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      text-align: center;
+    }
+
+    .pay-card h3 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .pay-card p {
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .pay-card .pay-label {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+
+    .pay-note {
+      background: var(--surface);
+      padding: 28px 32px;
+      border-radius: 16px;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--text);
+      border-left: 4px solid var(--primary);
+    }
+
     /* Safety & Compliance Section */
     .safety {
       padding: 100px 22px;
@@ -861,6 +921,36 @@
     </div>
   </section>
 
+  <!-- How You Get Paid -->
+  <section class="pay-section">
+    <div class="pay-content">
+      <h2 class="section-title">How You Get Paid</h2>
+      <p class="section-subtitle">
+        Every delivery you complete earns you money. Here's how it works.
+      </p>
+      <div class="pay-grid">
+        <div class="pay-card">
+          <div class="pay-label">Every Delivery</div>
+          <h3>Base Pay</h3>
+          <p>You earn a base amount for each delivery you complete. This is set when you're onboarded and is visible to you before you accept any route.</p>
+        </div>
+        <div class="pay-card">
+          <div class="pay-label">Extra Earnings</div>
+          <h3>Cold Chain Bonus</h3>
+          <p>If you're certified in cold chain handling (keeping produce at the right temperature during transport), you earn a bonus on top of your base pay for each delivery.</p>
+        </div>
+        <div class="pay-card">
+          <div class="pay-label">Yours to Keep</div>
+          <h3>Tips</h3>
+          <p>Any tips from buyers go directly to you. GreenReach never takes a cut of your tips.</p>
+        </div>
+      </div>
+      <div class="pay-note">
+        <strong>When do I get paid?</strong> Your completed deliveries are tracked in the driver payout system. You can see the status of each payment (pending or paid) and export your records anytime for your own bookkeeping. Payout details and your current pay rate are provided during onboarding.
+      </div>
+    </div>
+  </section>
+
   <!-- Requirements -->
   <section class="requirements">
     <div class="requirements-content">
@@ -1197,7 +1287,7 @@
     <div class="faq-list">
       <div class="faq-item">
         <div class="faq-question">How much can I earn delivering with GreenReach?</div>
-        <div class="faq-answer"><p>Earnings vary by route demand, distance, service window, and delivery completion volume. Approved drivers receive payout details during onboarding and can review current compensation terms before accepting routes.</p></div>
+        <div class="faq-answer"><p>You earn a base pay for each delivery you complete, plus a cold chain bonus if you're certified in temperature-controlled transport. Tips from buyers are always yours to keep. Your exact pay rate is provided during onboarding and shown to you before you accept any route. You can track all your earnings and export your pay records from the driver dashboard.</p></div>
       </div>
       <div class="faq-item">
         <div class="faq-question">Do I need prior delivery experience?</div>
