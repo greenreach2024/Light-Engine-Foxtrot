@@ -24,6 +24,7 @@ import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { sendWelcomeEmail } from '../services/email.js';
+import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 
 const router = Router();
 
@@ -735,17 +736,10 @@ router.get('/api/purchase/status', async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════
 // DELETE /api/purchase/farm/:farmId — Delete a test farm and its user
-// (admin diagnostic endpoint — requires admin_key query param)
+// (admin diagnostic endpoint — requires admin Bearer token)
 // ═══════════════════════════════════════════════════════════════
-router.delete('/api/purchase/farm/:farmId', async (req, res) => {
+router.delete('/api/purchase/farm/:farmId', adminAuthMiddleware, async (req, res) => {
   const { farmId } = req.params;
-  const adminKey = req.query.admin_key;
-
-  // Simple admin key check (use JWT_SECRET as admin key)
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
 
   if (!farmId || !farmId.startsWith('FARM-')) {
     return res.status(400).json({ success: false, error: 'Invalid farm ID format' });
@@ -790,12 +784,7 @@ router.delete('/api/purchase/farm/:farmId', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // GET /api/purchase/sessions — List checkout sessions (admin diagnostic)
 // ═══════════════════════════════════════════════════════════════
-router.get('/api/purchase/sessions', async (req, res) => {
-  const adminKey = req.query.admin_key;
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
+router.get('/api/purchase/sessions', adminAuthMiddleware, async (req, res) => {
   if (!isDatabaseAvailable()) {
     return res.status(503).json({ success: false, error: 'Database not available' });
   }
@@ -814,12 +803,7 @@ router.get('/api/purchase/sessions', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // POST /api/purchase/manual-verify/:sessionId — Admin: force-verify a session
 // ═══════════════════════════════════════════════════════════════
-router.post('/api/purchase/manual-verify/:sessionId', async (req, res) => {
-  const adminKey = req.query.admin_key;
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
+router.post('/api/purchase/manual-verify/:sessionId', adminAuthMiddleware, async (req, res) => {
 
   try {
     await ensureTables();
@@ -1142,12 +1126,7 @@ router.post('/api/purchase/webhook', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // PATCH /api/purchase/farm/:farmId — Update farm details (admin)
 // ═══════════════════════════════════════════════════════════════
-router.patch('/api/purchase/farm/:farmId', async (req, res) => {
-  const adminKey = req.query.admin_key;
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
+router.patch('/api/purchase/farm/:farmId', adminAuthMiddleware, async (req, res) => {
   const { farmId } = req.params;
   const { name, contact_name, email } = req.body;
 
@@ -1188,12 +1167,7 @@ router.patch('/api/purchase/farm/:farmId', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // GET /api/purchase/farms — List all provisioned farms (admin diagnostic)
 // ═══════════════════════════════════════════════════════════════
-router.get('/api/purchase/farms', async (req, res) => {
-  const adminKey = req.query.admin_key;
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
+router.get('/api/purchase/farms', adminAuthMiddleware, async (req, res) => {
   if (!isDatabaseAvailable()) {
     return res.status(503).json({ success: false, error: 'Database not available' });
   }
@@ -1208,12 +1182,7 @@ router.get('/api/purchase/farms', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // POST /api/purchase/fix-admin-role — Fix admin_users role (one-time diagnostic)
 // ═══════════════════════════════════════════════════════════════
-router.post('/api/purchase/fix-admin-role', async (req, res) => {
-  const adminKey = req.query.admin_key;
-  const expectedKey = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
-  if (adminKey !== expectedKey) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
+router.post('/api/purchase/fix-admin-role', adminAuthMiddleware, async (req, res) => {
   if (!isDatabaseAvailable()) {
     return res.status(503).json({ success: false, error: 'Database not available' });
   }

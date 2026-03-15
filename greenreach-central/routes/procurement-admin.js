@@ -2,6 +2,7 @@ import express from 'express';
 import { farmStore } from '../lib/farm-data-store.js';
 
 const router = express.Router();
+const commissionRate = parseFloat(process.env.PROCUREMENT_COMMISSION_RATE) || 0.05;
 
 /**
  * GreenReach Central Procurement Admin Routes
@@ -284,7 +285,7 @@ router.post('/orders', async (req, res) => {
         supplierId,
         items: orderItems,
         subtotal: Math.round(subtotal * 100) / 100,
-        commission: Math.round(subtotal * 0.05 * 100) / 100, // 5% default commission
+        commission: Math.round(subtotal * commissionRate * 100) / 100,
       });
     }
 

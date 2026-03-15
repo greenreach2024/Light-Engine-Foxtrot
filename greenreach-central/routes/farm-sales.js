@@ -29,6 +29,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 async function ensureDeliveryTables() {
@@ -120,7 +121,7 @@ router.get('/farm-auth/demo-tokens', (req, res) => {
 });
 
 // ─── Farm Sales Orders ─────────────────────────────────────
-router.get('/farm-sales/orders', async (req, res) => {
+router.get('/farm-sales/orders', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -169,7 +170,7 @@ router.get('/farm-sales/orders', async (req, res) => {
 });
 
 // ─── Farm Sales Inventory ──────────────────────────────────
-router.get('/farm-sales/inventory', async (req, res) => {
+router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     let inventory = [];
@@ -210,66 +211,66 @@ router.get('/farm-sales/inventory', async (req, res) => {
 });
 
 // ─── Subscription Plans ────────────────────────────────────
-router.get('/farm-sales/subscriptions/plans', (req, res) => {
-  res.json({
-    success: true,
+router.get('/farm-sales/subscriptions/plans', authMiddleware, (req, res) => {
+  res.status(501).json({
+    success: false,
     plans: [],
-    message: 'Subscription plans not yet configured',
+    message: 'Subscription plans not yet implemented',
   });
 });
 
 // ─── QuickBooks Integration ────────────────────────────────
-router.get('/farm-sales/quickbooks/status', (req, res) => {
-  res.json({
-    success: true,
+router.get('/farm-sales/quickbooks/status', authMiddleware, (req, res) => {
+  res.status(501).json({
+    success: false,
     connected: false,
-    status: 'not_configured',
-    message: 'QuickBooks integration not configured',
+    status: 'not_implemented',
+    message: 'QuickBooks integration not yet implemented',
   });
 });
 
-router.post('/farm-sales/quickbooks/auth', (req, res) => {
-  res.json({ success: false, error: 'QuickBooks integration not configured' });
+router.post('/farm-sales/quickbooks/auth', authMiddleware, (req, res) => {
+  res.status(501).json({ success: false, error: 'QuickBooks integration not yet implemented' });
 });
 
-router.post('/farm-sales/quickbooks/disconnect', (req, res) => {
-  res.json({ success: true, message: 'QuickBooks not connected' });
+router.post('/farm-sales/quickbooks/disconnect', authMiddleware, (req, res) => {
+  res.status(501).json({ success: false, message: 'QuickBooks integration not yet implemented' });
 });
 
-router.post('/farm-sales/quickbooks/sync-invoices', (req, res) => {
-  res.json({ success: true, synced: 0, message: 'QuickBooks not connected' });
+router.post('/farm-sales/quickbooks/sync-invoices', authMiddleware, (req, res) => {
+  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
 });
 
-router.post('/farm-sales/quickbooks/sync-payments', (req, res) => {
-  res.json({ success: true, synced: 0, message: 'QuickBooks not connected' });
+router.post('/farm-sales/quickbooks/sync-payments', authMiddleware, (req, res) => {
+  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
 });
 
-router.post('/farm-sales/quickbooks/sync/customer', (req, res) => {
-  res.json({ success: true, synced: 0, message: 'QuickBooks not connected' });
+router.post('/farm-sales/quickbooks/sync/customer', authMiddleware, (req, res) => {
+  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
 });
 
 // ─── AI Agent ──────────────────────────────────────────────
-router.get('/farm-sales/ai-agent/status', (req, res) => {
-  res.json({
-    success: true,
+router.get('/farm-sales/ai-agent/status', authMiddleware, (req, res) => {
+  res.status(501).json({
+    success: false,
     enabled: false,
-    status: 'inactive',
-    model: 'gpt-4',
-    message: 'AI agent not configured',
+    status: 'not_implemented',
+    model: null,
+    message: 'AI agent not yet implemented',
   });
 });
 
-router.post('/farm-sales/ai-agent/chat', (req, res) => {
-  res.json({
-    success: true,
-    response: 'AI agent is not currently enabled. Please configure it in farm settings.',
+router.post('/farm-sales/ai-agent/chat', authMiddleware, (req, res) => {
+  res.status(501).json({
+    success: false,
+    message: 'AI agent not yet implemented',
     sessionId: null,
   });
 });
 
 // ─── Farm Delivery Settings (farm-admin.js) ────────────────
 // GET /api/farm-sales/delivery/config — delivery settings + windows for this farm
-router.get('/farm-sales/delivery/config', async (req, res) => {
+router.get('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     if (!farmId) {
@@ -324,7 +325,7 @@ router.get('/farm-sales/delivery/config', async (req, res) => {
 });
 
 // PUT /api/farm-sales/delivery/config — update delivery settings
-router.put('/farm-sales/delivery/config', async (req, res) => {
+router.put('/farm-sales/delivery/config', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     if (!farmId) {
@@ -378,7 +379,7 @@ router.put('/farm-sales/delivery/config', async (req, res) => {
 });
 
 // PUT /api/farm-sales/delivery/windows — bulk upsert delivery windows
-router.put('/farm-sales/delivery/windows', async (req, res) => {
+router.put('/farm-sales/delivery/windows', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     if (!farmId) {
@@ -436,7 +437,7 @@ function csvEscape(value) {
 
 // ─── Inventory CSV Export ───────────────────────────────────
 // GET /api/farm-sales/inventory/export — CSV of current inventory
-router.get('/farm-sales/inventory/export', async (req, res) => {
+router.get('/farm-sales/inventory/export', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     const { category, available_only, include_valuation } = req.query;
@@ -503,7 +504,7 @@ router.get('/farm-sales/inventory/export', async (req, res) => {
 
 // ─── Sales Transaction CSV Export ───────────────────────────
 // GET /api/farm-sales/reports/sales-export — CSV of wholesale orders + POS txns
-router.get('/farm-sales/reports/sales-export', async (req, res) => {
+router.get('/farm-sales/reports/sales-export', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     const { start_date, end_date, channel, level } = req.query;
@@ -612,7 +613,7 @@ router.get('/farm-sales/reports/sales-export', async (req, res) => {
 
 // ─── QuickBooks Daily Summary CSV ───────────────────────────
 // GET /api/farm-sales/reports/quickbooks-daily-summary — aggregated daily summary
-router.get('/farm-sales/reports/quickbooks-daily-summary', async (req, res) => {
+router.get('/farm-sales/reports/quickbooks-daily-summary', authMiddleware, async (req, res) => {
   try {
     const farmId = req.farmId;
     const date = req.query.date || new Date().toISOString().slice(0, 10);

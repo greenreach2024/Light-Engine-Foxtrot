@@ -122,11 +122,10 @@ router.get('/usage/:farmId', async (req, res) => {
       usage: {
         devices: deviceCount,
         data_types: dataTypes,
-        api_calls_today: null, // requires request-counter middleware
-        storage_gb: null,
       },
-      renewsAt: null,
-      overages: { devices: 0, api_calls: 0, storage: 0 },
+      metering_available: false,
+      metering_note: 'API call counting and storage metering not yet wired',
+      overages: { devices: 0 },
     });
   } catch (err) {
     console.error('[Billing] Usage error:', err.message);
