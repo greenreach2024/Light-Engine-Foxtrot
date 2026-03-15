@@ -819,22 +819,14 @@
         )
         .join('');
       
-      // If no products but we have farms, show farm info
-      if (this.catalog.length === 0 && this.farms && this.farms.length > 0) {
+      // If no products, show availability messaging
+      if (this.catalog.length === 0) {
         grid.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
-            <h3 style="color: var(--primary); margin-bottom: 1rem;">No Products Available Yet</h3>
+            <h3 style="color: var(--primary); margin-bottom: 1rem;">Not Yet Available in Your Area</h3>
             <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-              We have ${this.farms.length} farm${this.farms.length !== 1 ? 's' : ''} registered, but they haven't added inventory yet.
+              The GreenReach Wholesale and Delivery is not live in your area. Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!
             </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center;">
-              ${this.farms.map(f => `
-                <div style="background: var(--bg); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                  <strong style="color: var(--primary);">${f.farm_name}</strong>
-                  <span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">(${f.status})</span>
-                </div>
-              `).join('')}
-            </div>
           </div>
         `;
       }

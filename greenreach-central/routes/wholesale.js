@@ -445,10 +445,6 @@ router.get('/catalog', async (req, res, next) => {
           .filter((it) => (it.farms || []).length > 0);
       }
 
-      if (!items.length) {
-        items = [buildFallbackCatalogSku()];
-      }
-
       // Basic sorting compatible with UI
       const sortBy = String(req.query.sortBy || '').trim();
       if (sortBy === 'availability') {
@@ -462,10 +458,12 @@ router.get('/catalog', async (req, res, next) => {
       return res.json({
         status: 'ok',
         data: {
-          skus: items
+          skus: items,
+          farms: catalog.farms || []
         },
         // Keep legacy fields for any existing callers
         items,
+        farms: catalog.farms || [],
         pagination: { page: 1, limit: items.length, totalItems: items.length, totalPages: 1 },
         filters: {
           farmId
