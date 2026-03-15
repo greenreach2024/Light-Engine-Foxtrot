@@ -386,4 +386,56 @@ router.get('/heatmap', async (req, res) => {
   }
 });
 
+// ── GET /export (admin-only, API-key protected) ─────────────────────
+// Returns full campaign_supporters table as CSV for nightly backup
+router.get('/export', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    const expected = process.env.GREENREACH_API_KEY;
+    if (!apiKey || !expected) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    const a = Buffer.from(apiKey, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    const crypto = await import('crypto');
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    await ensureTable();
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const result = await query(
+      `SELECT id, name, email, postal_code, postal_prefix, province, ip_address, referral_source, created_at
+       FROM campaign_supporters
+       ORDER BY created_at ASC`
+    );
+
+    // Build CSV
+    const headers = ['id', 'name', 'email', 'postal_code', 'postal_prefix', 'province', 'ip_address', 'referral_source', 'created_at'];
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+    const lines = [headers.join(',')];
+    for (const row of result.rows) {
+      lines.push(headers.map(h => escapeCSV(row[h])).join(','));
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="campaign_supporters_${date}.csv"`);
+    return res.send(lines.join('\n'));
+  } catch (error) {
+    console.error('[campaign] Export error:', error.message);
+    return res.status(500).json({ success: false, error: 'Export failed' });
+  }
+});
+
 export default router;
