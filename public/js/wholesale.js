@@ -352,6 +352,13 @@
 
         const json = await response.json();
 
+        if (response.status === 409) {
+          this.showToast('This email is already registered. Try signing in instead.', 'error');
+          this.switchAuthTab('sign-in');
+          document.getElementById('sign-in-email').value = email;
+          return;
+        }
+
         if (!response.ok || json?.status !== 'ok') {
           this.showToast(json?.message || 'Registration failed', 'error');
           return;
@@ -723,6 +730,9 @@
     },
 
     renderCatalog() {
+      const banner = document.getElementById('not-live-banner');
+      if (banner) banner.style.display = this.catalog.length === 0 ? 'block' : 'none';
+
       const sortBy = document.getElementById('sort-by')?.value || 'name';
       const sorted = [...this.catalog].sort((a, b) => {
         switch (sortBy) {
@@ -1629,7 +1639,12 @@
         const response = await fetch('/api/market-intelligence/price-alerts?threshold=7');
         const result = await response.json();
         
-        if (!response.ok || !result.ok) {
+        if (!response.ok) {
+          priceContent.innerHTML = '<div class="loading-state">Market data temporarily unavailable.</div>';
+          return;
+        }
+
+        if (!result.ok) {
           throw new Error('Failed to load market data');
         }
         
