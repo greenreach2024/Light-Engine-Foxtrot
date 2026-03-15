@@ -871,13 +871,13 @@
                         <li><span class="check-icon">✓</span><span>Hosted on GreenReach AWS infrastructure</span></li>
                         <li><span class="check-icon">✓</span><span>Point of Sale (POS) system</span></li>
                         <li><span class="check-icon">✓</span><span>Online store with custom branding</span></li>
-                        <li><span class="check-icon">✓</span><span>GreenReach wholesale marketplace (3% transaction fee only)</span></li>
+                        <li><span class="check-icon">✓</span><span>GreenReach wholesale marketplace</span></li>
                         <li><span class="check-icon">✓</span><span>Grant portal — free to access and use</span></li>
                         <li><span class="check-icon">✓</span><span>Real-time sensor monitoring</span></li>
                         <li><span class="check-icon">✓</span><span>Complete inventory management</span></li>
                         <li><span class="check-icon">✓</span><span>25 AI Actions included (insights, pricing, marketing)</span></li>
                         <li><span class="check-icon">✓</span><span>50 MB data included — monitor-only farms use ~30 MB (free overage)</span></li>
-                        <li><span class="check-icon">✓</span><span>Delivery fees paid by buyer — already built in</span></li>
+                        <li><span class="check-icon">✓</span><span>Delivery coordination — buyer-paid</span></li>
                         <li><span class="check-icon">✓</span><span>Access from any device, anywhere</span></li>
                         <li><span class="check-icon">✓</span><span>Automatic backups included</span></li>
                     </ul>
@@ -914,7 +914,7 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
                 <!-- Data Usage -->
                 <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
-                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">📊 Data Usage</h3>
+                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">Data Usage</h3>
                     <p style="font-size: 13px; color: #6e6e73; margin-bottom: 16px;">Beyond 50 MB included</p>
                     <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 8px 0; color: #374151;">50–500 MB</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1d1d1f;">$9.99/GB</td></tr>
@@ -926,7 +926,7 @@
 
                 <!-- AI Actions -->
                 <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
-                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">🤖 AI Actions</h3>
+                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">AI Actions</h3>
                     <p style="font-size: 13px; color: #6e6e73; margin-bottom: 16px;">Beyond 25 included</p>
                     <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 8px 0; color: #374151;">Insight / Recommendation / Pricing</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1d1d1f;">$0.10</td></tr>
@@ -939,7 +939,7 @@
 
                 <!-- AI Pusher Add-On -->
                 <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
-                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">⚡ AI Pusher Add-On</h3>
+                    <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 4px;">AI Pusher Add-On</h3>
                     <p style="font-size: 13px; color: #6e6e73; margin-bottom: 16px;">Automatic AI recommendations</p>
                     <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 8px 0; color: #374151;">Lite (every 2 hours)</td><td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1d1d1f;">$19/mo</td></tr>
@@ -951,10 +951,8 @@
 
             <!-- Transaction Fees -->
             <div style="margin-top: 24px; background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
-                <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 16px;">💳 Transaction Fees</h3>
+                <h3 style="font-size: 1.1rem; color: #1d1d1f; margin-bottom: 16px;">Usage Fees</h3>
                 <div style="display: flex; flex-wrap: wrap; gap: 32px; font-size: 14px;">
-                    <div><span style="color: #374151;">Wholesale platform fee:</span> <strong>3%</strong></div>
-                    <div><span style="color: #374151;">Managed delivery:</span> <strong>$2.50/delivery</strong> <span style="font-size: 12px; color: #6b7280;">(buyer-paid)</span></div>
                     <div><span style="color: #374151;">Grant export:</span> <strong>$4.99/pack</strong></div>
                 </div>
             </div>
@@ -1642,7 +1640,7 @@
                 console.log('[Purchase] Lead created:', data);
                 
                 // Success! Show confirmation message
-                submitBtn.textContent = '✓ Submitted Successfully';
+                submitBtn.textContent = 'Submitted Successfully';
                 submitBtn.style.background = '#10b981';
                 
                 // Close modal after 2 seconds and show thank you message
@@ -1682,7 +1680,7 @@
             const distance = launchDate - now;
 
             if (distance < 0) {
-                document.getElementById('countdown-timer').innerHTML = '<span style="font-size: 1.2rem; color: #10b981;">🚀 Now Available!</span>';
+                document.getElementById('countdown-timer').innerHTML = '<span style="font-size: 1.2rem; color: #10b981;">Now Available!</span>';
                 return;
             }
 
