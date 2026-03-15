@@ -33,6 +33,20 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Leaflet requires content-box — override the global border-box reset */
+    .leaflet-pane,
+    .leaflet-tile,
+    .leaflet-marker-icon,
+    .leaflet-marker-shadow,
+    .leaflet-tile-container,
+    .leaflet-pane > svg,
+    .leaflet-pane > canvas,
+    .leaflet-zoom-box,
+    .leaflet-image-layer,
+    .leaflet-layer {
+      box-sizing: content-box !important;
+    }
+
     :root {
       --primary: #2d5016;
       --accent: #82c341;
