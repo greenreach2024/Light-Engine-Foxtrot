@@ -189,6 +189,15 @@ export async function updateBuyer(buyerId, updates) {
   return sanitizeBuyer(buyer);
 }
 
+export async function resetBuyerPassword(email, newPasswordHash) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const buyer = buyersByEmail.get(normalizedEmail);
+  if (!buyer) return null;
+  buyer.passwordHash = newPasswordHash;
+  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer password reset error:', err.message));
+  return sanitizeBuyer(buyer);
+}
+
 export function deactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;

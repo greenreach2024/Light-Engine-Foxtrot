@@ -8,6 +8,7 @@ import {
   saveOrder,
   listAllBuyers,
   getBuyerById,
+  resetBuyerPassword,
   deactivateBuyer,
   reactivateBuyer,
   getOrderAuditLog,
@@ -138,13 +139,10 @@ router.post('/buyers/reset-password', async (req, res) => {
         // Hash the new password
         const passwordHash = await bcrypt.hash(newPassword, 10);
         
-        // Update buyer password
-        const result = await query(
-            'UPDATE wholesale_buyers SET password_hash = $1, updated_at = NOW() WHERE email = $2 RETURNING id',
-            [passwordHash, email]
-        );
+        // Update buyer password in memory store + DB
+        const updated = await resetBuyerPassword(email, passwordHash);
         
-        if (result.rows.length === 0) {
+        if (!updated) {
             return res.status(404).json({
                 status: 'error',
                 message: 'Buyer not found'
