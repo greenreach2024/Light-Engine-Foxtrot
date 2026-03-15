@@ -77,10 +77,23 @@ router.get('/buyers', async (req, res) => {
 
             const result = await query(sqlQuery, params);
 
+            // Map DB snake_case columns to camelCase for frontend
+            const mapped = result.rows.map(row => ({
+              id: row.id,
+              businessName: row.business_name,
+              contactName: row.contact_name,
+              email: row.email,
+              buyerType: row.buyer_type,
+              location: row.location || null,
+              status: row.status || 'active',
+              phone: row.phone || null,
+              createdAt: row.created_at ? new Date(row.created_at).toISOString() : null
+            }));
+
             return res.json({
               status: 'ok',
               data: {
-                buyers: result.rows,
+                buyers: mapped,
                 pagination: { page: parseInt(page), limit: parseInt(limit), total: dbTotal, pages: Math.ceil(dbTotal / parseInt(limit)) }
               }
             });
@@ -248,7 +261,34 @@ router.get('/dashboard', async (req, res) => {
  */
 router.get('/buyers/:buyerId', async (req, res) => {
     try {
-        const buyer = getBuyerById(req.params.buyerId);
+        let buyer = getBuyerById(req.params.buyerId);
+
+        // DB fallback when in-memory store is empty (e.g. after server restart)
+        if (!buyer && isDatabaseAvailable()) {
+            try {
+                const result = await query(
+                    'SELECT * FROM wholesale_buyers WHERE id = $1 LIMIT 1',
+                    [req.params.buyerId]
+                );
+                if (result.rows.length > 0) {
+                    const row = result.rows[0];
+                    buyer = {
+                        id: row.id,
+                        businessName: row.business_name,
+                        contactName: row.contact_name,
+                        email: row.email,
+                        buyerType: row.buyer_type,
+                        location: row.location || null,
+                        status: row.status || 'active',
+                        phone: row.phone || null,
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null
+                    };
+                }
+            } catch (dbErr) {
+                // DB table may not exist — fall through
+            }
+        }
+
         if (!buyer) {
             return res.status(404).json({ status: 'error', message: 'Buyer not found' });
         }
