@@ -1169,11 +1169,13 @@
 
     function initMap() {
       map = L.map('demandMap', {
-        center: [50, -90],
-        zoom: 4,
-        minZoom: 3,
+        center: [56, -96],
+        zoom: 5,
+        minZoom: 4,
         maxZoom: 12,
         scrollWheelZoom: true,
+        maxBounds: [[41, -142], [72, -50]],
+        maxBoundsViscosity: 1.0,
       });
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -1187,7 +1189,7 @@
 
       // Recalculate size then fit bounds
       map.invalidateSize();
-      map.fitBounds([[43, -136], [62, -52]], { padding: [10, 10] });
+      map.fitBounds([[44, -134], [60, -54]], { padding: [20, 20] });
 
       // Load data once map is ready
       loadHeatmap();
