@@ -439,6 +439,12 @@ router.get('/catalog', async (req, res, next) => {
       const farmId = req.query.farmId ? String(req.query.farmId) : null;
 
       let items = catalog.items || catalog.skus || [];
+
+      // Strip out fallback-seeded demo items — only show real farm inventory
+      items = items.filter(it =>
+        !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
+      );
+
       if (farmId) {
         items = items
           .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))
