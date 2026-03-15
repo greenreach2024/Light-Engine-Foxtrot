@@ -390,7 +390,7 @@
 
     #demandMap {
       width: 100%;
-      height: 520px;
+      height: 600px;
       background: #f0f4e8;
     }
 
@@ -1187,7 +1187,7 @@
 
       // Recalculate size then fit bounds
       map.invalidateSize();
-      map.fitBounds([[42, -140], [55, -52]]);
+      map.fitBounds([[43, -136], [62, -52]], { padding: [10, 10] });
 
       // Load data once map is ready
       loadHeatmap();
