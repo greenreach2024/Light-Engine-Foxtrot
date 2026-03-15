@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import {
   listAllOrders,
@@ -135,7 +136,6 @@ router.post('/buyers/reset-password', async (req, res) => {
         }
         
         // Hash the new password
-        const bcrypt = await import('bcryptjs');
         const passwordHash = await bcrypt.hash(newPassword, 10);
         
         // Update buyer password

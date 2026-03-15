@@ -1436,11 +1436,76 @@ router.get('/farms/users', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/farms/:farmId/reset-credentials
+ * Reset a farm's admin credentials (password + API keys)
+ */
+router.post('/farms/:farmId/reset-credentials', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, message: 'Database not available' });
+        }
+
+        const { farmId } = req.params;
+
+        // Verify farm exists
+        const farmCheck = await query(
+            'SELECT farm_id, email, name FROM farms WHERE farm_id = $1',
+            [farmId]
+        );
+        if (!farmCheck.rows.length) {
+            return res.status(404).json({ success: false, message: 'Farm not found' });
+        }
+
+        const farm = farmCheck.rows[0];
+
+        // Generate new temporary admin password
+        const tempPassword = 'Farm' + Math.random().toString(36).slice(2, 8) + '!' + Math.floor(Math.random() * 90 + 10);
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+        // Update or create farm admin user
+        const existingUser = await query(
+            'SELECT id FROM farm_users WHERE farm_id = $1 AND role = $2 LIMIT 1',
+            [farmId, 'admin']
+        );
+
+        if (existingUser.rows.length) {
+            await query(
+                `UPDATE farm_users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+                 WHERE farm_id = $2 AND role = 'admin'`,
+                [passwordHash, farmId]
+            );
+        } else {
+            // No admin user exists — create one using the farm's email
+            const adminEmail = farm.email || `admin@${farmId.toLowerCase()}.local`;
+            await query(
+                `INSERT INTO farm_users (farm_id, email, password_hash, role, must_change_password)
+                 VALUES ($1, $2, $3, 'admin', true)`,
+                [farmId, adminEmail, passwordHash]
+            );
+        }
+
+        console.log(`[Admin API] Credentials reset for farm ${farmId}`);
+
+        res.json({
+            success: true,
+            email: farm.email || 'admin',
+            temp_password: tempPassword,
+            message: 'Farm credentials reset successfully.'
+        });
+    } catch (error) {
+        console.error(`[Admin API] Error resetting farm credentials for ${req.params.farmId}:`, error);
+        res.status(500).json({ success: false, message: 'Failed to reset credentials: ' + error.message });
+    }
+});
+
+/**
  * POST /api/admin/farms/reset-user-password
  * Reset a farm user's password (generates temp password)
  */
 router.post('/farms/reset-user-password', async (req, res) => {
     try {
+        console.log(`[Admin API] reset-user-password called with body keys: ${Object.keys(req.body || {}).join(', ')}`);
+
         if (!(await isDatabaseAvailable())) {
             return res.status(503).json({ status: 'error', message: 'Database not available' });
         }
@@ -1479,7 +1544,7 @@ router.post('/farms/reset-user-password', async (req, res) => {
             message: 'Password reset successfully. User must change password on next login.'
         });
     } catch (error) {
-        console.error('[Admin API] Error resetting farm user password:', error);
+        console.error('[Admin API] Error resetting farm user password:', error.message, error.stack);
         res.status(500).json({ status: 'error', message: 'Failed to reset password: ' + error.message });
     }
 });
