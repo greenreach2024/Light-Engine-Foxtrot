@@ -1018,7 +1018,147 @@
     const SHARE_TEXT = "I just told my community I'd buy local produce if someone grew it nearby. Join the Field of Dreams campaign — the more demand we show, the more investment in local four-season farming. 🌱";
 
     // ── FSA (Forward Sortation Area) approximate positions on map ──
-    // Maps first letter of postal code to province center coordinates on our SVG
+    // Maps first 2 chars of postal code → city-level SVG coordinates
+    // Coordinates match the province SVG paths (viewBox: -100 150 993 882)
+    const fsaCoords = {
+      // ── Ontario — Toronto (M*) ──
+      'M1': { x: 540, y: 1000 }, // Scarborough
+      'M2': { x: 538, y: 996 },  // North York
+      'M3': { x: 536, y: 994 },  // North York West
+      'M4': { x: 534, y: 998 },  // East York / Midtown
+      'M5': { x: 532, y: 1002 }, // Downtown Toronto
+      'M6': { x: 529, y: 999 },  // West Toronto
+      'M7': { x: 536, y: 993 },  // East York
+      'M8': { x: 526, y: 1000 }, // Etobicoke South
+      'M9': { x: 524, y: 997 },  // Etobicoke North
+      // ── Ontario — GTA (L*) ──
+      'L1': { x: 546, y: 990 },  // Oshawa / Ajax
+      'L2': { x: 525, y: 1018 }, // St. Catharines / Niagara
+      'L3': { x: 543, y: 988 },  // Markham / Ajax
+      'L4': { x: 541, y: 985 },  // Markham / Richmond Hill
+      'L5': { x: 524, y: 995 },  // Mississauga
+      'L6': { x: 519, y: 992 },  // Burlington / Oakville
+      'L7': { x: 516, y: 988 },  // Halton Hills
+      'L8': { x: 516, y: 1005 }, // Hamilton
+      'L9': { x: 513, y: 1000 }, // Hamilton / Grimsby
+      // ── Ontario — Eastern / Ottawa (K*) ──
+      'K0': { x: 565, y: 945 },  // Eastern ON rural
+      'K1': { x: 580, y: 935 },  // Ottawa Central
+      'K2': { x: 577, y: 938 },  // Ottawa West
+      'K4': { x: 572, y: 943 },  // Smiths Falls
+      'K6': { x: 568, y: 950 },  // Brockville
+      'K7': { x: 560, y: 958 },  // Kingston
+      'K8': { x: 556, y: 955 },  // Belleville
+      'K9': { x: 548, y: 960 },  // Peterborough
+      // ── Ontario — Southwestern (N*) ──
+      'N0': { x: 497, y: 990 },  // Rural SW Ontario
+      'N1': { x: 507, y: 1000 }, // Brantford
+      'N2': { x: 510, y: 988 },  // Kitchener-Waterloo
+      'N3': { x: 505, y: 995 },  // Cambridge
+      'N4': { x: 500, y: 988 },  // Stratford
+      'N5': { x: 497, y: 995 },  // Woodstock
+      'N6': { x: 494, y: 1000 }, // London
+      'N7': { x: 490, y: 998 },  // Chatham-Kent
+      'N8': { x: 487, y: 1010 }, // Windsor area
+      'N9': { x: 484, y: 1013 }, // Windsor / Essex
+      // ── Ontario — Northern (P*) ──
+      'P0': { x: 450, y: 890 },  // Rural Northern ON
+      'P1': { x: 468, y: 920 },  // Parry Sound
+      'P2': { x: 462, y: 910 },  // North Bay
+      'P3': { x: 458, y: 900 },  // Sudbury
+      'P4': { x: 453, y: 895 },  // Sault Ste Marie area
+      'P5': { x: 445, y: 885 },  // Sault Ste Marie
+      'P6': { x: 440, y: 890 },  // Sault area
+      'P7': { x: 428, y: 872 },  // Thunder Bay
+      // ── Quebec — Montreal (H*) ──
+      'H1': { x: 618, y: 930 },  // East Montreal
+      'H2': { x: 615, y: 927 },  // Central Montreal
+      'H3': { x: 612, y: 925 },  // Montreal West
+      'H4': { x: 611, y: 930 },  // Verdun / LaSalle
+      'H5': { x: 614, y: 932 },  // South Montreal
+      'H7': { x: 609, y: 922 },  // Laval
+      'H8': { x: 606, y: 927 },  // West Island
+      'H9': { x: 604, y: 924 },  // West Island
+      // ── Quebec — Other (G*, J*) ──
+      'G0': { x: 640, y: 875 },  // Rural QC
+      'G1': { x: 650, y: 895 },  // Quebec City
+      'G2': { x: 652, y: 892 },  // Quebec City
+      'G3': { x: 645, y: 900 },  // Portneuf
+      'G5': { x: 655, y: 880 },  // Rivière-du-Loup
+      'G6': { x: 640, y: 905 },  // Thetford Mines
+      'G7': { x: 643, y: 870 },  // Saguenay
+      'G8': { x: 640, y: 865 },  // Saguenay region
+      'G9': { x: 638, y: 860 },  // Lac-Saint-Jean
+      'J0': { x: 620, y: 920 },  // Rural South QC
+      'J1': { x: 628, y: 935 },  // Sherbrooke
+      'J2': { x: 625, y: 933 },  // Eastern Townships
+      'J3': { x: 619, y: 933 },  // Saint-Hyacinthe
+      'J4': { x: 618, y: 935 },  // Longueuil
+      'J5': { x: 616, y: 932 },  // South Shore
+      'J6': { x: 612, y: 928 },  // Saint-Jean
+      'J7': { x: 607, y: 918 },  // Laurentides
+      'J8': { x: 600, y: 912 },  // Gatineau
+      'J9': { x: 597, y: 915 },  // Outaouais
+      // ── British Columbia (V*) ──
+      'V0': { x: 115, y: 880 },  // Rural BC
+      'V1': { x: 128, y: 900 },  // Kelowna / Interior
+      'V2': { x: 120, y: 915 },  // Abbotsford / Chilliwack
+      'V3': { x: 118, y: 925 },  // Coquitlam / Port Coquitlam
+      'V4': { x: 114, y: 930 },  // Delta / Ladner
+      'V5': { x: 113, y: 933 },  // Vancouver East / Burnaby
+      'V6': { x: 110, y: 935 },  // Vancouver
+      'V7': { x: 108, y: 928 },  // North / West Vancouver
+      'V8': { x: 96, y: 943 },   // Victoria
+      'V9': { x: 98, y: 938 },   // Nanaimo
+      // ── Alberta (T*) ──
+      'T0': { x: 240, y: 910 },  // Rural AB
+      'T1': { x: 250, y: 935 },  // Lethbridge / South
+      'T2': { x: 248, y: 928 },  // Calgary
+      'T3': { x: 245, y: 925 },  // Calgary NW
+      'T4': { x: 243, y: 912 },  // Red Deer
+      'T5': { x: 240, y: 896 },  // Edmonton
+      'T6': { x: 238, y: 893 },  // Edmonton
+      'T7': { x: 233, y: 885 },  // Edson / Hinton
+      'T8': { x: 237, y: 875 },  // Fort McMurray area
+      'T9': { x: 240, y: 870 },  // North Alberta
+      // ── Manitoba (R*) ──
+      'R0': { x: 418, y: 900 },  // Rural MB
+      'R1': { x: 420, y: 920 },  // Winnipeg suburbs
+      'R2': { x: 422, y: 925 },  // Winnipeg
+      'R3': { x: 424, y: 928 },  // Winnipeg
+      // ── Saskatchewan (S*) ──
+      'S0': { x: 328, y: 900 },  // Rural SK
+      'S4': { x: 332, y: 920 },  // Regina
+      'S6': { x: 330, y: 910 },  // Moose Jaw
+      'S7': { x: 328, y: 885 },  // Saskatoon
+      'S9': { x: 330, y: 878 },  // Prince Albert
+      // ── Nova Scotia (B*) ──
+      'B0': { x: 730, y: 1003 }, // Rural NS
+      'B1': { x: 740, y: 995 },  // Cape Breton / Sydney
+      'B2': { x: 735, y: 998 },  // Sydney area
+      'B3': { x: 722, y: 995 },  // Halifax
+      'B4': { x: 720, y: 992 },  // Dartmouth
+      // ── New Brunswick (E*) ──
+      'E1': { x: 688, y: 978 },  // Moncton
+      'E2': { x: 680, y: 988 },  // Saint John
+      'E3': { x: 674, y: 975 },  // Fredericton
+      'E4': { x: 670, y: 968 },  // Edmundston
+      'E5': { x: 684, y: 983 },  // Sussex
+      // ── Newfoundland & Labrador (A*) ──
+      'A0': { x: 740, y: 860 },  // Rural NL / Labrador
+      'A1': { x: 785, y: 910 },  // St. John's
+      'A2': { x: 770, y: 895 },  // Corner Brook
+      // ── PEI (C*) ──
+      'C0': { x: 713, y: 966 },  // Rural PEI
+      'C1': { x: 716, y: 968 },  // Charlottetown
+      // ── Territories ──
+      'X0': { x: 275, y: 615 },  // NT
+      'X1': { x: 280, y: 618 },  // NT
+      'Y0': { x: 80, y: 585 },   // YT
+      'Y1': { x: 82, y: 588 },   // YT (Whitehorse)
+    };
+
+    // Province center fallbacks for unknown FSAs
     const provinceCenters = {
       'YT': { x: 80, y: 580 },
       'NT': { x: 275, y: 610 },
@@ -1117,16 +1257,19 @@
         // Draw dots for each FSA region
         (data.regions || []).forEach(r => {
           const prov = r.province || letterToProvince[r.prefix.charAt(0)] || 'ON';
-          const center = provinceCenters[prov];
-          if (!center) return;
-
           const count = parseInt(r.count, 10);
-          // Scatter dots slightly around province center based on prefix hash
-          const hash = r.prefix.charCodeAt(1) * 17 + r.prefix.charCodeAt(2) * 31;
-          const offsetX = ((hash % 40) - 20);
-          const offsetY = (((hash * 7) % 40) - 20);
-          const x = center.x + offsetX;
-          const y = center.y + offsetY;
+
+          // Look up FSA-level coordinates (first 2 chars), fall back to province center
+          const fsa2 = r.prefix.substring(0, 2);
+          const coords = fsaCoords[fsa2] || provinceCenters[prov];
+          if (!coords) return;
+
+          // Small jitter based on 3rd character so overlapping FSAs separate visually
+          const c3 = r.prefix.charCodeAt(2) || 0;
+          const jitterX = ((c3 * 7) % 11) - 5;
+          const jitterY = ((c3 * 13) % 11) - 5;
+          const x = coords.x + jitterX;
+          const y = coords.y + jitterY;
 
           let radius, opacity;
           if (count >= 200) { radius = 12; opacity = 0.8; }
