@@ -253,9 +253,11 @@ router.post('/signup', async (req, res) => {
         );
       } catch (dbErr) {
         console.error('[campaign] DB insert error:', dbErr.message);
+        console.error('[campaign] SIGNUP_DATA:', JSON.stringify({ name: sanitizedName, email: sanitizedEmail, postalCode: cleanPostal, prefix, province, ip: clientIp, ts: new Date().toISOString() }));
         memoryStore.push({ name: sanitizedName, email: sanitizedEmail, postalCode: cleanPostal, prefix, province, createdAt: new Date() });
       }
     } else {
+      console.warn('[campaign] SIGNUP_DATA (no DB):', JSON.stringify({ name: sanitizedName, email: sanitizedEmail, postalCode: cleanPostal, prefix, province, ip: clientIp, ts: new Date().toISOString() }));
       memoryStore.push({ name: sanitizedName, email: sanitizedEmail, postalCode: cleanPostal, prefix, province, createdAt: new Date() });
     }
 
