@@ -22646,6 +22646,7 @@ if (!isControllerDisabled) {
         '/accounting/',
         '/api/accounting/',
         '/wholesale/',
+        '/market-intelligence',
         '/rooms',
         '/groups',
         '/farm/info',

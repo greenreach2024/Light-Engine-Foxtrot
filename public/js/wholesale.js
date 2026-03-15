@@ -1639,7 +1639,12 @@
         const response = await fetch('/api/market-intelligence/price-alerts?threshold=7');
         const result = await response.json();
         
-        if (!response.ok || !result.ok) {
+        if (!response.ok) {
+          priceContent.innerHTML = '<div class="loading-state">Market data temporarily unavailable.</div>';
+          return;
+        }
+
+        if (!result.ok) {
           throw new Error('Failed to load market data');
         }
         
