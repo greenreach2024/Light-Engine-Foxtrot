@@ -26,6 +26,10 @@
     gtag('config', 'G-GBPD0VBEF2');
   </script>
 
+  <!-- Leaflet.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -361,7 +365,7 @@
     }
 
     .map-container {
-      max-width: 900px;
+      max-width: 960px;
       margin: 0 auto;
       background: var(--surface);
       border-radius: 24px;
@@ -370,16 +374,19 @@
       position: relative;
     }
 
-    .map-canvas {
+    #demandMap {
       width: 100%;
-      position: relative;
+      height: 520px;
       background: #f0f4e8;
     }
 
-    .map-canvas svg {
-      width: 100%;
-      height: auto;
-      display: block;
+    .province-overlay {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: center;
+      line-height: 1.3;
+      pointer-events: none;
     }
 
     .map-legend {
@@ -670,22 +677,6 @@
       border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    /* Province label tooltip on map */
-    .province-label {
-      font-size: 11px;
-      font-weight: 600;
-      fill: var(--text);
-      pointer-events: none;
-      text-anchor: middle;
-    }
-
-    .province-count {
-      font-size: 10px;
-      fill: var(--primary);
-      font-weight: 700;
-      text-anchor: middle;
-    }
-
     /* Responsive */
     @media (max-width: 768px) {
       .hero h1 { font-size: 40px; }
@@ -770,7 +761,7 @@
       </div>
 
       <div class="form-success" id="formSuccess">
-        <div class="check-icon">✓</div>
+        <div class="check-icon">&check;</div>
         <h3>You're on the map!</h3>
         <p>Thank you for supporting local agriculture. Share the campaign to strengthen your community's voice.</p>
         <div class="share-buttons" style="justify-content: center;">
@@ -790,70 +781,12 @@
       <p>Every dot is a Canadian who wants fresh, local food in their community. Which neighbourhood will lead the charge?</p>
     </div>
     <div class="map-container">
-      <div class="map-canvas" id="mapCanvas">
-        <svg viewBox="-100 150 993 882" id="canadaMap" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <linearGradient id="mapBg" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#f0f4e8;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#e8f0dc;stop-opacity:1" />
-            </linearGradient>
-          </defs>
-          <rect x="-100" y="150" width="993" height="882" fill="url(#mapBg)" rx="0"/>
-
-          <!-- Province shapes (geographically accurate) -->
-          <path id="prov-YT" d="M41.1,580.7l2.5,44.9,18.9,0.2,3.8,10,0.1,13.2,11.5,-0.1,-1.9,2.7,3.2,5.6,-5.2,8.5,3.8,3.1,-2.1,5.6,7.7,5.4,-0.6,3,6.2,-0.3,3.1,8.4,5.7,4.1,-1.7,1.8,4.1,4.4,-2.6,4.2,4.7,4.3,3.2,17.6,6.2,0.7,12.5,12.4,2.7,12.9,20.4,-3.4,-0.1,5.3,7,12,-136.6,0,-0.2,-6.1,-8,2.9,-9.2,-2.1,0,-200.2,16.3,3.5,11.8,10.7,12.8,5zM17.8,563.5l-2.2,-0.5,2.2,0.5z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="YT"/>
-          <path id="prov-NT" d="M278.1,256.4l0,16.4,-10.4,-2.9,-3.1,4.9,-5.5,-4,-9.8,3,3.3,-7.5,17.7,-12.2,7.8,2.2zM278.1,283l0,6.9,-7.7,4,6.4,3,-0.4,10,-19.5,6.6,-7.1,-6.9,-0.2,-16.1,28.5,-7.6zM228.4,313.7l-7,9.2,3.4,16.9,-9.4,6.9,-1.4,8.9,-7.5,-4.1,1,-15.5,-8.2,11.3,-2.6,14.7,-4.4,-7.6,-3,17.4,-4.4,1.2,-3.9,-13.2,-3.3,7.4,-11.8,1.2,-3.3,-6.8,3.4,-8.2,8.6,-3.8,22.2,-33.6,20.1,-1.4,-1.8,-5.2,4.7,-3.4,8.6,7.6zM278.1,383.5l0,24.1,-22.6,14.7,-10.3,-1.2,-5.7,-8.8,23.7,-10.4,5.2,-8.3,-23.5,6.6,2.2,-12.2,-4.9,-0.6,-3.9,12.2,-5.1,3.9,-3.5,-4.8,-2.8,5.1,-16.8,-10.6,3.1,-6.7,19,-7.9,-18.1,1.2,19.5,-9.2,-15,-2.2,4.1,-8.8,12.8,0.8,-9.4,-4.6,9.6,-8,8.4,11.3,10.1,0.2,13.8,23.2,10.4,1.1zM190.9,432.4l4.8,-2.8,0.8,6,5.1,-7.5,9.2,0.4,18.8,24.7,-31.8,24,-4.9,11.4,-6,2.6,-3.9,20.3,-10.1,1.7,-12.1,9.8,-8.2,-16.4,-16.5,-8.7,18.4,-54.5,-8,-18.9,28.6,-6.6,17.4,10.4,-1.6,4zM278.1,468.2l0,84.3,-22.4,0,-3.4,4.4,-0.1,-4.4,-37.4,0,1.8,9.2,-3,-10.5,5.7,-3.2,44.1,-3.5,-19,-10.2,-34.3,1.6,-6.1,-11.1,26.6,-12.8,-25.8,1.6,4,-6.3,-11.2,-3,6.9,-14.5,-1.4,-8,10,-11.5,23.5,-14.2,5.3,9.4,-4.2,14.5,8.5,-1.8,2.5,-9,4.8,-1.1,13.3,8.3,-3.6,12.3,13.2,-10.7,-4.1,-10.5,5.8,0.8zM182.4,563.8l0,38.7,73.3,56.8,16.4,0.1,15.2,15.3,62.6,11.4,-0.1,81.1,-195.5,0,-6.9,-17.3,-20.4,3.4,-2.7,-12.9,-18.7,-13,-7.7,-32.3,-8.9,-12.4,-6.2,0.3,-7.1,-8.5,2.2,-25.5,-11.5,0.1,-3.9,-23.1,-19.2,-0.7,-2.2,-44.4,10.6,5.2,-5.8,-10.6,6.9,-9,6.1,-0.3,0.4,-5.2,4.8,4.5,-2.6,6.5,31.5,-22.5,8.9,-1.7,0.2,5.1,-28.4,20.4,-5.4,9,6.4,0.7,-0.1,-6.6,8.3,-8.9,6.5,-0.5,0.8,6.1,7.6,-13.1,10.9,-6.4,0.4,5.6,10.5,-13.3,-2.8,-8.4,20.3,31.3,5,-1.2,-1.6,-6,7.1,-12.7,1.9,20.4,7.3,-0.6,5.1,-11.1,20.4,6.5z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="NT"/>
-          <path id="prov-NU" d="M641.3,7.6l27.5,6.6,-18.4,19.5,24.6,-13.4,3.8,3.1,2.8,-7.4,4.3,8.9,7.7,-2.4,3.5,25.3,6.9,-4.8,9.7,5.3,-2,17.3,-17.7,21.8,-27.2,14.3,-18.5,19.5,35,-11.9,-42.8,63.2,-10.4,-8.5,4,16.4,-16,5.8,13.3,1.5,-7.3,17,-9.4,3.4,-17.6,-9.1,8.3,6,1,12.6,-19.2,4.4,-12.5,-4.8,11.6,13.3,10.1,0.5,-0.5,8.4,-36.3,-1,6.3,6.2,14.6,-3,16.3,13.1,-4,8.2,-13.8,1.5,11,8.2,-7,14.6,-18.3,2,-4.3,24.2,-18.6,2.2,-9.7,-8.7,3.4,6.6,-5,6.2,21,0.7,2.5,10.4,8.4,-1.7,0,15.9,-22.6,15.1,-1.6,-11.2,-13.9,-9.8,2.7,9.9,-14.8,0.5,-3,-8.6,-0.5,12.3,-7.8,2,-11.8,-10.7,-2,8,-7.3,-8,-0.1,7.6,-8.1,-0.7,-0.9,-14.2,-0.5,13.6,-9.2,-2.7,0.6,-13,8.4,-9.7,15.6,-4.5,-10.1,-17,1.6,-10,12.3,1.2,14.8,18.7,9.1,-2.2,9.1,-18.2,1,-6.1,-10.6,19.4,-13.5,-1.1,-2.3,-15.6,11.9,-10.7,-6.2,-2.8,1.1,-12.8,-7.2,18.5,-5.7,1.2,2.7,-11.5,-8.9,9.5,-5.7,-2.2,6.7,-26.8,16.2,-6.4,15.5,6.6,13.6,-9.5,-23.9,-1,0.3,-5.8,7.2,3.1,-25.5,-38.8,-0.7,-21.4,24.9,1.6,18.2,27.9,10.9,4,3.1,-3.2,-7.9,-1.2,-17.7,-32.5,54.9,-29.7,-16.6,-4.9,16.4,-28,-20.7,18.5,-5,15.8,-11.2,10.4,-16.8,4.3,5.9,-10.8,-26.2,13.9,-12.4,-4.6,0.8,-6.8,10.7,-14.7,17.5,-9.2,-22.3,6.5,-13.9,20.6,-6,-0.3,-10.4,-14.9,24.1,-5.4,13.8,-14.6,-20.9,12,-21,2.8,-2.9,-8.1,6.6,-4.5,-4.2,-4.6,18.6,-11.9,-7.9,-2.4,-17.4,9.6,5.3,-14,-13.2,3.9,-3.2,-6.9,32.1,-26.2,9.4,8.9,3.5,-6,14.2,4.4,-14.1,-15.4,15.4,-15.5,20.3,24.8,0.9,-11.2,27.5,25.7,-26.7,-35.6,6.9,-8.4,-3.9,-7.6,11.2,4,-1.3,-14.6,20.3,7.1,-12.6,-16.6,22.8,1.1,14.4,25.5,3.3,-7.5,-13.3,-26.2,24.3,-0.3,15.7,21.1,-7,-13.1,5.6,-13,7.4,-1.5,9.4,14.6,-1.3,-13.3,10,-2.5,4.2,7.4zM440.6,130.7l11.2,30.4,12.6,4.5,3.4,18.4,5.9,2.9,-2.9,-16.3,7.6,2.5,-2.2,14.5,8.5,10.5,-2.9,15.8,8.6,-2.7,2.9,7.7,2.9,-6.7,5.5,14.1,-22.9,30.7,-3.8,-14.8,0.5,21.1,-6.8,-2.1,-0.7,17.7,-10.9,-18.8,4.6,19.9,-6.9,-7.4,-2.9,7.8,-15.6,-7.2,-4.5,-6.6,8.8,-3.7,-12.6,-3,-3.3,-6.5,4.3,-1.1,-8.9,-8.1,25.6,-20.1,-13.6,-3.8,-20.4,7.8,-5,-11.6,11.3,-10.4,-13.1,3.1,-8.2,-23.6,19.1,4.5,3.4,-7.6,-10.3,3.1,-8.9,-9.5,7.6,-2.7,-3.4,-19.3,17.9,8.9,-14.2,-15.5,4.8,-12,15.2,-2.9,-8,-14,10.3,-0.4,10.2,12.5zM337.1,226.9l7.6,20.7,7.8,-9.4,5.1,12.9,10,3.4,7.6,38.5,-9.9,1,-7.2,-15.6,-13.7,-2.4,-1.1,-5.4,-10.9,4.9,-7.3,-4.1,-1.3,-9,12,0.6,-4,-4.3,5.8,-4.6,-7.3,-2.1,0.3,-9.7,-6.7,8.5,-4.8,-23.3,18,-0.6zM401.8,263.5l11.6,6.3,-0.2,13.8,-18.4,11.6,-6,-12.2,6.4,-2.7,-9.9,-7.7,-2.5,-20.2,8.5,-0.4,10.6,11.5zM419,331.8l9.6,5.6,-2.7,12.5,4.8,-6.6,15.2,-2.3,6.8,7.2,-7.8,1.5,19.1,5.9,-1.1,4.2,-17.9,-1.2,19.1,15.8,-3.3,8.3,6.5,4,2.4,-7.3,24.2,9.5,18.1,-15.3,15.9,-0.4,22.3,13.8,-6.5,14.6,8.8,4,-8.5,0.5,0.6,10.9,-14.9,3.7,-8.9,-3.1,-5.3,-11.4,-0.1,10.7,-8,2.6,-35.9,0.5,-1,-11.4,-9.2,9.4,-11.8,-8.9,-6,5.5,-13.8,-60.9,-19.6,3.4,-6.9,-8.5,3.5,-3.8,-11,-6,1.1,-9.2,8.1,-3.8,13.9,6.2zM278.1,407.7l0,-24.1,9.9,-3,-8,-8.7,3.4,-7.7,-5.3,-15.4,10.5,-13.3,7.3,38.5,7.2,-3.2,2.7,7.7,4.6,-14,6.9,4.3,1,11.4,-5.1,19.3,-9.5,5.6,-15,-4.8,-10.5,7.4zM388.4,349.2l0.2,48.9,-23,4.2,-4.3,-14,13.6,-10.5,-30.4,6.7,4,-13.1,10.5,2.8,-10.1,-19.8,6.2,-3.6,13.9,18.8,-2.2,-7.2,5.1,-1.1,-11.6,-14.3,9.1,-4.2,8.3,6.4,1.6,-8.8,9.1,8.8zM429,430.8l25,10.9,-15.6,33.4,-18.8,-0.1,6.1,7.7,-4.5,13.9,-10.4,0,-4,-50.7,8.4,1,-2.5,-12.2,16.2,-4zM367.8,437.8l7.6,6.9,14.1,-5,5.1,5.8,-12.8,23.4,7.1,-2.1,4.6,12.1,5.2,-2.1,-0.6,25.4,-8.7,5.8,-6.6,-6.4,-3.1,15.6,-36.3,-42.5,4.5,-9.6,8.3,10.8,10.3,-5.6,-3.7,-9,6.4,-0.5,-15.2,-8.5,4.9,-3.6,4.1,4.8,-4,-10.9,8.7,-0.1,0,-4.8zM488,525.4l13.4,-3.9,2,4.1,1.6,-17.6,-10.9,-10.2,5.3,-7.2,9.3,5.5,-12.2,-20.1,2.4,-6.8,10,3.3,-10.6,-8.2,29.2,-19.8,7.1,3.2,10.1,26.8,-8.5,13.7,5.5,-4.1,-2.8,15.9,9.8,-15.8,11.2,16.5,-1,-13.7,10.6,5.1,-8.1,-11.6,13.7,-4.5,15.9,10.2,-7.2,19.2,6.9,-10,7.9,0.7,-8.4,9.5,4.5,1,-2.6,12.9,10.1,-15.6,-3,10.4,4.3,-5.2,4.8,8.6,2.5,-11.1,12.9,6.1,2.2,6.3,-12.7,11.2,17.5,-6.1,-10.9,16.9,5.5,-1.8,-1.4,9.9,12.1,-18.8,14.7,6.4,-14.5,14.7,11.5,-4.2,0.3,6.9,8,-9,5.7,14.4,-18.2,5.6,18.1,1.3,5,6.8,-21.2,2.4,10.8,0.8,-0.4,7,-13.1,-2.1,23.3,10.1,-1.6,9.5,6.4,-5.2,-2.1,10.7,4.5,-5.7,4.9,9.4,4.3,-8.5,-0.9,5.8,10.5,5.2,-7.6,5,14.9,2.7,-5.9,9.5,14.2,-5.1,7.4,9.1,-7.4,0.1,2.3,7.4,-6.2,-2.1,5,8.3,-5.7,0.4,-0.3,8.2,-7.2,-4.7,-1.3,19.9,-16.1,-17.9,8.6,-12.2,-12.4,7.1,-10.4,-14,-2.1,7.1,-5.9,-3.5,4.8,11.9,-12.5,-6,18.4,29.9,11.4,1.9,3.2,6,-4.5,2.9,10.5,12,-2.3,9.2,-4.7,-10.4,4.6,16.8,-3.9,5.8,-25,-22,1.5,6.3,-10.7,-5.7,25.6,35.1,-47.4,-22.3,-5.8,-7,5.5,-3.3,-10,-4.9,-6.9,-15.6,-7.1,3.3,-5.5,-8.5,-0.1,7,-19.4,5.3,-10.7,-5.4,6.4,-20.2,13.4,4.9,3.4,8.2,-3.1,-9.7,20.1,-4,-7.8,-14.9,19.7,-24.6,-14.4,-34.2,-4,3.6,-5.6,-6.6,1.6,-5.9,-16.8,8.6,0.2,-7.7,8.1,-5.1,-5.3,-11.5,-12.2,-4.7,-1.6,-10.3,-11.6,-9.8,2.2,15.8,-25.4,-2.2,6.5,9.5,-5.8,-5.5,-37.8,-2.5,-5.5,-11.4,-12.9,5.8,-9.1,-7.4,-5.4,-14.7,20.7,1.4,-23.9,-12.6,-0.1,-29.1,14.8,-34.6,19.9,-8.1,9,4.1,-15.3,31,3.9,24.3,10.7,15.5,-14,9.4zM216.7,561.6l-1.8,-9.2,37.4,0,0.1,4.4,25.8,-4.4,0,-84.3,11.2,13,8.7,26.9,4.3,-7.6,-6.5,-43.6,21.6,13,9.9,54.1,32.3,32.1,-1.2,5.2,-3.9,-4.7,-10.2,7.7,-7.3,-3,2.8,11.8,8.7,-7.2,3.3,7.8,-9.9,9,-19.8,-2.4,-13.9,-13.1,-7,11.1,-18.2,8.1,-30.4,4.9,-7.4,-17.8,-21.6,-3.6,-6.7,-8zM414.7,767.2l-64.8,0,0.1,-81.1,-62.6,-11.4,-15.2,-15.3,-16.4,-0.1,-73.3,-56.8,0,-38.7,31,16.5,12.7,-1.8,10.6,6,5.9,8.5,-10.4,6.5,-0.1,7.5,23.6,3.3,21.7,-7.4,18.7,17.4,-4.6,3.8,11.1,15.7,-6.3,-32.7,19.8,-18.7,-17.8,10.2,-8.8,-3,3.6,-7.7,19.3,-7.7,15,20.9,9.1,-1.2,10.4,9,30.5,0.2,2.6,-8.2,10.6,10.8,2.2,-5.6,-8.9,-1.6,-4.1,-10.6,11.1,-3.2,8.8,4.5,-2.6,6.5,6.7,-5,-3.6,17.6,8.5,11.5,-9,-0.9,5.7,9.9,2.9,-32.6,18,-14.5,-3.6,-9.5,-6.7,4.9,9.6,-17,-21.8,-8.3,-5.3,-10.7,6,-9,-5.1,-18.9,7.9,-2.7,-2.8,-6.6,10.2,-11.7,8.9,6.9,6.9,24.9,12.7,18.1,-6.8,-1.5,3.1,5.2,-8.2,9.6,21.8,4.9,-7.1,4.8,9.3,25.4,8.3,-24.7,9.5,8.5,3.7,14,-4.5,9.5,8.5,18.1,15,-35.6,7.4,-2.5,-6,-26.9,28.3,5,-3.4,3.8,12.8,9,-5.7,6.4,6.1,5.6,-11.4,5.2,11.3,22.7,-1.5,9.9,-18.4,15.9,-11.9,-15,8.7,18.4,-25.4,-6.9,6.7,9,-11.9,16.7,-22,-12.6,-14.9,-0.5,39.3,19.4,-9.7,18.4,-17.3,0.9,-1.8,10.2,-30.9,-10.3,11,12,13.4,2.2,2.4,7.5,-14.9,4.8,3.8,4.4,-5.5,0.9,0.2,7.3,-6.1,-3.8,-14,43.9zM503,664.5l3.7,-4.2,22,17.3,1.5,13,9.5,-1.5,4.7,6.7,-6.7,6.1,-20.2,-13.8,-18.7,20.6,-3.4,-11.6,-12.4,2.3,8.1,-11.2,6.3,-37.8,5.7,14.3z" fill="#e4ecd8" stroke="#b8d4a0" stroke-width="1" data-province="NU"/>
-          <path id="prov-BC" d="M154.3,767.2l34.2,0,1,106.2,9.8,5.4,5.2,11.4,4.2,-0.1,7.6,9.9,2.1,-1.1,15,17.8,2.3,13.4,6,8.1,-80.8,0,-1.3,-3.7,3.1,-1.9,-3.6,0.8,0.8,-4.6,-3.1,3.9,-4.5,-2.8,4,-1.1,-2.6,-0.8,0.4,-5.7,-4.1,5.1,-4.5,-3.4,-2.5,-5.6,1.8,-6.4,-1.8,5.1,-4.3,-1.9,-1.4,2.6,-6.7,-1.2,5,-1.9,-5.5,0.1,0,-5.3,-7.5,1.6,-2.5,-6.9,8.4,-4,-9.2,3.1,-1.2,-8.6,5.4,-4.5,4.7,4.9,-4.3,-5.8,1.7,-5.7,-9.8,15.4,-2.3,-5.4,3.7,-5.7,-3,2.7,2,-8.1,-2.8,1.3,-7.2,-10.6,2.8,-2.6,-0.4,2.2,8.8,4.3,-6.7,-4.2,1.3,-4.6,-3.8,0.3,-5.4,8.9,-6.9,-7.1,6.4,-7.7,-4.1,0.8,-3.1,-3.7,7.8,-16.2,-2.1,-1.5,-2.3,7.9,-0.5,-16.7,-15.5,-7.8,-14.1,-30.3,-18.6,-24.1,-7.6,3.3,-2.3,8,-7.7,4.3,-1.4,-5.8,-13.1,-13.7,136.6,0zM75.1,864.1l4.4,2.6,-3.3,4.6,7.8,-7.4,-2.6,12.6,-3.5,1.8,-6.5,-9.7,0.3,-4.9,3.5,0.5zM111.9,882l-1.1,9.6,-0.6,-7,-3.8,-3,1.3,-4.7,4.3,5zM83.2,878.1l1.1,4.1,-3,0.6,4.6,2.6,2.1,8,-11.9,-14.5,7.1,-0.8zM124,915.2l15.4,4.5,19.5,26.2,-16.2,-4.7,2.7,-6.2,-6.1,3.8,-4,-6.4,-5.2,0.1,3.5,-3.8,-8.8,-2.9,-1.2,-3.6,-5.5,0.1,-0.4,-4.4,3.8,0.6,0.2,-2.5,-5.3,1.2,-2.6,-3.5,3.8,-1.6,6.4,3.1z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="BC"/>
-          <path id="prov-AB" d="M278.2,938l-36.4,0,-6,-8.1,0.7,-6,-3.1,-7.4,-5.8,-4.4,-9.3,-13.4,-2.1,1.1,-3.6,-6.4,-3.9,-0.8,-2.3,-4.1,-2,1.5,-5.2,-11.3,-9.8,-5.4,-1,-106.2,89.7,0,0,170.8z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="AB"/>
-          <path id="prov-SK" d="M355.6,938l-77.4,0,0,-170.8,71.7,0,0,70.5,5.7,100.3z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="SK"/>
-          <path id="prov-MB" d="M466.9,821.1l-55.6,62.6,-0.1,54.3,-55.6,0,-5.7,-100.3,0,-70.5,64.8,0,-1.7,16.5,6,6.1,-0.4,7.2,1.9,-7.5,8.5,0.2,6.7,23.7,-3.3,6.6,17,-5.5,17.5,6.7z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="MB"/>
-          <path id="prov-ON" d="M551.4,911.3l-0.4,47,4.9,11.5,19.6,9.4,3.7,4.9,16.5,-1.7,2.1,5.3,-15.4,10.7,-13.7,3.4,6.5,-0.1,-1.7,2.7,-5.6,-2,-12.4,2.6,-6.4,6.6,6.4,0.2,1.1,4.6,-13.6,3.6,3.2,0.8,-11.7,-1,-9.9,8.4,-5.3,-3.4,12.2,-14.3,0.3,-9.1,3.9,-6.4,-3.8,-7.7,3.7,0.1,3.4,7.9,7.4,1.6,-0.2,-4,3.8,0.5,-3.4,-7.7,-6.8,-7.4,-33,-6.9,1.2,-5.2,-3.7,-1.6,1.6,-4.2,-3.8,-4.2,1.4,-4.1,-9.5,-1,-4.9,-9.9,-16,-3,0.1,5.3,-2.9,2,0.5,-5.2,-2.1,6.1,-0.4,-2.7,-2.8,1.1,-2.3,5.1,-5,1.7,-9.1,-2.9,-5.4,2,-13.3,-7.4,-14.6,-1.8,-4.8,-8.6,0,-49.2,55.7,-62.6,13.1,13.4,16.2,6.7,4.1,4,-1.3,4.2,2.7,-3.2,10.3,-0.5,13.6,3.9,0.9,31,6.2,8.8,-2.1,3.1,10.5,6.8,1.9,5.3,-3.7,3.8,5.2,-2.7,6.9,5.6zM521.8,977.9l11,2.4,-4.1,3,-10.4,-4.4,3.6,-1z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="ON"/>
-          <path id="prov-QC" d="M685,761.7l-1.8,13.7,3.9,0.4,0.6,8.7,-4.7,1.2,12.1,3.4,-5.2,1.9,2,3.1,-4.9,5.4,3.1,6.1,4,1,-4.7,23.4,9,15.3,-3.8,3.1,-1.5,8.2,-17.7,-2,-9.9,-9.1,0.4,9.1,-6.1,-5,2.3,7.1,-4.1,1,-1.4,7.5,7.3,10.7,-1.1,8.9,3.4,0.4,2.3,-4.2,0.2,12.2,11.4,0.4,4.8,8,4.2,-8.5,-0.4,-9.2,4.1,-4.4,2.8,6.3,-5.8,3,2.7,6.9,59.7,0.1,0,8.1,-12.6,2.1,-14.1,14.7,-57.5,0.6,-7.9,12,-8.1,2.1,-12.5,13.5,-12.1,-3.4,10.3,3.8,-1.2,5.8,-11.4,12.4,-27.3,16.3,3.1,2.4,-3.3,1.7,-3.4,-5.6,-10.6,3,-5.8,-1.5,-2.4,-4.3,-17.6,-6.6,-7,-14.3,0.4,-56,2,-1.1,3.5,6,-0.7,-8.2,4.8,-7.1,-4.9,-25.9,-6.4,-10.3,17.4,-9.7,9.1,-11.2,2.1,-8.1,-3.2,-20.7,-14.5,-15.7,7.1,-17.3,3.4,1.7,0.5,-7.9,-2.7,-1.2,-0.1,-13.4,-5.2,0.1,6,-13.7,-4.5,-5.2,-0.8,-9.3,6.6,-4.9,13.9,5,0.2,2.6,4,-2.5,6.4,3.8,8.3,-6.9,9.1,6.7,-0.8,5.4,4.9,0.2,0.1,4.6,5.2,-0.6,-1.9,3.3,3.9,5.2,10.3,1.7,2.6,3.9,4.4,-3.4,-1.5,17.6,-8.8,0.9,8.2,1.9,0.4,10.2,3,0.7,-1.7,7.6,-2.3,-1.5,-3.3,3.4,13,-2.5,2.8,2.8,0.2,9.9,-6.1,4.4,5.6,-2.5,3.5,-7.4,-0.4,5.9,2.8,-4.5,0.7,7,11.8,-13.7,3.2,6.2,-0.4,-6.7,5.9,-4.2,-2.8,-2.7,2,-4.5,3.9,1.5,-3.6,-6.9,3.4,0.4,1.1,-8.9,2.9,-1.1zM710.3,936.7l-11.1,-1.8,-13,-9.1,14.6,2.5,9.5,8.4zM666.3,951.1l-5.9,2.2,-6.7,-1.9,-3.4,6.9,-5,2.4,-1.7,-2.2,-13,26.4,-7.4,5.3,-28.6,0.1,10.3,-5.4,3.6,-7.5,9.4,-7,14.3,-6.3,20.5,-21.2,24.3,-8.7,11.7,5.4,-2.7,0.4,1.5,5.6,-8.2,5.4,-6,-2.2,-7,2.2z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="QC"/>
-          <path id="prov-NB" d="M690.3,977.5l-4,2.6,-1.4,-1.8,-1.3,3.9,-9.9,5.3,-2,-1.2,0.8,-1.3,-3.7,4.1,-7.9,-0.7,-1.4,-1.6,0.3,-4.2,-3.3,-1.6,0,-17.6,-3.8,-3.5,-5.3,1.9,-2,-1.2,5.6,-3.1,0.5,-5.3,2.4,-0.9,4.5,0,2.2,1.9,9,-2.8,4.6,2,2.2,3.2,5.4,-2.4,2.7,1.6,-1.9,4.7,-3.6,3.5,4.4,0.5,-0.7,2.3,2.3,6.9,1,1.5,6,1.2,-1.4,1.7zM665.8,994.4l-1.2,0.7,0.9,-2.2,0.4,1.6z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NB"/>
-          <path id="prov-NS" d="M716.5,978.3l2.1,-0.5,-1.7,3.6,2.9,-0.6,2.5,-2.8,-2.4,0.2,3.9,-4.6,0.6,1.5,3.2,0.5,0.2,2.8,-7.4,4.5,-5.5,0.2,-1.5,-1.8,0.4,-5.8,4.8,-8.1,4.1,-2.7,-0.8,9.5,-5.4,4.2zM687.7,979.7l2.5,-2.3,13.9,5,4.7,-3.2,1.6,2.7,2.6,-0.4,1.3,1.5,0.6,1.7,-1.6,0.9,3.9,1,-20.4,8.2,-2.7,-0.5,-0.1,2.5,-3.5,-2.1,-0.9,2,-1.7,-0.8,0.1,2.7,-5.3,5.8,-4.3,3.9,-2.8,0.2,-2,-3.2,-2.1,-0.2,-0.6,-4.1,2.9,-5.3,-2.5,1.7,1.1,-1.6,14.1,-9.8,2.8,4,0.4,-2.5,6.5,-1.9,-13.9,-0.1,5.3,-6zM717.8,984.2l-1.1,-0.9,1.5,-0.1,-0.4,1z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NS"/>
-          <path id="prov-PE" d="M692.2,971.6l1.2,-1.2,5,1.8,8.7,-0.9,1.2,0.8,-4.5,2.8,0,2.9,-2.4,0,-0.9,-1.2,-1.1,0,1.1,-0.7,-1.4,-1.3,0.7,-1.2,-2.6,1.5,1.1,0.1,-0.5,0.4,-3.8,-0.9,-1.4,-1.8,0.4,-0.4,-3.2,-0.4,-0.2,-2.3,-2.3,-0.5,0.3,-1.7,3.2,-3.8,0.1,1.9,-1,1.8,2.5,4z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="PE"/>
-          <path id="prov-NL" d="M752.4,903.8l0,-8.1,-59.7,-0.1,-2.7,-6.9,5.8,-3,-2.8,-6.3,-7.9,22.1,-4.8,-8,-11.4,-0.4,-0.2,-12.2,-5.7,3.8,1.1,-8.9,-7.3,-10.7,1.4,-7.5,4.1,-1,-2.3,-7.1,6.1,5,-0.4,-9.1,9.9,9.1,17.7,2,5.3,-11.3,-9,-15.3,4.7,-23.4,-7.2,-6.7,5,-5.8,-2,-3.1,5.1,-1.9,-12.1,-3.4,4.7,-1.2,-0.6,-8.7,-3.9,-0.4,0,-13,12.6,19,-4.7,2.9,6.2,-0.7,2.9,5.3,-5.5,7.5,8.4,-2.8,-5.9,8.2,6.9,-2.4,5.2,5,-5.3,6.2,5.8,1.8,4.3,11.5,-10.1,-2,9.6,7.2,-0.2,5.9,9.9,3.3,-2.5,11.4,7.7,-3.9,2.9,2.1,-3.6,5.6,5.2,-6,4.3,5.6,7.3,-0.6,5,4.4,-26.8,14.3,0.6,5.8,21.5,-12.5,-2.3,-2.1,6.9,1,0.8,10.5,7.8,-4.5,5.4,6.4,0.5,10.4,-4.7,1.4,5.2,1,0.4,4.9,-12.6,10zM767.1,902.4l-5.1,3,2.1,4.2,-9.1,19.9,5.8,-6.9,6.1,1.8,-5.7,5,8.2,1.5,-1.1,5.9,7.6,-6.1,7.9,2.8,-4.4,12.6,9.8,-3.3,-7.6,8.3,1.8,4.9,7.2,-6.2,-2.7,8,3.5,-3.4,1.2,2.9,-4.1,11.7,-4.3,0.2,-0.1,-6.6,-5.2,3.5,2.9,-7.4,-3.1,-5.6,-2.7,6,-11.7,7,9,-10.5,-7.1,2.7,-4.9,-0.5,2.4,-4.2,-8.2,3.4,-22.8,-2.3,8.9,-10.5,-7.5,-0.5,4.1,-0.5,2.8,-6.6,3.7,1.3,-2,-5.5,3.8,-1.4,6.8,-21.3,9.1,-8,5,0.6z" fill="#d4e6c3" stroke="#b8d4a0" stroke-width="1" data-province="NL"/>
-
-          <!-- Province labels -->
-          <text x="80" y="590" class="province-label" style="font-size:10px">YT</text>
-          <text x="275" y="620" class="province-label" style="font-size:10px">NT</text>
-          <text x="455" y="480" class="province-label" style="font-size:10px">NU</text>
-          <text x="100" y="875" class="province-label">BC</text>
-          <text x="238" y="910" class="province-label">AB</text>
-          <text x="325" y="910" class="province-label">SK</text>
-          <text x="415" y="900" class="province-label">MB</text>
-          <text x="485" y="960" class="province-label">ON</text>
-          <text x="615" y="880" class="province-label">QC</text>
-          <text x="692" y="990" class="province-label" style="font-size:10px">NB</text>
-          <text x="725" y="1010" class="province-label" style="font-size:10px">NS</text>
-          <text x="718" y="972" class="province-label" style="font-size:8px">PE</text>
-          <text x="755" y="905" class="province-label" style="font-size:10px">NL</text>
-
-          <!-- Province supporter counts -->
-          <text x="80" y="605" class="province-count" id="count-YT" style="font-size:9px">0</text>
-          <text x="275" y="635" class="province-count" id="count-NT" style="font-size:9px">0</text>
-          <text x="455" y="495" class="province-count" id="count-NU" style="font-size:9px">0</text>
-          <text x="100" y="890" class="province-count" id="count-BC">0</text>
-          <text x="238" y="925" class="province-count" id="count-AB">0</text>
-          <text x="325" y="925" class="province-count" id="count-SK">0</text>
-          <text x="415" y="915" class="province-count" id="count-MB">0</text>
-          <text x="485" y="975" class="province-count" id="count-ON">0</text>
-          <text x="615" y="895" class="province-count" id="count-QC">0</text>
-          <text x="692" y="1005" class="province-count" id="count-NB" style="font-size:9px">0</text>
-          <text x="725" y="1025" class="province-count" id="count-NS" style="font-size:9px">0</text>
-          <text x="718" y="987" class="province-count" id="count-PE" style="font-size:7px">0</text>
-          <text x="755" y="920" class="province-count" id="count-NL" style="font-size:9px">0</text>
-
-          <!-- Heatmap dots will be injected here -->
-          <g id="heatDots"></g>
-        </svg>
-      </div>
+      <div id="demandMap"></div>
       <div class="map-legend">
-        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.3);"></div> 1–10 supporters</div>
-        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.6);"></div> 11–50 supporters</div>
-        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.7);"></div> 51–200 supporters</div>
-        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.95);"></div> 200+ supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.4);"></div> 1-10 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(130, 195, 65, 0.65);"></div> 11-50 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.7);"></div> 51-200 supporters</div>
+        <div class="legend-item"><div class="legend-dot" style="background: rgba(45, 80, 22, 0.9);"></div> 200+ supporters</div>
       </div>
     </div>
   </section>
@@ -866,13 +799,13 @@
     </div>
     <div class="leaderboard-grid">
       <div class="leaderboard-card">
-        <h3>🏆 Top Communities</h3>
+        <h3>Top Communities</h3>
         <div id="topCommunities">
           <div class="lb-row"><span class="lb-rank">—</span><span class="lb-community">Loading...</span><span class="lb-count">0</span></div>
         </div>
       </div>
       <div class="leaderboard-card">
-        <h3>🔥 Trending Now (24h)</h3>
+        <h3>Trending Now (24h)</h3>
         <div id="trendingCommunities">
           <div class="lb-row"><span class="lb-rank">—</span><span class="lb-community">Loading...</span><span class="lb-count">0</span></div>
         </div>
@@ -888,32 +821,32 @@
     </div>
     <div class="why-grid">
       <div class="why-card">
-        <div class="icon">🌱</div>
+        <div class="icon">&bull;</div>
         <h3>Investment Follows Demand</h3>
         <p>Local vertical farms need to see community interest before they invest. Your signup is a signal that your area is ready for year-round local produce.</p>
       </div>
       <div class="why-card">
-        <div class="icon">🏡</div>
+        <div class="icon">&bull;</div>
         <h3>Fresher Food, Less Travel</h3>
         <p>Field produce from California or Mexico travels 5,000+ km over 10–21 days. Local vertical farm produce travels under 50 km and arrives within 24 hours of harvest.</p>
       </div>
       <div class="why-card">
-        <div class="icon">❄️</div>
+        <div class="icon">&bull;</div>
         <h3>Four-Season Agriculture</h3>
         <p>Canada's growing season is short, but indoor farming changes that. Year-round production means year-round local jobs and food security in every community.</p>
       </div>
       <div class="why-card">
-        <div class="icon">🤝</div>
+        <div class="icon">&bull;</div>
         <h3>Strengthen Your Community</h3>
         <p>Every dollar spent on local food circulates 3x more in your community. Your signup tells growers the demand is real — and worth investing in.</p>
       </div>
       <div class="why-card">
-        <div class="icon">📊</div>
+        <div class="icon">&bull;</div>
         <h3>Data-Driven Decisions</h3>
         <p>We connect this demand data with local growers, investors, and agricultural planners to direct resources where they'll have the greatest impact.</p>
       </div>
       <div class="why-card">
-        <div class="icon">🏆</div>
+        <div class="icon">&bull;</div>
         <h3>Community Competition</h3>
         <p>Which neighbourhood will lead the charge? Rally your neighbours, share the campaign, and put your community at the top of the leaderboard.</p>
       </div>
@@ -1015,164 +948,163 @@
     'use strict';
 
     const SHARE_URL = 'https://greenreachgreens.com/id-buy-local.html';
-    const SHARE_TEXT = "I just told my community I'd buy local produce if someone grew it nearby. Join the Field of Dreams campaign — the more demand we show, the more investment in local four-season farming. 🌱";
+    const SHARE_TEXT = "I just told my community I'd buy local produce if someone grew it nearby. Join the Field of Dreams campaign -- the more demand we show, the more investment in local four-season farming.";
 
-    // ── FSA (Forward Sortation Area) approximate positions on map ──
-    // Maps first 2 chars of postal code → city-level SVG coordinates
-    // All coordinates validated to fall inside their province SVG paths
+    // ── FSA (Forward Sortation Area) lat/lng coordinates ──
+    // Maps first 2 chars of postal code → geographic coordinates
     const fsaCoords = {
-      // ── Ontario — Toronto (M*) ──
-      'M1': { x: 543, y: 997 },  // Scarborough
-      'M2': { x: 540, y: 997 },  // North York
-      'M3': { x: 538, y: 996 },  // North York West
-      'M4': { x: 541, y: 998 },  // East York / Midtown
-      'M5': { x: 539, y: 999 },  // Downtown Toronto
-      'M6': { x: 537, y: 998 },  // West Toronto
-      'M7': { x: 542, y: 996 },  // East York
-      'M8': { x: 536, y: 999 },  // Etobicoke South
-      'M9': { x: 537, y: 996 },  // Etobicoke North
-      // ── Ontario — GTA (L*) ──
-      'L1': { x: 547, y: 994 },  // Oshawa / Ajax
-      'L2': { x: 535, y: 1018 }, // St. Catharines / Niagara
-      'L3': { x: 548, y: 987 },  // Markham / Ajax
-      'L4': { x: 548, y: 988 },  // Markham / Richmond Hill
-      'L5': { x: 537, y: 997 },  // Mississauga
-      'L6': { x: 536, y: 1000 }, // Burlington / Oakville
-      'L7': { x: 536, y: 996 },  // Halton Hills
-      'L8': { x: 535, y: 1005 }, // Hamilton
-      'L9': { x: 534, y: 1008 }, // Hamilton / Grimsby
-      // ── Ontario — Eastern / Ottawa (K*) ──
-      'K0': { x: 548, y: 948 },  // Eastern ON rural
-      'K1': { x: 550, y: 965 },  // Ottawa Central
-      'K2': { x: 548, y: 962 },  // Ottawa West
-      'K4': { x: 546, y: 958 },  // Smiths Falls
-      'K6': { x: 558, y: 974 },  // Brockville
-      'K7': { x: 562, y: 978 },  // Kingston
-      'K8': { x: 553, y: 982 },  // Belleville
-      'K9': { x: 548, y: 978 },  // Peterborough
-      // ── Ontario — Southwestern (N*) ──
-      'N0': { x: 544, y: 982 },  // Rural SW Ontario
-      'N1': { x: 538, y: 997 },  // Brantford
-      'N2': { x: 536, y: 989 },  // Kitchener-Waterloo
-      'N3': { x: 536, y: 992 },  // Cambridge
-      'N4': { x: 546, y: 985 },  // Stratford
-      'N5': { x: 537, y: 991 },  // Woodstock
-      'N6': { x: 536, y: 994 },  // London
-      'N7': { x: 535, y: 1002 }, // Chatham-Kent
-      'N8': { x: 534, y: 1006 }, // Windsor area
-      'N9': { x: 533, y: 1008 }, // Windsor / Essex
-      // ── Ontario — Northern (P*) ──
-      'P0': { x: 450, y: 890 },  // Rural Northern ON
-      'P1': { x: 468, y: 920 },  // Parry Sound
-      'P2': { x: 462, y: 910 },  // North Bay
-      'P3': { x: 458, y: 900 },  // Sudbury
-      'P4': { x: 453, y: 895 },  // Sault Ste Marie area
-      'P5': { x: 445, y: 885 },  // Sault Ste Marie
-      'P6': { x: 440, y: 890 },  // Sault area
-      'P7': { x: 428, y: 872 },  // Thunder Bay
-      // ── Quebec — Montreal (H*) ──
-      'H1': { x: 618, y: 920 },  // East Montreal
-      'H2': { x: 615, y: 918 },  // Central Montreal
-      'H3': { x: 612, y: 916 },  // Montreal West
-      'H4': { x: 611, y: 920 },  // Verdun / LaSalle
-      'H5': { x: 614, y: 922 },  // South Montreal
-      'H7': { x: 609, y: 914 },  // Laval
-      'H8': { x: 606, y: 918 },  // West Island
-      'H9': { x: 604, y: 916 },  // West Island
-      // ── Quebec — Other (G*, J*) ──
-      'G0': { x: 620, y: 860 },  // Rural QC
-      'G1': { x: 640, y: 880 },  // Quebec City
-      'G2': { x: 642, y: 878 },  // Quebec City
-      'G3': { x: 635, y: 885 },  // Portneuf
-      'G5': { x: 638, y: 865 },  // Riviere-du-Loup
-      'G6': { x: 630, y: 890 },  // Thetford Mines
-      'G7': { x: 625, y: 855 },  // Saguenay
-      'G8': { x: 620, y: 850 },  // Saguenay region
-      'G9': { x: 615, y: 845 },  // Lac-Saint-Jean
-      'J0': { x: 600, y: 910 },  // Rural South QC
-      'J1': { x: 617, y: 925 },  // Sherbrooke
-      'J2': { x: 615, y: 923 },  // Eastern Townships
-      'J3': { x: 610, y: 920 },  // Saint-Hyacinthe
-      'J4': { x: 612, y: 925 },  // Longueuil
-      'J5': { x: 608, y: 922 },  // South Shore
-      'J6': { x: 605, y: 918 },  // Saint-Jean
-      'J7': { x: 597, y: 910 },  // Laurentides
-      'J8': { x: 590, y: 905 },  // Gatineau
-      'J9': { x: 585, y: 908 },  // Outaouais
-      // ── British Columbia (V*) ──
-      'V0': { x: 145, y: 830 },  // Rural BC
-      'V1': { x: 155, y: 870 },  // Kelowna / Interior
-      'V2': { x: 140, y: 910 },  // Abbotsford / Chilliwack
-      'V3': { x: 136, y: 914 },  // Coquitlam / Port Coquitlam
-      'V4': { x: 134, y: 916 },  // Delta / Ladner
-      'V5': { x: 132, y: 914 },  // Vancouver East / Burnaby
-      'V6': { x: 131, y: 914 },  // Vancouver
-      'V7': { x: 126, y: 910 },  // North / West Vancouver
-      'V8': { x: 150, y: 910 },  // Victoria
-      'V9': { x: 145, y: 905 },  // Nanaimo
-      // ── Alberta (T*) ──
-      'T0': { x: 240, y: 900 },  // Rural AB
-      'T1': { x: 250, y: 930 },  // Lethbridge / South
-      'T2': { x: 255, y: 920 },  // Calgary
-      'T3': { x: 252, y: 918 },  // Calgary NW
-      'T4': { x: 248, y: 905 },  // Red Deer
-      'T5': { x: 245, y: 890 },  // Edmonton
-      'T6': { x: 243, y: 888 },  // Edmonton
-      'T7': { x: 238, y: 880 },  // Edson / Hinton
-      'T8': { x: 240, y: 870 },  // Fort McMurray area
-      'T9': { x: 242, y: 865 },  // North Alberta
-      // ── Manitoba (R*) ──
-      'R0': { x: 385, y: 895 },  // Rural MB
-      'R1': { x: 395, y: 915 },  // Winnipeg suburbs
-      'R2': { x: 400, y: 920 },  // Winnipeg
-      'R3': { x: 405, y: 925 },  // Winnipeg
-      // ── Saskatchewan (S*) ──
-      'S0': { x: 328, y: 890 },  // Rural SK
-      'S4': { x: 335, y: 920 },  // Regina
-      'S6': { x: 332, y: 908 },  // Moose Jaw
-      'S7': { x: 330, y: 880 },  // Saskatoon
-      'S9': { x: 332, y: 870 },  // Prince Albert
-      // ── Nova Scotia (B*) ──
-      'B0': { x: 690, y: 990 },  // Rural NS
-      'B1': { x: 705, y: 985 },  // Cape Breton / Sydney
-      'B2': { x: 700, y: 987 },  // Sydney area
-      'B3': { x: 692, y: 988 },  // Halifax
-      'B4': { x: 688, y: 985 },  // Dartmouth
-      // ── New Brunswick (E*) ──
-      'E1': { x: 678, y: 975 },  // Moncton
-      'E2': { x: 668, y: 980 },  // Saint John
-      'E3': { x: 665, y: 970 },  // Fredericton
-      'E4': { x: 660, y: 960 },  // Edmundston
-      'E5': { x: 672, y: 978 },  // Sussex
-      // ── Newfoundland & Labrador (A*) ──
-      'A0': { x: 710, y: 870 },  // Rural NL / Labrador
-      'A1': { x: 762, y: 910 },  // St. John's
-      'A2': { x: 758, y: 892 },  // Corner Brook
-      // ── PEI (C*) ──
-      'C0': { x: 698, y: 974 },  // Rural PEI
-      'C1': { x: 701, y: 974 },  // Charlottetown
-      // ── Territories ──
-      'X0': { x: 260, y: 665 },  // NT
-      'X1': { x: 265, y: 670 },  // NT
-      'Y0': { x: 55, y: 630 },   // YT
-      'Y1': { x: 60, y: 640 },   // YT (Whitehorse)
+      // Ontario — Toronto (M*)
+      'M1': [43.77, -79.23],  // Scarborough
+      'M2': [43.78, -79.42],  // North York
+      'M3': [43.76, -79.50],  // North York West
+      'M4': [43.69, -79.36],  // East York / Midtown
+      'M5': [43.65, -79.38],  // Downtown Toronto
+      'M6': [43.66, -79.44],  // West Toronto
+      'M7': [43.67, -79.32],  // East York
+      'M8': [43.63, -79.52],  // Etobicoke South
+      'M9': [43.70, -79.55],  // Etobicoke North
+      // Ontario — GTA (L*)
+      'L1': [43.90, -78.87],  // Oshawa / Ajax
+      'L2': [43.16, -79.24],  // St. Catharines / Niagara
+      'L3': [43.87, -79.26],  // Markham / Ajax
+      'L4': [43.87, -79.43],  // Markham / Richmond Hill
+      'L5': [43.58, -79.65],  // Mississauga
+      'L6': [43.38, -79.77],  // Burlington / Oakville
+      'L7': [43.56, -79.92],  // Halton Hills
+      'L8': [43.24, -79.86],  // Hamilton
+      'L9': [43.18, -79.56],  // Hamilton / Grimsby
+      // Ontario — Eastern / Ottawa (K*)
+      'K0': [44.90, -76.50],  // Eastern ON rural
+      'K1': [45.42, -75.70],  // Ottawa Central
+      'K2': [45.38, -75.76],  // Ottawa West
+      'K4': [44.90, -76.02],  // Smiths Falls
+      'K6': [44.59, -75.68],  // Brockville
+      'K7': [44.23, -76.49],  // Kingston
+      'K8': [44.16, -77.38],  // Belleville
+      'K9': [44.30, -78.32],  // Peterborough
+      // Ontario — Southwestern (N*)
+      'N0': [43.50, -81.00],  // Rural SW Ontario
+      'N1': [43.14, -80.26],  // Brantford
+      'N2': [43.45, -80.49],  // Kitchener-Waterloo
+      'N3': [43.36, -80.31],  // Cambridge
+      'N4': [43.37, -81.00],  // Stratford
+      'N5': [43.13, -80.75],  // Woodstock
+      'N6': [42.98, -81.25],  // London
+      'N7': [42.40, -82.18],  // Chatham-Kent
+      'N8': [42.30, -83.00],  // Windsor area
+      'N9': [42.28, -83.05],  // Windsor / Essex
+      // Ontario — Northern (P*)
+      'P0': [48.50, -85.00],  // Rural Northern ON
+      'P1': [45.35, -79.87],  // Parry Sound
+      'P2': [46.31, -79.46],  // North Bay
+      'P3': [46.49, -81.00],  // Sudbury
+      'P4': [46.52, -84.33],  // Sault Ste Marie area
+      'P5': [46.50, -84.35],  // Sault Ste Marie
+      'P6': [46.53, -84.30],  // Sault area
+      'P7': [48.38, -89.25],  // Thunder Bay
+      // Quebec — Montreal (H*)
+      'H1': [45.56, -73.55],  // East Montreal
+      'H2': [45.51, -73.57],  // Central Montreal
+      'H3': [45.49, -73.62],  // Montreal West
+      'H4': [45.45, -73.58],  // Verdun / LaSalle
+      'H5': [45.47, -73.53],  // South Montreal
+      'H7': [45.58, -73.72],  // Laval
+      'H8': [45.44, -73.80],  // West Island
+      'H9': [45.43, -73.95],  // West Island
+      // Quebec — Other (G*, J*)
+      'G0': [47.50, -70.00],  // Rural QC
+      'G1': [46.81, -71.21],  // Quebec City
+      'G2': [46.85, -71.25],  // Quebec City
+      'G3': [46.70, -71.90],  // Portneuf
+      'G5': [47.56, -69.54],  // Riviere-du-Loup
+      'G6': [46.10, -71.30],  // Thetford Mines
+      'G7': [48.43, -71.07],  // Saguenay
+      'G8': [48.45, -71.65],  // Saguenay region
+      'G9': [48.55, -72.23],  // Lac-Saint-Jean
+      'J0': [45.50, -73.00],  // Rural South QC
+      'J1': [45.40, -71.89],  // Sherbrooke
+      'J2': [45.38, -72.05],  // Eastern Townships
+      'J3': [45.62, -72.95],  // Saint-Hyacinthe
+      'J4': [45.53, -73.46],  // Longueuil
+      'J5': [45.37, -73.29],  // South Shore
+      'J6': [45.32, -73.26],  // Saint-Jean
+      'J7': [45.60, -73.83],  // Laurentides
+      'J8': [45.48, -75.65],  // Gatineau
+      'J9': [45.52, -75.85],  // Outaouais
+      // British Columbia (V*)
+      'V0': [50.00, -122.00], // Rural BC
+      'V1': [49.88, -119.49], // Kelowna / Interior
+      'V2': [49.05, -122.33], // Abbotsford / Chilliwack
+      'V3': [49.23, -122.80], // Coquitlam / Port Coquitlam
+      'V4': [49.09, -123.06], // Delta / Ladner
+      'V5': [49.23, -123.03], // Vancouver East / Burnaby
+      'V6': [49.28, -123.12], // Vancouver
+      'V7': [49.33, -123.15], // North / West Vancouver
+      'V8': [48.43, -123.37], // Victoria
+      'V9': [49.17, -123.94], // Nanaimo
+      // Alberta (T*)
+      'T0': [52.00, -113.00], // Rural AB
+      'T1': [49.69, -112.83], // Lethbridge / South
+      'T2': [51.05, -114.07], // Calgary
+      'T3': [51.10, -114.16], // Calgary NW
+      'T4': [52.27, -113.81], // Red Deer
+      'T5': [53.54, -113.49], // Edmonton
+      'T6': [53.53, -113.52], // Edmonton
+      'T7': [53.58, -117.47], // Edson / Hinton
+      'T8': [56.73, -111.38], // Fort McMurray area
+      'T9': [55.17, -118.80], // North Alberta
+      // Manitoba (R*)
+      'R0': [50.50, -98.00],  // Rural MB
+      'R1': [49.85, -97.10],  // Winnipeg suburbs
+      'R2': [49.88, -97.15],  // Winnipeg
+      'R3': [49.90, -97.20],  // Winnipeg
+      // Saskatchewan (S*)
+      'S0': [51.50, -106.00], // Rural SK
+      'S4': [50.45, -104.62], // Regina
+      'S6': [50.40, -105.53], // Moose Jaw
+      'S7': [52.13, -106.67], // Saskatoon
+      'S9': [53.20, -105.75], // Prince Albert
+      // Nova Scotia (B*)
+      'B0': [44.65, -63.60],  // Rural NS
+      'B1': [46.14, -60.19],  // Cape Breton / Sydney
+      'B2': [46.10, -60.40],  // Sydney area
+      'B3': [44.65, -63.57],  // Halifax
+      'B4': [44.67, -63.53],  // Dartmouth
+      // New Brunswick (E*)
+      'E1': [46.09, -64.77],  // Moncton
+      'E2': [45.27, -66.06],  // Saint John
+      'E3': [45.96, -66.64],  // Fredericton
+      'E4': [47.37, -68.32],  // Edmundston
+      'E5': [45.61, -65.51],  // Sussex
+      // Newfoundland & Labrador (A*)
+      'A0': [53.00, -60.00],  // Rural NL / Labrador
+      'A1': [47.57, -52.71],  // St. John's
+      'A2': [48.95, -57.95],  // Corner Brook
+      // PEI (C*)
+      'C0': [46.24, -63.13],  // Rural PEI
+      'C1': [46.24, -63.13],  // Charlottetown
+      // Territories
+      'X0': [62.45, -114.37], // NT (Yellowknife)
+      'X1': [64.00, -114.00], // NT
+      'Y0': [60.72, -135.05], // YT
+      'Y1': [60.72, -135.05], // YT (Whitehorse)
     };
 
-    // Province center fallbacks for unknown FSAs
+    // Province center fallbacks (lat/lng)
     const provinceCenters = {
-      'YT': { x: 55, y: 640 },
-      'NT': { x: 260, y: 660 },
-      'NU': { x: 459, y: 500 },
-      'BC': { x: 145, y: 850 },
-      'AB': { x: 245, y: 900 },
-      'SK': { x: 330, y: 900 },
-      'MB': { x: 390, y: 890 },
-      'ON': { x: 500, y: 940 },
-      'QC': { x: 615, y: 870 },
-      'NB': { x: 670, y: 975 },
-      'NS': { x: 690, y: 990 },
-      'PE': { x: 700, y: 974 },
-      'NL': { x: 755, y: 895 },
+      'YT': [62.00, -136.00],
+      'NT': [64.00, -114.00],
+      'NU': [65.00, -90.00],
+      'BC': [53.73, -127.65],
+      'AB': [53.93, -116.58],
+      'SK': [52.94, -106.45],
+      'MB': [53.76, -98.81],
+      'ON': [44.50, -80.00],
+      'QC': [46.81, -71.21],
+      'NB': [46.50, -66.16],
+      'NS': [44.65, -63.57],
+      'PE': [46.24, -63.13],
+      'NL': [48.50, -55.00],
     };
 
     // Postal first letter → province mapping
@@ -1218,6 +1150,24 @@
       `).join('');
     }
 
+    // ── Initialize Leaflet Map ────────────────────────────────────
+    const map = L.map('demandMap', {
+      center: [56, -96],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 12,
+      scrollWheelZoom: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(map);
+
+    // Layer group for heatmap markers so we can clear/redraw
+    let heatLayer = L.layerGroup().addTo(map);
+    let labelLayer = L.layerGroup().addTo(map);
+
     // ── Load Heatmap ────────────────────────────────────────────
     async function loadHeatmap() {
       try {
@@ -1225,8 +1175,9 @@
         if (!res.ok) return;
         const data = await res.json();
 
-        const dotsGroup = document.getElementById('heatDots');
-        dotsGroup.innerHTML = '';
+        // Clear previous markers
+        heatLayer.clearLayers();
+        labelLayer.clearLayers();
 
         // Aggregate by province for counts
         const provinceTotals = {};
@@ -1235,62 +1186,57 @@
           provinceTotals[prov] = (provinceTotals[prov] || 0) + parseInt(r.count, 10);
         });
 
-        // Update province count labels
-        Object.entries(provinceTotals).forEach(([prov, count]) => {
-          const el = document.getElementById('count-' + prov);
-          if (el) el.textContent = count.toLocaleString();
-        });
-
-        // Color provinces by intensity
-        Object.entries(provinceTotals).forEach(([prov, count]) => {
-          const path = document.getElementById('prov-' + prov);
-          if (!path) return;
-          let fill;
-          if (count >= 200) fill = 'rgba(45, 80, 22, 0.55)';
-          else if (count >= 50) fill = 'rgba(45, 80, 22, 0.35)';
-          else if (count >= 10) fill = 'rgba(130, 195, 65, 0.45)';
-          else if (count > 0) fill = 'rgba(130, 195, 65, 0.25)';
-          else return;
-          path.setAttribute('fill', fill);
-        });
-
         // Draw dots for each FSA region
         (data.regions || []).forEach(r => {
           const prov = r.province || letterToProvince[r.prefix.charAt(0)] || 'ON';
           const count = parseInt(r.count, 10);
 
-          // Look up FSA-level coordinates (first 2 chars), fall back to province center
           const fsa2 = r.prefix.substring(0, 2);
           const coords = fsaCoords[fsa2] || provinceCenters[prov];
           if (!coords) return;
 
           // Small jitter based on 3rd character so overlapping FSAs separate visually
           const c3 = r.prefix.charCodeAt(2) || 0;
-          const jitterX = ((c3 * 7) % 11) - 5;
-          const jitterY = ((c3 * 13) % 11) - 5;
-          const x = coords.x + jitterX;
-          const y = coords.y + jitterY;
+          const jitterLat = ((c3 * 7) % 11 - 5) * 0.05;
+          const jitterLng = ((c3 * 13) % 11 - 5) * 0.05;
+          const lat = coords[0] + jitterLat;
+          const lng = coords[1] + jitterLng;
 
           let radius, opacity;
-          if (count >= 200) { radius = 12; opacity = 0.8; }
-          else if (count >= 50) { radius = 9; opacity = 0.7; }
-          else if (count >= 10) { radius = 6; opacity = 0.6; }
-          else { radius = 4; opacity = 0.5; }
+          if (count >= 200) { radius = 14; opacity = 0.8; }
+          else if (count >= 50) { radius = 10; opacity = 0.7; }
+          else if (count >= 10) { radius = 7; opacity = 0.6; }
+          else { radius = 5; opacity = 0.5; }
 
-          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('cx', x);
-          circle.setAttribute('cy', y);
-          circle.setAttribute('r', radius);
-          circle.setAttribute('fill', `rgba(130, 195, 65, ${opacity})`);
-          circle.setAttribute('stroke', 'rgba(45, 80, 22, 0.3)');
-          circle.setAttribute('stroke-width', '1');
+          const marker = L.circleMarker([lat, lng], {
+            radius: radius,
+            fillColor: 'rgba(130, 195, 65, 1)',
+            fillOpacity: opacity,
+            color: 'rgba(45, 80, 22, 0.5)',
+            weight: 1,
+          });
 
-          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-          title.textContent = `${r.prefix} — ${count} supporter${count !== 1 ? 's' : ''}`;
-          circle.appendChild(title);
+          marker.bindTooltip(`${r.prefix} - ${count} supporter${count !== 1 ? 's' : ''}`, {
+            direction: 'top',
+            offset: [0, -radius],
+          });
 
-          dotsGroup.appendChild(circle);
+          heatLayer.addLayer(marker);
         });
+
+        // Province count labels at province centers
+        Object.entries(provinceTotals).forEach(([prov, count]) => {
+          const center = provinceCenters[prov];
+          if (!center) return;
+          const icon = L.divIcon({
+            className: 'province-overlay',
+            html: `<strong>${prov}</strong><br>${count.toLocaleString()}`,
+            iconSize: [50, 30],
+            iconAnchor: [25, 15],
+          });
+          L.marker(center, { icon: icon, interactive: false }).addTo(labelLayer);
+        });
+
       } catch (e) {
         console.warn('[campaign] Heatmap load failed:', e.message);
       }
