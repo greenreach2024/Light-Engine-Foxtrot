@@ -520,13 +520,15 @@ async function runMigrations(client) {
   // Create wholesale_buyers table for wholesale admin + buyer auth
   await client.query(`
     CREATE TABLE IF NOT EXISTS wholesale_buyers (
-      id SERIAL PRIMARY KEY,
+      id VARCHAR(255) PRIMARY KEY,
       business_name VARCHAR(255) NOT NULL,
       contact_name VARCHAR(255),
       email VARCHAR(255) UNIQUE NOT NULL,
       buyer_type VARCHAR(50),
       location JSONB DEFAULT '{}',
       password_hash VARCHAR(255) NOT NULL,
+      status VARCHAR(50) DEFAULT 'active',
+      phone VARCHAR(50),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -534,6 +536,26 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_email ON wholesale_buyers(email);
     CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_created ON wholesale_buyers(created_at);
   `);
+
+  // Migrate existing wholesale_buyers table if id column is integer (SERIAL)
+  try {
+    const colCheck = await client.query(`
+      SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'wholesale_buyers' AND column_name = 'id'
+    `);
+    if (colCheck.rows.length > 0 && colCheck.rows[0].data_type === 'integer') {
+      await client.query(`
+        ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text;
+      `);
+    }
+    // Add missing columns if they don't exist
+    await client.query(`
+      ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active';
+      ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+    `);
+  } catch (migErr) {
+    console.warn('[DB Migration] wholesale_buyers schema update skipped:', migErr.message);
+  }
 
   // Create wholesale_orders table for persisted wholesale orders
   await client.query(`

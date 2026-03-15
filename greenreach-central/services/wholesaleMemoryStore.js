@@ -125,10 +125,8 @@ async function persistBuyer(buyer) {
        buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now]
     );
   } catch (err) {
-    // If table doesn't exist yet, silently skip
-    if (!String(err?.message || '').includes('relation')) {
-      console.warn('[BuyerPersist] Error:', err.message);
-    }
+    // Log all persist errors — schema mismatches, type errors, etc.
+    console.warn('[BuyerPersist] Error:', err.message);
   }
 }
 
