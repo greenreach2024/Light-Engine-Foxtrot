@@ -370,7 +370,6 @@
       background: var(--surface);
       border-radius: 24px;
       box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-      overflow: hidden;
       position: relative;
     }
 
@@ -378,6 +377,8 @@
       width: 100%;
       height: 520px;
       background: #f0f4e8;
+      border-radius: 24px 24px 0 0;
+      z-index: 1;
     }
 
     .province-overlay {
@@ -396,6 +397,9 @@
       padding: 16px 24px;
       background: rgba(45, 80, 22, 0.04);
       flex-wrap: wrap;
+      position: relative;
+      z-index: 2;
+      border-radius: 0 0 24px 24px;
     }
 
     .legend-item {
@@ -1152,7 +1156,7 @@
 
     // ── Initialize Leaflet Map ────────────────────────────────────
     const map = L.map('demandMap', {
-      center: [56, -96],
+      center: [50, -90],
       zoom: 4,
       minZoom: 3,
       maxZoom: 12,
@@ -1164,8 +1168,13 @@
       maxZoom: 18,
     }).addTo(map);
 
-    // Ensure tiles render correctly after layout
-    setTimeout(function() { map.invalidateSize(); }, 200);
+    // Fit bounds to show populated Canada
+    map.fitBounds([[42, -140], [55, -52]]);
+
+    // Ensure tiles render correctly after layout settles
+    setTimeout(function() { map.invalidateSize(); }, 100);
+    setTimeout(function() { map.invalidateSize(); }, 500);
+    window.addEventListener('load', function() { map.invalidateSize(); });
 
     // Layer group for heatmap markers so we can clear/redraw
     let heatLayer = L.layerGroup().addTo(map);
