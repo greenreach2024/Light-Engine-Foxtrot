@@ -44,11 +44,11 @@ export async function processSquarePayments(params) {
   const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0.12 } = params || {};
 
   if (!masterOrderId) {
-    return summarizeResults([{ success: false, farmId: null, error: 'master_order_id_required', amountMoney: { amount: 0, currency: 'USD' }, brokerFeeMoney: { amount: 0, currency: 'USD' }, status: 'FAILED' }]);
+    return summarizeResults([{ success: false, farmId: null, error: 'master_order_id_required', amountMoney: { amount: 0, currency: 'CAD' }, brokerFeeMoney: { amount: 0, currency: 'CAD' }, status: 'FAILED' }]);
   }
 
   if (!Array.isArray(farmSubOrders) || farmSubOrders.length === 0) {
-    return summarizeResults([{ success: false, farmId: null, error: 'farm_sub_orders_required', amountMoney: { amount: 0, currency: 'USD' }, brokerFeeMoney: { amount: 0, currency: 'USD' }, status: 'FAILED' }]);
+    return summarizeResults([{ success: false, farmId: null, error: 'farm_sub_orders_required', amountMoney: { amount: 0, currency: 'CAD' }, brokerFeeMoney: { amount: 0, currency: 'CAD' }, status: 'FAILED' }]);
   }
 
   const sourceId = paymentSource?.source_id || paymentSource?.sourceId || null;
@@ -57,8 +57,8 @@ export async function processSquarePayments(params) {
       farmId: subOrder.farm_id,
       success: false,
       error: 'valid_square_source_id_required',
-      amountMoney: { amount: getSubOrderAmountCents(subOrder), currency: 'USD' },
-      brokerFeeMoney: { amount: 0, currency: 'USD' },
+      amountMoney: { amount: getSubOrderAmountCents(subOrder), currency: 'CAD' },
+      brokerFeeMoney: { amount: 0, currency: 'CAD' },
       status: 'FAILED',
     }));
     return summarizeResults(failedResults);
@@ -78,8 +78,8 @@ export async function processSquarePayments(params) {
         farmId,
         success: false,
         error: creds?.error || 'square_credentials_unavailable',
-        amountMoney: { amount: amountCents, currency: 'USD' },
-        brokerFeeMoney: { amount: 0, currency: 'USD' },
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: 0, currency: 'CAD' },
         status: 'FAILED',
       });
       continue;
@@ -90,8 +90,8 @@ export async function processSquarePayments(params) {
         farmId,
         success: false,
         error: 'invalid_sub_order_amount',
-        amountMoney: { amount: amountCents, currency: 'USD' },
-        brokerFeeMoney: { amount: 0, currency: 'USD' },
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: 0, currency: 'CAD' },
         status: 'FAILED',
       });
       continue;
@@ -111,8 +111,8 @@ export async function processSquarePayments(params) {
         farmSubOrderId: subOrder.sub_order_id || `${masterOrderId}-${farmId}`,
         farmMerchantId: creds.merchant_id,
         farmLocationId: creds.location_id,
-        amountMoney: { amount: amountCents, currency: 'USD' },
-        brokerFeeMoney: { amount: brokerFeeCents, currency: 'USD' },
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: brokerFeeCents, currency: 'CAD' },
         idempotencyKey: makeIdempotencyKey({ masterOrderId, farmId, amountCents }),
         metadata: {
           sourceId,
@@ -125,8 +125,8 @@ export async function processSquarePayments(params) {
         farmId,
         success: true,
         paymentId: providerResponse.paymentId,
-        amountMoney: { amount: amountCents, currency: 'USD' },
-        brokerFeeMoney: { amount: brokerFeeCents, currency: 'USD' },
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: brokerFeeCents, currency: 'CAD' },
         status: providerResponse.status || 'COMPLETED',
         provider: 'square',
       });
@@ -135,8 +135,8 @@ export async function processSquarePayments(params) {
         farmId,
         success: false,
         error: error.message || 'square_payment_failed',
-        amountMoney: { amount: amountCents, currency: 'USD' },
-        brokerFeeMoney: { amount: brokerFeeCents, currency: 'USD' },
+        amountMoney: { amount: amountCents, currency: 'CAD' },
+        brokerFeeMoney: { amount: brokerFeeCents, currency: 'CAD' },
         status: 'FAILED',
       });
     }

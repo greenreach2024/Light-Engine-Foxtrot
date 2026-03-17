@@ -1023,6 +1023,24 @@ router.post('/api/purchase/recover', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 router.post('/api/purchase/webhook', async (req, res) => {
   try {
+    // Verify Square webhook signature before processing
+    const signature = req.headers['x-square-hmacsha256-signature'];
+    const webhookSecret = process.env.SQUARE_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      if (!signature) {
+        console.warn('[Webhook] Missing Square signature header — rejecting');
+        return res.status(401).json({ error: 'missing_signature' });
+      }
+      const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      const expected = crypto.createHmac('sha256', webhookSecret).update(payloadString).digest('base64');
+      if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+        console.warn('[Webhook] Invalid Square signature — rejecting');
+        return res.status(401).json({ error: 'invalid_signature' });
+      }
+    } else {
+      console.warn('[Webhook] SQUARE_WEBHOOK_SECRET not set — signature verification skipped');
+    }
+
     const event = req.body;
     const eventType = event?.type;
 

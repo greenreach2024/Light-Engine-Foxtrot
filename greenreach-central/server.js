@@ -4623,9 +4623,10 @@ app.post('/api/network/recipe-versions/push', async (req, res) => {
 
     // Load persisted buyers and payments into memory on startup
     try {
-      const { loadBuyersFromDb, loadPaymentsFromDb } = await import('./services/wholesaleMemoryStore.js');
+      const { loadBuyersFromDb, loadPaymentsFromDb, loadRefundsFromDb } = await import('./services/wholesaleMemoryStore.js');
       await loadBuyersFromDb();
       await loadPaymentsFromDb();
+      await loadRefundsFromDb();
     } catch (e) {
       logger.warn('Buyer/Payment DB load skipped:', e.message);
     }

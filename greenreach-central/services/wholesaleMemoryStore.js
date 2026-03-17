@@ -428,6 +428,34 @@ export async function loadPaymentsFromDb() {
   }
 }
 
+export async function loadRefundsFromDb() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const result = await query(
+      `SELECT * FROM payment_records WHERE provider = 'refund' ORDER BY created_at ASC`
+    );
+    for (const row of result.rows) {
+      const refund = {
+        id: row.payment_id,
+        order_id: row.order_id,
+        amount: Math.abs(Number(row.amount)),
+        reason: row.metadata?.reason || '',
+        status: row.status || 'processed',
+        admin_id: row.metadata?.admin_id || null,
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
+      };
+      if (!refundsById.has(refund.id)) {
+        refundsById.set(refund.id, refund);
+      }
+    }
+    console.log(`[RefundPersist] Loaded ${result.rows.length} refunds from DB`);
+  } catch (err) {
+    if (!String(err?.message || '').includes('relation')) {
+      console.warn('[RefundPersist] Load failed:', err.message);
+    }
+  }
+}
+
 export function listPayments() {
   return Array.from(paymentsById.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }

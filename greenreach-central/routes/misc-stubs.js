@@ -114,11 +114,16 @@ router.post('/api/dedicated-crops', async (req, res) => {
 
 // ═══════════ Square Integration Stubs ═══════════
 router.get('/api/farm/square/status', (req, res) => {
+  const hasToken = !!process.env.SQUARE_ACCESS_TOKEN;
+  const hasLocation = !!process.env.SQUARE_LOCATION_ID;
+  const connected = hasToken && hasLocation;
   res.json({
     ok: true,
-    connected: false,
-    status: 'not_connected',
-    message: 'Square integration not configured on this instance',
+    connected,
+    status: connected ? 'connected' : 'not_connected',
+    message: connected
+      ? 'Square integration active'
+      : 'Square integration not configured — set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID',
   });
 });
 

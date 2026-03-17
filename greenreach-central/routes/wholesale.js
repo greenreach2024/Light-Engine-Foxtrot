@@ -1628,6 +1628,13 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
         }
       }
 
+      // Reflect payment outcome in order status
+      if (payment.status === 'failed') {
+        order.status = 'payment_failed';
+      } else if (payment.status === 'pending') {
+        order.status = 'pending_payment';
+      }
+
       await saveOrder(order).catch(() => {});
       await persistDeliveryLedger({
         order,

@@ -109,14 +109,22 @@ router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
 // POST /order-tracking — Add a tracking event
 router.post('/order-tracking', verifyWebhookSignature, async (req, res) => {
   try {
-    const { order_id, event, location, timestamp } = req.body;
-    // Store tracking event (in production would go to a tracking_events table)
+    const { order_id, event, location, timestamp, notes } = req.body;
+    const recordedAt = timestamp || new Date().toISOString();
+
+    if (await isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO tracking_events (order_id, event, location, notes, recorded_at) VALUES ($1, $2, $3, $4, $5)`,
+        [order_id, event, location || null, notes || null, recordedAt]
+      );
+    }
+
     console.log(`[Wholesale] Tracking event: order=${order_id} event=${event} location=${location}`);
     res.json({
       success: true,
       event: {
         order_id, event, location,
-        timestamp: timestamp || new Date().toISOString(),
+        timestamp: recordedAt,
         recorded: true,
       }
     });

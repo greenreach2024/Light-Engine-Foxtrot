@@ -1706,6 +1706,24 @@ async function runMigrations(client) {
     logger.warn('Migration 025d warning:', err.message);
   }
 
+  // ── Migration 026: Delivery tracking events ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tracking_events (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) NOT NULL,
+        event VARCHAR(100) NOT NULL,
+        location TEXT,
+        notes TEXT,
+        recorded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_tracking_events_order ON tracking_events(order_id);
+    `);
+    logger.info('Tracking events table ready (migration 026)');
+  } catch (err) {
+    logger.warn('Migration 026 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
