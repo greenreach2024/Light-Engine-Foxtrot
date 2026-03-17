@@ -216,14 +216,38 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
       if (!payment.card_token) {
         return res.status(400).json({ success: false, error: 'Card token is required' });
       }
-      // Charge via Square if credentials are available
-      const hasSquare = process.env.SQUARE_ACCESS_TOKEN && process.env.SQUARE_LOCATION_ID;
-      if (hasSquare) {
+
+      // Resolve per-farm Square credentials (each subscriber provides their own)
+      let sqAccessToken = null;
+      let sqLocationId = null;
+      let sqEnvironment = 'production';
+
+      if (req.farmStore) {
+        try {
+          const oauthData = await req.farmStore.get(farmId, 'square_oauth');
+          if (oauthData && oauthData.access_token) {
+            sqAccessToken = oauthData.access_token;
+            sqLocationId = oauthData.location_id || null;
+            sqEnvironment = oauthData.environment || 'production';
+          }
+        } catch (err) {
+          console.warn(`[POS] farmStore Square lookup failed for ${farmId}:`, err.message);
+        }
+      }
+
+      // Fallback to global env vars (platform-level, for GreenReach-managed farms)
+      if (!sqAccessToken) {
+        sqAccessToken = process.env.SQUARE_ACCESS_TOKEN || null;
+        sqLocationId = process.env.SQUARE_LOCATION_ID || null;
+        sqEnvironment = process.env.SQUARE_ENVIRONMENT || 'production';
+      }
+
+      if (sqAccessToken && sqLocationId) {
         try {
           const { default: SquareSdk } = await import('square');
           const client = new SquareSdk.Client({
-            accessToken: process.env.SQUARE_ACCESS_TOKEN,
-            environment: process.env.SQUARE_ENVIRONMENT === 'sandbox'
+            accessToken: sqAccessToken,
+            environment: sqEnvironment === 'sandbox'
               ? SquareSdk.Environment.Sandbox
               : SquareSdk.Environment.Production,
           });
@@ -235,7 +259,7 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
               amount: BigInt(Math.round(total * 100)),
               currency: 'CAD',
             },
-            locationId: process.env.SQUARE_LOCATION_ID,
+            locationId: sqLocationId,
             referenceId: orderId,
             note: `POS sale at ${farmId}`,
           });
@@ -256,9 +280,11 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
           return res.status(502).json({ success: false, error: 'Payment processing failed' });
         }
       } else {
-        // No Square configured -- record as pending manual collection
-        paymentRecord.status = 'pending';
-        paymentRecord.note = 'Square not configured; card payment recorded for manual processing';
+        // Farm has not connected Square -- reject card payments
+        return res.status(422).json({
+          success: false,
+          error: 'Square payment processing not configured. Connect your Square account in Settings.',
+        });
       }
     }
 

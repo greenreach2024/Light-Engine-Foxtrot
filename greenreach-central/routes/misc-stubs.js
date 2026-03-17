@@ -112,8 +112,36 @@ router.post('/api/dedicated-crops', async (req, res) => {
   }
 });
 
-// ═══════════ Square Integration Stubs ═══════════
-router.get('/api/farm/square/status', (req, res) => {
+// ═══════════ Square Integration ═══════════
+// Returns per-farm Square connection status.
+// Each Light Engine subscriber stores their own Square credentials
+// via OAuth or manual entry in the farm admin settings page.
+router.get('/api/farm/square/status', async (req, res) => {
+  const farmId = req.farmId || req.headers['x-farm-id'] || req.query.farm_id;
+
+  // 1. Try per-farm credentials from farmStore (DB-backed, tenant-scoped)
+  if (farmId) {
+    try {
+      const oauthData = await farmStore.get(farmId, 'square_oauth');
+      if (oauthData && oauthData.access_token) {
+        return res.json({
+          ok: true,
+          connected: true,
+          status: 'connected',
+          data: {
+            applicationId: oauthData.application_id || process.env.SQUARE_APPLICATION_ID || null,
+            locationId: oauthData.location_id || null,
+          },
+          merchantName: oauthData.merchant_name || null,
+          message: 'Square integration active (farm credentials)',
+        });
+      }
+    } catch (err) {
+      console.warn(`[Square] farmStore lookup failed for ${farmId}:`, err.message);
+    }
+  }
+
+  // 2. Fallback: check global env vars (GreenReach-managed, subscription checkout only)
   const hasToken = !!process.env.SQUARE_ACCESS_TOKEN;
   const hasLocation = !!process.env.SQUARE_LOCATION_ID;
   const connected = hasToken && hasLocation;
@@ -126,8 +154,8 @@ router.get('/api/farm/square/status', (req, res) => {
       locationId: process.env.SQUARE_LOCATION_ID,
     } : null,
     message: connected
-      ? 'Square integration active'
-      : 'Square integration not configured — set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID',
+      ? 'Square integration active (platform credentials)'
+      : 'Square not connected — connect your Square account in Settings',
   });
 });
 
