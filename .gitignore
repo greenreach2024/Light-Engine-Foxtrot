@@ -41,6 +41,7 @@ nohup.out
 # Runtime state
 data/automation/
 data/sync-monitor-snapshot.json
+greenreach-central/data/sync-monitor-snapshot.json
 config/sync-queue.json
 
 # Phase A release artifacts

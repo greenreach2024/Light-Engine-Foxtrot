@@ -347,8 +347,9 @@ initFarmStore(_inMemoryStore);                     // Phase 3 — init data stor
 app.use(express.json({
   limit: '10mb',
   verify: (req, _res, buf) => {
-    // Preserve raw body bytes for routes that need HMAC signature verification
-    if (req.url === '/api/purchase/webhook') {
+    // Preserve raw body bytes for routes that need HMAC signature verification.
+    // Use startsWith so query-strings / trailing slashes don't skip capture.
+    if (req.url.startsWith('/api/purchase/webhook')) {
       req.rawBody = buf;
     }
   }
