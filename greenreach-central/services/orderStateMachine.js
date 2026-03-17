@@ -20,13 +20,24 @@ const ORDER_TRANSITIONS = {
 };
 
 // ── Fulfillment status transitions (farm facing) ─────────────────────
+// NOTE: uses 'cancelled' (double-L) to match ORDER_TRANSITIONS spelling.
 const FULFILLMENT_TRANSITIONS = {
-  'pending':     ['processing', 'fulfilled', 'canceled', 'shipped'],
-  'processing':  ['fulfilled', 'canceled', 'shipped'],
+  'pending':     ['processing', 'fulfilled', 'cancelled', 'shipped'],
+  'processing':  ['fulfilled', 'cancelled', 'shipped'],
   'fulfilled':   ['shipped', 'delivered'],
   'shipped':     ['delivered'],
-  'canceled':    [],
+  'cancelled':   [],
   'delivered':   []
+};
+
+// Map from fulfillment status to the corresponding order status.
+// Used by promoteOrderStatus() to keep the two tracks in sync.
+const FULFILLMENT_TO_ORDER = {
+  'processing':  'processing',
+  'fulfilled':   'processing',
+  'shipped':     'shipped',
+  'delivered':   'delivered',
+  'cancelled':   'cancelled',
 };
 
 /**
@@ -58,21 +69,40 @@ export function transitionOrderStatus(order, newStatus) {
  * @throws {Error} If the transition is invalid
  */
 export function transitionFulfillmentStatus(order, newStatus) {
+  // Normalize legacy single-L 'canceled' to 'cancelled'
+  const normalized = newStatus === 'canceled' ? 'cancelled' : newStatus;
   const current = order.fulfillment_status || 'pending';
-  const allowed = FULFILLMENT_TRANSITIONS[current];
+  const currentNorm = current === 'canceled' ? 'cancelled' : current;
+  const allowed = FULFILLMENT_TRANSITIONS[currentNorm];
   if (!allowed) {
-    // Unknown current status — log warning but allow transition
-    console.warn(`[OrderStateMachine] Unknown fulfillment status '${current}', allowing transition to '${newStatus}'`);
-    order.fulfillment_status = newStatus;
-    order.status_updated_at = new Date().toISOString();
-    return order;
+    throw new Error(`Unknown fulfillment status: ${current}`);
   }
-  if (!allowed.includes(newStatus)) {
-    throw new Error(`Invalid fulfillment status transition: ${current} → ${newStatus}`);
+  if (!allowed.includes(normalized)) {
+    throw new Error(`Invalid fulfillment status transition: ${currentNorm} → ${normalized}`);
   }
-  order.fulfillment_status = newStatus;
+  order.fulfillment_status = normalized;
   order.status_updated_at = new Date().toISOString();
   return order;
+}
+
+/**
+ * Promote order.status to match a fulfillment status change.
+ * Only advances forward — never downgrades the order status.
+ * Returns true if the order status was changed.
+ */
+export function promoteOrderStatus(order) {
+  const fulfillment = order.fulfillment_status || 'pending';
+  const target = FULFILLMENT_TO_ORDER[fulfillment];
+  if (!target) return false;
+  const current = order.status || 'pending';
+  if (current === target) return false;
+  const allowed = ORDER_TRANSITIONS[current];
+  if (allowed && allowed.includes(target)) {
+    order.status = target;
+    order.status_updated_at = new Date().toISOString();
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -87,8 +117,9 @@ export function isValidOrderTransition(currentStatus, newStatus) {
  * Check if a fulfillment status transition is valid without mutating.
  */
 export function isValidFulfillmentTransition(currentStatus, newStatus) {
-  const current = currentStatus || 'pending';
-  return FULFILLMENT_TRANSITIONS[current]?.includes(newStatus) ?? false;
+  const current = (currentStatus === 'canceled' ? 'cancelled' : currentStatus) || 'pending';
+  const target = newStatus === 'canceled' ? 'cancelled' : newStatus;
+  return FULFILLMENT_TRANSITIONS[current]?.includes(target) ?? false;
 }
 
 export const ORDER_STATUSES = Object.keys(ORDER_TRANSITIONS);

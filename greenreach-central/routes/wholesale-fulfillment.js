@@ -29,7 +29,8 @@ import {
 } from '../services/wholesaleMemoryStore.js';
 import {
   isValidOrderTransition,
-  transitionFulfillmentStatus
+  transitionFulfillmentStatus,
+  promoteOrderStatus
 } from '../services/orderStateMachine.js';
 
 const router = Router();
@@ -49,13 +50,20 @@ router.post('/order-statuses', verifyWebhookSignature, async (req, res) => {
           // Validate transition if current status is known
           const current = await query(`SELECT status FROM wholesale_orders WHERE id = $1`, [order_id]);
           if (current.rows.length && !isValidOrderTransition(current.rows[0].status, status)) {
-            results.push({ order_id, status, updated: false, reason: `invalid transition: ${current.rows[0].status} → ${status}` });
+            results.push({ order_id, status, updated: false, reason: `invalid transition: ${current.rows[0].status} -> ${status}` });
             continue;
           }
           await query(
             `UPDATE wholesale_orders SET status = $1, updated_at = NOW() WHERE id = $2`,
             [status, order_id]
           );
+          // Keep in-memory order object in sync with DB column
+          const memOrder = await getOrderById(order_id, { includeArchived: true });
+          if (memOrder) {
+            memOrder.status = status;
+            memOrder.status_updated_at = new Date().toISOString();
+            await saveOrder(memOrder).catch(() => {});
+          }
           results.push({ order_id, status, updated: true });
         } catch {
           results.push({ order_id, status, updated: false });
@@ -95,6 +103,15 @@ router.post('/tracking-numbers', verifyWebhookSignature, async (req, res) => {
              WHERE id = $3`,
             [tracking_number, carrier || 'unknown', order_id]
           );
+          // Keep in-memory order object in sync with DB column
+          const memOrder = await getOrderById(order_id, { includeArchived: true });
+          if (memOrder) {
+            memOrder.status = 'shipped';
+            memOrder.tracking_number = tracking_number;
+            memOrder.tracking_carrier = carrier || 'unknown';
+            memOrder.status_updated_at = new Date().toISOString();
+            await saveOrder(memOrder).catch(() => {});
+          }
         } catch (e) {
           console.warn(`[Wholesale] Tracking update failed for ${order_id}:`, e.message);
         }
@@ -285,11 +302,15 @@ router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async
       return res.status(404).json({ status: 'error', message: 'Order not found' });
     }
 
+    const previousStatus = order.fulfillment_status || 'pending';
     try {
       transitionFulfillmentStatus(order, 'fulfilled');
     } catch (err) {
       return res.status(409).json({ status: 'error', message: err.message });
     }
+
+    // Auto-promote buyer-facing order status to stay in sync
+    promoteOrderStatus(order);
 
     order.fulfilled_at = req.body?.fulfilledAt || new Date().toISOString();
     order.tracking_number = req.body?.trackingNumber || order.tracking_number || null;
@@ -297,7 +318,7 @@ router.post('/orders/:orderId/fulfill', requireFarmApiKey, express.json(), async
 
     await saveOrder(order).catch(() => {});
     logOrderEvent(orderId, 'status_changed', {
-      from: 'processing',
+      from: previousStatus,
       to: 'fulfilled',
       farm_id: farmId,
       tracking_number: order.tracking_number,
@@ -326,24 +347,28 @@ router.post('/orders/:orderId/cancel-by-farm', requireFarmApiKey, express.json()
       return res.status(404).json({ status: 'error', message: 'Order not found' });
     }
 
+    const previousStatus = order.fulfillment_status || 'pending';
     try {
-      transitionFulfillmentStatus(order, 'canceled');
+      transitionFulfillmentStatus(order, 'cancelled');
     } catch (err) {
       return res.status(409).json({ status: 'error', message: err.message });
     }
+
+    // Auto-promote buyer-facing order status to stay in sync
+    promoteOrderStatus(order);
 
     order.canceled_at = req.body?.canceledAt || new Date().toISOString();
     order.cancel_reason = reason;
 
     await saveOrder(order).catch(() => {});
     logOrderEvent(orderId, 'status_changed', {
-      from: 'processing',
-      to: 'canceled',
+      from: previousStatus,
+      to: 'cancelled',
       farm_id: farmId,
       reason
     });
 
-    return res.json({ status: 'ok', order_id: orderId, new_status: 'canceled' });
+    return res.json({ status: 'ok', order_id: orderId, new_status: 'cancelled' });
   } catch (error) {
     console.error('[wholesale] cancel-by-farm callback failed:', error);
     return res.status(500).json({ status: 'error', message: 'Failed to process cancellation callback' });
@@ -383,6 +408,9 @@ router.post('/order-status', requireFarmApiKey, async (req, res) => {
           requested_status: status
         });
       }
+
+      // Auto-promote buyer-facing order status to stay in sync
+      promoteOrderStatus(order);
 
       order.status_updated_at = timestamp || new Date().toISOString();
 

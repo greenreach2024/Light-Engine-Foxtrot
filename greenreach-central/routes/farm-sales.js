@@ -100,8 +100,12 @@ router.get('/config/app', (req, res) => {
 });
 
 // ─── Demo Tokens ───────────────────────────────────────────
-// GET /api/farm-auth/demo-tokens — demo/dev auth tokens for POS
+// GET /api/farm-auth/demo-tokens -- demo/dev auth tokens for POS
+// Gated to non-production to prevent unauthenticated token issuance.
 router.get('/farm-auth/demo-tokens', (req, res) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_TOKENS !== 'true') {
+    return res.status(403).json({ success: false, error: 'Demo tokens disabled in production' });
+  }
   const farmId = req.farmId || 'demo-farm';
   const token = jwt.sign(
     { farm_id: farmId, role: 'pos', type: 'demo-token', user_id: 'demo-user' },
@@ -118,6 +122,218 @@ router.get('/farm-auth/demo-tokens', (req, res) => {
     farm_id: farmId,
     expiresIn: '24h',
   });
+});
+
+// ─── POS Checkout ──────────────────────────────────────────
+// POST /api/farm-sales/pos/checkout — process a point-of-sale transaction
+router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (!farmId) {
+      return res.status(400).json({ success: false, error: 'Farm ID not resolved' });
+    }
+
+    const { items, payment, customer, cashier } = req.body || {};
+
+    // ── Validate input ──────────────────────────────────────
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'Cart is empty' });
+    }
+    if (!payment || !payment.method) {
+      return res.status(400).json({ success: false, error: 'Payment method is required' });
+    }
+    const validMethods = ['cash', 'card', 'gift_card'];
+    if (!validMethods.includes(payment.method)) {
+      return res.status(400).json({ success: false, error: 'Invalid payment method' });
+    }
+
+    // ── Resolve inventory & compute totals ──────────────────
+    let inventory = [];
+    if (isDatabaseAvailable()) {
+      try {
+        const result = await query('SELECT * FROM farm_inventory WHERE farm_id = $1', [farmId]);
+        if (result.rows.length) inventory = result.rows;
+      } catch { /* table may not exist */ }
+    }
+    if (!inventory.length && req.farmStore) {
+      const stored = await req.farmStore.get(farmId, 'inventory');
+      if (Array.isArray(stored)) inventory = stored;
+    }
+
+    const lineItems = [];
+    let subtotal = 0;
+    let taxableSubtotal = 0;
+
+    for (const cartItem of items) {
+      const product = inventory.find(
+        p => (p.sku_id || p.sku || p.product_id) === cartItem.sku_id
+      );
+      if (!product) {
+        return res.status(400).json({ success: false, error: `Product not found: ${cartItem.sku_id}` });
+      }
+      const qty = Math.max(1, parseInt(cartItem.quantity) || 1);
+      const unitPrice = Number(product.retail_price || product.price || product.unit_price || 0);
+      const lineTotal = unitPrice * qty;
+      subtotal += lineTotal;
+      if (product.is_taxable) taxableSubtotal += lineTotal;
+
+      lineItems.push({
+        sku_id: cartItem.sku_id,
+        name: product.name || product.product_name || cartItem.sku_id,
+        quantity: qty,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        is_taxable: !!product.is_taxable,
+        lot_code: product.lot_code || null,
+      });
+    }
+
+    const taxRate = 0.08;
+    const tax = Math.round(taxableSubtotal * taxRate * 100) / 100;
+    const total = Math.round((subtotal + tax) * 100) / 100;
+
+    // ── Generate order ID ───────────────────────────────────
+    const orderId = `POS-${farmId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // ── Process payment ─────────────────────────────────────
+    let paymentRecord = {
+      method: payment.method,
+      status: 'completed',
+      amount: total,
+      currency: 'CAD',
+    };
+
+    if (payment.method === 'cash') {
+      const tendered = Number(payment.tendered) || 0;
+      if (tendered < total) {
+        return res.status(400).json({ success: false, error: 'Insufficient cash tendered' });
+      }
+      paymentRecord.tendered = tendered;
+      paymentRecord.change = Math.round((tendered - total) * 100) / 100;
+    }
+
+    if (payment.method === 'card') {
+      if (!payment.card_token) {
+        return res.status(400).json({ success: false, error: 'Card token is required' });
+      }
+      // Charge via Square if credentials are available
+      const hasSquare = process.env.SQUARE_ACCESS_TOKEN && process.env.SQUARE_LOCATION_ID;
+      if (hasSquare) {
+        try {
+          const { default: SquareSdk } = await import('square');
+          const client = new SquareSdk.Client({
+            accessToken: process.env.SQUARE_ACCESS_TOKEN,
+            environment: process.env.SQUARE_ENVIRONMENT === 'sandbox'
+              ? SquareSdk.Environment.Sandbox
+              : SquareSdk.Environment.Production,
+          });
+          const idempotencyKey = `${orderId}-${Date.now()}`;
+          const result = await client.paymentsApi.createPayment({
+            sourceId: payment.card_token,
+            idempotencyKey,
+            amountMoney: {
+              amount: BigInt(Math.round(total * 100)),
+              currency: 'CAD',
+            },
+            locationId: process.env.SQUARE_LOCATION_ID,
+            referenceId: orderId,
+            note: `POS sale at ${farmId}`,
+          });
+          const sqPayment = result.result?.payment;
+          if (!sqPayment || sqPayment.status === 'FAILED') {
+            paymentRecord.status = 'failed';
+            return res.status(402).json({
+              success: false,
+              error: 'Card payment declined',
+              details: sqPayment?.status,
+            });
+          }
+          paymentRecord.provider = 'square';
+          paymentRecord.provider_payment_id = sqPayment.id;
+          paymentRecord.receipt_url = sqPayment.receiptUrl || null;
+        } catch (sqErr) {
+          console.error('[POS] Square payment error:', sqErr.message);
+          return res.status(502).json({ success: false, error: 'Payment processing failed' });
+        }
+      } else {
+        // No Square configured -- record as pending manual collection
+        paymentRecord.status = 'pending';
+        paymentRecord.note = 'Square not configured; card payment recorded for manual processing';
+      }
+    }
+
+    // ── Persist order ───────────────────────────────────────
+    const orderRecord = {
+      order_id: orderId,
+      farm_id: farmId,
+      channel: 'pos',
+      status: paymentRecord.status === 'completed' ? 'completed' : 'pending_payment',
+      items: lineItems,
+      subtotal,
+      tax,
+      total,
+      tax_rate: taxRate,
+      payment: paymentRecord,
+      customer: customer || null,
+      cashier: cashier || null,
+      created_at: new Date().toISOString(),
+    };
+
+    if (isDatabaseAvailable()) {
+      try {
+        // Persist to payment_records
+        await query(
+          `INSERT INTO payment_records (payment_id, order_id, amount, currency, provider, status, metadata, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+          [
+            paymentRecord.provider_payment_id || orderId,
+            orderId,
+            total,
+            'CAD',
+            paymentRecord.provider || payment.method,
+            paymentRecord.status,
+            JSON.stringify({ channel: 'pos', farm_id: farmId, cashier: cashier?.name }),
+          ]
+        );
+
+        // Decrement inventory for completed sales
+        if (paymentRecord.status === 'completed') {
+          for (const item of lineItems) {
+            await query(
+              `UPDATE farm_inventory SET quantity = GREATEST(quantity - $1, 0), updated_at = NOW()
+               WHERE farm_id = $2 AND (sku = $3 OR product_id = $3)`,
+              [item.quantity, farmId, item.sku_id]
+            ).catch(() => {});
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[POS] DB persistence warning:', dbErr.message);
+        // Non-fatal: sale still completes, logged in response
+      }
+    }
+
+    console.log(`[POS] Sale ${orderId}: $${total} via ${payment.method} (${paymentRecord.status})`);
+
+    // ── Respond with receipt ────────────────────────────────
+    return res.json({
+      success: true,
+      receipt: {
+        order_id: orderId,
+        farm_id: farmId,
+        items: lineItems,
+        subtotal,
+        tax,
+        total,
+        payment: paymentRecord,
+        customer: customer || null,
+        cashier: cashier || null,
+        created_at: orderRecord.created_at,
+      },
+    });
+  } catch (err) {
+    console.error('[POS] Checkout error:', err);
+    res.status(500).json({ success: false, error: 'Checkout failed' });
+  }
 });
 
 // ─── Farm Sales Orders ─────────────────────────────────────

@@ -121,6 +121,10 @@ router.get('/api/farm/square/status', (req, res) => {
     ok: true,
     connected,
     status: connected ? 'connected' : 'not_connected',
+    data: connected ? {
+      applicationId: process.env.SQUARE_APPLICATION_ID || null,
+      locationId: process.env.SQUARE_LOCATION_ID,
+    } : null,
     message: connected
       ? 'Square integration active'
       : 'Square integration not configured — set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID',

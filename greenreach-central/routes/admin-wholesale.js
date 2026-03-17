@@ -17,6 +17,12 @@ import {
   listRefundsForOrder,
   listPaymentsForBuyer
 } from '../services/wholesaleMemoryStore.js';
+import {
+  transitionOrderStatus,
+  transitionFulfillmentStatus,
+  ORDER_STATUSES,
+  FULFILLMENT_STATUSES
+} from '../services/orderStateMachine.js';
 
 const router = express.Router();
 
@@ -471,9 +477,28 @@ router.patch('/orders/:orderId', async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Order not found' });
         }
 
-        const allowedFields = ['status', 'delivery_date', 'admin_notes', 'fulfillment_status'];
         const updates = {};
-        for (const field of allowedFields) {
+
+        // Validate status transitions through the state machine
+        if (req.body.status !== undefined) {
+            try {
+                transitionOrderStatus(order, req.body.status);
+                updates.status = req.body.status;
+            } catch (err) {
+                return res.status(409).json({ status: 'error', message: err.message });
+            }
+        }
+        if (req.body.fulfillment_status !== undefined) {
+            try {
+                transitionFulfillmentStatus(order, req.body.fulfillment_status);
+                updates.fulfillment_status = req.body.fulfillment_status;
+            } catch (err) {
+                return res.status(409).json({ status: 'error', message: err.message });
+            }
+        }
+
+        // Non-status fields are safe to assign directly
+        for (const field of ['delivery_date', 'admin_notes']) {
             if (req.body[field] !== undefined) {
                 order[field] = req.body[field];
                 updates[field] = req.body[field];
@@ -481,7 +506,10 @@ router.patch('/orders/:orderId', async (req, res) => {
         }
 
         await saveOrder(order).catch(() => {});
-        logOrderEvent(order.master_order_id, 'admin_order_update', updates);
+        logOrderEvent(order.master_order_id, 'admin_order_update', {
+            ...updates,
+            actor: req.adminUser?.id || 'admin'
+        });
 
         return res.json({ status: 'ok', data: { order } });
     } catch (error) {
