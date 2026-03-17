@@ -344,7 +344,15 @@ initFarmStore(_inMemoryStore);                     // Phase 3 — init data stor
 // Body parser MUST run before farmDataWriteMiddleware so req.body is available
 // for POST/PUT /data/*.json. Without this, req.body is undefined and the
 // middleware crashes on payload.groups → TypeError (causes 502).
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    // Preserve raw body bytes for routes that need HMAC signature verification
+    if (req.url === '/api/purchase/webhook') {
+      req.rawBody = buf;
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(farmDataWriteMiddleware(_inMemoryStore)); // PUT /data/*.json → DB
 app.use(farmDataMiddleware(_inMemoryStore));       // GET /data/*.json → DB

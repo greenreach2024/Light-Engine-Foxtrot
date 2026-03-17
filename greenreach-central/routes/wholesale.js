@@ -1236,7 +1236,7 @@ router.post('/orders/:orderId/cancel', requireBuyerPortalAuth, async (req, res) 
   }
 
   // Only allow cancellation of recent orders that haven't shipped
-  const cancellableStatuses = ['confirmed', 'pending', 'processing'];
+  const cancellableStatuses = ['confirmed', 'pending', 'processing', 'payment_failed', 'pending_payment'];
   if (!cancellableStatuses.includes(order.status)) {
     return res.status(400).json({
       status: 'error',

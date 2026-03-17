@@ -1031,9 +1031,13 @@ router.post('/api/purchase/webhook', async (req, res) => {
         console.warn('[Webhook] Missing Square signature header — rejecting');
         return res.status(401).json({ error: 'missing_signature' });
       }
-      const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      const expected = crypto.createHmac('sha256', webhookSecret).update(payloadString).digest('base64');
-      if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+      // Use raw request bytes (preserved by express.json verify callback) for
+      // HMAC computation so the digest matches what Square actually sent.
+      const rawPayload = req.rawBody || Buffer.from(JSON.stringify(req.body));
+      const expected = crypto.createHmac('sha256', webhookSecret).update(rawPayload).digest('base64');
+      const sigBuf = Buffer.from(signature, 'utf8');
+      const expBuf = Buffer.from(expected, 'utf8');
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(expBuf, sigBuf)) {
         console.warn('[Webhook] Invalid Square signature — rejecting');
         return res.status(401).json({ error: 'invalid_signature' });
       }

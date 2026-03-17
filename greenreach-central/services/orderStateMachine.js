@@ -6,15 +6,17 @@
 
 // ── Order status transitions (buyer/admin facing) ────────────────────
 const ORDER_TRANSITIONS = {
-  'new':         ['pending', 'confirmed', 'cancelled', 'rejected'],
-  'pending':     ['confirmed', 'processing', 'cancelled', 'rejected'],
-  'confirmed':   ['processing', 'shipped', 'cancelled'],
-  'processing':  ['shipped', 'cancelled'],
-  'shipped':     ['delivered', 'returned'],
-  'delivered':   [],
-  'cancelled':   [],
-  'returned':    [],
-  'rejected':    []
+  'new':              ['pending', 'confirmed', 'cancelled', 'rejected'],
+  'pending':          ['confirmed', 'processing', 'cancelled', 'rejected'],
+  'confirmed':        ['processing', 'shipped', 'cancelled'],
+  'processing':       ['shipped', 'cancelled'],
+  'shipped':          ['delivered', 'returned'],
+  'delivered':        [],
+  'cancelled':        [],
+  'returned':         [],
+  'rejected':         [],
+  'payment_failed':   ['confirmed', 'cancelled'],
+  'pending_payment':  ['confirmed', 'cancelled'],
 };
 
 // ── Fulfillment status transitions (farm facing) ─────────────────────
