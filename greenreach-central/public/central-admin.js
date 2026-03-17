@@ -400,12 +400,13 @@ async function authenticatedFetch(url, options = {}) {
         );
         
         // Handle 401 Unauthorized - session expired.
-        // Do NOT force logout for sync endpoints, which use farm API-key auth
-        // and may legitimately return 401 for admin JWT requests.
+        // Only force logout for admin API endpoints (/api/admin/).
+        // Non-admin endpoints (sync, ai-insights, market-intelligence, etc.)
+        // may legitimately return 401 for admin JWT and should not kill the session.
         if (response.status === 401) {
-            const isSyncEndpoint = typeof url === 'string' && url.includes('/api/sync/');
-            if (isSyncEndpoint) {
-                DEBUG_TRACKING.trackError('SYNC_AUTH_MISMATCH', '401 from sync endpoint under admin JWT (non-fatal)', {
+            const isAdminEndpoint = typeof url === 'string' && url.includes('/api/admin/');
+            if (!isAdminEndpoint) {
+                DEBUG_TRACKING.trackError('NON_ADMIN_AUTH_MISMATCH', `401 from non-admin endpoint (non-fatal)`, {
                     url,
                     status: response.status
                 });

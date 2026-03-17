@@ -2940,7 +2940,7 @@ app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Publi
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
-app.use('/api/ai-insights', authMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
+app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/env', authMiddleware, envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/discovery/devices', authMiddleware, discoveryProxyRoutes); // Device discovery proxy to farm devices
 app.use('/api/discovery/devices', authMiddleware, discoveryProxyRoutes); // API alias for discovery proxy
@@ -3208,7 +3208,7 @@ app.use('/api/procurement', authOrAdminMiddleware, procurementAdminRoutes); // G
 app.use('/api/remote', authOrAdminMiddleware, remoteSupportRoutes); // Remote support / diagnostics proxy to farms
 app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler recommendations with market intelligence
 app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
-app.use('/api/market-intelligence', authMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
+app.use('/api/market-intelligence', authOrAdminMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', authMiddleware, cropPricingRoutes); // Farm-specific crop pricing
 app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
 app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
