@@ -521,15 +521,11 @@ class FarmAssistant {
     }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
-    // Try server-side OpenAI TTS first (natural voice)
-    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || localStorage.getItem('token') || '';
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
+    // Server-side OpenAI TTS (natural voice)
     this.isSpeaking = true;
     fetch('/api/tts', {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: text.substring(0, 2000), voice: 'nova' })
     })
       .then(res => {

@@ -2958,7 +2958,7 @@ app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
-app.use('/api/tts', authMiddleware, ttsRoutes); // OpenAI TTS voice synthesis
+app.use('/api/tts', ttsRoutes); // OpenAI TTS voice synthesis (rate-limited per IP, no auth needed)
 app.use('/api/env', authMiddleware, envProxyRoutes); // Environmental data proxy to farm devices
 app.use('/discovery/devices', authMiddleware, discoveryProxyRoutes); // Device discovery proxy to farm devices
 app.use('/api/discovery/devices', authMiddleware, discoveryProxyRoutes); // API alias for discovery proxy

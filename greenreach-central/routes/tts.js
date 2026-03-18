@@ -2,6 +2,8 @@
  * Text-to-Speech route — streams OpenAI TTS audio to the client.
  * POST /api/tts  { text, voice? }
  * Returns audio/mpeg stream.
+ *
+ * No auth required — rate-limited per IP to prevent abuse.
  */
 
 import { Router } from 'express';
@@ -21,7 +23,19 @@ try {
 const ALLOWED_VOICES = new Set(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
 const MAX_TEXT_LENGTH = 2000;
 
+// Simple per-IP rate limiter: max 20 requests per minute
+const _hits = new Map();
+const RATE_WINDOW = 60_000;
+const RATE_MAX = 20;
+setInterval(() => _hits.clear(), RATE_WINDOW);
+
 router.post('/', async (req, res) => {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const count = (_hits.get(ip) || 0) + 1;
+  _hits.set(ip, count);
+  if (count > RATE_MAX) {
+    return res.status(429).json({ error: 'Too many TTS requests — try again shortly' });
+  }
   if (!openai) {
     return res.status(503).json({ error: 'TTS not available — OPENAI_API_KEY not configured' });
   }
