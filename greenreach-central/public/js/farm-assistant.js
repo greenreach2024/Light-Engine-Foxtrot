@@ -69,15 +69,15 @@ class FarmAssistant {
 
         if (incomplete.length === 0) {
           this.addMessage(
-            `🎉 <strong>Your farm is fully set up.</strong> All onboarding tasks are complete — your grow rooms, inventory, payments, and store are configured and ready. Ask me anything about your crops, environment, or operations.`
+            `<strong>Your farm is fully set up.</strong> Grow rooms, inventory, payments, and store are all configured. Ask me anything about your crops, environment, or operations.`
           );
         } else {
           const nextItems = incomplete.slice(0, 3).map(t => `${t.icon || '○'} ${t.label}`).join('<br>');
           this.addMessage(
-            `🌱 <strong>Welcome to GreenReach Central!</strong><br>
-            I'm Cheo — I'll walk you through getting your farm operational. You've completed <strong>${done} of ${total}</strong> setup tasks so far.
-            <br><br><strong>Here's what I'd recommend next and why:</strong><br>${nextItems}
-            <br><br>Each step builds on the last — completing them in order means every feature works when you need it. Type <em>"what should I do next"</em> anytime and I'll pick up where you left off.`
+            `<strong>Welcome to GreenReach Central.</strong><br>
+            You've completed <strong>${done} of ${total}</strong> setup tasks.
+            <br><br><strong>Recommended next:</strong><br>${nextItems}
+            <br><br>Each step builds on the last. Type <em>"what should I do next"</em> anytime to pick up where you left off.`
           );
         }
 
@@ -98,11 +98,11 @@ class FarmAssistant {
     if (localStorage.getItem(hintKey)) return;
 
     const hints = {
-      'Inventory': '📦 <strong>This is your Crop Inventory.</strong> Everything starts here — the crops you add become available in your online store, POS, pricing tools, and harvest tracking. Click <strong>"Add Crop"</strong> to register what you grow, including variety, expected yield, and growing location.',
-      'POS Terminal': '💰 <strong>This is your Point-of-Sale terminal.</strong> Before you can ring up sales, you need Square connected for payment processing. Head to <strong>Settings → Payment Methods</strong> to link your Square account — once that\'s done, you can accept card and tap payments here.',
-      'Tray Management': '🌱 <strong>Tray Management tracks every plant from seed to harvest.</strong> Each tray gets a QR code for scanning on the farm floor. Add a tray to start logging seeding dates, germination rates, and transplant moves — this builds the traceability record your buyers may require.',
-      'Planting Schedule': '📅 <strong>The Planting Scheduler helps you plan successive plantings</strong> so you always have crops coming to harvest. Create a planting event to set a crop, target date, and quantity — the system will forecast your harvest window and help avoid gaps in supply.',
-      'Wholesale': '🏢 <strong>The Wholesale Module manages your B2B business.</strong> Here you\'ll see incoming orders from wholesale buyers, track fulfillment status, and manage compliance documents like food safety certificates. Buyers place orders through the wholesale portal and they appear here for you to fulfill.'
+      'Inventory': '<strong>Crop Inventory</strong> — Crops you add here feed into your store, POS, pricing, and harvest tracking. Click <strong>"Add Crop"</strong> to register variety, expected yield, and growing location.',
+      'POS Terminal': '<strong>Point-of-Sale</strong> — Connect Square under <strong>Settings → Payment Methods</strong> to accept card and tap payments here.',
+      'Tray Management': '<strong>Tray Management</strong> — Tracks every plant from seed to harvest with QR-coded trays. Add a tray to start logging seeding, germination, and transplant moves.',
+      'Planting Schedule': '<strong>Planting Scheduler</strong> — Plan successive plantings so you always have crops coming to harvest. Set a crop, target date, and quantity to forecast harvest windows.',
+      'Wholesale': '<strong>Wholesale Module</strong> — Manage incoming B2B orders, fulfillment status, and compliance documents. Buyers order through the portal and orders appear here.'
     };
 
     const hint = hints[page];
@@ -258,8 +258,8 @@ class FarmAssistant {
             <div class="mascot-welcome">
               <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo the Farm Assistant" class="mascot-image" />
               <div class="welcome-text">
-                <strong>I'm Cheo — your farm operations assistant.</strong>
-                <strong class="love-to-help">Ask me anything or try one of these:</strong>
+                <strong>Farm Assistant</strong>
+                <strong class="love-to-help">Ask me anything, or try one of these:</strong>
                 <div class="example-queries">
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What should I do next?')">What should I do next?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('What\'s ready to harvest?')">What's ready to harvest?</button>
@@ -267,7 +267,7 @@ class FarmAssistant {
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Where is the lettuce?')">Where is the lettuce?</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Blink lights for basil')">Blink lights for basil</button>
                   <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Show planting schedule')">Show planting schedule</button>
-                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Fun fact!')">Fun Fact!</button>
+                  <button class="example-btn" onclick="window.farmAssistant.handleExampleQuery('Any alerts?')">Any alerts?</button>
                 </div>
                 <strong>Or type your own question below.</strong>
               </div>
@@ -281,7 +281,7 @@ class FarmAssistant {
             <input 
               type="text" 
               id="assistantInput" 
-              placeholder="Ask me anything or use voice..."
+              placeholder="Ask a question..."
               autocomplete="off"
             />
             <button id="sendBtn" class="send-btn">
@@ -483,9 +483,9 @@ class FarmAssistant {
       this.updateVoiceButton();
       
       if (event.error === 'not-allowed') {
-        this.addMessage('🎤 Microphone access denied. Please allow microphone access in your browser settings.', 'assistant');
+        this.addMessage('Microphone access denied. Check your browser settings.', 'assistant');
       } else if (event.error === 'no-speech') {
-        this.addMessage('🎤 No speech detected. Try again!', 'assistant');
+        this.addMessage('No speech detected. Try again.', 'assistant');
       }
     };
 
@@ -497,143 +497,88 @@ class FarmAssistant {
   }
 
   initTextToSpeech() {
-    // ResponsiveVoice will be loaded via script tag in HTML
-    // Check if either ResponsiveVoice or browser speech synthesis is available
-    if (window.responsiveVoice) {
-      console.log('🔊 ResponsiveVoice detected - using high-quality voices');
-      this.voiceEnabled = true;
-      
-      // Log available ResponsiveVoice voices
-      if (window.responsiveVoice.getVoices) {
-        const voices = window.responsiveVoice.getVoices();
-        console.log('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
-      }
-    } else if (window.speechSynthesis) {
-      console.log('🔊 Using browser Web Speech API (fallback)');
-      this.voiceEnabled = true;
-      this.voices = [];
-      
-      // Load voices for fallback
-      const loadVoices = () => {
-        this.voices = window.speechSynthesis.getVoices();
-        console.log('🔊 Browser voices loaded:', this.voices.length);
-      };
-      
+    // Server-side OpenAI TTS is primary; browser speech is fallback
+    this.voiceEnabled = true;
+    this.voices = [];
+    this._ttsAudio = null;
+
+    if (window.speechSynthesis) {
+      const loadVoices = () => { this.voices = window.speechSynthesis.getVoices(); };
       loadVoices();
-      
       if (window.speechSynthesis.onvoiceschanged !== undefined) {
         window.speechSynthesis.onvoiceschanged = loadVoices;
       }
-    } else {
-      console.warn('🔊 Text-to-speech not supported in this browser');
-      this.voiceEnabled = false;
     }
-    
-    console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
   }
 
   speak(text) {
-    console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
-    
-    if (!this.voiceEnabled) {
-      console.warn('🔊 Voice disabled');
-      return;
-    }
+    if (!this.voiceEnabled) return;
 
-    // Check if ResponsiveVoice is available (better quality)
-    if (window.responsiveVoice) {
-      console.log('🔊 Using ResponsiveVoice');
-      
-      // Cancel any ongoing speech
-      if (window.responsiveVoice.isPlaying()) {
-        window.responsiveVoice.cancel();
-      }
-      
-      // Use a child-friendly voice
-      // Options: "UK English Female", "US English Female", "Australian Female"
-      const voiceName = "UK English Female"; // British accent is friendly for kids
-      
-      const options = {
-        pitch: 1.2,      // Slightly higher for friendlier sound
-        rate: 0.85,      // Slower for children to understand
-        volume: 1.0,
-        onstart: () => {
-          this.isSpeaking = true;
-          console.log('🔊 ✅ ResponsiveVoice speaking started:', text.substring(0, 30) + '...');
-        },
-        onend: () => {
-          this.isSpeaking = false;
-          console.log('🔊 ✅ ResponsiveVoice speech ended');
-        },
-        onerror: (error) => {
-          console.error('🔊 ❌ ResponsiveVoice error:', error);
-          this.isSpeaking = false;
-        }
-      };
-      
-      window.responsiveVoice.speak(text, voiceName, options);
-      return;
+    // Cancel any in-progress playback
+    if (this._ttsAudio) {
+      this._ttsAudio.pause();
+      this._ttsAudio = null;
     }
-    
-    // Fallback to browser's Web Speech API
-    console.log('🔊 Using browser Web Speech API (fallback)');
-    
-    if (!window.speechSynthesis) {
-      console.warn('🔊 Text-to-speech not supported');
-      return;
-    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
 
-    // Cancel any ongoing speech
+    // Try server-side OpenAI TTS first (natural voice)
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || localStorage.getItem('token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    this.isSpeaking = true;
+    fetch('/api/tts', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text: text.substring(0, 2000), voice: 'nova' })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`TTS ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        this._ttsAudio = audio;
+        audio.onended = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
+        audio.onerror = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
+        audio.play().catch(() => { this.isSpeaking = false; });
+      })
+      .catch(() => {
+        // Fallback: browser speech synthesis
+        this._speakBrowser(text);
+      });
+  }
+
+  /** Browser Web Speech API fallback */
+  _speakBrowser(text) {
+    if (!window.speechSynthesis) { this.isSpeaking = false; return; }
     window.speechSynthesis.cancel();
 
-    // Create speech utterance
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configure voice settings for child-friendly sound
-    utterance.rate = 0.85;
-    utterance.pitch = 1.3;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
     utterance.volume = 1.0;
-    
+
     const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
-    
     if (voices.length > 0) {
-      const preferredVoice = voices.find(v => 
+      const preferred = voices.find(v =>
+        v.name.includes('Google US English') ||
         v.name.includes('Samantha') ||
-        v.name.includes('Karen') ||
-        v.name.includes('Google UK English Female') ||
-        v.name.includes('Google US English Female') ||
-        (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
-      );
-      
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-        console.log('🔊 Using voice:', preferredVoice.name);
-      }
+        v.name.includes('Microsoft Aria') ||
+        (v.lang.startsWith('en') && v.name.toLowerCase().includes('natural'))
+      ) || voices.find(v => v.lang.startsWith('en'));
+      if (preferred) utterance.voice = preferred;
     }
 
-    utterance.onstart = () => {
-      this.isSpeaking = true;
-      console.log('🔊 ✅ Speaking started');
-    };
-
-    utterance.onend = () => {
-      this.isSpeaking = false;
-      console.log('🔊 ✅ Speech ended');
-    };
-
-    utterance.onerror = (event) => {
-      console.error('🔊 ❌ Speech error:', event.error);
-      this.isSpeaking = false;
-    };
-
-    // Speak the text
-    console.log('🔊 Calling speechSynthesis.speak()');
+    utterance.onend = () => { this.isSpeaking = false; };
+    utterance.onerror = () => { this.isSpeaking = false; };
     window.speechSynthesis.speak(utterance);
   }
 
   toggleVoiceRecognition() {
     if (!this.recognition) {
-      this.addMessage('🎤 Voice commands are not supported in your browser. Try Chrome, Edge, or Safari!', 'assistant');
+      this.addMessage('Voice input requires Chrome, Edge, or Safari.', 'assistant');
       return;
     }
 
@@ -642,10 +587,10 @@ class FarmAssistant {
     } else {
       try {
         this.recognition.start();
-        this.addMessage('🎤 Listening... Speak now!', 'assistant');
+        this.addMessage('Listening...', 'assistant');
       } catch (error) {
         console.error('Failed to start voice recognition:', error);
-        this.addMessage('🎤 Could not start microphone. Please try again.', 'assistant');
+        this.addMessage('Could not access microphone. Please try again.', 'assistant');
       }
     }
   }
@@ -771,14 +716,14 @@ class FarmAssistant {
     
     // Fallback with encouragement
     this.addMessage(
-      `🤔 I didn't catch that one, but I can help with a lot. Here's what I'd suggest:
+      `I'm not sure how to help with that. Here are some things I can do:
       <ul>
-        <li>🌱 <strong>Harvest readiness</strong> — "What's ready to harvest?" so you know what to pick today</li>
-        <li>🌡️ <strong>Environment check</strong> — "Show me the temperature" to spot any climate issues</li>
-        <li>🥬 <strong>Crop lookup</strong> — "Where is the basil?" to find which zone a crop is in</li>
-        <li>💡 <strong>Identify hardware</strong> — "Blink lights for basil" to visually locate a group</li>
-        <li>📅 <strong>Scheduling</strong> — "Show planting schedule" to review upcoming plantings</li>
-        <li>🚀 <strong>Setup help</strong> — "What should I do next?" and I'll guide you through onboarding</li>
+        <li><strong>Harvest</strong> — "What's ready to harvest?"</li>
+        <li><strong>Environment</strong> — "Show me the temperature"</li>
+        <li><strong>Crop lookup</strong> — "Where is the basil?"</li>
+        <li><strong>Hardware ID</strong> — "Blink lights for basil"</li>
+        <li><strong>Scheduling</strong> — "Show planting schedule"</li>
+        <li><strong>Setup</strong> — "What should I do next?"</li>
       </ul>`
     );
   }
@@ -804,7 +749,7 @@ class FarmAssistant {
 
     if (addRoomPattern.test(query)) {
       this.addMessage(
-        `🌱 <strong>Let's add a grow room.</strong><br>Grow rooms are the foundation of your farm layout — every zone, sensor, and light group lives inside a room. Once you create one, you can assign crops to it, track environmental conditions, and run grow recipes.<br><br>Go to <strong>Setup/Update → Farm Setup → Grow Rooms</strong> to define your first space.`,
+        `🌱 <strong>Add a grow room.</strong><br>Grow rooms are the foundation of your layout — zones, sensors, and light groups all live inside a room. Go to <strong>Setup/Update → Farm Setup → Grow Rooms</strong> to define your first space.`,
         'assistant',
         `<button onclick="window.location.href='/LE-dashboard.html?panel=grow-rooms'" class="action-btn primary">Open Grow Rooms</button>`
       );
@@ -813,7 +758,7 @@ class FarmAssistant {
 
     if (paymentPattern.test(query)) {
       this.addMessage(
-        `💳 <strong>Let's connect payment processing.</strong><br>GreenReach uses Square to handle farm payments — this covers your online store checkout, POS terminal, and wholesale order billing. Without it connected, customers can browse but can't complete purchases.<br><br>You'll need a Square account (free to create). Go to <strong>Settings → Payment Methods</strong> to start the connection.`,
+        `<strong>Connect payment processing.</strong><br>GreenReach uses Square for payments — store checkout, POS, and wholesale billing. Go to <strong>Settings → Payment Methods</strong> to link your Square account.`,
         'assistant',
         `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=payments]')){window.parent.document.querySelector('[data-section=payments]').click()}else{window.location.href='/LE-farm-admin.html#payments'}" class="action-btn primary">Open Payment Settings</button>`
       );
@@ -822,7 +767,7 @@ class FarmAssistant {
 
     if (storePattern.test(query)) {
       this.addMessage(
-        `🛒 <strong>Let's set up your online store.</strong><br>Your store lets customers browse your available crops and place orders directly. It pulls from your crop inventory and pricing — so make sure you've added crops and set prices first.<br><br>The store wizard will walk you through branding, delivery options, and payment setup.`,
+        `<strong>Set up your online store.</strong><br>Your store lets customers browse crops and place orders directly. Make sure you've added crops and set prices first. The store wizard walks you through branding, delivery, and payment setup.`,
         'assistant',
         `<button onclick="window.location.href='/LE-dashboard.html?wizard=store-setup'" class="action-btn primary">Open Store Wizard</button>`
       );
@@ -884,18 +829,18 @@ class FarmAssistant {
 
       if (incomplete.length === 0) {
         this.addMessage(
-          `🎉 <strong>All ${data.totalCount} setup tasks are complete.</strong> Your farm is fully configured — grow rooms, inventory, payments, store, and recipes are all in place. You're ready for daily operations. Ask me about harvests, environment, or anything else you need.`
+          `<strong>All ${data.totalCount} setup tasks are complete.</strong> Your farm is fully configured. Ask me about harvests, environment, or anything else.`
         );
         return;
       }
 
       let nextTasks = incomplete.slice(0, 3).map(t => `<li>${t.icon || '○'} ${t.label}</li>`).join('');
       this.addMessage(
-        `🚀 <strong>Setup Progress: ${data.completedCount} of ${data.totalCount} complete</strong>
-        <br><br>Here's what to focus on next — I've ordered these so each step unlocks the features that follow:
+        `<strong>Setup Progress: ${data.completedCount} of ${data.totalCount} complete</strong>
+        <br><br>Next steps:
         <ul>${nextTasks}</ul>
-        ${incomplete.length > 3 ? `<em>...and ${incomplete.length - 3} more after these</em>` : ''}
-        <br>Click any task in the <strong>Getting Started</strong> checklist in Settings to jump straight to it.`,
+        ${incomplete.length > 3 ? `<em>...and ${incomplete.length - 3} more</em>` : ''}
+        <br>Open <strong>Getting Started</strong> in Settings to jump to any task.`,
         'assistant',
         `<button onclick="if(window.parent && window.parent.document.querySelector('[data-section=settings]')){window.parent.document.querySelector('[data-section=settings]').click()}else{window.location.href='/LE-farm-admin.html#settings'}" class="action-btn primary">View Full Checklist</button>`
       );
@@ -908,14 +853,14 @@ class FarmAssistant {
   matchNavigation(query) {
     // Simplified navigation - just check if query contains ANY keyword
     const navPatterns = [
-      { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '📅' },
-      { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '🌱' },
-      { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '🏠' },
-      { keywords: ['wholesale', 'buyer'], url: '/GR-wholesale.html', name: 'Wholesale Portal', emoji: '📦' },
-      { keywords: ['sales', 'pos', 'sell', 'store'], url: '/Farmsales-pos.html', name: 'POS Terminal', emoji: '💰' },
-      { keywords: ['heatmap', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '🗺️' },
-      { keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '🥬' },
-      { keywords: ['admin', 'settings'], url: '/GR-central-admin.html', name: 'Central Admin', emoji: '⚙️' }
+      { keywords: ['planting', 'schedule', 'calendar', 'plan'], url: '/views/planting-scheduler.html', name: 'Planting Schedule', emoji: '' },
+      { keywords: ['tray', 'seed', 'seeding'], url: '/views/tray-inventory.html', name: 'Tray Inventory', emoji: '' },
+      { keywords: ['dashboard', 'home', 'main', 'summary'], url: '/views/farm-summary.html', name: 'Farm Dashboard', emoji: '' },
+      { keywords: ['wholesale', 'buyer'], url: '/GR-wholesale.html', name: 'Wholesale Portal', emoji: '' },
+      { keywords: ['sales', 'pos', 'sell', 'store'], url: '/Farmsales-pos.html', name: 'POS Terminal', emoji: '' },
+      { keywords: ['heatmap', 'map', 'temps'], url: '/views/room-heatmap.html', name: 'Temperature Heatmap', emoji: '' },
+      { keywords: ['inventory', 'crops', 'plants'], url: '/views/farm-inventory.html', name: 'Crop Inventory', emoji: '' },
+      { keywords: ['admin', 'settings'], url: '/GR-central-admin.html', name: 'Central Admin', emoji: '' }
     ];
 
     for (const nav of navPatterns) {
@@ -993,15 +938,15 @@ class FarmAssistant {
           <div class="harvest-list">
             <div class="harvest-icon">🌾</div>
             <div class="harvest-text">
-              <p class="harvest-message">Today we have:</p>
+              <p class="harvest-message">Ready today:</p>
               <p class="harvest-crops">${cropList}</p>
-              <p class="harvest-count">${readyToHarvest.length} trays ready to pick!</p>
+              <p class="harvest-count">${readyToHarvest.length} tray${readyToHarvest.length > 1 ? 's' : ''} ready</p>
             </div>
           </div>
         `;
         
-        this.createInfoPopup('Ready to Harvest!', popupContent);
-        this.addMessage(`We have ${cropNames.length} types of crops ready today! 🌾`, 'assistant');
+        this.createInfoPopup('Ready to Harvest', popupContent);
+        this.addMessage(`${cropNames.length} crop type${cropNames.length > 1 ? 's' : ''} ready for harvest.`, 'assistant');
       } else if (soonToHarvest.length > 0) {
         const cropNames = [...new Set(soonToHarvest.map(item => item.crop))];
         let popupContent = `
@@ -1010,15 +955,15 @@ class FarmAssistant {
             <div class="harvest-text">
               <p class="harvest-message">Coming soon:</p>
               <p class="harvest-crops">${cropNames.join(', ')}</p>
-              <p class="harvest-count">Will be ready in 1-2 days!</p>
+              <p class="harvest-count">Expected ready in 1–2 days</p>
             </div>
           </div>
         `;
         
-        this.createInfoPopup('Almost Ready!', popupContent);
-        this.addMessage('These crops will be ready very soon! 🌱', 'assistant');
+        this.createInfoPopup('Almost Ready', popupContent);
+        this.addMessage('These crops are close to harvest.', 'assistant');
       } else {
-        this.addMessage('No crops are ready for harvest right now. Check back tomorrow! 🌱', 'assistant');
+        this.addMessage('No crops are currently ready for harvest.', 'assistant');
       }
     } catch (error) {
       console.error('Harvest check error:', error);
@@ -1102,15 +1047,15 @@ class FarmAssistant {
         
         // Add status message (Celsius thresholds: 20-26°C ideal, <18°C or >29°C warning)
         if (avgTemp >= 20 && avgTemp <= 26 && avgHumidity >= 50 && avgHumidity <= 70) {
-          popupContent += '<div class="status-message success">✅ Perfect conditions! Everything looks great!</div>';
+          popupContent += '<div class="status-message success">All readings within ideal range</div>';
         } else if (avgTemp < 18 || avgTemp > 29) {
-          popupContent += '<div class="status-message warning">⚠️ Temperature needs attention</div>';
+          popupContent += '<div class="status-message warning">Temperature outside ideal range</div>';
         } else {
-          popupContent += '<div class="status-message ok">Conditions look good!</div>';
+          popupContent += '<div class="status-message ok">Conditions within acceptable range</div>';
         }
         
-        this.createInfoPopup('Farm Weather', popupContent);
-        this.addMessage('Here\'s the current weather! 🌞', 'assistant');
+        this.createInfoPopup('Environment', popupContent);
+        this.addMessage('Current environment readings:', 'assistant');
       } else {
         this.addMessage('No environmental data available right now.', 'assistant');
       }
@@ -1225,7 +1170,7 @@ class FarmAssistant {
             </div>
           `;
           
-          this.createInfoPopup(`Found ${cropName}!`, popupContent);
+          this.createInfoPopup(`Found: ${cropName}`, popupContent);
         } else {
           // Simple info query
           const totalTrays = found.reduce((sum, item) => sum + item.trays, 0);
@@ -1369,11 +1314,11 @@ class FarmAssistant {
         const identifyResp = await fetch(endpoint, { method: 'POST' }).catch(() => null);
         
         if (identifyResp && identifyResp.ok) {
-          this.addMessage(`✨ Blinking lights for <strong>${found.name}</strong>! The lights will flash for 10 seconds.`, 'assistant',
+          this.addMessage(`Blinking lights for <strong>${found.name}</strong> — watch for the flash over the next 10 seconds.`, 'assistant',
             `<button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn">View on Heatmap</button>`
           );
         } else {
-          this.addMessage(`Found <strong>${found.name}</strong>, but hardware control is not available in demo mode. In production, lights would blink!`, 'assistant',
+          this.addMessage(`Found <strong>${found.name}</strong>, but hardware control isn't available right now.`, 'assistant',
             `<button onclick="window.location.href='/views/room-heatmap.html'" class="action-btn">View on Heatmap</button>`
           );
         }
@@ -1411,7 +1356,7 @@ class FarmAssistant {
         const data = await response.json();
         
         if (data.success && data.anomalies && data.anomalies.length > 0) {
-          let message = `<strong>⚠️ Found ${data.anomalies.length} alert(s):</strong><ul>`;
+          let message = `<strong>${data.anomalies.length} active alert${data.anomalies.length > 1 ? 's' : ''}:</strong><ul>`;
           data.anomalies.slice(0, 3).forEach(alert => {
             message += `<li><strong>${alert.severity}:</strong> ${alert.reason} (${alert.zone})</li>`;
           });
@@ -1421,7 +1366,7 @@ class FarmAssistant {
             `<button onclick="window.location.href='/views/farm-summary.html'" class="action-btn primary">View All Alerts</button>`
           );
         } else {
-          this.addMessage('✅ No alerts! Everything looks good.', 'assistant',
+          this.addMessage('No active alerts. All systems normal.', 'assistant',
             `<button onclick="window.location.href='/views/farm-summary.html'" class="action-btn">View Dashboard</button>`
           );
         }
@@ -1441,17 +1386,16 @@ class FarmAssistant {
     
     if (helpPatterns.test(query)) {
       this.addMessage(`
-        <strong>🎯 Here's what I can help you with:</strong>
+        <strong>What I can help with:</strong>
         <ul>
-          <li><strong>🌱 Harvest Readiness:</strong><br>"What's ready to harvest?" — I'll check all crops and tell you what to pick today</li>
-          <li><strong>🌡️ Environment:</strong><br>"Show temperature" — real-time climate data from your sensors to catch problems early</li>
-          <li><strong>🥬 Crop Lookup:</strong><br>"Where is the basil?" — find which zone and tray any crop is growing in</li>
-          <li><strong>💡 Hardware ID:</strong><br>"Blink lights for romaine" — flash the lights in a zone so you can physically locate it</li>
-          <li><strong>📊 Farm Status:</strong><br>"Any alerts?" — check for environmental warnings or equipment issues</li>
-          <li><strong>🗺️ Navigation:</strong><br>"Open planting schedule" — I'll take you directly to any page</li>
-          <li><strong>🚀 Setup Guide:</strong><br>"What should I do next?" — I'll walk you through onboarding step by step</li>
+          <li><strong>Harvest</strong> — "What's ready to harvest?"</li>
+          <li><strong>Environment</strong> — "Show me the temperature"</li>
+          <li><strong>Crop lookup</strong> — "Where is the basil?"</li>
+          <li><strong>Hardware ID</strong> — "Blink lights for romaine"</li>
+          <li><strong>Alerts</strong> — "Any alerts?"</li>
+          <li><strong>Navigation</strong> — "Open planting schedule"</li>
+          <li><strong>Setup</strong> — "What should I do next?"</li>
         </ul>
-        <br><em>Just ask naturally — I understand many ways of phrasing the same question.</em>
       `);
       return true;
     }
@@ -1477,7 +1421,7 @@ class FarmAssistant {
         </div>
       `;
       
-      this.createInfoPopup(item.type === 'riddle' ? 'Riddle Time! 🧩' : 'Joke Time! 😄', popupContent);
+      this.createInfoPopup(item.type === 'riddle' ? 'Riddle' : 'Joke', popupContent);
       
       // Speak the question first
       const questionText = item.question.replace(/[🤔😄]/g, '');
@@ -1519,7 +1463,7 @@ class FarmAssistant {
         </div>
       `;
       
-      this.createInfoPopup('Amazing Farm Fact! 🌱', popupContent);
+      this.createInfoPopup('Farm Fact', popupContent);
       
       // Show question after 4 seconds
       setTimeout(() => {
@@ -1529,7 +1473,7 @@ class FarmAssistant {
         }
       }, 4000);
       
-      this.addMessage(`Here's an amazing farm fact! 🌟`, 'assistant');
+      this.addMessage(`Here's an interesting farm fact.`, 'assistant');
       return true;
     }
     

@@ -163,14 +163,14 @@
 }
 
 .mascot-image {
-  width: 90%;
-  max-width: 320px;
+  width: 70%;
+  max-width: 260px;
   height: auto;
   object-fit: contain;
   margin-bottom: 1rem;
   border-radius: 16px;
   padding: 0.5rem;
-  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6), 0 0 60px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
 }
 
 .welcome-text {
@@ -522,8 +522,8 @@
 .popup-header h2 {
   margin: 0;
   color: white !important;
-  font-size: 32px;
-  font-weight: bold;
+  font-size: 22px;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -549,20 +549,20 @@
 }
 
 .info-icon {
-  font-size: 64px;
+  font-size: 40px;
   margin-bottom: 12px;
 }
 
 .info-label {
   color: #94a3b8;
-  font-size: 20px;
+  font-size: 14px;
   margin-bottom: 8px;
   font-weight: 600;
 }
 
 .info-value {
   color: #f8fafc;
-  font-size: 48px;
+  font-size: 32px;
   font-weight: bold;
 }
 
@@ -570,8 +570,8 @@
   text-align: center;
   padding: 16px;
   border-radius: 12px;
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 16px;
+  font-weight: 600;
   margin-top: 16px;
 }
 
@@ -597,8 +597,8 @@
 }
 
 .harvest-icon, .location-icon, .crop-icon {
-  font-size: 80px;
-  margin-bottom: 20px;
+  font-size: 48px;
+  margin-bottom: 16px;
 }
 
 .harvest-text, .location-text, .crop-text {
@@ -606,13 +606,13 @@
 }
 
 .harvest-message, .location-message, .crop-message {
-  font-size: 28px;
+  font-size: 18px;
   margin-bottom: 16px;
   color: #94a3b8;
 }
 
 .harvest-crops, .crop-details {
-  font-size: 36px;
+  font-size: 22px;
   font-weight: bold;
   color: #10b981;
   margin-bottom: 16px;
@@ -620,20 +620,20 @@
 }
 
 .harvest-count, .crop-locations {
-  font-size: 24px;
+  font-size: 16px;
   color: #cbd5e1;
 }
 
 .location-item {
-  font-size: 28px;
-  margin: 12px 0;
+  font-size: 18px;
+  margin: 10px 0;
   color: #f8fafc;
 }
 
 .location-hint {
-  font-size: 20px;
+  font-size: 14px;
   color: #fbbf24;
-  margin-top: 20px;
+  margin-top: 16px;
   font-style: italic;
 }
 
@@ -699,28 +699,26 @@
 }
 
 .example-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .example-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
 }
 
 .example-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
 }
 
 /* Large Popup Overlay for Jokes, Riddles, and Fun Facts */
@@ -776,17 +774,16 @@
 }
 
 .assistant-popup-header {
-  font-size: 32px;
-  font-weight: bold;
+  font-size: 22px;
+  font-weight: 600;
   color: #ffffff;
   text-align: center;
   margin-bottom: 2rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .assistant-popup-content {
   color: #f8fafc;
-  font-size: 20px;
+  font-size: 15px;
   line-height: 1.6;
   margin-bottom: 2rem;
 }
@@ -840,9 +837,8 @@
 }
 
 .joke-icon {
-  font-size: 80px;
+  font-size: 48px;
   line-height: 1;
-  animation: bounce 1s ease infinite;
 }
 
 @keyframes bounce {
@@ -860,7 +856,7 @@
 }
 
 .joke-question {
-  font-size: 28px;
+  font-size: 20px;
   color: #fbbf24;
   font-weight: 600;
   margin: 0 0 1.5rem 0;
@@ -868,7 +864,7 @@
 }
 
 .joke-answer {
-  font-size: 24px;
+  font-size: 18px;
   color: #10b981;
   font-weight: 500;
   margin: 0;
@@ -891,12 +887,12 @@
 }
 
 .info-icon {
-  font-size: 64px;
+  font-size: 40px;
   line-height: 1;
 }
 
 .info-label {
-  font-size: 18px;
+  font-size: 13px;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -904,7 +900,7 @@
 }
 
 .info-value {
-  font-size: 48px;
+  font-size: 32px;
   font-weight: bold;
   color: #60a5fa;
   line-height: 1;
@@ -914,7 +910,7 @@
   text-align: center;
   padding: 1rem 1.5rem;
   border-radius: 12px;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 600;
   margin-top: 1rem;
 }
