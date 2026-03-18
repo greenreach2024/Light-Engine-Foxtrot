@@ -1394,13 +1394,14 @@ app.use(async (req, res, next) => {
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // 500 requests per 15 min
-  message: 'Too many requests from this IP, please try again later.',
+  message: { success: false, error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting for debug/tracking endpoints (logging only)
     return req.path.startsWith('/api/debug/') || req.path.startsWith('/api/sync/');
-  }
+  },
+  skipFailedRequests: true
 });
 app.use('/api/', limiter);
 

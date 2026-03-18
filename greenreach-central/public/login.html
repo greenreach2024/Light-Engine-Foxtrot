@@ -343,7 +343,12 @@
                     body: JSON.stringify({ farmId: farmId, password })
                 });
                 
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = { message: response.status === 429 ? 'Too many login attempts. Please wait a few minutes and try again.' : 'Unexpected server response' };
+                }
                 
                 if (!response.ok) {
                     throw new Error(data.message || data.error || 'Login failed');
