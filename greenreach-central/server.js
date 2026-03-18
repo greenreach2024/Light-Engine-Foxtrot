@@ -2874,8 +2874,10 @@ app.get('/api/rooms', authMiddleware, async (req, res) => {
 // and response { success } → { status: 'success' }
 app.post('/api/farm/auth/login', (req, res, next) => {
   const { farmId, email, password } = req.body;
+  // Sanitize farm ID: strip trailing commas, semicolons, periods, and whitespace
+  const cleanFarmId = typeof farmId === 'string' ? farmId.replace(/[,;.\s]+$/, '').trim() : farmId;
   // Rewrite to central field names
-  req.body = { farm_id: farmId, email, password };
+  req.body = { farm_id: cleanFarmId, email, password };
   // Rewrite URL so the auth router matches /login
   req.url = '/login';
   // Wrap res.json to translate response format

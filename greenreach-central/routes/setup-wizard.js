@@ -47,7 +47,8 @@ function authenticateToken(req, res, next) {
       audience: 'greenreach-farms'
     });
     
-    req.farmId = decoded.farm_id || decoded.farmId;
+    const rawFarmId = decoded.farm_id || decoded.farmId;
+    req.farmId = typeof rawFarmId === 'string' ? rawFarmId.replace(/[,;.\s]+$/, '').trim() : rawFarmId;
     req.userId = decoded.user_id || decoded.userId;
     req.userEmail = decoded.email;
     req.userRole = decoded.role || 'admin';
@@ -105,8 +106,9 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       updated = result.rowCount > 0;
     }
     
-    // Fallback: try by user ID in farm_users
-    if (!updated && userId) {
+    // Fallback: try by user ID in farm_users (only if userId is a valid UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!updated && userId && uuidRegex.test(userId)) {
       const result = await pool.query(
         'UPDATE farm_users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2',
         [password_hash, userId]
@@ -114,8 +116,27 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       updated = result.rowCount > 0;
     }
 
+    // Fallback: if farm exists but no farm_users row, create one
+    if (!updated && farmId) {
+      try {
+        const farmCheck = await pool.query('SELECT farm_id, name FROM farms WHERE farm_id = $1', [farmId]);
+        if (farmCheck.rows.length > 0) {
+          const fallbackEmail = userEmail || `admin@${farmId.toLowerCase()}.local`;
+          await pool.query(
+            `INSERT INTO farm_users (farm_id, email, password_hash, role, must_change_password, status, created_at, updated_at)
+             VALUES ($1, $2, $3, 'admin', false, 'active', NOW(), NOW())
+             ON CONFLICT (farm_id, email) DO UPDATE SET password_hash = $3, must_change_password = false, updated_at = NOW()`,
+            [farmId, fallbackEmail, password_hash]
+          );
+          updated = true;
+        }
+      } catch (e) {
+        console.warn('[Setup Wizard] Fallback farm_users upsert failed:', e.message);
+      }
+    }
+
     // Legacy fallback: update users table if it exists
-    if (!updated) {
+    if (!updated && userId && uuidRegex.test(userId)) {
       try {
         await pool.query(
           'UPDATE users SET password_hash = $1, email_verified = true WHERE id = $2',
