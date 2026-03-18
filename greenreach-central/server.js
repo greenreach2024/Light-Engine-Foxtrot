@@ -445,7 +445,7 @@ app.post('/data/iot-devices.json', async (req, res) => {
     if (lightEngineUrl) {
       fetch(`${lightEngineUrl}/data/iot-devices.json`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10000)
       })
@@ -777,6 +777,19 @@ async function getInventoryTraysForCompat(farmId) {
   return normalizeInventoryTrays([]);
 }
 
+/**
+ * Build auth headers for Central-to-LE proxy requests.
+ * Sends API key + farm ID so the LE's auth middleware accepts the request.
+ */
+function leProxyHeaders(extra = {}) {
+  const headers = { 'Accept': 'application/json', ...extra };
+  const farmId = process.env.FARM_ID;
+  if (farmId) headers['X-Farm-ID'] = farmId;
+  const apiKey = process.env.GREENREACH_API_KEY;
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  return headers;
+}
+
 function resolveEdgeUrl() {
   // Resolves the Light Engine URL. FARM_EDGE_URL env var takes priority.
   if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL;
@@ -808,7 +821,7 @@ async function syncFarmIdentity(edgeUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch(`${edgeUrl}/data/farm.json`, { signal: controller.signal });
+    const response = await fetch(`${edgeUrl}/data/farm.json`, { headers: leProxyHeaders(), signal: controller.signal });
     clearTimeout(timeout);
 
     if (!response.ok) {
@@ -887,7 +900,7 @@ async function syncFarmData(options = {}) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        const response = await fetch(`${edgeUrl}/data/${file}`, { signal: controller.signal });
+        const response = await fetch(`${edgeUrl}/data/${file}`, { headers: leProxyHeaders(), signal: controller.signal });
         clearTimeout(timeout);
         
         if (response.ok) {
@@ -912,7 +925,7 @@ async function syncFarmData(options = {}) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        const response = await fetch(`${edgeUrl}/data/${extra}`, { signal: controller.signal });
+        const response = await fetch(`${edgeUrl}/data/${extra}`, { headers: leProxyHeaders(), signal: controller.signal });
         clearTimeout(timeout);
         if (response.ok) {
           const text = await response.text();
@@ -1547,7 +1560,7 @@ app.get('/env', authMiddleware, async (req, res) => {
     logger.info(`[Env] Proxying to Light Engine: ${upstream}`);
     const response = await fetch(upstream, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: leProxyHeaders(),
       signal: AbortSignal.timeout(8000)
     });
     if (!response.ok) throw new Error(`LE returned ${response.status}`);
@@ -1797,7 +1810,7 @@ async function switchBotDiscover(req, res) {
     if (lightEngineUrl) {
       fetch(`${lightEngineUrl}/switchbot/discover`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ token: token.trim(), secret: secret.trim() }),
         signal: AbortSignal.timeout(12000)
       })
@@ -2016,7 +2029,7 @@ app.get('/api/traceability', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: true, records: [] });
   try {
-    const r = await fetch(`${farmUrl}/api/traceability?${new URLSearchParams(req.query)}`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`${farmUrl}/api/traceability?${new URLSearchParams(req.query)}`, { headers: leProxyHeaders(), signal: AbortSignal.timeout(5000) });
     return res.json(await r.json());
   } catch { return res.json({ ok: true, records: [] }); }
 });
@@ -2025,7 +2038,7 @@ app.get('/api/traceability/stats', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } });
   try {
-    const r = await fetch(`${farmUrl}/api/traceability/stats`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`${farmUrl}/api/traceability/stats`, { headers: leProxyHeaders(), signal: AbortSignal.timeout(5000) });
     return res.json(await r.json());
   } catch { return res.json({ ok: true, stats: { total_records: 0, active_records: 0, crops_tracked: 0, total_events: 0 } }); }
 });
@@ -2034,7 +2047,7 @@ app.get('/api/traceability/lot/:lotCode', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
   try {
-    const r = await fetch(`${farmUrl}/api/traceability/lot/${req.params.lotCode}`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`${farmUrl}/api/traceability/lot/${req.params.lotCode}`, { headers: leProxyHeaders(), signal: AbortSignal.timeout(5000) });
     return res.json(await r.json());
   } catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -2043,7 +2056,7 @@ app.get('/api/traceability/sfcr-export', authMiddleware, async (req, res) => {
   const farmUrl = await getFirstActiveFarmUrl();
   if (!farmUrl) return res.json({ ok: false, error: 'No farm connected' });
   try {
-    const r = await fetch(`${farmUrl}/api/traceability/sfcr-export?${new URLSearchParams(req.query)}`, { signal: AbortSignal.timeout(10000) });
+    const r = await fetch(`${farmUrl}/api/traceability/sfcr-export?${new URLSearchParams(req.query)}`, { headers: leProxyHeaders(), signal: AbortSignal.timeout(10000) });
     const ct = r.headers.get('content-type');
     if (ct) res.set('content-type', ct);
     const cd = r.headers.get('content-disposition');
@@ -2674,7 +2687,7 @@ app.get('/api/weather', authMiddleware, async (req, res) => {
     try {
       const url = `${leUrl}/api/weather?lat=${lat}&lng=${lng}`;
       logger.info(`[WeatherProxy] Fetching from ${url}`);
-      const upstream = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const upstream = await fetch(url, { headers: leProxyHeaders(), signal: AbortSignal.timeout(10000) });
       const text = await upstream.text();
       return res.status(upstream.status).type('json').send(text);
     } catch (err) {
@@ -2971,7 +2984,7 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeou
   const url = `${edgeUrl}${edgePath}`;
   const opts = {
     method,
-    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
     signal: AbortSignal.timeout(timeoutMs)
   };
   if (body && method !== 'GET') opts.body = JSON.stringify(body);
@@ -3006,7 +3019,7 @@ async function cloudNativeScan(req, res) {
       logger.info(`[CloudScan] Trying Light Engine at ${edgeUrl}/discovery/scan`);
       const edgeResp = await fetch(`${edgeUrl}/discovery/scan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(req.body || {}),
         signal: AbortSignal.timeout(8000)
       });

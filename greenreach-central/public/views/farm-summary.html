@@ -4843,7 +4843,7 @@
         try {
           // Try primary ML-based insights
           console.log('[Health] Fetching from /api/health/insights...');
-          const response = await fetch('/api/health/insights?t=' + Date.now());
+          const response = await fetchWithFarmAuth('/api/health/insights?t=' + Date.now());
           
           if (response.ok) {
             const data = await response.json();
@@ -4855,7 +4855,7 @@
           
           // Fallback to env data
           console.log('[Health] Falling back to /api/env...');
-          const envResponse = await fetch('/api/env?t=' + Date.now());
+          const envResponse = await fetchWithFarmAuth('/api/env?t=' + Date.now());
           if (!envResponse.ok) throw new Error(`HTTP ${envResponse.status}`);
           
           const envData = await envResponse.json();
@@ -5931,7 +5931,7 @@
         error.style.display = 'none';
         
         // Get available zones
-        const envResponse = await fetch('/api/env');
+        const envResponse = await fetchWithFarmAuth('/api/env');
         if (!envResponse.ok) throw new Error('Failed to load environment data');
         const envData = await envResponse.json();
         
@@ -5939,7 +5939,7 @@
         const firstZone = envData.zones && envData.zones.length > 0 ? envData.zones[0].id : 'all';
         
         // Try to load forecast, with fallback to common zone names
-        let response = await fetch(`/api/ml/insights/forecast/${firstZone}`);
+        let response = await fetchWithFarmAuth(`/api/ml/insights/forecast/${firstZone}`);
         
         // Check if ML features are available (403 = feature not enabled)
         if (response.status === 403) {
@@ -5953,7 +5953,7 @@
           const fallbackZones = ['main', 'veg', 'flower', 'all'];
           
           for (const fallbackZone of fallbackZones) {
-            response = await fetch(`/api/ml/insights/forecast/${fallbackZone}`);
+            response = await fetchWithFarmAuth(`/api/ml/insights/forecast/${fallbackZone}`);
             if (response.ok) {
               console.log(`[Temp Forecast] Using fallback zone: ${fallbackZone}`);
               break;

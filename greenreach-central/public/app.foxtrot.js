@@ -6706,6 +6706,14 @@ async function publishSchedulesDocument(doc) {
 // Light Engine Charlie - Comprehensive Dashboard Application
 // Global API fetch helper
 async function api(url, opts = {}) {
+  // Inject auth token for same-origin API calls
+  const token = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('token')) || (typeof localStorage !== 'undefined' && localStorage.getItem('token'));
+  if (token && typeof url === 'string' && (url.startsWith('/') || url.startsWith(location.origin))) {
+    opts.headers = opts.headers || {};
+    if (!opts.headers['Authorization'] && !opts.headers['authorization']) {
+      opts.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
   const resp = await fetch(url, opts);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 

@@ -19,6 +19,15 @@ class FarmAssistant {
     this.initTextToSpeech();
   }
 
+  _authFetch(url, opts = {}) {
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || localStorage.getItem('token') || '';
+    if (token) {
+      opts.headers = opts.headers || {};
+      if (!opts.headers['Authorization']) opts.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return fetch(url, opts);
+  }
+
   init() {
     this.createWidget();
     this.attachEventListeners();
@@ -943,7 +952,7 @@ class FarmAssistant {
   async checkHarvestReady() {
     try {
       const API_BASE = window.API_BASE || '';
-      const response = await fetch(`${API_BASE}/env`);
+      const response = await this._authFetch(`${API_BASE}/env`);
       if (!response.ok) throw new Error('Failed to fetch crop data');
       
       const data = await response.json();
@@ -1041,7 +1050,7 @@ class FarmAssistant {
   async checkEnvironment(query) {
     try {
       const API_BASE = window.API_BASE || '';
-      const response = await fetch(`${API_BASE}/env`);
+      const response = await this._authFetch(`${API_BASE}/env`);
       if (!response.ok) throw new Error('Failed to fetch environmental data');
       
       const data = await response.json();
@@ -1158,7 +1167,7 @@ class FarmAssistant {
       const API_BASE = window.API_BASE || '';
       
       // Try to fetch inventory data
-      const response = await fetch(`${API_BASE}/env`);
+      const response = await this._authFetch(`${API_BASE}/env`);
       if (!response.ok) throw new Error('Failed to fetch inventory');
       
       const data = await response.json();
@@ -1266,7 +1275,7 @@ class FarmAssistant {
   async checkFarmHealth() {
     try {
       const API_BASE = window.API_BASE || '';
-      const response = await fetch(`${API_BASE}/env`);
+      const response = await this._authFetch(`${API_BASE}/env`);
       if (!response.ok) throw new Error('Failed to fetch farm data');
       
       const data = await response.json();
@@ -1328,7 +1337,7 @@ class FarmAssistant {
       const API_BASE = window.API_BASE || '';
       
       // First, find the target zone/group
-      const response = await fetch(`${API_BASE}/env`);
+      const response = await this._authFetch(`${API_BASE}/env`);
       if (!response.ok) throw new Error('Failed to fetch zones');
       
       const data = await response.json();

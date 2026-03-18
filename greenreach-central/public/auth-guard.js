@@ -194,13 +194,14 @@
       resolvedUrl = window.API_BASE + url;
     }
 
-    // Inject JWT for ALL authenticated requests — both /api/ and /data/ endpoints.
+    // Inject JWT for ALL authenticated requests — /api/, /data/, and /env endpoints.
     // CRITICAL: /data/*.json requests MUST carry the JWT so the farmDataMiddleware
     // can scope responses to the authenticated farm. Without this, requests fall
     // through to unscoped flat files, leaking cross-farm data.
     // IMPORTANT: Never overwrite an Authorization header the caller already set
     // (e.g., central-admin uses admin_token, not the farm token stored here).
-    if (token && typeof resolvedUrl === 'string' && (resolvedUrl.includes('/api/') || resolvedUrl.includes('/data/'))) {
+    const needsAuth = typeof resolvedUrl === 'string' && (resolvedUrl.includes('/api/') || resolvedUrl.includes('/data/') || /\/env(\?|$)/.test(resolvedUrl));
+    if (token && needsAuth) {
       options.headers = options.headers || {};
       if (!options.headers['Authorization'] && !options.headers['authorization']) {
         options.headers['Authorization'] = `Bearer ${token}`;
@@ -208,7 +209,7 @@
     }
 
     // Inject farm slug header in cloud mode for tenant routing
-    if (window.FARM_SLUG && typeof resolvedUrl === 'string' && (resolvedUrl.includes('/api/') || resolvedUrl.includes('/data/'))) {
+    if (window.FARM_SLUG && needsAuth) {
       options.headers = options.headers || {};
       options.headers['X-Farm-Slug'] = window.FARM_SLUG;
     }

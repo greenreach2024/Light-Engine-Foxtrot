@@ -70,11 +70,15 @@ router.get('/', async (req, res, next) => {
     const farmUrl = `${farmEndpoint}/env?hours=${hours}`;
     logger.info(`[ENV Proxy] Fetching from ${farmUrl}`);
     
+    const proxyHeaders = { 'Accept': 'application/json' };
+    const farmId = process.env.FARM_ID || targetFarm.farm_id || targetFarm.id;
+    if (farmId) proxyHeaders['X-Farm-ID'] = farmId;
+    const apiKey = process.env.GREENREACH_API_KEY;
+    if (apiKey) proxyHeaders['X-API-Key'] = apiKey;
+
     const response = await fetch(farmUrl, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      },
+      headers: proxyHeaders,
       signal: AbortSignal.timeout(10000) // 10 second timeout
     });
     
