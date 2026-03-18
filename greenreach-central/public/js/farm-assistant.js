@@ -509,6 +509,19 @@ class FarmAssistant {
         window.speechSynthesis.onvoiceschanged = loadVoices;
       }
     }
+
+    // Unlock audio playback on first user gesture (autoplay policy)
+    this._audioUnlocked = false;
+    const unlockAudio = () => {
+      if (this._audioUnlocked) return;
+      this._audioUnlocked = true;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx.resume().then(() => ctx.close());
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+    document.addEventListener('click', unlockAudio, { once: false });
+    document.addEventListener('touchstart', unlockAudio, { once: false });
   }
 
   speak(text) {
@@ -537,11 +550,16 @@ class FarmAssistant {
         const audio = new Audio(url);
         this._ttsAudio = audio;
         audio.onended = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
-        audio.onerror = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
-        audio.play().catch(() => { this.isSpeaking = false; });
+        audio.onerror = () => { this.isSpeaking = false; URL.revokeObjectURL(url); this._speakBrowser(text); };
+        audio.play().catch(() => {
+          this.isSpeaking = false;
+          URL.revokeObjectURL(url);
+          console.warn('[TTS] Audio play blocked (autoplay policy) — using browser speech');
+          this._speakBrowser(text);
+        });
       })
-      .catch(() => {
-        // Fallback: browser speech synthesis
+      .catch(err => {
+        console.warn('[TTS] Fetch failed:', err.message, '— using browser speech');
         this._speakBrowser(text);
       });
   }
