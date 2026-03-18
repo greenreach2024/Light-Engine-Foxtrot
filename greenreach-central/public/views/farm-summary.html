@@ -2933,7 +2933,10 @@
         envDataInFlight = (async () => {
           // Ask server for 24-hour window; when ENV_SOURCE=cloud and CLOUD_ENDPOINT_URL are set
           // the server will proxy to AWS and include per-zone histories.
-          const response = await fetchWithFarmAuth('/env?hours=24');
+          const response = await fetchWithFarmAuth('/env?hours=24&t=' + Date.now(), {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(12000)
+          });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
           
@@ -6960,7 +6963,7 @@
           if (vals.length) {
             newHistory.push(Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * factor) / factor);
             const ts = sources.find(s => Array.isArray(s.timestamps) && i < s.timestamps.length)?.timestamps[i];
-            newTimestamps.push(ts || new Date(Date.now() - i * 300000).toISOString());
+            newTimestamps.push(ts || new Date(Date.now() - (maxSrcLen - 1 - i) * 300000).toISOString());
           }
         }
 
