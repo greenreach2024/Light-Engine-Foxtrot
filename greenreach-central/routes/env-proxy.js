@@ -71,8 +71,8 @@ router.get('/', async (req, res, next) => {
     logger.info(`[ENV Proxy] Fetching from ${farmUrl}`);
     
     const proxyHeaders = { 'Accept': 'application/json' };
-    const farmId = process.env.FARM_ID || targetFarm.farm_id || targetFarm.id;
-    if (farmId) proxyHeaders['X-Farm-ID'] = farmId;
+    const proxyFarmId = process.env.FARM_ID || targetFarm.farm_id || targetFarm.id;
+    if (proxyFarmId) proxyHeaders['X-Farm-ID'] = proxyFarmId;
     const apiKey = process.env.GREENREACH_API_KEY;
     if (apiKey) proxyHeaders['X-API-Key'] = apiKey;
 
