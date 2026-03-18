@@ -188,7 +188,7 @@ function loadFarmApiKeys() {
   return null;
 }
 
-async function isValidFarmApiKey(farmId, apiKey) {
+export async function isValidFarmApiKey(farmId, apiKey) {
   if (await isDatabaseAvailable()) {
     try {
       const dbResult = await query(

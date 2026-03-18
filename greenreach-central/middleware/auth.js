@@ -11,6 +11,7 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import logger from '../utils/logger.js';
+import { isValidFarmApiKey } from '../routes/sync.js';
 
 function getJwtSecret() {
   if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.DEPLOYMENT_MODE === 'cloud')) {
@@ -141,7 +142,7 @@ export async function checkFarmOwnership(req, res, next) {
  * Tries farm auth first (JWT with issuer/audience or API key), then falls back
  * to admin JWT (no issuer/audience constraints). If neither succeeds, returns 401.
  */
-export function authOrAdminMiddleware(req, res, next) {
+export async function authOrAdminMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   // 1. Try farm JWT (has issuer/audience)
@@ -191,18 +192,31 @@ export function authOrAdminMiddleware(req, res, next) {
     }
   }
 
-  // 3. API key auth (edge devices)
+  // 3. API key auth (edge devices) — try global key first, then per-farm key
   if (req.headers['x-api-key'] && req.headers['x-farm-id']) {
-    if (!isValidApiKey(req.headers['x-api-key'])) {
-      logger.warn('[Auth] Invalid API key from', req.headers['x-farm-id']);
-      return res.status(401).json({ error: 'Invalid API key' });
+    const apiKey = req.headers['x-api-key'];
+    const farmId = req.headers['x-farm-id'];
+
+    if (isValidApiKey(apiKey)) {
+      req.user = { farmId, role: 'admin', authMethod: 'api-key' };
+      return next();
     }
-    req.user = {
-      farmId: req.headers['x-farm-id'],
-      role: 'admin',
-      authMethod: 'api-key'
-    };
-    return next();
+
+    // Fallback: per-farm API key (e.g. Light Engine using farm-specific key)
+    if (/^[a-f0-9]{64}$/.test(apiKey)) {
+      try {
+        const validFarmKey = await isValidFarmApiKey(farmId, apiKey);
+        if (validFarmKey) {
+          req.user = { farmId, role: 'admin', authMethod: 'farm-api-key' };
+          return next();
+        }
+      } catch (err) {
+        logger.warn('[Auth] Per-farm API key check failed:', err.message);
+      }
+    }
+
+    logger.warn('[Auth] Invalid API key from', farmId);
+    return res.status(401).json({ error: 'Invalid API key' });
   }
 
   // 4. Local dev mode only
