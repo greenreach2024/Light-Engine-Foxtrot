@@ -63,8 +63,9 @@ router.post('/', async (req, res) => {
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'no-store');
 
-    const stream = response.body;
-    stream.pipe(res);
+    // OpenAI SDK v6 returns a Response with arrayBuffer(), not a Node stream
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
   } catch (err) {
     console.error('[TTS] OpenAI error:', err.message);
     if (err.status === 429) {
