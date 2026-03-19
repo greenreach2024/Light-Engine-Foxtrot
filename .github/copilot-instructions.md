@@ -20,6 +20,33 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
 
+### Recent Fixes (Mar 19, 2026)
+
+Agents touching dashboard, weather, or devices must preserve these behaviors:
+
+1. **Weather fallback is server-side in Central**
+	- Route: `greenreach-central/server.js` `/api/weather`
+	- If `lat/lng` query params are missing, Central resolves coordinates from farm profile data (`farm_data`), then safe static fallback.
+	- `farm-summary.html` may call `/api/weather` without coordinates when farm profile payload is incomplete.
+
+2. **Farm Summary auto-refresh has visible status + logging**
+	- File: `greenreach-central/public/views/farm-summary.html`
+	- `loadData(source)` labels cycles (`Initial`, `Auto`, `Tab Resume`, `Manual`), updates `#envRefreshStatus`, and logs cycle duration.
+	- Interval refresh (`60s`) and visibility refresh both clear env cache before reloading.
+
+3. **Central Devices page status is derived, not defaulted offline**
+	- File: `greenreach-central/public/central-admin.js`
+	- Do NOT use `device.status || 'offline'` as the fallback.
+	- Correct order: explicit `status` -> `telemetry.online`/`deviceData.online` -> last-seen recency (< 5 minutes = online).
+
+4. **AI Insights/Sustainability popup hardening requires farm-auth fetches**
+	- Files:
+	  - `greenreach-central/public/views/farm-inventory.html`
+	  - `greenreach-central/public/LE-farm-admin.html`
+	- `fetchWithFarmAuth` must read token from both `sessionStorage` and `localStorage`.
+	- Include `x-farm-id` header when farm ID is available (`farm_id`/`farmId` in storage).
+	- Sustainability dashboard fetches (`/api/sustainability/metrics`, `/utility-bills`, `/food-miles`, `/trends`) must fail soft on non-OK responses (no hard JSON parse crash/popups).
+
 ### DO NOT (Architecture Rules)
 
 - DO NOT assume any physical device exists (no Pi, no edge box, no local server)

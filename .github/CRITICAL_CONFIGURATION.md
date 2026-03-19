@@ -114,6 +114,45 @@ Separate copy of farm profile for Central. NOT automatically synced with `public
 | SWITCHBOT_SECRET | LE EB env var + farm.json | `switchBotApiRequest()` | SwitchBot Cloud API |
 | JWT Bearer Token | Browser localStorage | Dashboard fetch calls | Central JWT verification |
 
+### Browser Storage Contract (Farm UI)
+
+Protected farm UI API calls must treat browser storage as dual-source:
+
+1. Token lookup order:
+  - `sessionStorage.getItem('token')`
+  - `localStorage.getItem('token')`
+2. Farm ID lookup order:
+  - `sessionStorage.getItem('farm_id')`
+  - `sessionStorage.getItem('farmId')`
+  - `localStorage.getItem('farm_id')`
+  - `localStorage.getItem('farmId')`
+3. Request headers:
+  - `Authorization: Bearer <token>` when token exists
+  - `x-farm-id: <farm-id>` when farm ID exists
+
+This prevents auth/context drift between login flows and standalone pages.
+Reference implementations:
+- `greenreach-central/public/views/farm-inventory.html`
+- `greenreach-central/public/LE-farm-admin.html`
+
+---
+
+## Device Status Data Contract (Central UI)
+
+For `GET /api/sync/:farmId/devices` and `/data/iot-devices.json`, do not assume
+`device.status` is always present.
+
+Expected online/offline derivation order:
+1. `device.status` when provided (`online`, `offline`, `warning`, `critical`)
+2. `device.telemetry.online` or `device.deviceData.online`
+3. Timestamp recency from `lastSeen` / `last_seen` / `telemetry.lastUpdate`
+
+Operational threshold: treat a device as online when last-seen is within 5 minutes.
+
+This contract is implemented in:
+- `greenreach-central/public/central-admin.js` (`deriveDeviceStatus`, `getDeviceSeenAt`)
+- `greenreach-central/public/views/field-mapping.html` (`device.online` mapping)
+
 ---
 
 ## SwitchBot Device Registry

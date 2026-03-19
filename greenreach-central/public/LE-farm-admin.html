@@ -4814,30 +4814,63 @@
         let utilityBills = [];
         let sustainabilityMetrics = null;
 
+        function fetchWithFarmAuth(url, opts = {}) {
+            const headers = Object.assign({}, opts.headers || {});
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const farmId =
+                sessionStorage.getItem('farm_id') ||
+                sessionStorage.getItem('farmId') ||
+                localStorage.getItem('farm_id') ||
+                localStorage.getItem('farmId');
+
+            if (token && !headers['Authorization']) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            if (farmId && !headers['x-farm-id']) {
+                headers['x-farm-id'] = farmId;
+            }
+
+            return fetch(url, Object.assign({}, opts, { headers }));
+        }
+
+        async function safeJson(response) {
+            try {
+                return await response.json();
+            } catch (_) {
+                return { ok: false, error: `HTTP ${response.status}` };
+            }
+        }
+
         async function loadSustainabilityDashboard() {
             try {
                 const [metricsRes, billsRes, foodRes, trendsRes] = await Promise.all([
-                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
-                    fetch(`${SUSTAINABILITY_API}/food-miles`),
-                    fetch(`${SUSTAINABILITY_API}/trends?days=30`)
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/food-miles`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/trends?days=30`)
                 ]);
                 
-                const metrics = await metricsRes.json();
-                const billsData = await billsRes.json();
-                const food = await foodRes.json();
-                const trends = await trendsRes.json();
+                const metrics = await safeJson(metricsRes);
+                const billsData = await safeJson(billsRes);
+                const food = await safeJson(foodRes);
+                const trends = await safeJson(trendsRes);
                 
                 if (metrics.ok) {
                     sustainabilityMetrics = metrics;
                     displaySustMetrics(metrics);
+                } else {
+                    console.warn('[Sustainability] Metrics unavailable:', metricsRes.status, metrics.error || 'Unknown error');
                 }
                 if (billsData.ok) {
                     utilityBills = billsData.bills || [];
                     renderUtilityBills();
+                } else {
+                    console.warn('[Sustainability] Utility bills unavailable:', billsRes.status, billsData.error || 'Unknown error');
                 }
                 if (food.ok) displayFoodMiles(food);
+                else console.warn('[Sustainability] Food miles unavailable:', foodRes.status, food.error || 'Unknown error');
                 if (trends.ok) createSustainabilityCharts(trends.trends);
+                else console.warn('[Sustainability] Trends unavailable:', trendsRes.status, trends.error || 'Unknown error');
             } catch (error) {
                 console.error('Error loading sustainability dashboard:', error);
             }
@@ -4972,12 +5005,12 @@
                 return;
             }
             try {
-                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills`, {
+                const res = await fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(bill)
                 });
-                const data = await res.json();
+                const data = await safeJson(res);
                 if (data.ok) {
                     closeUtilityBillModal();
                     loadSustainabilityDashboard();
@@ -4994,8 +5027,8 @@
         async function deleteUtilityBill(id) {
             if (!confirm('Delete this utility bill?')) return;
             try {
-                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills/${id}`, { method: 'DELETE' });
-                const data = await res.json();
+                const res = await fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills/${id}`, { method: 'DELETE' });
+                const data = await safeJson(res);
                 if (data.ok) {
                     loadSustainabilityDashboard();
                     if (typeof showNotification === 'function') showNotification('Bill deleted', 'success');
@@ -5037,13 +5070,13 @@
         async function exportESGReport() {
             try {
                 const [metricsRes, billsRes, foodRes] = await Promise.all([
-                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
-                    fetch(`${SUSTAINABILITY_API}/food-miles`)
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/food-miles`)
                 ]);
-                const metrics = await metricsRes.json();
-                const billsData = await billsRes.json();
-                const food = await foodRes.json();
+                const metrics = await safeJson(metricsRes);
+                const billsData = await safeJson(billsRes);
+                const food = await safeJson(foodRes);
 
                 // Build CSV
                 const rows = [['Sustainability & ESG Report', new Date().toISOString().split('T')[0]]];
@@ -5378,7 +5411,7 @@
     </div>
   </div>
 
-  <script src="/js/farm-assistant.js?v=20260318c"></script>
+  <script src="/js/farm-assistant.js?v=20260319b"></script>
   
   <!-- Export Functions -->
   <script>

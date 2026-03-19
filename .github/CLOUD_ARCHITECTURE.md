@@ -136,7 +136,19 @@ The monorepo contains two independently deployed applications:
 - **Data directory**: `greenreach-central/public/data/` (SEPARATE copy)
 - **Routes**: `greenreach-central/routes/` (sync.js, auth.js, etc.)
 - **Dashboard**: `greenreach-central/public/views/farm-summary.html`
+- **Central Admin UI**: `greenreach-central/public/central-admin.js` (farm detail, devices table)
 - **Deployed via**: `eb deploy` from `greenreach-central/`
+
+### Central Devices Status Contract
+
+`GET /api/sync/:farmId/devices` can return devices without a top-level `status`.
+For SwitchBot sensors, online state is commonly represented by:
+1. `telemetry.online` boolean
+2. `lastSeen` / `telemetry.lastUpdate` timestamp recency
+
+Central UI must derive status from these fields rather than defaulting to offline.
+Canonical rule: if explicit status is missing, use `telemetry.online`; else infer
+online when last-seen is within 5 minutes.
 
 **These data directories are NOT automatically synced.** Changes to `public/data/farm.json` do NOT affect `greenreach-central/public/data/farm.json` and vice versa.
 
@@ -157,6 +169,27 @@ There are TWO separate authentication systems:
 - **Token source**: Login flow via `/api/farm/auth/login`
 - **Used by**: Dashboard (farm-summary.html), admin pages
 - **GREENREACH_API_KEY env var**: Used by Central's authMiddleware for server-to-server calls
+
+#### Browser Auth Header Contract (UI Pages)
+
+Some UI pages are standalone HTML/JS files and do not always run through shared helpers.
+To avoid 401 regressions on protected APIs, farm-facing views must:
+
+1. Read JWT token from both `sessionStorage` and `localStorage`
+2. Send `Authorization: Bearer <token>` when available
+3. Send `x-farm-id` when available (`farm_id` or `farmId` in storage)
+
+This contract is required for endpoints such as:
+- `/api/inventory/current`
+- `/api/inventory/forecast`
+- `/api/sustainability/metrics`
+- `/api/sustainability/utility-bills`
+- `/api/sustainability/food-miles`
+- `/api/sustainability/trends`
+
+Reference implementations:
+- `greenreach-central/public/views/farm-inventory.html` (`fetchWithFarmAuth`)
+- `greenreach-central/public/LE-farm-admin.html` (`fetchWithFarmAuth`)
 
 ### 3. Central-to-LE Proxy Authentication
 - **Mechanism**: `X-Farm-ID` + `X-API-Key` headers (uses GREENREACH_API_KEY)

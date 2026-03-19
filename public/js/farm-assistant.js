@@ -410,137 +410,136 @@ class FarmAssistant {
   }
 
   initTextToSpeech() {
-    // ResponsiveVoice will be loaded via script tag in HTML
-    // Check if either ResponsiveVoice or browser speech synthesis is available
-    if (window.responsiveVoice) {
-      console.log('🔊 ResponsiveVoice detected - using high-quality voices');
-      this.voiceEnabled = true;
-      
-      // Log available ResponsiveVoice voices
-      if (window.responsiveVoice.getVoices) {
-        const voices = window.responsiveVoice.getVoices();
-        console.log('🔊 ResponsiveVoice voices:', voices.map(v => v.name).join(', '));
-      }
-    } else if (window.speechSynthesis) {
-      console.log('🔊 Using browser Web Speech API (fallback)');
-      this.voiceEnabled = true;
-      this.voices = [];
-      
-      // Load voices for fallback
+    // Server-side OpenAI TTS is primary; browser speech is fallback.
+    this.voiceEnabled = true;
+    this.voices = [];
+    this._ttsAudio = null;
+    this._audioCtx = null;
+    this._ttsSource = null;
+
+    if (window.speechSynthesis) {
       const loadVoices = () => {
         this.voices = window.speechSynthesis.getVoices();
-        console.log('🔊 Browser voices loaded:', this.voices.length);
       };
-      
       loadVoices();
-      
       if (window.speechSynthesis.onvoiceschanged !== undefined) {
         window.speechSynthesis.onvoiceschanged = loadVoices;
       }
-    } else {
-      console.warn('🔊 Text-to-speech not supported in this browser');
-      this.voiceEnabled = false;
     }
-    
-    console.log('🔊 Text-to-speech initialized, voiceEnabled:', this.voiceEnabled);
+
+    // Create a persistent AudioContext and unlock it on first user gesture.
+    // Web Audio API stays unlocked for the page lifetime once resumed.
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      this._audioCtx = new AudioCtx();
+      const unlock = () => {
+        if (this._audioCtx.state === 'running') return;
+        this._audioCtx.resume();
+      };
+      document.addEventListener('click', unlock);
+      document.addEventListener('touchstart', unlock);
+    }
   }
 
   speak(text) {
-    console.log('🔊 speak() called with:', text.substring(0, 50) + '...');
-    
-    if (!this.voiceEnabled) {
-      console.warn('🔊 Voice disabled');
-      return;
+    if (!this.voiceEnabled) return;
+
+    // Cancel any in-progress playback.
+    if (this._ttsSource) {
+      try { this._ttsSource.stop(); } catch (_) { /* ignore */ }
+      this._ttsSource = null;
+    }
+    if (this._ttsAudio) {
+      this._ttsAudio.pause();
+      this._ttsAudio = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
-    // Check if ResponsiveVoice is available (better quality)
-    if (window.responsiveVoice) {
-      console.log('🔊 Using ResponsiveVoice');
-      
-      // Cancel any ongoing speech
-      if (window.responsiveVoice.isPlaying()) {
-        window.responsiveVoice.cancel();
-      }
-      
-      // Use a child-friendly voice
-      // Options: "UK English Female", "US English Female", "Australian Female"
-      const voiceName = "UK English Female"; // British accent is friendly for kids
-      
-      const options = {
-        pitch: 1.2,      // Slightly higher for friendlier sound
-        rate: 0.85,      // Slower for children to understand
-        volume: 1.0,
-        onstart: () => {
-          this.isSpeaking = true;
-          console.log('🔊 ✅ ResponsiveVoice speaking started:', text.substring(0, 30) + '...');
-        },
-        onend: () => {
-          this.isSpeaking = false;
-          console.log('🔊 ✅ ResponsiveVoice speech ended');
-        },
-        onerror: (error) => {
-          console.error('🔊 ❌ ResponsiveVoice error:', error);
-          this.isSpeaking = false;
-        }
-      };
-      
-      window.responsiveVoice.speak(text, voiceName, options);
+    this.isSpeaking = true;
+    const ttsVoice = (window.ASSISTANT_TTS_VOICE || 'echo').toLowerCase();
+    fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: text.substring(0, 2000),
+        voice: ttsVoice,
+      }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('TTS ' + res.status);
+        return res.arrayBuffer();
+      })
+      .then(buf => this._playViaWebAudio(buf, text))
+      .catch(err => {
+        console.warn('[TTS] Fetch failed:', err.message, '-- using browser speech');
+        this._speakBrowser(text);
+      });
+  }
+
+  // Play audio buffer through Web Audio API (bypasses autoplay blocking).
+  _playViaWebAudio(arrayBuffer, fallbackText) {
+    if (!this._audioCtx) {
+      this._playViaHtmlAudio(arrayBuffer, fallbackText);
       return;
     }
-    
-    // Fallback to browser's Web Speech API
-    console.log('🔊 Using browser Web Speech API (fallback)');
-    
+    this._audioCtx.resume().then(() => {
+      return this._audioCtx.decodeAudioData(arrayBuffer);
+    }).then(audioBuffer => {
+      const source = this._audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this._audioCtx.destination);
+      this._ttsSource = source;
+      source.onended = () => { this.isSpeaking = false; this._ttsSource = null; };
+      source.start(0);
+    }).catch(() => {
+      this._playViaHtmlAudio(arrayBuffer, fallbackText);
+    });
+  }
+
+  // HTMLAudioElement fallback if Web Audio API is unavailable.
+  _playViaHtmlAudio(arrayBuffer, fallbackText) {
+    const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    this._ttsAudio = audio;
+    audio.onended = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
+    audio.onerror = () => { this.isSpeaking = false; URL.revokeObjectURL(url); this._speakBrowser(fallbackText); };
+    audio.play().catch(() => {
+      this.isSpeaking = false;
+      URL.revokeObjectURL(url);
+      this._speakBrowser(fallbackText);
+    });
+  }
+
+  // Browser Web Speech API fallback.
+  _speakBrowser(text) {
     if (!window.speechSynthesis) {
-      console.warn('🔊 Text-to-speech not supported');
+      this.isSpeaking = false;
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
-    // Create speech utterance
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configure voice settings for child-friendly sound
-    utterance.rate = 0.85;
-    utterance.pitch = 1.3;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
     utterance.volume = 1.0;
-    
-    const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
-    
+
+    const voices = this.voices && this.voices.length > 0
+      ? this.voices
+      : window.speechSynthesis.getVoices();
+
     if (voices.length > 0) {
-      const preferredVoice = voices.find(v => 
-        v.name.includes('Samantha') ||
-        v.name.includes('Karen') ||
-        v.name.includes('Google UK English Female') ||
-        v.name.includes('Google US English Female') ||
-        (v.name.toLowerCase().includes('female') && v.lang.startsWith('en'))
-      );
-      
+      const preferredVoice = voices.find(v => v.lang.startsWith('en'));
       if (preferredVoice) {
         utterance.voice = preferredVoice;
-        console.log('🔊 Using voice:', preferredVoice.name);
       }
     }
 
-    utterance.onstart = () => {
-      this.isSpeaking = true;
-      console.log('🔊 ✅ Speaking started');
-    };
-
-    utterance.onend = () => {
-      this.isSpeaking = false;
-      console.log('🔊 ✅ Speech ended');
-    };
-
-    utterance.onerror = (event) => {
-      console.error('🔊 ❌ Speech error:', event.error);
-      this.isSpeaking = false;
-    };
-
-    // Speak the text
-    console.log('🔊 Calling speechSynthesis.speak()');
+    utterance.onend = () => { this.isSpeaking = false; };
+    utterance.onerror = () => { this.isSpeaking = false; };
     window.speechSynthesis.speak(utterance);
   }
 

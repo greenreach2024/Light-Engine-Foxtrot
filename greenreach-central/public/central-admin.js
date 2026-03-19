@@ -2617,8 +2617,8 @@ async function viewRoomDetail(farmId, roomId) {
                 deviceId: d.device_code || d.deviceId || d.device_id || d.id,
                 type: d.device_type || d.type || 'sensor',
                 zone: d.zone || d.zone_id || d.location || 'Unassigned',
-                status: d.status || 'online',
-                lastSeen: d.last_seen || d.lastSeen ? new Date(d.last_seen || d.lastSeen).toLocaleString() : 'Never'
+                status: deriveDeviceStatus(d),
+                lastSeen: formatDeviceLastSeen(d)
             }));
             console.log('[room-detail] Loaded devices:', roomData.devices.length);
         }
@@ -2808,8 +2808,8 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
             deviceId: device.deviceId,
             type: device.type,
             zone: device.zone,
-            status: device.status || 'online',
-            lastSeen: device.lastSeen || 'Never'
+            status: device.status || deriveDeviceStatus(device),
+            lastSeen: device.lastSeen || formatDeviceLastSeen(device)
         }));
     } else {
         // Fallback: fetch devices from API
@@ -2831,8 +2831,8 @@ async function loadRoomDevices(farmId, roomId, devicesData) {
                     deviceId: d.device_code || d.deviceId || d.device_id || d.id,
                     type: d.device_type || d.type || 'sensor',
                     zone: d.zone || d.zone_id || d.location || 'Unassigned',
-                    status: d.status || 'online',
-                    lastSeen: d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'
+                    status: deriveDeviceStatus(d),
+                    lastSeen: formatDeviceLastSeen(d)
                 }));
             }
         } catch (err) {
@@ -4638,8 +4638,8 @@ async function loadFarmDevices(farmId, count) {
                 name: device.device_name || device.deviceName || device.name || 'Unnamed Device',
                 type: device.device_type || device.type || 'unknown',
                 location: device.location || 'Unknown',
-                status: device.status || 'offline',
-                lastSeen: device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never',
+                status: deriveDeviceStatus(device),
+                lastSeen: formatDeviceLastSeen(device),
                 firmware: device.firmware_version || 'Unknown'
             }));
         } else {
@@ -5653,6 +5653,58 @@ function getStatusBadgeClass(status) {
         'critical': 'danger'
     };
     return map[status] || 'neutral';
+}
+
+/**
+ * Utility: Parse the most relevant device timestamp for online/offline inference.
+ */
+function getDeviceSeenAt(device) {
+    const ts = device?.last_seen
+        || device?.lastSeen
+        || device?.updatedAt
+        || device?.telemetry?.lastUpdate
+        || device?.telemetry?.timestamp
+        || device?.deviceData?.status?.lastUpdate
+        || null;
+    const ms = ts ? Date.parse(ts) : NaN;
+    return Number.isFinite(ms) ? new Date(ms) : null;
+}
+
+/**
+ * Utility: Infer device status from explicit fields, telemetry.online, and recency.
+ * Field mapping doc defines online when lastSeen < 5 minutes.
+ */
+function deriveDeviceStatus(device) {
+    const explicitStatus = String(device?.status || '').toLowerCase();
+    if (explicitStatus === 'online' || explicitStatus === 'offline' || explicitStatus === 'warning' || explicitStatus === 'critical') {
+        return explicitStatus;
+    }
+
+    const telemetryOnline = device?.telemetry?.online;
+    if (typeof telemetryOnline === 'boolean') {
+        return telemetryOnline ? 'online' : 'offline';
+    }
+
+    const embeddedOnline = device?.deviceData?.online;
+    if (typeof embeddedOnline === 'boolean') {
+        return embeddedOnline ? 'online' : 'offline';
+    }
+
+    const seenAt = getDeviceSeenAt(device);
+    if (seenAt) {
+        const ageMs = Date.now() - seenAt.getTime();
+        return ageMs <= (5 * 60 * 1000) ? 'online' : 'offline';
+    }
+
+    return 'offline';
+}
+
+/**
+ * Utility: Format device last-seen timestamp for table display.
+ */
+function formatDeviceLastSeen(device) {
+    const seenAt = getDeviceSeenAt(device);
+    return seenAt ? seenAt.toLocaleString() : 'Never';
 }
 
 /**
@@ -7156,18 +7208,35 @@ async function loadEnergyDashboard() {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/energy/dashboard`);
         if (!response.ok) {
-            throw new Error('Failed to load energy data');
+            throw new Error(`Failed to load energy data (${response.status})`);
         }
         
-        const data = await response.json();
-        
-        document.getElementById('energy-total-24h').textContent = data.total24h.toLocaleString();
-        document.getElementById('energy-cost-kwh').textContent = data.costPerKwh.toFixed(2);
-        document.getElementById('energy-efficiency').textContent = `${data.efficiency}%`;
-        document.getElementById('energy-savings').textContent = data.savingsKwh.toLocaleString();
-        
-        const consumersHtml = data.topConsumers && data.topConsumers.length > 0
-            ? data.topConsumers.map(c => `
+        const apiData = await response.json();
+        const energyData = apiData?.data || apiData || {};
+
+        const total24h = Number(energyData.total24h ?? energyData.summary?.totalConsumption ?? 0);
+        const totalCost = Number(energyData.summary?.cost ?? 0);
+        const costPerKwh = Number(energyData.costPerKwh ?? (total24h > 0 ? totalCost / total24h : 0));
+        const efficiency = Number(energyData.efficiency ?? 0);
+        const savingsKwh = Number(energyData.savingsKwh ?? 0);
+
+        document.getElementById('energy-total-24h').textContent = Number.isFinite(total24h) ? total24h.toLocaleString() : '0';
+        document.getElementById('energy-cost-kwh').textContent = Number.isFinite(costPerKwh) ? costPerKwh.toFixed(2) : '0.00';
+        document.getElementById('energy-efficiency').textContent = Number.isFinite(efficiency) ? `${efficiency}%` : '0%';
+        document.getElementById('energy-savings').textContent = Number.isFinite(savingsKwh) ? savingsKwh.toLocaleString() : '0';
+
+        const topConsumers = Array.isArray(energyData.topConsumers)
+            ? energyData.topConsumers
+            : (Array.isArray(energyData.byFarm)
+                ? energyData.byFarm.slice(0, 5).map(farm => ({
+                    name: farm.farmName || farm.farmId || 'Farm',
+                    type: 'Farm',
+                    consumption: Number(farm.consumption || 0)
+                }))
+                : []);
+
+        const consumersHtml = topConsumers.length > 0
+            ? topConsumers.map(c => `
                 <div class="metric-row">
                     <div class="metric-label">${c.name} - ${c.type}</div>
                     <div class="metric-value">${c.consumption} kWh</div>
@@ -7466,19 +7535,61 @@ let analyticsData = {
     summary: {}
 };
 
+function normalizeFarmIdValue(farmLike) {
+    if (!farmLike) return null;
+    if (typeof farmLike === 'string') {
+        const id = farmLike.trim();
+        return id || null;
+    }
+    const id = farmLike.farmId || farmLike.farm_id || null;
+    if (!id) return null;
+    return String(id).trim() || null;
+}
+
+function normalizeAnalyticsMetrics(metrics) {
+    if (!Array.isArray(metrics)) return [];
+    return metrics.map((m) => ({
+        date: m.date || m.recorded_at || m.timestamp || new Date().toISOString(),
+        production_kg: Number(m.production_kg ?? m.plant_count ?? 0),
+        revenue: Number(m.revenue ?? 0),
+        costs: Number(m.costs ?? m.energy_24h ?? 0),
+        efficiency_score: Number(m.efficiency_score ?? 0),
+        trays_seeded: Number(m.trays_seeded ?? m.tray_count ?? 0),
+        trays_harvested: Number(m.trays_harvested ?? 0),
+        orders_fulfilled: Number(m.orders_fulfilled ?? 0)
+    }));
+}
+
+function renderAnalyticsEmptyState(message = 'No metrics data available.') {
+    analyticsData = {
+        metrics: [],
+        summary: {
+            totalProduction: 0,
+            totalRevenue: 0,
+            daysReported: 0,
+            avgYield: 0,
+            topCrop: null
+        }
+    };
+    renderAnalyticsSummary(analyticsData.summary);
+    renderAnalyticsMetricsTable([]);
+    console.warn('[Analytics]', message);
+}
+
 function resolveAnalyticsFarmId() {
     if (currentAnalyticsFarmId) return currentAnalyticsFarmId;
     if (currentFarmId) return currentFarmId;
-    const fallbackFarm = farmsData.find(f => f.farmId) || farmsData[0];
-    return fallbackFarm ? fallbackFarm.farmId : null;
+    const fallbackFarm = farmsData.find(f => normalizeFarmIdValue(f)) || farmsData[0];
+    return normalizeFarmIdValue(fallbackFarm);
 }
 
 /**
  * Load analytics for a specific farm
  */
 async function loadAnalyticsForFarm(farmId) {
-    currentAnalyticsFarmId = farmId;
-    await loadFarmMetrics(farmId);
+    const resolvedFarmId = normalizeFarmIdValue(farmId);
+    currentAnalyticsFarmId = resolvedFarmId;
+    await loadFarmMetrics(resolvedFarmId);
 }
 
 /**
@@ -7498,36 +7609,49 @@ async function refreshAnalytics() {
  * Load farm metrics from API
  */
 async function loadFarmMetrics(farmId, days = 7, isFallback = false) {
-    if (!farmId) {
+    const resolvedFarmId = normalizeFarmIdValue(farmId);
+    if (!resolvedFarmId) {
         console.warn('[Analytics] No farmId provided — skipping metrics load');
+        renderAnalyticsEmptyState('No farm selected for analytics.');
         return;
     }
+
+    currentAnalyticsFarmId = resolvedFarmId;
+
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${resolvedFarmId}/metrics?days=${days}`);
         
         if (!response.ok) {
             console.error('Failed to load farm metrics:', response.status);
-            if (response.status === 404 && !isFallback) {
-                const fallbackFarm = farmsData.find(f => f.farmId && f.farmId !== farmId);
+            if ((response.status === 404 || response.status === 400) && !isFallback) {
+                const fallbackFarm = farmsData.find(f => {
+                    const fid = normalizeFarmIdValue(f);
+                    return fid && fid !== resolvedFarmId;
+                });
                 if (fallbackFarm) {
-                    currentAnalyticsFarmId = fallbackFarm.farmId;
-                    await loadFarmMetrics(fallbackFarm.farmId, days, true);
+                    const fallbackId = normalizeFarmIdValue(fallbackFarm);
+                    currentAnalyticsFarmId = fallbackId;
+                    await loadFarmMetrics(fallbackId, days, true);
                     return;
                 }
             }
-            showToast('Failed to load analytics data', 'error');
+            renderAnalyticsEmptyState(`Analytics endpoint returned HTTP ${response.status}.`);
             return;
         }
         
         const data = await response.json();
-        analyticsData = data;
+        analyticsData = {
+            ...data,
+            summary: data?.summary || {},
+            metrics: normalizeAnalyticsMetrics(data?.metrics)
+        };
         
-        renderAnalyticsSummary(data.summary);
-        renderAnalyticsMetricsTable(data.metrics);
+        renderAnalyticsSummary(analyticsData.summary);
+        renderAnalyticsMetricsTable(analyticsData.metrics);
         
     } catch (error) {
         console.error('Error loading farm metrics:', error);
-        showToast('Error loading analytics data', 'error');
+        renderAnalyticsEmptyState(error.message || 'Error loading analytics data.');
     }
 }
 
@@ -7536,13 +7660,21 @@ async function loadFarmMetrics(farmId, days = 7, isFallback = false) {
  */
 function renderAnalyticsSummary(summary) {
     if (!summary) return;
+
+    const productionEl = document.getElementById('analytics-production');
+    const productionAvgEl = document.getElementById('analytics-production-avg');
+    const revenueEl = document.getElementById('analytics-revenue');
+    if (!productionEl || !productionAvgEl || !revenueEl) {
+        console.warn('[Analytics] Summary elements not found in DOM');
+        return;
+    }
     
     // Production
-    document.getElementById('analytics-production').textContent = `${(summary.totalProduction || 0).toFixed(1)} kg`;
-    document.getElementById('analytics-production-avg').textContent = `${((summary.totalProduction || 0) / (summary.daysReported || 1)).toFixed(1)} kg/day avg`;
+    productionEl.textContent = `${(summary.totalProduction || 0).toFixed(1)} kg`;
+    productionAvgEl.textContent = `${((summary.totalProduction || 0) / (summary.daysReported || 1)).toFixed(1)} kg/day avg`;
     
     // Revenue
-    document.getElementById('analytics-revenue').textContent = `$${(summary.totalRevenue || 0).toFixed(2)}`;
+    revenueEl.textContent = `$${(summary.totalRevenue || 0).toFixed(2)}`;
     
     // Model performance (from API response)
     const perfData = summary.modelPerformance || analyticsData.modelPerformance;
@@ -8118,13 +8250,18 @@ async function loadFarmAlertsView(farmId) {
  */
 function renderAnalyticsMetricsTable(metrics) {
     const tbody = document.getElementById('analytics-metrics-tbody');
+    if (!tbody) {
+        console.warn('[Analytics] Metrics table body not found in DOM');
+        return;
+    }
+    const rows = Array.isArray(metrics) ? metrics : [];
     
-    if (metrics.length === 0) {
+    if (rows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No metrics data available.</td></tr>';
         return;
     }
     
-    tbody.innerHTML = metrics.map(m => {
+    tbody.innerHTML = rows.map(m => {
         const date = new Date(m.date);
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const profit = parseFloat(m.revenue) - parseFloat(m.costs);
@@ -10994,15 +11131,15 @@ function toggleDriverStatus(driverId) {
 async function loadAiMonitoring() {
     try {
         // Load AI agent status
-        const statusRes = await fetch('/api/farm-sales/ai-agent/status');
+        const statusRes = await authenticatedFetch(`${API_BASE}/api/farm-sales/ai-agent/status`);
         const statusData = statusRes.ok ? await statusRes.json() : {};
         
         // Load AI monitoring data
-        const monitorRes = await fetch('/api/admin/ai/monitoring');
+        const monitorRes = await authenticatedFetch(`${API_BASE}/api/admin/ai/monitoring`);
         const monitorData = monitorRes.ok ? await monitorRes.json() : null;
         
         // Load AI rules count
-        const rulesRes = await fetch('/api/ai-rules');
+        const rulesRes = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`);
         const rulesData = rulesRes.ok ? await rulesRes.json() : { rules: [] };
         
         if (monitorData && monitorData.success) {

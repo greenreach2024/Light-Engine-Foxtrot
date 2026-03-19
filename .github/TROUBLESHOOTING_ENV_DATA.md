@@ -144,6 +144,59 @@ Open browser dev tools (Network tab) and check:
 **Diagnostic**: Timestamps match deploy time rather than current time
 **Fix**: Ensure SwitchBot credentials are set (see #1). Fresh polling will overwrite stale file data.
 
+### 7. Devices Page False Offline (Status Field Missing)
+
+**Symptom**: Central dashboard Devices table shows `offline`, but sensors are updating and
+`/api/sync/:farmId/devices` contains fresh telemetry.
+
+**Cause**: UI status mapping relied on `device.status` only. SwitchBot device payloads often
+omit top-level `status` and provide `telemetry.online` + `lastSeen` instead.
+
+**Diagnostic**:
+```bash
+curl -s "https://greenreachgreens.com/api/sync/FARM-MLTP9LVH-B0B85039/devices" \
+  -H "X-Farm-ID: FARM-MLTP9LVH-B0B85039" \
+  -H "X-API-Key: <farm-api-key>" | python3 -m json.tool
+```
+
+Check whether:
+1. `devices[].telemetry.online` is `true`
+2. `devices[].lastSeen` or `devices[].telemetry.lastUpdate` is recent (< 5 minutes)
+
+**Fix**:
+- Use derived status logic in `greenreach-central/public/central-admin.js`:
+  1. explicit `status`
+  2. `telemetry.online` / `deviceData.online`
+  3. fallback to recency (`lastSeen < 5 minutes => online`)
+
+This matches the field mapping contract and prevents false offline badges.
+
+### 8. AI Insights Popup Errors (401 current/forecast, 500 metrics)
+
+**Symptom**: Farm-facing dashboards show popup/toast errors while network logs include:
+- `401` on `/api/inventory/current` and/or `/api/inventory/forecast`
+- `500` or non-OK on `/api/sustainability/metrics`
+
+**Cause**:
+1. Frontend request helper only read token from one storage location (local vs session mismatch)
+2. Missing `x-farm-id` context header on some standalone pages
+3. Dashboard parsed JSON on failed responses without graceful fallback
+
+**Diagnostic**:
+1. In browser Network tab, inspect request headers for failing endpoints
+2. Confirm `Authorization: Bearer ...` exists
+3. Confirm `x-farm-id: FARM-...` exists (when available in storage)
+4. Confirm UI does not crash on non-OK responses; it should render partial cards and log warnings
+
+**Fix**:
+- Standardize `fetchWithFarmAuth` to read from both `sessionStorage` and `localStorage`
+- Add `x-farm-id` from `farm_id`/`farmId` storage keys
+- Use safe JSON parsing and fail-soft rendering for sustainability widgets
+
+Reference implementations:
+- `greenreach-central/public/views/farm-inventory.html`
+- `greenreach-central/public/LE-farm-admin.html`
+
 ---
 
 ## Diagnostic One-Liner

@@ -580,9 +580,15 @@
       const API_BASE = window.location.origin;
 
       function fetchWithFarmAuth(url, opts = {}) {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const farmId =
+          sessionStorage.getItem('farm_id') ||
+          sessionStorage.getItem('farmId') ||
+          localStorage.getItem('farm_id') ||
+          localStorage.getItem('farmId');
         const headers = Object.assign({}, opts.headers || {});
         if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (farmId && !headers['x-farm-id']) headers['x-farm-id'] = farmId;
         return fetch(url, Object.assign({}, opts, { headers }));
       }
 
@@ -1478,6 +1484,6 @@
       }, 500);
     });
   </script>
-  <script src="/js/farm-assistant.js?v=20260318d"></script>
+  <script src="/js/farm-assistant.js?v=20260319b"></script>
 </body>
 </html>

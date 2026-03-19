@@ -266,6 +266,42 @@ The sync-service pushes data every 30s. The DB always has the freshest data from
 4. Renders temperature/humidity cards for each zone
 5. Cloud mode detection logic determines display format
 
+### Companion Views: Inventory + Sustainability
+
+The farm dashboard ecosystem includes additional views that call protected APIs:
+- `/api/inventory/current`
+- `/api/inventory/forecast`
+- `/api/sustainability/metrics`
+- `/api/sustainability/utility-bills`
+- `/api/sustainability/food-miles`
+- `/api/sustainability/trends`
+
+Required client behavior (Mar 2026 fix):
+1. Pull token from BOTH `sessionStorage` and `localStorage`
+2. Send `Authorization: Bearer <token>` when token exists
+3. Send `x-farm-id` from storage (`farm_id` / `farmId`) when available
+4. Fail soft on non-OK responses (render partial data, avoid hard popup/parsing failures)
+
+Reference files:
+- `greenreach-central/public/views/farm-inventory.html`
+- `greenreach-central/public/LE-farm-admin.html`
+
+### Device Status Display (Central Admin)
+
+**Primary File**: `greenreach-central/public/central-admin.js`
+
+The Central Devices table does not always receive a top-level `status` field from
+`/api/sync/:farmId/devices`. For SwitchBot payloads, online state is often carried
+in `telemetry.online` and freshness timestamps (`lastSeen`, `telemetry.lastUpdate`).
+
+Current status derivation rules (Mar 2026 fix):
+1. Use explicit `status` when present (`online`, `offline`, `warning`, `critical`)
+2. Otherwise use `telemetry.online` (or `deviceData.online`)
+3. Otherwise infer from recency: `lastSeen < 5 minutes => online`, else `offline`
+
+This matches the field contract in `field-mapping.html` and prevents false offline
+badges when telemetry is healthy but `status` is omitted.
+
 ---
 
 ## Common Failure Scenarios
@@ -292,6 +328,16 @@ The sync-service pushes data every 30s. The DB always has the freshest data from
 1. Is the user logged in? (JWT in localStorage)
 2. Is Central's /env endpoint responding? (curl test)
 3. Is the dashboard JS auto-refreshing? (Check browser console)
+
+### Scenario: Devices Page Shows "Offline" But Sensors Are Fresh
+
+**Check in order:**
+1. Confirm `/api/sync/FARM-MLTP9LVH-B0B85039/devices` returns `telemetry.online: true`
+2. Confirm `lastSeen`/`telemetry.lastUpdate` are recent (< 5 minutes)
+3. Confirm deployed `central-admin.js` includes `deriveDeviceStatus()` helper
+
+If steps 1-2 are true and UI still shows offline, the client mapping likely fell
+back to `device.status || 'offline'` instead of derived status.
 
 ---
 

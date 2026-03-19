@@ -497,10 +497,12 @@ class FarmAssistant {
   }
 
   initTextToSpeech() {
-    // Server-side OpenAI TTS is primary; browser speech is fallback
+    // Server-side OpenAI TTS is primary; browser speech is fallback.
     this.voiceEnabled = true;
     this.voices = [];
     this._ttsAudio = null;
+    this._audioCtx = null;
+    this._ttsSource = null;
 
     if (window.speechSynthesis) {
       const loadVoices = () => { this.voices = window.speechSynthesis.getVoices(); };
@@ -510,61 +512,108 @@ class FarmAssistant {
       }
     }
 
-    // Unlock audio playback on first user gesture (autoplay policy)
-    this._audioUnlocked = false;
+    // Create a persistent AudioContext and unlock it on first user gesture.
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      this._audioCtx = new AudioCtx();
+    }
     const unlockAudio = () => {
-      if (this._audioUnlocked) return;
-      this._audioUnlocked = true;
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      ctx.resume().then(() => ctx.close());
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
+      if (this._audioCtx && this._audioCtx.state !== 'running') {
+        this._audioCtx.resume().catch(() => {});
+      }
     };
-    document.addEventListener('click', unlockAudio, { once: false });
-    document.addEventListener('touchstart', unlockAudio, { once: false });
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
   }
 
   speak(text) {
     if (!this.voiceEnabled) return;
 
-    // Cancel any in-progress playback
+    // Cancel any in-progress playback.
+    if (this._ttsSource) {
+      try { this._ttsSource.stop(); } catch (_) { /* ignore */ }
+      this._ttsSource = null;
+    }
     if (this._ttsAudio) {
       this._ttsAudio.pause();
       this._ttsAudio = null;
     }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
-    // Server-side OpenAI TTS (natural voice)
     this.isSpeaking = true;
+    const ttsVoice = window.FARM_ASSISTANT_TTS_VOICE || 'echo';
     fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.substring(0, 2000), voice: 'ash' })
+      body: JSON.stringify({ text: text.substring(0, 2000), voice: ttsVoice })
     })
       .then(res => {
-        if (!res.ok) throw new Error(`TTS ${res.status}`);
-        return res.blob();
+        if (!res.ok) throw new Error('TTS ' + res.status);
+        return res.arrayBuffer();
       })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        this._ttsAudio = audio;
-        audio.onended = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
-        audio.onerror = () => { this.isSpeaking = false; URL.revokeObjectURL(url); this._speakBrowser(text); };
-        audio.play().catch(() => {
-          this.isSpeaking = false;
-          URL.revokeObjectURL(url);
-          console.warn('[TTS] Audio play blocked (autoplay policy) — using browser speech');
-          this._speakBrowser(text);
-        });
+      .then(buf => {
+        // Keep a copy for fallback since decodeAudioData detaches the buffer.
+        this._lastTtsBuf = buf.slice(0);
+        return this._playViaWebAudio(buf, text);
       })
       .catch(err => {
-        console.warn('[TTS] Fetch failed:', err.message, '— using browser speech');
+        console.warn('[TTS] Error:', err.message, '-- falling back to browser speech');
         this._speakBrowser(text);
       });
   }
 
-  /** Browser Web Speech API fallback */
+  // Play audio buffer through Web Audio API (bypasses autoplay blocking).
+  _playViaWebAudio(arrayBuffer, fallbackText) {
+    const ctx = this._audioCtx;
+    if (!ctx) {
+      console.warn('[TTS] No AudioContext -- trying HTML Audio');
+      return this._playViaHtmlAudio(this._lastTtsBuf || arrayBuffer, fallbackText);
+    }
+    return ctx.resume().then(() => {
+      return ctx.decodeAudioData(arrayBuffer);
+    }).then(audioBuffer => {
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      this._ttsSource = source;
+      source.onended = () => { this.isSpeaking = false; this._ttsSource = null; };
+      source.start(0);
+      console.log('[TTS] Playing via Web Audio API');
+    }).catch(err => {
+      console.warn('[TTS] Web Audio decode failed:', err.message, '-- trying HTML Audio');
+      this._playViaHtmlAudio(this._lastTtsBuf, fallbackText);
+    });
+  }
+
+  // HTMLAudioElement fallback if Web Audio API is unavailable.
+  _playViaHtmlAudio(arrayBuffer, fallbackText) {
+    try {
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      this._ttsAudio = audio;
+      audio.onended = () => { this.isSpeaking = false; URL.revokeObjectURL(url); };
+      audio.onerror = () => {
+        this.isSpeaking = false;
+        URL.revokeObjectURL(url);
+        console.warn('[TTS] HTML Audio error -- using browser speech');
+        this._speakBrowser(fallbackText);
+      };
+      audio.play().then(() => {
+        console.log('[TTS] Playing via HTML Audio element');
+      }).catch(() => {
+        this.isSpeaking = false;
+        URL.revokeObjectURL(url);
+        console.warn('[TTS] HTML Audio play blocked -- using browser speech');
+        this._speakBrowser(fallbackText);
+      });
+    } catch (e) {
+      console.warn('[TTS] HTML Audio setup failed:', e.message, '-- using browser speech');
+      this._speakBrowser(fallbackText);
+    }
+  }
+
+  // Browser Web Speech API fallback.
   _speakBrowser(text) {
     if (!window.speechSynthesis) { this.isSpeaking = false; return; }
     window.speechSynthesis.cancel();
@@ -577,8 +626,8 @@ class FarmAssistant {
     const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
     if (voices.length > 0) {
       const preferred = voices.find(v =>
-        v.name.includes('Google US English') ||
         v.name.includes('Samantha') ||
+        v.name.includes('Google US English') ||
         v.name.includes('Microsoft Aria') ||
         (v.lang.startsWith('en') && v.name.toLowerCase().includes('natural'))
       ) || voices.find(v => v.lang.startsWith('en'));
@@ -588,6 +637,7 @@ class FarmAssistant {
     utterance.onend = () => { this.isSpeaking = false; };
     utterance.onerror = () => { this.isSpeaking = false; };
     window.speechSynthesis.speak(utterance);
+    console.log('[TTS] Playing via browser speech synthesis');
   }
 
   toggleVoiceRecognition() {
