@@ -239,4 +239,66 @@ Line 1792 re-declares `let zoneId = sensor.zone;` — a **SyntaxError in strict 
 | `greenreach-central/public/farm-admin.html` | Fixed `INVENTORY_API` to use current origin |
 | `routes/crop-pricing.js` | Enhanced to merge all 50 recipes, mark growing crops |
 | `greenreach-central/server.js` | Added pull-based farm data sync, `fs` import |
-| `data/tray-formats.db` | Cleared corrupted file (will re-seed on restart) |
+
+---
+
+## 2026-03-19 — central-admin.js: 17 Bare fetch() Calls Sending Wrong Auth Token
+
+**Date:** March 19, 2026
+**Discovered on:** GR-central-admin.html (Farm Summary for FARM-MLTP9LVH-B0B85039)
+
+### 11. Central Admin — Wholesale Pricing & Procurement 401 Errors
+
+**Symptom:** Two console errors on page load:
+```
+Failed to load resource: 401 (current, line 0)    → /api/admin/pricing/current-prices
+Failed to load resource: 401 (forecast, line 0)   → /api/admin/harvest/forecast
+```
+
+**Root Cause:** Two entire sections of `central-admin.js` (Wholesale Pricing Management and Procurement Management) used bare `fetch()` for authenticated endpoints. The globally-injected `auth-guard.js` wraps `window.fetch` and injects the farm JWT (`sessionStorage.token`), not the admin JWT (`localStorage.admin_token`). The admin endpoints reject farm JWTs, producing 401s.
+
+This is a dual-token architecture conflict:
+- Farm pages use farm JWTs (stored in `sessionStorage.token`)
+- Admin pages use admin JWTs (stored in `localStorage.admin_token`)
+- `auth-guard.js` always injects the farm token for any `/api/` call
+- `authenticatedFetch()` explicitly sets the admin token and prevents auth-guard override
+
+**Fix:** Replaced 17 bare `fetch()` calls with `authenticatedFetch()` across:
+- 8 calls in Wholesale Pricing (loadPricingManagement, submitWholesalePrice, loadCurrentPricesIntoScanner, submitBatchPricing, cancelPriceOffer)
+- 9 calls in Procurement (loadProcurementCatalog, loadProcurementSuppliers, loadProcurementRevenue, saveCatalogProduct, editCatalogProduct, deleteCatalogProduct, saveNewSupplier, editSupplier, updateSupplier)
+
+Added null-safety checks since `authenticatedFetch()` returns null on auth failure.
+
+**Files Changed:**
+- `greenreach-central/public/central-admin.js` — 17 bare fetch() replaced with authenticatedFetch()
+
+**Prevention Rule:** All new API calls in `central-admin.js` must use `authenticatedFetch()`, never bare `fetch()`. The auth-guard fetch wrapper will inject the wrong token for admin pages.
+
+---
+
+**Date:** March 19, 2026
+**Discovered on:** room-heatmap.html (Heat Map for FARM-MLTP9LVH-B0B85039)
+
+### 12. Heat Map — Color Gradient Not Reflecting Temperature Delta
+
+**Symptom:** Sensor readings display correct numeric values, but the heat map renders a near-uniform color (mostly green) despite a dramatic temperature difference between sensors (one sensor moved to a cold climate).
+
+**Root Cause:** Two compounding factors in the Gaussian RBF interpolation engine:
+
+1. **Sigma uncapped for sparse sensors.** `computeLengthScale()` used `Math.max(avgNN * 1.2, roomDiag / 4)`. With only 2 sensors ~17 cells apart on a 20x15 grid, sigma computed to ~21 (nearly the room diagonal). This made every pixel receive near-equal weight from all sensors, collapsing the interpolated value to the room mean everywhere except within r^2 < 0.01 of a sensor marker.
+
+2. **2.5x range expansion compressed data into 40% of palette.** `displayRange = dataRange * 2.5` mapped the actual sensor range to only 40% of the color stops. Combined with the flat interpolation, the resulting normalized values (0.47-0.53) fell in a narrow green band — visually indistinguishable.
+
+**Combined effect:** Entire map rendered as uniform green. The ~2px ring at each sensor position showed correct colors but was hidden by the sensor marker overlay.
+
+**Fix:**
+- `computeLengthScale()`: Added upper cap `Math.min(..., roomDiag / 3)` and lowered floor from `roomDiag / 4` to `roomDiag / 6`. This preserves smooth interpolation for dense sensor arrays while preventing over-smoothing with sparse sensors.
+- Range expansion: Reduced from `dataRange * 2.5` to `dataRange * 1.5` (data occupies ~67% of palette instead of 40%). Updated in both `renderHeatMap()` and the legend calculation.
+
+**Files Changed:**
+- `greenreach-central/public/views/room-heatmap.html` — computeLengthScale sigma formula, 2x displayRange calculation
+- `public/views/room-heatmap.html` — identical changes to edge copy
+
+**Impact:** Color rendering only. No change to sensor data extraction, numeric displays, telemetry values, zone aggregates, or any API data flow. VPD per-pixel computation unaffected (uses same interpolation engine with corrected sigma).
+
+**Prevention Rule:** When tuning interpolation parameters, verify gradient visibility with both sparse (2 sensor) and dense (6+ sensor) configurations. The sigma cap ensures sparse layouts still produce visible gradients.

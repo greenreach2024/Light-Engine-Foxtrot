@@ -2315,7 +2315,7 @@
         const dataRange = dataMax - dataMin;
         const ADAPTIVE_MIN_RANGE = { temperature: 1.0, humidity: 5.0, vpd: 0.2 };
         const minRange = ADAPTIVE_MIN_RANGE[STATE.currentMetric] || 1;
-        const displayRange = Math.max(dataRange * 2.5, minRange);
+        const displayRange = Math.max(dataRange * 1.5, minRange);
         const legendMin = dataMean - displayRange / 2;
         const legendMax = dataMean + displayRange / 2;
         document.getElementById('legendMin').textContent = `${legendMin.toFixed(1)}${metric.unit}`;
@@ -2397,8 +2397,8 @@
         vpd:         0.2    // At least ±0.1 kPa
       };
       const minRange = ADAPTIVE_MIN_RANGE[STATE.currentMetric] || 1;
-      // Expand sensor range ×2.5 so data occupies ~40% of colour palette
-      const displayRange = Math.max(dataRange * 2.5, minRange);
+      // Expand sensor range x1.5 so data occupies ~67% of colour palette
+      const displayRange = Math.max(dataRange * 1.5, minRange);
       let min = dataMean - displayRange / 2;
       let max = dataMean + displayRange / 2;
       if (max <= min) max = min + 1;
@@ -2757,9 +2757,10 @@
       }
       const avgNN = totalNN / sensors.length;
 
-      // Length scale: 1.2× avg NN distance, but at least room_diagonal/4
-      // This yields smooth room-wide gradients that still reveal local variation
-      return Math.max(avgNN * 1.2, roomDiag / 4);
+      // Length scale: 1.2x avg NN distance, floored at roomDiag/6 for
+      // minimum coverage, CAPPED at roomDiag/3 to prevent over-smoothing
+      // when sensors are sparse (avoids near-uniform mean everywhere).
+      return Math.min(Math.max(avgNN * 1.2, roomDiag / 6), roomDiag / 3);
     }
 
     /**
