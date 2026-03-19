@@ -1,7 +1,9 @@
 # Data Workflow Errors — Diagnosis & Fixes
 
-**Date:** February 10, 2026  
-**Status:** All issues addressed — see fixes below
+**Created:** February 10, 2026  
+**Last Updated:** March 19, 2026  
+**Status:** All issues addressed — see fixes below  
+**Latest Issue:** #13 — Settings page crash + no persistence (commit `ef13d60`, March 19, 2026)
 
 ---
 
@@ -244,7 +246,8 @@ Line 1792 re-declares `let zoneId = sensor.zone;` — a **SyntaxError in strict 
 
 ## 2026-03-19 — central-admin.js: 17 Bare fetch() Calls Sending Wrong Auth Token
 
-**Date:** March 19, 2026
+**Date:** March 19, 2026  
+**Timestamp:** 2026-03-19  
 **Discovered on:** GR-central-admin.html (Farm Summary for FARM-MLTP9LVH-B0B85039)
 
 ### 11. Central Admin — Wholesale Pricing & Procurement 401 Errors
@@ -276,7 +279,9 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 
 ---
 
-**Date:** March 19, 2026
+**Date:** March 19, 2026  
+**Timestamp:** 2026-03-19  
+**Commit:** `bde4fbf`  
 **Discovered on:** room-heatmap.html (Heat Map for FARM-MLTP9LVH-B0B85039)
 
 ### 12. Heat Map — Color Gradient Not Reflecting Temperature Delta
@@ -305,12 +310,17 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 
 ---
 
-**Date:** March 19, 2026
+**Date:** March 19, 2026  
+**Timestamp:** 2026-03-19  
+**Commit:** `ef13d60`  
 **Discovered on:** Farm Settings page (LE-farm-admin.html, Farm ID: FARM-MLTP9LVH-B0B85039)
 
 ### 13. Settings Page — "Error loading settings" + Fields Not Seeding / Not Persisting
 
-**Symptom:** Settings page shows "Error loading settings" toast on load. Contact Information, Certifications & Practices, Display Preferences, System Configuration sections all appear empty. Changes entered by the user do not persist across page reloads.
+**Original Problem (reported by user):**  
+> "Audit setting page - Farm ID: FARM-MLTP9LVH-B0B85039 - Pop up error 'unable to load settings.' There are many fields that should be filled and pull from other location that are not seeding. Contact Information, Certifications & Practices, Display Preferences, System Configuration are all not seeding or persisting when I do add the data. There is no save button on this page."
+
+**Symptom:** Settings page shows "Error loading settings" toast on load. Contact Information, Certifications & Practices, Display Preferences, System Configuration sections all appear empty. Changes entered by the user do not persist across page reloads. User could not find save buttons (page errored before full render).
 
 **Root Cause — 3 compounding issues:**
 
