@@ -302,3 +302,37 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 **Impact:** Color rendering only. No change to sensor data extraction, numeric displays, telemetry values, zone aggregates, or any API data flow. VPD per-pixel computation unaffected (uses same interpolation engine with corrected sigma).
 
 **Prevention Rule:** When tuning interpolation parameters, verify gradient visibility with both sparse (2 sensor) and dense (6+ sensor) configurations. The sigma cap ensures sparse layouts still produce visible gradients.
+
+---
+
+**Date:** March 19, 2026
+**Discovered on:** Farm Settings page (LE-farm-admin.html, Farm ID: FARM-MLTP9LVH-B0B85039)
+
+### 13. Settings Page — "Error loading settings" + Fields Not Seeding / Not Persisting
+
+**Symptom:** Settings page shows "Error loading settings" toast on load. Contact Information, Certifications & Practices, Display Preferences, System Configuration sections all appear empty. Changes entered by the user do not persist across page reloads.
+
+**Root Cause — 3 compounding issues:**
+
+1. **Missing DOM elements crash `loadSettings()`.** The HTML had been redesigned (Integration Settings card changed to Wholesale Marketplace, Hardware Detection and Square Status cards removed) but `loadSettings()` in `farm-admin.js` still referenced 7 removed element IDs: `greenreach-sync-enabled`, `greenreach-endpoint`, `settings-api-key`, `hardware-lights`, `hardware-fans`, `hardware-sensors`, `hardware-other`. Direct `.value =` / `.checked =` on null elements threw TypeError, caught by the function's try/catch, which showed the error toast and aborted — preventing ALL downstream field population (Display Preferences, Notifications, System Configuration, Farm Operations, API & Webhooks).
+
+2. **No server-side persistence endpoint.** `saveSettings()` saved to `localStorage` AND attempted POST to `/data/farm-settings.json`, but no server route handled that endpoint (404). Settings were lost on cache clear or device switch. Only `saveProfileSettings()` (Contact Info) and `saveEditCertifications()` had working server persistence via `/api/setup/profile` PATCH and `/api/setup/certifications` POST respectively.
+
+3. **Certifications edit modal HTML missing.** `openEditCertificationsModal()` and `saveEditCertifications()` referenced `editCertificationsForm` and `editCertificationsModal` elements that did not exist in the HTML. The certifications card had no Edit button, so users could not modify certifications after initial setup wizard completion.
+
+**Fix:**
+- Added null-safe DOM helpers (`setVal`, `setChk`, `setTxt`) to `loadSettings()` so missing elements are silently skipped instead of crashing. Applied same null-safety to `checkSquareStatus()`, `scanHardware()`, `openEditCertificationsModal()`, `closeEditCertificationsModal()`, and `saveEditCertifications()`.
+- Added `val()`/`chk()` null-safe helpers to `saveSettings()` (edge copy had direct `.value`/`.checked` access without null checks).
+- Added POST `/data/farm-settings.json` and GET `/data/farm-settings.json` routes in `greenreach-central/server.js` using `farmStore.set/get(fid, 'farm_settings', ...)` for server-side persistence.
+- Updated `loadSettings()` to try loading from server endpoint first, falling back to localStorage.
+- Added certifications edit modal HTML with checkbox forms for certifications and practices, plus an "Edit" button on the Certifications & Practices card.
+
+**Files Changed:**
+- `greenreach-central/public/farm-admin.js` — null-safe helpers in loadSettings, checkSquareStatus, scanHardware, modal functions; server-first settings load
+- `greenreach-central/public/LE-farm-admin.html` — added editCertificationsModal, Edit button on certifications card
+- `greenreach-central/server.js` — added POST/GET `/data/farm-settings.json` routes
+- `public/farm-admin.js` — identical null-safety fixes + val/chk helpers in saveSettings (edge copy)
+
+**Impact:** Settings page load, field population, and persistence. No change to sensor data, telemetry, orders, or any other data flow.
+
+**Prevention Rule:** All `document.getElementById()` calls in settings functions must use null-safe helpers. When HTML cards are removed or redesigned, the corresponding JS references must be updated in the same commit.

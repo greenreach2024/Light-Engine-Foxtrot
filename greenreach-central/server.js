@@ -422,6 +422,36 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
   }
 });
 
+// ── Farm Settings: persist display prefs, notifications, system config ──────
+app.post('/data/farm-settings.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  try {
+    await farmStore.set(fid, 'farm_settings', req.body);
+    return res.json({ success: true, dataType: 'farm_settings', farmId: fid });
+  } catch (err) {
+    logger.error('[Farm Settings] Save failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Load saved farm settings on GET
+app.get('/data/farm-settings.json', async (req, res) => {
+  const fid = farmStore.farmIdFromReq(req);
+  if (!fid) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  try {
+    const settings = await farmStore.get(fid, 'farm_settings') || {};
+    return res.json(settings);
+  } catch (err) {
+    logger.error('[Farm Settings] Load failed:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── IoT Devices: save to DB + forward to Light Engine ──────────────────────
 // The browser's room-mapper saves device registry data (zone assignments,
 // sensor placements) via POST /data/iot-devices.json. This handler persists

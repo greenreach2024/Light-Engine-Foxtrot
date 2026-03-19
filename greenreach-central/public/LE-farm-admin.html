@@ -3319,7 +3319,10 @@
 
                     <!-- Certifications & Practices -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Certifications & Practices</h2>
+                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="font-size: 12px; padding: 6px 14px;">Edit</button>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
@@ -3620,6 +3623,47 @@
                 <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px;">
                     <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+
+                <!-- Edit Certifications Modal -->
+                <div id="editCertificationsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: none; align-items: center; justify-content: center;">
+                    <div style="background: var(--bg-card); border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Edit Certifications & Practices</h2>
+                            <button onclick="closeEditCertificationsModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;">&times;</button>
+                        </div>
+                        <form id="editCertificationsForm" onsubmit="saveEditCertifications(event)">
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="USDA Organic"><span>USDA Organic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Canada Organic"><span>Canada Organic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Non-GMO"><span>Non-GMO</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Fair Trade"><span>Fair Trade</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="GAP Certified"><span>GAP Certified</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Biodynamic"><span>Biodynamic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Rainforest Alliance"><span>Rainforest Alliance</span></label>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Growing Practices</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Hydroponic"><span>Hydroponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aquaponic"><span>Aquaponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aeroponic"><span>Aeroponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Vertical Farming"><span>Vertical Farming</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="No-Till"><span>No-Till</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Regenerative"><span>Regenerative</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Permaculture"><span>Permaculture</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Cover Cropping"><span>Cover Cropping</span></label>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 15px; border-top: 1px solid var(--border);">
+                                <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()">Cancel</button>
+                                <button type="submit" class="btn-primary">Save Certifications</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

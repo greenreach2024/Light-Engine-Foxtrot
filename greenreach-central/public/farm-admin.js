@@ -4072,6 +4072,11 @@ function downloadAllReceipts() {
  */
 async function loadSettings() {
     try {
+        // Null-safe DOM helpers — prevent crash when elements are absent
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+        const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+        const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? ''; };
+
         // Load farm data from /data/farm.json (source of truth for edge devices)
         let farmData = {};
         try {
@@ -4132,19 +4137,19 @@ async function loadSettings() {
         const registrationCode = farmData.registrationCode || setupData.registrationCode || storedFarmData.registration_code || 'UNKNOWN';
         const networkType = setupData.network?.type || storedFarmData.network_type || 'Edge Device';
         
-        document.getElementById('settings-farm-id').value = farmId;
-        document.getElementById('settings-registration-code').value = registrationCode;
-        document.getElementById('network-type').textContent = networkType;
+        setVal('settings-farm-id', farmId);
+        setVal('settings-registration-code', registrationCode);
+        setTxt('network-type', networkType);
 
         // Populate editable profile fields
         const farmName = profileData.name || farmData.name || setupData.farm?.name || authFarmName || '';
-        document.getElementById('settings-farm-name').value = farmName;
-        document.getElementById('settings-contact-name').value = profileData.contactName || farmData.contact?.name || '';
-        document.getElementById('settings-contact-email').value = profileData.email || farmData.contact?.email || '';
-        document.getElementById('settings-contact-phone').value = profileData.phone || farmData.contact?.phone || '';
-        document.getElementById('settings-website').value = profileData.website || farmData.contact?.website || '';
+        setVal('settings-farm-name', farmName);
+        setVal('settings-contact-name', profileData.contactName || farmData.contact?.name || '');
+        setVal('settings-contact-email', profileData.email || farmData.contact?.email || '');
+        setVal('settings-contact-phone', profileData.phone || farmData.contact?.phone || '');
+        setVal('settings-website', profileData.website || farmData.contact?.website || '');
         const city = profileData.address?.city || (typeof profileData.address === 'string' ? profileData.address : '') || profileData.location || '';
-        document.getElementById('settings-city').value = typeof city === 'object' ? (city.city || '') : city;
+        setVal('settings-city', typeof city === 'object' ? (city.city || '') : city);
 
         // Plan type badge
         const planType = profileData.planType || setupData.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
@@ -4174,10 +4179,10 @@ async function loadSettings() {
             
             // Load hardware info
             if (setupData.hardwareDetected) {
-                document.getElementById('hardware-lights').textContent = setupData.hardwareDetected.lights || 0;
-                document.getElementById('hardware-fans').textContent = setupData.hardwareDetected.fans || 0;
-                document.getElementById('hardware-sensors').textContent = setupData.hardwareDetected.sensors || 0;
-                document.getElementById('hardware-other').textContent = setupData.hardwareDetected.other || 0;
+                setTxt('hardware-lights', setupData.hardwareDetected.lights || 0);
+                setTxt('hardware-fans', setupData.hardwareDetected.fans || 0);
+                setTxt('hardware-sensors', setupData.hardwareDetected.sensors || 0);
+                setTxt('hardware-other', setupData.hardwareDetected.other || 0);
             }
             
             // Load certifications
@@ -4217,50 +4222,68 @@ async function loadSettings() {
             }
         }
         
-        // Load user preferences from localStorage
-        const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        // Load user preferences — try server first, fallback to localStorage
+        let settings = {};
+        try {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token') || currentSession?.token;
+            const sHeaders = {};
+            if (token) sHeaders['Authorization'] = 'Bearer ' + token;
+            const sResp = await fetch('/data/farm-settings.json', { headers: sHeaders });
+            if (sResp.ok) {
+                const serverSettings = await sResp.json();
+                if (serverSettings && Object.keys(serverSettings).length > 0) {
+                    settings = serverSettings;
+                    // Keep localStorage in sync
+                    localStorage.setItem('farmSettings', JSON.stringify(settings));
+                }
+            }
+        } catch (_) { /* server load is best-effort */ }
+        // Fallback to localStorage if server returned nothing
+        if (!Object.keys(settings).length) {
+            settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        }
         
         // Display Preferences
-        document.getElementById('settings-temp-unit').value = settings.tempUnit || 'F';
-        document.getElementById('settings-weight-unit').value = settings.weightUnit || 'lbs';
-        document.getElementById('settings-currency').value = settings.currency || 'USD';
-        document.getElementById('settings-timezone').value = settings.timezone || 'America/New_York';
+        setVal('settings-temp-unit', settings.tempUnit || 'F');
+        setVal('settings-weight-unit', settings.weightUnit || 'lbs');
+        setVal('settings-currency', settings.currency || 'USD');
+        setVal('settings-timezone', settings.timezone || 'America/New_York');
         
         // Notifications
-        document.getElementById('notif-new-order').checked = settings.notifNewOrder !== false;
-        document.getElementById('notif-order-shipped').checked = settings.notifOrderShipped !== false;
-        document.getElementById('notif-low-inventory').checked = settings.notifLowInventory !== false;
-        document.getElementById('notif-harvest-ready').checked = settings.notifHarvestReady !== false;
-        document.getElementById('notif-equipment-issue').checked = settings.notifEquipmentIssue !== false;
-        document.getElementById('notif-ai-recommend').checked = settings.notifAiRecommend !== false;
-        document.getElementById('settings-notif-email').value = settings.notifEmail || '';
+        setChk('notif-new-order', settings.notifNewOrder !== false);
+        setChk('notif-order-shipped', settings.notifOrderShipped !== false);
+        setChk('notif-low-inventory', settings.notifLowInventory !== false);
+        setChk('notif-harvest-ready', settings.notifHarvestReady !== false);
+        setChk('notif-equipment-issue', settings.notifEquipmentIssue !== false);
+        setChk('notif-ai-recommend', settings.notifAiRecommend !== false);
+        setVal('settings-notif-email', settings.notifEmail || '');
         
         // Integration Settings
-        document.getElementById('greenreach-sync-enabled').checked = settings.greenreachSync !== false;
-        document.getElementById('greenreach-endpoint').value = settings.greenreachEndpoint || 'https://central.greenreach.app';
-        document.getElementById('settings-api-key').value = settings.apiKey || '';
+        setChk('greenreach-sync-enabled', settings.greenreachSync !== false);
+        setVal('greenreach-endpoint', settings.greenreachEndpoint || 'https://central.greenreach.app');
+        setVal('settings-api-key', settings.apiKey || '');
         
         // Check Square status
         checkSquareStatus();
         
         // System Configuration
-        document.getElementById('auto-backup').checked = settings.autoBackup !== false;
-        document.getElementById('backup-frequency').value = settings.backupFrequency || 'daily';
-        document.getElementById('require-2fa').checked = settings.require2fa || false;
-        document.getElementById('password-expiry').checked = settings.passwordExpiry || false;
-        document.getElementById('session-timeout').value = settings.sessionTimeout || 30;
+        setChk('auto-backup', settings.autoBackup !== false);
+        setVal('backup-frequency', settings.backupFrequency || 'daily');
+        setChk('require-2fa', settings.require2fa || false);
+        setChk('password-expiry', settings.passwordExpiry || false);
+        setVal('session-timeout', settings.sessionTimeout || 30);
         
         // Farm Operations Defaults
-        document.getElementById('default-ws1-discount').value = settings.defaultWS1Discount || 15;
-        document.getElementById('default-ws2-discount').value = settings.defaultWS2Discount || 25;
-        document.getElementById('default-ws3-discount').value = settings.defaultWS3Discount || 35;
-        document.getElementById('low-stock-threshold').value = settings.lowStockThreshold || 10;
+        setVal('default-ws1-discount', settings.defaultWS1Discount || 15);
+        setVal('default-ws2-discount', settings.defaultWS2Discount || 25);
+        setVal('default-ws3-discount', settings.defaultWS3Discount || 35);
+        setVal('low-stock-threshold', settings.lowStockThreshold || 10);
         
         // API & Webhooks
-        document.getElementById('webhook-url').value = settings.webhookUrl || '';
-        document.getElementById('webhook-orders').checked = settings.webhookOrders || false;
-        document.getElementById('webhook-inventory').checked = settings.webhookInventory || false;
-        document.getElementById('webhook-harvest').checked = settings.webhookHarvest || false;
+        setVal('webhook-url', settings.webhookUrl || '');
+        setChk('webhook-orders', settings.webhookOrders || false);
+        setChk('webhook-inventory', settings.webhookInventory || false);
+        setChk('webhook-harvest', settings.webhookHarvest || false);
         
     } catch (error) {
         console.error('Error loading settings:', error);
@@ -4284,20 +4307,31 @@ async function checkSquareStatus() {
         const statusContainer = document.getElementById('square-connection-status');
         
         if (data.connected) {
-            statusEl.textContent = `Connected (${data.merchantName || 'Unknown Merchant'})`;
-            statusEl.style.color = 'var(--accent-green)';
-            statusContainer.style.background = 'rgba(16, 185, 129, 0.1)';
-            statusContainer.style.borderColor = 'var(--accent-green)';
+            if (statusEl) {
+                statusEl.textContent = `Connected (${data.merchantName || 'Unknown Merchant'})`;
+                statusEl.style.color = 'var(--accent-green)';
+            }
+            if (statusContainer) {
+                statusContainer.style.background = 'rgba(16, 185, 129, 0.1)';
+                statusContainer.style.borderColor = 'var(--accent-green)';
+            }
         } else {
-            statusEl.textContent = 'Not Connected';
-            statusEl.style.color = 'var(--accent-red)';
-            statusContainer.style.background = 'rgba(239, 68, 68, 0.1)';
-            statusContainer.style.borderColor = 'var(--accent-red)';
+            if (statusEl) {
+                statusEl.textContent = 'Not Connected';
+                statusEl.style.color = 'var(--accent-red)';
+            }
+            if (statusContainer) {
+                statusContainer.style.background = 'rgba(239, 68, 68, 0.1)';
+                statusContainer.style.borderColor = 'var(--accent-red)';
+            }
         }
     } catch (error) {
         console.error('Error checking Square status:', error);
-        document.getElementById('square-status-text').textContent = 'Unable to check status';
-        document.getElementById('square-status-text').style.color = 'var(--text-muted)';
+        const statusEl = document.getElementById('square-status-text');
+        if (statusEl) {
+            statusEl.textContent = 'Unable to check status';
+            statusEl.style.color = 'var(--text-muted)';
+        }
     }
 }
 
@@ -4315,10 +4349,11 @@ async function scanHardware() {
         
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('hardware-lights').textContent = data.lights || 0;
-            document.getElementById('hardware-fans').textContent = data.fans || 0;
-            document.getElementById('hardware-sensors').textContent = data.sensors || 0;
-            document.getElementById('hardware-other').textContent = data.other || 0;
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            set('hardware-lights', data.lights || 0);
+            set('hardware-fans', data.fans || 0);
+            set('hardware-sensors', data.sensors || 0);
+            set('hardware-other', data.other || 0);
             showToast('Hardware scan complete', 'success');
         }
     } catch (error) {
@@ -4424,6 +4459,11 @@ async function openEditCertificationsModal() {
         
         // Populate checkboxes with current values
         const form = document.getElementById('editCertificationsForm');
+        if (!form) {
+            console.warn('[Settings] editCertificationsForm not found in DOM');
+            showToast('Certifications editor not available', 'warning');
+            return;
+        }
         
         // Clear all checkboxes first
         form.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -4445,7 +4485,8 @@ async function openEditCertificationsModal() {
         // Decision: Not relevant for farm operations (2026-01-22)
         
         // Show modal
-        document.getElementById('editCertificationsModal').style.display = 'block';
+        const modal = document.getElementById('editCertificationsModal');
+        if (modal) modal.style.display = 'block';
     } catch (error) {
         console.error('Error opening certifications modal:', error);
         showToast('Error loading certifications', 'error');
@@ -4456,7 +4497,8 @@ async function openEditCertificationsModal() {
  * Close edit certifications modal
  */
 function closeEditCertificationsModal() {
-    document.getElementById('editCertificationsModal').style.display = 'none';
+    const modal = document.getElementById('editCertificationsModal');
+    if (modal) modal.style.display = 'none';
 }
 
 /**
@@ -4467,6 +4509,10 @@ async function saveEditCertifications(event) {
     
     try {
         const form = document.getElementById('editCertificationsForm');
+        if (!form) {
+            showToast('Certifications form not found', 'error');
+            return;
+        }
         
         // Collect selected values
         const certifications = Array.from(form.querySelectorAll('input[name="certifications"]:checked'))
