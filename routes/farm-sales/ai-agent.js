@@ -14,7 +14,7 @@ const pendingApprovals = new Map();
 const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
 function pendingKey(req) {
-  return `${req.farmId || 'unknown'}:${req.userId || 'unknown'}`;
+  return `${req.farm_id || 'unknown'}:${req.user_id || 'unknown'}`;
 }
 
 function setPendingApproval(req, intent, rawMessage) {
@@ -49,7 +49,7 @@ const RATE_LIMIT_MAX = 20; // Max 20 requests per minute per farm
  * Simple rate limiting middleware
  */
 function rateLimiter(req, res, next) {
-  const farmId = req.farmId;
+  const farmId = req.farm_id;
   const now = Date.now();
   
   if (!rateLimitMap.has(farmId)) {
@@ -131,8 +131,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
         recommendation: intent.response,
         human_decision: 'pending',
         tier: 'recommend',
-        farm_id: req.farmId,
-        user_id: req.userId
+        farm_id: req.farm_id,
+        user_id: req.user_id
       });
 
       return res.json({
@@ -145,8 +145,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
     // Execute the action
     const result = await executeAction(intent, {
       farmStores: req.app.get('farmStores'),
-      farmId: req.farmId,
-      userId: req.userId,
+      farmId: req.farm_id,
+      userId: req.user_id,
       agentClass,
       confirmAction: !!confirm_action,
       userMessage: message
@@ -169,8 +169,8 @@ router.post('/chat', farmAuthMiddleware, rateLimiter, async (req, res) => {
       recommendation: result.message || intent.response,
       human_decision: humanDecision,
       tier: result.tier || 'auto',
-      farm_id: req.farmId,
-      user_id: req.userId
+      farm_id: req.farm_id,
+      user_id: req.user_id
     });
     
     // Return combined response
@@ -253,7 +253,7 @@ router.post('/feedback', farmAuthMiddleware, async (req, res) => {
     
     // Log feedback (could be stored in database for analysis)
     console.log('[AI Agent] Feedback received:', {
-      farm_id: req.farmId,
+      farm_id: req.farm_id,
       message_id,
       rating,
       comment,
@@ -284,7 +284,7 @@ router.get('/audit', farmAuthMiddleware, async (req, res) => {
     const records = await getAuditLog({
       limit: parseInt(req.query.limit) || 50,
       agent_class: req.query.agent_class || undefined,
-      farm_id: req.farmId
+      farm_id: req.farm_id
     });
     res.json({ ok: true, count: records.length, records });
   } catch (error) {

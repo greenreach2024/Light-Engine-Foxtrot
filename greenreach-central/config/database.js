@@ -1724,6 +1724,34 @@ async function runMigrations(client) {
     logger.warn('Migration 026 warning:', err.message);
   }
 
+  // ── Migration 027: AI usage tracking per farm ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_usage (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255),
+        endpoint VARCHAR(100) NOT NULL,
+        model VARCHAR(100) NOT NULL,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        total_tokens INTEGER,
+        audio_chars INTEGER,
+        estimated_cost NUMERIC(10,6),
+        status VARCHAR(20) DEFAULT 'success',
+        error_message TEXT,
+        user_id VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_ai_usage_farm ON ai_usage(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_ai_usage_endpoint ON ai_usage(endpoint);
+      CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at);
+      CREATE INDEX IF NOT EXISTS idx_ai_usage_farm_date ON ai_usage(farm_id, created_at);
+    `);
+    logger.info('AI usage tracking table ready (migration 027)');
+  } catch (err) {
+    logger.warn('Migration 027 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

@@ -90,6 +90,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import logger from '../utils/logger.js';
 import { getDatabase } from '../config/database.js';
+import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
@@ -1203,6 +1204,18 @@ router.post('/scrape-website', optionalAuth, async (req, res) => {
           max_tokens: 500
         });
         intelligence.positioningSummary = aiRes.choices[0].message.content;
+
+        trackAiUsage({
+          farm_id: null,
+          endpoint: 'grant-wizard-positioning',
+          model: 'gpt-4',
+          prompt_tokens: aiRes.usage?.prompt_tokens,
+          completion_tokens: aiRes.usage?.completion_tokens,
+          total_tokens: aiRes.usage?.total_tokens,
+          estimated_cost: estimateChatCost('gpt-4', aiRes.usage?.prompt_tokens || 0, aiRes.usage?.completion_tokens || 0),
+          status: 'success',
+          user_id: req.grantUserId || null
+        });
       } catch (aiErr) {
         logger.warn('[grant-wizard] AI positioning summary failed:', aiErr.message);
       }
@@ -1799,6 +1812,18 @@ Rules:
       ],
       temperature: 0.5,
       max_tokens: 1500
+    });
+
+    trackAiUsage({
+      farm_id: null,
+      endpoint: 'grant-wizard-matching',
+      model: 'gpt-4',
+      prompt_tokens: completion.usage?.prompt_tokens,
+      completion_tokens: completion.usage?.completion_tokens,
+      total_tokens: completion.usage?.total_tokens,
+      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      status: 'success',
+      user_id: req.grantUserId || null
     });
 
     let recommendations;
@@ -2841,6 +2866,18 @@ router.post('/applications/:id/ai-draft', authenticateGrantUser, async (req, res
     });
 
     const draftText = completion.choices[0].message.content;
+
+    trackAiUsage({
+      farm_id: null,
+      endpoint: 'grant-wizard-drafting',
+      model: 'gpt-4',
+      prompt_tokens: completion.usage?.prompt_tokens,
+      completion_tokens: completion.usage?.completion_tokens,
+      total_tokens: completion.usage?.total_tokens,
+      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      status: 'success',
+      user_id: req.grantUserId || null
+    });
 
     res.json({
       success: true,

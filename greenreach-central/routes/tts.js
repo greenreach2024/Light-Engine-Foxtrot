@@ -3,11 +3,13 @@
  * POST /api/tts  { text, voice? }
  * Returns audio/mpeg stream.
  *
- * No auth required — rate-limited per IP to prevent abuse.
+ * Farm identity is read from the global farm-context middleware (req.farmId).
+ * Usage is tracked per farm in the ai_usage table.
  */
 
 import { Router } from 'express';
 import OpenAI from 'openai';
+import { trackAiUsage, estimateTtsCost } from '../lib/ai-usage-tracker.js';
 
 const router = Router();
 
@@ -55,6 +57,8 @@ router.post('/', async (req, res) => {
   }
 
   const selectedVoice = ALLOWED_VOICES.has(voice) ? voice : DEFAULT_VOICE;
+  const farmId = req.farmId || req.headers['x-farm-id'] || null;
+  const charCount = text.trim().length;
 
   try {
     const response = await openai.audio.speech.create({
@@ -69,9 +73,29 @@ router.post('/', async (req, res) => {
 
     // OpenAI SDK v6 returns a Response with arrayBuffer(), not a Node stream
     const buffer = Buffer.from(await response.arrayBuffer());
+
+    trackAiUsage({
+      farm_id: farmId,
+      endpoint: 'tts',
+      model: TTS_MODEL,
+      audio_chars: charCount,
+      estimated_cost: estimateTtsCost(TTS_MODEL, charCount),
+      status: 'success',
+    });
+
     res.send(buffer);
   } catch (err) {
     console.error('[TTS] OpenAI error:', err.message);
+
+    trackAiUsage({
+      farm_id: farmId,
+      endpoint: 'tts',
+      model: TTS_MODEL,
+      audio_chars: charCount,
+      status: 'error',
+      error_message: err.message,
+    });
+
     if (err.status === 429) {
       return res.status(429).json({ error: 'Rate limited — try again shortly' });
     }

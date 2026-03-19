@@ -6,6 +6,7 @@
 
 import OpenAI from 'openai';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import fetch from 'node-fetch';
 import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
@@ -263,6 +264,17 @@ async function analyzeFarm(farm) {
     });
 
     const aiResponse = completion.choices[0].message.content;
+
+    trackAiUsage({
+      farm_id: farm.farm_id,
+      endpoint: 'recommendations-pusher',
+      model: 'gpt-4',
+      prompt_tokens: completion.usage?.prompt_tokens,
+      completion_tokens: completion.usage?.completion_tokens,
+      total_tokens: completion.usage?.total_tokens,
+      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      status: 'success'
+    });
     
     // 4. Parse recommendations
     const recommendations = [];

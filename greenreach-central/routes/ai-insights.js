@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import OpenAI from 'openai';
 import { query } from '../config/database.js';
+import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -276,6 +277,17 @@ router.get('/:farmId', async (req, res) => {
       insights = parseAIResponse(aiResponse, currentConditions, recipeTargets);
       tokensUsed = completion.usage?.total_tokens || null;
       source = 'openai';
+
+      trackAiUsage({
+        farm_id: farmId,
+        endpoint: 'ai-insights',
+        model: 'gpt-4',
+        prompt_tokens: completion.usage?.prompt_tokens,
+        completion_tokens: completion.usage?.completion_tokens,
+        total_tokens: tokensUsed,
+        estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+        status: 'success'
+      });
     } else {
       insights = buildRuleBasedInsights(currentConditions, recipeTargets);
     }
