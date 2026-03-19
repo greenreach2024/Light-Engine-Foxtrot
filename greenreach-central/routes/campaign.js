@@ -122,8 +122,12 @@ function resolvePostal(postalCode) {
 // ── In-memory fallback if DB unavailable ─────────────────────────
 const memoryStore = [];
 
-// ── Seed data for marketing (Ontario-biased, grows daily) ────────
+// ── Seed baseline (frozen 2026-03-19 — no longer grows) ─────────
+// These seeded numbers were used during the initial campaign launch.
+// They are now frozen and will not increase. Only real form signups
+// add to the totals going forward.
 const SEED_LAUNCH = new Date('2026-03-14T00:00:00Z');
+const SEED_FROZEN_AT = new Date('2026-03-19T14:00:00Z');
 const SEED_REGIONS = [
   // Ontario (heavy bias) — GTA, Ottawa, Hamilton, London, Waterloo, etc.
   { prefix: 'M5V', province: 'ON', base: 47, daily: 12 },
@@ -172,7 +176,7 @@ const SEED_REGIONS = [
 ];
 
 function getSeedCount(base, daily) {
-  const daysSinceLaunch = Math.max(0, (Date.now() - SEED_LAUNCH.getTime()) / 86400000);
+  const daysSinceLaunch = Math.max(0, (SEED_FROZEN_AT.getTime() - SEED_LAUNCH.getTime()) / 86400000);
   return Math.floor(base + daily * daysSinceLaunch);
 }
 
@@ -181,7 +185,7 @@ function getSeedTotal() {
 }
 
 function getSeedLast24h() {
-  return SEED_REGIONS.reduce((sum, r) => sum + r.daily, 0);
+  return 0; // Frozen — no seeded daily growth
 }
 
 function getSeedHeatmap() {
@@ -285,11 +289,11 @@ router.get('/stats', async (req, res) => {
       const allPrefixes = new Set([...memPrefixes, ...seedPrefixes]);
       return res.json({
         total: memTotal + getSeedTotal(),
-        last24h: mem24h + getSeedLast24h(),
+        last24h: mem24h,
         communityCount: allPrefixes.size,
         topCommunities: getSeedTopCommunities(15),
         topPerCapita: [],
-        recentCommunities: getSeedTopCommunities(10)
+        recentCommunities: []
       });
     }
 
@@ -320,17 +324,18 @@ router.get('/stats', async (req, res) => {
     );
     const topMerged = allMerged.slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }));
 
-    const recentMerged = mergeRegions(
-      recentR.rows.map(r => ({ prefix: r.postal_prefix, province: r.province, count: r.supporters })),
-      seedHeatmap
-    ).slice(0, 10).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }));
+    const recentCommunities = recentR.rows.slice(0, 10).map(r => ({
+      postal_prefix: r.postal_prefix,
+      province: r.province,
+      supporters: parseInt(r.supporters, 10)
+    }));
 
     return res.json({
       total: dbTotal + getSeedTotal(),
       last24h: dbLast24h + getSeedLast24h(),
       communityCount: allMerged.length,
       topCommunities: topMerged,
-      recentCommunities: recentMerged
+      recentCommunities
     });
   } catch (error) {
     console.error('[campaign] Stats error:', error.message);
@@ -346,10 +351,10 @@ router.get('/stats', async (req, res) => {
     const merged = mergeRegions(memRegions, getSeedHeatmap());
     return res.json({
       total: memTotal + getSeedTotal(),
-      last24h: mem24h + getSeedLast24h(),
+      last24h: mem24h,
       communityCount: merged.length,
       topCommunities: merged.slice(0, 15).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count })),
-      recentCommunities: merged.slice(0, 10).map(r => ({ postal_prefix: r.prefix, province: r.province, supporters: r.count }))
+      recentCommunities: []
     });
   }
 });
