@@ -241,7 +241,7 @@ app.use(helmet({
       connectSrc: ["'self'", "https:", "wss:", "https://connect.squareup.com", "https://pci-connect.squareup.com", "https://connect.stripe.com", "https://api.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
+      mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'", "https://web.squarecdn.com", "https://connect.stripe.com"],  // Allow Square + Stripe iframes
       upgradeInsecureRequests: null
     },
@@ -2691,10 +2691,50 @@ app.get('/data/equipment-metadata', async (req, res) => {
 // Weather API — proxy to Light Engine (which calls Open-Meteo)
 // Previously returned hardcoded stub data; now forwards to LE for real weather.
 app.get('/api/weather', authMiddleware, async (req, res) => {
-  const lat = Number(req.query.lat);
-  const lng = Number(req.query.lng);
+  let lat = Number(req.query.lat);
+  let lng = Number(req.query.lng);
+
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return res.status(400).json({ ok: false, error: 'lat and lng are required' });
+    const fid = farmStore.farmIdFromReq(req);
+
+    try {
+      const profile = await farmStore.get(fid, 'farm_profile');
+      const profileCoords = profile?.coordinates
+        || profile?.location?.coordinates
+        || profile?.metadata?.location?.coordinates;
+      if (Number.isFinite(Number(profileCoords?.lat)) && Number.isFinite(Number(profileCoords?.lng))) {
+        lat = Number(profileCoords.lat);
+        lng = Number(profileCoords.lng);
+      }
+    } catch (err) {
+      logger.warn('[WeatherProxy] Failed to read farm profile coordinates:', err.message);
+    }
+
+    // Single-tenant fallback: use static farm profile only when it matches the farm context.
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      try {
+        const staticProfile = farmStore.readFileSync('farm_profile', null);
+        const staticFarmId = staticProfile?.farmId || staticProfile?.farm_id || null;
+        const staticCoords = staticProfile?.coordinates
+          || staticProfile?.location?.coordinates
+          || staticProfile?.metadata?.location?.coordinates;
+
+        if (
+          Number.isFinite(Number(staticCoords?.lat))
+          && Number.isFinite(Number(staticCoords?.lng))
+          && (!fid || !staticFarmId || staticFarmId === fid)
+        ) {
+          lat = Number(staticCoords.lat);
+          lng = Number(staticCoords.lng);
+        }
+      } catch (err) {
+        logger.warn('[WeatherProxy] Failed to read static farm profile coordinates:', err.message);
+      }
+    }
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ ok: false, error: 'lat and lng are required (or farm profile must include coordinates)' });
   }
 
   // Try proxying to Light Engine first (real Open-Meteo data)

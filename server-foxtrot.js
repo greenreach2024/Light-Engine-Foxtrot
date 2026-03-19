@@ -189,6 +189,7 @@ import { SuccessionPlanner } from './lib/succession-planner.js';
 import { validateLicense } from './lib/license-manager.js';
 import { autoEnforceFeatures, requireFeature } from './server/middleware/feature-flags.js';
 import healthRouter from './routes/health.js';
+import ttsRouter from './routes/tts.js';
 import adminHealthRouter from './routes/admin-health.js';
 import adminAuthRouter from './server/routes/admin-auth.js';
 import { adminAuthMiddleware } from './server/middleware/admin-auth.js';
@@ -300,14 +301,14 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://code.responsivevoice.org", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
+      mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'"], // Allow same-origin iframes for views
       upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
@@ -12765,6 +12766,7 @@ app.use('/api', licenseRouter);
  * - /api/health/insights: Get health insights with scores and recommendations
  */
 app.use('/api/health', healthRouter);
+app.use('/api/tts', ttsRouter);
 
 /**
  * Farm Purchase & Onboarding Routes (Removed - now using ES module import below at line ~9757)
