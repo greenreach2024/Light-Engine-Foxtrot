@@ -3,7 +3,7 @@
 **Created:** February 10, 2026  
 **Last Updated:** March 19, 2026  
 **Status:** All issues addressed — see fixes below  
-**Latest Issue:** #13 — Settings page crash + no persistence (commit `ef13d60`, March 19, 2026)
+**Latest Issue:** #15 — Crop Pricing 401 + missing /api/ prefix (March 19, 2026)
 
 ---
 
@@ -25,40 +25,37 @@
 ### Data Flow Chain
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    EDGE DEVICE (Foxtrot)                │
-│                    Port 8091                            │
-│                                                        │
-│  JSON Data Files ──→ server-foxtrot.js ──→ API Routes  │
-│  (public/data/)       │                    │            │
-│                       │                    ▼            │
-│                       │              Frontend Views     │
-│                       │              (public/views/)    │
-│                       │                                 │
-│                       ▼                                 │
-│              Derived Endpoints:                         │
-│              /api/inventory/current  ← groups.json      │
-│              /api/inventory/forecast ← groups.json      │
-│              /api/crop-pricing       ← crop-pricing.json│
-│                                      + lighting-recipes │
-│                                      + groups.json      │
-│              /api/tray-formats       ← NeDB database    │
-│              /plans                  ← plans.json +     │
-│                                        lighting-recipes │
-└──────────────┬──────────────────────────────────────────┘
-               │ Sync: POST /api/sync/* (push model)
-               │ OR: Central pulls via /data/*.json
-               ▼
-┌─────────────────────────────────────────────────────────┐
-│              GREENREACH CENTRAL                         │
-│              Port 3100                                  │
-│                                                        │
-│  greenreach-central/public/data/ ←── Edge data copies  │
-│  PostgreSQL database             ←── Heartbeats, farms │
-│                                                        │
-│  Serves same views with farm data from local copies    │
-│  Auto-syncs from edge every 5 minutes (new)            │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     LIGHT ENGINE (Foxtrot)                   │
+│                                                              │
+│  Two server components in ONE system:                        │
+│                                                              │
+│  ┌─ server-foxtrot.js (Port 8091) ────────────────────────┐  │
+│  │  Device control, sensor polling, SwitchBot, lighting    │  │
+│  │  schedules, flat-file data (public/data/*.json)         │  │
+│  │                                                         │  │
+│  │  JSON Data Files ──→ API Routes ──→ Frontend Views      │  │
+│  │  (public/data/)      /api/inventory/current             │  │
+│  │                      /api/inventory/forecast             │  │
+│  │                      /api/crop-pricing                   │  │
+│  │                      /api/tray-formats                   │  │
+│  │                      /plans                              │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                          │                                    │
+│                          │ Sync (every 5 min)                 │
+│                          ▼                                    │
+│  ┌─ greenreach-central/server.js (Port 3100) ─────────────┐  │
+│  │  Cloud gateway at greenreachgreens.com                   │  │
+│  │  PostgreSQL multi-tenant DB, web UI, wholesale,         │  │
+│  │  billing, admin APIs                                    │  │
+│  │                                                         │  │
+│  │  greenreach-central/public/data/ ←── synced from above  │  │
+│  │  PostgreSQL ←── heartbeats, multi-farm data             │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  Both servers share public/views/ (mirrored files).          │
+│  There is NO separate "edge" product — this is one system.   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Field: `plan` vs `crop` vs `recipe`
@@ -92,7 +89,7 @@ This function is now available both server-side (server-foxtrot.js) and client-s
 
 ### 2. Farm Inventory — Crop Varieties Not Populating
 
-**Root Cause:** `farm-inventory.html` calculates unique crops via `groupsData.map(g => g.crop)` — but edge `groups.json` has no `crop` field, only `plan` (e.g., `"crop-bibb-butterhead"`). All values were `undefined`.
+**Root Cause:** `farm-inventory.html` calculates unique crops via `groupsData.map(g => g.crop)` — but `groups.json` has no `crop` field, only `plan` (e.g., `"crop-bibb-butterhead"`). All values were `undefined`.
 
 **Fix:** Updated crop counting to use: `g.crop || extractCropDisplayName(g.plan)`
 
@@ -103,7 +100,7 @@ This function is now available both server-side (server-foxtrot.js) and client-s
 
 ### 3. Farm Inventory — Group Cards Missing Variety/Location/Daily Info
 
-**Root Cause:** Server-side inventory endpoints used `group.crop`, `group.roomId`, `group.recipe` directly — all `undefined` in edge data. The forecast endpoint built `location` from `group.roomId || 'Room-1'` and `recipe` from `group.crop`.
+**Root Cause:** Server-side inventory endpoints used `group.crop`, `group.roomId`, `group.recipe` directly — all `undefined` in the flat-file data. The forecast endpoint built `location` from `group.roomId || 'Room-1'` and `recipe` from `group.crop`.
 
 **Fix:** Server now derives missing fields:
 - `cropName = group.crop || extractCropDisplayName(group.plan) || 'Unknown'`
@@ -179,7 +176,7 @@ Line 1792 re-declares `let zoneId = sensor.zone;` — a **SyntaxError in strict 
 1. `admin.js` set `API_BASE = window.location.origin.replace(':8091', ':8000')` — port 8000 is a Python backend that doesn't run by default
 2. `LE-farm-admin.html` and `farm-admin.html` hardcoded `INVENTORY_API = 'http://localhost:8000/api/inventory'`
 3. Missing endpoints: `/api/inventory/dashboard`, `/api/inventory/reorder-alerts`, `/api/inventory/seeds/list`, `/api/inventory/usage/weekly-summary`
-4. `FARM-TEST-WIZARD-001` 404: This farm ID exists in edge config but was never synced to Central's PostgreSQL `farms` table
+4. `FARM-TEST-WIZARD-001` 404: This farm ID exists in local config but was never synced to Central's PostgreSQL `farms` table
 
 **Fix:**
 - Changed `admin.js` `API_BASE` to `window.location.origin` (uses current server)
@@ -216,7 +213,7 @@ Line 1792 re-declares `let zoneId = sensor.zone;` — a **SyntaxError in strict 
 **Root Cause:** The sync service (`lib/sync-service.js`) only starts when `EDGE_MODE=true` and the farm is registered. The current `edge-config.json` has `"mode": "cloud"`, preventing sync. The API key format doesn't match Central's 64-hex requirement. Central has no pull mechanism.
 
 **Fix:** Added a **pull-based sync** to Central's `server.js`:
-- Every 5 minutes, Central reads `farm.json` to get the edge device URL
+- Every 5 minutes, Central reads `farm.json` to get the Light Engine URL
 - Fetches `groups.json`, `rooms.json`, `iot-devices.json`, `room-map.json` from the edge
 - Writes updated copies to `greenreach-central/public/data/`
 - Added `POST /api/sync/pull-farm-data` endpoint for manual sync trigger
@@ -302,7 +299,7 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 
 **Files Changed:**
 - `greenreach-central/public/views/room-heatmap.html` — computeLengthScale sigma formula, 2x displayRange calculation
-- `public/views/room-heatmap.html` — identical changes to edge copy
+- `public/views/room-heatmap.html` — identical changes (mirrored file)
 
 **Impact:** Color rendering only. No change to sensor data extraction, numeric displays, telemetry values, zone aggregates, or any API data flow. VPD per-pixel computation unaffected (uses same interpolation engine with corrected sigma).
 
@@ -332,7 +329,7 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 
 **Fix:**
 - Added null-safe DOM helpers (`setVal`, `setChk`, `setTxt`) to `loadSettings()` so missing elements are silently skipped instead of crashing. Applied same null-safety to `checkSquareStatus()`, `scanHardware()`, `openEditCertificationsModal()`, `closeEditCertificationsModal()`, and `saveEditCertifications()`.
-- Added `val()`/`chk()` null-safe helpers to `saveSettings()` (edge copy had direct `.value`/`.checked` access without null checks).
+- Added `val()`/`chk()` null-safe helpers to `saveSettings()` (mirrored copy had direct `.value`/`.checked` access without null checks).
 - Added POST `/data/farm-settings.json` and GET `/data/farm-settings.json` routes in `greenreach-central/server.js` using `farmStore.set/get(fid, 'farm_settings', ...)` for server-side persistence.
 - Updated `loadSettings()` to try loading from server endpoint first, falling back to localStorage.
 - Added certifications edit modal HTML with checkbox forms for certifications and practices, plus an "Edit" button on the Certifications & Practices card.
@@ -341,8 +338,82 @@ Added null-safety checks since `authenticatedFetch()` returns null on auth failu
 - `greenreach-central/public/farm-admin.js` — null-safe helpers in loadSettings, checkSquareStatus, scanHardware, modal functions; server-first settings load
 - `greenreach-central/public/LE-farm-admin.html` — added editCertificationsModal, Edit button on certifications card
 - `greenreach-central/server.js` — added POST/GET `/data/farm-settings.json` routes
-- `public/farm-admin.js` — identical null-safety fixes + val/chk helpers in saveSettings (edge copy)
+- `public/farm-admin.js` — identical null-safety fixes + val/chk helpers in saveSettings (mirrored file)
 
 **Impact:** Settings page load, field population, and persistence. No change to sensor data, telemetry, orders, or any other data flow.
 
 **Prevention Rule:** All `document.getElementById()` calls in settings functions must use null-safe helpers. When HTML cards are removed or redesigned, the corresponding JS references must be updated in the same commit.
+
+---
+
+**Date:** March 19, 2026  
+**Timestamp:** 2026-03-19  
+**Discovered on:** Activity Hub (tray-inventory.html, Farm ID: FARM-MLTP9LVH-B0B85039)
+
+### 14. Activity Hub — SyntaxError Kills Entire Script Block (openScanModal undefined)
+
+**Original Problem (reported by user):**  
+> "New errors in the activity hub. This hub was error free."  
+> Console errors: `SyntaxError: Invalid escape in identifier: '\'` at line 4987, `ReferenceError: Can't find variable: openScanModal` at lines 1252, 1260, 1268.
+
+**Symptom:** Three console errors on the Activity Hub page:
+1. `SyntaxError: Invalid escape in identifier: '\'` at tray-inventory.html:4987
+2. `ReferenceError: Can't find variable: openScanModal` at lines 1252, 1260, 1268
+3. All scan buttons (Seed, Harvest, Move) non-functional
+
+**Root Cause:** Commit `bfd42e4` ("feat: implement all readiness shortfall todos P0-P2") ran a bulk file sync ("P2.1: Sync 17 stale mirrored files from LE canonical to Central") that corrupted template literals in the `submitSeed()` function. Four lines had backslash-escaped backticks and dollar signs (`\`` and `\${`) instead of plain template literal syntax (`` ` `` and `${}`).
+
+The corrupted lines in `greenreach-central/public/views/tray-inventory.html`:
+- Line 4984: `` const res = await fetch(\`\${currentAPI}... `` (should be template literal)
+- Line 5007: `` scanResult.innerHTML = \` `` (should be plain backtick)
+- Line 5011: `` \${crop}\${document.getElementById... `` (should be `${...}`)
+- Line 5021: `` \`; `` (should be plain `` `; ``)
+
+The mirrored copy (`public/views/tray-inventory.html`) had one corrupted line at line 5011.
+
+Since the entire main `<script>` block (lines 1694-6007) is parsed as a single unit, the SyntaxError at line 4984 prevented ALL functions in the block from being registered — including `openScanModal()` defined at line 4304. This single parse failure caused both the SyntaxError AND all three `ReferenceError: Can't find variable: openScanModal` errors.
+
+**Fix:** Removed backslash escapes from all 4 lines in the central copy and the 1 affected line in the mirrored copy, restoring valid template literal syntax.
+
+**Files Changed:**
+- `greenreach-central/public/views/tray-inventory.html` — 4 lines in submitSeed() fixed
+- `public/views/tray-inventory.html` — 1 line in submitSeed() fixed (mirrored file)
+
+**Impact:** Restores Activity Hub scan functionality (Seed, Harvest, Move buttons). No change to data flow, APIs, or tray records.
+
+**Prevention Rule:** File sync operations must not escape template literals. When mirroring files, verify no `\`` or `\${` patterns are introduced. A simple grep for `\\`` in `.html` files catches this class of corruption.
+
+---
+
+**Date:** March 19, 2026  
+**Timestamp:** 2026-03-19  
+**Discovered on:** Farm Admin page (LE-farm-admin.html, Farm ID: FARM-MLTP9LVH-B0B85039)
+
+### 15. Crop Pricing — 401 from Missing /api/ Prefix + No Auth Headers
+
+**Original Problem (reported by user):**  
+> Console error: `401` on `crop-pricing, line 0`
+
+**Symptom:** Console 401 error on farm admin page load when `loadCropsFromDatabase()` fires. Crop pricing falls back to localStorage instead of loading from the server API.
+
+**Root Cause — 2 compounding issues:**
+
+1. **Wrong URL path.** `farm-admin.js` fetched `${API_BASE}/crop-pricing` but the server route is mounted at `/api/crop-pricing`. The request to `/crop-pricing` (without `/api/`) hit no matching route on Central.
+
+2. **No Authorization header.** The GET fetch used bare `fetch()` with no headers. On `LE-farm-admin.html` (which does NOT load `auth-guard.js`), this means no JWT is sent. The Central route at `/api/crop-pricing` requires `authMiddleware`, so even with the correct URL, the request would still 401 without a token.
+
+The PUT fetch (save pricing) had the same URL bug and also lacked auth headers.
+
+**Fix:**
+- Changed GET URL from `${API_BASE}/crop-pricing` to `${API_BASE}/api/crop-pricing`
+- Changed PUT URL from `${API_BASE}/crop-pricing` to `${API_BASE}/api/crop-pricing`
+- Added `Authorization: Bearer ${currentSession.token}` header to both GET and PUT requests
+- Applied to both `greenreach-central/public/farm-admin.js` and `public/farm-admin.js`
+
+**Files Changed:**
+- `greenreach-central/public/farm-admin.js` — lines 1258, 1507: URL + auth header fix
+- `public/farm-admin.js` — lines 1273, 1522: identical changes (mirrored file)
+
+**Impact:** Crop pricing now loads from server API instead of falling back to stale localStorage data. Pricing saves now persist to server.
+
+**Prevention Rule:** All `fetch()` calls to `/api/*` routes must include the `/api/` prefix and an Authorization header. Never assume `auth-guard.js` is loaded — it is NOT present on `LE-farm-admin.html`.

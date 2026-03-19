@@ -4981,7 +4981,7 @@
       if (!crop) { alert('Crop is required'); return; }
 
       try {
-        const res = await fetch(\`\${currentAPI}/api/trays/\${trayId}/seed\`, {
+        const res = await fetch(`${currentAPI}/api/trays/${trayId}/seed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -5004,11 +5004,11 @@
           : '';
 
         const scanResult = document.getElementById('scanResult');
-        scanResult.innerHTML = \`
+        scanResult.innerHTML = `
           <div style="text-align: center; padding: 2rem;">
             <div style="font-size: 3rem; color: #10b981;">✓</div>
             <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin: 0.5rem 0;">Seeding Recorded</div>
-            <div style="color: #cbd5e1;">\${crop}\${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
+            <div style="color: #cbd5e1;">${crop}${document.getElementById('seedVariety').value ? ' (' + document.getElementById('seedVariety').value + ')' : ''}</div>
             ${weightInfo}
             <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.5rem;">
               Traceability will auto-track from here through harvest and delivery.
@@ -5018,7 +5018,7 @@
               background: #334155; color: white; font-size: 1.1rem; cursor: pointer;"
             >Done</button>
           </div>
-        \`;
+        `;
       } catch (err) {
         alert('Seeding error: ' + err.message);
       }

@@ -1255,7 +1255,9 @@ async function loadCropsFromDatabase() {
         // Try loading from server-side pricing API first
         let loadedFromAPI = false;
         try {
-            const pricingRes = await fetch(`${API_BASE}/crop-pricing`);
+            const pricingRes = await fetch(`${API_BASE}/api/crop-pricing`, {
+                headers: currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : undefined
+            });
             if (pricingRes.ok) {
                 const pricingResult = await pricingRes.json();
                 if (pricingResult.ok && pricingResult.pricing?.crops?.length) {
@@ -1504,9 +1506,12 @@ async function savePricing() {
                 isTaxable: item.isTaxable || false
             }));
             
-            const response = await fetch(`${API_BASE}/crop-pricing`, {
+            const response = await fetch(`${API_BASE}/api/crop-pricing`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+                },
                 body: JSON.stringify({ crops })
             });
             
