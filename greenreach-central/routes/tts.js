@@ -20,7 +20,7 @@ try {
   console.warn('[TTS] Failed to initialise OpenAI client:', e.message);
 }
 
-const ALLOWED_VOICES = new Set(['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']);
+const ALLOWED_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse']);
 const MAX_TEXT_LENGTH = 2000;
 
 // Simple per-IP rate limiter: max 20 requests per minute
@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
     return res.status(503).json({ error: 'TTS not available — OPENAI_API_KEY not configured' });
   }
 
-  const { text, voice = 'nova' } = req.body;
+  const { text, voice = 'ash' } = req.body;
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     return res.status(400).json({ error: 'text is required' });
@@ -50,11 +50,11 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: `text must be ${MAX_TEXT_LENGTH} characters or fewer` });
   }
 
-  const selectedVoice = ALLOWED_VOICES.has(voice) ? voice : 'nova';
+  const selectedVoice = ALLOWED_VOICES.has(voice) ? voice : 'ash';
 
   try {
     const response = await openai.audio.speech.create({
-      model: 'tts-1',
+      model: 'tts-1-hd',
       voice: selectedVoice,
       input: text.trim(),
       response_format: 'mp3',

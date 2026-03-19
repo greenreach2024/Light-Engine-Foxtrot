@@ -539,7 +539,7 @@ class FarmAssistant {
     fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.substring(0, 2000), voice: 'nova' })
+      body: JSON.stringify({ text: text.substring(0, 2000), voice: 'ash' })
     })
       .then(res => {
         if (!res.ok) throw new Error(`TTS ${res.status}`);
