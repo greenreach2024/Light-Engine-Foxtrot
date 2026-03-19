@@ -1549,16 +1549,37 @@ app.post('/api/debug/track', express.json(), (req, res) => {
   res.json({ success: true, logged: events.length });
 });
 
-// Live environmental data — proxy to LE for real-time readings,
-// fall back to stale DB telemetry only when the LE is unreachable.
+// Live environmental data — prefer DB telemetry (pushed by sync-service from the
+// actual farm device every 30s) over LE-EB proxy (which only has static deploy data).
+// Fall back to LE proxy when DB has no telemetry (e.g. fresh install, DB down).
 app.get('/env', authMiddleware, async (req, res) => {
   const hours = req.query.hours || 24;
+  const farmId = farmStore.farmIdFromReq(req);
+
+  // 1. Try DB telemetry first — sync-service pushes live data from the farm device
   try {
-    // resolveEdgeUrlForProxy() is hoisted (function declaration at ~L2715)
+    const dbData = await farmStore.get(farmId, 'telemetry');
+    if (dbData && Array.isArray(dbData.zones) && dbData.zones.length > 0) {
+      logger.info(`[Env] Serving DB telemetry for farm ${farmId} (${dbData.zones.length} zones)`);
+      return res.json({
+        ...dbData,
+        meta: {
+          ...(dbData.meta || {}),
+          envSource: 'sync-service',
+          updatedAt: dbData.timestamp || dbData.lastUpdated || new Date().toISOString()
+        }
+      });
+    }
+  } catch (dbErr) {
+    logger.warn(`[Env] DB telemetry read failed: ${dbErr.message}`);
+  }
+
+  // 2. Fall back to LE proxy (cloud LE instance)
+  try {
     const leUrl = resolveEdgeUrlForProxy();
     if (!leUrl) throw new Error('No Light Engine URL configured');
     const upstream = `${leUrl}/env?hours=${hours}`;
-    logger.info(`[Env] Proxying to Light Engine: ${upstream}`);
+    logger.info(`[Env] No DB telemetry, proxying to Light Engine: ${upstream}`);
     const response = await fetch(upstream, {
       method: 'GET',
       headers: leProxyHeaders(),
@@ -1568,14 +1589,8 @@ app.get('/env', authMiddleware, async (req, res) => {
     const data = await response.json();
     return res.json(data);
   } catch (proxyErr) {
-    logger.warn(`[Env] LE proxy failed, falling back to DB: ${proxyErr.message}`);
-    try {
-      const data = await farmStore.get(farmStore.farmIdFromReq(req), 'telemetry');
-      return res.status(200).json(data || { zones: [] });
-    } catch (dbErr) {
-      logger.warn('[Env] DB fallback also failed:', dbErr.message);
-      return res.status(200).json({ zones: [] });
-    }
+    logger.warn(`[Env] LE proxy also failed: ${proxyErr.message}`);
+    return res.status(200).json({ zones: [] });
   }
 });
 
