@@ -1,5 +1,37 @@
 Production Light Engine Foxtrot system
 
+## ARCHITECTURE: THE FARM IS 100% CLOUD (REQUIRED READING)
+
+**There is NO physical farm device. No Raspberry Pi. No edge hardware. No on-premise server.**
+
+The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS the farm. "Edge" and "cloud" are MERGED into a single cloud deployment. Any references to "edge mode" or "hardware" in the code are legacy artifacts.
+
+**Read `.github/CLOUD_ARCHITECTURE.md` for the full architecture reference.**
+**Read `.github/SENSOR_DATA_PIPELINE.md` for the complete sensor data flow.**
+**Read `.github/CRITICAL_CONFIGURATION.md` for all credentials, env vars, and config files.**
+**Read `.github/TROUBLESHOOTING_ENV_DATA.md` before debugging any sensor data issues.**
+
+### Critical Facts Every Agent Must Know
+
+1. **LE-EB IS the farm.** `light-engine-foxtrot-prod-v3` runs on the v2 CNAME (CNAME swap). URL contains "v2" but environment is v3. This is correct.
+2. **v2 is DEAD.** `light-engine-foxtrot-prod-v2` is terminated. DO NOT deploy to it. DO NOT reference it as a target.
+3. **Central is the hub.** `greenreach-central-prod-v4` at `greenreachgreens.com`. Separate EB application, separate deploy.
+4. **Two data directories exist.** `public/data/` (LE) and `greenreach-central/public/data/` (Central). NOT synced.
+5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
+6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
+
+### DO NOT (Architecture Rules)
+
+- DO NOT assume any physical device exists (no Pi, no edge box, no local server)
+- DO NOT deploy to `light-engine-foxtrot-prod-v2` (dead environment)
+- DO NOT "fix" the CNAME swap (v3 on v2 domain is intentional)
+- DO NOT "fix" edge mode settings (LE-EB running as "edge" in cloud is intentional)
+- DO NOT remove or modify SwitchBot credentials from EB env vars or farm.json
+- DO NOT change the Central `/env` endpoint to proxy-first (DB-first is correct)
+- DO NOT modify `setupLiveSensorSync()`, `ensureSwitchBotConfigured()`, or `getFarmIntegrations()` without reading SENSOR_DATA_PIPELINE.md
+- DO NOT modify sync-service.js authentication without verifying both auth systems (Farm API key vs GREENREACH_API_KEY)
+- DO NOT assume `foxtrot.greenreachgreens.com` resolves (it does not)
+
 ## 💾 Workspace Location (REQUIRED)
 
 **All coding projects live on the external CodeVault drive:**

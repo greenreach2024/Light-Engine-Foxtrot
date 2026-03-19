@@ -207,6 +207,40 @@ Multiple agents edited `greenreach-central/public/data/farm.json` across 3 commi
 - **Resolution**: Identified in diagnostic report. Action plan created. Awaiting implementation approval.
 - **Framework Lesson**: Reading a file is not the same as understanding it. Agents must verify the IDENTITY of data files (who does this data belong to?) before editing PROPERTIES of data files (what values need changing?). Symptom-focused debugging that ignores surrounding context will compound errors across multiple commits.
 
+**Real Incident #7 (March 19, 2026 - Sensor Data Pipeline Blindness):**
+Agent investigated stale environmental data on Central (frozen since March 6). After extensive debugging, agent assumed a physical "farm Pi" existed and tried to fix the wrong endpoint. User had to correct the agent TWICE ("what farm pi?" and "The farm is 100% cloud") before the root cause was found. Result:
+- **Problem**: Central dashboard showed stale env data (temp 15.7C, humidity 28.5%, timestamp March 6)
+- **Root Cause**: SwitchBot API credentials (`SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET`) were NEVER configured on the LE-EB cloud instance. Without credentials, `ensureSwitchBotConfigured()` returned false, `setupLiveSensorSync()` silently skipped all polling, and stale values from env.json (frozen at last deploy) were recycled with fresh timestamps.
+- **Agent Error #1: Assumed physical device existed**
+  - Referenced "farm Pi" despite no physical hardware in the project
+  - `config/edge-config.json` clearly shows `"hardwareModel": "AWS Cloud"`
+  - Agent should have READ this field instead of assuming Raspberry Pi
+- **Agent Error #2: Did not understand merged cloud/edge architecture**
+  - Spent time trying to trace "edge to cloud" communication as if they were separate systems
+  - The LE-EB instance IS the farm — edge and cloud are the same machine
+  - sync-service.js runs ON the LE-EB instance, not on a separate device
+- **Agent Error #3: Fixed the wrong endpoint first**
+  - Changed Central's `/env` from LE-proxy-first to DB-first (commit a9233fb)
+  - This was a valid secondary improvement but did NOT fix the root cause
+  - Root cause was upstream: no SwitchBot credentials on LE-EB, so no data was being generated
+- **Agent Error #4: Did not trace the full pipeline systematically**
+  - Jumped between Central and LE code without mapping the complete data flow
+  - Should have started at the source (SwitchBot API polling) and traced forward
+  - Would have found missing credentials much sooner
+- **What the stale data looked like**: env.json contained valid-looking sensor data with March 6 timestamps. setupLiveSensorSync() was skipped entirely (no credentials), but the sync-service still read env.json every 30s and pushed those stale values to Central. The sync loop ran correctly — it just had nothing new to sync.
+- **Fix Applied**:
+  1. Set `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET` as EB env vars on `light-engine-foxtrot-prod-v3`
+  2. Added `integrations.switchbot` to `public/data/farm.json` as backup
+  3. Sensor data immediately started flowing: temp went from 15.7C to 20.1C, humidity from 28.5% to 31.5%
+- **Cost**: 2+ hours of investigation, multiple user corrections required, user trust further damaged
+- **How To Avoid**:
+  1. **Read CLOUD_ARCHITECTURE.md first** — there is no physical device
+  2. **Read SENSOR_DATA_PIPELINE.md** — trace the full pipeline from source to dashboard
+  3. **Check credentials EARLY** — `getFarmIntegrations()` and `ensureSwitchBotConfigured()` are the first things to verify when sensor data is stale
+  4. **Read `edge-config.json` hardwareModel field** — it says "AWS Cloud", not "Raspberry Pi"
+  5. **Never assume silent failures don't exist** — missing credentials cause SILENT skip with no error log
+- **Framework Lesson**: When data is stale, start at the SOURCE of the data pipeline and trace forward. Do not start at the consumer (dashboard) and work backward making fixes along the way. Each "fix" to an intermediate stage wastes time when the actual problem is at the source. Also: READ THE ARCHITECTURE DOCS BEFORE STARTING.
+
 ### The Iron Law
 
 **BEFORE proposing ANY solution, you MUST:**
@@ -386,6 +420,27 @@ No programming. No guesswork. No spreadsheets. Just select a crop, and Light Eng
 
 ## System Architecture (Critical Understanding)
 
+### 100% Cloud Architecture - No Physical Farm Device
+
+**The farm runs entirely on AWS Elastic Beanstalk. There is NO physical farm device,
+NO Raspberry Pi, NO edge hardware, NO on-premise server.** The Light Engine EB instance
+IS the farm. References to "edge mode" in the code are legacy artifacts.
+
+**For the full architecture reference, read `.github/CLOUD_ARCHITECTURE.md`.**
+**For the sensor data pipeline, read `.github/SENSOR_DATA_PIPELINE.md`.**
+**For credentials and config, read `.github/CRITICAL_CONFIGURATION.md`.**
+**For troubleshooting sensor data, read `.github/TROUBLESHOOTING_ENV_DATA.md`.**
+
+### Elastic Beanstalk Environments
+
+| Environment | Application | Status | CNAME | Entry Point |
+|-------------|-------------|--------|-------|-------------|
+| `light-engine-foxtrot-prod-v3` | light-engine-foxtrot | ACTIVE | `...prod-v2.eba-ukiyyqf9...` (SWAPPED) | `node server-foxtrot.js` |
+| `light-engine-foxtrot-prod-v2` | light-engine-foxtrot | DEAD | Does not resolve | DO NOT USE |
+| `greenreach-central-prod-v4` | greenreach-central | ACTIVE | Standard EB CNAME | `npm start` -> `server.js` |
+
+**v3 answers on the v2 CNAME due to a previous `eb swap`. This is correct. Do NOT "fix" it.**
+
 ### Unified Platform (Single Codebase)
 
 Light Engine is a SINGLE unified platform. There is NO separate "edge" vs "cloud"
@@ -395,12 +450,8 @@ the multi-farm marketplace and admin aggregation layer.
 
 **⚠️ CRITICAL: Elastic Beanstalk Entry Point**
 
-The Procfile specifies: `web: cd greenreach-central && npm start`
-
-This means **EB production runs `greenreach-central/server.js`, NOT `server-foxtrot.js`.**
-- Code fixes targeting `server-foxtrot.js` will NOT take effect on production
-- Route changes MUST be applied to `greenreach-central/server.js`
-- Data files read on production come from `greenreach-central/public/data/`, NOT `public/data/`
+The LE Procfile specifies: `web: node server-foxtrot.js`
+The Central Procfile specifies: `web: npm start`
 
 **⚠️ CRITICAL: Two Data Directories**
 
@@ -408,20 +459,29 @@ Two copies of flat data files exist. They are NOT automatically synced:
 
 | Directory | Used By | Deployed On |
 |---|---|---|
-| `public/data/` | `server-foxtrot.js` (local dev) | Local only |
-| `greenreach-central/public/data/` | `greenreach-central/server.js` (EB) | AWS EB production |
+| `public/data/` | `server-foxtrot.js` (LE-EB) | AWS EB (light-engine-foxtrot-prod-v3) |
+| `greenreach-central/public/data/` | `greenreach-central/server.js` (Central EB) | AWS EB (greenreach-central-prod-v4) |
 
 **Agent Rule: When editing ANY file in `public/data/`, check if a corresponding file exists in `greenreach-central/public/data/` and verify BOTH contain the same farm identity (`farmId`, `name`).**
 
 **Production Farm Identity (source of truth):**
 - Farm ID: `FARM-MLTP9LVH-B0B85039`
 - Farm Name: "The Notable Sprout"
-- Login: `FARM-MLTP9LVH-B0B85039` / `admin123`
 
 All farm data flows to GreenReach Central. Controller restrictions prevent
 remote laptops from issuing farm-critical device commands (lights, HVAC, plugs)
 via the `requireEdgeForControl` middleware -- this is a safety feature, not a
 platform split.
+
+### Sensor Data Flow (SwitchBot Cloud API)
+
+Environmental sensors are SwitchBot WoIOSensors. They communicate to a SwitchBot Hub Mini
+via BLE, which uploads to SwitchBot's cloud. The LE-EB polls the SwitchBot Cloud API
+every 30 seconds. There is NO direct BLE connection from the server to the sensors.
+
+**If sensor data is stale, the FIRST thing to check is SwitchBot credentials on the LE-EB
+environment (`SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET`). Missing credentials cause silent
+failure with no error log.**
 
 ```
 +-----------------------------------------------------------------+
@@ -441,29 +501,32 @@ platform split.
                              |
 +-----------------------------------------------------------------+
 |                 LIGHT ENGINE (Per-Farm)                          |
-|              (server-foxtrot.js - unified)                       |
+|     (server-foxtrot.js - runs on EB, NOT a physical device)     |
 |                                                                  |
 |  - Farm dashboard (farm-admin.html, farm-summary.html)           |
+|  - SwitchBot Cloud API polling (sensor data every 30s)           |
 |  - Real-time environmental control                               |
 |  - IoT device management (lights, sensors, HVAC)                 |
 |  - Inventory tracking                                            |
 |  - Controller restrictions for non-local access                  |
-|  - All farm data pushed to GreenReach Central                    |
+|  - All farm data pushed to GreenReach Central via sync-service   |
 +-----------------------------------------------------------------+
                              |
               +------------------------------+
-              |  FARM DEVICES                |
-              |  - DMX512 Lighting           |
-              |  - Environmental Sensors     |
-              |  - HVAC Controls             |
-              |  - Smart Plugs               |
+              |  SENSORS (via SwitchBot Cloud)|
+              |  - 4x WoIOSensor (BLE->Hub)  |
+              |  - 1x Hub Mini (WiFi bridge) |
+              |  - Polled via HTTPS API       |
+              |  - NO direct BLE connection   |
               +------------------------------+
 ```
 
 **Agent Understanding Check:**
 - There is ONE platform, not two. Do not refer to "edge" and "cloud" as separate systems.
+- The farm has NO physical server. LE-EB IS the farm.
 - GreenReach Central aggregates data from multiple farms.
 - Wholesale marketplace connects buyers to multi-farm inventory.
+- Sensors connect via SwitchBot Cloud API, not BLE.
 - All farm data flows to GreenReach Central (Central is source of truth for aggregated data).
 - `requireEdgeForControl` is a controller restriction (safety), not a platform boundary.
 - Authentication is multi-tenant (farm-based isolation).
