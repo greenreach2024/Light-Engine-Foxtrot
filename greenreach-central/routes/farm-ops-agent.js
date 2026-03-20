@@ -77,6 +77,22 @@ function resolveCropName(input) {
   return cropUtils.normalizeCropName(input) || input;
 }
 
+/** Infer a normalised device type from raw device type strings (e.g. "MeterPlus" → "sensor"). */
+function inferDeviceType(rawType) {
+  const t = (rawType || '').toLowerCase();
+  if (/meter|sensor|thermo|hygro|temp|humid|co2|ph|ec|par|ppfd/.test(t)) return 'sensor';
+  if (/light|led|strip|bulb|lamp|color/.test(t)) return 'light_controller';
+  if (/fan|ventilat|airflow|exhaust|circul/.test(t)) return 'fan_controller';
+  if (/dehumid/.test(t)) return 'dehumidifier';
+  if (/humidif/.test(t)) return 'humidifier';
+  if (/hvac|heat|cool|ac\b|air.?condition/.test(t)) return 'hvac';
+  if (/irrig|pump|water|valve|drip/.test(t)) return 'irrigation';
+  if (/cam|motion/.test(t)) return 'camera';
+  if (/hub|gateway|bridge/.test(t)) return 'hub';
+  if (/plug|relay|switch|bot|curtain|blind/.test(t)) return 'relay';
+  return 'other';
+}
+
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 function daysBetween(dateA, dateB) {
@@ -722,13 +738,15 @@ export const TOOL_CATALOG = {
         // Pick room with fewest devices
         availableRooms.sort((a, b) => (roomDeviceCounts[a] || 0) - (roomDeviceCounts[b] || 0));
         const targetRoom = availableRooms[0];
+        const roomObj = roomList.find(r => (r.id || r.room_id) === targetRoom);
+        const targetZone = (roomObj?.zones?.length > 0) ? roomObj.zones[0].toLowerCase().replace(/\s+/g, '-') : 'zone-1';
         previousAssignments[deviceId] = { room_id: device.room_id, zone: device.zone };
         device.room_id = targetRoom;
-        device.zone = 'zone-1';
+        device.zone = targetZone;
         device.assigned_at = new Date().toISOString();
         device.assigned_by = 'farm-ops-agent';
         roomDeviceCounts[targetRoom] = (roomDeviceCounts[targetRoom] || 0) + 1;
-        assignments.push({ device_id: deviceId, room_id: targetRoom, zone: 'zone-1', device_type: device.type || device.protocol || 'unknown' });
+        assignments.push({ device_id: deviceId, room_id: targetRoom, zone: targetZone, device_type: device.type || device.protocol || 'unknown' });
       }
 
       // Save back in original wrapper format
@@ -758,6 +776,238 @@ export const TOOL_CATALOG = {
       if (isWrapper) { raw.lastUpdated = new Date().toISOString(); }
       writeJSON('device-meta.json', isWrapper ? raw : devices);
       return { ok: true, undone, message: `Reverted ${undone} device assignment(s)` };
+    }
+  },
+  'register_device': {
+    description: 'Register a new IoT device (sensor, light controller, fan controller, dehumidifier, etc.) into the device inventory.',
+    category: 'write',
+    required: ['name', 'type'],
+    optional: ['room_id', 'zone', 'protocol', 'brand', 'model', 'device_id'],
+    undoable: true,
+    handler: async ({ name, type, room_id, zone, protocol, brand, model, device_id }) => {
+      const VALID_TYPES = ['sensor', 'light_controller', 'fan_controller', 'dehumidifier', 'hvac', 'humidifier', 'irrigation', 'camera', 'hub', 'relay', 'meter', 'other'];
+      const normType = String(type || '').toLowerCase().replace(/[\s-]+/g, '_');
+      if (!VALID_TYPES.includes(normType)) {
+        return { ok: false, error: `Invalid device type "${type}". Valid types: ${VALID_TYPES.join(', ')}` };
+      }
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return { ok: false, error: 'Device name is required' };
+      }
+
+      const raw = readJSON('device-meta.json', { devices: {}, lastUpdated: null, version: '1.0.0' });
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : (() => { const { version, lastUpdated, farmId, ...rest } = raw; return rest; })();
+
+      // Generate device ID if not provided
+      const id = device_id || `dev-${normType}-${crypto.randomBytes(4).toString('hex')}`;
+
+      // Check for duplicate
+      if (devices[id]) {
+        return { ok: false, error: `Device "${id}" already exists` };
+      }
+
+      // Validate room_id if provided
+      if (room_id) {
+        const rooms = readJSON('rooms.json', {});
+        const roomList = rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object');
+        const validRoom = roomList.find(r => (r.id || r.room_id) === room_id);
+        if (!validRoom) {
+          return { ok: false, error: `Room "${room_id}" not found. Available rooms: ${roomList.map(r => r.id || r.room_id).join(', ')}` };
+        }
+        // Validate zone if provided
+        if (zone && validRoom.zones && validRoom.zones.length > 0) {
+          const normZone = zone.toLowerCase().replace(/\s+/g, '-');
+          const validZones = validRoom.zones.map(z => z.toLowerCase().replace(/\s+/g, '-'));
+          if (!validZones.includes(normZone)) {
+            return { ok: false, error: `Zone "${zone}" not found in room "${room_id}". Available zones: ${validRoom.zones.join(', ')}` };
+          }
+        }
+      }
+
+      const device = {
+        name: name.trim(),
+        type: normType,
+        protocol: protocol || 'manual',
+        brand: brand || '',
+        model: model || '',
+        room_id: room_id || null,
+        zone: zone ? zone.toLowerCase().replace(/\s+/g, '-') : null,
+        status: 'online',
+        registered_at: new Date().toISOString(),
+        registered_by: 'farm-ops-agent'
+      };
+      if (room_id) {
+        device.assigned_at = new Date().toISOString();
+        device.assigned_by = 'farm-ops-agent';
+      }
+
+      devices[id] = device;
+
+      if (isWrapper) {
+        raw.devices = devices;
+        raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', raw);
+      } else {
+        writeJSON('device-meta.json', { devices, lastUpdated: new Date().toISOString(), version: '1.0.0' });
+      }
+
+      // Update room category count if type matches a hardware category
+      if (room_id) {
+        try {
+          const rooms = readJSON('rooms.json', {});
+          const roomList = rooms.rooms || [];
+          const room = roomList.find(r => (r.id || r.room_id) === room_id);
+          if (room?.category && room.category[normType] !== undefined) {
+            room.category[normType].count = (room.category[normType].count || 0) + 1;
+            writeJSON('rooms.json', rooms);
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      return {
+        ok: true,
+        device_id: id,
+        device,
+        message: `Registered ${normType} "${name}"${room_id ? ` in room ${room_id}${zone ? ` ${zone}` : ''}` : ' (unassigned)'}`,
+        _undo_state: { device_id: id, room_id, type: normType }
+      };
+    },
+    undoHandler: async (params, state) => {
+      const raw = readJSON('device-meta.json', { devices: {} });
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : raw;
+      const id = state?.device_id || params?.device_id;
+      if (id && devices[id]) {
+        delete devices[id];
+        if (isWrapper) raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', isWrapper ? raw : devices);
+
+        // Decrement room category count
+        if (state?.room_id && state?.type) {
+          try {
+            const rooms = readJSON('rooms.json', {});
+            const roomList = rooms.rooms || [];
+            const room = roomList.find(r => (r.id || r.room_id) === state.room_id);
+            if (room?.category?.[state.type]) {
+              room.category[state.type].count = Math.max(0, (room.category[state.type].count || 1) - 1);
+              writeJSON('rooms.json', rooms);
+            }
+          } catch { /* non-fatal */ }
+        }
+        return { ok: true, undone: true, message: `Removed device ${id}` };
+      }
+      return { ok: false, error: `Device ${id} not found for undo` };
+    }
+  },
+  'scan_devices': {
+    description: 'Trigger a network/protocol scan for IoT devices (SwitchBot, Light Engine, wired). Returns discovered devices that can then be registered.',
+    category: 'read',
+    required: [],
+    optional: ['protocol'],
+    handler: async ({ protocol }) => {
+      const discovered = [];
+
+      // 1. Check Light Engine edge proxy
+      const edgeUrl = process.env.LIGHT_ENGINE_URL || process.env.EDGE_URL;
+      if (edgeUrl) {
+        try {
+          const resp = await fetch(`${edgeUrl}/discovery/scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ protocol: protocol || 'all' }),
+            signal: AbortSignal.timeout(8000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const edgeDevices = Array.isArray(data.devices) ? data.devices : [];
+            discovered.push(...edgeDevices.map(d => ({
+              name: d.name || d.deviceName || 'Unknown Device',
+              device_id: d.deviceId || d.id || null,
+              type: inferDeviceType(d.deviceType || d.type || ''),
+              device_type_raw: d.deviceType || d.type || 'unknown',
+              protocol: d.protocol || 'light-engine',
+              brand: d.brand || '',
+              source: 'light-engine'
+            })));
+          }
+        } catch (err) {
+          // Light Engine unreachable — continue with cloud scan
+        }
+      }
+
+      // 2. SwitchBot cloud API scan using stored credentials
+      if (!protocol || protocol === 'all' || protocol === 'switchbot') {
+        try {
+          let sbCreds = null;
+          // Try farmStore (DB)
+          try {
+            const fid = process.env.FARM_ID || 'default';
+            const dbCreds = await farmStore.get(fid, 'switchbot_credentials');
+            if (dbCreds?.token && dbCreds?.secret) sbCreds = dbCreds;
+          } catch { /* ok */ }
+          // Fall back to farm.json
+          if (!sbCreds) {
+            try {
+              const farmJson = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'farm.json'), 'utf8'));
+              const sb = farmJson?.integrations?.switchbot;
+              if (sb?.token && sb?.secret) sbCreds = sb;
+            } catch { /* ok */ }
+          }
+          if (sbCreds) {
+            const t = Date.now().toString();
+            const nonce = crypto.randomBytes(16).toString('hex');
+            const strToSign = sbCreds.token + t + nonce;
+            const { createHmac } = await import('crypto');
+            const sign = createHmac('sha256', sbCreds.secret).update(strToSign, 'utf8').digest('base64');
+            const sbResp = await fetch('https://api.switch-bot.com/v1.1/devices', {
+              headers: { 'Authorization': sbCreds.token, 't': t, 'sign': sign, 'nonce': nonce, 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(10000)
+            });
+            const sbBody = await sbResp.json().catch(() => ({}));
+            if (sbResp.ok && sbBody.statusCode === 100) {
+              const deviceList = sbBody.body?.deviceList || [];
+              const infraredList = sbBody.body?.infraredRemoteList || [];
+              for (const d of [...deviceList, ...infraredList]) {
+                discovered.push({
+                  name: d.deviceName || d.remoteType || `SwitchBot ${d.deviceType}`,
+                  device_id: d.deviceId,
+                  type: inferDeviceType(d.deviceType || d.remoteType || ''),
+                  device_type_raw: d.deviceType || d.remoteType || 'unknown',
+                  protocol: 'switchbot',
+                  brand: 'SwitchBot',
+                  source: 'switchbot-cloud'
+                });
+              }
+            }
+          }
+        } catch { /* SwitchBot scan failed — non-fatal */ }
+      }
+
+      // 3. Check what's already registered to avoid duplicates
+      const raw = readJSON('device-meta.json', { devices: {} });
+      const existingDevices = raw.devices || {};
+      const existingIds = new Set(Object.keys(existingDevices));
+      const existingNames = new Set(Object.values(existingDevices).map(d => (d.name || '').toLowerCase()));
+
+      const newDevices = discovered.filter(d => {
+        if (d.device_id && existingIds.has(d.device_id)) return false;
+        if (existingNames.has((d.name || '').toLowerCase())) return false;
+        return true;
+      });
+
+      return {
+        ok: true,
+        total_discovered: discovered.length,
+        already_registered: discovered.length - newDevices.length,
+        new_devices: newDevices.length,
+        devices: newDevices,
+        all_discovered: discovered,
+        note: newDevices.length > 0
+          ? `Found ${newDevices.length} new device(s). Use register_device to add them.`
+          : discovered.length > 0
+            ? 'All discovered devices are already registered.'
+            : 'No devices found on the network. Check that devices are powered on and connected.'
+      };
     }
   },
   'seed_benchmarks': {
@@ -1349,13 +1599,36 @@ const COMMAND_FAMILIES = [
     intent: 'device_status',
     family: 'device_onboarding',
     patterns: [
-      /scan\s*(?:for\s*)?(?:new\s*)?(?:devices?|sensors?|lights?|hardware)/i,
-      /(?:check|show|list|get)\s*(?:devices?|sensors?|iot)/i,
+      /(?:check|show|list|get|what)\s*(?:are\s*)?(?:my\s*)?(?:devices?|sensors?|iot)/i,
       /(?:device|sensor|iot)\s*(?:status|inventory|list|check)/i,
-      /(?:any|how\s*many)\s*(?:unassigned|new)\s*(?:devices?|sensors?)/i
+      /(?:any|how\s*many)\s*(?:unassigned|new)\s*(?:devices?|sensors?)/i,
+      /what\s*(?:devices?|hardware|sensors?)\s*(?:do\s*I|are)/i
     ],
     slots: {},
     tool: 'get_device_status'
+  },
+  {
+    intent: 'scan_devices',
+    family: 'device_onboarding',
+    patterns: [
+      /scan\s*(?:for\s*)?(?:new\s*)?(?:devices?|sensors?|lights?|hardware)/i,
+      /discover\s*(?:new\s*)?(?:devices?|sensors?|hardware)/i,
+      /find\s*(?:new\s*)?(?:devices?|sensors?|hardware)\s*(?:on|in)/i,
+      /(?:network|protocol)\s*scan/i
+    ],
+    slots: {},
+    tool: 'scan_devices'
+  },
+  {
+    intent: 'register_device',
+    family: 'device_onboarding',
+    patterns: [
+      /(?:add|register|introduce|set\s*up|install|connect)\s*(?:a?\s*new\s*)?(?:device|sensor|light|fan|dehumidifier|humidifier|controller|hvac|camera|meter)/i,
+      /(?:new|add)\s*(?:dehumidifier|humidifier|sensor|fan|light|hvac|camera)/i,
+      /(?:introduce|put|place)\s*(?:a?\s*)?(?:dehumidifier|humidifier|sensor|fan|light)\s*(?:in|into|to)/i
+    ],
+    slots: {},
+    tool: 'register_device'
   },
   {
     intent: 'auto_assign',
@@ -1415,7 +1688,9 @@ const INTENT_KEYWORDS = {
   alert_check: ['alert', 'alerts', 'warning', 'problem', 'issue', 'sensor', 'outage', 'anomaly'],
   dismiss_alert: ['dismiss', 'clear', 'resolve', 'acknowledge'],
   auto_assign: ['assign', 'auto', 'device', 'devices', 'light', 'lights', 'sensor'],
-  device_status: ['scan', 'device', 'devices', 'sensor', 'sensors', 'iot', 'hardware', 'unassigned', 'new'],
+  device_status: ['device', 'devices', 'sensor', 'sensors', 'iot', 'hardware', 'inventory', 'list'],
+  scan_devices: ['scan', 'discover', 'find', 'network', 'new', 'detect', 'hardware', 'switchbot'],
+  register_device: ['add', 'register', 'introduce', 'install', 'connect', 'setup', 'dehumidifier', 'humidifier', 'fan', 'light', 'controller', 'camera', 'meter'],
   planting_schedule: ['planting', 'planted', 'growing', 'schedule', 'assignment', 'current', 'active'],
   scheduled_harvests: ['upcoming', 'harvest', 'next', 'forecast', 'freeing', 'available', 'zone'],
   seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],

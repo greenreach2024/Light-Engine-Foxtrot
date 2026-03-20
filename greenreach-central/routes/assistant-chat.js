@@ -238,7 +238,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_device_status',
-      description: 'Get current IoT device inventory — total, assigned, unassigned devices, with room info.',
+      description: 'Get current IoT device inventory — total, assigned, unassigned devices with room/zone info and device types.',
       parameters: {
         type: 'object',
         properties: {}
@@ -248,8 +248,42 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'scan_devices',
+      description: 'Trigger a real network/protocol scan for IoT devices (SwitchBot, Light Engine, wired sensors). Returns discovered devices that are NOT yet registered. After scanning, use register_device to add new devices to the inventory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          protocol: { type: 'string', description: 'Protocol to scan: "all", "switchbot", "light-engine". Default: all.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'register_device',
+      description: 'Register a new IoT device into the farm inventory. WRITE operation — describe the device and ask the user to confirm before executing. Valid types: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Device name (e.g. "Zone 1 Dehumidifier", "Main Room Temp Sensor")' },
+          type: { type: 'string', description: 'Device type: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other' },
+          room_id: { type: 'string', description: 'Room to assign to (optional — can assign later with auto_assign_devices)' },
+          zone: { type: 'string', description: 'Zone within the room (e.g. "zone-1", "zone-2"). Optional.' },
+          protocol: { type: 'string', description: 'Connection protocol: switchbot, wifi, wired, zigbee, bluetooth, manual. Default: manual' },
+          brand: { type: 'string', description: 'Manufacturer/brand (optional)' },
+          model: { type: 'string', description: 'Model number (optional)' },
+          device_id: { type: 'string', description: 'Specific device ID (auto-generated if omitted)' }
+        },
+        required: ['name', 'type']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'auto_assign_devices',
-      description: 'Auto-assign unassigned IoT devices (sensors, lights) to rooms/zones based on room capacity.',
+      description: 'Auto-assign unassigned IoT devices to rooms/zones based on room capacity and zone structure.',
       parameters: {
         type: 'object',
         properties: {
@@ -745,9 +779,18 @@ PLANTING SCHEDULE WORKFLOW:
 - For succession planting, stagger seed dates so harvests are spread across weeks rather than all at once.
 
 DEVICE MANAGEMENT:
-- When the farmer asks to scan for devices, check devices, or assign devices, FIRST call get_device_status to see the current inventory.
-- Report what you find (total, assigned, unassigned) before proposing any action.
-- Only offer to auto-assign if there are actually unassigned devices.
+- When the farmer asks to scan for devices, discover hardware, or check what's connected:
+  1. Call scan_devices to trigger a real network/protocol scan.
+  2. Also call get_device_status to show the current inventory.
+  3. Report what was found: new devices on the network + already registered devices.
+  4. For each new device found, offer to register it using register_device.
+- When the farmer asks to add, introduce, register, or set up a specific device (e.g. "add a dehumidifier to zone 1"):
+  1. Call get_device_status to see the current inventory and available rooms.
+  2. Use register_device with the device details (name, type, room_id, zone, protocol, brand).
+  3. Device types: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other.
+  4. After registration, call get_device_status to verify it's in the inventory.
+- Only offer auto_assign_devices when there are multiple unassigned devices that need bulk assignment.
+- When asked "what devices do I have" or "show my devices", use get_device_status (no scan needed).
 
 PRICING WORKFLOW:
 - When the farmer asks to update crop prices, FIRST call get_pricing_info to see current prices and units.
