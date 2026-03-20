@@ -64,43 +64,37 @@ router.get('/demand-forecast', async (req, res) => {
     const marketData = getMarketData();
     const cropPricing = await getCropPricing();
     
-    // Generate forecast based on market trends
+    // Generate forecast based on market trends — expressed as percentage signals
     const forecast = [];
-    let totalDemand = 0;
     
     for (const [product, data] of Object.entries(marketData)) {
-      const trendMultiplier = data.trend === 'increasing' ? 1 + (data.trendPercent / 100) : 
-                             data.trend === 'decreasing' ? 1 + (data.trendPercent / 100) : 1;
-      
-      // Find matching crop in pricing
       const pricingMatch = cropPricing.find(c => 
         c.crop.toLowerCase().includes(product.toLowerCase()) ||
         product.toLowerCase().includes(c.crop.toLowerCase().split(' ')[0])
       );
       
-      const baselineDemand = 100; // Units per period
-      const projectedDemand = Math.round(baselineDemand * trendMultiplier);
-      totalDemand += projectedDemand;
-      
       forecast.push({
         product,
-        baselineDemand,
-        projectedDemand,
-        trend: data.trend,
         trendPercent: data.trendPercent,
+        trend: data.trend,
         confidence: data.articles.length > 0 ? 'high' : 'medium',
         reasoning: data.articles[0]?.summary || `Market trend: ${data.trend}`,
         pricePerUnit: pricingMatch?.wholesalePrice || null
       });
     }
     
+    // Average trend across all tracked crops (percentage)
+    const averageTrend = forecast.length > 0
+      ? Math.round((forecast.reduce((s, f) => s + f.trendPercent, 0) / forecast.length) * 10) / 10
+      : 0;
+    
     return res.json({
       success: true,
       data: {
         horizon,
         farmId: farm_id,
-        forecast: forecast.sort((a, b) => b.projectedDemand - a.projectedDemand),
-        totalDemand,
+        forecast: forecast.sort((a, b) => Math.abs(b.trendPercent) - Math.abs(a.trendPercent)),
+        averageTrend,
         generatedAt: new Date().toISOString()
       }
     });

@@ -2692,9 +2692,10 @@
         if (!el || !sub) return;
 
         if (data.success && data.data && data.data.forecast && data.data.forecast.length > 0) {
-          const totalDemand = data.data.totalDemand || 
-            data.data.forecast.reduce((s, f) => s + (f.projectedDemand || 0), 0);
-          el.textContent = totalDemand + ' units';
+          const avg = data.data.averageTrend || 0;
+          const sign = avg > 0 ? '+' : '';
+          el.textContent = sign + avg + '%';
+          el.style.color = avg > 0 ? '#10b981' : avg < 0 ? '#ef4444' : '';
 
           // Count trends
           const inc = data.data.forecast.filter(f => f.trend === 'increasing').length;

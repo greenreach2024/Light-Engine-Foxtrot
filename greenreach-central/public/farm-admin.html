@@ -2948,13 +2948,17 @@
                 const forecastRes = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
                 const forecastData = await forecastRes.json();
                 
-                if (forecastData.ok && forecastData.forecasts.length > 0) {
-                    const totalDemand = forecastData.forecasts.reduce((sum, f) => sum + f.forecasted_quantity, 0);
-                    document.getElementById('forecasted-demand').textContent = `${totalDemand.toFixed(1)} kg`;
+                if (forecastData.success && forecastData.data && forecastData.data.forecast && forecastData.data.forecast.length > 0) {
+                    const avg = forecastData.data.averageTrend || 0;
+                    const sign = avg > 0 ? '+' : '';
+                    document.getElementById('forecasted-demand').textContent = `${sign}${avg}%`;
                     
-                    const avgGrowth = forecastData.forecasts.reduce((sum, f) => sum + f.growth_rate, 0) / forecastData.forecasts.length;
-                    const trendText = avgGrowth > 0 ? `+${(avgGrowth * 100).toFixed(1)}% trend` : `${(avgGrowth * 100).toFixed(1)}% trend`;
-                    document.getElementById('demand-trend').textContent = trendText;
+                    const inc = forecastData.data.forecast.filter(f => f.trend === 'increasing').length;
+                    const dec = forecastData.data.forecast.filter(f => f.trend === 'decreasing').length;
+                    const parts = [];
+                    if (inc) parts.push(`${inc} rising`);
+                    if (dec) parts.push(`${dec} falling`);
+                    document.getElementById('demand-trend').textContent = parts.length ? parts.join(', ') : 'Stable';
                 }
 
                 // Load production plans
@@ -2978,7 +2982,7 @@
                 const response = await fetch(`${PLANNING_BACKEND_URL}/api/planning/demand-forecast?horizon=${horizon}`);
                 const data = await response.json();
                 
-                if (data.ok && data.forecasts.length > 0) {
+                if (data.success && data.data && data.data.forecast && data.data.forecast.length > 0) {
                     const ctx = document.getElementById('demandForecastChart').getContext('2d');
                     
                     if (demandChart) {
@@ -2989,11 +2993,11 @@
                         '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
                     ];
 
-                    const datasets = data.forecasts.map((forecast, idx) => ({
-                        label: forecast.crop,
+                    const datasets = data.data.forecast.map((f, idx) => ({
+                        label: f.product,
                         data: [
-                            { x: 'Current', y: forecast.current_avg_daily },
-                            { x: 'Forecast', y: forecast.forecasted_quantity / (horizon === 'WEEKLY' ? 7 : 30) }
+                            { x: 'Baseline', y: 0 },
+                            { x: 'Trend', y: f.trendPercent }
                         ],
                         borderColor: colors[idx % colors.length],
                         backgroundColor: colors[idx % colors.length] + '33',
@@ -3014,8 +3018,8 @@
                                 x: { display: true, title: { display: true, text: 'Period' } },
                                 y: { 
                                     display: true, 
-                                    title: { display: true, text: 'Daily Production (kg)' },
-                                    beginAtZero: true
+                                    title: { display: true, text: 'Market Trend (%)' },
+                                    beginAtZero: false
                                 }
                             }
                         }
