@@ -106,6 +106,8 @@ import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
 import { startAIPusher } from './services/ai-recommendations-pusher.js';
 import { startAwsCostExplorerScheduler } from './services/awsCostExplorerSync.js';
+import { startMarketDataFetcher } from './services/market-data-fetcher.js';
+import { startMarketAnalysisAgent } from './services/market-analysis-agent.js';
 import { detectHarvestConflicts, analyzeSupplyDemand, generateNetworkRiskAlerts } from './jobs/supply-demand-balancer.js';
 import { generateHarvestPredictions } from './services/harvest-prediction-engine.js';
 import { getCoordinatedPlantingRecommendations } from './services/network-planting-coordinator.js';
@@ -4589,6 +4591,8 @@ async function startServer() {
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startAwsCostExplorerScheduler(); // Optional AWS Cost Explorer accounting sync
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
+      startMarketDataFetcher(); // Phase 1A: daily USDA price ingestion
+      startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
 
       // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)
       // Run once after 5 min, then weekly

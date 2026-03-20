@@ -1,7 +1,10 @@
 import express from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
-import { getMarketData } from './market-intelligence.js';
+import { getMarketDataAsync } from './market-intelligence.js';
 import { getCropPricing } from './crop-pricing.js';
+import { getLatestAnalyses } from '../services/market-analysis-agent.js';
+import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
+import farmStore from '../lib/farm-data-store.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -30,11 +33,15 @@ router.get('/capacity', async (req, res) => {
       }
     }
     
-    // Calculate capacity (assume each group is 1 unit of capacity)
-    const totalCapacity = 2000; // TODO: Get from farm configuration
+    // Calculate capacity from actual farm groups
+    const groups = await farmStore.get(farm_id, 'groups') || [];
+    const totalCapacity = groups.reduce((sum, g) => {
+      const trays = Number(g.trays) || (Array.isArray(g.trays) ? g.trays.length : 0) || Number(g.trayCount) || 0;
+      return sum + trays;
+    }, 0) || 0;
     const usedCapacity = assignments.length;
-    const availableCapacity = totalCapacity - usedCapacity;
-    const utilizationPercent = (usedCapacity / totalCapacity) * 100;
+    const availableCapacity = Math.max(0, totalCapacity - usedCapacity);
+    const utilizationPercent = totalCapacity > 0 ? (usedCapacity / totalCapacity) * 100 : 0;
     
     return res.json({
       success: true,
@@ -61,9 +68,19 @@ router.get('/demand-forecast', async (req, res) => {
   try {
     const horizon = req.query.horizon || 'MONTHLY';
     const farm_id = req.query.farm_id || req.session?.farm_id || 'demo-farm';
-    const marketData = getMarketData();
+    const pool = req.app?.locals?.dbPool || null;
+    const marketData = await getMarketDataAsync(pool);
     const cropPricing = await getCropPricing();
-    
+
+    // Fetch AI analysis + wholesale demand signals (non-blocking)
+    let aiAnalyses = [];
+    let demandSignals = {};
+    try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
+    try { demandSignals = await analyzeDemandPatterns() || {}; } catch { /* ok */ }
+
+    const aiMap = {};
+    for (const a of aiAnalyses) aiMap[a.product] = a;
+
     // Generate forecast based on market trends — expressed as percentage signals
     const forecast = [];
     
@@ -72,14 +89,40 @@ router.get('/demand-forecast', async (req, res) => {
         c.crop.toLowerCase().includes(product.toLowerCase()) ||
         product.toLowerCase().includes(c.crop.toLowerCase().split(' ')[0])
       );
-      
+
+      const ai = aiMap[product] || null;
+      const demand = demandSignals[product] || null;
+
+      // Confidence: prefer AI confidence, fall back to observation count
+      let confidence = 'medium';
+      if (ai?.confidence) {
+        confidence = ai.confidence;
+      } else if (data.observationCount >= 20) {
+        confidence = 'high';
+      } else if ((data.observationCount || 0) < 5) {
+        confidence = 'low';
+      }
+
       forecast.push({
         product,
         trendPercent: data.trendPercent,
         trend: data.trend,
-        confidence: data.articles.length > 0 ? 'high' : 'medium',
-        reasoning: data.articles[0]?.summary || `Market trend: ${data.trend}`,
-        pricePerUnit: pricingMatch?.wholesalePrice || null
+        confidence,
+        reasoning: ai?.reasoning || `Market trend: ${data.trend}`,
+        pricePerUnit: pricingMatch?.wholesalePrice || null,
+        priceCAD: data.avgPriceCAD || null,
+        // AI enrichment
+        aiOutlook: ai?.outlook || null,
+        aiAction: ai?.action || null,
+        aiForecastPrice: ai?.price_forecast ? parseFloat(ai.price_forecast) : null,
+        // Wholesale demand
+        wholesaleDemand: demand ? {
+          totalQty: demand.network_total_qty,
+          orderCount: demand.network_order_count,
+          trend: demand.network_trend,
+        } : null,
+        dataSource: data.dataSource || 'hardcoded',
+        dataFreshness: data.lastUpdated || null,
       });
     }
     
@@ -113,7 +156,8 @@ router.get('/recommendations', async (req, res) => {
     const farm_id = req.query.farm_id || req.session?.farm_id || 'demo-farm';
     
     // Get market data and current assignments
-    const marketData = getMarketData();
+    const pool = req.app?.locals?.dbPool || null;
+    const marketData = await getMarketDataAsync(pool);
     const cropPricing = await getCropPricing();
     
     let currentAssignments = [];
@@ -129,11 +173,20 @@ router.get('/recommendations', async (req, res) => {
       }
     }
     
-    // Generate recommendations based on market opportunities + farm diversity
+    // Generate recommendations based on market opportunities + farm diversity + AI signals
+    let aiAnalyses = [];
+    try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
+    const aiMap = {};
+    for (const a of aiAnalyses) aiMap[a.product] = a;
+
     const recommendations = [];
     
     for (const [product, data] of Object.entries(marketData)) {
-      if (data.trend !== 'increasing' || Math.abs(data.trendPercent) < 10) continue; // Only high-opportunity crops
+      const ai = aiMap[product] || null;
+      // Include crops with strong upward trend OR AI says "increase_production" / "bullish"
+      const strongTrend = data.trend === 'increasing' && Math.abs(data.trendPercent) >= 10;
+      const aiBullish = ai?.outlook === 'bullish' || ai?.action === 'increase_production';
+      if (!strongTrend && !aiBullish) continue;
       
       const pricingMatch = cropPricing.find(c => 
         c.crop.toLowerCase().includes(product.toLowerCase()) ||
@@ -148,13 +201,14 @@ router.get('/recommendations', async (req, res) => {
       recommendations.push({
         crop: pricingMatch.crop,
         priority: isPriority ? 'high' : 'medium',
-        reasoning: `Market prices up ${data.trendPercent}% - strong demand signal. ${data.articles[0]?.summary || ''}`,
+        reasoning: ai?.reasoning || `Market prices ${data.trendPercent > 0 ? 'up' : 'down'} ${Math.abs(data.trendPercent)}% — ${data.trend} trend`,
         marketTrend: data.trend,
         trendPercent: data.trendPercent,
         currentlyGrowing: currentCount,
-        projectedRevenue: pricingMatch.wholesalePrice * 100, // Per 100 units
-        confidence: data.articles.length > 0 ? 'high' : 'medium',
-        sources: data.articles.map(a => ({ title: a.title, source: a.source, date: a.date }))
+        projectedRevenue: pricingMatch.wholesalePrice * 100,
+        confidence: ai?.confidence || (data.observationCount >= 10 ? 'high' : 'medium'),
+        aiOutlook: ai?.outlook || null,
+        aiAction: ai?.action || null,
       });
     }
     

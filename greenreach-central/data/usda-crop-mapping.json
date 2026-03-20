@@ -1,0 +1,44 @@
+{
+  "_comment": "Maps crop-registry market.resolveAs names to USDA terminal market commodity names and IDs. Source: USDA AMS MARS API (marketnews.usda.gov). Commodity group: VEGETABLES / SPECIALTY CROPS.",
+  "crops": {
+    "Arugula":             { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_bunch", "fallbackCAD": 5.29 },
+    "Baby Arugula":        { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_5oz",   "fallbackCAD": 5.49 },
+    "Cultivated Arugula":  { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_5oz",   "fallbackCAD": 5.29 },
+    "Red Arugula":         { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_5oz",   "fallbackCAD": 5.49 },
+    "Wasabi Arugula":      { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_5oz",   "fallbackCAD": 5.99 },
+    "Wild Arugula":        { "usdaName": "ARUGULA", "commodityGroup": "specialty", "unit": "per_5oz",   "fallbackCAD": 5.49 },
+    "Basil":               { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Genovese Basil":      { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Holy Basil":          { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 4.49 },
+    "Lemon Basil":         { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 4.49 },
+    "Purple Basil":        { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 4.49 },
+    "Thai Basil":          { "usdaName": "BASIL",   "commodityGroup": "herbs",     "unit": "per_bunch", "fallbackCAD": 4.49 },
+    "Butterhead Lettuce":  { "usdaName": "LETTUCE, BUTTERHEAD", "commodityGroup": "vegetables", "unit": "per_head", "fallbackCAD": 3.49 },
+    "Lettuce":             { "usdaName": "LETTUCE", "commodityGroup": "vegetables", "unit": "per_head", "fallbackCAD": 2.99 },
+    "Mixed Lettuce":       { "usdaName": "LETTUCE, LEAF TYPE", "commodityGroup": "vegetables", "unit": "per_lb", "fallbackCAD": 3.99 },
+    "Oak Leaf Lettuce":    { "usdaName": "LETTUCE, LEAF TYPE", "commodityGroup": "vegetables", "unit": "per_head", "fallbackCAD": 3.49 },
+    "Red Leaf Lettuce":    { "usdaName": "LETTUCE, LEAF TYPE", "commodityGroup": "vegetables", "unit": "per_head", "fallbackCAD": 3.49 },
+    "Romaine Lettuce":     { "usdaName": "LETTUCE, ROMAINE", "commodityGroup": "vegetables", "unit": "per_head", "fallbackCAD": 3.49 },
+    "Kale":                { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Baby Kale":           { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_5oz",   "fallbackCAD": 4.99 },
+    "Curly Kale":          { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Dinosaur Kale":       { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Lacinato Kale":       { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Red Russian Kale":    { "usdaName": "KALE",    "commodityGroup": "greens",    "unit": "per_bunch", "fallbackCAD": 3.99 },
+    "Frisée Endive":       { "usdaName": "ENDIVE",  "commodityGroup": "specialty", "unit": "per_head",  "fallbackCAD": 4.99 },
+    "Watercress":          { "usdaName": "WATERCRESS", "commodityGroup": "specialty", "unit": "per_bunch", "fallbackCAD": 4.99 }
+  },
+  "retailers": [
+    "Whole Foods",
+    "Sobeys",
+    "Metro",
+    "Loblaws",
+    "Trader Joes",
+    "Farm Boy"
+  ],
+  "usdaTerminalMarkets": [
+    { "id": "BOSTON",   "name": "Boston Terminal Market" },
+    { "id": "CHICAGO", "name": "Chicago Terminal Market" },
+    { "id": "TORONTO", "name": "Toronto (estimated from USDA + FX)" }
+  ]
+}
