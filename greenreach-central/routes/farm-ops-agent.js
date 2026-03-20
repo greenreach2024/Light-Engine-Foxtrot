@@ -457,6 +457,74 @@ export const TOOL_CATALOG = {
       }
     }
   },
+  'get_planting_assignments': {
+    description: 'Get all active planting assignments — what is planted where, seed dates, expected harvest dates',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'status'],
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const farm_id = params.farm_id || 'demo-farm';
+      const status = params.status || 'active';
+      try {
+        const result = await dbQuery(
+          `SELECT group_id, crop_name, crop_id, seed_date, harvest_date, status, notes, updated_at
+           FROM planting_assignments WHERE farm_id = $1 AND status = $2
+           ORDER BY seed_date ASC`,
+          [farm_id, status]
+        );
+        const assignments = (result.rows || []).map(r => ({
+          group_id: r.group_id, crop: r.crop_name, crop_id: r.crop_id,
+          seed_date: r.seed_date ? new Date(r.seed_date).toISOString().split('T')[0] : null,
+          harvest_date: r.harvest_date ? new Date(r.harvest_date).toISOString().split('T')[0] : null,
+          status: r.status, notes: r.notes
+        }));
+        return { ok: true, count: assignments.length, assignments };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_scheduled_harvests': {
+    description: 'Get upcoming harvests — active plantings with expected harvest dates and days remaining',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'days_ahead'],
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const farm_id = params.farm_id || 'demo-farm';
+      const daysAhead = params.days_ahead || 60;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() + daysAhead);
+      try {
+        const result = await dbQuery(
+          `SELECT group_id, crop_name, seed_date, harvest_date, status, notes
+           FROM planting_assignments
+           WHERE farm_id = $1 AND status = 'active' AND harvest_date IS NOT NULL AND harvest_date <= $2
+           ORDER BY harvest_date ASC`,
+          [farm_id, cutoff.toISOString().split('T')[0]]
+        );
+        const today = new Date(); today.setHours(0,0,0,0);
+        const upcoming = (result.rows || []).map(r => {
+          const hd = new Date(r.harvest_date);
+          const daysRemaining = Math.ceil((hd - today) / 86400000);
+          return {
+            group_id: r.group_id, crop: r.crop_name,
+            seed_date: r.seed_date ? new Date(r.seed_date).toISOString().split('T')[0] : null,
+            harvest_date: new Date(r.harvest_date).toISOString().split('T')[0],
+            days_remaining: daysRemaining,
+            status: daysRemaining <= 0 ? 'ready' : daysRemaining <= 3 ? 'imminent' : 'upcoming',
+            notes: r.notes
+          };
+        });
+        const ready = upcoming.filter(h => h.status === 'ready').length;
+        const imminent = upcoming.filter(h => h.status === 'imminent').length;
+        return { ok: true, count: upcoming.length, ready, imminent, upcoming_harvests: upcoming };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
   'get_capacity': {
     description: 'Get farm capacity utilization — total trays, used, available, utilization percentage',
     category: 'read',
@@ -808,8 +876,9 @@ export const TOOL_CATALOG = {
       const seed_date = params.seed_date || new Date().toISOString().split('T')[0];
       const canonicalCrop = resolveCropName(params.crop_name);
       const growDays = cropUtils.getCropGrowDays(canonicalCrop);
+      // Calculate harvest_date from seed_date (not today) so future-dated plantings get correct harvest
       const harvest_date = params.harvest_date || (growDays
-        ? new Date(Date.now() + growDays * 86400000).toISOString().split('T')[0]
+        ? new Date(new Date(seed_date + 'T00:00:00').getTime() + growDays * 86400000).toISOString().split('T')[0]
         : null);
       try {
         const result = await dbQuery(
@@ -1254,6 +1323,29 @@ const COMMAND_FAMILIES = [
     tool: 'dismiss_alert'
   },
   {
+    intent: 'planting_schedule',
+    family: 'planting',
+    patterns: [
+      /(?:show|get|what'?s?)\s*(?:the\s+)?(?:current\s+)?(?:planting|growing)\s*(?:schedule|assignments?|plan)/i,
+      /what(?:'s|\s+is)\s*(?:planted|growing)\s*(?:right now|currently|now)?/i,
+      /(?:current|active)\s*(?:plantings?|crops?|assignments?)/i
+    ],
+    slots: {},
+    tool: 'get_planting_assignments'
+  },
+  {
+    intent: 'scheduled_harvests',
+    family: 'planting',
+    patterns: [
+      /(?:upcoming|scheduled|next|expected)\s*harvests?/i,
+      /(?:when|what)\s*(?:is|are)\s*(?:the\s+)?(?:next\s+)?harvests?/i,
+      /(?:harvest|zone)\s*(?:forecast|schedule|timeline)/i,
+      /(?:zones?|groups?)\s*(?:freeing|opening|available)\s*(?:up|soon)?/i
+    ],
+    slots: {},
+    tool: 'get_scheduled_harvests'
+  },
+  {
     intent: 'device_status',
     family: 'device_onboarding',
     patterns: [
@@ -1324,6 +1416,8 @@ const INTENT_KEYWORDS = {
   dismiss_alert: ['dismiss', 'clear', 'resolve', 'acknowledge'],
   auto_assign: ['assign', 'auto', 'device', 'devices', 'light', 'lights', 'sensor'],
   device_status: ['scan', 'device', 'devices', 'sensor', 'sensors', 'iot', 'hardware', 'unassigned', 'new'],
+  planting_schedule: ['planting', 'planted', 'growing', 'schedule', 'assignment', 'current', 'active'],
+  scheduled_harvests: ['upcoming', 'harvest', 'next', 'forecast', 'freeing', 'available', 'zone'],
   seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],
   seed_benchmarks: ['benchmark', 'benchmarks', 'import', 'crop', 'yield', 'baseline'],
   undo_last: ['undo', 'revert', 'rollback', 'takeback']

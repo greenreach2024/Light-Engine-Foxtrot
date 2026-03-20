@@ -373,14 +373,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'create_planting_assignment',
-      description: 'Schedule a new planting — assign a crop to a group/zone with seed and harvest dates. Crop names are auto-resolved from aliases/IDs. Harvest date auto-calculates from recipe if omitted. WRITE operation — confirm with user first.',
+      description: 'Schedule a single planting — assign a crop to a group/zone with seed and harvest dates. Crop names are auto-resolved from aliases/IDs. Harvest date auto-calculates from seed_date + recipe grow days if omitted. For batch scheduling of multiple crops, use create_planting_plan instead.',
       parameters: {
         type: 'object',
         properties: {
           crop_name: { type: 'string', description: 'Crop to plant' },
           group_id: { type: 'string', description: 'Group/zone ID to plant in' },
-          seed_date: { type: 'string', description: 'Seed date (YYYY-MM-DD). Defaults to today.' },
-          harvest_date: { type: 'string', description: 'Expected harvest date (YYYY-MM-DD)' },
+          seed_date: { type: 'string', description: 'Seed date (YYYY-MM-DD). Defaults to today. Use the date the farmer specifies.' },
+          harvest_date: { type: 'string', description: 'Expected harvest date (YYYY-MM-DD). Auto-calculates from seed_date + recipe if omitted.' },
           notes: { type: 'string', description: 'Optional notes' },
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
         },
@@ -442,6 +442,52 @@ const GPT_TOOLS = [
     }
   },
   // --- Crop Planning Intelligence Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_planting_assignments',
+      description: 'Get all active planting assignments — what crops are planted where, their seed dates, expected harvest dates, and status. Call this FIRST when asked about the current schedule, what is planted, or when zones free up.',
+      parameters: {
+        type: 'object',
+        properties: {
+          farm_id: { type: 'string', description: 'Farm ID (optional)' },
+          status: { type: 'string', description: 'Filter by status: active, completed, cancelled. Default: active.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_scheduled_harvests',
+      description: 'Get upcoming harvests — which crops are close to harvest, days remaining, and which zones will free up soon. Use this when planning new plantings to correlate with harvest timing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          farm_id: { type: 'string', description: 'Farm ID (optional)' },
+          days_ahead: { type: 'number', description: 'Look ahead window in days (default: 60)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_planting_plan',
+      description: 'Create an optimized planting plan for multiple crops/zones at once. Analyses current assignments, harvest forecasts, crop compatibility, and market data to generate a batch schedule. Returns the plan for review before executing. Use this instead of calling create_planting_assignment multiple times.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target_date: { type: 'string', description: 'Target start date (YYYY-MM-DD) for the plan. Required.' },
+          num_zones: { type: 'number', description: 'Number of zones/groups to fill (optional, uses available capacity)' },
+          focus: { type: 'string', description: 'Planning focus: balanced, high-margin, quick-turn, succession, diversification' },
+          exclude: { type: 'string', description: 'Comma-separated crop names to exclude' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['target_date']
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -566,6 +612,18 @@ When advising on what to grow, consider ALL of these factors (not only financial
 8. Harvest schedule alignment — group crops for regular weekly harvests. Balance quick-turn crops with slower crops to avoid feast-or-famine production.
 
 When the farmer asks "what should I grow" or "help me plan", use get_planning_recommendation and explain your reasoning across these dimensions — not just price trends.
+
+PLANTING SCHEDULE WORKFLOW:
+- When the farmer asks to create a planting schedule, optimise the schedule, or plan plantings for a date:
+  1. Call get_planting_assignments to see what is currently planted and where.
+  2. Call get_scheduled_harvests to see what zones free up and when.
+  3. Call get_capacity to see available space.
+  4. Use create_planting_plan with the farmer’s target date and preferences to generate an optimised batch schedule.
+  5. Present the plan as a clear table (crop, zone, seed date, harvest date, reasoning) and ask the farmer to confirm.
+  6. After confirmation, execute using create_planting_assignment for each line item, passing the exact seed_date from the plan.
+- When the farmer mentions a date like “April 1st” or “next Monday”, convert it to YYYY-MM-DD and pass it as target_date / seed_date. Never default to today’s date if the farmer specified a date.
+- If the farmer asks to “update the schedule based on harvests” or “optimise around the harvest schedule”, correlate get_scheduled_harvests with get_planting_assignments — propose new plantings for zones that are freeing up.
+- For succession planting, stagger seed dates so harvests are spread across weeks rather than all at once.
 
 DEVICE MANAGEMENT:
 - When the farmer asks to scan for devices, check devices, or assign devices, FIRST call get_device_status to see the current inventory.
@@ -1069,6 +1127,174 @@ async function executeExtendedTool(toolName, params, farmId) {
           totalCandidates: recommendations.length,
           currentlyGrowing: currentAssignments.map(a => a.crop_name),
           focus: params.focus || 'all',
+          generatedAt: new Date().toISOString()
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Batch Planting Plan Tool ──
+    case 'create_planting_plan': {
+      try {
+        const pool = getDatabase();
+        const targetDate = params.target_date;
+        if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+          return { ok: false, error: 'target_date is required (YYYY-MM-DD)' };
+        }
+        const theFarmId = params.farm_id || farmId;
+        const excludeSet = new Set((params.exclude || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean));
+        const focus = (params.focus || 'balanced').toLowerCase();
+
+        // 1. Current assignments
+        let currentAssignments = [];
+        if (isDatabaseAvailable()) {
+          try {
+            const result = await query(
+              `SELECT group_id, crop_name, seed_date, harvest_date, status FROM planting_assignments WHERE farm_id = $1 AND status = 'active' ORDER BY harvest_date ASC`,
+              [theFarmId]
+            );
+            currentAssignments = result.rows || [];
+          } catch { /* ok */ }
+        }
+
+        // 2. Current groups/capacity
+        const groups = await farmStore.get(theFarmId, 'groups') || [];
+        const occupiedGroups = new Set(currentAssignments.map(a => a.group_id));
+        const freeGroups = groups.filter(g => !occupiedGroups.has(g.id || g.group_id));
+
+        // 3. Zones freeing up around target date (harvest within 14 days before target)
+        const targetMs = new Date(targetDate + 'T00:00:00').getTime();
+        const freeingUp = currentAssignments.filter(a => {
+          if (!a.harvest_date) return false;
+          const hd = new Date(a.harvest_date).getTime();
+          return hd >= targetMs - 14 * 86400000 && hd <= targetMs + 7 * 86400000;
+        });
+
+        // Total available zones = free now + freeing up near target date
+        const availableZones = [
+          ...freeGroups.map(g => ({ group_id: g.id || g.group_id, name: g.name || g.id, source: 'empty' })),
+          ...freeingUp.map(a => ({ group_id: a.group_id, currentCrop: a.crop_name, harvestDate: new Date(a.harvest_date).toISOString().split('T')[0], source: 'freeing_up' }))
+        ];
+
+        const numZones = params.num_zones || availableZones.length || 3;
+
+        // 4. Get recommendations (reuse planning logic)
+        const marketData = await getMarketDataAsync(pool);
+        const cropPricing = await getCropPricing();
+        let aiAnalyses = [];
+        try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
+        const aiMap = {};
+        for (const a of aiAnalyses) aiMap[a.product] = a;
+
+        const currentCropNames = new Set(currentAssignments.map(a => (a.crop_name || '').toLowerCase()));
+        const crops = CROP_REGISTRY.crops || {};
+        const candidates = [];
+
+        for (const [cropName, info] of Object.entries(crops)) {
+          if (!info.active) continue;
+          if (excludeSet.has(cropName.toLowerCase())) continue;
+          const growth = info.growth || {};
+          const recipeKey = Object.keys(LIGHTING_RECIPES).find(k =>
+            k.toLowerCase() === cropName.toLowerCase() || k.toLowerCase().includes(cropName.split(' ')[0].toLowerCase())
+          );
+          const recipe = recipeKey ? LIGHTING_RECIPES[recipeKey] : null;
+          const totalDays = recipe?.length || growth.daysToHarvest || 30;
+          const harvestDate = new Date(new Date(targetDate + 'T00:00:00').getTime() + totalDays * 86400000).toISOString().split('T')[0];
+
+          const marketKey = info.market?.resolveAs || cropName;
+          const mkt = marketData[marketKey] || null;
+          const ai = aiMap[marketKey] || null;
+          const pricing = info.pricing || {};
+          const retailPrice = growth.retailPricePerLb || pricing.retailPrice || 0;
+
+          // Score (simplified from planning recommendation)
+          let score = 50;
+          if (mkt?.trend === 'increasing') score += Math.min(mkt.trendPercent, 20);
+          if (ai?.outlook === 'bullish') score += 10;
+          if (ai?.action === 'increase_production') score += 8;
+          if (retailPrice >= 15) score += 15;
+          else if (retailPrice >= 8) score += 8;
+          if (!currentCropNames.has(cropName.toLowerCase())) score += 12;
+          if (totalDays <= 21) score += 10;
+          else if (totalDays <= 35) score += 5;
+          if (growth.harvestStrategy === 'cut_and_come_again') score += 8;
+
+          // Focus adjustments
+          if (focus === 'high-margin' && retailPrice < 8) continue;
+          if (focus === 'quick-turn' && totalDays > 30) continue;
+          if (focus === 'diversification' && currentCropNames.has(cropName.toLowerCase())) continue;
+
+          const reasons = [];
+          if (mkt?.trend === 'increasing' && mkt.trendPercent >= 5) reasons.push(`prices up ${mkt.trendPercent}%`);
+          if (ai?.outlook === 'bullish') reasons.push('AI outlook bullish');
+          if (!currentCropNames.has(cropName.toLowerCase())) reasons.push('diversification');
+          if (retailPrice >= 12) reasons.push(`premium ($${retailPrice.toFixed(2)}/lb)`);
+          if (totalDays <= 21) reasons.push(`fast turn (${totalDays}d)`);
+          if (growth.harvestStrategy === 'cut_and_come_again') reasons.push('multi-harvest');
+
+          candidates.push({ crop: cropName, score, totalDays, harvestDate, category: info.category, reasons: reasons.join('; ') });
+        }
+
+        candidates.sort((a, b) => b.score - a.score);
+
+        // 5. Assign top candidates to available zones (avoid category bunching)
+        const plan = [];
+        const usedCategories = {};
+        let candidateIdx = 0;
+
+        for (let i = 0; i < Math.min(numZones, availableZones.length) && candidateIdx < candidates.length; i++) {
+          const zone = availableZones[i];
+
+          // For succession focus, stagger same crop across zones
+          if (focus === 'succession' && candidates.length > 0) {
+            const crop = candidates[0];
+            const staggerDays = i * 7;
+            const staggeredSeedDate = new Date(new Date(targetDate + 'T00:00:00').getTime() + staggerDays * 86400000).toISOString().split('T')[0];
+            const staggeredHarvestDate = new Date(new Date(staggeredSeedDate + 'T00:00:00').getTime() + crop.totalDays * 86400000).toISOString().split('T')[0];
+            plan.push({
+              zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+              crop: crop.crop, seed_date: staggeredSeedDate, harvest_date: staggeredHarvestDate,
+              grow_days: crop.totalDays, category: crop.category, score: crop.score, reasons: crop.reasons + '; staggered ' + staggerDays + 'd'
+            });
+            continue;
+          }
+
+          // Pick next candidate, slightly penalising repeated categories for diversity
+          let picked = null;
+          for (let j = candidateIdx; j < candidates.length; j++) {
+            const c = candidates[j];
+            if ((usedCategories[c.category] || 0) >= 2 && j < candidates.length - 1) continue; // skip if 2+ of same category already picked
+            picked = c;
+            candidateIdx = j + 1;
+            break;
+          }
+          if (!picked) { picked = candidates[candidateIdx++]; }
+          if (!picked) break;
+
+          usedCategories[picked.category] = (usedCategories[picked.category] || 0) + 1;
+
+          // Use zone's harvest date as seed date if zone is freeing up
+          const seedDate = zone.source === 'freeing_up' && zone.harvestDate ? zone.harvestDate : targetDate;
+          const harvestDate = new Date(new Date(seedDate + 'T00:00:00').getTime() + picked.totalDays * 86400000).toISOString().split('T')[0];
+
+          plan.push({
+            zone: zone.group_id, zone_source: zone.source, zone_detail: zone.currentCrop ? `${zone.currentCrop} harvests ${zone.harvestDate}` : 'empty',
+            crop: picked.crop, seed_date: seedDate, harvest_date: harvestDate,
+            grow_days: picked.totalDays, category: picked.category, score: picked.score, reasons: picked.reasons
+          });
+        }
+
+        return {
+          ok: true,
+          target_date: targetDate,
+          focus,
+          plan,
+          zones_available: availableZones.length,
+          zones_planned: plan.length,
+          current_assignments: currentAssignments.length,
+          freeing_up: freeingUp.length,
+          note: 'This is a proposed plan. Confirm to execute each assignment.',
           generatedAt: new Date().toISOString()
         };
       } catch (err) {
