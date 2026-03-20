@@ -303,3 +303,95 @@ If user sees "No authorization token provided" errors, they need to login first.
 
 **Status:** ✅ All fixes implemented and committed to GitHub  
 **Next Action:** Deploy updated central-admin.js to greenreachgreens.com and test in browser
+
+---
+
+## 2026-03-19 — Admin Token vs Farm Token Mismatch (401 Console Errors)
+
+**Date:** March 19, 2026
+**Reporter:** Console error investigation on GR-central-admin.html
+**Farm:** FARM-MLTP9LVH-B0B85039
+**URL:** https://greenreachgreens.com/GR-central-admin.html?farmId=FARM-MLTP9LVH-B0B85039
+
+### Problem Discovered
+
+Two 401 console errors on the Farm Summary page of GR-central-admin.html:
+```
+[Error] Failed to load resource: 401 (current, line 0)
+[Error] Failed to load resource: 401 (forecast, line 0)
+```
+
+**Root Cause:** 17 API calls in `central-admin.js` used bare `fetch()` instead of `authenticatedFetch()` for authenticated admin and procurement endpoints. The `auth-guard.js` script (auto-injected into all HTML pages by server.js) globally wraps `window.fetch` and injects a **farm JWT** from `sessionStorage.getItem('token')`. However, admin users on GR-central-admin.html authenticate with an **admin JWT** stored in `localStorage.getItem('admin_token')`.
+
+When bare `fetch()` was used:
+1. auth-guard intercepted the call
+2. auth-guard injected the farm JWT (which didn't exist or was invalid for admin users)
+3. Server-side `adminAuthMiddleware` (applied via `router.use(adminAuthMiddleware)` at admin.js line 392) rejected the token
+4. Result: 401 Unauthorized
+
+The `authenticatedFetch()` function correctly reads `admin_token` from localStorage and sets the `Authorization` header explicitly. The auth-guard check (`if (!options.headers['Authorization'])`) then skips injection since the header is already set.
+
+### Auth Token Architecture (for reference)
+
+```
+GR-central-admin.html (Admin Dashboard)
+  ├── Admin JWT: localStorage.getItem('admin_token')
+  │   └── Payload: { adminId, email, role, name }
+  │   └── Signed with same JWT_SECRET (no issuer/audience)
+  │   └── Used by: authenticatedFetch() → Bearer ${admin_token}
+  │
+  └── auth-guard.js (globally injected fetch wrapper)
+      └── Injects: sessionStorage.getItem('token') || localStorage.getItem('token')
+      └── This is the FARM JWT, not the admin JWT
+      └── Guard skips injection if Authorization header already present
+
+Server-side middleware chain:
+  /api/admin/* → admin.js router
+    ├── /auth/* routes → NO auth (login, register)
+    └── router.use(adminAuthMiddleware) → ALL other routes
+        └── Validates Bearer token as admin JWT (checks adminId in payload)
+        └── Rejects farm JWTs (missing adminId)
+
+  /api/procurement/* → authOrAdminMiddleware
+    └── Tries farm JWT first (issuer: greenreach-central)
+    └── Falls back to admin JWT (checks adminId || email)
+    └── Rejects if neither validates
+```
+
+### Affected Functions (all in central-admin.js)
+
+**Wholesale Pricing Management (8 calls):**
+| Function | Line | Endpoint | Method |
+|----------|------|----------|--------|
+| `loadPricingManagement()` | ~10282 | `/api/admin/pricing/offers?status=active` | GET |
+| `loadPricingManagement()` | ~10287 | `/api/admin/pricing/offers` | GET |
+| `loadPricingManagement()` | ~10292 | `/api/admin/pricing/cost-surveys` | GET |
+| `loadPricingManagement()` | ~10297 | `/api/admin/wholesale/dashboard` | GET |
+| `submitWholesalePrice()` | ~10419 | `/api/admin/pricing/set-wholesale` | POST |
+| `loadCurrentPricesIntoScanner()` | ~10444 | `/api/admin/pricing/current-prices` | GET |
+| `submitBatchPricing()` | ~10572 | `/api/admin/pricing/batch-update` | POST |
+| `cancelPriceOffer()` | ~10633 | `/api/admin/pricing/offers/{id}/cancel` | PUT |
+
+**Procurement Management (9 calls):**
+| Function | Line | Endpoint | Method |
+|----------|------|----------|--------|
+| `loadProcurementCatalog()` | ~6389 | `/api/procurement/catalog` | GET |
+| `loadProcurementSuppliers()` | ~6452 | `/api/procurement/suppliers` | GET |
+| `loadProcurementRevenue()` | ~6507 | `/api/procurement/revenue` | GET |
+| `saveCatalogProduct()` | ~6599 | `/api/procurement/catalog/product` | PUT |
+| `editCatalogProduct()` | ~6619 | `/api/procurement/catalog` | GET |
+| `deleteCatalogProduct()` | ~6665 | `/api/procurement/catalog/product/{sku}` | DELETE |
+| `saveNewSupplier()` | ~6706 | `/api/procurement/suppliers` | POST |
+| `editSupplier()` | ~6726 | `/api/procurement/suppliers` | GET |
+| `updateSupplier()` | ~6767 | `/api/procurement/suppliers/{id}` | PUT |
+
+### Solution Applied
+
+Replaced all 17 bare `fetch()` calls with `authenticatedFetch()` using `${API_BASE}` prefix and added null-safety checks (`if (!resp) return;`) since `authenticatedFetch()` returns `null` on auth failure (and redirects to login).
+
+**Files Changed:**
+- `greenreach-central/public/central-admin.js` — 17 bare fetch() replaced with authenticatedFetch()
+
+### Cross-Reference Pattern
+
+This is a systemic pattern to watch for: any new code added to `central-admin.js` that calls `/api/admin/*` or `/api/procurement/*` endpoints MUST use `authenticatedFetch()`, not bare `fetch()`. The auth-guard fetch wrapper will inject the wrong token type for admin pages.

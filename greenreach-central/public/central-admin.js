@@ -6386,7 +6386,8 @@ function showToast(message, type = 'info') {
 async function loadProcurementCatalog() {
     console.log('[Procurement] Loading catalog...');
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/catalog`);
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog`);
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
 
@@ -6449,7 +6450,8 @@ async function loadProcurementCatalog() {
 async function loadProcurementSuppliers() {
     console.log('[Procurement] Loading suppliers...');
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`);
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`);
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
 
@@ -6504,7 +6506,8 @@ async function loadProcurementRevenue() {
         if (toDate) params.push(`to=${toDate}`);
         if (params.length) url += '?' + params.join('&');
 
-        const resp = await fetch(url);
+        const resp = await authenticatedFetch(url);
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
 
@@ -6596,11 +6599,12 @@ async function saveCatalogProduct() {
         return;
     }
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/catalog/product`, {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog/product`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product })
         });
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
         closeModal();
@@ -6616,7 +6620,8 @@ async function saveCatalogProduct() {
  */
 async function editCatalogProduct(sku) {
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/catalog`);
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog`);
+        if (!resp) return;
         const data = await resp.json();
         const product = (data.products || []).find(p => p.sku === sku);
         if (!product) { showToast('Product not found', 'error'); return; }
@@ -6662,7 +6667,8 @@ async function deleteCatalogProduct(sku) {
     });
     if (!confirmed) return;
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/catalog/product/${sku}`, { method: 'DELETE' });
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog/product/${sku}`, { method: 'DELETE' });
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
         showToast(`Product ${sku} deleted`, 'success');
@@ -6703,11 +6709,12 @@ async function saveNewSupplier() {
     };
     if (!supplier.name) { showToast('Supplier name is required', 'warning'); return; }
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`, {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(supplier)
         });
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
         closeModal();
@@ -6723,7 +6730,8 @@ async function saveNewSupplier() {
  */
 async function editSupplier(supplierId) {
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/suppliers`);
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`);
+        if (!resp) return;
         const data = await resp.json();
         const supplier = (data.suppliers || []).find(s => s.id === supplierId);
         if (!supplier) { showToast('Supplier not found', 'error'); return; }
@@ -6764,11 +6772,12 @@ async function updateSupplier(supplierId) {
         status: document.getElementById('edit-supplier-status').value
     };
     try {
-        const resp = await fetch(`${API_BASE}/api/procurement/suppliers/${supplierId}`, {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers/${supplierId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updates)
         });
+        if (!resp) return;
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error);
         closeModal();
@@ -10279,23 +10288,23 @@ console.log('%cUse window.DEBUG to access tracking data:', 'color: #4CAF50; font
 async function loadPricingManagement() {
     try {
         // Load active offers
-        const offersRes = await fetch('/api/admin/pricing/offers?status=active');
-        const offersData = offersRes.ok ? await offersRes.json() : { offers: [] };
+        const offersRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers?status=active`);
+        const offersData = offersRes && offersRes.ok ? await offersRes.json() : { offers: [] };
         const offers = offersData.offers || [];
 
         // Load all offers for stats
-        const allOffersRes = await fetch('/api/admin/pricing/offers');
-        const allOffersData = allOffersRes.ok ? await allOffersRes.json() : { offers: [] };
+        const allOffersRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers`);
+        const allOffersData = allOffersRes && allOffersRes.ok ? await allOffersRes.json() : { offers: [] };
         const allOffers = allOffersData.offers || [];
 
         // Load cost surveys
-        const costRes = await fetch('/api/admin/pricing/cost-surveys');
-        const costData = costRes.ok ? await costRes.json() : { cost_surveys: [] };
+        const costRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/cost-surveys`);
+        const costData = costRes && costRes.ok ? await costRes.json() : { cost_surveys: [] };
         const surveys = costData.cost_surveys || [];
 
         // Load product catalog from network inventory
-        const catalogRes = await fetch('/api/admin/wholesale/dashboard');
-        const catalogData = catalogRes.ok ? await catalogRes.json() : {};
+        const catalogRes = await authenticatedFetch(`${API_BASE}/api/admin/wholesale/dashboard`);
+        const catalogData = catalogRes && catalogRes.ok ? await catalogRes.json() : {};
 
         // Update KPIs
         document.getElementById('pricing-active-offers').textContent = offers.length;
@@ -10416,11 +10425,12 @@ async function submitWholesalePrice(event) {
     const reasoning = document.getElementById('price-reasoning').value;
     
     try {
-        const res = await fetch('/api/admin/pricing/set-wholesale', {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/set-wholesale`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ crop, wholesale_price, tier, reasoning })
         });
+        if (!res) return;
         const data = await res.json();
         
         if (data.success) {
@@ -10441,8 +10451,8 @@ let pricingScannerCrops = []; // cached from /current-prices
 
 async function loadCurrentPricesIntoScanner() {
     try {
-        const res = await fetch('/api/admin/pricing/current-prices');
-        const data = res.ok ? await res.json() : { prices: [] };
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/current-prices`);
+        const data = res && res.ok ? await res.json() : { prices: [] };
         pricingScannerCrops = data.prices || [];
         // Add every crop as a row, pre-filled with current prices
         const tbody = document.getElementById('pricing-scanner-tbody');
@@ -10569,11 +10579,12 @@ async function applyBatchPriceUpdate() {
     });
 
     try {
-        const res = await fetch('/api/admin/pricing/batch-update', {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ updates, pushToFarms, reasoning: 'AI Pricing Assistant batch scan' })
         });
+        if (!res) return;
         const data = await res.json();
 
         // Mark row statuses
@@ -10630,11 +10641,12 @@ async function cancelPriceOffer(offerId) {
     });
     if (!confirmed) return;
     try {
-        const res = await fetch(`/api/admin/pricing/offers/${offerId}/cancel`, {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers/${offerId}/cancel`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason: 'Admin cancelled' })
         });
+        if (!res) return;
         const data = await res.json();
         if (data.success) {
             await loadPricingManagement();
