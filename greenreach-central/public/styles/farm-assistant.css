@@ -977,3 +977,189 @@
   color: #60a5fa;
   border: 2px solid rgba(96, 165, 250, 0.4);
 }
+
+/* ── Phase 5B: Settings Panel ─────────────────────── */
+.settings-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.7);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+.settings-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,.12);
+}
+
+.cheo-settings-panel {
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 14px 16px;
+  max-height: 260px;
+  overflow-y: auto;
+  animation: cheoSlideDown .2s ease-out;
+}
+@keyframes cheoSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cheo-settings-section {
+  margin-bottom: 12px;
+}
+.cheo-settings-section:last-child { margin-bottom: 0; }
+
+.cheo-settings-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.55);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+
+.cheo-voice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cheo-voice-chip {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  color: rgba(255,255,255,.75);
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.cheo-voice-chip:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #fff;
+}
+.cheo-voice-chip.active {
+  background: rgba(139, 92, 246, 0.35);
+  border-color: #8b5cf6;
+  color: #fff;
+  font-weight: 600;
+}
+
+.cheo-settings-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,.8);
+  cursor: pointer;
+}
+.cheo-settings-panel input[type="checkbox"] {
+  accent-color: #8b5cf6;
+}
+
+/* ── Phase 6C: Feedback Buttons ───────────────────── */
+.cheo-feedback {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  opacity: 0.5;
+  transition: opacity .2s;
+}
+.message-content:hover .cheo-feedback {
+  opacity: 1;
+}
+
+.cheo-fb-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  transition: all .15s ease;
+  opacity: 0.7;
+}
+.cheo-fb-btn:hover {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.2);
+  opacity: 1;
+}
+.cheo-fb-btn.selected {
+  opacity: 1;
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.2);
+}
+.cheo-fb-btn:disabled:not(.selected) {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* ── Phase 5C: Rich Response Cards ────────────────── */
+.cheo-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin: 8px 0;
+}
+.cheo-data-table th,
+.cheo-data-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.cheo-data-table th {
+  font-weight: 600;
+  color: rgba(255,255,255,.6);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.cheo-data-table tr:last-child td { border-bottom: none; }
+
+.cheo-card {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 8px 0;
+}
+.cheo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.cheo-card-metric {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #8b5cf6;
+}
+.cheo-card-sub {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,.5);
+  margin-top: 4px;
+}
+.cheo-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.cheo-status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.cheo-status-pill.good { background: rgba(16,185,129,.2); color: #10b981; }
+.cheo-status-pill.warn { background: rgba(251,191,36,.2); color: #fbbf24; }
+.cheo-status-pill.bad  { background: rgba(239,68,68,.2);  color: #ef4444; }

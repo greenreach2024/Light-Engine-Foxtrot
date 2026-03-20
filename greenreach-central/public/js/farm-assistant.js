@@ -11,7 +11,8 @@ class FarmAssistant {
     this.isListening = false;
     this.recognition = null;
     this.isSpeaking = false;
-    this.voiceEnabled = true;
+    this.voiceEnabled = JSON.parse(localStorage.getItem('cheo_tts_enabled') ?? 'true');
+    this.ttsVoice = localStorage.getItem('cheo_tts_voice') || 'echo';
     this.jokes = [];
     this.funFacts = [];
     this.conversationId = null;  // Server-side conversation tracking
@@ -19,6 +20,7 @@ class FarmAssistant {
     this.pendingAction = null;   // Pending write action awaiting confirmation
     window._farmAssistant = this; // Global ref for confirm/cancel button onclick
     this.nudgeInterval = null;    // Nudge polling interval
+    this.settingsOpen = false;   // Settings panel state
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -344,9 +346,14 @@ class FarmAssistant {
               <small>${this.currentContext.page}</small>
             </div>
           </div>
-          <button class="minimize-btn" id="minimizeBtn">
-            <span class="minimize-icon">+</span>
-          </button>
+          <div style="display:flex;gap:0.25rem;align-items:center">
+            <button class="settings-btn" id="settingsBtn" title="Settings">
+              <span>⚙</span>
+            </button>
+            <button class="minimize-btn" id="minimizeBtn">
+              <span class="minimize-icon">+</span>
+            </button>
+          </div>
         </div>
         
         <div class="assistant-body">
@@ -422,8 +429,14 @@ class FarmAssistant {
     const voiceBtn = document.getElementById('voiceBtn');
     const minimizeBtn = document.getElementById('minimizeBtn');
 
+    const settingsBtn = document.getElementById('settingsBtn');
+
     sendBtn.addEventListener('click', () => this.handleUserInput());
     voiceBtn.addEventListener('click', () => this.toggleVoiceRecognition());
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleSettings();
+    });
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.handleUserInput();
     });
@@ -637,7 +650,7 @@ class FarmAssistant {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
     this.isSpeaking = true;
-    const ttsVoice = window.FARM_ASSISTANT_TTS_VOICE || 'echo';
+    const ttsVoice = this.ttsVoice || window.FARM_ASSISTANT_TTS_VOICE || 'echo';
     fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -776,7 +789,108 @@ class FarmAssistant {
     const icon = document.querySelector('.minimize-icon');
     
     container.classList.toggle('minimized', this.isMinimized);
-    icon.textContent = this.isMinimized ? '+' : '−';
+    icon.textContent = this.isMinimized ? '+' : '\u2212';
+    // Close settings panel when minimizing
+    if (this.isMinimized && this.settingsOpen) this.toggleSettings();
+  }
+
+  // ── Settings Panel (Phase 5B) ──────────────────────
+  toggleSettings() {
+    this.settingsOpen = !this.settingsOpen;
+    let panel = document.getElementById('cheoSettingsPanel');
+    if (this.settingsOpen && !panel) {
+      panel = document.createElement('div');
+      panel.id = 'cheoSettingsPanel';
+      panel.className = 'cheo-settings-panel';
+      const voices = ['alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer'];
+      const voiceOpts = voices.map(v =>
+        `<button class="cheo-voice-chip${v === this.ttsVoice ? ' active' : ''}" data-voice="${v}">${v}</button>`
+      ).join('');
+      panel.innerHTML = `
+        <div class="cheo-settings-section">
+          <label class="cheo-settings-label">Voice</label>
+          <div class="cheo-voice-grid">${voiceOpts}</div>
+        </div>
+        <div class="cheo-settings-section">
+          <label class="cheo-settings-label">
+            <input type="checkbox" id="cheoTtsToggle" ${this.voiceEnabled ? 'checked' : ''} />
+            Read responses aloud
+          </label>
+        </div>
+      `;
+      const body = document.querySelector('.assistant-body');
+      body.insertBefore(panel, body.firstChild);
+
+      // Voice chip click handlers
+      panel.querySelectorAll('.cheo-voice-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          panel.querySelectorAll('.cheo-voice-chip').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.ttsVoice = btn.dataset.voice;
+          localStorage.setItem('cheo_tts_voice', this.ttsVoice);
+          // Play a short sample
+          this.speak('Hello, I\'m Cheo.');
+        });
+      });
+
+      // TTS toggle handler
+      document.getElementById('cheoTtsToggle').addEventListener('change', (e) => {
+        this.voiceEnabled = e.target.checked;
+        localStorage.setItem('cheo_tts_enabled', JSON.stringify(this.voiceEnabled));
+      });
+    } else if (panel) {
+      panel.remove();
+      this.settingsOpen = false;
+    }
+  }
+
+  // ── Phase 6C: Feedback ──────────────────────────────
+  async _submitFeedback(msgId, rating, content) {
+    const container = document.querySelector(`.cheo-feedback[data-msg-id="${msgId}"]`);
+    if (!container || container.dataset.submitted) return;
+    container.dataset.submitted = 'true';
+    container.querySelectorAll('.cheo-fb-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.rating === rating);
+      b.disabled = true;
+    });
+    // Strip HTML for a short snippet
+    const snippet = content.replace(/<[^>]*>/g, '').slice(0, 120);
+    try {
+      await fetch('/api/assistant/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ conversationId: this.conversationId, rating, snippet })
+      });
+    } catch (e) {
+      console.warn('[Farm Assistant] feedback send failed', e);
+    }
+  }
+
+  // ── Phase 6A: Usage-pattern tracking ────────────────
+  _trackQuery(text) {
+    try {
+      const queries = JSON.parse(localStorage.getItem('cheo_query_log') || '[]');
+      queries.push({ q: text.slice(0, 200), t: Date.now() });
+      // Keep last 200 queries
+      if (queries.length > 200) queries.splice(0, queries.length - 200);
+      localStorage.setItem('cheo_query_log', JSON.stringify(queries));
+    } catch (_) { /* silent */ }
+  }
+
+  getQueryStats() {
+    try {
+      const queries = JSON.parse(localStorage.getItem('cheo_query_log') || '[]');
+      const now = Date.now();
+      const recent = queries.filter(q => now - q.t < 7 * 86400000);
+      const topics = {};
+      const keywords = ['plant', 'water', 'harvest', 'temperature', 'humidity', 'light', 'nutrient', 'cost', 'price', 'schedule', 'alert', 'sensor'];
+      recent.forEach(({ q }) => {
+        const lower = q.toLowerCase();
+        keywords.forEach(k => { if (lower.includes(k)) topics[k] = (topics[k] || 0) + 1; });
+      });
+      return { totalQueries: queries.length, last7Days: recent.length, topTopics: topics };
+    } catch (_) { return null; }
   }
 
   async handleUserInput() {
@@ -830,23 +944,40 @@ class FarmAssistant {
     }
 
     const avatar = type === 'user' ? 'You' : 'AI';
+    const msgId = `msg-${Date.now()}`;
+    const feedbackHtml = type === 'assistant' && this.aiAvailable
+      ? `<div class="cheo-feedback" data-msg-id="${msgId}">
+           <button class="cheo-fb-btn" data-rating="up" title="Helpful">👍</button>
+           <button class="cheo-fb-btn" data-rating="down" title="Not helpful">👎</button>
+         </div>` : '';
     
     messageDiv.innerHTML = `
       <div class="message-avatar">${avatar}</div>
       <div class="message-content">
         ${content}
         ${actions ? `<div class="message-actions">${actions}</div>` : ''}
+        ${feedbackHtml}
       </div>
     `;
     
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Wire feedback buttons
+    if (feedbackHtml) {
+      messageDiv.querySelectorAll('.cheo-fb-btn').forEach(btn => {
+        btn.addEventListener('click', () => this._submitFeedback(msgId, btn.dataset.rating, content));
+      });
+    }
     
     // Save to history
     this.conversationHistory.push({ content, type, timestamp: Date.now() });
     this.saveHistory();
+
+    // Track assistant tool usage patterns (Phase 6A)
+    if (type === 'user') this._trackQuery(content);
     
-    // Speak assistant messages aloud (text-to-speech for children)
+    // Speak assistant messages aloud (text-to-speech)
     if (type === 'assistant' && this.voiceEnabled) {
       // Remove HTML tags and emojis from speech
       const cleanText = content

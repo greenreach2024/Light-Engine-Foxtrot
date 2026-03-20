@@ -441,6 +441,14 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
+  // Phase 6B: Feedback summary for personalisation cues
+  try {
+    const fb = getFeedbackSummary(farmId);
+    if (fb && fb.total >= 3) {
+      farmContext += `User feedback: ${fb.positive}👍 ${fb.negative}👎 (${fb.total} total)\n`;
+    }
+  } catch { /* non-fatal */ }
+
   return `You are Cheo, the GreenReach Farm Assistant. You help farmers manage their indoor growing operations through natural conversation. You have access to real-time farm data and can execute actions.
 
 CURRENT FARM STATE:
@@ -453,7 +461,7 @@ RULES:
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
 - Never fabricate data — only report what tools return.
-- Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists. Keep it clean.
+- Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="cheo-data-table"> for tabular data, <div class="cheo-card"> for metric cards. Keep it clean.
 - When listing tasks or items, show the top 3-5 most relevant, mention the total count.
 - For prices, always show currency (CAD).`;
 }
@@ -1101,5 +1109,42 @@ router.get('/nudges', async (req, res) => {
     return res.json({ ok: true, nudges: [], count: 0 });
   }
 });
+
+// ── Phase 6C: Feedback endpoint ──────────────────────
+const feedbackLog = [];            // in-memory ring buffer (last 500)
+const FEEDBACK_MAX = 500;
+
+router.post('/feedback', async (req, res) => {
+  try {
+    const { conversationId, rating, snippet } = req.body;
+    if (!rating || !['up', 'down'].includes(rating)) {
+      return res.status(400).json({ ok: false, error: 'Invalid rating' });
+    }
+    const entry = {
+      conversationId: String(conversationId || '').slice(0, 64),
+      rating,
+      snippet: String(snippet || '').slice(0, 200),
+      ts: Date.now(),
+      farmId: req.user?.farmId || 'unknown'
+    };
+    feedbackLog.push(entry);
+    if (feedbackLog.length > FEEDBACK_MAX) feedbackLog.shift();
+
+    logger.info(`[Feedback] ${rating} from farm=${entry.farmId} conv=${entry.conversationId}`);
+    return res.json({ ok: true });
+  } catch (err) {
+    logger.error('[Feedback] Error:', err.message);
+    return res.status(500).json({ ok: false });
+  }
+});
+
+// ── Phase 6B: Feedback stats for system-prompt context ──
+function getFeedbackSummary(farmId) {
+  const farm = feedbackLog.filter(f => f.farmId === farmId);
+  if (farm.length === 0) return null;
+  const up = farm.filter(f => f.rating === 'up').length;
+  const down = farm.filter(f => f.rating === 'down').length;
+  return { total: farm.length, positive: up, negative: down, ratio: farm.length ? +(up / farm.length).toFixed(2) : 0 };
+}
 
 export default router;
