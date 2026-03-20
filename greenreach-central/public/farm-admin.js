@@ -4170,13 +4170,21 @@ async function loadSettings() {
         }
 
         // Apply feature gating after settings load
-        if (typeof applyPlanFeatureGating === 'function') {
-            applyPlanFeatureGating(planType);
+        try {
+            if (typeof applyPlanFeatureGating === 'function') {
+                applyPlanFeatureGating(planType);
+            }
+        } catch (fgErr) {
+            console.warn('[Farm Settings] Feature gating error (non-fatal):', fgErr);
         }
 
         // Load onboarding checklist
-        if (typeof loadOnboardingChecklist === 'function') {
-            loadOnboardingChecklist();
+        try {
+            if (typeof loadOnboardingChecklist === 'function') {
+                loadOnboardingChecklist();
+            }
+        } catch (obErr) {
+            console.warn('[Farm Settings] Onboarding checklist error (non-fatal):', obErr);
         }
         
         // If we have complete setup data, use it
@@ -4193,37 +4201,34 @@ async function loadSettings() {
             // Load certifications
             if (setupData.certifications) {
                 const certList = document.getElementById('certifications-list');
-                certList.innerHTML = '';
-                (setupData.certifications.certifications || []).forEach(cert => {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge';
-                    badge.style.cssText = 'background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-green);';
-                    badge.textContent = cert;
-                    certList.appendChild(badge);
-                });
+                if (certList) {
+                    certList.innerHTML = '';
+                    (setupData.certifications.certifications || []).forEach(cert => {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge';
+                        badge.style.cssText = 'background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-green);';
+                        badge.textContent = cert;
+                        certList.appendChild(badge);
+                    });
+                    if (!setupData.certifications.certifications?.length) {
+                        certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
+                    }
+                }
                 
                 const practicesList = document.getElementById('practices-list');
-                practicesList.innerHTML = '';
-                (setupData.certifications.practices || []).forEach(practice => {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge';
-                    badge.style.cssText = 'background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-blue);';
-                    badge.textContent = practice;
-                    practicesList.appendChild(badge);
-                });
-                
-                // ATTRIBUTES DISPLAY REMOVED - DO NOT RE-ADD
-                // Section removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
-                // Reason: Not relevant for farm operations. Focus on certifications and practices only.
-                
-                // Show placeholder if no data
-                if (!setupData.certifications.certifications?.length) {
-                    certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
+                if (practicesList) {
+                    practicesList.innerHTML = '';
+                    (setupData.certifications.practices || []).forEach(practice => {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge';
+                        badge.style.cssText = 'background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-blue);';
+                        badge.textContent = practice;
+                        practicesList.appendChild(badge);
+                    });
+                    if (!setupData.certifications.practices?.length) {
+                        practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
+                    }
                 }
-                if (!setupData.certifications.practices?.length) {
-                    practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
-                }
-                // ATTRIBUTES PLACEHOLDER REMOVED - section permanently deleted
             }
         }
         
@@ -4291,7 +4296,7 @@ async function loadSettings() {
         setChk('webhook-harvest', settings.webhookHarvest || false);
         
     } catch (error) {
-        console.error('Error loading settings:', error);
+        console.error('Error loading settings:', error?.message || error, error?.stack || '');
         showToast('Error loading settings', 'error');
     }
 }
