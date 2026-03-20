@@ -13,6 +13,9 @@ import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import { getNetworkModifiers } from '../jobs/yield-regression.js';
 import { generateNetworkRiskAlerts } from '../jobs/supply-demand-balancer.js';
 import { getExperimentsForFarm } from '../jobs/experiment-orchestrator.js';
+import { getLatestAnalyses } from '../services/market-analysis-agent.js';
+import { getMarketDataAsync } from '../routes/market-intelligence.js';
+import { getDatabase } from '../config/database.js';
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const PUSH_INTERVAL_MS = 30 * 60 * 1000;
@@ -459,6 +462,50 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Driver warnings failed (non-fatal):', warnErr.message);
       }
 
+      // AI Market Intelligence Phase 3A+: Pricing intelligence from market analysis
+      let pricingIntelligence = null;
+      try {
+        const pool = getDatabase();
+        if (pool) {
+          const [marketData, aiAnalyses] = await Promise.all([
+            getMarketDataAsync(pool),
+            getLatestAnalyses(pool)
+          ]);
+
+          const aiMap = {};
+          for (const a of aiAnalyses) aiMap[a.product] = a;
+
+          const tips = [];
+          for (const [product, data] of Object.entries(marketData)) {
+            const ai = aiMap[product] || null;
+            if (data.trend === 'increasing' || ai?.outlook === 'bullish') {
+              tips.push({
+                crop: product,
+                trend: data.trend,
+                trendPercent: data.trendPercent,
+                latestPrice: data.latestPrice,
+                unit: data.unit,
+                aiOutlook: ai?.outlook || null,
+                aiAction: ai?.action || null,
+                aiConfidence: ai?.confidence || null,
+                tip: ai?.reasoning || `${product} prices ${data.trend} (${data.trendPercent > 0 ? '+' : ''}${data.trendPercent}%)`
+              });
+            }
+          }
+
+          if (tips.length > 0) {
+            pricingIntelligence = {
+              tips,
+              analysis_count: aiAnalyses.length,
+              generated_at: new Date().toISOString()
+            };
+            console.log(`[AI Pusher] Loaded pricing intelligence: ${tips.length} tip(s)`);
+          }
+        }
+      } catch (pricingErr) {
+        console.warn('[AI Pusher] Pricing intelligence load failed (non-fatal):', pricingErr.message);
+      }
+
       if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0 || deviceIntegrations || integrationWarnings.length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
@@ -466,8 +513,7 @@ export async function analyzeAndPushToAllFarms() {
           recipe_modifiers: recipeModifiers,
           risk_alerts: riskAlerts,
           device_integrations: deviceIntegrations,
-          integration_warnings: integrationWarnings,
-          generated_at: new Date().toISOString()
+          integration_warnings: integrationWarnings,          pricing_intelligence: pricingIntelligence,          generated_at: new Date().toISOString()
         };
         console.log(`[AI Pusher] Loaded crop benchmarks for ${Object.keys(cropBenchmarks).length} crop(s)`);
       }

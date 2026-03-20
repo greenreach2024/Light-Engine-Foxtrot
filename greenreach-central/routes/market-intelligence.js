@@ -478,7 +478,8 @@ router.post('/seed', async (req, res) => {
  * Now returns DB-backed data when available, falls back to hardcoded seed data.
  */
 export function getMarketData() {
-  // Synchronous — return cached DB data or fallback to static
+  // DEPRECATED: Use getMarketDataAsync(pool) instead — this sync fallback will be removed in a future release
+  console.warn('[Market Intelligence] DEPRECATED: getMarketData() called — migrate to getMarketDataAsync(pool)');
   if (_cachedMarketData && (Date.now() - _cacheTime) < CACHE_TTL) {
     return _cachedMarketData;
   }

@@ -173,20 +173,17 @@ router.get('/recommendations', async (req, res) => {
       }
     }
     
-    // Generate recommendations based on market opportunities + farm diversity + AI signals
+    // Generate smart recommendations: market signal + margin + diversity + timing
     let aiAnalyses = [];
     try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
     const aiMap = {};
     for (const a of aiAnalyses) aiMap[a.product] = a;
 
+    const totalAssigned = currentAssignments.reduce((sum, a) => sum + parseInt(a.count, 10), 0) || 1;
     const recommendations = [];
     
     for (const [product, data] of Object.entries(marketData)) {
       const ai = aiMap[product] || null;
-      // Include crops with strong upward trend OR AI says "increase_production" / "bullish"
-      const strongTrend = data.trend === 'increasing' && Math.abs(data.trendPercent) >= 10;
-      const aiBullish = ai?.outlook === 'bullish' || ai?.action === 'increase_production';
-      if (!strongTrend && !aiBullish) continue;
       
       const pricingMatch = cropPricing.find(c => 
         c.crop.toLowerCase().includes(product.toLowerCase()) ||
@@ -195,16 +192,66 @@ router.get('/recommendations', async (req, res) => {
       
       if (!pricingMatch) continue;
       
-      const currentCount = currentAssignments.find(a => a.crop_sku === pricingMatch.crop)?.count || 0;
-      const isPriority = currentCount === 0; // Prioritize crops not currently growing
+      const currentCount = parseInt(currentAssignments.find(a => a.crop_sku === pricingMatch.crop)?.count || 0, 10);
+
+      // --- Signal scores (0-100 each) ---
+
+      // 1. Market trend signal
+      let trendScore = 50; // neutral baseline
+      if (data.trend === 'increasing') trendScore = 50 + Math.min(data.trendPercent, 50);
+      else if (data.trend === 'decreasing') trendScore = Math.max(50 - Math.abs(data.trendPercent), 0);
+
+      // 2. AI outlook signal
+      let aiScore = 50;
+      if (ai?.outlook === 'bullish') aiScore = 80;
+      else if (ai?.outlook === 'bearish') aiScore = 20;
+      if (ai?.action === 'increase_production') aiScore = Math.min(aiScore + 15, 100);
+      else if (ai?.action === 'reduce_production') aiScore = Math.max(aiScore - 15, 0);
+
+      // 3. Margin signal (wholesale price as proxy — higher is better)
+      const marginScore = Math.min((pricingMatch.wholesalePrice || 0) / 15 * 100, 100);
+
+      // 4. Diversity signal — favor under-represented or absent crops
+      const cropShare = currentCount / totalAssigned;
+      let diversityScore = 100; // not growing = maximum diversity value
+      if (currentCount > 0) diversityScore = Math.max(100 - cropShare * 200, 10);
+
+      // Composite score (weighted)
+      const composite = Math.round(
+        trendScore * 0.30 +
+        aiScore * 0.25 +
+        marginScore * 0.20 +
+        diversityScore * 0.25
+      );
+
+      // Build reasoning
+      const reasons = [];
+      if (data.trend === 'increasing' && data.trendPercent >= 5)
+        reasons.push(`prices up ${data.trendPercent}%`);
+      if (ai?.outlook === 'bullish')
+        reasons.push('AI outlook bullish');
+      if (ai?.action === 'increase_production')
+        reasons.push('AI recommends increasing production');
+      if (currentCount === 0)
+        reasons.push('not currently growing — diversification opportunity');
+      else if (cropShare > 0.3)
+        reasons.push(`${Math.round(cropShare * 100)}% of capacity — over-concentrated`);
+      if (pricingMatch.wholesalePrice >= 10)
+        reasons.push(`strong margin ($${pricingMatch.wholesalePrice}/unit)`);
+      
+      const reasoning = ai?.reasoning || reasons.join('; ') || `Composite score ${composite}`;
+
+      const priority = composite >= 70 ? 'high' : composite >= 45 ? 'medium' : 'low';
       
       recommendations.push({
         crop: pricingMatch.crop,
-        priority: isPriority ? 'high' : 'medium',
-        reasoning: ai?.reasoning || `Market prices ${data.trendPercent > 0 ? 'up' : 'down'} ${Math.abs(data.trendPercent)}% — ${data.trend} trend`,
+        priority,
+        score: composite,
+        reasoning,
         marketTrend: data.trend,
         trendPercent: data.trendPercent,
         currentlyGrowing: currentCount,
+        diversityShare: Math.round(cropShare * 100),
         projectedRevenue: pricingMatch.wholesalePrice * 100,
         confidence: ai?.confidence || (data.observationCount >= 10 ? 'high' : 'medium'),
         aiOutlook: ai?.outlook || null,
@@ -216,10 +263,7 @@ router.get('/recommendations', async (req, res) => {
       success: true,
       data: {
         farmId: farm_id,
-        recommendations: recommendations.sort((a, b) => {
-          if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
-          return b.trendPercent - a.trendPercent;
-        }),
+        recommendations: recommendations.sort((a, b) => b.score - a.score),
         generatedAt: new Date().toISOString()
       }
     });
