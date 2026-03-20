@@ -15,7 +15,7 @@ class FarmAssistant {
     this.ttsVoice = localStorage.getItem('cheo_tts_voice') || 'echo';
     this.jokes = [];
     this.funFacts = [];
-    this.conversationId = null;  // Server-side conversation tracking
+    this.conversationId = localStorage.getItem('cheo_conversation_id') || null;
     this.aiAvailable = null;     // null = unknown, true/false after check
     this.pendingAction = null;   // Pending write action awaiting confirmation
     window._farmAssistant = this; // Global ref for confirm/cancel button onclick
@@ -1047,6 +1047,7 @@ class FarmAssistant {
 
     // Track conversation for follow-ups
     this.conversationId = data.conversation_id;
+    try { localStorage.setItem('cheo_conversation_id', data.conversation_id); } catch { /* quota */ }
     this.aiAvailable = true;
 
     // Display the AI response

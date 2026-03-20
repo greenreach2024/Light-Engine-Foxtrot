@@ -532,7 +532,110 @@ const GPT_TOOLS = [
       }
     }
   }
+  ,
+  // --- User Memory Tool ---
+  {
+    type: 'function',
+    function: {
+      name: 'save_user_memory',
+      description: 'Save a fact learned about the user or their preferences (e.g. their name, preferred crops, communication style, units, goals). Call this automatically when the user shares personal info like "my name is Bob" or "I prefer metric units". Do NOT ask before saving — just save it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', description: 'Short key for the fact (e.g. "user_name", "preferred_units", "favorite_crop", "communication_style", "farm_goal")' },
+          value: { type: 'string', description: 'The value to remember (e.g. "Bob", "metric", "Genovese Basil")' }
+        },
+        required: ['key', 'value']
+      }
+    }
+  }
 ];
+
+// ── User Memory Helpers ───────────────────────────────────────────────
+
+async function getUserMemory(farmId) {
+  try {
+    if (!isDatabaseAvailable()) return {};
+    const result = await query('SELECT key, value FROM user_memory WHERE farm_id = $1 ORDER BY updated_at DESC LIMIT 50', [farmId]);
+    const mem = {};
+    for (const row of result.rows) mem[row.key] = row.value;
+    return mem;
+  } catch { return {}; }
+}
+
+async function saveUserMemory(farmId, key, value) {
+  try {
+    if (!isDatabaseAvailable()) return false;
+    await query(
+      `INSERT INTO user_memory (farm_id, key, value, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (farm_id, key) DO UPDATE SET value = $3, updated_at = NOW()`,
+      [farmId, String(key).slice(0, 100), String(value).slice(0, 500)]
+    );
+    return true;
+  } catch (err) {
+    logger.error('[UserMemory] Save failed:', err.message);
+    return false;
+  }
+}
+
+// ── Engagement Tracking Helpers ───────────────────────────────────────
+
+async function trackEngagement(farmId, { messages = 0, toolCalls = 0, toolsUsed = [] }) {
+  try {
+    if (!isDatabaseAvailable()) return;
+    const now = new Date();
+    // Biweekly periods: 1st-14th and 15th-end
+    const day = now.getDate();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), day <= 14 ? 1 : 15);
+    const periodEnd = day <= 14
+      ? new Date(now.getFullYear(), now.getMonth(), 14)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0); // last day of month
+    const startStr = periodStart.toISOString().slice(0, 10);
+    const endStr = periodEnd.toISOString().slice(0, 10);
+    const toolsJson = JSON.stringify(
+      toolsUsed.reduce((acc, t) => { acc[t] = (acc[t] || 0) + 1; return acc; }, {})
+    );
+    await query(
+      `INSERT INTO engagement_metrics (farm_id, period_start, period_end, total_sessions, total_messages, total_tool_calls, tools_used)
+       VALUES ($1, $2, $3, 1, $4, $5, $6::jsonb)
+       ON CONFLICT (farm_id, period_start) DO UPDATE SET
+         total_sessions = engagement_metrics.total_sessions + 1,
+         total_messages = engagement_metrics.total_messages + $4,
+         total_tool_calls = engagement_metrics.total_tool_calls + $5,
+         tools_used = (
+           SELECT jsonb_object_agg(key, COALESCE((engagement_metrics.tools_used->>key)::int, 0) + COALESCE((new_tools->>key)::int, 0))
+           FROM jsonb_each_text($6::jsonb) AS new_tools(key, value)
+           FULL OUTER JOIN jsonb_each_text(engagement_metrics.tools_used) AS old_tools(key, value) USING (key)
+         ),
+         updated_at = NOW()`,
+      [farmId, startStr, endStr, messages, toolCalls, toolsJson]
+    );
+  } catch (err) {
+    logger.error('[Engagement] Track failed:', err.message);
+  }
+}
+
+async function persistFeedbackToDB(farmId, conversationId, rating, snippet) {
+  try {
+    if (!isDatabaseAvailable()) return;
+    await query(
+      'INSERT INTO assistant_feedback (farm_id, conversation_id, rating, snippet) VALUES ($1, $2, $3, $4)',
+      [farmId, String(conversationId || '').slice(0, 100), rating, String(snippet || '').slice(0, 200)]
+    );
+    // Update engagement period feedback counts
+    const now = new Date();
+    const day = now.getDate();
+    const startStr = new Date(now.getFullYear(), now.getMonth(), day <= 14 ? 1 : 15).toISOString().slice(0, 10);
+    const col = rating === 'up' ? 'positive_feedback' : 'negative_feedback';
+    await query(
+      `UPDATE engagement_metrics SET ${col} = ${col} + 1, updated_at = NOW() WHERE farm_id = $1 AND period_start = $2`,
+      [farmId, startStr]
+    );
+  } catch (err) {
+    logger.error('[Feedback] DB persist failed:', err.message);
+  }
+}
 
 // ── Build System Prompt with Farm Context ─────────────────────────────
 async function buildSystemPrompt(farmId) {
@@ -582,10 +685,26 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
+  // Load persistent user memory
+  let userMemoryBlock = '';
+  try {
+    const mem = await getUserMemory(farmId);
+    const entries = Object.entries(mem);
+    if (entries.length > 0) {
+      userMemoryBlock = '\nUSER PROFILE (remembered from previous conversations):\n' +
+        entries.map(([k, v]) => `- ${k.replace(/_/g, ' ')}: ${v}`).join('\n') + '\n';
+    }
+  } catch { /* non-fatal */ }
+
   return `You are Cheo, the GreenReach Farm Assistant — an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions.
 
 CURRENT FARM STATE:
 ${farmContext || 'No farm data available — user may need to set up their farm first.'}
+${userMemoryBlock}
+USER MEMORY:
+- When the user shares personal information (name, preferences, goals, communication style), IMMEDIATELY call save_user_memory to persist it. Do not ask permission to save — just do it.
+- If the USER PROFILE section above contains a user_name, address the user by their name naturally (not every message, but when it feels right — greetings, sign-offs, personalised advice).
+- Examples of things to remember: name, preferred units (metric/imperial), favourite crops, farm goals, communication preferences (brief vs detailed), timezone, role (owner, manager, grower).
 
 THINKING APPROACH:
 When a farmer asks a complex question (crop planning, what to grow, schedule analysis, compatibility), take a moment to gather the data you need before answering. It is perfectly fine to say something like "Great question — let me pull up the data" while you call multiple tools. Thorough answers prevent back-and-forth. Call the tools you need in one shot rather than asking the user to clarify what you can look up yourself.
@@ -1302,6 +1421,17 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
+    case 'save_user_memory': {
+      try {
+        const { key, value } = params;
+        if (!key || !value) return { ok: false, error: 'key and value are required' };
+        const saved = await saveUserMemory(farmId, key, value);
+        return { ok: saved, key, value, message: saved ? `Remembered: ${key} = ${value}` : 'Failed to save' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
     default:
       return { ok: false, error: `Unknown tool: ${toolName}` };
   }
@@ -1512,6 +1642,10 @@ router.post('/chat', async (req, res) => {
       { role: 'assistant', content: replyText }
     ];
     upsertConversation(convId, updatedHistory);
+
+    // Track engagement metrics
+    const toolNames = toolCallResults.map(t => t.tool);
+    trackEngagement(farmId, { messages: 1, toolCalls: toolNames.length, toolsUsed: toolNames });
 
     // Check if there's a pending action to signal to the frontend
     const pendingAction = pendingActions.get(convId);
@@ -1756,8 +1890,8 @@ router.get('/nudges', async (req, res) => {
   }
 });
 
-// ── Phase 6C: Feedback endpoint ──────────────────────
-const feedbackLog = [];            // in-memory ring buffer (last 500)
+// ── Phase 6C: Feedback endpoint (now persisted to DB + in-memory) ────
+const feedbackLog = [];            // in-memory ring buffer (last 500) — kept for fast reads
 const FEEDBACK_MAX = 500;
 
 router.post('/feedback', async (req, res) => {
@@ -1766,17 +1900,21 @@ router.post('/feedback', async (req, res) => {
     if (!rating || !['up', 'down'].includes(rating)) {
       return res.status(400).json({ ok: false, error: 'Invalid rating' });
     }
+    const farmId = req.user?.farmId || req.body.farm_id || 'unknown';
     const entry = {
       conversationId: String(conversationId || '').slice(0, 64),
       rating,
       snippet: String(snippet || '').slice(0, 200),
       ts: Date.now(),
-      farmId: req.user?.farmId || 'unknown'
+      farmId
     };
     feedbackLog.push(entry);
     if (feedbackLog.length > FEEDBACK_MAX) feedbackLog.shift();
 
-    logger.info(`[Feedback] ${rating} from farm=${entry.farmId} conv=${entry.conversationId}`);
+    // Persist to DB
+    persistFeedbackToDB(farmId, entry.conversationId, rating, entry.snippet);
+
+    logger.info(`[Feedback] ${rating} from farm=${farmId} conv=${entry.conversationId}`);
     return res.json({ ok: true });
   } catch (err) {
     logger.error('[Feedback] Error:', err.message);
@@ -1786,11 +1924,155 @@ router.post('/feedback', async (req, res) => {
 
 // ── Phase 6B: Feedback stats for system-prompt context ──
 function getFeedbackSummary(farmId) {
+  // Try DB first, fall back to in-memory
   const farm = feedbackLog.filter(f => f.farmId === farmId);
   if (farm.length === 0) return null;
   const up = farm.filter(f => f.rating === 'up').length;
   const down = farm.filter(f => f.rating === 'down').length;
   return { total: farm.length, positive: up, negative: down, ratio: farm.length ? +(up / farm.length).toFixed(2) : 0 };
 }
+
+// ── User Memory REST Endpoints ─────────────────────────────────────────
+
+// GET /api/assistant/memory?farm_id=... — return all memory for a farm
+router.get('/memory', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+    const mem = await getUserMemory(farmId);
+    return res.json({ ok: true, memory: mem, count: Object.keys(mem).length });
+  } catch (err) {
+    logger.error('[Memory] GET failed:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to load memory' });
+  }
+});
+
+// POST /api/assistant/memory — save a memory { farm_id, key, value }
+router.post('/memory', async (req, res) => {
+  try {
+    const { key, value, farm_id } = req.body;
+    if (!key || !value) {
+      return res.status(400).json({ ok: false, error: 'key and value are required' });
+    }
+    const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+    const saved = await saveUserMemory(farmId, key, value);
+    return res.json({ ok: saved, key, value });
+  } catch (err) {
+    logger.error('[Memory] POST failed:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to save memory' });
+  }
+});
+
+// ── Biweekly Engagement Report ──────────────────────────────────────────
+
+/**
+ * GET /api/assistant/engagement-report?farm_id=...&period=current|previous
+ * Returns engagement metrics for biweekly reporting to GreenReach farms.
+ */
+router.get('/engagement-report', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+    const periodParam = req.query.period || 'current';
+
+    if (!isDatabaseAvailable()) {
+      return res.json({ ok: true, report: null, message: 'Database not available' });
+    }
+
+    // Get the requested period
+    const now = new Date();
+    let periodStart, periodEnd;
+    if (periodParam === 'previous') {
+      // Previous biweekly period
+      const day = now.getDate();
+      if (day <= 14) {
+        // Currently in 1st-14th, previous was 15th-end of last month
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+        periodStart = prevMonth.toISOString().slice(0, 10);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      } else {
+        // Currently in 15th+, previous was 1st-14th
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 14).toISOString().slice(0, 10);
+      }
+    } else {
+      // Current period
+      const day = now.getDate();
+      periodStart = new Date(now.getFullYear(), now.getMonth(), day <= 14 ? 1 : 15).toISOString().slice(0, 10);
+      periodEnd = day <= 14
+        ? new Date(now.getFullYear(), now.getMonth(), 14).toISOString().slice(0, 10)
+        : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    }
+
+    // Fetch engagement metrics
+    const metricsResult = await query(
+      'SELECT * FROM engagement_metrics WHERE farm_id = $1 AND period_start = $2',
+      [farmId, periodStart]
+    );
+
+    // Fetch feedback breakdown for this period
+    const feedbackResult = await query(
+      `SELECT rating, COUNT(*) as count FROM assistant_feedback
+       WHERE farm_id = $1 AND created_at >= $2 AND created_at <= ($3::date + interval '1 day')
+       GROUP BY rating`,
+      [farmId, periodStart, periodEnd]
+    );
+
+    // Fetch memory facts count
+    const memResult = await query(
+      'SELECT COUNT(*) as count FROM user_memory WHERE farm_id = $1',
+      [farmId]
+    );
+
+    // Fetch top tools from AI usage
+    const usageResult = await query(
+      `SELECT COUNT(*) as total_api_calls,
+              SUM(COALESCE((total_tokens)::int, 0)) as total_tokens,
+              SUM(COALESCE(estimated_cost, 0)) as total_cost
+       FROM ai_usage
+       WHERE farm_id = $1 AND created_at >= $2 AND created_at <= ($3::date + interval '1 day')
+         AND endpoint = 'assistant-chat'`,
+      [farmId, periodStart, periodEnd]
+    );
+
+    const metrics = metricsResult.rows[0] || {};
+    const feedback = {};
+    for (const row of feedbackResult.rows) feedback[row.rating] = parseInt(row.count);
+    const usage = usageResult.rows[0] || {};
+
+    const report = {
+      farm_id: farmId,
+      period: { start: periodStart, end: periodEnd, type: 'biweekly' },
+      engagement: {
+        total_sessions: metrics.total_sessions || 0,
+        total_messages: metrics.total_messages || 0,
+        total_tool_calls: metrics.total_tool_calls || 0,
+        tools_used: metrics.tools_used || {},
+        avg_messages_per_session: metrics.total_sessions > 0
+          ? +((metrics.total_messages || 0) / metrics.total_sessions).toFixed(1) : 0
+      },
+      satisfaction: {
+        positive: feedback.up || 0,
+        negative: feedback.down || 0,
+        total: (feedback.up || 0) + (feedback.down || 0),
+        ratio: (feedback.up || 0) + (feedback.down || 0) > 0
+          ? +((feedback.up || 0) / ((feedback.up || 0) + (feedback.down || 0))).toFixed(2) : null
+      },
+      learning: {
+        memory_facts_saved: parseInt(memResult.rows[0]?.count || 0),
+        personalisation_active: parseInt(memResult.rows[0]?.count || 0) > 0
+      },
+      cost: {
+        total_api_calls: parseInt(usage.total_api_calls || 0),
+        total_tokens: parseInt(usage.total_tokens || 0),
+        estimated_cost_cad: parseFloat(usage.total_cost || 0).toFixed(4)
+      },
+      generated_at: new Date().toISOString()
+    };
+
+    return res.json({ ok: true, report });
+  } catch (err) {
+    logger.error('[EngagementReport] Error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to generate report' });
+  }
+});
 
 export default router;
