@@ -6,7 +6,7 @@
 
 import { sendEmail } from '../lib/email-service.js';
 
-const testEmail = process.argv[2] || 'info@greenreachfarms.com';
+const testEmail = process.argv[2] || 'info@greenreachgreens.com';
 
 console.log('=== Testing Email Service ===\n');
 console.log('Environment Variables:');
@@ -23,7 +23,7 @@ async function testSend() {
     
     const result = await sendEmail({
       to: testEmail,
-      cc: 'info@greenreachfarms.com',
+      cc: 'info@greenreachgreens.com',
       subject: 'Test Email from GreenReach Central',
       text: 'This is a test email to verify the email service is working correctly.',
       html: `
@@ -40,7 +40,7 @@ async function testSend() {
     console.log('✅ Email sent successfully!');
     console.log('Result:', result);
     console.log('\nCheck the inbox for:', testEmail);
-    console.log('Also check CC inbox:', 'info@greenreachfarms.com');
+    console.log('Also check CC inbox:', 'info@greenreachgreens.com');
   } catch (error) {
     console.error('❌ Email send failed!');
     console.error('Error:', error.message);

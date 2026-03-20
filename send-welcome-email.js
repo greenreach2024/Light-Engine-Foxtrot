@@ -36,7 +36,7 @@ const htmlEmail = `
       <div class="credentials">
         <h3>Your Login Credentials</h3>
         <p><strong>Farm ID:</strong> FARM-MJT7BTBW-FAB2</p>
-        <p><strong>Email:</strong> info@greenreachfarms.com</p>
+        <p><strong>Email:</strong> info@greenreachgreens.com</p>
         <p><strong>Temporary Password:</strong> 5kr4seyWWJ8</p>
       </div>
       
@@ -61,11 +61,11 @@ const htmlEmail = `
 
 emailTransporter.sendMail({
   from: 'support@greenreach.ca',
-  to: 'info@greenreachfarms.com',
+  to: 'info@greenreachgreens.com',
   subject: '🌱 Welcome to GreenReach Farms - Your Account is Ready',
   html: htmlEmail
 }).then(() => {
-  console.log('✅ Welcome email sent successfully to info@greenreachfarms.com');
+  console.log('✅ Welcome email sent successfully to info@greenreachgreens.com');
   process.exit(0);
 }).catch(err => {
   console.error('❌ Failed to send email:', err.message);

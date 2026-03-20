@@ -17,7 +17,7 @@ async function createAdmin() {
       `INSERT INTO admin_users (email, password_hash, name, active, mfa_enabled, created_at)
        VALUES ($1, $2, $3, true, false, NOW())
        RETURNING id, email, name`,
-      ['info@greenreachfarms.com', '$2b$12$yhwYsvrY1WzHfIPB/RNZQOvpUXtiSx1u7z33ukpTrSmmWg1eHlYmi', 'GreenReach Admin']
+      ['info@greenreachgreens.com', '$2b$12$yhwYsvrY1WzHfIPB/RNZQOvpUXtiSx1u7z33ukpTrSmmWg1eHlYmi', 'GreenReach Admin']
     );
     console.log('✅ Admin created:', result.rows[0]);
   } catch (error) {
@@ -25,9 +25,9 @@ async function createAdmin() {
       console.log('⚠️  Admin already exists, updating password...');
       await pool.query(
         `UPDATE admin_users SET password_hash = $1 WHERE email = $2`,
-        ['$2b$12$yhwYsvrY1WzHfIPB/RNZQOvpUXtiSx1u7z33ukpTrSmmWg1eHlYmi', 'info@greenreachfarms.com']
+        ['$2b$12$yhwYsvrY1WzHfIPB/RNZQOvpUXtiSx1u7z33ukpTrSmmWg1eHlYmi', 'info@greenreachgreens.com']
       );
-      console.log('✅ Password updated for info@greenreachfarms.com');
+      console.log('✅ Password updated for info@greenreachgreens.com');
     } else {
       console.error('❌ Error:', error.message);
     }

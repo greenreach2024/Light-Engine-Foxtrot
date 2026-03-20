@@ -588,7 +588,7 @@ async function provisionFarmAndUser(session) {
 
     return {
       success: false,
-      error: 'Failed to create your farm account. Please contact support at info@greenreachfarms.com',
+      error: 'Failed to create your farm account. Please contact support at info@greenreachgreens.com',
     };
   }
 }

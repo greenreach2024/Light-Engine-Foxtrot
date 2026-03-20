@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Delete farm and associated users for info@greenreachfarms.com
+ * Delete farm and associated users for info@greenreachgreens.com
  * This allows testing the complete signup flow from scratch
  */
 
@@ -19,7 +19,7 @@ const pool = new pg.Pool({
   connectionTimeoutMillis: 10000
 });
 
-const EMAIL = 'info@greenreachfarms.com';
+const EMAIL = 'info@greenreachgreens.com';
 
 async function deleteFarm() {
   try {

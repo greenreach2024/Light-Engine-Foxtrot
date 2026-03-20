@@ -19,7 +19,7 @@ const emailTransporter = nodemailer.createTransport({
 });
 
 const testEmail = {
-  from: process.env.EMAIL_FROM || 'info@greenreachfarms.com',
+  from: process.env.EMAIL_FROM || 'info@greenreachgreens.com',
   to: 'peter@greenreachfarms.com',
   subject: 'Light Engine - Email Test',
   html: `
@@ -29,7 +29,7 @@ const testEmail = {
       <p>This is a test email from Light Engine production system.</p>
       
       <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <p><strong>From:</strong> ${process.env.EMAIL_FROM || 'info@greenreachfarms.com'}</p>
+        <p><strong>From:</strong> ${process.env.EMAIL_FROM || 'info@greenreachgreens.com'}</p>
         <p><strong>SMTP:</strong> SendGrid (smtp.sendgrid.net:587)</p>
         <p><strong>Date:</strong> ${new Date().toISOString()}</p>
       </div>
@@ -48,7 +48,7 @@ Email Configuration Test
 
 This is a test email from Light Engine production system.
 
-From: ${process.env.EMAIL_FROM || 'info@greenreachfarms.com'}
+From: ${process.env.EMAIL_FROM || 'info@greenreachgreens.com'}
 SMTP: SendGrid (smtp.sendgrid.net:587)
 Date: ${new Date().toISOString()}
 

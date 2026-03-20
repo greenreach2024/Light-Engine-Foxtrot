@@ -740,10 +740,6 @@
         <span class="label"><span class="pulse-dot"></span>Total Supporters</span>
       </div>
       <div class="live-stat">
-        <span class="number" id="stat24h">—</span>
-        <span class="label">New in Last 24 Hours</span>
-      </div>
-      <div class="live-stat">
         <span class="number" id="statCommunities">—</span>
         <span class="label">Communities Represented</span>
       </div>
@@ -919,7 +915,7 @@
           <li><a href="/grant-wizard.html">Funding Support</a></li>
           <li><a href="/blog.html">Blog</a></li>
           <li><a href="https://greenreachgreens.com/wholesale-about.html">About</a></li>
-          <li><a href="mailto:info@greenreachfarms.com">Contact Us</a></li>
+          <li><a href="mailto:info@greenreachgreens.com">Contact Us</a></li>
           <li><a href="https://calendly.com/greenreachfarms">Schedule a Call</a></li>
         </ul>
       </div>
@@ -1138,7 +1134,6 @@
         const data = await res.json();
 
         document.getElementById('statTotal').textContent = (data.total || 0).toLocaleString();
-        document.getElementById('stat24h').textContent = (data.last24h || 0).toLocaleString();
         document.getElementById('statCommunities').textContent =
           (data.communityCount || (data.topCommunities ? data.topCommunities.length : 0)).toLocaleString();
 

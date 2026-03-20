@@ -9,14 +9,14 @@
  * (via environment, IAM role, or shared credentials file).
  * 
  * Env vars (optional overrides):
- *   SES_FROM_EMAIL   — Sender address (default: info@greenreachfarms.com)
+ *   SES_FROM_EMAIL   — Sender address (default: info@greenreachgreens.com)
  *   SES_REGION       — AWS region for SES (default: us-east-1)
  *   SES_ENABLED      — Set to 'false' to disable (default: true)
  */
 
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
-const SES_FROM =  process.env.SES_FROM_EMAIL || 'info@greenreachfarms.com';
+const SES_FROM =  process.env.SES_FROM_EMAIL || 'info@greenreachgreens.com';
 const SES_REGION = process.env.SES_REGION || 'us-east-1';
 const SES_ENABLED = process.env.SES_ENABLED !== 'false';
 
@@ -202,7 +202,7 @@ export async function sendWelcomeEmail({ email, farmId, farmName, contactName, t
             </p>
             <p style="color:#94a3b8;font-size:12px;margin:0;">
               <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a> &nbsp;|&nbsp;
-              <a href="mailto:info@greenreachfarms.com" style="color:#64748b;text-decoration:none;">info@greenreachfarms.com</a>
+              <a href="mailto:info@greenreachgreens.com" style="color:#64748b;text-decoration:none;">info@greenreachgreens.com</a>
             </p>
           </td>
         </tr>
@@ -238,7 +238,7 @@ IMPORTANT: Save this email — you'll need these credentials to log in from othe
 
 —
 GreenReach — The foundation for smarter farms
-greenreachgreens.com | info@greenreachfarms.com`;
+greenreachgreens.com | info@greenreachgreens.com`;
 
   return sendEmail({ to: email, subject, html, text });
 }

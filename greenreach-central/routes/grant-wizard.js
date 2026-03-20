@@ -736,7 +736,7 @@ router.get('/corporation-search', async (req, res) => {
 let edgarCompanyCache = null;
 let edgarCacheTimestamp = 0;
 const EDGAR_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const EDGAR_UA = 'GreenReach-Grant-Wizard/1.0 (info@greenreachfarms.com)';
+const EDGAR_UA = 'GreenReach-Grant-Wizard/1.0 (info@greenreachgreens.com)';
 
 const KEYWORD_STOP_WORDS = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','by',

@@ -137,7 +137,7 @@ router.post('/auth/login', async (req, res) => {
     
     // Hard-coded fallback admin credentials (for NeDB/in-memory mode)
     const FALLBACK_ADMIN = {
-      email: 'info@greenreachfarms.com',
+      email: 'info@greenreachgreens.com',
       password: 'Admin2025!',
       name: 'System Administrator',
       id: 1,
@@ -1217,7 +1217,7 @@ router.get('/users', requireAdmin, async (req, res) => {
       const sampleUsers = [
         {
           user_id: 1,
-          email: 'info@greenreachfarms.com',
+          email: 'info@greenreachgreens.com',
           first_name: 'GreenReach',
           last_name: 'Admin',
           role: 'admin',
@@ -1327,9 +1327,9 @@ router.post('/users', requireAdmin, async (req, res) => {
       const sesVerification = await verifySESRecipient(normalizedEmail);
       console.log('[Admin] SES verification result:', sesVerification);
       
-      // Also verify CC email (info@greenreachfarms.com)
-      console.log('[Admin] Auto-verifying CC email (info@greenreachfarms.com) in SES...');
-      const ccVerification = await verifySESRecipient('info@greenreachfarms.com');
+      // Also verify CC email (info@greenreachgreens.com)
+      console.log('[Admin] Auto-verifying CC email (info@greenreachgreens.com) in SES...');
+      const ccVerification = await verifySESRecipient('info@greenreachgreens.com');
       console.log('[Admin] CC SES verification result:', ccVerification);
       
       const emailHtml = generateAdminWelcomeEmail({
@@ -1350,7 +1350,7 @@ router.post('/users', requireAdmin, async (req, res) => {
           console.log('[Admin] ===== SENDING WELCOME EMAIL (DEMO MODE) =====');
           const emailResult = await sendEmail({
             to: normalizedEmail,
-            cc: 'info@greenreachfarms.com',
+            cc: 'info@greenreachgreens.com',
             subject: 'Welcome to the GreenReach Team',
             html: emailHtml,
             text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
@@ -1366,7 +1366,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       } else if (sesVerification.needs_confirmation || ccVerification.needs_confirmation) {
         const pendingEmails = [];
         if (sesVerification.needs_confirmation) pendingEmails.push(normalizedEmail);
-        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachfarms.com');
+        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachgreens.com');
         
         emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
         console.log('[Admin] ⏳ Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
@@ -1459,7 +1459,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     try {
       console.log('[Admin] ===== SENDING WELCOME EMAIL =====');
       console.log('[Admin] To:', normalizedEmail);
-      console.log('[Admin] CC: info@greenreachfarms.com');
+      console.log('[Admin] CC: info@greenreachgreens.com');
       console.log('[Admin] From:', process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreach.org');
       console.log('[Admin] From Name:', process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'GreenReach');
       console.log('[Admin] Provider:', process.env.EMAIL_PROVIDER || 'ses');
@@ -1470,9 +1470,9 @@ router.post('/users', requireAdmin, async (req, res) => {
       const sesVerification = await verifySESRecipient(normalizedEmail);
       console.log('[Admin] SES verification result:', sesVerification);
       
-      // Also verify CC email (info@greenreachfarms.com)
-      console.log('[Admin] Auto-verifying CC email (info@greenreachfarms.com) in SES...');
-      const ccVerification = await verifySESRecipient('info@greenreachfarms.com');
+      // Also verify CC email (info@greenreachgreens.com)
+      console.log('[Admin] Auto-verifying CC email (info@greenreachgreens.com) in SES...');
+      const ccVerification = await verifySESRecipient('info@greenreachgreens.com');
       console.log('[Admin] CC SES verification result:', ccVerification);
       
       const loginUrl = `https://greenreachgreens.com/GR-central-admin-login.html`;
@@ -1490,7 +1490,7 @@ router.post('/users', requireAdmin, async (req, res) => {
         console.log('[Admin] Calling sendEmail function...');
         const emailResult = await sendEmail({
           to: normalizedEmail,
-          cc: 'info@greenreachfarms.com',
+          cc: 'info@greenreachgreens.com',
           subject: 'Welcome to the GreenReach Team',
           html: emailHtml,
           text: `Welcome to GreenReach!\n\nHi ${first_name},\n\nYour admin account has been created.\n\nEmail: ${normalizedEmail}\nTemporary Password: ${tempPassword}\nLogin: ${loginUrl}\n\nPlease change your password after first login.`
@@ -1501,7 +1501,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       } else if (sesVerification.needs_confirmation || ccVerification.needs_confirmation) {
         const pendingEmails = [];
         if (sesVerification.needs_confirmation) pendingEmails.push(normalizedEmail);
-        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachfarms.com');
+        if (ccVerification.needs_confirmation) pendingEmails.push('info@greenreachgreens.com');
         
         emailError = `Email verification pending for: ${pendingEmails.join(', ')} - AWS sent verification email(s)`;
         console.log('[Admin] Welcome email NOT sent - awaiting verification for:', pendingEmails.join(', '));
@@ -1529,7 +1529,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       user_id: userId,
       reactivated: isReactivation,
       message: emailSent 
-        ? `User ${action} successfully and welcome email sent to ${normalizedEmail} (CC: info@greenreachfarms.com)` 
+        ? `User ${action} successfully and welcome email sent to ${normalizedEmail} (CC: info@greenreachgreens.com)` 
         : verificationPending
           ? `User ${action} successfully. AWS verification email sent to ${normalizedEmail} - welcome email will be sent after they verify.`
           : `User ${action} successfully (email failed - see temp_password)`,
@@ -3024,7 +3024,7 @@ function generateAdminWelcomeEmail({ first_name, last_name, email, role, temp_pa
         </p>
         
         <ul style="margin: 0 0 24px 0; padding-left: 20px; color: #525252; font-size: 13px; line-height: 1.6;">
-          <li style="margin-bottom: 4px;">Email: <a href="mailto:info@greenreachfarms.com" style="color: #171717; text-decoration: underline;">info@greenreachfarms.com</a></li>
+          <li style="margin-bottom: 4px;">Email: <a href="mailto:info@greenreachgreens.com" style="color: #171717; text-decoration: underline;">info@greenreachgreens.com</a></li>
           <li style="margin-bottom: 4px;">Web: <a href="https://greenreachgreens.com" style="color: #171717; text-decoration: underline;">greenreachgreens.com</a></li>
         </ul>
         

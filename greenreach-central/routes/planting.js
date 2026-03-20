@@ -6,7 +6,7 @@ import validator from 'validator';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { requireAuth, checkFarmOwnership } from '../middleware/auth.js';
 import logger from '../utils/logger.js';
-import { getMarketData } from './market-intelligence.js';
+import { getMarketDataAsync } from './market-intelligence.js';
 import { getCropPricing } from './crop-pricing.js';
 
 const router = express.Router();
@@ -439,7 +439,8 @@ router.post('/recommendations', async (req, res) => {
     }
 
     // Fetch market intelligence data for scoring AND justifications
-    const marketData = getMarketData();
+    const dbPool = req.app?.locals?.dbPool || null;
+    const marketData = await getMarketDataAsync(dbPool);
     
     const allScored = pool.map(profile => {
       const scores = computeRecommendation(profile, context, currentProfile, diversityContext, marketData);
