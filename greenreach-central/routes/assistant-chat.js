@@ -205,7 +205,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_pricing_info',
-      description: 'Get the farm\'s current retail and wholesale pricing for all crops.',
+      description: 'Get the farm\'s current retail and wholesale pricing for all crops. Returns each crop with its unit (usually lb), retail price (CAD), wholesale price (CAD), and discount tiers. ALWAYS call this before updating prices so you know the current values and units.',
       parameters: {
         type: 'object',
         properties: {}
@@ -345,13 +345,13 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'update_crop_price',
-      description: 'Update the retail or wholesale price for a crop. This is a WRITE operation — you MUST describe the change and ask the user to confirm before calling this tool.',
+      description: 'Update the retail or wholesale price for a crop. Prices are per unit (typically per lb) in CAD. WRITE operation — describe the change and ask the user to confirm first. After confirming, call the tool, then use get_pricing_info to verify the update was saved.',
       parameters: {
         type: 'object',
         properties: {
-          crop: { type: 'string', description: 'Crop name (e.g. "Genovese Basil")' },
-          retail_price: { type: 'number', description: 'New retail price in CAD' },
-          wholesale_price: { type: 'number', description: 'New wholesale price in CAD' },
+          crop: { type: 'string', description: 'Crop name (e.g. "Genovese Basil"). Aliases and abbreviations are resolved automatically.' },
+          retail_price: { type: 'number', description: 'New retail price in CAD per lb (e.g. 25.00)' },
+          wholesale_price: { type: 'number', description: 'New wholesale price in CAD per lb (e.g. 17.50)' },
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
         },
         required: ['crop']
@@ -556,11 +556,20 @@ When advising on what to grow, consider ALL of these factors (not only financial
 
 When the farmer asks "what should I grow" or "help me plan", use get_planning_recommendation and explain your reasoning across these dimensions — not just price trends.
 
+PRICING WORKFLOW:
+- When the farmer asks to update crop prices, FIRST call get_pricing_info to see current prices and units.
+- If they say "update to current values" or "use the AI pricing", call get_market_intelligence and get_pricing_decisions to determine the recommended price, then propose the specific new values.
+- Always include the unit (e.g. "$23.52/lb") when displaying or proposing prices.
+- After a price update is confirmed and executed, call get_pricing_info again to verify the change was saved, and report the confirmed new prices.
+- Update each crop individually using update_crop_price — one tool call per crop.
+
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
+- Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
 - For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
 - Never fabricate data — only report what tools return.

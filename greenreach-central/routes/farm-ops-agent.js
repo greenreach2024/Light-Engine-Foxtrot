@@ -699,43 +699,60 @@ export const TOOL_CATALOG = {
 
   // --- Phase 2B: New Write Tools ---
   'update_crop_price': {
-    description: 'Update retail or wholesale price for a crop',
+    description: 'Update retail or wholesale price for a crop (prices are per unit shown in the crop record, typically per lb)',
     category: 'write',
     required: ['crop'],
     optional: ['retail_price', 'wholesale_price', 'farm_id'],
     undoable: true,
     handler: async (params) => {
       const farm_id = params.farm_id || 'demo-farm';
-      const crops = await farmStore.get(farm_id, 'crop_pricing') || [];
-      const cropIdx = crops.findIndex(c =>
-        (c.crop || '').toLowerCase() === params.crop.toLowerCase() ||
-        (c.crop || '').toLowerCase().includes(params.crop.toLowerCase())
-      );
-      if (cropIdx === -1) return { ok: false, error: `Crop not found: ${params.crop}` };
+      const resolvedName = resolveCropName(params.crop);
+      const data = await farmStore.get(farm_id, 'crop_pricing') || { crops: [] };
+      const crops = Array.isArray(data) ? data : (data.crops || []);
+      const cropIdx = crops.findIndex(c => {
+        const cName = (c.crop || '').toLowerCase();
+        const target = resolvedName.toLowerCase();
+        const raw = params.crop.toLowerCase();
+        return cName === target || cName === raw || cName.includes(raw);
+      });
+      if (cropIdx === -1) return { ok: false, error: `Crop not found: ${params.crop}. Use get_pricing_info to see available crops.` };
       const previous = { ...crops[cropIdx] };
       if (params.retail_price != null) crops[cropIdx].retailPrice = parseFloat(params.retail_price);
       if (params.wholesale_price != null) crops[cropIdx].wholesalePrice = parseFloat(params.wholesale_price);
-      await farmStore.set(farm_id, 'crop_pricing', crops);
+      // Save back in the original wrapper format
+      if (Array.isArray(data)) {
+        await farmStore.set(farm_id, 'crop_pricing', crops);
+      } else {
+        data.crops = crops;
+        data.lastUpdated = new Date().toISOString();
+        await farmStore.set(farm_id, 'crop_pricing', data);
+      }
       if (isDatabaseAvailable()) {
         try {
           await dbQuery(
             'INSERT INTO pricing_decisions (farm_id, crop, previous_price, applied_price, decision, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
-            [farm_id, params.crop, previous.retailPrice || 0, crops[cropIdx].retailPrice || 0, 'assistant-chat']
+            [farm_id, resolvedName, previous.retailPrice || 0, crops[cropIdx].retailPrice || 0, 'assistant-chat']
           );
         } catch { /* ok */ }
       }
       return {
-        ok: true, crop: params.crop,
+        ok: true, crop: resolvedName, unit: crops[cropIdx].unit || 'lb',
         previous: { retail: previous.retailPrice, wholesale: previous.wholesalePrice },
         updated: { retail: crops[cropIdx].retailPrice, wholesale: crops[cropIdx].wholesalePrice },
         _undo_state: { farm_id, previous, cropIdx }
       };
     },
     undoHandler: async ({ crop }, prevState) => {
-      const crops = await farmStore.get(prevState.farm_id, 'crop_pricing') || [];
+      const data = await farmStore.get(prevState.farm_id, 'crop_pricing') || { crops: [] };
+      const crops = Array.isArray(data) ? data : (data.crops || []);
       if (crops[prevState.cropIdx]) {
         Object.assign(crops[prevState.cropIdx], prevState.previous);
-        await farmStore.set(prevState.farm_id, 'crop_pricing', crops);
+        if (Array.isArray(data)) {
+          await farmStore.set(prevState.farm_id, 'crop_pricing', crops);
+        } else {
+          data.crops = crops;
+          await farmStore.set(prevState.farm_id, 'crop_pricing', data);
+        }
       }
       return { ok: true, message: `Price reverted for ${crop}` };
     }
