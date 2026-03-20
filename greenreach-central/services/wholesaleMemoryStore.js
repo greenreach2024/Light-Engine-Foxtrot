@@ -3,6 +3,7 @@ import { randomUUID, createHash } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { isDatabaseAvailable, query } from '../config/database.js';
+import { ingestPaymentRevenue } from './revenue-accounting-connector.js';
 
 function hashToken(token) {
   return createHash('sha256').update(token).digest('hex');
@@ -374,6 +375,18 @@ export function createPayment({ orderId, provider, split, totals }) {
   };
   paymentsById.set(paymentId, payment);
   persistPayment(payment).catch(err => console.error('[Persist] Payment save error:', err.message));
+
+  // Ingest into accounting ledger (fire-and-forget)
+  ingestPaymentRevenue({
+    payment_id: paymentId,
+    order_id: orderId,
+    amount: totals.grand_total,
+    provider: provider || 'demo',
+    broker_fee: totals.broker_fee_total || 0,
+    tax_amount: totals.tax_total || 0,
+    source_type: 'wholesale',
+  }).catch(err => console.warn('[Persist] Revenue ingest error:', err.message));
+
   return payment;
 }
 

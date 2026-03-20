@@ -462,33 +462,415 @@ router.get('/farm-sales/subscriptions/plans', authMiddleware, (req, res) => {
 });
 
 // ─── QuickBooks Integration ────────────────────────────────
-router.get('/farm-sales/quickbooks/status', authMiddleware, (req, res) => {
-  res.status(501).json({
-    success: false,
-    connected: false,
-    status: 'not_implemented',
-    message: 'QuickBooks integration not yet implemented',
+
+/**
+ * GET /api/farm-sales/quickbooks/status
+ * Check QuickBooks connection status for this farm
+ */
+router.get('/farm-sales/quickbooks/status', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (!isDatabaseAvailable() || !farmId) {
+      return res.json({ success: true, connected: false, status: 'not_configured', message: 'Database or farm not available' });
+    }
+
+    // Check for stored OAuth tokens
+    try {
+      await query(`
+        CREATE TABLE IF NOT EXISTS farm_quickbooks_connections (
+          id SERIAL PRIMARY KEY,
+          farm_id VARCHAR(255) UNIQUE NOT NULL,
+          realm_id VARCHAR(255),
+          access_token TEXT,
+          refresh_token TEXT,
+          token_expires_at TIMESTAMPTZ,
+          company_name VARCHAR(255),
+          status VARCHAR(50) DEFAULT 'connected',
+          last_sync_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } catch { /* table may already exist */ }
+
+    const result = await query('SELECT realm_id, company_name, status, last_sync_at, token_expires_at FROM farm_quickbooks_connections WHERE farm_id = $1', [farmId]);
+    if (result.rows.length === 0) {
+      return res.json({ success: true, connected: false, status: 'not_connected', message: 'QuickBooks not connected. Use POST /auth to begin OAuth.' });
+    }
+
+    const conn = result.rows[0];
+    const expired = conn.token_expires_at && new Date(conn.token_expires_at) < new Date();
+
+    return res.json({
+      success: true,
+      connected: conn.status === 'connected' && !expired,
+      status: expired ? 'token_expired' : conn.status,
+      company_name: conn.company_name,
+      realm_id: conn.realm_id,
+      last_sync_at: conn.last_sync_at,
+      token_expired: expired,
+    });
+  } catch (err) {
+    console.error('[QuickBooks] Status error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to check QuickBooks status' });
+  }
+});
+
+/**
+ * POST /api/farm-sales/quickbooks/auth
+ * Start QuickBooks OAuth flow — returns the authorization URL
+ */
+router.post('/farm-sales/quickbooks/auth', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const clientId = process.env.QUICKBOOKS_CLIENT_ID;
+    const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || `${process.env.BASE_URL || 'https://greenreachgreens.com'}/api/farm-sales/quickbooks/callback`;
+
+    if (!clientId) {
+      return res.status(503).json({ success: false, error: 'QuickBooks integration not configured. Set QUICKBOOKS_CLIENT_ID env var.' });
+    }
+
+    const state = Buffer.from(JSON.stringify({ farm_id: farmId, ts: Date.now() })).toString('base64url');
+    const scope = 'com.intuit.quickbooks.accounting';
+    const environment = process.env.QUICKBOOKS_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
+    const baseUrl = environment === 'production'
+      ? 'https://appcenter.intuit.com/connect/oauth2'
+      : 'https://appcenter.intuit.com/connect/oauth2';
+
+    const authUrl = `${baseUrl}?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+
+    return res.json({ success: true, auth_url: authUrl, state });
+  } catch (err) {
+    console.error('[QuickBooks] Auth start error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to start QuickBooks auth' });
+  }
+});
+
+/**
+ * GET /api/farm-sales/quickbooks/callback
+ * OAuth callback from QuickBooks — exchanges code for tokens
+ */
+router.get('/farm-sales/quickbooks/callback', async (req, res) => {
+  try {
+    const { code, state, realmId } = req.query;
+    if (!code || !state || !realmId) {
+      return res.status(400).send('Invalid OAuth callback parameters');
+    }
+
+    let stateData;
+    try {
+      stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    } catch {
+      return res.status(400).send('Invalid state parameter');
+    }
+
+    const farmId = stateData.farm_id;
+    const clientId = process.env.QUICKBOOKS_CLIENT_ID;
+    const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
+    const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || `${process.env.BASE_URL || 'https://greenreachgreens.com'}/api/farm-sales/quickbooks/callback`;
+
+    if (!clientId || !clientSecret) {
+      return res.status(503).send('QuickBooks not configured');
+    }
+
+    // Exchange code for tokens
+    const tokenUrl = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      console.error('[QuickBooks] Token exchange failed:', errText);
+      return res.status(502).send('Failed to exchange authorization code');
+    }
+
+    const tokens = await tokenResponse.json();
+    const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
+
+    // Get company info
+    const environment = process.env.QUICKBOOKS_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
+    const apiBase = environment === 'production'
+      ? 'https://quickbooks.api.intuit.com'
+      : 'https://sandbox-quickbooks.api.intuit.com';
+
+    let companyName = 'Unknown';
+    try {
+      const companyResp = await fetch(`${apiBase}/v3/company/${realmId}/companyinfo/${realmId}?minorversion=65`, {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+      });
+      if (companyResp.ok) {
+        const companyData = await companyResp.json();
+        companyName = companyData.CompanyInfo?.CompanyName || 'Unknown';
+      }
+    } catch { /* non-critical */ }
+
+    // Store connection
+    if (isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO farm_quickbooks_connections (farm_id, realm_id, access_token, refresh_token, token_expires_at, company_name, status, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'connected', NOW())
+         ON CONFLICT (farm_id) DO UPDATE SET
+           realm_id = EXCLUDED.realm_id,
+           access_token = EXCLUDED.access_token,
+           refresh_token = EXCLUDED.refresh_token,
+           token_expires_at = EXCLUDED.token_expires_at,
+           company_name = EXCLUDED.company_name,
+           status = 'connected',
+           updated_at = NOW()`,
+        [farmId, realmId, tokens.access_token, tokens.refresh_token, expiresAt.toISOString(), companyName]
+      );
+    }
+
+    console.log(`[QuickBooks] Connected farm ${farmId} to company "${companyName}" (realm: ${realmId})`);
+
+    // Redirect back to farm admin
+    return res.redirect('/farm-admin.html?quickbooks=connected');
+  } catch (err) {
+    console.error('[QuickBooks] Callback error:', err.message);
+    return res.status(500).send('QuickBooks connection failed');
+  }
+});
+
+/**
+ * POST /api/farm-sales/quickbooks/disconnect
+ * Disconnect QuickBooks from this farm
+ */
+router.post('/farm-sales/quickbooks/disconnect', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    if (isDatabaseAvailable()) {
+      await query(
+        `UPDATE farm_quickbooks_connections SET status = 'disconnected', access_token = NULL, refresh_token = NULL, updated_at = NOW() WHERE farm_id = $1`,
+        [farmId]
+      );
+    }
+    return res.json({ success: true, message: 'QuickBooks disconnected' });
+  } catch (err) {
+    console.error('[QuickBooks] Disconnect error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to disconnect' });
+  }
+});
+
+/**
+ * Helper: Get a valid QuickBooks access token, refreshing if expired
+ */
+async function getQbAccessToken(farmId) {
+  const result = await query('SELECT * FROM farm_quickbooks_connections WHERE farm_id = $1 AND status = $2', [farmId, 'connected']);
+  if (result.rows.length === 0) return null;
+
+  const conn = result.rows[0];
+  const now = new Date();
+
+  if (conn.token_expires_at && new Date(conn.token_expires_at) > now) {
+    return { access_token: conn.access_token, realm_id: conn.realm_id };
+  }
+
+  // Refresh the token
+  const clientId = process.env.QUICKBOOKS_CLIENT_ID;
+  const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
+  if (!clientId || !clientSecret || !conn.refresh_token) return null;
+
+  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const tokenResponse = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(conn.refresh_token)}`,
   });
+
+  if (!tokenResponse.ok) {
+    await query(`UPDATE farm_quickbooks_connections SET status = 'token_expired', updated_at = NOW() WHERE farm_id = $1`, [farmId]);
+    return null;
+  }
+
+  const tokens = await tokenResponse.json();
+  const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
+
+  await query(
+    `UPDATE farm_quickbooks_connections SET access_token = $1, refresh_token = $2, token_expires_at = $3, updated_at = NOW() WHERE farm_id = $4`,
+    [tokens.access_token, tokens.refresh_token || conn.refresh_token, expiresAt.toISOString(), farmId]
+  );
+
+  return { access_token: tokens.access_token, realm_id: conn.realm_id };
+}
+
+/**
+ * Helper: Get QBO API base URL
+ */
+function getQbApiBase() {
+  return process.env.QUICKBOOKS_ENVIRONMENT === 'production'
+    ? 'https://quickbooks.api.intuit.com'
+    : 'https://sandbox-quickbooks.api.intuit.com';
+}
+
+/**
+ * POST /api/farm-sales/quickbooks/sync-invoices
+ * Sync recent orders as invoices to QuickBooks
+ */
+router.post('/farm-sales/quickbooks/sync-invoices', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const qb = await getQbAccessToken(farmId);
+    if (!qb) return res.status(401).json({ success: false, error: 'QuickBooks not connected or token expired' });
+
+    // Fetch recent orders for this farm
+    const ordersResult = await query(
+      `SELECT master_order_id, buyer_email, order_data, created_at FROM wholesale_orders
+       WHERE (order_data->>'farm_id' = $1 OR order_data->'farmSubOrders' @> $2::jsonb)
+         AND created_at >= NOW() - INTERVAL '30 days'
+       ORDER BY created_at DESC LIMIT 50`,
+      [farmId, JSON.stringify([{ farm_id: farmId }])]
+    );
+
+    let synced = 0;
+    const apiBase = getQbApiBase();
+
+    for (const row of ordersResult.rows) {
+      const order = row.order_data || {};
+      const total = order.totals?.total || order.grand_total || 0;
+      if (total <= 0) continue;
+
+      // Create a simple QBO invoice
+      const invoice = {
+        Line: [{
+          DetailType: 'SalesItemLineDetail',
+          Amount: Number(total),
+          Description: `Wholesale Order ${row.master_order_id}`,
+          SalesItemLineDetail: { Qty: 1, UnitPrice: Number(total) },
+        }],
+        CustomerRef: { value: '1', name: row.buyer_email || 'Wholesale Customer' },
+        TxnDate: row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        DocNumber: row.master_order_id,
+        PrivateNote: `Synced from GreenReach — Farm ${farmId}`,
+      };
+
+      try {
+        const resp = await fetch(`${apiBase}/v3/company/${qb.realm_id}/invoice?minorversion=65`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${qb.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(invoice),
+        });
+        if (resp.ok) synced++;
+      } catch { /* individual invoice sync failure — continue */ }
+    }
+
+    await query(`UPDATE farm_quickbooks_connections SET last_sync_at = NOW() WHERE farm_id = $1`, [farmId]);
+
+    return res.json({ success: true, synced, total_orders: ordersResult.rows.length });
+  } catch (err) {
+    console.error('[QuickBooks] Sync invoices error:', err.message);
+    res.status(500).json({ success: false, synced: 0, error: 'Sync failed' });
+  }
 });
 
-router.post('/farm-sales/quickbooks/auth', authMiddleware, (req, res) => {
-  res.status(501).json({ success: false, error: 'QuickBooks integration not yet implemented' });
+/**
+ * POST /api/farm-sales/quickbooks/sync-payments
+ * Sync payment records to QuickBooks as payments
+ */
+router.post('/farm-sales/quickbooks/sync-payments', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const qb = await getQbAccessToken(farmId);
+    if (!qb) return res.status(401).json({ success: false, error: 'QuickBooks not connected or token expired' });
+
+    const paymentsResult = await query(
+      `SELECT payment_id, order_id, amount, currency, provider, status, created_at
+       FROM payment_records
+       WHERE metadata::text LIKE $1 AND created_at >= NOW() - INTERVAL '30 days'
+       ORDER BY created_at DESC LIMIT 50`,
+      [`%${farmId}%`]
+    );
+
+    let synced = 0;
+    const apiBase = getQbApiBase();
+
+    for (const row of paymentsResult.rows) {
+      if (row.status !== 'completed' && row.status !== 'created') continue;
+
+      const payment = {
+        TotalAmt: Number(row.amount),
+        CustomerRef: { value: '1' },
+        TxnDate: row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        PrivateNote: `Payment ${row.payment_id} via ${row.provider} — GreenReach sync`,
+      };
+
+      try {
+        const resp = await fetch(`${apiBase}/v3/company/${qb.realm_id}/payment?minorversion=65`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${qb.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payment),
+        });
+        if (resp.ok) synced++;
+      } catch { /* continue */ }
+    }
+
+    await query(`UPDATE farm_quickbooks_connections SET last_sync_at = NOW() WHERE farm_id = $1`, [farmId]);
+
+    return res.json({ success: true, synced, total_payments: paymentsResult.rows.length });
+  } catch (err) {
+    console.error('[QuickBooks] Sync payments error:', err.message);
+    res.status(500).json({ success: false, synced: 0, error: 'Sync failed' });
+  }
 });
 
-router.post('/farm-sales/quickbooks/disconnect', authMiddleware, (req, res) => {
-  res.status(501).json({ success: false, message: 'QuickBooks integration not yet implemented' });
-});
+/**
+ * POST /api/farm-sales/quickbooks/sync/customer
+ * Sync wholesale buyers as QuickBooks customers
+ */
+router.post('/farm-sales/quickbooks/sync/customer', authMiddleware, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const qb = await getQbAccessToken(farmId);
+    if (!qb) return res.status(401).json({ success: false, error: 'QuickBooks not connected or token expired' });
 
-router.post('/farm-sales/quickbooks/sync-invoices', authMiddleware, (req, res) => {
-  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
-});
+    // Get buyers who have placed orders with this farm
+    const buyersResult = await query(
+      `SELECT DISTINCT wo.buyer_email, wb.business_name, wb.contact_name, wb.phone
+       FROM wholesale_orders wo
+       LEFT JOIN wholesale_buyers wb ON wb.email = wo.buyer_email
+       WHERE (wo.order_data->>'farm_id' = $1 OR wo.order_data->'farmSubOrders' @> $2::jsonb)
+       LIMIT 100`,
+      [farmId, JSON.stringify([{ farm_id: farmId }])]
+    );
 
-router.post('/farm-sales/quickbooks/sync-payments', authMiddleware, (req, res) => {
-  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
-});
+    let synced = 0;
+    const apiBase = getQbApiBase();
 
-router.post('/farm-sales/quickbooks/sync/customer', authMiddleware, (req, res) => {
-  res.status(501).json({ success: false, synced: 0, message: 'QuickBooks integration not yet implemented' });
+    for (const buyer of buyersResult.rows) {
+      if (!buyer.buyer_email) continue;
+
+      const customer = {
+        DisplayName: buyer.business_name || buyer.contact_name || buyer.buyer_email,
+        PrimaryEmailAddr: { Address: buyer.buyer_email },
+        CompanyName: buyer.business_name || null,
+        GivenName: (buyer.contact_name || '').split(' ')[0] || null,
+        FamilyName: (buyer.contact_name || '').split(' ').slice(1).join(' ') || null,
+        PrimaryPhone: buyer.phone ? { FreeFormNumber: buyer.phone } : null,
+      };
+
+      try {
+        const resp = await fetch(`${apiBase}/v3/company/${qb.realm_id}/customer?minorversion=65`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${qb.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(customer),
+        });
+        if (resp.ok) synced++;
+      } catch { /* continue */ }
+    }
+
+    return res.json({ success: true, synced, total_buyers: buyersResult.rows.length });
+  } catch (err) {
+    console.error('[QuickBooks] Sync customers error:', err.message);
+    res.status(500).json({ success: false, synced: 0, error: 'Sync failed' });
+  }
 });
 
 // ─── AI Agent ──────────────────────────────────────────────

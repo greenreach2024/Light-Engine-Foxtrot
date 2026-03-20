@@ -78,6 +78,8 @@ import miscStubsRouter from './routes/misc-stubs.js';
 import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
+import stripePaymentsRouter from './routes/stripe-payments.js';
+import paymentWebhooksRouter from './routes/payment-webhooks.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -3309,6 +3311,8 @@ app.get('/api/bus/:busId/scan', authMiddleware, (req, res) => edgeProxy(req, res
 
 app.use('/api/ml/insights', authMiddleware, mlForecastRoutes); // ML temperature forecast (Light Engine feature)
 app.use('/api/billing', authOrAdminMiddleware, billingRoutes); // Billing usage (cloud)
+app.use('/api/stripe', authOrAdminMiddleware, stripePaymentsRouter); // Stripe payment operations
+app.use('/api/webhooks', paymentWebhooksRouter); // Square + Stripe webhook receivers (no auth — signature-verified)
 app.use('/api/accounting', authOrAdminMiddleware, accountingRoutes); // Canonical accounting ledger + close controls (accepts farm OR admin auth)
 app.use('/api/procurement', authOrAdminMiddleware, procurementAdminRoutes); // GRC catalog & suppliers (accepts farm OR admin auth)
 app.use('/api/remote', authOrAdminMiddleware, remoteSupportRoutes); // Remote support / diagnostics proxy to farms

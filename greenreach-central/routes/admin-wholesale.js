@@ -1,6 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { ingestRefundReversal } from '../services/revenue-accounting-connector.js';
 import {
   listAllOrders,
   listOrdersForBuyer,
@@ -394,7 +396,7 @@ router.get('/audit-log', async (req, res) => {
 
 /**
  * POST /api/admin/wholesale/refunds
- * Process a refund for an order
+ * Process a refund for an order — issues a real Square refund when possible
  */
 router.post('/refunds', async (req, res) => {
     try {
@@ -413,6 +415,49 @@ router.post('/refunds', async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Refund amount exceeds order total' });
         }
 
+        // Attempt a real Square refund if a Square payment exists for this order
+        let squareRefundResult = null;
+        if (isDatabaseAvailable()) {
+            try {
+                const paymentRow = await query(
+                    `SELECT payment_id, metadata FROM payment_records
+                     WHERE order_id = $1 AND provider = 'square' AND status = 'completed'
+                     ORDER BY created_at DESC LIMIT 1`,
+                    [orderId]
+                );
+                const squarePaymentId = paymentRow.rows[0]?.payment_id;
+
+                if (squarePaymentId && process.env.SQUARE_ACCESS_TOKEN) {
+                    const { SquareClient, SquareEnvironment } = await import('square');
+                    const sqClient = new SquareClient({
+                        token: process.env.SQUARE_ACCESS_TOKEN,
+                        environment: process.env.SQUARE_ENVIRONMENT === 'production'
+                            ? SquareEnvironment.Production
+                            : SquareEnvironment.Sandbox,
+                    });
+
+                    const refundResponse = await sqClient.refunds.refundPayment({
+                        idempotencyKey: crypto.randomUUID(),
+                        paymentId: squarePaymentId,
+                        amountMoney: {
+                            amount: BigInt(Math.round(Number(amount) * 100)),
+                            currency: 'CAD',
+                        },
+                        reason: reason || 'Admin refund',
+                    });
+                    squareRefundResult = {
+                        provider: 'square',
+                        refund_id: refundResponse.refund?.id,
+                        status: refundResponse.refund?.status,
+                    };
+                    console.log(`[Admin Wholesale] Square refund issued: ${squareRefundResult.refund_id}`);
+                }
+            } catch (sqErr) {
+                console.error('[Admin Wholesale] Square refund failed:', sqErr.message);
+                squareRefundResult = { provider: 'square', error: sqErr.message };
+            }
+        }
+
         const refund = createRefund({
             orderId,
             amount: Number(amount),
@@ -428,10 +473,19 @@ router.post('/refunds', async (req, res) => {
         logOrderEvent(orderId, 'refund_processed', {
             refund_id: refund.id,
             amount: refund.amount,
-            reason: refund.reason
+            reason: refund.reason,
+            square_refund: squareRefundResult || null
         });
 
-        return res.json({ status: 'ok', data: { refund, order } });
+        // Ingest refund reversal into accounting ledger (fire-and-forget)
+        ingestRefundReversal({
+            refund_id: refund.id,
+            order_id: orderId,
+            amount: refund.amount,
+            provider: squareRefundResult?.provider || 'manual',
+        }).catch(err => console.warn('[Admin Wholesale] Revenue reversal error:', err.message));
+
+        return res.json({ status: 'ok', data: { refund, order, square_refund: squareRefundResult } });
     } catch (error) {
         console.error('[Admin Wholesale] Error processing refund:', error);
         res.status(500).json({ status: 'error', message: error.message });

@@ -249,9 +249,9 @@ async function analyzeFarm(farm) {
     prompt += `2. [RECOMMENDATION TEXT]\n`;
     prompt += `Focus on: Temperature/humidity optimization, equipment adjustments, crop health.\n`;
 
-    // 3. Call GPT-4
+    // 3. Call AI model (uses OPENAI_MODEL env var, defaults to gpt-4o-mini)
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -271,11 +271,11 @@ async function analyzeFarm(farm) {
     trackAiUsage({
       farm_id: farm.farm_id,
       endpoint: 'recommendations-pusher',
-      model: 'gpt-4',
+      model: OPENAI_MODEL,
       prompt_tokens: completion.usage?.prompt_tokens,
       completion_tokens: completion.usage?.completion_tokens,
       total_tokens: completion.usage?.total_tokens,
-      estimated_cost: estimateChatCost('gpt-4', completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
+      estimated_cost: estimateChatCost(OPENAI_MODEL, completion.usage?.prompt_tokens || 0, completion.usage?.completion_tokens || 0),
       status: 'success'
     });
     
