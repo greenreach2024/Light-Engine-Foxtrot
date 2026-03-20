@@ -21,6 +21,7 @@ class FarmAssistant {
     window._farmAssistant = this; // Global ref for confirm/cancel button onclick
     this.nudgeInterval = null;    // Nudge polling interval
     this.settingsOpen = false;   // Settings panel state
+    this._speakGeneration = 0;   // TTS generation counter — prevents overlapping playback
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -638,6 +639,9 @@ class FarmAssistant {
   speak(text) {
     if (!this.voiceEnabled) return;
 
+    // Increment generation — any in-flight TTS for a prior generation is discarded on arrival.
+    const gen = ++this._speakGeneration;
+
     // Cancel any in-progress playback.
     if (this._ttsSource) {
       try { this._ttsSource.stop(); } catch (_) { /* ignore */ }
@@ -657,13 +661,15 @@ class FarmAssistant {
       body: JSON.stringify({ text: text.substring(0, 2000), voice: ttsVoice })
     })
       .then(res => {
+        if (gen !== this._speakGeneration) return; // stale — discard
         if (!res.ok) throw new Error('TTS ' + res.status);
         return res.arrayBuffer();
       })
       .then(buf => {
+        if (!buf || gen !== this._speakGeneration) return; // stale — discard
         // Keep a copy for fallback since decodeAudioData detaches the buffer.
         this._lastTtsBuf = buf.slice(0);
-        return this._playViaWebAudio(buf, text);
+        return this._playViaWebAudio(buf, text, gen);
       })
       .catch(err => {
         console.warn('[TTS] Error:', err.message, '-- falling back to browser speech');
@@ -672,15 +678,18 @@ class FarmAssistant {
   }
 
   // Play audio buffer through Web Audio API (bypasses autoplay blocking).
-  _playViaWebAudio(arrayBuffer, fallbackText) {
+  _playViaWebAudio(arrayBuffer, fallbackText, gen) {
     const ctx = this._audioCtx;
     if (!ctx) {
       console.warn('[TTS] No AudioContext -- trying HTML Audio');
       return this._playViaHtmlAudio(this._lastTtsBuf || arrayBuffer, fallbackText);
     }
     return ctx.resume().then(() => {
+      if (gen != null && gen !== this._speakGeneration) return; // stale
       return ctx.decodeAudioData(arrayBuffer);
     }).then(audioBuffer => {
+      if (!audioBuffer) return; // stale guard returned early
+      if (gen != null && gen !== this._speakGeneration) return; // stale
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
@@ -930,7 +939,7 @@ class FarmAssistant {
     }
   }
 
-  addMessage(content, type = 'assistant', actions = null) {
+  addMessage(content, type = 'assistant', actions = null, suppressSpeak = false) {
     const messagesContainer = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}-message`;
@@ -978,7 +987,7 @@ class FarmAssistant {
     if (type === 'user') this._trackQuery(content);
     
     // Speak assistant messages aloud (text-to-speech)
-    if (type === 'assistant' && this.voiceEnabled) {
+    if (type === 'assistant' && this.voiceEnabled && !suppressSpeak) {
       // Remove HTML tags and emojis from speech
       const cleanText = content
         .replace(/<[^>]*>/g, '') // Remove HTML tags
@@ -1890,7 +1899,7 @@ class FarmAssistant {
         this.speak(answerText);
       }, 3000);
       
-      this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you!`, 'assistant');
+      this.addMessage(`Here's a ${item.type === 'riddle' ? 'riddle' : 'joke'} for you!`, 'assistant', null, true);
       return true;
     }
     
@@ -1925,7 +1934,7 @@ class FarmAssistant {
         }
       }, 4000);
       
-      this.addMessage(`Here's an interesting farm fact.`, 'assistant');
+      this.addMessage(`Here's an interesting farm fact.`, 'assistant', null, true);
       return true;
     }
     

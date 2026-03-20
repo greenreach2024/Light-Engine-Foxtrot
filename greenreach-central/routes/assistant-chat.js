@@ -19,6 +19,37 @@ import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import farmStore from '../lib/farm-data-store.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
+
+// Load crop-utils for name resolution (alias/planId → canonical)
+const require_ = createRequire(import.meta.url);
+const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
+
+// Load lighting recipes (day-by-day growth schedules for 50 crops)
+let LIGHTING_RECIPES = {};
+try {
+  const recipePath = path.join(DATA_DIR, 'lighting-recipes.json');
+  if (fs.existsSync(recipePath)) {
+    LIGHTING_RECIPES = JSON.parse(fs.readFileSync(recipePath, 'utf8'));
+  }
+} catch { /* non-fatal */ }
+
+// Load crop registry and initialise crop-utils caches
+let CROP_REGISTRY = {};
+try {
+  const regPath = path.join(DATA_DIR, 'crop-registry.json');
+  if (fs.existsSync(regPath)) {
+    CROP_REGISTRY = JSON.parse(fs.readFileSync(regPath, 'utf8'));
+    cropUtils.setRegistry(CROP_REGISTRY);
+  }
+} catch { /* non-fatal */ }
 
 const router = Router();
 
@@ -185,7 +216,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_planting_recommendations',
-      description: 'Get AI-powered smart planting recommendations scored by market trend, AI outlook, margin, and diversity.',
+      description: 'Get quick planting recommendations scored by market trend, AI outlook, margin, and diversity. For comprehensive planning that includes companion compatibility, seasonal gaps, harvest alignment, and supply risk, use get_planning_recommendation instead.',
       parameters: {
         type: 'object',
         properties: {}
@@ -274,7 +305,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_crop_info',
-      description: 'Get detailed crop registry info — growth parameters, days to harvest, pricing, categories. Use to answer questions about how to grow a specific crop.',
+      description: 'Get detailed crop registry info — growth parameters, days to harvest, pricing, categories. Resolves aliases and plan IDs automatically (e.g. "bibb" → "Bibb Butterhead", "crop-genovese-basil" → "Genovese Basil"). Use to answer questions about how to grow a specific crop or to resolve an ambiguous crop name.',
       parameters: {
         type: 'object',
         properties: {
@@ -331,7 +362,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'create_planting_assignment',
-      description: 'Schedule a new planting — assign a crop to a group/zone with seed and harvest dates. WRITE operation — confirm with user first.',
+      description: 'Schedule a new planting — assign a crop to a group/zone with seed and harvest dates. Crop names are auto-resolved from aliases/IDs. Harvest date auto-calculates from recipe if omitted. WRITE operation — confirm with user first.',
       parameters: {
         type: 'object',
         properties: {
@@ -398,6 +429,51 @@ const GPT_TOOLS = [
         required: ['crop_name', 'quantity']
       }
     }
+  },
+  // --- Crop Planning Intelligence Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_crop_schedule',
+      description: 'Get the full growth recipe/schedule for a crop — day-by-day stages, DLI, PPFD, EC, pH, temperature, humidity, spectrum ratios. Use this to answer questions about how long a crop takes, what light or nutrient recipe it needs, what stage it is in, and planting/harvest timing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Crop name (e.g. "Genovese Basil", "butterhead", "cherry tomato")' },
+          summary_only: { type: 'boolean', description: 'If true, return stage summary instead of day-by-day detail. Default true.' }
+        },
+        required: ['crop']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crop_compatibility',
+      description: 'Analyse compatibility between two or more crops for zone co-location. Compares light (DLI, photoperiod), nutrient (EC, pH), environment (temp, VPD, humidity), and harvest schedule. Use when farmers ask about companion planting, grouping crops together, or what goes well in the same room/zone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crops: { type: 'string', description: 'Comma-separated list of crop names to compare (e.g. "basil, lettuce, kale")' }
+        },
+        required: ['crops']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_planning_recommendation',
+      description: 'Get comprehensive crop planning recommendations considering market gaps, supply risks, seasonal opportunity, companion compatibility, harvest alignment, and revenue potential. More thorough than get_planting_recommendations — use when the farmer asks "what should I grow", "help me plan", or "what crops should I add".',
+      parameters: {
+        type: 'object',
+        properties: {
+          focus: { type: 'string', description: 'Optional focus area: market-gaps, high-margin, quick-turn, seasonal, diversification, companion-groups' },
+          zone_id: { type: 'string', description: 'Optional zone/group ID to recommend for specifically' },
+          exclude: { type: 'string', description: 'Comma-separated crop names to exclude from recommendations' }
+        }
+      }
+    }
   }
 ];
 
@@ -449,13 +525,40 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
-  return `You are Cheo, the GreenReach Farm Assistant. You help farmers manage their indoor growing operations through natural conversation. You have access to real-time farm data and can execute actions.
+  return `You are Cheo, the GreenReach Farm Assistant — an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions.
 
 CURRENT FARM STATE:
 ${farmContext || 'No farm data available — user may need to set up their farm first.'}
 
+THINKING APPROACH:
+When a farmer asks a complex question (crop planning, what to grow, schedule analysis, compatibility), take a moment to gather the data you need before answering. It is perfectly fine to say something like "Great question — let me pull up the data" while you call multiple tools. Thorough answers prevent back-and-forth. Call the tools you need in one shot rather than asking the user to clarify what you can look up yourself.
+
+SELF-RESOLUTION:
+- If a crop name looks like an ID, alias, or abbreviation, resolve it yourself using get_crop_info — do NOT ask the user "which crop do you mean?" if the lookup returns exactly one match.
+- Every crop in the system has aliases and plan IDs. Use the tools to resolve names before reporting errors.
+- If a planting request omits the harvest date, the system will auto-calculate it from the crop's growth recipe. You do not need to ask.
+
+CROP RECIPE KNOWLEDGE:
+- The farm has 50 day-by-day growth recipes. Each recipe defines DLI, PPFD, EC, pH, VPD, temperature, humidity, and light spectrum per day through every growth stage (Seedling → Vegetative → Flowering → Fruiting).
+- Crops already have their own schedules. When asked "how long does X take" or "what does X need", use get_crop_schedule to give actual recipe data — do not guess.
+- Recipes are the source of truth for lighting, nutrients, and environment targets.
+
+CROP PLANNING INTELLIGENCE:
+When advising on what to grow, consider ALL of these factors (not only financial):
+1. Local market gaps — what is not consistently available nearby, seasonal unavailability, items expensive or weak when trucked in
+2. Supply risk — California crop failures, drought, wildfire, pest pressure, border issues, tariffs, freight disruption, geopolitical instability
+3. Trending demand — interest in specific herbs, greens, blends, garnishes, culturally relevant crops, chef adoption, health trends
+4. High-value / high-margin — crops commanding premium pricing, freshness/shelf-life advantage, local identity value
+5. Companion crop compatibility — group by similar nutrient demand (EC/pH), similar lighting needs (DLI/photoperiod), similar temperature and humidity. Use get_crop_compatibility.
+6. Lighting schedule compatibility — crops sharing the same photoperiod and light intensity. Avoid mixing crops with very different recipes in the same zone.
+7. Nutrient management — similar EC, pH, feeding intensity. Avoid mixing light feeders with heavy feeders.
+8. Harvest schedule alignment — group crops for regular weekly harvests. Balance quick-turn crops with slower crops to avoid feast-or-famine production.
+
+When the farmer asks "what should I grow" or "help me plan", use get_planning_recommendation and explain your reasoning across these dimensions — not just price trends.
+
 RULES:
-- Be concise: 2-3 sentences unless the user asks for detail.
+- Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
+- For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - If you can't help, say so briefly and suggest what you CAN do.
@@ -463,7 +566,8 @@ RULES:
 - Never fabricate data — only report what tools return.
 - Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="cheo-data-table"> for tabular data, <div class="cheo-card"> for metric cards. Keep it clean.
 - When listing tasks or items, show the top 3-5 most relevant, mention the total count.
-- For prices, always show currency (CAD).`;
+- For prices, always show currency (CAD).
+- When comparing crops, use tables for clarity.`;
 }
 
 // ── Tool Execution Layer ──────────────────────────────────────────────
@@ -649,6 +753,297 @@ async function executeExtendedTool(toolName, params, farmId) {
           ok: true,
           forecast: forecast.sort((a, b) => Math.abs(b.trendPercent) - Math.abs(a.trendPercent)),
           averageTrend,
+          generatedAt: new Date().toISOString()
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Crop Schedule / Recipe Tool ──
+    case 'get_crop_schedule': {
+      try {
+        const resolved = cropUtils.normalizeCropName(params.crop) || params.crop;
+        // Find recipe by exact match or substring
+        const recipeKey = Object.keys(LIGHTING_RECIPES).find(k =>
+          k.toLowerCase() === resolved.toLowerCase() ||
+          k.toLowerCase().includes(resolved.toLowerCase()) ||
+          resolved.toLowerCase().includes(k.toLowerCase())
+        );
+        if (!recipeKey || !LIGHTING_RECIPES[recipeKey]) {
+          return { ok: false, error: `No growth recipe found for "${params.crop}". Available crops: ${Object.keys(LIGHTING_RECIPES).slice(0, 15).join(', ')}…` };
+        }
+        const days = LIGHTING_RECIPES[recipeKey];
+        const totalDays = days.length;
+
+        // Build stage summary
+        const stageMap = {};
+        for (const d of days) {
+          const stage = d.stage || 'Unknown';
+          if (!stageMap[stage]) stageMap[stage] = { days: 0, avgDLI: 0, avgPPFD: 0, avgEC: 0, avgPH: 0, avgTemp: 0, avgVPD: 0, maxHumidity: 0 };
+          const s = stageMap[stage];
+          s.days++;
+          s.avgDLI += (d.dli || 0);
+          s.avgPPFD += (d.ppfd || 0);
+          s.avgEC += (d.ec || 0);
+          s.avgPH += (d.ph || 0);
+          s.avgTemp += (d.temperature || 0);
+          s.avgVPD += (d.vpd || 0);
+          s.maxHumidity = Math.max(s.maxHumidity, d.max_humidity || 0);
+        }
+        const stages = {};
+        for (const [name, s] of Object.entries(stageMap)) {
+          stages[name] = {
+            days: s.days,
+            dli: +(s.avgDLI / s.days).toFixed(1),
+            ppfd: Math.round(s.avgPPFD / s.days),
+            ec: +(s.avgEC / s.days).toFixed(2),
+            ph: +(s.avgPH / s.days).toFixed(1),
+            temp_c: +(s.avgTemp / s.days).toFixed(1),
+            vpd: +(s.avgVPD / s.days).toFixed(2),
+            max_humidity: s.maxHumidity
+          };
+        }
+
+        // Registry enrichment
+        const crops = CROP_REGISTRY.crops || {};
+        const regEntry = crops[resolved] || crops[recipeKey] || null;
+        const growth = regEntry?.growth || {};
+
+        const result = {
+          ok: true, crop: recipeKey, resolved_name: resolved,
+          total_days: totalDays, stages,
+          harvest_strategy: growth.harvestStrategy || null,
+          max_harvests: growth.maxHarvests || null,
+          regrowth_days: growth.regrowthDays || null,
+          category: regEntry?.category || null,
+          nutrient_profile: regEntry?.nutrientProfile || null
+        };
+
+        if (!params.summary_only && params.summary_only !== undefined) {
+          result.daily_schedule = days; // full day-by-day (only if explicitly requested)
+        }
+
+        return result;
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Crop Compatibility Analysis Tool ──
+    case 'get_crop_compatibility': {
+      try {
+        const cropNames = params.crops.split(',').map(c => c.trim()).filter(Boolean);
+        if (cropNames.length < 2) return { ok: false, error: 'Provide at least 2 crops to compare.' };
+
+        const profiles = [];
+        for (const name of cropNames) {
+          const resolved = cropUtils.normalizeCropName(name) || name;
+          const recipeKey = Object.keys(LIGHTING_RECIPES).find(k =>
+            k.toLowerCase() === resolved.toLowerCase() ||
+            k.toLowerCase().includes(resolved.toLowerCase()) ||
+            resolved.toLowerCase().includes(k.toLowerCase())
+          );
+          if (!recipeKey) {
+            profiles.push({ name: resolved, found: false });
+            continue;
+          }
+          const days = LIGHTING_RECIPES[recipeKey];
+          // Compute averages across the whole schedule
+          const avg = { dli: 0, ppfd: 0, ec: 0, ph: 0, temp: 0, vpd: 0, humidity: 0 };
+          for (const d of days) {
+            avg.dli += (d.dli || 0); avg.ppfd += (d.ppfd || 0); avg.ec += (d.ec || 0);
+            avg.ph += (d.ph || 0); avg.temp += (d.temperature || 0); avg.vpd += (d.vpd || 0);
+            avg.humidity += (d.max_humidity || 0);
+          }
+          const n = days.length || 1;
+          profiles.push({
+            name: resolved, found: true, recipeName: recipeKey, totalDays: days.length,
+            avg: { dli: +(avg.dli/n).toFixed(1), ppfd: Math.round(avg.ppfd/n),
+                   ec: +(avg.ec/n).toFixed(2), ph: +(avg.ph/n).toFixed(1),
+                   temp: +(avg.temp/n).toFixed(1), vpd: +(avg.vpd/n).toFixed(2),
+                   humidity: Math.round(avg.humidity/n) }
+          });
+        }
+
+        const found = profiles.filter(p => p.found);
+        if (found.length < 2) return { ok: false, error: `Could not find recipes for enough crops. Found: ${found.map(p=>p.name).join(', ')}` };
+
+        // Compute pairwise compatibility scores
+        function dimScore(vals, tolerance) {
+          const range = Math.max(...vals) - Math.min(...vals);
+          return Math.max(0, Math.round(100 - (range / tolerance) * 100));
+        }
+        const dlis = found.map(p => p.avg.dli);
+        const ecs = found.map(p => p.avg.ec);
+        const phs = found.map(p => p.avg.ph);
+        const temps = found.map(p => p.avg.temp);
+        const vpds = found.map(p => p.avg.vpd);
+        const durations = found.map(p => p.totalDays);
+
+        const lightCompat = dimScore(dlis, 10);       // 10 mol/m²/d tolerance
+        const nutrientCompat = Math.round((dimScore(ecs, 1.5) + dimScore(phs, 1.0)) / 2);
+        const envCompat = Math.round((dimScore(temps, 5) + dimScore(vpds, 0.6)) / 2);
+        const harvestAlign = dimScore(durations, 20);  // 20-day tolerance
+
+        const overall = Math.round(lightCompat * 0.30 + nutrientCompat * 0.25 + envCompat * 0.25 + harvestAlign * 0.20);
+
+        const conflicts = [];
+        if (lightCompat < 50) conflicts.push(`Light needs differ significantly (DLI range: ${Math.min(...dlis)}-${Math.max(...dlis)} mol/m²/d)`);
+        if (nutrientCompat < 50) conflicts.push(`Nutrient needs differ (EC range: ${Math.min(...ecs)}-${Math.max(...ecs)} dS/m)`);
+        if (envCompat < 50) conflicts.push(`Environment preferences differ (temp range: ${Math.min(...temps)}-${Math.max(...temps)}°C)`);
+        if (harvestAlign < 40) conflicts.push(`Harvest timing misaligned (${Math.min(...durations)}-${Math.max(...durations)} day cycles)`);
+
+        const verdict = overall >= 75 ? 'excellent' : overall >= 55 ? 'good' : overall >= 35 ? 'marginal' : 'poor';
+
+        return {
+          ok: true, crops: found.map(p => ({ name: p.name, totalDays: p.totalDays, avgDLI: p.avg.dli, avgEC: p.avg.ec, avgTemp: p.avg.temp })),
+          compatibility: { overall, verdict, light: lightCompat, nutrient: nutrientCompat, environment: envCompat, harvest_alignment: harvestAlign },
+          conflicts, suggestion: conflicts.length === 0 ? 'These crops can share the same zone effectively.' : 'Consider separating crops with conflicting needs into different zones.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Comprehensive Planning Recommendation Tool ──
+    case 'get_planning_recommendation': {
+      try {
+        const pool = getDatabase();
+        const marketData = await getMarketDataAsync(pool);
+        const cropPricing = await getCropPricing();
+        let aiAnalyses = [];
+        try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
+        const aiMap = {};
+        for (const a of aiAnalyses) aiMap[a.product] = a;
+
+        // Current farm assignments
+        let currentAssignments = [];
+        if (isDatabaseAvailable()) {
+          try {
+            const result = await query(
+              'SELECT crop_name, crop_id, COUNT(*) as count FROM planting_assignments WHERE farm_id = $1 AND status = \'active\' GROUP BY crop_name, crop_id',
+              [farmId]
+            );
+            currentAssignments = result.rows || [];
+          } catch { /* ok */ }
+        }
+
+        const excludeSet = new Set((params.exclude || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean));
+        const currentCrops = new Set(currentAssignments.map(a => a.crop_name?.toLowerCase()));
+        const totalAssigned = currentAssignments.reduce((s, a) => s + parseInt(a.count, 10), 0) || 1;
+
+        const recommendations = [];
+        const crops = CROP_REGISTRY.crops || {};
+
+        for (const [cropName, info] of Object.entries(crops)) {
+          if (!info.active) continue;
+          if (excludeSet.has(cropName.toLowerCase())) continue;
+
+          const marketKey = info.market?.resolveAs || cropName;
+          const mkt = marketData[marketKey] || null;
+          const ai = aiMap[marketKey] || null;
+          const growth = info.growth || {};
+          const pricing = info.pricing || {};
+          const recipeKey = Object.keys(LIGHTING_RECIPES).find(k =>
+            k.toLowerCase() === cropName.toLowerCase() || k.toLowerCase().includes(cropName.split(' ')[0].toLowerCase())
+          );
+          const recipe = recipeKey ? LIGHTING_RECIPES[recipeKey] : null;
+
+          // Scoring dimensions
+          const scores = {};
+
+          // 1. Market gap / local unavailability (proxy: high price or increasing trend)
+          scores.marketGap = 50;
+          if (mkt?.trend === 'increasing' && mkt.trendPercent >= 5) scores.marketGap = 70 + Math.min(mkt.trendPercent, 30);
+          else if (mkt?.trend === 'decreasing') scores.marketGap = Math.max(30, 50 - Math.abs(mkt.trendPercent));
+          if (ai?.outlook === 'bullish') scores.marketGap = Math.min(scores.marketGap + 15, 100);
+
+          // 2. Revenue / margin
+          const retailPrice = growth.retailPricePerLb || 0;
+          scores.revenue = Math.min(100, retailPrice * 3);
+
+          // 3. Seasonal opportunity (indoor advantage in winter/shoulder months)
+          const month = new Date().getMonth();
+          const isWinter = month >= 10 || month <= 2;
+          const category = (info.category || '').toLowerCase();
+          scores.seasonal = 50;
+          if (isWinter && ['herbs', 'leafy_greens', 'lettuce', 'microgreen'].includes(category)) scores.seasonal = 80;
+          if (isWinter && ['tomato', 'strawberry', 'pepper'].includes(category)) scores.seasonal = 90;
+
+          // 4. Diversification
+          const isGrowing = currentCrops.has(cropName.toLowerCase());
+          scores.diversification = isGrowing ? 30 : 85;
+          const catCount = currentAssignments.filter(a => {
+            const regEntry = crops[a.crop_name];
+            return regEntry && regEntry.category === info.category;
+          }).length;
+          if (catCount / totalAssigned > 0.4) scores.diversification = Math.max(scores.diversification - 20, 0);
+
+          // 5. Quick turn / harvest cadence
+          const daysToHarvest = growth.daysToHarvest || (recipe?.length) || 30;
+          scores.quickTurn = daysToHarvest <= 14 ? 95 : daysToHarvest <= 25 ? 80 : daysToHarvest <= 40 ? 60 : 40;
+          if (growth.harvestStrategy === 'cut_and_come_again') scores.quickTurn = Math.min(scores.quickTurn + 15, 100);
+
+          // 6. Companion group potential (how many existing crops it's compatible with)
+          scores.companionFit = 60;
+          if (recipe && currentAssignments.length > 0) {
+            let compatSum = 0; let compatCount = 0;
+            for (const a of currentAssignments) {
+              const otherKey = Object.keys(LIGHTING_RECIPES).find(k =>
+                k.toLowerCase().includes((a.crop_name || '').split(' ')[0].toLowerCase())
+              );
+              if (!otherKey) continue;
+              const otherDays = LIGHTING_RECIPES[otherKey];
+              const avgEC = recipe.reduce((s,d) => s + (d.ec||0), 0) / recipe.length;
+              const otherEC = otherDays.reduce((s,d) => s + (d.ec||0), 0) / otherDays.length;
+              const ecGap = Math.abs(avgEC - otherEC);
+              compatSum += ecGap < 0.5 ? 90 : ecGap < 1.0 ? 70 : 40;
+              compatCount++;
+            }
+            if (compatCount > 0) scores.companionFit = Math.round(compatSum / compatCount);
+          }
+
+          // Focus filter
+          if (params.focus) {
+            const f = params.focus.toLowerCase().replace(/[^a-z]/g, '');
+            if (f === 'marketgaps' && scores.marketGap < 60) continue;
+            if (f === 'highmargin' && scores.revenue < 60) continue;
+            if (f === 'quickturn' && scores.quickTurn < 70) continue;
+            if (f === 'seasonal' && scores.seasonal < 65) continue;
+            if (f === 'diversification' && scores.diversification < 50) continue;
+          }
+
+          const composite = Math.round(
+            scores.marketGap * 0.20 + scores.revenue * 0.15 + scores.seasonal * 0.12 +
+            scores.diversification * 0.18 + scores.quickTurn * 0.12 + scores.companionFit * 0.10 +
+            (ai?.action === 'increase_production' ? 13 : 0)
+          );
+
+          const reasons = [];
+          if (scores.marketGap >= 70) reasons.push(mkt?.trend === 'increasing' ? `market prices up ${mkt.trendPercent}%` : 'strong market demand');
+          if (scores.seasonal >= 75) reasons.push('winter premium — hard to source locally');
+          if (scores.revenue >= 70) reasons.push(`premium crop ($${retailPrice.toFixed(2)}/lb)`);
+          if (!isGrowing) reasons.push('diversification — not currently growing');
+          if (scores.quickTurn >= 80) reasons.push(`fast turn (${daysToHarvest}d)`);
+          if (growth.harvestStrategy === 'cut_and_come_again') reasons.push('multi-harvest — cut and come again');
+          if (ai?.outlook === 'bullish') reasons.push('AI outlook bullish');
+
+          recommendations.push({
+            crop: cropName, score: composite, category: info.category,
+            daysToHarvest, scores, reasons: reasons.join('; '),
+            isCurrentlyGrowing: isGrowing
+          });
+        }
+
+        recommendations.sort((a, b) => b.score - a.score);
+
+        return {
+          ok: true,
+          recommendations: recommendations.slice(0, 15),
+          totalCandidates: recommendations.length,
+          currentlyGrowing: currentAssignments.map(a => a.crop_name),
+          focus: params.focus || 'all',
           generatedAt: new Date().toISOString()
         };
       } catch (err) {

@@ -32,12 +32,17 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { createRequire } from 'module';
 import farmStore from '../lib/farm-data-store.js';
 import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
+
+// Load crop-utils (UMD module) for name/alias/planId resolution
+const require_ = createRequire(import.meta.url);
+const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
 
 const router = express.Router();
 
@@ -58,6 +63,18 @@ function readJSON(filename, fallback = null) {
 function writeJSON(filename, data) {
   const filePath = path.join(DATA_DIR, filename);
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// Initialize crop-utils registry cache (must happen after readJSON is defined)
+try {
+  const _registryData = readJSON('crop-registry.json', null);
+  if (_registryData) cropUtils.setRegistry(_registryData);
+} catch { /* ok — tools will still work, just without alias resolution */ }
+
+/** Resolve a user-supplied crop name/alias/planId to its canonical registry name. */
+function resolveCropName(input) {
+  if (!input) return input;
+  return cropUtils.normalizeCropName(input) || input;
 }
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -487,10 +504,16 @@ export const TOOL_CATALOG = {
         crops = Object.entries(crops).map(([name, info]) => ({ name, ...info }));
       }
       if (params.crop) {
-        crops = crops.filter(c =>
-          (c.name || '').toLowerCase().includes(params.crop.toLowerCase()) ||
-          (c.id || '').toLowerCase().includes(params.crop.toLowerCase())
-        );
+        // Resolve alias/planId to canonical name first, then fall back to substring
+        const resolved = resolveCropName(params.crop);
+        crops = crops.filter(c => {
+          const cName = (c.name || '').toLowerCase();
+          const rLower = resolved.toLowerCase();
+          const pLower = params.crop.toLowerCase();
+          return cName === rLower || cName.includes(pLower) ||
+            (c.id || '').toLowerCase().includes(pLower) ||
+            (c.aliases || []).some(a => a.toLowerCase().includes(pLower));
+        });
       }
       return { ok: true, crops, count: crops.length };
     }
@@ -727,6 +750,11 @@ export const TOOL_CATALOG = {
       if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
       const farm_id = params.farm_id || 'demo-farm';
       const seed_date = params.seed_date || new Date().toISOString().split('T')[0];
+      const canonicalCrop = resolveCropName(params.crop_name);
+      const growDays = cropUtils.getCropGrowDays(canonicalCrop);
+      const harvest_date = params.harvest_date || (growDays
+        ? new Date(Date.now() + growDays * 86400000).toISOString().split('T')[0]
+        : null);
       try {
         const result = await dbQuery(
           `INSERT INTO planting_assignments (farm_id, group_id, tray_id, crop_id, crop_name, seed_date, harvest_date, status, notes, updated_at)
@@ -734,9 +762,9 @@ export const TOOL_CATALOG = {
            ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_name=$5, seed_date=$6, harvest_date=$7, notes=$8, status='active', updated_at=NOW()
            RETURNING *`,
           [farm_id, params.group_id, params.tray_id || null, params.crop_id || null,
-           params.crop_name, seed_date, params.harvest_date || null, params.notes || null]
+           canonicalCrop, seed_date, harvest_date, params.notes || null]
         );
-        return { ok: true, assignment: result.rows[0], _undo_state: { farm_id, group_id: params.group_id } };
+        return { ok: true, assignment: result.rows[0], resolved_name: canonicalCrop, _undo_state: { farm_id, group_id: params.group_id } };
       } catch (err) {
         return { ok: false, error: err.message };
       }
