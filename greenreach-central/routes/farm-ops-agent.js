@@ -338,7 +338,7 @@ router.get('/daily-todo', (req, res) => {
  * Each tool has: name, description, category (read/write/dangerous),
  * required/optional slots, and the handler function.
  */
-const TOOL_CATALOG = {
+export const TOOL_CATALOG = {
   // --- Read tools ---
   'get_daily_todo': {
     description: 'Generate the ranked daily to-do list',
@@ -1061,5 +1061,36 @@ router.get('/audit-log', (req, res) => {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
+
+/**
+ * Execute a tool programmatically (used by assistant-chat.js).
+ * Skips HTTP layer — calls handler directly with audit logging.
+ */
+export async function executeTool(toolName, params = {}) {
+  const toolDef = TOOL_CATALOG[toolName];
+  if (!toolDef) return { ok: false, error: `Unknown tool: ${toolName}` };
+
+  // Validate required params
+  const missing = toolDef.required.filter(slot => params[slot] == null);
+  if (missing.length > 0) return { ok: false, error: `Missing: ${missing.join(', ')}` };
+
+  const result = await toolDef.handler(params);
+
+  // Audit
+  appendAuditEntry({
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    tool: toolName,
+    category: toolDef.category,
+    params: toolDef.category === 'read' ? {} : params,
+    success: true,
+    source: 'assistant-chat'
+  });
+
+  // Clean undo state from response
+  if (result?._undo_state) delete result._undo_state;
+
+  return result;
+}
 
 export default router;

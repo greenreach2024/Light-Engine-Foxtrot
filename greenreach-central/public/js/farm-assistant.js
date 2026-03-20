@@ -14,9 +14,27 @@ class FarmAssistant {
     this.voiceEnabled = true;
     this.jokes = [];
     this.funFacts = [];
+    this.conversationId = null;  // Server-side conversation tracking
+    this.aiAvailable = null;     // null = unknown, true/false after check
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
+    this.checkAIAvailability();
+  }
+
+  async checkAIAvailability() {
+    try {
+      const resp = await this._authFetch('/api/assistant/status');
+      if (resp.ok) {
+        const data = await resp.json();
+        this.aiAvailable = data.available === true;
+      } else {
+        this.aiAvailable = false;
+      }
+    } catch {
+      this.aiAvailable = false;
+    }
+    console.debug('[Farm Assistant] AI chat available:', this.aiAvailable);
   }
 
   _authFetch(url, opts = {}) {
@@ -743,6 +761,63 @@ class FarmAssistant {
   }
 
   async processQuery(query) {
+    // Try GPT-powered AI chat first (if available)
+    if (this.aiAvailable !== false) {
+      try {
+        const aiHandled = await this.tryAIChat(query);
+        if (aiHandled) return;
+      } catch (err) {
+        console.warn('[Farm Assistant] AI chat failed, falling back to local:', err.message);
+      }
+    }
+
+    // Fallback: local pattern matching (works offline / when API is down)
+    await this.processQueryLocal(query);
+  }
+
+  /**
+   * Send query to GPT-powered backend assistant.
+   * Returns true if handled, false if should fall through to local.
+   */
+  async tryAIChat(query) {
+    const body = {
+      message: query,
+      conversation_id: this.conversationId || undefined,
+      farm_id: window.FARM_ID || undefined
+    };
+
+    const resp = await this._authFetch('/api/assistant/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      if (resp.status === 503) {
+        // AI not configured — mark unavailable and fall through
+        this.aiAvailable = false;
+        return false;
+      }
+      return false;
+    }
+
+    const data = await resp.json();
+    if (!data.ok || !data.reply) return false;
+
+    // Track conversation for follow-ups
+    this.conversationId = data.conversation_id;
+    this.aiAvailable = true;
+
+    // Display the AI response
+    this.addMessage(data.reply);
+    return true;
+  }
+
+  /**
+   * Local pattern-matching fallback (original logic).
+   * Used when AI API is unavailable or fails.
+   */
+  async processQueryLocal(query) {
     const lowerQuery = query.toLowerCase();
     
     // Setup / onboarding queries (highest priority for new users)

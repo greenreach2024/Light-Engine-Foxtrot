@@ -77,6 +77,7 @@ import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
 import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
+import assistantChatRouter from './routes/assistant-chat.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -3447,6 +3448,7 @@ app.get('/api/wholesale/demand-analysis', authMiddleware, async (req, res) => {
 app.use('/', purchaseRouter);                                // Purchase/checkout pipeline (Square)
 app.use('/', miscStubsRouter);                               // Misc stubs + path aliases (full /api/* paths)
 app.use('/api/farm-ops', authMiddleware, farmOpsAgentRouter);                 // Farm operations agent (daily to-do, tool gateway, command taxonomy)
+app.use('/api/assistant', authMiddleware, assistantChatRouter);                // AI assistant chat (GPT-4o-mini + function calling)
 
 // ── Phase 4 Ticket 4.2: Harvest schedule conflict detection ────────────
 app.get('/api/network/harvest-conflicts', authMiddleware, async (req, res) => {
