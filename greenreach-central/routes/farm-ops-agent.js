@@ -514,6 +514,25 @@ export const TOOL_CATALOG = {
       }
     }
   },
+  'get_ai_recommendations': {
+    description: 'Get AI Pusher recommendations from network intelligence',
+    category: 'read',
+    required: [],
+    optional: ['limit'],
+    handler: async (params) => {
+      const aiRecs = readJSON('ai-recommendations.json', {});
+      let recs = aiRecs.recommended_actions || aiRecs.actions || aiRecs.recommendations || [];
+      recs = recs.filter(r => !r.dismissed && !r.completed);
+      if (params.limit) recs = recs.slice(0, parseInt(params.limit, 10));
+      return {
+        ok: true,
+        recommendations: recs,
+        count: recs.length,
+        generated_at: aiRecs.generated_at || null,
+        farm_id: aiRecs.farm_id || null
+      };
+    }
+  },
 
   // --- Write tools ---
   'dismiss_alert': {

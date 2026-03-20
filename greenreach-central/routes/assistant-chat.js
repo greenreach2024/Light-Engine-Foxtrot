@@ -17,6 +17,7 @@ import { getMarketDataAsync } from './market-intelligence.js';
 import { getCropPricing } from './crop-pricing.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import farmStore from '../lib/farm-data-store.js';
+import logger from '../utils/logger.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -291,6 +292,19 @@ const GPT_TOOLS = [
         type: 'object',
         properties: {
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ai_recommendations',
+      description: 'Get AI Pusher recommendations from network intelligence — cross-farm insights on production, demand, and growing conditions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Max recommendations to return' }
         }
       }
     }
@@ -887,6 +901,205 @@ router.get('/status', (req, res) => {
     model: MODEL,
     active_conversations: conversations.size
   });
+});
+
+// ── Morning Briefing Endpoint ─────────────────────────────────────────
+
+/**
+ * GET /api/assistant/morning-briefing?farm_id=...
+ * Returns a pre-composed daily briefing without an LLM call.
+ * Fast, deterministic, cached for 4 hours.
+ */
+const briefingCache = new Map();
+const BRIEFING_TTL_MS = 4 * 60 * 60 * 1000;
+
+router.get('/morning-briefing', async (req, res) => {
+  const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+  const cacheKey = `${farmId}:${new Date().toISOString().slice(0, 10)}`;
+
+  // Return cached briefing if fresh
+  const cached = briefingCache.get(cacheKey);
+  if (cached && Date.now() - cached.created < BRIEFING_TTL_MS) {
+    return res.json({ ok: true, briefing: cached.briefing, cached: true });
+  }
+
+  try {
+    const sections = [];
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+    // 1. Daily tasks
+    try {
+      const todoResult = await executeTool('get_daily_todo', { limit: 5 });
+      if (todoResult?.tasks?.length > 0) {
+        const highPriority = todoResult.tasks.filter(t => t.score >= 0.6).length;
+        sections.push(`📋 <strong>${todoResult.task_count} tasks today</strong>${highPriority ? ` (${highPriority} high priority)` : ''}`);
+      }
+    } catch { /* non-fatal */ }
+
+    // 2. Environment status
+    try {
+      const envData = await farmStore.get(farmId, 'telemetry');
+      if (envData?.zones?.length > 0) {
+        const temps = envData.zones
+          .map(z => z.sensors?.tempC?.current ?? z.sensors?.temperature?.current)
+          .filter(t => t != null);
+        if (temps.length > 0) {
+          const avg = (temps.reduce((s, t) => s + t, 0) / temps.length).toFixed(1);
+          sections.push(`🌡️ All zones averaging ${avg}°C`);
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // 3. Active alerts
+    try {
+      const alertResult = await executeTool('get_alerts', {});
+      if (alertResult?.ok && alertResult.count > 0) {
+        const critical = alertResult.alerts.filter(a => (a.severity || a.level) === 'critical').length;
+        sections.push(`⚠️ ${alertResult.count} active alert${alertResult.count > 1 ? 's' : ''}${critical ? ` (${critical} critical)` : ''}`);
+      } else {
+        sections.push('✅ No active alerts');
+      }
+    } catch { /* non-fatal */ }
+
+    // 4. Orders due
+    try {
+      const orderResult = await executeTool('get_orders', {});
+      if (orderResult?.ok && orderResult.orders?.length > 0) {
+        const today = new Date().toISOString().slice(0, 10);
+        const dueSoon = orderResult.orders.filter(o => {
+          const due = o.delivery_date || o.due_date;
+          if (!due) return false;
+          const daysUntil = Math.round((new Date(due) - new Date(today)) / 86400000);
+          return daysUntil >= 0 && daysUntil <= 1;
+        });
+        if (dueSoon.length > 0) {
+          sections.push(`📦 ${dueSoon.length} order${dueSoon.length > 1 ? 's' : ''} due for delivery today`);
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // 5. Market highlights
+    try {
+      if (isDatabaseAvailable()) {
+        const mktResult = await query(
+          `SELECT product, trend, trend_percent FROM market_price_trends WHERE ABS(trend_percent) > 5 ORDER BY ABS(trend_percent) DESC LIMIT 2`
+        );
+        if (mktResult.rows.length > 0) {
+          const highlights = mktResult.rows.map(r =>
+            `${r.product} ${r.trend === 'increasing' ? '↑' : '↓'} ${Math.abs(r.trend_percent)}%`
+          ).join(', ');
+          sections.push(`💰 Market movers: ${highlights}`);
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // 6. AI Pusher recommendations
+    try {
+      const aiRecsResult = await executeTool('get_ai_recommendations', {});
+      if (aiRecsResult?.ok && aiRecsResult.count > 0) {
+        sections.push(`🤖 ${aiRecsResult.count} AI recommendation${aiRecsResult.count > 1 ? 's' : ''} from network intelligence`);
+      }
+    } catch { /* non-fatal */ }
+
+    const briefing = `<strong>${greeting}!</strong> Here's your daily briefing:<br><br>` +
+      sections.map(s => `${s}`).join('<br>') +
+      `<br><br>Say <em>"show tasks"</em> for the full list, or ask me anything.`;
+
+    briefingCache.set(cacheKey, { briefing, created: Date.now() });
+
+    return res.json({ ok: true, briefing, cached: false });
+  } catch (err) {
+    logger.error('[Morning Briefing] Error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to generate briefing' });
+  }
+});
+
+// ── Contextual Nudge Endpoint ─────────────────────────────────────────
+
+/**
+ * GET /api/assistant/nudges?farm_id=...
+ * Returns rule-based contextual nudges (no LLM call).
+ * Light polling endpoint — frontend calls every 5 min.
+ */
+router.get('/nudges', async (req, res) => {
+  const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+  const nudges = [];
+
+  try {
+    // 1. Market price increase > 10%
+    if (isDatabaseAvailable()) {
+      try {
+        const result = await query(
+          `SELECT product, trend_percent FROM market_price_trends WHERE trend = 'increasing' AND trend_percent > 10 ORDER BY trend_percent DESC LIMIT 3`
+        );
+        for (const row of result.rows) {
+          nudges.push({
+            type: 'market_price',
+            priority: 'medium',
+            message: `${row.product} market prices are up ${row.trend_percent}% this week. Want me to update your pricing?`,
+            action: `Update ${row.product} pricing`
+          });
+        }
+      } catch { /* ok */ }
+    }
+
+    // 2. Orders due within 4 hours
+    try {
+      const orderResult = await executeTool('get_orders', {});
+      if (orderResult?.ok) {
+        const now = Date.now();
+        for (const order of (orderResult.orders || [])) {
+          const due = order.delivery_date || order.due_date;
+          if (!due) continue;
+          const hoursUntil = (new Date(due).getTime() - now) / 3600000;
+          if (hoursUntil > 0 && hoursUntil <= 4 && order.status !== 'shipped' && order.status !== 'delivered') {
+            nudges.push({
+              type: 'order_due',
+              priority: 'high',
+              message: `Order for ${order.buyer_name || order.buyer || order.order_id} is due in ${Math.round(hoursUntil)}h. Status: ${order.status}. Want to see details?`,
+              action: 'Show order details'
+            });
+          }
+        }
+      }
+    } catch { /* ok */ }
+
+    // 3. Crops ready to harvest (from daily todo)
+    try {
+      const todoResult = await executeTool('get_daily_todo', { category: 'harvest' });
+      if (todoResult?.tasks?.length > 0) {
+        const ready = todoResult.tasks.filter(t => t.title?.includes('Ready to harvest'));
+        for (const task of ready.slice(0, 2)) {
+          nudges.push({
+            type: 'harvest_ready',
+            priority: 'medium',
+            message: `${task.title}. Want me to log a harvest?`,
+            action: 'Log harvest'
+          });
+        }
+      }
+    } catch { /* ok */ }
+
+    // 4. AI Pusher recommendations
+    try {
+      const aiResult = await executeTool('get_ai_recommendations', { limit: '1' });
+      if (aiResult?.ok && aiResult.recommendations?.length > 0) {
+        const rec = aiResult.recommendations[0];
+        nudges.push({
+          type: 'ai_recommendation',
+          priority: rec.priority || 'medium',
+          message: rec.message || rec.recommendation || rec.title || 'New AI recommendation available.',
+          action: 'Show AI recommendations'
+        });
+      }
+    } catch { /* ok */ }
+
+    return res.json({ ok: true, nudges, count: nudges.length });
+  } catch (err) {
+    logger.error('[Nudges] Error:', err.message);
+    return res.json({ ok: true, nudges: [], count: 0 });
+  }
 });
 
 export default router;

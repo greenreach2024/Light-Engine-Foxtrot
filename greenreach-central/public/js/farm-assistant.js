@@ -18,10 +18,13 @@ class FarmAssistant {
     this.aiAvailable = null;     // null = unknown, true/false after check
     this.pendingAction = null;   // Pending write action awaiting confirmation
     window._farmAssistant = this; // Global ref for confirm/cancel button onclick
+    this.nudgeInterval = null;    // Nudge polling interval
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
     this.checkAIAvailability();
+    this.checkMorningBriefing();
+    this.startNudgePolling();
   }
 
   async checkAIAvailability() {
@@ -37,6 +40,79 @@ class FarmAssistant {
       this.aiAvailable = false;
     }
     console.debug('[Farm Assistant] AI chat available:', this.aiAvailable);
+  }
+
+  /**
+   * Morning briefing — shows once per day on first visit.
+   * Calls the server-side briefing endpoint (no LLM, deterministic).
+   */
+  checkMorningBriefing() {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastBriefing = localStorage.getItem('cheo_briefing_date');
+    if (lastBriefing === today) return;
+
+    setTimeout(async () => {
+      try {
+        const greeted = localStorage.getItem('cheo_greeted');
+        if (!greeted) return; // Let onboarding greeting happen first
+
+        const resp = await this._authFetch(`/api/assistant/morning-briefing?farm_id=${encodeURIComponent(window.FARM_ID || '')}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.ok || !data.briefing) return;
+
+        // Auto-expand the assistant
+        const container = document.querySelector('.assistant-container');
+        if (container && container.classList.contains('minimized')) {
+          this.toggleMinimize();
+        }
+
+        this.addMessage(data.briefing);
+        localStorage.setItem('cheo_briefing_date', today);
+      } catch (e) {
+        console.debug('[Farm Assistant] Morning briefing skipped:', e.message);
+      }
+    }, 3000);
+  }
+
+  /**
+   * Contextual nudge polling — checks every 5 min for actionable insights.
+   * Nudges appear as subtle assistant messages (not intrusive).
+   */
+  startNudgePolling() {
+    // First check after 2 minutes (don't overload page load)
+    setTimeout(() => this.checkNudges(), 2 * 60 * 1000);
+    // Then every 5 minutes
+    this.nudgeInterval = setInterval(() => this.checkNudges(), 5 * 60 * 1000);
+  }
+
+  async checkNudges() {
+    try {
+      const resp = await this._authFetch(`/api/assistant/nudges?farm_id=${encodeURIComponent(window.FARM_ID || '')}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.ok || !data.nudges?.length) return;
+
+      // Only show nudges we haven't shown in this session
+      const shownKey = 'cheo_shown_nudges';
+      const shown = JSON.parse(sessionStorage.getItem(shownKey) || '[]');
+
+      for (const nudge of data.nudges) {
+        const nudgeKey = `${nudge.type}:${nudge.message.slice(0, 40)}`;
+        if (shown.includes(nudgeKey)) continue;
+
+        // Show the first unseen nudge (one at a time, not spammy)
+        const container = document.querySelector('.assistant-container');
+        if (!container || container.classList.contains('minimized')) break;
+
+        this.addMessage(`\ud83d\udca1 ${nudge.message}`);
+        shown.push(nudgeKey);
+        sessionStorage.setItem(shownKey, JSON.stringify(shown));
+        break;
+      }
+    } catch {
+      // Silent — nudges are non-critical
+    }
   }
 
   _authFetch(url, opts = {}) {
