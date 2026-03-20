@@ -2,6 +2,8 @@
  * Database Configuration and Connection Management
  */
 
+import fs from 'fs';
+import path from 'path';
 import pg from 'pg';
 import logger from '../utils/logger.js';
 
@@ -1825,6 +1827,60 @@ async function runMigrations(client) {
     logger.info('Conversation history table ready (migration 029)');
   } catch (err) {
     logger.warn('Migration 029 warning:', err.message);
+  }
+
+  // Migration 030: Farm alerts table (self-solving error system) + load optimized planting schedule
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS farm_alerts (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(100) NOT NULL,
+        severity VARCHAR(20) DEFAULT 'warning',
+        tool VARCHAR(100),
+        error TEXT,
+        recovery_attempted BOOLEAN DEFAULT false,
+        recovery_strategy VARCHAR(100),
+        resolved BOOLEAN DEFAULT false,
+        conversation_id VARCHAR(200),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_farm_alerts_farm ON farm_alerts(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_farm_alerts_unresolved ON farm_alerts(farm_id, resolved) WHERE resolved = false;
+    `);
+    logger.info('Farm alerts table ready (migration 030a)');
+  } catch (err) {
+    logger.warn('Migration 030a warning:', err.message);
+  }
+
+  // Migration 030b: Load optimized planting schedule (78 assignments, succession planting)
+  try {
+    const scheduleFile = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'public', 'data', 'planting-schedule.json');
+    if (fs.existsSync(scheduleFile)) {
+      const schedule = JSON.parse(fs.readFileSync(scheduleFile, 'utf8'));
+      const assignments = schedule.assignments || [];
+      if (assignments.length > 0) {
+        // Check if schedule already loaded (idempotent)
+        const existing = await pool.query("SELECT COUNT(*) as cnt FROM planting_assignments WHERE farm_id = 'demo-farm'");
+        const existingCount = parseInt(existing.rows[0].cnt);
+        if (existingCount < assignments.length) {
+          // Clear and reload
+          await pool.query("DELETE FROM planting_assignments WHERE farm_id = 'demo-farm'");
+          for (const a of assignments) {
+            await pool.query(
+              `INSERT INTO planting_assignments (farm_id, group_id, crop_id, crop_name, seed_date, harvest_date, status, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+               ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_id=EXCLUDED.crop_id, crop_name=EXCLUDED.crop_name, seed_date=EXCLUDED.seed_date, harvest_date=EXCLUDED.harvest_date, status=EXCLUDED.status, updated_at=NOW()`,
+              [a.farm_id, a.group_id, a.crop_id, a.crop_name, a.seed_date, a.harvest_date, a.status]
+            );
+          }
+          logger.info(`Planting schedule loaded: ${assignments.length} assignments (migration 030b)`);
+        } else {
+          logger.info(`Planting schedule already loaded (${existingCount} assignments) — skipping (migration 030b)`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn('Migration 030b warning:', err.message);
   }
 
   logger.info('Database migrations completed');

@@ -28,6 +28,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
 
+// Helper to read JSON files from DATA_DIR with a fallback default
+function readJSON(filename, fallback) {
+  try {
+    const filePath = path.join(DATA_DIR, filename);
+    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch { /* non-fatal */ }
+  return fallback;
+}
+
 // Load crop-utils for name resolution (alias/planId → canonical)
 const require_ = createRequire(import.meta.url);
 const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
@@ -850,6 +859,28 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
+  // Inject current date and time context (prevents wrong-year hallucinations)
+  const now = new Date();
+  farmContext += `Today's date: ${now.toISOString().split('T')[0]} (${now.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})\n`;
+  farmContext += `Current year: ${now.getFullYear()}\n`;
+
+  // Inject valid zones and capacity from groups data
+  try {
+    const groups = await farmStore.get(farmId || 'demo-farm', 'groups') || [];
+    const zones = [...new Set(groups.map(g => g.zone).filter(Boolean))];
+    const roomNames = [...new Set(groups.map(g => g.room).filter(Boolean))];
+    if (zones.length > 0) {
+      farmContext += `Valid zones: ${zones.join(', ')} (in ${roomNames.join(', ') || 'Main Grow Room'})\n`;
+      farmContext += `Total grow positions: ${groups.length} groups across ${zones.length} zone(s)\n`;
+      for (const zone of zones) {
+        const zoneGroups = groups.filter(g => g.zone === zone);
+        farmContext += `  ${zone}: ${zoneGroups.length} groups (e.g. "${zoneGroups[0]?.id || zoneGroups[0]?.group_id}")\n`;
+      }
+    }
+    farmContext += `IMPORTANT: Only use zones listed above. Do NOT invent Zone 3, Zone 4, etc. if they don't exist.\n`;
+    farmContext += `IMPORTANT: When creating planting assignments, group_id can be a zone name like "Zone 1" — the system auto-assigns an available group.\n`;
+  } catch { /* non-fatal */ }
+
   // Get quick summary from daily todo (lightweight)
   try {
     const todoResult = await executeTool('get_daily_todo', { limit: 5 });
@@ -935,7 +966,9 @@ PLANTING SCHEDULE WORKFLOW:
   4. Use create_planting_plan with the farmer’s target date and preferences to generate an optimised batch schedule.
   5. Present the plan as a clear table (crop, zone, seed date, harvest date, reasoning) and ask the farmer to confirm.
   6. After confirmation, execute using create_planting_assignment for each line item, passing the exact seed_date from the plan.
-- When the farmer mentions a date like “April 1st” or “next Monday”, convert it to YYYY-MM-DD and pass it as target_date / seed_date. Never default to today’s date if the farmer specified a date.
+- CRITICAL DATE RULE: Always use the current year from "Today's date" above. If the farmer says "April 1", use the CURRENT YEAR (e.g. 2026-04-01), NOT 2024. All dates must be current or future.
+- CRITICAL ZONE RULE: Only use zones listed in "Valid zones" above. Do NOT invent zones that don't exist. Pass zone name as group_id (e.g. "Zone 1") — the system auto-picks an available group.
+- When the farmer mentions a date like "April 1st" or "next Monday", convert it to YYYY-MM-DD using the current year from Today's date, and pass it as target_date / seed_date.
 - If the farmer asks to “update the schedule based on harvests” or “optimise around the harvest schedule”, correlate get_scheduled_harvests with get_planting_assignments — propose new plantings for zones that are freeing up.
 - For succession planting, stagger seed dates so harvests are spread across weeks rather than all at once.
 
@@ -1688,6 +1721,112 @@ async function executeExtendedTool(toolName, params, farmId) {
   }
 }
 
+// ── Self-Solving Error Recovery ───────────────────────────────────────
+
+/**
+ * Attempt to auto-recover from a tool failure before surfacing to user.
+ * Returns { recovered: bool, result?, strategy?, hint? }
+ */
+async function attemptAutoRecovery(toolName, params, errorMsg, farmId) {
+  const errLower = (errorMsg || '').toLowerCase();
+
+  // Strategy 1: crop_id NOT NULL — auto-resolve crop_id from registry
+  if (errLower.includes('null') && errLower.includes('crop_id') && toolName === 'create_planting_assignment') {
+    const registry = readJSON('crop-registry.json', {});
+    const crops = registry.crops || {};
+    const cropName = params.crop_name || '';
+    const entry = Object.entries(crops).find(([k]) => k.toLowerCase() === cropName.toLowerCase());
+    if (entry) {
+      params.crop_id = entry[1].planId || `crop-${cropName.toLowerCase().replace(/\s+/g, '-')}`;
+      try {
+        const result = await executeExtendedTool(toolName, params, farmId);
+        if (result?.ok !== false) return { recovered: true, result, strategy: 'auto-resolved crop_id from registry' };
+      } catch { /* fall through */ }
+    }
+    return { recovered: false, strategy: 'crop_id_resolution_failed', hint: `Could not resolve crop ID for "${cropName}". Check if the crop exists in the registry.` };
+  }
+
+  // Strategy 2: group_id not found — try zone-based resolution
+  if ((errLower.includes('group') || errLower.includes('zone')) && errLower.includes('not found')) {
+    return { recovered: false, strategy: 'invalid_group_id', hint: `The zone/group "${params.group_id}" doesn't exist. Use valid zone names from the farm layout (e.g. "Zone 1").` };
+  }
+
+  // Strategy 3: database unavailable — retry once after 1s
+  if (errLower.includes('database') && errLower.includes('unavailable')) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const result = await executeExtendedTool(toolName, params, farmId);
+      if (result?.ok !== false) return { recovered: true, result, strategy: 'database_retry_success' };
+    } catch { /* fall through */ }
+    return { recovered: false, strategy: 'database_retry_failed', hint: 'Database is temporarily unavailable. The operation can be retried in a few minutes.' };
+  }
+
+  // Strategy 4: foreign key violation — probably bad farm_id
+  if (errLower.includes('foreign key') || errLower.includes('violates')) {
+    return { recovered: false, strategy: 'constraint_violation', hint: `A database constraint was violated. This likely means a referenced record (farm, group, or crop) doesn't exist yet.` };
+  }
+
+  // No recovery available
+  return { recovered: false, strategy: 'no_recovery_available', hint: `Tool "${toolName}" failed: ${errorMsg}. Try a different approach or check the input parameters.` };
+}
+
+/**
+ * Log a structured alert to system-alerts.json and optionally the DB.
+ * These appear on the GreenReach Central dashboard.
+ */
+async function logSystemAlert(alertData) {
+  try {
+    const alertsPath = path.join(DATA_DIR, 'system-alerts.json');
+    let alerts = [];
+    try {
+      if (fs.existsSync(alertsPath)) {
+        alerts = JSON.parse(fs.readFileSync(alertsPath, 'utf8'));
+        if (!Array.isArray(alerts)) alerts = alerts.alerts || [];
+      }
+    } catch { alerts = []; }
+
+    const alert = {
+      id: crypto.randomUUID(),
+      alert_type: alertData.alert_type || 'system_error',
+      severity: alertData.severity || 'medium',
+      source: alertData.source || 'assistant-chat',
+      message: `Tool ${alertData.tool} failed: ${alertData.error}`,
+      details: {
+        tool: alertData.tool,
+        params: alertData.params,
+        error: alertData.error,
+        recovery_attempted: alertData.recovery_attempted,
+        conversation_id: alertData.conversation_id
+      },
+      farm_id: alertData.farm_id,
+      resolved: false,
+      created_at: new Date().toISOString()
+    };
+
+    alerts.push(alert);
+    // Keep last 200 alerts
+    if (alerts.length > 200) alerts = alerts.slice(-200);
+
+    const tmpPath = alertsPath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify(alerts, null, 2));
+    fs.renameSync(tmpPath, alertsPath);
+
+    // Also persist to DB if available
+    if (isDatabaseAvailable()) {
+      try {
+        await query(
+          'INSERT INTO farm_alerts (alert_type, severity, message, farm_id, created_at) VALUES ($1, $2, $3, $4, NOW())',
+          [alert.alert_type, alert.severity, alert.message, alertData.farm_id]
+        );
+      } catch { /* non-fatal */ }
+    }
+
+    logger.warn(`[System Alert] ${alert.severity}: ${alert.message}`);
+  } catch (err) {
+    logger.error('[System Alert] Failed to log alert:', err.message);
+  }
+}
+
 // ── Main Chat Endpoint ────────────────────────────────────────────────
 
 /**
@@ -1865,6 +2004,30 @@ router.post('/chat', async (req, res) => {
           }
         } catch (err) {
           toolResult = { ok: false, error: err.message };
+        }
+
+        // Self-solving: if tool failed, attempt auto-recovery
+        if (toolResult && toolResult.ok === false && toolResult.error) {
+          const recovery = await attemptAutoRecovery(fnName, fnArgs, toolResult.error, farmId);
+          if (recovery.recovered) {
+            toolResult = recovery.result;
+            logger.info(`[Self-Solve] Auto-recovered ${fnName}: ${recovery.strategy}`);
+          } else {
+            // Log structured alert for GreenReach Central dashboard
+            await logSystemAlert({
+              alert_type: 'tool_failure',
+              severity: 'medium',
+              source: 'assistant-chat',
+              tool: fnName,
+              params: fnArgs,
+              error: toolResult.error,
+              recovery_attempted: recovery.strategy || 'none',
+              farm_id: farmId,
+              conversation_id: convId
+            });
+            // Enrich error for GPT so it can explain helpfully
+            toolResult._self_solve_hint = recovery.hint || 'Report this error to the user and suggest an alternative approach.';
+          }
         }
 
         toolCallResults.push({

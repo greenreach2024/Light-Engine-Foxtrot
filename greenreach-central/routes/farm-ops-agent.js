@@ -1506,16 +1506,57 @@ export const TOOL_CATALOG = {
       const harvest_date = params.harvest_date || (growDays
         ? new Date(new Date(seed_date + 'T00:00:00').getTime() + growDays * 86400000).toISOString().split('T')[0]
         : null);
+
+      // Auto-resolve crop_id from registry (DB column is NOT NULL)
+      let crop_id = params.crop_id;
+      if (!crop_id) {
+        const registry = readJSON('crop-registry.json', {});
+        const crops = registry.crops || {};
+        const entry = crops[canonicalCrop];
+        crop_id = entry?.planId || `crop-${canonicalCrop.toLowerCase().replace(/\s+/g, '-')}`;
+      }
+
+      // Smart group_id resolution: if user passes a zone name like "Zone 1",
+      // find the first available group in that zone
+      let resolvedGroupId = params.group_id;
+      const groups = await farmStore.get(farm_id, 'groups') || [];
+      const groupExists = groups.some(g => (g.id || g.group_id) === resolvedGroupId);
+
+      if (!groupExists) {
+        // Try to match by zone name — find first group in that zone
+        const zoneMatch = groups.find(g =>
+          g.zone && (g.zone.toLowerCase() === resolvedGroupId.toLowerCase() ||
+                     resolvedGroupId.toLowerCase().includes(g.zone.toLowerCase()))
+        );
+        if (zoneMatch) {
+          // Find first unoccupied group in this zone
+          let occupiedGroups = new Set();
+          try {
+            const occupied = await dbQuery(
+              "SELECT group_id FROM planting_assignments WHERE farm_id = $1 AND status = 'active'",
+              [farm_id]
+            );
+            occupiedGroups = new Set(occupied.rows.map(r => r.group_id));
+          } catch { /* ok */ }
+          const sameZone = groups.filter(g => g.zone === zoneMatch.zone);
+          const freeGroup = sameZone.find(g => !occupiedGroups.has(g.id || g.group_id));
+          resolvedGroupId = freeGroup ? (freeGroup.id || freeGroup.group_id) : (zoneMatch.id || zoneMatch.group_id);
+        } else {
+          const validZones = [...new Set(groups.map(g => g.zone).filter(Boolean))];
+          return { ok: false, error: `Group/zone "${params.group_id}" not found. Valid zones: ${validZones.join(', ')}. Use a zone name like "Zone 1" and the system will auto-assign an available group.` };
+        }
+      }
+
       try {
         const result = await dbQuery(
           `INSERT INTO planting_assignments (farm_id, group_id, tray_id, crop_id, crop_name, seed_date, harvest_date, status, notes, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, NOW())
            ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_name=$5, seed_date=$6, harvest_date=$7, notes=$8, status='active', updated_at=NOW()
            RETURNING *`,
-          [farm_id, params.group_id, params.tray_id || null, params.crop_id || null,
+          [farm_id, resolvedGroupId, params.tray_id || null, crop_id,
            canonicalCrop, seed_date, harvest_date, params.notes || null]
         );
-        return { ok: true, assignment: result.rows[0], resolved_name: canonicalCrop, _undo_state: { farm_id, group_id: params.group_id } };
+        return { ok: true, assignment: result.rows[0], resolved_name: canonicalCrop, resolved_group: resolvedGroupId, _undo_state: { farm_id, group_id: resolvedGroupId } };
       } catch (err) {
         return { ok: false, error: err.message };
       }

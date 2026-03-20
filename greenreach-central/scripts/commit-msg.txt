@@ -1,0 +1,20 @@
+Deploy #519: Fix AI conversation failures + self-solving error system + optimized crop schedule
+
+Bug fixes:
+- Fix crop_id NOT NULL constraint: auto-resolve from crop-registry.json planId
+- Fix wrong year (2024 to 2026): inject current date/year into AI system prompt
+- Fix zone hallucinations (Zone 3/4): inject valid zones, group counts, constraints
+- Fix group_id format mismatch: smart resolution from zone name to first free group
+
+Self-solving error system:
+- attemptAutoRecovery(): 4 strategies (crop_id, group_id, DB retry, FK explain)
+- logSystemAlert(): dual write to system-alerts.json + farm_alerts DB table
+- Integrated into tool execution loop: auto-recover or alert on failure
+
+Optimized crop schedule (78 groups, succession planting):
+- Astro Arugula: 23 groups, 3 waves (30% fastest turnover)
+- Buttercrunch Lettuce: 20 groups, 3 waves (25%)
+- Bibb Butterhead: 20 groups, 3 waves (25%)
+- Salad Bowl Oakleaf: 15 groups, 3 waves (20%)
+- Weekly stagger for continuous harvest, all starting 2026-04-01
+- Migration 030: farm_alerts table + auto-load schedule from JSON
