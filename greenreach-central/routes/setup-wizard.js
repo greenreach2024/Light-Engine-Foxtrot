@@ -197,9 +197,11 @@ router.get('/status', authenticateToken, async (req, res) => {
       if (req.farmStore) {
         try {
           const profile = await req.farmStore.get(farmId, 'farm_profile');
-          if (profile && profile.setup_completed) {
-            setupCompleted = true;
-            farmName = profile.farmName || profile.name || 'Farm';
+          if (profile) {
+            if (profile.setup_completed) {
+              setupCompleted = true;
+            }
+            farmName = profile.farmName || profile.name || farmName;
             certifications = profile.certifications || {};
           }
           const rooms = await req.farmStore.get(farmId, 'rooms');
@@ -1036,6 +1038,62 @@ router.patch('/profile', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('[Setup Wizard] Profile update error:', error);
     res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * POST /api/setup/certifications
+ * Update certifications & practices from the Settings page edit modal
+ *
+ * Body: { certifications: string[], practices: string[], attributes: string[] }
+ */
+router.post('/certifications', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const { certifications, practices, attributes } = req.body;
+
+    // Validate input: arrays of strings only
+    const sanitizeArr = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(v => typeof v === 'string').map(v => validator.escape(validator.trim(v))).filter(Boolean);
+    };
+
+    const updatedCerts = {
+      certifications: sanitizeArr(certifications),
+      practices: sanitizeArr(practices),
+      attributes: sanitizeArr(attributes)
+    };
+
+    // Save to farmStore (source of truth for certifications)
+    if (req.farmStore) {
+      try {
+        const existing = await req.farmStore.get(farmId, 'farm_profile') || {};
+        existing.certifications = updatedCerts;
+        await req.farmStore.set(farmId, 'farm_profile', existing);
+      } catch (e) {
+        console.warn('[Setup Wizard] farmStore certifications write error:', e.message);
+      }
+    }
+
+    // Also save to DB if available (certifications column)
+    const pool = req.db;
+    if (pool) {
+      try {
+        await pool.query(
+          'UPDATE farms SET certifications = $1, updated_at = CURRENT_TIMESTAMP WHERE farm_id = $2',
+          [JSON.stringify(updatedCerts), farmId]
+        );
+      } catch (dbErr) {
+        console.warn('[Setup Wizard] DB certifications update failed:', dbErr.message);
+      }
+    }
+
+    console.log('[Setup Wizard] Certifications updated for farm:', farmId);
+    res.json({ success: true, certifications: updatedCerts });
+
+  } catch (error) {
+    console.error('[Setup Wizard] Certifications update error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update certifications' });
   }
 });
 

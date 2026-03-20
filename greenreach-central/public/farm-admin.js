@@ -4187,47 +4187,43 @@ async function loadSettings() {
             console.warn('[Farm Settings] Onboarding checklist error (non-fatal):', obErr);
         }
         
-        // If we have complete setup data, use it
-        if (setupData.completed) {
-            
-            // Load hardware info
-            if (setupData.hardwareDetected) {
-                setTxt('hardware-lights', setupData.hardwareDetected.lights || 0);
-                setTxt('hardware-fans', setupData.hardwareDetected.fans || 0);
-                setTxt('hardware-sensors', setupData.hardwareDetected.sensors || 0);
-                setTxt('hardware-other', setupData.hardwareDetected.other || 0);
-            }
-            
-            // Load certifications
-            if (setupData.certifications) {
-                const certList = document.getElementById('certifications-list');
-                if (certList) {
-                    certList.innerHTML = '';
-                    (setupData.certifications.certifications || []).forEach(cert => {
-                        const badge = document.createElement('span');
-                        badge.className = 'badge';
-                        badge.style.cssText = 'background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-green);';
-                        badge.textContent = cert;
-                        certList.appendChild(badge);
-                    });
-                    if (!setupData.certifications.certifications?.length) {
-                        certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
-                    }
+        // Load hardware info if setup is completed
+        if (setupData.completed && setupData.hardwareDetected) {
+            setTxt('hardware-lights', setupData.hardwareDetected.lights || 0);
+            setTxt('hardware-fans', setupData.hardwareDetected.fans || 0);
+            setTxt('hardware-sensors', setupData.hardwareDetected.sensors || 0);
+            setTxt('hardware-other', setupData.hardwareDetected.other || 0);
+        }
+
+        // Load certifications (always render when data exists, not gated by setup completion)
+        if (setupData.certifications) {
+            const certList = document.getElementById('certifications-list');
+            if (certList) {
+                certList.innerHTML = '';
+                (setupData.certifications.certifications || []).forEach(cert => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.cssText = 'background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-green);';
+                    badge.textContent = cert;
+                    certList.appendChild(badge);
+                });
+                if (!setupData.certifications.certifications?.length) {
+                    certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
                 }
-                
-                const practicesList = document.getElementById('practices-list');
-                if (practicesList) {
-                    practicesList.innerHTML = '';
-                    (setupData.certifications.practices || []).forEach(practice => {
-                        const badge = document.createElement('span');
-                        badge.className = 'badge';
-                        badge.style.cssText = 'background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-blue);';
-                        badge.textContent = practice;
-                        practicesList.appendChild(badge);
-                    });
-                    if (!setupData.certifications.practices?.length) {
-                        practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
-                    }
+            }
+
+            const practicesList = document.getElementById('practices-list');
+            if (practicesList) {
+                practicesList.innerHTML = '';
+                (setupData.certifications.practices || []).forEach(practice => {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.cssText = 'background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--accent-blue);';
+                    badge.textContent = practice;
+                    practicesList.appendChild(badge);
+                });
+                if (!setupData.certifications.practices?.length) {
+                    practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
                 }
             }
         }
@@ -4437,6 +4433,11 @@ async function saveSettings() {
                 body: JSON.stringify(settings)
             });
         } catch (_) { /* server save is best-effort */ }
+
+        // Also save farm profile (contact info) so the bottom Save Settings captures everything
+        try {
+            await saveProfileSettings({ silent: true });
+        } catch (_) { /* profile save is best-effort — it has its own error handling */ }
         
         const notify = typeof showNotification === 'function' ? showNotification : typeof showToast === 'function' ? showToast : (msg) => alert(msg);
         notify('Settings saved successfully', 'success');
@@ -4452,19 +4453,21 @@ async function saveSettings() {
  */
 async function openEditCertificationsModal() {
     try {
-        // Load current certifications from farm data
+        // Load current certifications from setup status (farmStore is source of truth)
         let certifications = { certifications: [], practices: [], attributes: [] };
         
         try {
-            const farmResponse = await fetch('/data/farm.json');
-            if (farmResponse.ok) {
-                const farmData = await farmResponse.json();
-                if (farmData.certifications) {
-                    certifications = farmData.certifications;
+            const headers = {};
+            if (currentSession?.token) headers['Authorization'] = `Bearer ${currentSession.token}`;
+            const statusResponse = await fetch('/api/setup/status', { headers });
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                if (statusData.certifications) {
+                    certifications = statusData.certifications;
                 }
             }
         } catch (error) {
-            console.warn('Could not load certifications from /data/farm.json:', error);
+            console.warn('[Settings] Could not load certifications from /api/setup/status:', error);
         }
         
         // Populate checkboxes with current values
@@ -4551,8 +4554,9 @@ async function saveEditCertifications(event) {
             body: JSON.stringify(updatedCertifications)
         });
         
-        if (!response.ok) {
-            throw new Error('Failed to save certifications');
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || 'Failed to save certifications');
         }
         
         // Close modal and reload settings to show updates
@@ -4564,11 +4568,9 @@ async function saveEditCertifications(event) {
         
     } catch (error) {
         console.error('Error saving certifications:', error);
-        showToast('Error saving certifications. Changes saved locally only.', 'warning');
+        showToast('Error saving certifications', 'error');
         
-        // Even if API fails, update the display
         closeEditCertificationsModal();
-        await loadSettings();
     }
 }
 
@@ -4641,7 +4643,8 @@ async function saveOperationDefaults() {
 /**
  * Save farm profile (contact/identity) to the API
  */
-async function saveProfileSettings() {
+async function saveProfileSettings(options = {}) {
+    const silent = options.silent || false;
     try {
         const profileData = {
             name: document.getElementById('settings-farm-name').value.trim(),
@@ -4654,7 +4657,7 @@ async function saveProfileSettings() {
 
         // Basic validation
         if (profileData.email && !profileData.email.includes('@')) {
-            showToast('Please enter a valid email address', 'error');
+            if (!silent) showToast('Please enter a valid email address', 'error');
             return;
         }
 
@@ -4671,17 +4674,17 @@ async function saveProfileSettings() {
 
         const result = await response.json();
         if (result.success) {
-            showToast('Farm profile saved successfully', 'success');
+            if (!silent) showToast('Farm profile saved successfully', 'success');
             // Update localStorage farm_name for nav header
             if (profileData.name) {
                 localStorage.setItem('farm_name', profileData.name);
             }
         } else {
-            showToast(result.error || 'Failed to save profile', 'error');
+            if (!silent) showToast(result.error || 'Failed to save profile', 'error');
         }
     } catch (error) {
         console.error('Error saving profile:', error);
-        showToast('Error saving profile', 'error');
+        if (!silent) showToast('Error saving profile', 'error');
     }
 }
 
