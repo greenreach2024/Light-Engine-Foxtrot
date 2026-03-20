@@ -1824,7 +1824,7 @@ function closeAIPricingAssistant() {
 }
 
 /**
- * Run AI pricing analysis
+ * Run AI pricing analysis — fetches live market data + AI analysis from backend
  */
 async function runAIPricingAnalysis() {
     const statusDiv = document.getElementById('ai-analysis-status');
@@ -1835,32 +1835,77 @@ async function runAIPricingAnalysis() {
     recommendationsDiv.style.display = 'none';
     
     const steps = [
-        'Fetching current USD to CAD exchange rate...',
-        'Searching organic retailers in North America...',
-        'Analyzing Whole Foods pricing data...',
-        'Checking Trader Joes and specialty stores...',
-        'Scanning Canadian grocers: Sobeys, Metro, Loblaws, Farm Boy...',
-        'Reviewing independent organic markets...',
-        'Converting US prices to CAD (Canadian prices unchanged)...',
-        'Calculating cost per oz and per 25g...',
-        'Monitoring market trends and news...',
+        'Connecting to market intelligence service...',
+        'Fetching real-time price observations from DB...',
+        'Loading AI market analysis (GPT-4o-mini)...',
+        'Retrieving Bank of Canada USD/CAD exchange rate...',
+        'Analysing price trends across retailers...',
+        'Matching crops to your pricing table...',
         'Generating competitive pricing recommendations...'
     ];
     
-    for (let i = 0; i < steps.length; i++) {
-        statusText.textContent = steps[i];
-        await new Promise(resolve => setTimeout(resolve, 700));
-    }
+    // Show progress steps while fetching in parallel
+    const stepPromise = (async () => {
+        for (let i = 0; i < steps.length; i++) {
+            statusText.textContent = steps[i];
+            await new Promise(resolve => setTimeout(resolve, 600));
+        }
+    })();
 
-    // Ensure pricing data is loaded before analysis (needed for current-price comparisons)
+    // Ensure pricing data is loaded before analysis
     if (!Array.isArray(pricingData) || pricingData.length === 0) {
         await loadCropsFromDatabase();
     }
+
+    // Fetch live pricing recommendations from backend
+    let liveData = null;
+    try {
+        const res = await fetch(`${API_BASE}/api/market-intelligence/pricing-recommendations`, {
+            headers: currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : undefined
+        });
+        if (res.ok) {
+            liveData = await res.json();
+        }
+    } catch (e) {
+        console.warn('Live pricing recommendations unavailable:', e.message);
+    }
+
+    // Wait for progress animation to finish
+    await stepPromise;
+
+    // Use live data if available, otherwise fall back to local hardcoded sources
+    if (liveData?.ok && liveData.recommendations?.length > 0) {
+        currentExchangeRate = liveData.fxRate || currentExchangeRate;
+        // Populate marketDataSources cache from live data so resolveMarketDataForCrop works
+        for (const rec of liveData.recommendations) {
+            marketDataSources[rec.product] = {
+                retailers: rec.retailers || [],
+                avgPriceCAD: rec.avgPriceCAD || 0,
+                avgPriceUSD: (rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
+                avgWeightOz: 1, // DB data is already per-unit
+                priceRange: (rec.priceRange || [0, 0]).map(p => p * 1), // already per oz
+                trend: rec.trend || 'stable',
+                trendPercent: rec.trendPercent ?? 0,
+                country: 'Canada',
+                articles: [],
+                // AI enrichment
+                _aiOutlook: rec.aiOutlook,
+                _aiConfidence: rec.aiConfidence,
+                _aiForecastPrice: rec.aiForecastPrice,
+                _aiAction: rec.aiAction,
+                _aiReasoning: rec.aiReasoning,
+                _dataSource: rec.dataSource || 'database',
+                _observationCount: rec.observationCount || 0,
+            };
+        }
+        console.log(`✅ Loaded ${liveData.recommendations.length} live pricing recommendations (FX: ${currentExchangeRate})`);
+    } else {
+        // Fallback: use hardcoded marketDataSources + fake FX
+        await fetchExchangeRate();
+        console.warn('⚠ Using hardcoded market data (backend unavailable)');
+    }
     
-    // Simulate fetching exchange rate (in production, call real API)
-    await fetchExchangeRate();
-    
-    // Generate recommendations
+    // Generate recommendations using the (now-updated) marketDataSources
     const recommendations = generateRecommendations();
     
     // Store recommendations
@@ -1950,12 +1995,30 @@ function generateRecommendations() {
     );
 
     // Analyze full recipe universe: market-supported recipes + current pricing recipes
-    const analysisCrops = [...new Set([
-        ...Object.keys(marketDataSources),
-        ...(pricingData || []).map(item => item.crop)
-    ])].sort();
+    // Deduplicate: if a marketDataSources key and a pricingData name resolve to the
+    // same market source, keep only the pricingData name (the farm's actual crop name).
+    const seenMarketKeys = new Set();
+    const analysisCrops = [];
 
-    analysisCrops.forEach(cropName => {
+    // First pass: add pricingData crop names (primary — these are the farm's real names)
+    for (const item of (pricingData || [])) {
+        const md = resolveMarketDataForCrop(item.crop);
+        if (md) {
+            // Track which market source key this resolved to, to avoid duplicates
+            const mdKey = Object.keys(marketDataSources).find(k => marketDataSources[k] === md);
+            if (mdKey) seenMarketKeys.add(mdKey);
+        }
+        analysisCrops.push(item.crop);
+    }
+
+    // Second pass: add marketDataSources keys that weren't already covered
+    for (const key of Object.keys(marketDataSources)) {
+        if (!seenMarketKeys.has(key)) {
+            analysisCrops.push(key);
+        }
+    }
+
+    analysisCrops.sort().forEach(cropName => {
         const marketData = resolveMarketDataForCrop(cropName);
         if (!marketData) return;
 
@@ -1963,44 +2026,60 @@ function generateRecommendations() {
         const defaultItem = defaultPricing[cropName] || null;
         
         // Calculate price per oz from market data
-        const pricePerOzUSD = marketData.avgPriceUSD / marketData.avgWeightOz;
-        
-        // Convert to CAD if source is outside Canada
-        const pricePerOzCAD = marketData.country !== 'Canada' ? 
-            pricePerOzUSD * currentExchangeRate : 
-            pricePerOzUSD;
+        // Live DB data has avgWeightOz=1 (already per-unit), hardcoded has actual weight
+        const avgWeight = marketData.avgWeightOz || 1;
+        const pricePerOzCAD = marketData.country === 'Canada' || marketData._dataSource === 'database'
+            ? (marketData.avgPriceCAD || 0) / avgWeight
+            : ((marketData.avgPriceUSD || 0) / avgWeight) * currentExchangeRate;
+        const pricePerOzUSD = pricePerOzCAD / currentExchangeRate;
         
         // Calculate price per 25g (1 oz = 28.35g, so 25g = 0.8818 oz)
         const pricePer25gCAD = pricePerOzCAD * 0.8818;
         
         const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? pricePerOzCAD);
         const marketAvg = pricePerOzCAD;
-        const difference = ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1);
+        const difference = marketAvg > 0 ? ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1) : '0.0';
         
         let recommendation = marketAvg;
         let reasoning = '';
         let priceChangeType = 'stable';
-        
-        if (marketData.trend === 'increasing') {
-            recommendation = marketAvg * 1.05; // Suggest 5% above average
+
+        // Use AI reasoning if available from backend
+        const aiReasoning = marketData._aiReasoning;
+        const aiOutlook = marketData._aiOutlook;
+        const aiAction = marketData._aiAction;
+        const aiForecast = marketData._aiForecastPrice;
+
+        if (aiOutlook && aiReasoning) {
+            // AI-powered recommendation
+            if (aiForecast && aiForecast > 0) {
+                recommendation = aiForecast;
+            } else if (aiOutlook === 'bullish') {
+                recommendation = marketAvg * 1.05;
+            } else if (aiOutlook === 'bearish') {
+                recommendation = marketAvg * 0.95;
+            }
+
+            priceChangeType = aiOutlook === 'bullish' ? 'up' : aiOutlook === 'bearish' ? 'down' : 'stable';
+            reasoning = `🤖 AI Analysis: ${aiReasoning}`;
+            if (aiAction) reasoning += ` Action: ${aiAction.replace(/_/g, ' ')}.`;
+        } else if (marketData.trend === 'increasing') {
+            recommendation = marketAvg * 1.05;
             reasoning = `Market analysis shows ${cropName} prices are trending upward. `;
             priceChangeType = 'up';
-            
-            if (marketData.articles.length > 0) {
+            if (marketData.articles && marketData.articles.length > 0) {
                 reasoning += `Recent reports indicate supply constraints and increased demand. `;
             }
-            
             reasoning += `Recommended to adjust pricing to capitalize on market conditions.`;
         } else if (marketData.trend === 'decreasing') {
-            recommendation = marketAvg * 0.95; // Suggest 5% below average
+            recommendation = marketAvg * 0.95;
             reasoning = `Market prices for ${cropName} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
             priceChangeType = 'down';
         } else {
             recommendation = marketAvg;
             reasoning = `Current ${cropName} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
-            
-            if (Math.abs(difference) > 10) {
-                reasoning += difference > 0 ? 
+            if (Math.abs(parseFloat(difference)) > 10) {
+                reasoning += parseFloat(difference) > 0 ? 
                     'Consider reducing price to match market expectations.' : 
                     'You have room to increase margins without losing competitiveness.';
             } else {
@@ -2009,9 +2088,9 @@ function generateRecommendations() {
         }
         
         // Calculate range in CAD
-        const priceRangeCAD = marketData.country !== 'Canada' ?
-            marketData.priceRange.map(p => (p / marketData.avgWeightOz) * currentExchangeRate) :
-            marketData.priceRange.map(p => p / marketData.avgWeightOz);
+        const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
+            ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeight) * currentExchangeRate)
+            : (marketData.priceRange || [0, 0]).map(p => p / avgWeight);
         
         recommendations.push({
             crop: cropName,
@@ -2023,13 +2102,17 @@ function generateRecommendations() {
             pricePerOzUSD: pricePerOzUSD,
             priceRange: priceRangeCAD,
             exchangeRate: currentExchangeRate,
-            sourceCountry: marketData.country,
+            sourceCountry: marketData.country || 'Canada',
             trend: marketData.trend,
             reasoning: reasoning,
             priceChangeType: priceChangeType,
-            articles: marketData.articles,
-            retailers: marketData.retailers,
+            articles: marketData.articles || [],
+            retailers: marketData.retailers || [],
             hasPricingRow: Boolean(pricingItem),
+            aiOutlook: aiOutlook || null,
+            aiConfidence: marketData._aiConfidence || null,
+            dataSource: marketData._dataSource || 'static',
+            observationCount: marketData._observationCount || 0,
             timestamp: Date.now()
         });
     });
@@ -2056,19 +2139,32 @@ function displayRecommendations(recommendations) {
     }
     
     contentDiv.innerHTML = recommendations.map(rec => {
-        const priceChange = ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1);
+        const priceChange = rec.currentPrice > 0
+            ? ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1)
+            : '0.0';
         const hasSignificantChange = Math.abs(priceChange) > 5;
         
-        // Show currency conversion info if from USA
-        const conversionInfo = rec.sourceCountry !== 'Canada' ? 
-            `<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+        // Data source badge
+        const isLive = rec.dataSource === 'database';
+        const sourceBadge = isLive
+            ? `<span style="padding: 2px 6px; background: rgba(34,197,94,0.2); color: #4ade80; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">LIVE DATA</span>`
+            : `<span style="padding: 2px 6px; background: rgba(156,163,175,0.2); color: #9ca3af; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">STATIC</span>`;
+
+        // AI confidence badge
+        const aiBadge = rec.aiOutlook
+            ? `<span style="padding: 2px 6px; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px;">AI ${(rec.aiConfidence || 'medium').toUpperCase()}</span>`
+            : '';
+
+        // FX info
+        const conversionInfo = !isLive && rec.sourceCountry !== 'Canada'
+            ? `<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
                 💱 Prices converted from USD at rate: 1 USD = ${rec.exchangeRate.toFixed(4)} CAD
             </div>` : '';
         
         return `
             <div class="recommendation-card ${hasSignificantChange ? 'updated' : ''}">
                 <div class="recommendation-header">
-                    <div class="crop-title">${rec.crop}</div>
+                    <div class="crop-title">${rec.crop}${sourceBadge}${aiBadge}</div>
                     ${hasSignificantChange ? 
                         `<span style="padding: 4px 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-radius: 4px; font-size: 12px; font-weight: 600;">UPDATE RECOMMENDED</span>` 
                         : ''}
@@ -2087,12 +2183,14 @@ function displayRecommendations(recommendations) {
                         </div>
                     </div>
                     <div>
-                        <div class="price-label">Source (USD)</div>
+                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : 'Source (USD)'}</div>
                         <div style="font-size: 16px; font-weight: 600; color: var(--text-muted);">
-                            $${rec.pricePerOzUSD.toFixed(2)}/oz
+                            ${rec.dataSource === 'database'
+                                ? `${rec.observationCount || '—'} obs`
+                                : `$${rec.pricePerOzUSD.toFixed(2)}/oz`}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
-                            ${rec.sourceCountry}
+                            ${rec.dataSource === 'database' ? `${(rec.retailers || []).length} retailers` : rec.sourceCountry}
                         </div>
                     </div>
                 </div>
@@ -2124,10 +2222,10 @@ function displayRecommendations(recommendations) {
                 </div>
                 
                 <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                    <strong>Retailers surveyed:</strong> ${rec.retailers.join(', ')}
+                    <strong>Retailers surveyed:</strong> ${(rec.retailers || []).length > 0 ? rec.retailers.join(', ') : 'N/A'}
                 </div>
                 
-                ${rec.articles.length > 0 ? `
+                ${(rec.articles || []).length > 0 ? `
                     <div>
                         <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Related News:</div>
                         <div class="news-links">
@@ -2170,9 +2268,21 @@ function displayCachedRecommendations() {
 /**
  * Apply recommended price to a crop
  */
-function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
-    const index = pricingData.findIndex(item => item.crop === cropName);
+async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
+    // Exact match first, then fuzzy match
+    let index = pricingData.findIndex(item => item.crop === cropName);
+
+    if (index === -1) {
+        // Fuzzy match: normalize and compare substrings
+        const norm = cropName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        index = pricingData.findIndex(item => {
+            const itemNorm = item.crop.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            return itemNorm.includes(norm) || norm.includes(itemNorm);
+        });
+    }
+
     if (index !== -1) {
+        const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
         renderPricingTable();
         
@@ -2184,8 +2294,70 @@ function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             btnEl.style.cursor = 'default';
         }
 
-        // Non-blocking toast inside the modal
-        showPricingToast(`Updated ${cropName} to $${recommendedPrice.toFixed(2)} — remember to save`);
+        // Auto-save to backend
+        await savePricingQuiet();
+
+        // Phase 3B: Record pricing decision for feedback loop
+        try {
+            const cached = JSON.parse(localStorage.getItem(AI_PRICING_KEY) || '[]');
+            const rec = cached.find(r => r.crop === cropName) || {};
+            await fetch(`${API_BASE}/api/crop-pricing/decisions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+                },
+                body: JSON.stringify({ decisions: [{
+                    crop: pricingData[index].crop,
+                    previous_price: previousPrice,
+                    recommended_price: recommendedPrice,
+                    applied_price: recommendedPrice,
+                    market_average: rec.marketAverage || null,
+                    ai_outlook: rec.aiOutlook || null,
+                    ai_action: null,
+                    trend: rec.trend || null,
+                    data_source: rec.dataSource || 'static',
+                    decision: 'accepted'
+                }]})
+            });
+        } catch (e) {
+            console.warn('Decision recording failed:', e.message);
+        }
+
+        showPricingToast(`Updated ${pricingData[index].crop} to $${recommendedPrice.toFixed(2)} — saved`);
+    } else {
+        showPricingToast(`⚠ Could not match "${cropName}" to any crop in your pricing table`);
+    }
+}
+
+/**
+ * Save pricing data silently (no alert). Used by applyRecommendedPrice.
+ */
+async function savePricingQuiet() {
+    try {
+        pricingData.forEach(item => {
+            localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
+        });
+        const crops = pricingData.map(item => ({
+            crop: item.crop,
+            unit: 'lb',
+            retailPrice: parseFloat(item.retail),
+            wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
+            ws1Discount: item.ws1Discount,
+            ws2Discount: item.ws2Discount,
+            ws3Discount: item.ws3Discount,
+            isTaxable: item.isTaxable || false
+        }));
+        await fetch(`${API_BASE}/api/crop-pricing`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+            },
+            body: JSON.stringify({ crops })
+        });
+    } catch (e) {
+        console.warn('Auto-save failed:', e.message);
     }
 }
 

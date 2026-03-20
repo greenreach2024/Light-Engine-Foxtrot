@@ -219,4 +219,57 @@ export async function getCropPricing(farmId) {
   }
 }
 
+/**
+ * POST /api/crop-pricing/decisions
+ * Phase 3B — Record a pricing decision (accepted/rejected/modified AI recommendation)
+ */
+router.post('/decisions', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) return res.status(503).json({ ok: false, error: 'Database not available' });
+
+    const fid = farmStore.farmIdFromReq(req) || 'default';
+    const { decisions } = req.body;
+    if (!Array.isArray(decisions) || decisions.length === 0) {
+      return res.status(400).json({ ok: false, error: 'decisions array required' });
+    }
+
+    // Ensure table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pricing_decisions (
+        id              SERIAL PRIMARY KEY,
+        farm_id         VARCHAR(100) NOT NULL,
+        crop            VARCHAR(150) NOT NULL,
+        previous_price  NUMERIC(10,2),
+        recommended_price NUMERIC(10,2),
+        applied_price   NUMERIC(10,2) NOT NULL,
+        market_average  NUMERIC(10,2),
+        ai_outlook      VARCHAR(20),
+        ai_action       VARCHAR(50),
+        trend           VARCHAR(20),
+        data_source     VARCHAR(20) DEFAULT 'static',
+        decision        VARCHAR(20) DEFAULT 'accepted',
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    let recorded = 0;
+    for (const d of decisions) {
+      if (!d.crop || d.applied_price == null) continue;
+      await pool.query(
+        `INSERT INTO pricing_decisions (farm_id, crop, previous_price, recommended_price, applied_price, market_average, ai_outlook, ai_action, trend, data_source, decision)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [fid, d.crop, d.previous_price, d.recommended_price, d.applied_price, d.market_average, d.ai_outlook || null, d.ai_action || null, d.trend || null, d.data_source || 'static', d.decision || 'accepted']
+      );
+      recorded++;
+    }
+
+    console.log(`[crop-pricing] Recorded ${recorded} pricing decisions for farm ${fid}`);
+    return res.json({ ok: true, recorded });
+  } catch (error) {
+    console.error('[crop-pricing] Pricing decisions error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 export default router;

@@ -18,6 +18,8 @@ import {
   detectPriceAnomalies,
   seedInitialPrices
 } from '../services/market-intelligence-service.js';
+import { getLatestAnalyses } from '../services/market-analysis-agent.js';
+import { getLastFxRate } from '../services/market-data-fetcher.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -147,160 +149,208 @@ const MARKET_DATA_SOURCES = {
 /**
  * GET /api/market-intelligence/price-alerts
  * Get current price anomaly alerts with market context
- * Returns significant price changes (>7% threshold) with news references
+ * Now DB-backed — reads from market_price_trends + market_ai_analysis
  */
 router.get('/price-alerts', async (req, res) => {
   try {
-    const { threshold = 7 } = req.query; // Default 7% price change threshold
-    
+    const { threshold = 7 } = req.query;
+    const pool = req.app?.locals?.dbPool;
+    const marketData = pool ? await getMarketDataAsync(pool) : MARKET_DATA_SOURCES;
+
     const alerts = [];
-    const now = new Date();
-    
-    // Analyze each product for significant price changes
-    for (const [product, data] of Object.entries(MARKET_DATA_SOURCES)) {
-      const absChange = Math.abs(data.trendPercent);
-      
-      // Only include products with significant price movements
-      if (absChange >= threshold) {
-        const type = data.trend === 'increasing' ? 'increase' : 'decrease';
-        const changeSign = data.trendPercent >= 0 ? '+' : '';
-        
-        // Build summary from news articles
-        let summary = '';
-        if (data.articles && data.articles.length > 0) {
-          // Combine summaries from all articles
-          summary = data.articles.map(article => article.summary).join(' ');
-          
-          // Add source references
-          const sources = data.articles.map(article => 
-            `${article.source} (${article.date})`
-          ).join(', ');
-          summary += ` [Sources: ${sources}]`;
-        } else {
-          // Generate basic summary based on trend
-          if (type === 'increase') {
-            summary = `Market analysis shows ${product} prices have increased ${absChange}% in recent weeks. Supply constraints and seasonal factors are contributing to higher wholesale and retail prices. Monitored across ${data.retailers.length} major retailers in North America.`;
-          } else {
-            summary = `${product} prices have declined ${absChange}% due to increased regional production and favorable growing conditions. Competitive pricing from local suppliers is putting downward pressure on retail prices. Monitored across ${data.retailers.length} major retailers.`;
-          }
-        }
-        
-        alerts.push({
-          product,
-          change: `${changeSign}${data.trendPercent}%`,
-          type,
-          currentPrice: data.avgPriceCAD / data.avgWeightOz, // Price per oz
-          previousPrice: data.previousPrice / data.avgWeightOz,
-          priceUnit: 'CAD per oz',
-          summary,
-          retailers: data.retailers,
-          dataPoints: data.retailers.length,
-          lastUpdated: data.lastUpdated,
-          confidence: data.articles.length > 0 ? 'high' : 'medium',
-          articles: data.articles || [],
-          priceRange: {
-            low: data.priceRange[0] / data.avgWeightOz,
-            high: data.priceRange[1] / data.avgWeightOz
-          }
-        });
+    for (const [product, data] of Object.entries(marketData)) {
+      const trendPct = data.trendPercent ?? 0;
+      const absChange = Math.abs(trendPct);
+      if (absChange < threshold) continue;
+
+      const type = data.trend === 'increasing' ? 'increase' : 'decrease';
+      const changeSign = trendPct >= 0 ? '+' : '';
+      const avgWeight = data.avgWeightOz || 1;
+
+      let summary = '';
+      if (data.articles && data.articles.length > 0) {
+        summary = data.articles.map(a => a.summary).join(' ');
+        summary += ` [Sources: ${data.articles.map(a => `${a.source} (${a.date})`).join(', ')}]`;
+      } else {
+        summary = type === 'increase'
+          ? `${product} prices have increased ${absChange}% recently. Supply constraints and seasonal factors are contributing to higher prices across ${(data.retailers || []).length} retailers.`
+          : `${product} prices have declined ${absChange}% due to increased supply. Competitive pricing from local suppliers is putting downward pressure. Monitored across ${(data.retailers || []).length} retailers.`;
       }
+
+      alerts.push({
+        product,
+        change: `${changeSign}${trendPct}%`,
+        type,
+        currentPrice: (data.avgPriceCAD || 0) / avgWeight,
+        previousPrice: (data.previousPrice || data.avgPriceCAD || 0) / avgWeight,
+        priceUnit: 'CAD per oz',
+        summary,
+        retailers: data.retailers || [],
+        dataPoints: data.observationCount || (data.retailers || []).length,
+        lastUpdated: data.lastUpdated,
+        confidence: (data.observationCount || 0) > 10 ? 'high' : 'medium',
+        articles: data.articles || [],
+        priceRange: data.priceRange
+          ? { low: data.priceRange[0] / avgWeight, high: data.priceRange[1] / avgWeight }
+          : { low: 0, high: 0 },
+        dataSource: data.dataSource || 'static'
+      });
     }
-    
-    // Sort by absolute price change (largest first)
-    alerts.sort((a, b) => {
-      const aChange = Math.abs(parseFloat(a.change));
-      const bChange = Math.abs(parseFloat(b.change));
-      return bChange - aChange;
-    });
-    
-    console.log(`[Market Intelligence] Generated ${alerts.length} price alerts (threshold: ${threshold}%)`);
-    
+
+    alerts.sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change)));
+
     return res.json({
       ok: true,
       alerts,
-      timestamp: now.toISOString(),
+      timestamp: new Date().toISOString(),
       threshold: parseInt(threshold),
-      totalProductsMonitored: Object.keys(MARKET_DATA_SOURCES).length,
+      totalProductsMonitored: Object.keys(marketData).length,
       alertsGenerated: alerts.length
     });
-    
   } catch (error) {
-    console.error('[Market Intelligence] Price alerts error:', error);
-    return res.status(500).json({
-      ok: false,
-      message: 'Failed to generate price alerts',
-      error: error.message
-    });
+    logger.error('[Market Intelligence] Price alerts error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to generate price alerts', error: error.message });
   }
 });
 
 /**
  * GET /api/market-intelligence/market-overview
- * Get comprehensive market overview with all products
+ * Get comprehensive market overview — now DB-backed
  */
 router.get('/market-overview', async (req, res) => {
   try {
+    const pool = req.app?.locals?.dbPool;
+    const marketData = pool ? await getMarketDataAsync(pool) : MARKET_DATA_SOURCES;
+    const entries = Object.entries(marketData);
+
     const overview = {
       timestamp: new Date().toISOString(),
-      products: Object.entries(MARKET_DATA_SOURCES).map(([product, data]) => ({
+      products: entries.map(([product, data]) => ({
         product,
-        currentPrice: data.avgPriceCAD / data.avgWeightOz,
+        currentPrice: (data.avgPriceCAD || 0) / (data.avgWeightOz || 1),
         priceUnit: 'CAD per oz',
         trend: data.trend,
-        trendPercent: data.trendPercent,
-        retailers: data.retailers,
+        trendPercent: data.trendPercent ?? 0,
+        retailers: data.retailers || [],
         lastUpdated: data.lastUpdated,
-        articlesCount: data.articles?.length || 0
+        articlesCount: data.articles?.length || 0,
+        dataSource: data.dataSource || 'static'
       })),
       summary: {
-        totalProducts: Object.keys(MARKET_DATA_SOURCES).length,
-        increasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'increasing').length,
-        decreasing: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'decreasing').length,
-        stable: Object.values(MARKET_DATA_SOURCES).filter(d => d.trend === 'stable').length
+        totalProducts: entries.length,
+        increasing: entries.filter(([, d]) => d.trend === 'increasing').length,
+        decreasing: entries.filter(([, d]) => d.trend === 'decreasing').length,
+        stable: entries.filter(([, d]) => d.trend === 'stable' || !d.trend).length
       }
     };
-    
+
     return res.json({ ok: true, ...overview });
-    
   } catch (error) {
-    console.error('[Market Intelligence] Market overview error:', error);
-    return res.status(500).json({
-      ok: false,
-      message: 'Failed to generate market overview'
-    });
+    logger.error('[Market Intelligence] Market overview error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to generate market overview' });
   }
 });
 
 /**
  * GET /api/market-intelligence/product/:productName
- * Get detailed market data for a specific product
+ * Get detailed market data for a specific product — now DB-backed
  */
 router.get('/product/:productName', async (req, res) => {
   try {
     const { productName } = req.params;
-    
-    const data = MARKET_DATA_SOURCES[productName];
+    const pool = req.app?.locals?.dbPool;
+    const marketData = pool ? await getMarketDataAsync(pool) : MARKET_DATA_SOURCES;
+
+    const data = marketData[productName];
     if (!data) {
-      return res.status(404).json({
-        ok: false,
-        message: `Product '${productName}' not found in market data`
-      });
+      return res.status(404).json({ ok: false, message: `Product '${productName}' not found in market data` });
     }
-    
+
+    const avgWeight = data.avgWeightOz || 1;
     return res.json({
       ok: true,
       product: productName,
       ...data,
-      pricePerOz: data.avgPriceCAD / data.avgWeightOz,
-      pricePerLb: (data.avgPriceCAD / data.avgWeightOz) * 16
+      pricePerOz: (data.avgPriceCAD || 0) / avgWeight,
+      pricePerLb: ((data.avgPriceCAD || 0) / avgWeight) * 16,
+      dataSource: data.dataSource || 'static'
     });
-    
   } catch (error) {
-    console.error('[Market Intelligence] Product details error:', error);
-    return res.status(500).json({
-      ok: false,
-      message: 'Failed to get product details'
+    logger.error('[Market Intelligence] Product details error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to get product details' });
+  }
+});
+
+// ── PHASE 3A — PRICING RECOMMENDATIONS ──────────────────────────────────
+
+/**
+ * GET /api/market-intelligence/pricing-recommendations
+ * Returns per-crop pricing recommendations combining:
+ *   - market_price_trends (live prices, trend direction)
+ *   - market_ai_analysis  (AI outlook, forecast price, action, reasoning)
+ *   - Bank of Canada FX rate
+ * The frontend AI Pricing Assistant reads this instead of hardcoded data.
+ */
+router.get('/pricing-recommendations', async (req, res) => {
+  try {
+    const pool = req.app?.locals?.dbPool;
+    if (!pool) {
+      return res.status(503).json({ ok: false, error: 'Database not available' });
+    }
+
+    // Gather DB-backed market data + AI analyses in parallel
+    const [marketData, aiAnalyses] = await Promise.all([
+      getMarketDataAsync(pool),
+      getLatestAnalyses(pool),
+    ]);
+
+    const fxRate = getLastFxRate();
+
+    // Index AI analyses by product
+    const aiMap = new Map(aiAnalyses.map(a => [a.product, a]));
+
+    const recommendations = [];
+    for (const [product, data] of Object.entries(marketData)) {
+      const ai = aiMap.get(product) || null;
+      const avgWeight = data.avgWeightOz || 1;
+      const avgPriceCAD = data.avgPriceCAD || 0;
+      const pricePerOzCAD = avgPriceCAD / avgWeight;
+      const priceRange = data.priceRange || [avgPriceCAD * 0.85, avgPriceCAD * 1.15];
+
+      recommendations.push({
+        product,
+        // Live price data
+        avgPriceCAD,
+        pricePerOzCAD,
+        priceRange: priceRange.map(p => p / avgWeight),
+        trend: data.trend || 'stable',
+        trendPercent: data.trendPercent ?? 0,
+        retailers: data.retailers || [],
+        observationCount: data.observationCount || 0,
+        lastUpdated: data.lastUpdated,
+        dataSource: data.dataSource || 'static',
+        // AI analysis
+        aiOutlook: ai?.outlook || null,
+        aiConfidence: ai?.confidence || null,
+        aiForecastPrice: ai?.price_forecast ? parseFloat(ai.price_forecast) : null,
+        aiAction: ai?.action || null,
+        aiReasoning: ai?.reasoning || null,
+        aiAnalysisDate: ai?.analysis_date || null,
+        // FX
+        fxRate,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      recommendations,
+      fxRate,
+      timestamp: new Date().toISOString(),
+      totalProducts: recommendations.length,
     });
+  } catch (error) {
+    logger.error('[Market Intelligence] Pricing recommendations error:', error);
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 

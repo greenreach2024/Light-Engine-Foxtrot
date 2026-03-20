@@ -289,3 +289,8 @@ export function stopMarketDataFetcher() {
     logger.info('[MarketFetcher] Stopped');
   }
 }
+
+/** Return the most recent USD/CAD FX rate (cached from Bank of Canada). */
+export function getLastFxRate() {
+  return _lastFxRate;
+}
