@@ -588,6 +588,30 @@ export const TOOL_CATALOG = {
       return { ok: true, alert_id, undone: true };
     }
   },
+  'get_device_status': {
+    description: 'Get current IoT device inventory — assigned and unassigned devices, rooms, counts',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      const raw = readJSON('device-meta.json', {});
+      const devices = raw.devices || (Array.isArray(raw) ? {} : (() => { const { version, lastUpdated, farmId, ...rest } = raw; return rest; })());
+      const rooms = readJSON('rooms.json', {});
+      const roomList = (rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object'));
+      const entries = Object.entries(devices);
+      const assigned = entries.filter(([_, d]) => d && d.room_id);
+      const unassigned = entries.filter(([_, d]) => d && !d.room_id);
+      return {
+        ok: true,
+        total_devices: entries.length,
+        assigned: assigned.length,
+        unassigned: unassigned.length,
+        unassigned_devices: unassigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', name: d.name || id })),
+        assigned_devices: assigned.map(([id, d]) => ({ id, type: d.type || d.protocol || 'unknown', room_id: d.room_id, zone: d.zone })),
+        rooms: roomList.map(r => ({ id: r.id || r.room_id, name: r.name })),
+      };
+    }
+  },
   'auto_assign_devices': {
     description: 'Auto-assign unassigned IoT devices to rooms/zones based on type and availability',
     category: 'write',
@@ -595,14 +619,17 @@ export const TOOL_CATALOG = {
     optional: ['room_id'],
     undoable: true,
     handler: async ({ room_id }) => {
-      const deviceMeta = readJSON('device-meta.json', {});
+      const raw = readJSON('device-meta.json', {});
+      // Extract devices map from wrapper format { devices: {}, version, ... } or bare map
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : (() => { const { version, lastUpdated, farmId, ...rest } = raw; return rest; })();
       const rooms = readJSON('rooms.json', {});
-      const roomList = rooms.rooms || Object.values(rooms).filter(r => typeof r === 'object');
+      const roomList = (rooms.rooms || Object.values(rooms).filter(r => r != null && typeof r === 'object'));
 
       // Snapshot for undo
       const previousAssignments = {};
       const assignments = [];
-      const unassigned = Object.entries(deviceMeta).filter(([_, d]) => !d.room_id);
+      const unassigned = Object.entries(devices).filter(([_, d]) => d && !d.room_id);
 
       if (unassigned.length === 0) {
         return { ok: true, assigned: 0, message: 'All devices are already assigned.' };
@@ -611,9 +638,11 @@ export const TOOL_CATALOG = {
       // Simple round-robin assignment: assign to rooms that have fewest devices
       const roomDeviceCounts = {};
       for (const r of roomList) {
+        if (!r) continue;
         const rid = r.id || r.room_id;
+        if (!rid) continue;
         if (room_id && rid !== room_id) continue;
-        roomDeviceCounts[rid] = Object.values(deviceMeta).filter(d => d.room_id === rid).length;
+        roomDeviceCounts[rid] = Object.values(devices).filter(d => d && d.room_id === rid).length;
       }
 
       const availableRooms = Object.keys(roomDeviceCounts);
@@ -634,22 +663,32 @@ export const TOOL_CATALOG = {
         assignments.push({ device_id: deviceId, room_id: targetRoom, zone: 'zone-1', device_type: device.type || device.protocol || 'unknown' });
       }
 
-      writeJSON('device-meta.json', deviceMeta);
+      // Save back in original wrapper format
+      if (isWrapper) {
+        raw.devices = devices;
+        raw.lastUpdated = new Date().toISOString();
+        writeJSON('device-meta.json', raw);
+      } else {
+        writeJSON('device-meta.json', devices);
+      }
       return { ok: true, assigned: assignments.length, assignments, _undo_state: previousAssignments };
     },
     undoHandler: async (params, previousAssignments) => {
-      const deviceMeta = readJSON('device-meta.json', {});
+      const raw = readJSON('device-meta.json', {});
+      const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+      const devices = isWrapper ? raw.devices : raw;
       let undone = 0;
       for (const [deviceId, prev] of Object.entries(previousAssignments)) {
-        if (deviceMeta[deviceId]) {
-          deviceMeta[deviceId].room_id = prev.room_id || undefined;
-          deviceMeta[deviceId].zone = prev.zone || undefined;
-          delete deviceMeta[deviceId].assigned_at;
-          delete deviceMeta[deviceId].assigned_by;
+        if (devices[deviceId]) {
+          devices[deviceId].room_id = prev.room_id || undefined;
+          devices[deviceId].zone = prev.zone || undefined;
+          delete devices[deviceId].assigned_at;
+          delete devices[deviceId].assigned_by;
           undone++;
         }
       }
-      writeJSON('device-meta.json', deviceMeta);
+      if (isWrapper) { raw.lastUpdated = new Date().toISOString(); }
+      writeJSON('device-meta.json', isWrapper ? raw : devices);
       return { ok: true, undone, message: `Reverted ${undone} device assignment(s)` };
     }
   },
@@ -1215,6 +1254,18 @@ const COMMAND_FAMILIES = [
     tool: 'dismiss_alert'
   },
   {
+    intent: 'device_status',
+    family: 'device_onboarding',
+    patterns: [
+      /scan\s*(?:for\s*)?(?:new\s*)?(?:devices?|sensors?|lights?|hardware)/i,
+      /(?:check|show|list|get)\s*(?:devices?|sensors?|iot)/i,
+      /(?:device|sensor|iot)\s*(?:status|inventory|list|check)/i,
+      /(?:any|how\s*many)\s*(?:unassigned|new)\s*(?:devices?|sensors?)/i
+    ],
+    slots: {},
+    tool: 'get_device_status'
+  },
+  {
     intent: 'auto_assign',
     family: 'device_onboarding',
     patterns: [
@@ -1272,6 +1323,7 @@ const INTENT_KEYWORDS = {
   alert_check: ['alert', 'alerts', 'warning', 'problem', 'issue', 'sensor', 'outage', 'anomaly'],
   dismiss_alert: ['dismiss', 'clear', 'resolve', 'acknowledge'],
   auto_assign: ['assign', 'auto', 'device', 'devices', 'light', 'lights', 'sensor'],
+  device_status: ['scan', 'device', 'devices', 'sensor', 'sensors', 'iot', 'hardware', 'unassigned', 'new'],
   seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],
   seed_benchmarks: ['benchmark', 'benchmarks', 'import', 'crop', 'yield', 'baseline'],
   undo_last: ['undo', 'revert', 'rollback', 'takeback']

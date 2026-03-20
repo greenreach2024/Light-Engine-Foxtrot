@@ -237,8 +237,19 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_device_status',
+      description: 'Get current IoT device inventory — total, assigned, unassigned devices, with room info.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'auto_assign_devices',
-      description: 'Auto-assign unassigned IoT devices (sensors, lights) to rooms/zones. This is a write operation — confirm with the user first.',
+      description: 'Auto-assign unassigned IoT devices (sensors, lights) to rooms/zones based on room capacity.',
       parameters: {
         type: 'object',
         properties: {
@@ -555,6 +566,11 @@ When advising on what to grow, consider ALL of these factors (not only financial
 8. Harvest schedule alignment — group crops for regular weekly harvests. Balance quick-turn crops with slower crops to avoid feast-or-famine production.
 
 When the farmer asks "what should I grow" or "help me plan", use get_planning_recommendation and explain your reasoning across these dimensions — not just price trends.
+
+DEVICE MANAGEMENT:
+- When the farmer asks to scan for devices, check devices, or assign devices, FIRST call get_device_status to see the current inventory.
+- Report what you find (total, assigned, unassigned) before proposing any action.
+- Only offer to auto-assign if there are actually unassigned devices.
 
 PRICING WORKFLOW:
 - When the farmer asks to update crop prices, FIRST call get_pricing_info to see current prices and units.
