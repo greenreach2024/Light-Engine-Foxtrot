@@ -1806,6 +1806,27 @@ async function runMigrations(client) {
     logger.warn('Migration 028 warning:', err.message);
   }
 
+  // Migration 029: Conversation history persistence
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversation_history (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(100) NOT NULL,
+        conversation_id VARCHAR(200) NOT NULL,
+        messages JSONB NOT NULL DEFAULT '[]',
+        message_count INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(farm_id, conversation_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_conv_farm ON conversation_history(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_conv_updated ON conversation_history(updated_at);
+    `);
+    logger.info('Conversation history table ready (migration 029)');
+  } catch (err) {
+    logger.warn('Migration 029 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

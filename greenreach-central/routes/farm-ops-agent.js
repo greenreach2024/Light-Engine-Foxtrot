@@ -151,6 +151,113 @@ function syncSensorData() {
       },
       meta: { updatedAt: new Date().toISOString(), source: 'syncSensorData' }
     });
+
+    // --- Proactive Alert Generation ---
+    // Compare zone readings to targets and generate alerts for breaches
+    try {
+      const targetRanges = readJSON('target-ranges.json', {});
+      const zt = targetRanges.zones || {};
+      const dt = targetRanges.defaults || {};
+      const existingAlerts = readJSON('system-alerts.json', []);
+      const alertList = Array.isArray(existingAlerts) ? existingAlerts : (existingAlerts.alerts || []);
+      let alertsChanged = false;
+
+      for (const [zid, zdata] of Object.entries(zones)) {
+        const targets = zt[zid] || dt;
+        if (!targets.temp_min && !targets.temp_max) continue;
+
+        // Temperature check
+        if (zdata.temperature < targets.temp_min) {
+          const alertId = `env-temp-low-${zid}`;
+          if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+            alertList.push({ id: alertId, alert_type: 'environment', severity: 'warning', zone: zid, message: `${zid}: Temperature ${zdata.temperature}°C is below target minimum ${targets.temp_min}°C`, reading: zdata.temperature, target_min: targets.temp_min, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+            alertsChanged = true;
+          }
+        } else if (zdata.temperature > targets.temp_max) {
+          const alertId = `env-temp-high-${zid}`;
+          if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+            alertList.push({ id: alertId, alert_type: 'environment', severity: 'warning', zone: zid, message: `${zid}: Temperature ${zdata.temperature}°C exceeds target maximum ${targets.temp_max}°C`, reading: zdata.temperature, target_max: targets.temp_max, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+            alertsChanged = true;
+          }
+        } else {
+          // Auto-resolve old temp alerts for this zone if back in range
+          for (const a of alertList) {
+            if (a.id?.startsWith(`env-temp-`) && a.id?.endsWith(zid) && !a.resolved) {
+              a.resolved = true; a.resolved_at = new Date().toISOString();
+              alertsChanged = true;
+            }
+          }
+        }
+
+        // Humidity check
+        if (targets.rh_min && zdata.humidity < targets.rh_min) {
+          const alertId = `env-rh-low-${zid}`;
+          if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+            alertList.push({ id: alertId, alert_type: 'environment', severity: 'warning', zone: zid, message: `${zid}: Humidity ${zdata.humidity}% is below target minimum ${targets.rh_min}%`, reading: zdata.humidity, target_min: targets.rh_min, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+            alertsChanged = true;
+          }
+        } else if (targets.rh_max && zdata.humidity > targets.rh_max) {
+          const alertId = `env-rh-high-${zid}`;
+          if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+            alertList.push({ id: alertId, alert_type: 'environment', severity: 'warning', zone: zid, message: `${zid}: Humidity ${zdata.humidity}% exceeds target maximum ${targets.rh_max}%`, reading: zdata.humidity, target_max: targets.rh_max, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+            alertsChanged = true;
+          }
+        } else {
+          for (const a of alertList) {
+            if (a.id?.startsWith(`env-rh-`) && a.id?.endsWith(zid) && !a.resolved) {
+              a.resolved = true; a.resolved_at = new Date().toISOString();
+              alertsChanged = true;
+            }
+          }
+        }
+
+        // Low battery check (< 20%)
+        if (zdata.avg_battery < 20) {
+          const alertId = `battery-low-${zid}`;
+          if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+            alertList.push({ id: alertId, alert_type: 'hardware', severity: 'info', zone: zid, message: `${zid}: Average sensor battery ${zdata.avg_battery}% — consider replacing batteries soon`, reading: zdata.avg_battery, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+            alertsChanged = true;
+          }
+        }
+      }
+
+      // Nutrient alert check
+      try {
+        const nutrientData = readJSON('nutrient-dashboard.json', { tanks: {} });
+        for (const [tid, tank] of Object.entries(nutrientData.tanks || {})) {
+          const ad = tank.autodose || {};
+          const ph = tank.sensors?.ph?.current;
+          const ec = tank.sensors?.ec?.current;
+          if (ph != null && ad.phTarget != null && Math.abs(ph - ad.phTarget) > (ad.phTolerance || 0.3)) {
+            const alertId = `nutrient-ph-${tid}`;
+            if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+              alertList.push({ id: alertId, alert_type: 'nutrient', severity: 'warning', message: `${tid}: pH ${ph} is outside target ${ad.phTarget} ± ${ad.phTolerance || 0.3}`, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+              alertsChanged = true;
+            }
+          }
+          if (ec != null && ad.ecTarget != null && Math.abs(ec - ad.ecTarget) > (ad.ecTolerance || 100)) {
+            const alertId = `nutrient-ec-${tid}`;
+            if (!alertList.some(a => a.id === alertId && !a.resolved && !a.dismissed)) {
+              alertList.push({ id: alertId, alert_type: 'nutrient', severity: 'warning', message: `${tid}: EC ${ec} µS/cm is outside target ${ad.ecTarget} ± ${ad.ecTolerance || 100}`, created_at: new Date().toISOString(), resolved: false, dismissed: false, source: 'syncSensorData' });
+              alertsChanged = true;
+            }
+          }
+        }
+      } catch { /* nutrient check non-fatal */ }
+
+      // Keep only last 200 alerts, trim old resolved ones
+      if (alertList.length > 200) {
+        const active = alertList.filter(a => !a.resolved && !a.dismissed);
+        const resolved = alertList.filter(a => a.resolved || a.dismissed).slice(-50);
+        alertList.length = 0;
+        alertList.push(...active, ...resolved);
+        alertsChanged = true;
+      }
+
+      if (alertsChanged) writeJSON('system-alerts.json', alertList);
+    } catch (alertErr) {
+      console.error('[SyncSensorData] Alert generation error:', alertErr.message);
+    }
   } catch (err) {
     console.error('[SyncSensorData] Error:', err.message);
   }
@@ -1562,6 +1669,256 @@ export const TOOL_CATALOG = {
       await farmStore.set(prevState.farm_id, 'inventory', inventory);
       return { ok: true, message: `Inventory change reverted for ${prevState.crop_name}` };
     }
+  },
+
+  // --- Nutrient Management Tools ---
+  'get_nutrient_status': {
+    description: 'Get current nutrient solution status — pH, EC, temperature, autodose config, tank info, recent dosing events',
+    category: 'read',
+    required: [],
+    optional: ['tank_id'],
+    handler: async ({ tank_id }) => {
+      const data = readJSON('nutrient-dashboard.json', { sensors: {}, tanks: {} });
+      const sensors = data.sensors || {};
+      const tanks = data.tanks || {};
+
+      if (tank_id && tanks[tank_id]) {
+        const tank = tanks[tank_id];
+        return {
+          ok: true,
+          tank_id,
+          provider: tank.nutrientProvider,
+          ph: tank.sensors?.ph?.current,
+          ec: tank.sensors?.ec?.current,
+          temperature: tank.sensors?.temperature?.current,
+          autodose: tank.autodose || {},
+          recent_dosing: (tank.dosing?.history || []).slice(-5),
+          updated_at: data.metadata?.updatedAt
+        };
+      }
+
+      // Summary of all tanks
+      const summary = { ph: sensors.ph?.current, ec: sensors.ec?.current, temperature: sensors.temperature?.current };
+      const tankList = [];
+      for (const [tid, tank] of Object.entries(tanks)) {
+        tankList.push({
+          tank_id: tid,
+          provider: tank.nutrientProvider,
+          ph: tank.sensors?.ph?.current,
+          ec: tank.sensors?.ec?.current,
+          autodose_enabled: tank.autodose?.autodoseEnabled ?? false,
+          ph_target: tank.autodose?.phTarget,
+          ec_target: tank.autodose?.ecTarget
+        });
+      }
+      return { ok: true, ...summary, tanks: tankList, updated_at: data.metadata?.updatedAt };
+    }
+  },
+
+  'update_nutrient_targets': {
+    description: 'Update nutrient solution targets — pH target, EC target, tolerances, autodose settings for a tank',
+    category: 'write',
+    required: ['tank_id'],
+    optional: ['ph_target', 'ph_tolerance', 'ec_target', 'ec_tolerance', 'autodose_enabled'],
+    undoable: true,
+    handler: async (params) => {
+      const data = readJSON('nutrient-dashboard.json', { sensors: {}, tanks: {} });
+      const tank = data.tanks?.[params.tank_id];
+      if (!tank) return { ok: false, error: `Tank "${params.tank_id}" not found. Available: ${Object.keys(data.tanks || {}).join(', ')}` };
+
+      const previousAutodose = { ...tank.autodose };
+
+      if (params.ph_target != null) tank.autodose.phTarget = parseFloat(params.ph_target);
+      if (params.ph_tolerance != null) tank.autodose.phTolerance = parseFloat(params.ph_tolerance);
+      if (params.ec_target != null) tank.autodose.ecTarget = parseInt(params.ec_target);
+      if (params.ec_tolerance != null) tank.autodose.ecTolerance = parseInt(params.ec_tolerance);
+      if (params.autodose_enabled != null) tank.autodose.autodoseEnabled = params.autodose_enabled === true || params.autodose_enabled === 'true';
+
+      // Also sync top-level setpoints
+      if (params.ph_target != null) tank.phSetpoint = parseFloat(params.ph_target);
+      if (params.ph_tolerance != null) tank.phTolerance = parseFloat(params.ph_tolerance);
+      if (params.ec_target != null) tank.ecSetpoint = parseInt(params.ec_target);
+      if (params.ec_tolerance != null) tank.ecTolerance = parseInt(params.ec_tolerance);
+
+      data.metadata = { ...data.metadata, updatedAt: new Date().toISOString() };
+      writeJSON('nutrient-dashboard.json', data);
+
+      return {
+        ok: true,
+        tank_id: params.tank_id,
+        autodose: tank.autodose,
+        _undo_state: { tank_id: params.tank_id, previousAutodose }
+      };
+    },
+    undoHandler: async (params, prevState) => {
+      const data = readJSON('nutrient-dashboard.json', { sensors: {}, tanks: {} });
+      const tank = data.tanks?.[prevState.tank_id];
+      if (tank) {
+        tank.autodose = prevState.previousAutodose;
+        tank.phSetpoint = prevState.previousAutodose.phTarget;
+        tank.phTolerance = prevState.previousAutodose.phTolerance;
+        tank.ecSetpoint = prevState.previousAutodose.ecTarget;
+        tank.ecTolerance = prevState.previousAutodose.ecTolerance;
+        data.metadata = { ...data.metadata, updatedAt: new Date().toISOString() };
+        writeJSON('nutrient-dashboard.json', data);
+      }
+      return { ok: true, message: `Nutrient targets reverted for ${prevState.tank_id}` };
+    }
+  },
+
+  'get_dosing_history': {
+    description: 'Get recent autodose events — pump activations, pH/EC corrections, calibration history',
+    category: 'read',
+    required: [],
+    optional: ['tank_id', 'limit'],
+    handler: async ({ tank_id, limit }) => {
+      const data = readJSON('nutrient-dashboard.json', { sensors: {}, tanks: {} });
+      const maxEntries = parseInt(limit) || 20;
+      const results = [];
+
+      for (const [tid, tank] of Object.entries(data.tanks || {})) {
+        if (tank_id && tid !== tank_id) continue;
+        const history = (tank.dosing?.history || []).slice(-maxEntries);
+        results.push({
+          tank_id: tid,
+          provider: tank.nutrientProvider,
+          dosing_events: history,
+          count: history.length,
+          calibration: tank.calibration || null
+        });
+      }
+      return { ok: true, tanks: results, updated_at: data.metadata?.updatedAt };
+    }
+  },
+
+  // --- Yield Forecasting Tools ---
+  'get_yield_forecast': {
+    description: 'Forecast upcoming yields based on active plantings, crop benchmarks, and growth schedules. Shows expected harvest dates, estimated weights, and revenue projections.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'crop'],
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const farm_id = params.farm_id || 'demo-farm';
+
+      // Get active plantings
+      const plantings = await dbQuery(
+        'SELECT * FROM planting_assignments WHERE farm_id = $1 AND status = $2 ORDER BY expected_harvest_date ASC',
+        [farm_id, 'active']
+      );
+
+      // Get benchmarks
+      const benchmarks = await dbQuery('SELECT * FROM crop_benchmarks');
+      const benchMap = {};
+      for (const b of benchmarks.rows) benchMap[b.crop_name?.toLowerCase()] = b;
+
+      // Get pricing
+      const pricing = readJSON('crop-pricing.json', {});
+      const priceMap = {};
+      if (pricing.crops) {
+        for (const c of pricing.crops) priceMap[c.crop?.toLowerCase()] = c;
+      }
+
+      const forecasts = [];
+      const now = new Date();
+
+      for (const p of plantings.rows) {
+        if (params.crop && !p.crop_name?.toLowerCase().includes(params.crop.toLowerCase())) continue;
+        const cropKey = p.crop_name?.toLowerCase();
+        const bench = benchMap[cropKey] || {};
+        const price = priceMap[cropKey] || {};
+
+        const seedDate = new Date(p.seed_date);
+        const harvestDate = p.expected_harvest_date ? new Date(p.expected_harvest_date) : null;
+        const daysRemaining = harvestDate ? Math.max(0, Math.ceil((harvestDate - now) / (1000 * 60 * 60 * 24))) : null;
+        const growDays = harvestDate ? Math.ceil((harvestDate - seedDate) / (1000 * 60 * 60 * 24)) : bench.avg_grow_days;
+
+        // Estimate yield
+        const trays = p.tray_count || 1;
+        const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
+        const plantsPerTray = 50; // standard estimate
+        const lossRate = bench.avg_loss_rate || 0.05;
+        const estYieldLbs = ((trays * plantsPerTray * avgWeightOz * (1 - lossRate)) / 16).toFixed(1);
+        const pricePerLb = price.price_per_lb || price.pricePerLb || 0;
+        const estRevenue = (estYieldLbs * pricePerLb).toFixed(2);
+
+        forecasts.push({
+          crop: p.crop_name,
+          zone: p.zone_id,
+          seed_date: p.seed_date,
+          expected_harvest: p.expected_harvest_date,
+          days_remaining: daysRemaining,
+          grow_days: growDays,
+          tray_count: trays,
+          est_yield_lbs: parseFloat(estYieldLbs),
+          est_revenue_cad: parseFloat(estRevenue),
+          benchmark_available: !!benchMap[cropKey]
+        });
+      }
+
+      return {
+        ok: true,
+        forecasts,
+        count: forecasts.length,
+        total_est_revenue: parseFloat(forecasts.reduce((s, f) => s + f.est_revenue_cad, 0).toFixed(2))
+      };
+    }
+  },
+
+  'get_cost_analysis': {
+    description: 'Analyze cost-per-tray and profitability for active or recent crops — includes grow time, estimated resource use, revenue, and margin.',
+    category: 'read',
+    required: [],
+    optional: ['crop'],
+    handler: async (params) => {
+      const pricing = readJSON('crop-pricing.json', {});
+      const crops = pricing.crops || [];
+
+      // Get benchmarks
+      let benchRows = [];
+      if (isDatabaseAvailable()) {
+        try {
+          const res = await dbQuery('SELECT * FROM crop_benchmarks');
+          benchRows = res.rows;
+        } catch { /* ok */ }
+      }
+      const benchMap = {};
+      for (const b of benchRows) benchMap[b.crop_name?.toLowerCase()] = b;
+
+      const analysis = [];
+      for (const c of crops) {
+        if (params.crop && !c.crop?.toLowerCase().includes(params.crop.toLowerCase())) continue;
+        const bench = benchMap[c.crop?.toLowerCase()] || {};
+        const growDays = bench.avg_grow_days || 28;
+        const lossRate = bench.avg_loss_rate || 0.05;
+
+        // Estimated costs per tray (approximate)
+        const seedCostPerTray = 1.50;
+        const mediaCostPerTray = 0.80;
+        const nutrientCostPerDay = 0.15;
+        const electricityPerDay = 0.25;
+        const totalCostPerTray = seedCostPerTray + mediaCostPerTray + (nutrientCostPerDay + electricityPerDay) * growDays;
+
+        const pricePerLb = c.price_per_lb || c.pricePerLb || 0;
+        const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
+        const yieldPerTrayLbs = (50 * avgWeightOz * (1 - lossRate)) / 16;
+        const revenuePerTray = yieldPerTrayLbs * pricePerLb;
+        const margin = revenuePerTray > 0 ? ((revenuePerTray - totalCostPerTray) / revenuePerTray * 100).toFixed(1) : 0;
+
+        analysis.push({
+          crop: c.crop,
+          grow_days: growDays,
+          cost_per_tray_cad: parseFloat(totalCostPerTray.toFixed(2)),
+          yield_per_tray_lbs: parseFloat(yieldPerTrayLbs.toFixed(2)),
+          revenue_per_tray_cad: parseFloat(revenuePerTray.toFixed(2)),
+          margin_pct: parseFloat(margin),
+          price_per_lb: pricePerLb
+        });
+      }
+
+      analysis.sort((a, b) => b.margin_pct - a.margin_pct);
+      return { ok: true, analysis, count: analysis.length };
+    }
   }
 };
 
@@ -2006,6 +2363,66 @@ const COMMAND_FAMILIES = [
     slots: {},
     tool: null,
     special: 'undo'
+  },
+  {
+    intent: 'nutrient_status',
+    family: 'nutrients',
+    patterns: [
+      /(?:what|how|check|show|get)\s*(?:is|are|the)?\s*(?:ph|ec|nutrient|solution|tank|reservoir)/i,
+      /(?:nutrient|solution|tank|reservoir)\s*(?:status|readings|levels?|check)/i,
+      /(?:ph|ec)\s*(?:level|reading|current|now)/i,
+      /(?:autodose|auto-dose|dosing)\s*(?:status|config|settings?)/i
+    ],
+    slots: {},
+    tool: 'get_nutrient_status'
+  },
+  {
+    intent: 'nutrient_targets',
+    family: 'nutrients',
+    patterns: [
+      /(?:set|change|update|adjust)\s*(?:ph|ec|nutrient)\s*(?:target|setpoint|level)/i,
+      /(?:ph|ec)\s*(?:target|setpoint|should)\s*(?:be|to|at)/i,
+      /(?:autodose|auto-dose)\s*(?:enable|disable|turn|toggle|on|off)/i,
+      /(?:change|update)\s*(?:nutrient|tank|dosing)\s*(?:target|settings?)/i
+    ],
+    slots: {},
+    tool: 'update_nutrient_targets'
+  },
+  {
+    intent: 'dosing_history',
+    family: 'nutrients',
+    patterns: [
+      /(?:dosing|dose)\s*(?:history|log|events?|recent)/i,
+      /(?:recent|last|latest)\s*(?:dosing|dose|pump)\s*(?:events?|activity)/i,
+      /(?:when|what)\s*(?:was|were)\s*(?:the\s*)?(?:last|recent)\s*(?:dose|dosing|pump)/i,
+      /(?:calibration|calibrate)\s*(?:history|data|log)/i
+    ],
+    slots: {},
+    tool: 'get_dosing_history'
+  },
+  {
+    intent: 'yield_forecast',
+    family: 'planting',
+    patterns: [
+      /(?:yield|harvest)\s*(?:forecast|projection|estimate|expected)/i,
+      /(?:how\s*much|what)\s*(?:will|should)\s*(?:we|I)?\s*(?:harvest|yield|get)/i,
+      /(?:expected|upcoming|projected)\s*(?:yield|harvest|revenue)/i,
+      /(?:forecast|project|estimate)\s*(?:revenue|income|harvest)/i
+    ],
+    slots: {},
+    tool: 'get_yield_forecast'
+  },
+  {
+    intent: 'cost_analysis',
+    family: 'planting',
+    patterns: [
+      /(?:cost|expense)\s*(?:per|analysis|breakdown|estimate)/i,
+      /(?:profitability|profit|margin)\s*(?:analysis|by\s*crop|per\s*tray)/i,
+      /(?:cost|how\s*much)\s*(?:per\s*tray|to\s*grow)/i,
+      /(?:most|least|best|worst)\s*(?:profitable|margin)/i
+    ],
+    slots: {},
+    tool: 'get_cost_analysis'
   }
 ];
 
@@ -2031,7 +2448,12 @@ const INTENT_KEYWORDS = {
   scheduled_harvests: ['upcoming', 'harvest', 'next', 'forecast', 'freeing', 'available', 'zone'],
   seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],
   seed_benchmarks: ['benchmark', 'benchmarks', 'import', 'crop', 'yield', 'baseline'],
-  undo_last: ['undo', 'revert', 'rollback', 'takeback']
+  undo_last: ['undo', 'revert', 'rollback', 'takeback'],
+  nutrient_status: ['nutrient', 'nutrients', 'ph', 'ec', 'solution', 'tank', 'reservoir', 'autodose', 'dosing'],
+  nutrient_targets: ['nutrient', 'ph', 'ec', 'target', 'setpoint', 'autodose', 'enable', 'disable'],
+  dosing_history: ['dosing', 'dose', 'pump', 'calibration', 'history', 'recent'],
+  yield_forecast: ['yield', 'forecast', 'projection', 'estimate', 'revenue', 'expected', 'upcoming'],
+  cost_analysis: ['cost', 'profitability', 'profit', 'margin', 'expense', 'tray', 'per']
 };
 
 function fuzzyMatch(text) {

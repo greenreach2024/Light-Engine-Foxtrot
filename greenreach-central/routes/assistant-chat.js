@@ -67,25 +67,54 @@ try {
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-// ── Conversation Memory (in-memory, 30-min TTL) ───────────────────────
+// ── Conversation Memory (in-memory cache + DB persistence) ─────────
 const conversations = new Map();
 const CONVERSATION_TTL_MS = 30 * 60 * 1000;
 const MAX_HISTORY = 20; // messages per conversation
 
-function getConversation(id) {
+async function getConversation(id, farmId) {
+  // Check hot cache first
   const conv = conversations.get(id);
-  if (!conv) return null;
-  if (Date.now() - conv.lastAccess > CONVERSATION_TTL_MS) {
-    conversations.delete(id);
-    return null;
+  if (conv && Date.now() - conv.lastAccess <= CONVERSATION_TTL_MS) {
+    conv.lastAccess = Date.now();
+    return conv;
   }
-  conv.lastAccess = Date.now();
-  return conv;
+  if (conv) conversations.delete(id);
+
+  // Fall back to DB
+  try {
+    if (isDatabaseAvailable() && farmId) {
+      const result = await query(
+        'SELECT messages FROM conversation_history WHERE farm_id = $1 AND conversation_id = $2 AND updated_at > NOW() - INTERVAL \'24 hours\'',
+        [farmId, id]
+      );
+      if (result.rows.length > 0) {
+        const messages = result.rows[0].messages || [];
+        const restored = { messages, lastAccess: Date.now() };
+        conversations.set(id, restored);
+        return restored;
+      }
+    }
+  } catch { /* DB unavailable — proceed without */ }
+  return null;
 }
 
-function upsertConversation(id, messages) {
+async function upsertConversation(id, messages, farmId) {
   const trimmed = messages.slice(-MAX_HISTORY);
   conversations.set(id, { messages: trimmed, lastAccess: Date.now() });
+
+  // Persist to DB (fire-and-forget)
+  try {
+    if (isDatabaseAvailable() && farmId) {
+      await query(
+        `INSERT INTO conversation_history (farm_id, conversation_id, messages, message_count, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (farm_id, conversation_id)
+         DO UPDATE SET messages = $3, message_count = $4, updated_at = NOW()`,
+        [farmId, id, JSON.stringify(trimmed), trimmed.length]
+      );
+    }
+  } catch { /* non-fatal */ }
 }
 
 // Periodic cleanup every 10 min
@@ -621,6 +650,84 @@ const GPT_TOOLS = [
       }
     }
   },
+  // --- Nutrient Management Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_nutrient_status',
+      description: 'Get current nutrient solution status — pH, EC, temperature, autodose config, tank info, recent dosing events.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tank_id: { type: 'string', description: 'Specific tank ID (e.g. "tank2"). Omit for all tanks.' }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_nutrient_targets',
+      description: 'Update nutrient solution targets — pH target, EC target, tolerances, enable/disable autodose. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tank_id: { type: 'string', description: 'Tank ID (e.g. "tank2")' },
+          ph_target: { type: 'number', description: 'Target pH level (e.g. 6.0)' },
+          ph_tolerance: { type: 'number', description: 'pH tolerance band (e.g. 0.15)' },
+          ec_target: { type: 'number', description: 'Target EC in µS/cm (e.g. 1600)' },
+          ec_tolerance: { type: 'number', description: 'EC tolerance (e.g. 50)' },
+          autodose_enabled: { type: 'boolean', description: 'Enable or disable autodosing' }
+        },
+        required: ['tank_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_dosing_history',
+      description: 'Get recent autodose events — pump activations, pH/EC corrections, calibration history.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tank_id: { type: 'string', description: 'Specific tank ID. Omit for all tanks.' },
+          limit: { type: 'number', description: 'Max events to return (default: 20)' }
+        },
+        required: []
+      }
+    }
+  },
+  // --- Yield & Cost Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_yield_forecast',
+      description: 'Forecast upcoming yields from active plantings — expected harvest dates, estimated weights, revenue projections based on crop benchmarks and pricing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Filter by crop name (optional)' }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_cost_analysis',
+      description: 'Analyze cost-per-tray and profitability for crops — grow time, estimated costs, revenue per tray, and profit margins. Sorted by margin.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Filter by crop name (optional)' }
+        },
+        required: []
+      }
+    }
+  },
   // --- User Memory Tool ---
   {
     type: 'function',
@@ -868,18 +975,44 @@ ENVIRONMENT CONTROL:
 - When harvest is recorded via mark_harvest_complete, inventory is automatically updated — you can confirm by calling get_inventory_summary.
 - The daily to-do (get_daily_todo) now detects environment drift per zone and will flag temperature/humidity out of range.
 
+NUTRIENT MANAGEMENT:
+- When the farmer asks about pH, EC, nutrients, solution, tank status, or dosing:
+  1. Call get_nutrient_status to get current pH, EC, temperature, autodose config, and tank info.
+  2. Compare pH/EC to targets and flag if out of tolerance.
+  3. If values are drifting, proactively suggest target adjustments or manual intervention.
+- When the farmer wants to change pH/EC targets or autodose settings:
+  1. Call get_nutrient_status first to show current values and targets.
+  2. Use update_nutrient_targets to change — this is a WRITE operation, confirm first.
+  3. After confirmation, verify with get_nutrient_status.
+- When the farmer asks about recent dosing activity or pump events:
+  1. Call get_dosing_history to show recent autodose events and calibration data.
+- Cross-reference nutrients with crop recipes: different growth stages need different pH/EC ranges.
+
+YIELD FORECASTING:
+- When the farmer asks about expected yields, projected revenue, or harvest forecasts:
+  1. Call get_yield_forecast to get projections from active plantings with crop benchmarks.
+  2. Present as a clear table: crop, zone, expected harvest date, days remaining, estimated yield, estimated revenue.
+  3. Highlight crops approaching harvest soon (within 7 days).
+- When the farmer asks about profitability, cost per tray, or margins:
+  1. Call get_cost_analysis to see per-crop cost breakdown, revenue, and margins.
+  2. Identify the most and least profitable crops.
+  3. Suggest optimizations: focus on high-margin crops, review pricing for low-margin ones.
+
 AUTONOMY MINDSET:
 - You are evolving toward full farm autonomy. When you detect issues, don't just report — propose specific actions.
-- Cross-reference data sources: combine sensor readings, crop schedules, harvest logs, and market data to give integrated advice.
+- Cross-reference data sources: combine sensor readings, crop schedules, harvest logs, nutrient data, and market data to give integrated advice.
 - If a sensor shows low temperature AND a crop schedule requires higher temps, connect the dots and recommend both the environment fix AND the crop impact.
+- If nutrient pH is drifting AND a crop is entering a sensitive growth stage, flag both issues together with a unified recommendation.
+- When presenting yield forecasts, connect them to market pricing trends — suggest timing harvest/sales for maximum revenue.
 - Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
+- Proactive alerts are generated every 5 minutes for environment, nutrient, and hardware issues. Reference these in your daily briefings.
 
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks, update_nutrient_targets): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
@@ -1610,12 +1743,12 @@ router.post('/chat', async (req, res) => {
     const pending = pendingActions.get(convId);
     pendingActions.delete(convId);
 
-    const existing = getConversation(convId);
+    const existing = await getConversation(convId, farmId);
     const history = existing ? [...existing.messages] : [];
 
     if (isCancel) {
       const cancelReply = 'Cancelled — no changes were made.';
-      upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: cancelReply }]);
+      await upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: cancelReply }], farmId);
       return res.json({ ok: true, reply: cancelReply, conversation_id: convId });
     }
 
@@ -1650,7 +1783,7 @@ router.post('/chat', async (req, res) => {
         status: 'success'
       });
 
-      upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: replyText }]);
+      await upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: replyText }], farmId);
 
       return res.json({
         ok: true, reply: replyText, conversation_id: convId,
@@ -1663,7 +1796,7 @@ router.post('/chat', async (req, res) => {
 
   try {
     // Build conversation
-    const existing = getConversation(convId);
+    const existing = await getConversation(convId, farmId);
     const history = existing ? [...existing.messages] : [];
 
     // Build system prompt (only on first message or every 5 messages to save tokens)
@@ -1781,7 +1914,7 @@ router.post('/chat', async (req, res) => {
       { role: 'user', content: sanitizedMessage },
       { role: 'assistant', content: replyText }
     ];
-    upsertConversation(convId, updatedHistory);
+    await upsertConversation(convId, updatedHistory, farmId);
 
     // Track engagement metrics
     const toolNames = toolCallResults.map(t => t.tool);
