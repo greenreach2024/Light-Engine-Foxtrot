@@ -62,7 +62,13 @@ setInterval(() => {
   for (const [id, conv] of conversations) {
     if (now - conv.lastAccess > CONVERSATION_TTL_MS) conversations.delete(id);
   }
+  for (const [id, action] of pendingActions) {
+    if (now - action.created > CONVERSATION_TTL_MS) pendingActions.delete(id);
+  }
 }, 10 * 60 * 1000);
+
+// ── Pending Write Actions (require user confirmation) ─────────────────
+const pendingActions = new Map();
 
 // ── GPT Function Definitions ──────────────────────────────────────────
 const GPT_TOOLS = [
@@ -221,6 +227,163 @@ const GPT_TOOLS = [
         }
       }
     }
+  },
+  // --- Phase 2A: New Read Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_pricing_decisions',
+      description: 'Get recent pricing decisions and their outcomes — shows what prices were changed, when, and by whom.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Filter by crop name' },
+          limit: { type: 'number', description: 'Max results (default 10)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_capacity',
+      description: 'Get farm capacity utilization — total tray slots, used, available, and utilization percentage.',
+      parameters: {
+        type: 'object',
+        properties: {
+          farm_id: { type: 'string', description: 'Farm ID (optional, uses session default)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_inventory_summary',
+      description: 'Get current crop inventory — quantities, statuses, and zones for all crops in stock.',
+      parameters: {
+        type: 'object',
+        properties: {
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crop_info',
+      description: 'Get detailed crop registry info — growth parameters, days to harvest, pricing, categories. Use to answer questions about how to grow a specific crop.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Crop name to look up. Omit for all crops.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_farm_insights',
+      description: 'Get AI-generated environmental insights and recipe recommendations for the farm.',
+      parameters: {
+        type: 'object',
+        properties: {
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        }
+      }
+    }
+  },
+  // --- Phase 2B: Write Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'update_crop_price',
+      description: 'Update the retail or wholesale price for a crop. This is a WRITE operation — you MUST describe the change and ask the user to confirm before calling this tool.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Crop name (e.g. "Genovese Basil")' },
+          retail_price: { type: 'number', description: 'New retail price in CAD' },
+          wholesale_price: { type: 'number', description: 'New wholesale price in CAD' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['crop']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_planting_assignment',
+      description: 'Schedule a new planting — assign a crop to a group/zone with seed and harvest dates. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop_name: { type: 'string', description: 'Crop to plant' },
+          group_id: { type: 'string', description: 'Group/zone ID to plant in' },
+          seed_date: { type: 'string', description: 'Seed date (YYYY-MM-DD). Defaults to today.' },
+          harvest_date: { type: 'string', description: 'Expected harvest date (YYYY-MM-DD)' },
+          notes: { type: 'string', description: 'Optional notes' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['crop_name', 'group_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mark_harvest_complete',
+      description: 'Record a completed harvest — crop, quantity, zone, yield. WRITE operation — confirm details with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop: { type: 'string', description: 'Crop name harvested' },
+          quantity: { type: 'number', description: 'Number of trays/units harvested' },
+          zone: { type: 'string', description: 'Zone harvested from' },
+          unit: { type: 'string', description: 'Unit type (trays, lbs, units). Default: trays' },
+          yield_lbs: { type: 'number', description: 'Yield in pounds (optional)' },
+          notes: { type: 'string', description: 'Optional notes' }
+        },
+        required: ['crop', 'quantity']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_order_status',
+      description: 'Update a wholesale order status (e.g. confirmed → packed → shipped → delivered). WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          order_id: { type: 'string', description: 'Order ID (e.g. WO-2026-0047)' },
+          status: { type: 'string', enum: ['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled'], description: 'New status' }
+        },
+        required: ['order_id', 'status']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_inventory_item',
+      description: 'Add stock to inventory or create a new inventory entry for a crop. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop_name: { type: 'string', description: 'Crop name' },
+          quantity: { type: 'number', description: 'Quantity to add' },
+          unit: { type: 'string', description: 'Unit (units, lbs, trays). Default: units' },
+          zone: { type: 'string', description: 'Storage zone (optional)' },
+          status: { type: 'string', description: 'Status (available, reserved, damaged). Default: available' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['crop_name', 'quantity']
+      }
+    }
   }
 ];
 
@@ -272,7 +435,7 @@ ${farmContext || 'No farm data available — user may need to set up their farm 
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
-- For write operations (dismiss_alert, auto_assign_devices, seed_benchmarks), ALWAYS describe what you're about to do and ask for confirmation before calling the tool. Only call the tool after the user confirms.
+- For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
 - Never fabricate data — only report what tools return.
@@ -501,6 +664,65 @@ router.post('/chat', async (req, res) => {
   const convId = conversation_id || crypto.randomUUID();
   const toolCallResults = [];
 
+  // ── Handle pending action confirmations ──
+  const isConfirm = /^(__confirm_action__|yes|yeah|yep|confirm|do it|go ahead|proceed|approved|sure|ok)$/i.test(sanitizedMessage);
+  const isCancel = /^(__cancel_action__|cancel|no|nah|never mind|abort|don't|stop)$/i.test(sanitizedMessage);
+
+  if (pendingActions.has(convId) && (isConfirm || isCancel)) {
+    const pending = pendingActions.get(convId);
+    pendingActions.delete(convId);
+
+    const existing = getConversation(convId);
+    const history = existing ? [...existing.messages] : [];
+
+    if (isCancel) {
+      const cancelReply = 'Cancelled — no changes were made.';
+      upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: cancelReply }]);
+      return res.json({ ok: true, reply: cancelReply, conversation_id: convId });
+    }
+
+    // Execute the confirmed write action
+    try {
+      pending.params.confirm = true;
+      const result = await executeExtendedTool(pending.tool, pending.params, pending.farmId);
+
+      toolCallResults.push({ tool: pending.tool, params: pending.params, success: result?.ok !== false });
+
+      const systemPrompt = await buildSystemPrompt(farmId);
+      const summaryCompletion = await openai.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...history.filter(m => m.role !== 'system'),
+          { role: 'user', content: 'I confirmed the action.' },
+          { role: 'system', content: `User confirmed. Tool "${pending.tool}" executed. Result: ${JSON.stringify(result).slice(0, 1500)}. Summarize what was done concisely.` }
+        ],
+        temperature: 0.7,
+        max_tokens: 400
+      });
+
+      const replyText = summaryCompletion.choices[0].message?.content || 'Done — action completed.';
+
+      trackAiUsage({
+        farm_id: farmId, endpoint: 'assistant-chat', model: MODEL,
+        prompt_tokens: summaryCompletion.usage?.prompt_tokens,
+        completion_tokens: summaryCompletion.usage?.completion_tokens,
+        total_tokens: summaryCompletion.usage?.total_tokens,
+        estimated_cost: estimateChatCost(MODEL, summaryCompletion.usage?.prompt_tokens || 0, summaryCompletion.usage?.completion_tokens || 0),
+        status: 'success'
+      });
+
+      upsertConversation(convId, [...history, { role: 'user', content: sanitizedMessage }, { role: 'assistant', content: replyText }]);
+
+      return res.json({
+        ok: true, reply: replyText, conversation_id: convId,
+        tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined, model: MODEL
+      });
+    } catch (err) {
+      return res.json({ ok: true, reply: `Sorry, the action failed: ${err.message}`, conversation_id: convId });
+    }
+  }
+
   try {
     // Build conversation
     const existing = getConversation(convId);
@@ -556,11 +778,20 @@ router.post('/chat', async (req, res) => {
 
         let toolResult;
         try {
-          // Write tools: auto-confirm since GPT is supposed to ask user first in conversation
-          if (TOOL_CATALOG[fnName]?.category === 'write') {
-            fnArgs.confirm = true;
+          // Write tools: intercept and require user confirmation
+          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write';
+          if (isWriteTool) {
+            // Store as pending — don't execute yet
+            pendingActions.set(convId, { tool: fnName, params: fnArgs, farmId, created: Date.now() });
+            toolResult = {
+              status: 'pending_confirmation',
+              message: 'This action requires user confirmation before execution. Describe what will happen and ask the user to confirm or cancel.',
+              tool: fnName,
+              params: fnArgs
+            };
+          } else {
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
           }
-          toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
         } catch (err) {
           toolResult = { ok: false, error: err.message };
         }
@@ -614,11 +845,15 @@ router.post('/chat', async (req, res) => {
     ];
     upsertConversation(convId, updatedHistory);
 
+    // Check if there's a pending action to signal to the frontend
+    const pendingAction = pendingActions.get(convId);
+
     return res.json({
       ok: true,
       reply: replyText,
       conversation_id: convId,
       tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
+      pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
       model: MODEL
     });
 

@@ -16,6 +16,8 @@ class FarmAssistant {
     this.funFacts = [];
     this.conversationId = null;  // Server-side conversation tracking
     this.aiAvailable = null;     // null = unknown, true/false after check
+    this.pendingAction = null;   // Pending write action awaiting confirmation
+    window._farmAssistant = this; // Global ref for confirm/cancel button onclick
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
@@ -723,11 +725,34 @@ class FarmAssistant {
     await this.processQuery(query);
   }
 
+  setTypingIndicator(show) {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) return;
+    let indicator = messagesContainer.querySelector('.typing-indicator');
+    if (show && !indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'message assistant-message typing-indicator';
+      indicator.innerHTML = '<div class="message-avatar">AI</div><div class="message-content loading">Thinking…</div>';
+      messagesContainer.appendChild(indicator);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } else if (!show && indicator) {
+      indicator.remove();
+    }
+  }
+
   addMessage(content, type = 'assistant', actions = null) {
     const messagesContainer = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}-message`;
     
+    if (type === 'action') {
+      // Action buttons — no avatar, no history, no TTS
+      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messagesContainer.appendChild(messageDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      return;
+    }
+
     const avatar = type === 'user' ? 'You' : 'AI';
     
     messageDiv.innerHTML = `
@@ -810,7 +835,88 @@ class FarmAssistant {
 
     // Display the AI response
     this.addMessage(data.reply);
+
+    // If a write action is pending confirmation, show Confirm/Cancel buttons
+    if (data.pending_action) {
+      this.pendingAction = data.pending_action;
+      const actionButtons = `
+        <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
+        <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
+      `;
+      this.addMessage(actionButtons, 'action');
+    }
+
     return true;
+  }
+
+  /**
+   * Confirm a pending write action.
+   */
+  async confirmPendingAction() {
+    if (!this.pendingAction || !this.conversationId) return;
+    this.pendingAction = null;
+
+    // Remove the action buttons
+    const messagesContainer = document.getElementById('chatMessages');
+    const actionMsgs = messagesContainer?.querySelectorAll('.action-message');
+    if (actionMsgs) actionMsgs.forEach(el => el.remove());
+
+    this.addMessage('Yes, confirm.', 'user');
+    this.setTypingIndicator(true);
+
+    try {
+      const resp = await this._authFetch('/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: '__confirm_action__',
+          conversation_id: this.conversationId,
+          farm_id: window.FARM_ID || undefined
+        })
+      });
+      this.setTypingIndicator(false);
+      if (!resp.ok) { this.addMessage('Action failed — please try again.'); return; }
+      const data = await resp.json();
+      if (data.reply) this.addMessage(data.reply);
+    } catch (err) {
+      this.setTypingIndicator(false);
+      this.addMessage('Action failed — please try again.');
+    }
+  }
+
+  /**
+   * Cancel a pending write action.
+   */
+  async cancelPendingAction() {
+    if (!this.conversationId) return;
+    this.pendingAction = null;
+
+    // Remove the action buttons
+    const messagesContainer = document.getElementById('chatMessages');
+    const actionMsgs = messagesContainer?.querySelectorAll('.action-message');
+    if (actionMsgs) actionMsgs.forEach(el => el.remove());
+
+    this.addMessage('Cancel', 'user');
+    this.setTypingIndicator(true);
+
+    try {
+      const resp = await this._authFetch('/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: '__cancel_action__',
+          conversation_id: this.conversationId,
+          farm_id: window.FARM_ID || undefined
+        })
+      });
+      this.setTypingIndicator(false);
+      if (!resp.ok) { this.addMessage('Cancelled.'); return; }
+      const data = await resp.json();
+      if (data.reply) this.addMessage(data.reply);
+    } catch {
+      this.setTypingIndicator(false);
+      this.addMessage('Cancelled — no changes made.');
+    }
   }
 
   /**

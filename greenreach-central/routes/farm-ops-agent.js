@@ -32,6 +32,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import farmStore from '../lib/farm-data-store.js';
+import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -413,6 +415,106 @@ export const TOOL_CATALOG = {
     }
   },
 
+  // --- Phase 2A: Expanded Read Tools ---
+  'get_pricing_decisions': {
+    description: 'Get recent pricing decisions and their outcomes',
+    category: 'read',
+    required: [],
+    optional: ['crop', 'limit'],
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: true, decisions: [], message: 'Database unavailable' };
+      try {
+        const limit = parseInt(params.limit) || 10;
+        const values = [];
+        let sql = 'SELECT * FROM pricing_decisions';
+        if (params.crop) {
+          values.push(`%${params.crop}%`);
+          sql += ' WHERE crop ILIKE $1';
+        }
+        sql += ` ORDER BY created_at DESC LIMIT $${values.length + 1}`;
+        values.push(limit);
+        const result = await dbQuery(sql, values);
+        return { ok: true, decisions: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: true, decisions: [], message: err.message };
+      }
+    }
+  },
+  'get_capacity': {
+    description: 'Get farm capacity utilization — total trays, used, available, utilization percentage',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params) => {
+      const farm_id = params.farm_id || 'demo-farm';
+      const groups = await farmStore.get(farm_id, 'groups') || [];
+      const totalCapacity = groups.reduce((sum, g) => {
+        const trays = Number(g.trays) || (Array.isArray(g.trays) ? g.trays.length : 0) || Number(g.trayCount) || 0;
+        return sum + trays;
+      }, 0) || 0;
+      let usedCapacity = 0;
+      if (isDatabaseAvailable()) {
+        try {
+          const result = await dbQuery('SELECT COUNT(*) as count FROM planting_assignments WHERE farm_id = $1', [farm_id]);
+          usedCapacity = parseInt(result.rows[0]?.count || 0);
+        } catch { /* ok */ }
+      }
+      const availableCapacity = Math.max(0, totalCapacity - usedCapacity);
+      const utilizationPercent = totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 10000) / 100 : 0;
+      return { ok: true, farmId: farm_id, totalCapacity, usedCapacity, availableCapacity, utilizationPercent };
+    }
+  },
+  'get_inventory_summary': {
+    description: 'Get current crop inventory counts and statuses',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params) => {
+      const farm_id = params.farm_id || 'demo-farm';
+      const inventory = await farmStore.get(farm_id, 'inventory') || [];
+      return { ok: true, inventory, count: Array.isArray(inventory) ? inventory.length : Object.keys(inventory).length };
+    }
+  },
+  'get_crop_info': {
+    description: 'Get detailed crop registry info — growth parameters, pricing, categories',
+    category: 'read',
+    required: [],
+    optional: ['crop'],
+    handler: async (params) => {
+      const registry = readJSON('crop-registry.json', {});
+      let crops = registry.crops || registry;
+      if (typeof crops === 'object' && !Array.isArray(crops)) {
+        crops = Object.entries(crops).map(([name, info]) => ({ name, ...info }));
+      }
+      if (params.crop) {
+        crops = crops.filter(c =>
+          (c.name || '').toLowerCase().includes(params.crop.toLowerCase()) ||
+          (c.id || '').toLowerCase().includes(params.crop.toLowerCase())
+        );
+      }
+      return { ok: true, crops, count: crops.length };
+    }
+  },
+  'get_farm_insights': {
+    description: 'Get AI environmental insights and recipe recommendations',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params) => {
+      const farm_id = params.farm_id || 'demo-farm';
+      if (!isDatabaseAvailable()) return { ok: true, insights: [], message: 'Database unavailable' };
+      try {
+        const result = await dbQuery(
+          'SELECT * FROM ai_insights WHERE farm_id = $1 ORDER BY created_at DESC LIMIT 5',
+          [farm_id]
+        );
+        return { ok: true, insights: result.rows, count: result.rows.length };
+      } catch {
+        return { ok: true, insights: [], message: 'No AI insights available yet' };
+      }
+    }
+  },
+
   // --- Write tools ---
   'dismiss_alert': {
     description: 'Dismiss a system alert by ID',
@@ -550,6 +652,194 @@ export const TOOL_CATALOG = {
         total_benchmarks: existing.crop_count,
         _undo_state: previousState
       };
+    }
+  },
+
+  // --- Phase 2B: New Write Tools ---
+  'update_crop_price': {
+    description: 'Update retail or wholesale price for a crop',
+    category: 'write',
+    required: ['crop'],
+    optional: ['retail_price', 'wholesale_price', 'farm_id'],
+    undoable: true,
+    handler: async (params) => {
+      const farm_id = params.farm_id || 'demo-farm';
+      const crops = await farmStore.get(farm_id, 'crop_pricing') || [];
+      const cropIdx = crops.findIndex(c =>
+        (c.crop || '').toLowerCase() === params.crop.toLowerCase() ||
+        (c.crop || '').toLowerCase().includes(params.crop.toLowerCase())
+      );
+      if (cropIdx === -1) return { ok: false, error: `Crop not found: ${params.crop}` };
+      const previous = { ...crops[cropIdx] };
+      if (params.retail_price != null) crops[cropIdx].retailPrice = parseFloat(params.retail_price);
+      if (params.wholesale_price != null) crops[cropIdx].wholesalePrice = parseFloat(params.wholesale_price);
+      await farmStore.set(farm_id, 'crop_pricing', crops);
+      if (isDatabaseAvailable()) {
+        try {
+          await dbQuery(
+            'INSERT INTO pricing_decisions (farm_id, crop, previous_price, applied_price, decision, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+            [farm_id, params.crop, previous.retailPrice || 0, crops[cropIdx].retailPrice || 0, 'assistant-chat']
+          );
+        } catch { /* ok */ }
+      }
+      return {
+        ok: true, crop: params.crop,
+        previous: { retail: previous.retailPrice, wholesale: previous.wholesalePrice },
+        updated: { retail: crops[cropIdx].retailPrice, wholesale: crops[cropIdx].wholesalePrice },
+        _undo_state: { farm_id, previous, cropIdx }
+      };
+    },
+    undoHandler: async ({ crop }, prevState) => {
+      const crops = await farmStore.get(prevState.farm_id, 'crop_pricing') || [];
+      if (crops[prevState.cropIdx]) {
+        Object.assign(crops[prevState.cropIdx], prevState.previous);
+        await farmStore.set(prevState.farm_id, 'crop_pricing', crops);
+      }
+      return { ok: true, message: `Price reverted for ${crop}` };
+    }
+  },
+  'create_planting_assignment': {
+    description: 'Schedule a new planting assignment for a crop in a group/zone',
+    category: 'write',
+    required: ['crop_name', 'group_id'],
+    optional: ['farm_id', 'tray_id', 'crop_id', 'seed_date', 'harvest_date', 'notes'],
+    undoable: true,
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const farm_id = params.farm_id || 'demo-farm';
+      const seed_date = params.seed_date || new Date().toISOString().split('T')[0];
+      try {
+        const result = await dbQuery(
+          `INSERT INTO planting_assignments (farm_id, group_id, tray_id, crop_id, crop_name, seed_date, harvest_date, status, notes, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, NOW())
+           ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_name=$5, seed_date=$6, harvest_date=$7, notes=$8, status='active', updated_at=NOW()
+           RETURNING *`,
+          [farm_id, params.group_id, params.tray_id || null, params.crop_id || null,
+           params.crop_name, seed_date, params.harvest_date || null, params.notes || null]
+        );
+        return { ok: true, assignment: result.rows[0], _undo_state: { farm_id, group_id: params.group_id } };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+    undoHandler: async (params, prevState) => {
+      try {
+        await dbQuery('DELETE FROM planting_assignments WHERE farm_id = $1 AND group_id = $2', [prevState.farm_id, prevState.group_id]);
+        return { ok: true, message: 'Planting assignment removed' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'mark_harvest_complete': {
+    description: 'Record a completed harvest with crop, quantity, zone, and yield data',
+    category: 'write',
+    required: ['crop', 'quantity'],
+    optional: ['zone', 'unit', 'yield_lbs', 'notes'],
+    undoable: false,
+    handler: async (params) => {
+      let harvests = readJSON('harvest-log.json', []);
+      harvests = Array.isArray(harvests) ? harvests : (harvests.harvests || harvests.records || []);
+      const entry = {
+        id: crypto.randomUUID(),
+        crop: params.crop,
+        quantity: parseInt(params.quantity),
+        unit: params.unit || 'trays',
+        zone: params.zone || null,
+        yield_lbs: params.yield_lbs ? parseFloat(params.yield_lbs) : null,
+        notes: params.notes || null,
+        harvested_at: new Date().toISOString(),
+        recorded_by: 'assistant-chat'
+      };
+      harvests.push(entry);
+      writeJSON('harvest-log.json', harvests);
+      return { ok: true, harvest: entry };
+    }
+  },
+  'update_order_status': {
+    description: 'Update a wholesale order status (confirmed, packed, shipped, delivered)',
+    category: 'write',
+    required: ['order_id', 'status'],
+    optional: [],
+    undoable: true,
+    handler: async (params) => {
+      let ordersData = readJSON('wholesale-orders-status.json', []);
+      let orders = Array.isArray(ordersData) ? ordersData : (ordersData.orders || []);
+      const order = orders.find(o => (o.order_id || o.id) === params.order_id);
+      if (!order) return { ok: false, error: `Order ${params.order_id} not found` };
+      const validStatuses = ['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled'];
+      if (!validStatuses.includes(params.status.toLowerCase())) {
+        return { ok: false, error: `Invalid status. Valid: ${validStatuses.join(', ')}` };
+      }
+      const previousStatus = order.status;
+      order.status = params.status.toLowerCase();
+      order.updated_at = new Date().toISOString();
+      if (Array.isArray(ordersData)) writeJSON('wholesale-orders-status.json', ordersData);
+      else { ordersData.orders = orders; writeJSON('wholesale-orders-status.json', ordersData); }
+      return { ok: true, order_id: params.order_id, previousStatus, newStatus: order.status, buyer: order.buyer_name || order.buyer, _undo_state: { order_id: params.order_id, previousStatus } };
+    },
+    undoHandler: async (params, prevState) => {
+      let ordersData = readJSON('wholesale-orders-status.json', []);
+      let orders = Array.isArray(ordersData) ? ordersData : (ordersData.orders || []);
+      const order = orders.find(o => (o.order_id || o.id) === prevState.order_id);
+      if (!order) return { ok: false, error: 'Order not found for undo' };
+      order.status = prevState.previousStatus;
+      order.updated_at = new Date().toISOString();
+      if (Array.isArray(ordersData)) writeJSON('wholesale-orders-status.json', ordersData);
+      else { ordersData.orders = orders; writeJSON('wholesale-orders-status.json', ordersData); }
+      return { ok: true, message: `Order reverted to ${prevState.previousStatus}` };
+    }
+  },
+  'add_inventory_item': {
+    description: 'Add or update a crop in the farm inventory',
+    category: 'write',
+    required: ['crop_name', 'quantity'],
+    optional: ['farm_id', 'unit', 'status', 'zone'],
+    undoable: true,
+    handler: async (params) => {
+      const farm_id = params.farm_id || 'demo-farm';
+      let inventory = await farmStore.get(farm_id, 'inventory') || [];
+      if (!Array.isArray(inventory)) inventory = Object.values(inventory);
+      const existing = inventory.find(i => (i.crop || i.name || '').toLowerCase() === params.crop_name.toLowerCase());
+      let previousState = null;
+      if (existing) {
+        previousState = { ...existing };
+        existing.quantity = (existing.quantity || 0) + parseInt(params.quantity);
+        existing.unit = params.unit || existing.unit || 'units';
+        existing.updated_at = new Date().toISOString();
+        if (params.status) existing.status = params.status;
+      } else {
+        inventory.push({
+          id: crypto.randomUUID(),
+          crop: params.crop_name,
+          name: params.crop_name,
+          quantity: parseInt(params.quantity),
+          unit: params.unit || 'units',
+          zone: params.zone || null,
+          status: params.status || 'available',
+          added_at: new Date().toISOString(),
+          added_by: 'assistant-chat'
+        });
+      }
+      await farmStore.set(farm_id, 'inventory', inventory);
+      return {
+        ok: true, crop: params.crop_name,
+        quantity: existing?.quantity || parseInt(params.quantity),
+        isUpdate: !!previousState,
+        _undo_state: { farm_id, previousState, crop_name: params.crop_name }
+      };
+    },
+    undoHandler: async (params, prevState) => {
+      let inventory = await farmStore.get(prevState.farm_id, 'inventory') || [];
+      if (!Array.isArray(inventory)) inventory = Object.values(inventory);
+      if (prevState.previousState) {
+        const item = inventory.find(i => (i.crop || i.name || '').toLowerCase() === prevState.crop_name.toLowerCase());
+        if (item) Object.assign(item, prevState.previousState);
+      } else {
+        inventory = inventory.filter(i => (i.crop || i.name || '').toLowerCase() !== prevState.crop_name.toLowerCase());
+      }
+      await farmStore.set(prevState.farm_id, 'inventory', inventory);
+      return { ok: true, message: `Inventory change reverted for ${prevState.crop_name}` };
     }
   }
 };

@@ -311,6 +311,51 @@
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
+/* Confirmation flow buttons (Phase 2C) */
+.action-message {
+  padding: 0.25rem 0;
+}
+
+.action-message .message-content {
+  display: flex;
+  gap: 0.5rem;
+  background: none;
+  padding: 0;
+}
+
+.assistant-confirm-btn,
+.assistant-cancel-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.assistant-confirm-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.assistant-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.assistant-cancel-btn {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.assistant-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
 .chat-input-container {
   padding: 1rem;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
