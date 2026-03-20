@@ -567,6 +567,60 @@ const GPT_TOOLS = [
     }
   }
   ,
+  // --- Environment Control Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_environment_readings',
+      description: 'Get current real-time environment readings from all sensors — temperature, humidity, battery levels per zone with status vs targets.',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Optional zone ID to filter (e.g. "zone-1"). Omit for all zones.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_target_ranges',
+      description: 'Update environmental target ranges for a zone — temperature min/max (°C), humidity min/max (%), CO2 min/max (ppm), VPD min/max. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Zone ID (e.g. "zone-1", "zone-2")' },
+          temp_min: { type: 'number', description: 'Minimum temperature target in °C' },
+          temp_max: { type: 'number', description: 'Maximum temperature target in °C' },
+          rh_min: { type: 'number', description: 'Minimum relative humidity target %' },
+          rh_max: { type: 'number', description: 'Maximum relative humidity target %' },
+          co2_min: { type: 'number', description: 'Minimum CO2 target in ppm' },
+          co2_max: { type: 'number', description: 'Maximum CO2 target in ppm' },
+          vpd_min: { type: 'number', description: 'Minimum VPD target in kPa' },
+          vpd_max: { type: 'number', description: 'Maximum VPD target in kPa' }
+        },
+        required: ['zone_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_light_schedule',
+      description: 'Set or update the light schedule for a zone — on/off times, PPFD, photoperiod hours. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Zone ID (e.g. "zone-1")' },
+          on_time: { type: 'string', description: 'Lights-on time in HH:MM format (e.g. "06:00")' },
+          off_time: { type: 'string', description: 'Lights-off time in HH:MM format (e.g. "22:00")' },
+          ppfd: { type: 'number', description: 'Target PPFD (photosynthetic photon flux density) in µmol/m²/s' },
+          photoperiod_hours: { type: 'number', description: 'Total photoperiod in hours (auto-calculated from on/off if omitted)' }
+        },
+        required: ['zone_id', 'on_time', 'off_time']
+      }
+    }
+  },
   // --- User Memory Tool ---
   {
     type: 'function',
@@ -798,6 +852,27 @@ PRICING WORKFLOW:
 - Always include the unit (e.g. "$23.52/lb") when displaying or proposing prices.
 - After a price update is confirmed and executed, call get_pricing_info again to verify the change was saved, and report the confirmed new prices.
 - Update each crop individually using update_crop_price — one tool call per crop.
+
+ENVIRONMENT CONTROL:
+- When the farmer asks about environment, temperature, humidity, readings, or "how's the room":
+  1. Call get_environment_readings to get real sensor data per zone (temperature, humidity, battery, status vs targets).
+  2. Compare readings to targets and highlight any zones out of range.
+  3. If readings are critical, proactively suggest corrective actions.
+- When the farmer wants to adjust target ranges (e.g. "set zone 1 temp to 20-24"):
+  1. Call get_environment_readings first to show current state.
+  2. Use update_target_ranges to change the targets. This is a WRITE operation — confirm first.
+  3. After confirmation, verify with get_environment_readings.
+- When the farmer asks to set up lights or change photoperiod:
+  1. Use set_light_schedule with zone, on/off times, and optionally PPFD.
+  2. Reference the crop recipe with get_crop_schedule if asking "what light schedule does X need".
+- When harvest is recorded via mark_harvest_complete, inventory is automatically updated — you can confirm by calling get_inventory_summary.
+- The daily to-do (get_daily_todo) now detects environment drift per zone and will flag temperature/humidity out of range.
+
+AUTONOMY MINDSET:
+- You are evolving toward full farm autonomy. When you detect issues, don't just report — propose specific actions.
+- Cross-reference data sources: combine sensor readings, crop schedules, harvest logs, and market data to give integrated advice.
+- If a sensor shows low temperature AND a crop schedule requires higher temps, connect the dots and recommend both the environment fix AND the crop impact.
+- Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
 
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
@@ -1487,6 +1562,23 @@ async function executeExtendedTool(toolName, params, farmId) {
  * Body: { message, conversation_id?, farm_id? }
  * Returns: { reply, conversation_id, actions?, tool_calls? }
  */
+
+// ── Rate limiter — protect OpenAI credits ──
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 20; // max 20 messages per minute per farm
+
+function checkRateLimit(farmId) {
+  const now = Date.now();
+  let entry = rateLimitMap.get(farmId);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry = { windowStart: now, count: 0 };
+    rateLimitMap.set(farmId, entry);
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
 router.post('/chat', async (req, res) => {
   if (!openai) {
     return res.status(503).json({
@@ -1502,6 +1594,11 @@ router.post('/chat', async (req, res) => {
 
   const sanitizedMessage = message.trim().slice(0, 2000);
   const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+
+  if (!checkRateLimit(farmId)) {
+    return res.status(429).json({ ok: false, error: 'Too many messages — please wait a moment before sending another.' });
+  }
+
   const convId = conversation_id || crypto.randomUUID();
   const toolCallResults = [];
 

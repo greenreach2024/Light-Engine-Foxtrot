@@ -1,0 +1,55 @@
+{
+  "farm_id": "default",
+  "generated_at": "2026-03-20T21:49:04.647Z",
+  "recommended_actions": [
+    {
+      "id": "rec-env-temp-low",
+      "type": "environment",
+      "priority": "high",
+      "title": "Room temperature below optimal range",
+      "description": "Current room avg is 15.6°C — most crops need 18-24°C. Check HVAC settings, insulation, and heater capacity.",
+      "recommended_action": "Increase room temperature to at least 18°C",
+      "impact": "Slow growth, reduced yield, potential cold stress",
+      "dismissed": false,
+      "completed": false,
+      "created_at": "2026-03-20T21:49:04.646Z"
+    },
+    {
+      "id": "rec-env-hum-low",
+      "type": "environment",
+      "priority": "high",
+      "title": "Humidity below optimal range",
+      "description": "Current room avg is 28.8% — most crops need 50-70%. Low humidity causes leaf tip burn, slow transpiration, and wilting.",
+      "recommended_action": "Add humidifier or increase misting frequency",
+      "impact": "Leaf damage, reduced growth rate, tip burn on greens",
+      "dismissed": false,
+      "completed": false,
+      "created_at": "2026-03-20T21:49:04.646Z"
+    },
+    {
+      "id": "rec-ops-device-sync",
+      "type": "operations",
+      "priority": "medium",
+      "title": "Run periodic device scans",
+      "description": "Set up regular SwitchBot device scans to keep sensor data fresh and detect offline devices early.",
+      "recommended_action": "Ask Cheo to scan devices weekly",
+      "impact": "Better monitoring reliability, early detection of sensor failures",
+      "dismissed": false,
+      "completed": false,
+      "created_at": "2026-03-20T21:49:04.647Z"
+    },
+    {
+      "id": "rec-ops-harvest-tracking",
+      "type": "operations",
+      "priority": "medium",
+      "title": "Start recording harvests",
+      "description": "No harvest data found. Recording harvests enables yield tracking, cycle analysis, and revenue forecasting.",
+      "recommended_action": "Tell Cheo when you harvest — crop, quantity, zone",
+      "impact": "Enables yield analysis, cost-per-tray metrics, and succession planning",
+      "dismissed": false,
+      "completed": false,
+      "created_at": "2026-03-20T21:49:04.647Z"
+    }
+  ],
+  "source": "data-pipeline-audit"
+}

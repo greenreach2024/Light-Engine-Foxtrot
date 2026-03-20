@@ -1,6 +1,76 @@
 {
-  "devices": [],
-  "summary": null,
-  "lastSync": null,
+  "devices": [
+    {
+      "id": "C3343035702D",
+      "name": "Sen 3",
+      "type": "woiosensor",
+      "zone": 2,
+      "brand": "SwitchBot",
+      "deviceId": "C3343035702D",
+      "hubDeviceId": "D3F85167A57E",
+      "battery": 60,
+      "temperature": 15.5,
+      "humidity": 30,
+      "lastSeen": "2026-03-06T13:53:23.404Z"
+    },
+    {
+      "id": "CE2A81460E78",
+      "name": "Sen 1",
+      "type": "woiosensor",
+      "zone": 1,
+      "brand": "SwitchBot",
+      "deviceId": "CE2A81460E78",
+      "hubDeviceId": "D3F85167A57E",
+      "battery": 60,
+      "temperature": 15.7,
+      "humidity": 28,
+      "lastSeen": "2026-03-06T13:53:27.089Z"
+    },
+    {
+      "id": "CE2A8606558E",
+      "name": "Sen 2",
+      "type": "woiosensor",
+      "zone": 2,
+      "brand": "SwitchBot",
+      "deviceId": "CE2A8606558E",
+      "hubDeviceId": "D3F85167A57E",
+      "battery": 60,
+      "temperature": 15.7,
+      "humidity": 28,
+      "lastSeen": "2026-03-06T13:53:30.628Z"
+    },
+    {
+      "id": "D0C841064453",
+      "name": "Sen 4",
+      "type": "woiosensor",
+      "zone": 1,
+      "brand": "SwitchBot",
+      "deviceId": "D0C841064453",
+      "hubDeviceId": "D3F85167A57E",
+      "battery": 60,
+      "temperature": 15.6,
+      "humidity": 29,
+      "lastSeen": "2026-03-06T13:53:31.681Z"
+    },
+    {
+      "id": "D3F85167A57E",
+      "name": "Hub Mini 7E",
+      "type": "hub mini",
+      "zone": null,
+      "brand": "SwitchBot",
+      "deviceId": "D3F85167A57E",
+      "hubDeviceId": "000000000000",
+      "battery": null,
+      "temperature": null,
+      "humidity": null,
+      "lastSeen": "2026-03-05T15:18:03.998Z"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "sensors": 4,
+    "hubs": 1
+  },
+  "lastSync": "2026-03-20T21:49:04.644Z",
   "version": "1.0.0"
 }

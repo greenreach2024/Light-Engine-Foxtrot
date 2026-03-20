@@ -1,3 +1,12 @@
-{
-  "GRC-ORDER-1766239503": "packed"
-}
+[
+  {
+    "order_id": "GRC-ORDER-1766239503",
+    "status": "packed",
+    "buyer_name": null,
+    "delivery_date": null,
+    "total_items": null,
+    "created_at": "2026-03-20T21:49:04.648Z",
+    "updated_at": "2026-03-20T21:49:04.648Z",
+    "notes": "Migrated from legacy format"
+  }
+]

@@ -62,8 +62,103 @@ function readJSON(filename, fallback = null) {
 
 function writeJSON(filename, data) {
   const filePath = path.join(DATA_DIR, filename);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const tmpPath = filePath + '.tmp';
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
+  fs.renameSync(tmpPath, filePath);
 }
+
+// ---------------------------------------------------------------------------
+// Sensor data sync — keeps env-cache.json and device-meta.json fresh
+// ---------------------------------------------------------------------------
+function syncSensorData() {
+  try {
+    const iotDevices = readJSON('iot-devices.json', null);
+    if (!iotDevices || !Array.isArray(iotDevices) || iotDevices.length === 0) return;
+
+    // --- Update device-meta.json with latest telemetry ---
+    const raw = readJSON('device-meta.json', { devices: {}, lastUpdated: null, version: '1.0.0' });
+    const isWrapper = raw.devices && typeof raw.devices === 'object' && !Array.isArray(raw.devices);
+    const devices = isWrapper ? raw.devices : {};
+    let metaChanged = false;
+
+    for (const d of iotDevices) {
+      if (devices[d.id] && d.telemetry) {
+        devices[d.id].telemetry = d.telemetry;
+        devices[d.id].status = 'online';
+        metaChanged = true;
+      }
+    }
+    if (metaChanged) {
+      raw.devices = devices;
+      raw.lastUpdated = new Date().toISOString();
+      writeJSON('device-meta.json', raw);
+    }
+
+    // --- Rebuild env-cache.json from sensor readings ---
+    const sensors = iotDevices.filter(d => d.telemetry && d.telemetry.temperature != null);
+    if (sensors.length === 0) return;
+
+    const zoneReadings = {};
+    for (const s of sensors) {
+      const zoneKey = s.zone ? `zone-${s.zone}` : null;
+      if (!zoneKey) continue;
+      if (!zoneReadings[zoneKey]) zoneReadings[zoneKey] = [];
+      zoneReadings[zoneKey].push({
+        temperature: s.telemetry.temperature,
+        humidity: s.telemetry.humidity,
+        battery: s.telemetry.battery,
+        sensor_name: s.name
+      });
+    }
+
+    const zones = {};
+    for (const [zid, readings] of Object.entries(zoneReadings)) {
+      const avgT = readings.reduce((s, r) => s + r.temperature, 0) / readings.length;
+      const avgH = readings.reduce((s, r) => s + r.humidity, 0) / readings.length;
+      const avgB = readings.reduce((s, r) => s + (r.battery || 0), 0) / readings.length;
+      zones[zid] = {
+        temperature: Math.round(avgT * 10) / 10,
+        humidity: Math.round(avgH * 10) / 10,
+        avg_battery: Math.round(avgB),
+        sensor_count: readings.length,
+        sensors: readings.map(r => r.sensor_name)
+      };
+    }
+
+    const allT = sensors.filter(s => s.zone);
+    const roomTemp = allT.length > 0
+      ? Math.round((allT.reduce((s, r) => s + r.telemetry.temperature, 0) / allT.length) * 10) / 10
+      : null;
+    const roomHum = allT.length > 0
+      ? Math.round((allT.reduce((s, r) => s + r.telemetry.humidity, 0) / allT.length) * 10) / 10
+      : null;
+
+    // Determine room_id from rooms.json
+    const rooms = readJSON('rooms.json', {});
+    const roomList = rooms.rooms || [];
+    const roomId = roomList.length > 0 ? (roomList[0].id || roomList[0].room_id || 'room-default') : 'room-default';
+
+    writeJSON('env-cache.json', {
+      [roomId]: {
+        temperature: roomTemp,
+        humidity: roomHum,
+        co2: null,
+        par: null,
+        vpd: null,
+        zones,
+        sensor_count: allT.length,
+        source: 'iot-devices.json'
+      },
+      meta: { updatedAt: new Date().toISOString(), source: 'syncSensorData' }
+    });
+  } catch (err) {
+    console.error('[SyncSensorData] Error:', err.message);
+  }
+}
+
+// Run sensor sync on startup and every 5 minutes
+syncSensorData();
+setInterval(syncSensorData, 5 * 60 * 1000);
 
 // Initialize crop-utils registry cache (must happen after readJSON is defined)
 try {
@@ -262,45 +357,58 @@ function generateDailyTodo() {
   // --- Source E: Environment drift (readings vs targets) ---
   const envCache = readJSON('env-cache.json', {});
   const targetRanges = readJSON('target-ranges.json', {});
-  const targets = targetRanges.targets || targetRanges;
+  const zoneTargets = targetRanges.zones || {};
+  const defaultTargets = targetRanges.defaults || {};
 
   for (const room of roomList) {
     const roomId = room.id || room.room_id;
     const envData = envCache[roomId] || envCache[room.name];
-    const roomTargets = targets[roomId] || targets[room.name];
-    if (!envData || !roomTargets) continue;
+    if (!envData) continue;
 
-    const checks = [
-      { metric: 'temperature', value: envData.temperature || envData.temp, min: roomTargets.temp_min, max: roomTargets.temp_max, unit: '°F' },
-      { metric: 'humidity', value: envData.humidity || envData.rh, min: roomTargets.rh_min, max: roomTargets.rh_max, unit: '%' },
-      { metric: 'co2', value: envData.co2, min: roomTargets.co2_min, max: roomTargets.co2_max, unit: 'ppm' }
-    ];
+    // Check each zone within the room (zone-level granularity)
+    const zonesToCheck = envData.zones ? Object.entries(envData.zones) : [];
+    // Also check room-level if no zone data
+    if (zonesToCheck.length === 0 && (envData.temperature != null || envData.humidity != null)) {
+      zonesToCheck.push([roomId, envData]);
+    }
 
-    for (const chk of checks) {
-      if (chk.value == null || chk.min == null || chk.max == null) continue;
-      const drift = chk.value < chk.min ? chk.min - chk.value : chk.value > chk.max ? chk.value - chk.max : 0;
-      if (drift <= 0) continue;
+    for (const [zoneId, zoneEnv] of zonesToCheck) {
+      const zt = zoneTargets[zoneId] || defaultTargets;
+      if (!zt.temp_min && !zt.rh_min) continue;
 
-      const range = chk.max - chk.min;
-      const driftPct = range > 0 ? drift / range : 0.5;
+      const checks = [
+        { metric: 'temperature', value: zoneEnv.temperature || zoneEnv.temp, min: zt.temp_min, max: zt.temp_max, unit: '°C' },
+        { metric: 'humidity', value: zoneEnv.humidity || zoneEnv.rh, min: zt.rh_min, max: zt.rh_max, unit: '%' },
+        { metric: 'co2', value: zoneEnv.co2, min: zt.co2_min, max: zt.co2_max, unit: 'ppm' }
+      ];
 
-      tasks.push({
-        id: `env-drift-${roomId}-${chk.metric}`,
-        category: 'environment',
-        title: `${chk.metric} out of range in ${room.name || roomId}`,
-        why: `Current: ${chk.value}${chk.unit}, target: ${chk.min}–${chk.max}${chk.unit} (${drift.toFixed(1)}${chk.unit} off)`,
-        deadline: today,
-        estimated_minutes: 10,
-        actions: ['Adjust controller', 'Check HVAC', 'Verify sensor'],
-        dependencies: [],
-        score: priorityScore({
-          urgency: driftPct > 0.5 ? 0.9 : 0.6,
-          impact: 0.6,
-          risk: driftPct > 0.5 ? 0.7 : 0.4,
-          confidence: 0.8,
-          effort: 0.15
-        })
-      });
+      for (const chk of checks) {
+        if (chk.value == null || chk.min == null || chk.max == null) continue;
+        const drift = chk.value < chk.min ? chk.min - chk.value : chk.value > chk.max ? chk.value - chk.max : 0;
+        if (drift <= 0) continue;
+
+        const range = chk.max - chk.min;
+        const driftPct = range > 0 ? drift / range : 0.5;
+        const label = zoneId !== roomId ? `${room.name || roomId} ${zoneId}` : (room.name || roomId);
+
+        tasks.push({
+          id: `env-drift-${zoneId}-${chk.metric}`,
+          category: 'environment',
+          title: `${chk.metric} out of range in ${label}`,
+          why: `Current: ${chk.value}${chk.unit}, target: ${chk.min}–${chk.max}${chk.unit} (${drift.toFixed(1)}${chk.unit} off)`,
+          deadline: today,
+          estimated_minutes: 10,
+          actions: ['Adjust controller', 'Check HVAC', 'Verify sensor'],
+          dependencies: [],
+          score: priorityScore({
+            urgency: driftPct > 0.5 ? 0.9 : 0.6,
+            impact: 0.6,
+            risk: driftPct > 0.5 ? 0.7 : 0.4,
+            confidence: 0.8,
+            effort: 0.15
+          })
+        });
+      }
     }
   }
 
@@ -400,10 +508,28 @@ export const TOOL_CATALOG = {
       if (!room) return { ok: false, error: `Room ${room_id} not found` };
       const envCache = readJSON('env-cache.json', {});
       const roomMap = readJSON(`room-map-${room_id}.json`, null);
+      const targetRanges = readJSON('target-ranges.json', {});
+      const envData = envCache[room_id] || null;
+      // Include per-zone targets alongside readings
+      const zoneStatus = {};
+      if (envData?.zones) {
+        const zt = targetRanges.zones || {};
+        const dt = targetRanges.defaults || {};
+        for (const [zid, zenv] of Object.entries(envData.zones)) {
+          const t = zt[zid] || dt;
+          zoneStatus[zid] = {
+            readings: zenv,
+            targets: { temp_min: t.temp_min, temp_max: t.temp_max, rh_min: t.rh_min, rh_max: t.rh_max },
+            temp_ok: zenv.temperature >= t.temp_min && zenv.temperature <= t.temp_max,
+            humidity_ok: zenv.humidity >= t.rh_min && zenv.humidity <= t.rh_max
+          };
+        }
+      }
       return {
         ok: true,
         room,
-        environment: envCache[room_id] || null,
+        environment: envData,
+        zone_status: zoneStatus,
         zones: roomMap?.zones || [],
         zone_count: (roomMap?.zones || []).length
       };
@@ -1010,6 +1136,149 @@ export const TOOL_CATALOG = {
       };
     }
   },
+
+  // --- Environment Control Tools ---
+  'update_target_ranges': {
+    description: 'Update environmental target ranges for a zone (temperature min/max, humidity min/max, CO2 min/max, VPD min/max)',
+    category: 'write',
+    required: ['zone_id'],
+    optional: ['temp_min', 'temp_max', 'rh_min', 'rh_max', 'co2_min', 'co2_max', 'vpd_min', 'vpd_max'],
+    undoable: true,
+    handler: async (params) => {
+      const targetRanges = readJSON('target-ranges.json', { zones: {}, defaults: {} });
+      const zones = targetRanges.zones || {};
+      const zoneId = params.zone_id.toLowerCase().replace(/\s+/g, '-');
+      const previous = zones[zoneId] ? { ...zones[zoneId] } : null;
+
+      if (!zones[zoneId]) {
+        zones[zoneId] = { ...targetRanges.defaults, name: params.zone_id };
+      }
+
+      const numFields = ['temp_min', 'temp_max', 'rh_min', 'rh_max', 'co2_min', 'co2_max', 'vpd_min', 'vpd_max'];
+      const changes = {};
+      for (const f of numFields) {
+        if (params[f] != null) {
+          const val = parseFloat(params[f]);
+          if (isNaN(val)) return { ok: false, error: `Invalid value for ${f}: ${params[f]}` };
+          changes[f] = { from: zones[zoneId][f], to: val };
+          zones[zoneId][f] = val;
+        }
+      }
+      if (Object.keys(changes).length === 0) return { ok: false, error: 'No target fields provided' };
+
+      // Validate min < max
+      if (zones[zoneId].temp_min >= zones[zoneId].temp_max) return { ok: false, error: 'temp_min must be less than temp_max' };
+      if (zones[zoneId].rh_min >= zones[zoneId].rh_max) return { ok: false, error: 'rh_min must be less than rh_max' };
+
+      targetRanges.zones = zones;
+      targetRanges.metadata = targetRanges.metadata || {};
+      targetRanges.metadata.last_updated = new Date().toISOString();
+      writeJSON('target-ranges.json', targetRanges);
+
+      return { ok: true, zone_id: zoneId, changes, _undo_state: { zone_id: zoneId, previous } };
+    },
+    undoHandler: async (params, prevState) => {
+      const targetRanges = readJSON('target-ranges.json', { zones: {} });
+      if (prevState.previous) {
+        targetRanges.zones[prevState.zone_id] = prevState.previous;
+      } else {
+        delete targetRanges.zones[prevState.zone_id];
+      }
+      targetRanges.metadata = targetRanges.metadata || {};
+      targetRanges.metadata.last_updated = new Date().toISOString();
+      writeJSON('target-ranges.json', targetRanges);
+      return { ok: true, message: `Target ranges reverted for ${prevState.zone_id}` };
+    }
+  },
+  'get_environment_readings': {
+    description: 'Get current real-time environment readings from all sensors — temperature, humidity, battery levels per zone',
+    category: 'read',
+    required: [],
+    optional: ['zone_id'],
+    handler: async ({ zone_id }) => {
+      const envCache = readJSON('env-cache.json', {});
+      const targetRanges = readJSON('target-ranges.json', {});
+      const zt = targetRanges.zones || {};
+      const dt = targetRanges.defaults || {};
+
+      // Collect all rooms/zones
+      const readings = [];
+      for (const [key, data] of Object.entries(envCache)) {
+        if (key === 'meta') continue;
+        if (data.zones) {
+          for (const [zid, zdata] of Object.entries(data.zones)) {
+            if (zone_id && zid !== zone_id) continue;
+            const targets = zt[zid] || dt;
+            readings.push({
+              room_id: key,
+              zone_id: zid,
+              temperature: zdata.temperature,
+              humidity: zdata.humidity,
+              battery: zdata.avg_battery,
+              sensor_count: zdata.sensor_count,
+              sensors: zdata.sensors,
+              targets: { temp_min: targets.temp_min, temp_max: targets.temp_max, rh_min: targets.rh_min, rh_max: targets.rh_max },
+              temp_status: zdata.temperature >= targets.temp_min && zdata.temperature <= targets.temp_max ? 'ok' : zdata.temperature < targets.temp_min ? 'low' : 'high',
+              humidity_status: zdata.humidity >= targets.rh_min && zdata.humidity <= targets.rh_max ? 'ok' : zdata.humidity < targets.rh_min ? 'low' : 'high'
+            });
+          }
+        }
+      }
+      return { ok: true, readings, count: readings.length, updated_at: envCache.meta?.updatedAt || null };
+    }
+  },
+  'set_light_schedule': {
+    description: 'Set or update the light schedule for a zone — on/off times, PPFD, photoperiod hours',
+    category: 'write',
+    required: ['zone_id', 'on_time', 'off_time'],
+    optional: ['ppfd', 'photoperiod_hours'],
+    undoable: true,
+    handler: async (params) => {
+      const schedules = readJSON('schedules.json', { schedules: [] });
+      const zoneId = params.zone_id.toLowerCase().replace(/\s+/g, '-');
+      const list = schedules.schedules || [];
+      const existing = list.find(s => s.zone_id === zoneId && s.type === 'light');
+      const previous = existing ? { ...existing } : null;
+
+      // Validate time format HH:MM
+      const timeRe = /^\d{1,2}:\d{2}$/;
+      if (!timeRe.test(params.on_time) || !timeRe.test(params.off_time)) {
+        return { ok: false, error: 'Times must be HH:MM format (e.g. "06:00", "22:00")' };
+      }
+
+      const entry = {
+        id: existing?.id || crypto.randomUUID(),
+        zone_id: zoneId,
+        type: 'light',
+        on_time: params.on_time,
+        off_time: params.off_time,
+        ppfd: params.ppfd ? parseInt(params.ppfd) : (existing?.ppfd || null),
+        photoperiod_hours: params.photoperiod_hours ? parseFloat(params.photoperiod_hours) : null,
+        updated_at: new Date().toISOString(),
+        updated_by: 'farm-ops-agent'
+      };
+
+      if (existing) Object.assign(existing, entry);
+      else list.push(entry);
+
+      schedules.schedules = list;
+      writeJSON('schedules.json', schedules);
+
+      return { ok: true, schedule: entry, was_update: !!previous, _undo_state: { zone_id: zoneId, previous } };
+    },
+    undoHandler: async (params, prevState) => {
+      const schedules = readJSON('schedules.json', { schedules: [] });
+      const list = schedules.schedules || [];
+      if (prevState.previous) {
+        const idx = list.findIndex(s => s.zone_id === prevState.zone_id && s.type === 'light');
+        if (idx >= 0) list[idx] = prevState.previous;
+      } else {
+        schedules.schedules = list.filter(s => !(s.zone_id === prevState.zone_id && s.type === 'light'));
+      }
+      writeJSON('schedules.json', schedules);
+      return { ok: true, message: `Light schedule reverted for ${prevState.zone_id}` };
+    }
+  },
   'seed_benchmarks': {
     description: 'Seed crop benchmarks from the crop registry into benchmark config',
     category: 'write',
@@ -1175,7 +1444,37 @@ export const TOOL_CATALOG = {
       };
       harvests.push(entry);
       writeJSON('harvest-log.json', harvests);
-      return { ok: true, harvest: entry };
+
+      // Auto-add to inventory (harvest → inventory pipeline)
+      let inventoryUpdated = false;
+      try {
+        const farm_id = 'demo-farm';
+        let inventory = await farmStore.get(farm_id, 'inventory') || [];
+        if (!Array.isArray(inventory)) inventory = Object.values(inventory);
+        const existing = inventory.find(i => (i.crop || i.name || '').toLowerCase() === params.crop.toLowerCase());
+        if (existing) {
+          existing.quantity = (existing.quantity || 0) + parseInt(params.quantity);
+          existing.updated_at = new Date().toISOString();
+          existing.last_harvest = entry.harvested_at;
+        } else {
+          inventory.push({
+            id: crypto.randomUUID(),
+            crop: params.crop,
+            name: params.crop,
+            quantity: parseInt(params.quantity),
+            unit: params.unit || 'trays',
+            zone: params.zone || null,
+            status: 'available',
+            added_at: new Date().toISOString(),
+            added_by: 'harvest-pipeline',
+            last_harvest: entry.harvested_at
+          });
+        }
+        await farmStore.set(farm_id, 'inventory', inventory);
+        inventoryUpdated = true;
+      } catch { /* non-fatal: harvest is still logged */ }
+
+      return { ok: true, harvest: entry, inventory_updated: inventoryUpdated };
     }
   },
   'update_order_status': {
@@ -1631,6 +1930,40 @@ const COMMAND_FAMILIES = [
     tool: 'register_device'
   },
   {
+    intent: 'environment_readings',
+    family: 'environment',
+    patterns: [
+      /(?:what|how|check|show|get)\s*(?:is|are|the)?\s*(?:temperature|humidity|environment|conditions|readings|climate)/i,
+      /(?:how\s*)?(?:warm|cold|hot|humid|dry)\s*(?:is|are)?\s*(?:it|the|zone|room)/i,
+      /(?:sensor|environment|env)\s*(?:data|readings|status|check)/i,
+      /(?:current|live|real)\s*(?:temp|temperature|humidity|readings)/i
+    ],
+    slots: {},
+    tool: 'get_environment_readings'
+  },
+  {
+    intent: 'update_targets',
+    family: 'environment',
+    patterns: [
+      /(?:set|change|update|adjust)\s*(?:target|range|setpoint)s?\s*(?:for|in|to)/i,
+      /(?:set|change)\s*(?:temp|temperature|humidity)\s*(?:target|range|min|max)/i,
+      /(?:target|ideal|optimal)\s*(?:temp|temperature|humidity)\s*(?:should|to|for)/i
+    ],
+    slots: {},
+    tool: 'update_target_ranges'
+  },
+  {
+    intent: 'light_schedule',
+    family: 'environment',
+    patterns: [
+      /(?:set|change|update|adjust)\s*(?:light|lighting)\s*(?:schedule|timer|on|off)/i,
+      /(?:lights?|photoperiod)\s*(?:on|off|schedule|hours|time)/i,
+      /(?:when|what\s*time)\s*(?:should|do)\s*(?:the\s*)?lights/i
+    ],
+    slots: {},
+    tool: 'set_light_schedule'
+  },
+  {
     intent: 'auto_assign',
     family: 'device_onboarding',
     patterns: [
@@ -1691,6 +2024,9 @@ const INTENT_KEYWORDS = {
   device_status: ['device', 'devices', 'sensor', 'sensors', 'iot', 'hardware', 'inventory', 'list'],
   scan_devices: ['scan', 'discover', 'find', 'network', 'new', 'detect', 'hardware', 'switchbot'],
   register_device: ['add', 'register', 'introduce', 'install', 'connect', 'setup', 'dehumidifier', 'humidifier', 'fan', 'light', 'controller', 'camera', 'meter'],
+  environment_readings: ['temperature', 'humidity', 'readings', 'sensors', 'climate', 'conditions', 'env', 'how', 'warm', 'cold', 'humid', 'dry'],
+  update_targets: ['target', 'targets', 'range', 'setpoint', 'set', 'adjust', 'temp', 'humidity', 'min', 'max'],
+  light_schedule: ['light', 'lights', 'photoperiod', 'schedule', 'on', 'off', 'ppfd', 'dli'],
   planting_schedule: ['planting', 'planted', 'growing', 'schedule', 'assignment', 'current', 'active'],
   scheduled_harvests: ['upcoming', 'harvest', 'next', 'forecast', 'freeing', 'available', 'zone'],
   seed_window: ['seed', 'plant', 'sow', 'planting', 'succession', 'schedule'],

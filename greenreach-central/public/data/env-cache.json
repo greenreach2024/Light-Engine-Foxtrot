@@ -1,7 +1,37 @@
 {
-  "scopes": {},
+  "room-3xxjln": {
+    "temperature": 15.6,
+    "humidity": 28.8,
+    "co2": null,
+    "par": null,
+    "vpd": null,
+    "zones": {
+      "zone-2": {
+        "temperature": 15.6,
+        "humidity": 29,
+        "avg_battery": 60,
+        "sensor_count": 2,
+        "sensors": [
+          "Sen 3",
+          "Sen 2"
+        ]
+      },
+      "zone-1": {
+        "temperature": 15.7,
+        "humidity": 28.5,
+        "avg_battery": 60,
+        "sensor_count": 2,
+        "sensors": [
+          "Sen 1",
+          "Sen 4"
+        ]
+      }
+    },
+    "sensor_count": 4,
+    "source": "iot-devices.json"
+  },
   "meta": {
-    "updatedAt": null,
-    "source": "mqtt"
+    "updatedAt": "2026-03-20T22:11:11.516Z",
+    "source": "syncSensorData"
   }
 }
