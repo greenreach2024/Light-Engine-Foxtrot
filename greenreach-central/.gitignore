@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Sensitive data files (credentials, API keys)
+public/data/farm-api-keys.json
+public/data/env.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+*.tgz
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+_fix_*.py

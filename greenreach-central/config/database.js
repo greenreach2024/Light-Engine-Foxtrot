@@ -1863,17 +1863,27 @@ async function runMigrations(client) {
         const existing = await pool.query("SELECT COUNT(*) as cnt FROM planting_assignments WHERE farm_id = 'demo-farm'");
         const existingCount = parseInt(existing.rows[0].cnt);
         if (existingCount < assignments.length) {
-          // Clear and reload
-          await pool.query("DELETE FROM planting_assignments WHERE farm_id = 'demo-farm'");
-          for (const a of assignments) {
-            await pool.query(
-              `INSERT INTO planting_assignments (farm_id, group_id, crop_id, crop_name, seed_date, harvest_date, status, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-               ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_id=EXCLUDED.crop_id, crop_name=EXCLUDED.crop_name, seed_date=EXCLUDED.seed_date, harvest_date=EXCLUDED.harvest_date, status=EXCLUDED.status, updated_at=NOW()`,
-              [a.farm_id, a.group_id, a.crop_id, a.crop_name, a.seed_date, a.harvest_date, a.status]
-            );
+          // Clear and reload — wrapped in transaction for atomicity
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            await client.query("DELETE FROM planting_assignments WHERE farm_id = 'demo-farm'");
+            for (const a of assignments) {
+              await client.query(
+                `INSERT INTO planting_assignments (farm_id, group_id, crop_id, crop_name, seed_date, harvest_date, status, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                 ON CONFLICT (farm_id, group_id) DO UPDATE SET crop_id=EXCLUDED.crop_id, crop_name=EXCLUDED.crop_name, seed_date=EXCLUDED.seed_date, harvest_date=EXCLUDED.harvest_date, status=EXCLUDED.status, updated_at=NOW()`,
+                [a.farm_id, a.group_id, a.crop_id, a.crop_name, a.seed_date, a.harvest_date, a.status]
+              );
+            }
+            await client.query('COMMIT');
+            logger.info(`Planting schedule loaded: ${assignments.length} assignments (migration 030b)`);
+          } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+          } finally {
+            client.release();
           }
-          logger.info(`Planting schedule loaded: ${assignments.length} assignments (migration 030b)`);
         } else {
           logger.info(`Planting schedule already loaded (${existingCount} assignments) — skipping (migration 030b)`);
         }

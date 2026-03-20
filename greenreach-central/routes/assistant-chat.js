@@ -41,14 +41,20 @@ function readJSON(filename, fallback) {
 const require_ = createRequire(import.meta.url);
 const cropUtils = require_(path.join(__dirname, '..', 'public', 'js', 'crop-utils.js'));
 
-// Load lighting recipes (day-by-day growth schedules for 50 crops)
-let LIGHTING_RECIPES = {};
-try {
-  const recipePath = path.join(DATA_DIR, 'lighting-recipes.json');
-  if (fs.existsSync(recipePath)) {
-    LIGHTING_RECIPES = JSON.parse(fs.readFileSync(recipePath, 'utf8'));
-  }
-} catch { /* non-fatal */ }
+// Load lighting recipes lazily (1.2 MB file — parse once, cache in memory)
+let _recipesCache = null;
+function getLightingRecipes() {
+  if (_recipesCache) return _recipesCache;
+  try {
+    const recipePath = path.join(DATA_DIR, 'lighting-recipes.json');
+    if (fs.existsSync(recipePath)) {
+      _recipesCache = JSON.parse(fs.readFileSync(recipePath, 'utf8'));
+    }
+  } catch { /* non-fatal */ }
+  return _recipesCache || {};
+}
+// Keep backward-compatible LIGHTING_RECIPES reference (lazy getter)
+const LIGHTING_RECIPES = new Proxy({}, { get: (_, prop) => getLightingRecipes()[prop], has: (_, prop) => prop in getLightingRecipes(), ownKeys: () => Object.keys(getLightingRecipes()), getOwnPropertyDescriptor: (_, prop) => ({ value: getLightingRecipes()[prop], writable: false, enumerable: true, configurable: true }) });
 
 // Load crop registry and initialise crop-utils caches
 let CROP_REGISTRY = {};

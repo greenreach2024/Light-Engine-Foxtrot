@@ -592,6 +592,19 @@ const staticCacheOptions = {
     }
   }
 };
+// ── Fix 1C: Block unauthenticated access to sensitive data files ──
+const SENSITIVE_DATA_FILES = /\/(iot-devices|farm-api-keys|env)\.json$/i;
+app.use('/data', (req, res, next) => {
+  if (SENSITIVE_DATA_FILES.test(req.path)) {
+    // Allow only authenticated requests (JWT or session)
+    const hasAuth = req.headers.authorization || req.session?.farmId;
+    if (!hasAuth) {
+      return res.status(403).json({ error: 'Authentication required for this resource' });
+    }
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 // Fallback to root public directory for shared assets
 app.use(express.static(path.join(__dirname, '..', 'public'), staticCacheOptions));
