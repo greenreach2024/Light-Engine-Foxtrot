@@ -928,6 +928,26 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
+  // Load AI guardrails from ai-rules.json (environment/sensor/actuation safety rules)
+  let guardrailsBlock = '';
+  try {
+    const rulesPath = path.join(__dirname, '..', 'data', 'ai-rules.json');
+    if (fs.existsSync(rulesPath)) {
+      const rulesData = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+      const enabledRules = (rulesData.rules || []).filter(r => r.enabled);
+      if (enabledRules.length > 0) {
+        const byCategory = {};
+        for (const r of enabledRules) {
+          const cat = r.category || 'General';
+          if (!byCategory[cat]) byCategory[cat] = [];
+          byCategory[cat].push(`- ${r.content}`);
+        }
+        guardrailsBlock = '\nFARM ENVIRONMENT GUARDRAILS:\n' +
+          Object.entries(byCategory).map(([cat, items]) => `${cat}:\n${items.join('\n')}`).join('\n\n') + '\n';
+      }
+    }
+  } catch { /* non-fatal — guardrails enhance but aren't required */ }
+
   return `You are Cheo, the GreenReach Farm Assistant — an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions.
 
 CURRENT FARM STATE:
@@ -1045,7 +1065,7 @@ AUTONOMY MINDSET:
 - When presenting yield forecasts, connect them to market pricing trends — suggest timing harvest/sales for maximum revenue.
 - Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
 - Proactive alerts are generated every 5 minutes for environment, nutrient, and hardware issues. Reference these in your daily briefings.
-
+${guardrailsBlock}
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
