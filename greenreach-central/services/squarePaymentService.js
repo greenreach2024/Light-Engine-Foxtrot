@@ -41,7 +41,7 @@ function summarizeResults(paymentResults) {
 }
 
 export async function processSquarePayments(params) {
-  const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0.12 } = params || {};
+  const { masterOrderId, farmSubOrders = [], paymentSource = {}, commissionRate = 0 } = params || {};
 
   if (!masterOrderId) {
     return summarizeResults([{ success: false, farmId: null, error: 'master_order_id_required', amountMoney: { amount: 0, currency: 'CAD' }, brokerFeeMoney: { amount: 0, currency: 'CAD' }, status: 'FAILED' }]);
