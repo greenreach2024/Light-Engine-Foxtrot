@@ -1,7 +1,5 @@
-Deploy #529 — E.V.I.E. update_manual_inventory tool
+Deploy #530 — Fix inventory 500: add auto/manual_quantity_lbs columns to startup migration
 
-- get_inventory_summary now queries farm_inventory DB table (auto + manual lbs)
-- New update_manual_inventory tool: AI-driven manual inventory updates
-- System prompt: MANUAL INVENTORY MANAGEMENT section with weight conversion
-- Added to write-ops confirmation tier
-- Growers can say \"update basil inventory, we have 23 lbs\" and E.V.I.E. handles it
+Migration 024 columns (auto_quantity_lbs, manual_quantity_lbs, inventory_source)
+were not wired into database.js startup migration. GET /api/inventory/:farmId
+queried those columns and hit a PG error → 500. Now added inline.

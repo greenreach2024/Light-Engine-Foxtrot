@@ -645,7 +645,7 @@
         <div class="manual-inv-panel">
           <p style="color:#94a3b8; margin-bottom:1rem;">Add crop inventory by weight for wholesale &amp; retail sales. Items entered here appear alongside tray-synced inventory in the catalog.</p>
           <form id="manualInvForm" class="manual-inv-form" onsubmit="return false;">
-            <div><label>Product Name *</label><input id="mi-name" placeholder="e.g. Roma Tomatoes" required></div>
+            <div><label>Product Name *</label><input id="mi-name" list="crop-names-list" placeholder="e.g. Roma Tomatoes" autocomplete="off" required><datalist id="crop-names-list"></datalist></div>
             <div><label>Weight (lbs) *</label><input id="mi-qty" type="number" step="0.01" min="0" placeholder="0.00" required></div>
             <div><label>Retail $/lb</label><input id="mi-retail" type="number" step="0.01" min="0" placeholder="0.00"></div>
             <div><label>Wholesale $/lb</label><input id="mi-wholesale" type="number" step="0.01" min="0" placeholder="0.00"></div>
@@ -1674,7 +1674,40 @@
     window.submitManualEntry = submitManualEntry;
     window.deleteManualItem = deleteManualItem;
 
+    // Seed product name datalist from crop registry
+    let _cropCategories = {};
+    async function loadCropNames() {
+      try {
+        const resp = await fetch('/data/crop-registry.json');
+        if (!resp.ok) return;
+        const reg = await resp.json();
+        const crops = reg.crops || {};
+        const names = Object.keys(crops).sort();
+        const dl = document.getElementById('crop-names-list');
+        dl.innerHTML = names.map(n => `<option value="${escHtml(n)}">`).join('');
+        // Build category lookup for auto-fill
+        const catMap = { lettuce:'Leafy Greens', arugula:'Leafy Greens', kale:'Leafy Greens', specialty_greens:'Leafy Greens', asian_greens:'Leafy Greens', basil:'Herbs' };
+        for (const [name, info] of Object.entries(crops)) {
+          if (info.category) _cropCategories[name.toLowerCase()] = catMap[info.category] || info.category;
+        }
+        // Auto-fill category when crop selected from list
+        document.getElementById('mi-name').addEventListener('change', () => {
+          const val = document.getElementById('mi-name').value.trim().toLowerCase();
+          const cat = _cropCategories[val];
+          if (cat) {
+            const sel = document.getElementById('mi-category');
+            for (const opt of sel.options) {
+              if (opt.value.toLowerCase() === cat.toLowerCase() || opt.text.toLowerCase() === cat.toLowerCase()) {
+                sel.value = opt.value; break;
+              }
+            }
+          }
+        });
+      } catch (e) { console.warn('[ManualInv] Could not load crop names:', e.message); }
+    }
+
     // Load inventory on page load
+    loadCropNames();
     loadInventory();
     loadManualInventory();
 
