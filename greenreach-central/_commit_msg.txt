@@ -1,9 +1,9 @@
-Add nightly system audit service (10-check automated health monitor)
+Add email alert notifications to nightly audit service
 
-- New service: services/nightly-audit.js runs at 3 AM ET daily
-- 10 checks: DB, farm sync, inventory pricing, POS, wholesale catalog,
-  background services, Light Engine, AI, payment gateways, auth
-- Results in system_audits table (migration 032)
-- Admin API: GET/POST /api/admin/system-audit + /history
-- E.V.I.E. get_system_health tool for how is the system queries
-- server.js: startNightlyAuditService() in background services block
+- Import emailService into nightly-audit.js
+- New sendAuditAlert() sends HTML + text email on failures or warnings
+- Email includes: failure/warning callout boxes, full check table,
+  status icons, actionable detail for each failed check
+- Recipient configured via ADMIN_ALERT_EMAIL or ADMIN_EMAIL env var
+- Graceful skip when no alert email is configured
+- Non-blocking: alert email errors are logged but do not fail the audit

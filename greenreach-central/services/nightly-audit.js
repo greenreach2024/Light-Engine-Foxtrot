@@ -10,6 +10,7 @@
 
 import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
 import { farmStore } from '../lib/farm-data-store.js';
+import emailService from '../services/email-service.js';
 import logger from '../utils/logger.js';
 
 // ── Configuration ───────────────────────────────────────────────────
@@ -140,7 +141,101 @@ export async function runNightlyAudit() {
     logger.error(`${TAG} FAILURES:`, failures.map(f => `${f.name}: ${f.message}`).join('; '));
   }
 
+  // ── Email alert on failures or warnings ──
+  if (overallStatus !== 'pass') {
+    try {
+      await sendAuditAlert(result);
+    } catch (alertErr) {
+      logger.warn(`${TAG} Could not send audit alert email:`, alertErr.message);
+    }
+  }
+
   return result;
+}
+
+// ── Email Alert ─────────────────────────────────────────────────────
+
+const ALERT_EMAIL = process.env.ADMIN_ALERT_EMAIL || process.env.ADMIN_EMAIL || null;
+
+async function sendAuditAlert(result) {
+  if (!ALERT_EMAIL) {
+    logger.warn(`${TAG} No ADMIN_ALERT_EMAIL configured — skipping email notification`);
+    return;
+  }
+
+  const { status, checks, summary, audit_date } = result;
+  const failures = checks.filter(c => c.status === 'fail');
+  const warnings = checks.filter(c => c.status === 'warn');
+  const statusLabel = status === 'fail' ? 'FAILURE' : 'WARNING';
+  const statusColor = status === 'fail' ? '#d32f2f' : '#f57c00';
+
+  const checkRows = checks.map(c => {
+    const icon = c.status === 'pass' ? '✅' : c.status === 'warn' ? '⚠️' : '❌';
+    const bg = c.status === 'pass' ? '#e8f5e9' : c.status === 'warn' ? '#fff3e0' : '#ffebee';
+    return `<tr style="background:${bg}">
+      <td style="padding:6px 10px">${icon} ${c.name.replace(/_/g, ' ')}</td>
+      <td style="padding:6px 10px;text-transform:uppercase;font-weight:600">${c.status}</td>
+      <td style="padding:6px 10px">${c.message}</td>
+    </tr>`;
+  }).join('\n');
+
+  const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:640px;margin:0 auto">
+  <div style="background:${statusColor};color:#fff;padding:16px 20px;border-radius:8px 8px 0 0">
+    <h2 style="margin:0;font-size:20px">🌱 GreenReach Nightly Audit: ${statusLabel}</h2>
+    <p style="margin:6px 0 0;opacity:0.9">${audit_date} &mdash; ${summary.failures} failure(s), ${summary.warnings} warning(s), ${summary.passed} passed</p>
+  </div>
+
+  ${failures.length > 0 ? `
+  <div style="background:#ffebee;padding:14px 20px;border-left:4px solid #d32f2f">
+    <h3 style="margin:0 0 8px;color:#b71c1c;font-size:15px">❌ Failures Requiring Attention</h3>
+    <ul style="margin:0;padding-left:20px">
+      ${failures.map(f => `<li><strong>${f.name.replace(/_/g, ' ')}</strong>: ${f.message}</li>`).join('\n      ')}
+    </ul>
+  </div>` : ''}
+
+  ${warnings.length > 0 ? `
+  <div style="background:#fff3e0;padding:14px 20px;border-left:4px solid #f57c00">
+    <h3 style="margin:0 0 8px;color:#e65100;font-size:15px">⚠️ Warnings</h3>
+    <ul style="margin:0;padding-left:20px">
+      ${warnings.map(w => `<li><strong>${w.name.replace(/_/g, ' ')}</strong>: ${w.message}</li>`).join('\n      ')}
+    </ul>
+  </div>` : ''}
+
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+    <thead>
+      <tr style="background:#f5f5f5">
+        <th style="padding:8px 10px;text-align:left">Check</th>
+        <th style="padding:8px 10px;text-align:left">Status</th>
+        <th style="padding:8px 10px;text-align:left">Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${checkRows}
+    </tbody>
+  </table>
+
+  <p style="color:#666;font-size:12px;padding:0 20px">
+    Audit ran in ${summary.duration_ms}ms. Log in to the admin dashboard or ask E.V.I.E. <em>"how's the system?"</em> for live status.
+  </p>
+</div>`;
+
+  const text = `GreenReach Nightly Audit: ${statusLabel} (${audit_date})\n\n` +
+    `${summary.failures} failure(s), ${summary.warnings} warning(s), ${summary.passed}/${summary.total} passed\n\n` +
+    (failures.length ? 'FAILURES:\n' + failures.map(f => `  ❌ ${f.name}: ${f.message}`).join('\n') + '\n\n' : '') +
+    (warnings.length ? 'WARNINGS:\n' + warnings.map(w => `  ⚠️ ${w.name}: ${w.message}`).join('\n') + '\n\n' : '') +
+    'Full details available on the admin dashboard or via E.V.I.E.';
+
+  const emailResult = await emailService.sendEmail({
+    to: ALERT_EMAIL,
+    subject: `🌱 GreenReach Audit ${statusLabel} — ${audit_date}`,
+    text,
+    html
+  });
+
+  if (emailResult.success) {
+    logger.info(`${TAG} Alert email sent to ${ALERT_EMAIL} (${emailResult.messageId})`);
+  }
 }
 
 // ── Individual Checks ───────────────────────────────────────────────
