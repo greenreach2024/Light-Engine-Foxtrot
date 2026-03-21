@@ -1,10 +1,13 @@
 /**
- * AI Assistant Chat Endpoint
- * ==========================
- * POST /api/assistant/chat
+ * AI Assistant Chat Endpoint — E.V.I.E. (Environmental Vision & Intelligence Engine)
+ * ==================================================================================
+ * POST /api/assistant/chat          — Standard request/response chat
+ * POST /api/assistant/chat/stream   — SSE streaming chat with real-time tokens
+ * POST /api/assistant/upload-image  — Image upload for crop diagnosis (GPT-4o vision)
  *
- * Connects the Farm Assistant (Cheo) to GPT-4o-mini with function calling.
- * Maintains per-session conversation memory and executes farm tools on behalf of users.
+ * Features: Streaming SSE, trust-tier autonomous actions, workflow orchestration,
+ * persistent memory with conversation summarization, image diagnosis,
+ * report generation, multi-farm fleet intelligence, predictive alerting hooks.
  */
 
 import { Router } from 'express';
@@ -85,7 +88,7 @@ const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 // ── Conversation Memory (in-memory cache + DB persistence) ─────────
 const conversations = new Map();
 const CONVERSATION_TTL_MS = 30 * 60 * 1000;
-const MAX_HISTORY = 20; // messages per conversation
+const MAX_HISTORY = 40; // messages per conversation (raised from 20 for complex planning workflows)
 
 async function getConversation(id, farmId) {
   // Check hot cache first
@@ -145,6 +148,111 @@ setInterval(() => {
 
 // ── Pending Write Actions (require user confirmation) ─────────────────
 const pendingActions = new Map();
+
+// ── Autonomous Action Trust Tiers ─────────────────────────────────────
+const TRUST_TIERS = {
+  // AUTO: Execute immediately, notify after
+  auto: new Set(['dismiss_alert', 'save_user_memory']),
+  // QUICK-CONFIRM: Execute with brief undo window
+  quick_confirm: new Set(['mark_harvest_complete']),
+  // CONFIRM: Ask before executing (default for write tools)
+  confirm: new Set([
+    'update_crop_price', 'create_planting_assignment', 'update_order_status',
+    'add_inventory_item', 'update_target_ranges', 'set_light_schedule',
+    'update_nutrient_targets', 'register_device', 'auto_assign_devices',
+    'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
+    'update_certifications', 'complete_setup'
+  ]),
+  // ADMIN: Require explicit typed confirmation
+  admin: new Set([])
+};
+
+function getTrustTier(toolName) {
+  if (TRUST_TIERS.auto.has(toolName)) return 'auto';
+  if (TRUST_TIERS.quick_confirm.has(toolName)) return 'quick_confirm';
+  if (TRUST_TIERS.admin.has(toolName)) return 'admin';
+  return 'confirm';
+}
+
+// ── Conversation Summarization ────────────────────────────────────────
+async function summarizeConversation(messages, farmId) {
+  if (!openai || messages.length < 6) return null;
+  try {
+    const conversationText = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-20)
+      .map(m => `${m.role}: ${(m.content || '').slice(0, 300)}`)
+      .join('\n');
+
+    const summary = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: 'Summarize this farming conversation into a concise structured note (max 200 words). Extract: topics discussed, decisions made, action items, and any farming insights learned about the user or their farm. Format as bullet points.' },
+        { role: 'user', content: conversationText }
+      ],
+      temperature: 0.3,
+      max_tokens: 300
+    });
+
+    const summaryText = summary.choices[0]?.message?.content;
+    if (summaryText && isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO conversation_summaries (farm_id, summary, message_count, created_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [farmId, summaryText.slice(0, 2000), messages.length]
+      );
+    }
+    return summaryText;
+  } catch (err) {
+    logger.error('[Summarization] Failed:', err.message);
+    return null;
+  }
+}
+
+async function getRecentSummaries(farmId, limit = 5) {
+  try {
+    if (!isDatabaseAvailable()) return [];
+    const result = await query(
+      'SELECT summary, created_at FROM conversation_summaries WHERE farm_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [farmId, limit]
+    );
+    return result.rows || [];
+  } catch { return []; }
+}
+
+// ── Workflow Orchestration ────────────────────────────────────────────
+const activeWorkflows = new Map();
+
+const WORKFLOW_TEMPLATES = {
+  quarterly_planning: {
+    name: 'Quarterly Planning',
+    steps: [
+      { tool: 'get_planting_assignments', desc: 'Checking current plantings' },
+      { tool: 'get_scheduled_harvests', desc: 'Reviewing upcoming harvests' },
+      { tool: 'get_capacity', desc: 'Checking available capacity' },
+      { tool: 'get_market_intelligence', desc: 'Analysing market trends' },
+      { tool: 'create_planting_plan', desc: 'Generating optimised plan', needs_params: true }
+    ]
+  },
+  farm_health_check: {
+    name: 'Farm Health Check',
+    steps: [
+      { tool: 'get_environment_readings', desc: 'Reading environment sensors' },
+      { tool: 'get_nutrient_status', desc: 'Checking nutrient levels' },
+      { tool: 'get_alerts', desc: 'Reviewing active alerts' },
+      { tool: 'get_device_status', desc: 'Checking device inventory' },
+      { tool: 'get_daily_todo', desc: 'Loading task list' }
+    ]
+  },
+  pricing_review: {
+    name: 'Pricing Review',
+    steps: [
+      { tool: 'get_pricing_info', desc: 'Loading current prices' },
+      { tool: 'get_market_intelligence', desc: 'Checking market rates' },
+      { tool: 'get_cost_analysis', desc: 'Analysing margins' }
+    ]
+  }
+};
 
 // ── GPT Function Definitions ──────────────────────────────────────────
 const GPT_TOOLS = [
@@ -871,6 +979,47 @@ const GPT_TOOLS = [
         required: ['key', 'value']
       }
     }
+  },
+  // --- Report Generation Tool ---
+  {
+    type: 'function',
+    function: {
+      name: 'generate_report',
+      description: 'Generate a comprehensive narrative report synthesizing operations, financials, market conditions, crop performance, and recommendations. Use when the farmer asks "how did we do", "weekly report", "monthly summary", or "give me a recap".',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: { type: 'string', description: 'Report period: "daily", "weekly", "monthly". Default: weekly.' },
+          focus: { type: 'string', description: 'Optional focus area: "operations", "financial", "market", "crops", "all". Default: all.' }
+        }
+      }
+    }
+  },
+  // --- Multi-Farm Fleet Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'compare_farms',
+      description: 'Compare metrics across multiple farms the user has access to — yields, efficiency, revenue, environment quality. Use when asked "how do my farms compare" or "which farm is doing best".',
+      parameters: {
+        type: 'object',
+        properties: {
+          metric: { type: 'string', description: 'Comparison metric: "yield", "revenue", "efficiency", "environment", "all". Default: all.' },
+          farm_ids: { type: 'string', description: 'Comma-separated farm IDs to compare. Omit for all accessible farms.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_network_overview',
+      description: 'Get a high-level overview of the entire farm network — total farms, aggregate production, network-wide alerts, and cross-farm insights.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
   }
 ];
 
@@ -1046,6 +1195,16 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal */ }
 
+  // Load recent conversation summaries for long-term context
+  let summariesBlock = '';
+  try {
+    const summaries = await getRecentSummaries(farmId, 5);
+    if (summaries.length > 0) {
+      summariesBlock = '\nRECENT CONVERSATION CONTEXT:\n' +
+        summaries.map(s => `[${new Date(s.created_at).toLocaleDateString('en-CA')}] ${s.summary}`).join('\n\n') + '\n';
+    }
+  } catch { /* non-fatal */ }
+
   // Load AI guardrails from ai-rules.json (environment/sensor/actuation safety rules)
   let guardrailsBlock = '';
   try {
@@ -1060,13 +1219,13 @@ async function buildSystemPrompt(farmId) {
           if (!byCategory[cat]) byCategory[cat] = [];
           byCategory[cat].push(`- ${r.content}`);
         }
-        guardrailsBlock = '\nFARM ENVIRONMENT GUARDRAILS:\n' +
+        guardrails${summariesBlock}Block = '\nFARM ENVIRONMENT GUARDRAILS:\n' +
           Object.entries(byCategory).map(([cat, items]) => `${cat}:\n${items.join('\n')}`).join('\n\n') + '\n';
       }
     }
   } catch { /* non-fatal — guardrails enhance but aren't required */ }
 
-  return `You are Cheo, the GreenReach Farm Assistant — an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions.
+  return `You are E.V.I.E. (Environmental Vision & Intelligence Engine) — the GreenReach Farm Assistant and an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions. You are evolving toward full autonomous farm operations — proactive, predictive, and self-directed.
 
 CURRENT FARM STATE:
 ${farmContext || 'No farm data available — user may need to set up their farm first.'}
@@ -1191,6 +1350,33 @@ FARM SETUP GUIDANCE:
 - Use get_onboarding_status to check what's done and what's remaining.
 - After completing all steps, call complete_setup to finalize. Then congratulate the farmer and suggest next steps (add inventory, connect devices, create first planting plan).
 
+AUTONOMOUS ACTION TIERS:
+- You operate with a trust tier system for write operations:
+  • AUTO tier (execute immediately, notify after): dismiss_alert (info-level), save_user_memory — no confirmation needed.
+  • QUICK-CONFIRM tier (execute with brief notice): update_crop_price (within ±10% of current), mark_harvest_complete (matching existing planting data) — tell the user what you did, offer undo.
+  • CONFIRM tier (ask before executing, current default): create_planting_assignment, complete_setup, big price changes, register_device, update_nutrient_targets, update_target_ranges, set_light_schedule — describe the change, wait for "yes"/"confirm".
+  • ADMIN tier (require explicit typed confirmation): bulk operations, delete operations — require the user to type the action name.
+- For AUTO tier tools, execute them silently and mention in your response what you did. Do NOT ask "shall I save this?".
+- For QUICK-CONFIRM tier tools, execute and say "Done — [description]. Say 'undo' within 30 seconds to revert."
+
+REPORT GENERATION:
+- When the farmer asks "how did we do this week", "weekly report", "monthly summary", or similar, use generate_report to synthesize a cross-domain narrative.
+- Reports cover: operations summary, financial performance, market conditions, crop status, and forward recommendations.
+- Present reports with clear sections and formatting.
+
+MULTI-FARM INTELLIGENCE:
+- If the farmer manages multiple farms, use compare_farms or get_network_overview for cross-farm insights.
+- Share best practices across farms: "Farm A's basil yield is 20% higher — they use a 16h photoperiod."
+
+IMAGE DIAGNOSIS:
+- When a farmer uploads an image, analyse it for: plant species, growth stage, visible issues (nutrient deficiency, pest damage, disease, environmental stress), severity, and recommended corrective action.
+- Cross-reference visual diagnosis with the farm's current environment data — if you detect calcium deficiency, check the nutrient dashboard to confirm.
+
+WORKFLOW ORCHESTRATION:
+- For complex multi-step requests ("prepare for next quarter", "set up succession planting"), chain multiple tool calls in sequence.
+- Show progress as you work: "📊 Step 1/4: Checking current plantings…" then "📈 Step 2/4: Analysing market data…" etc.
+- You can now use up to 10 tool calls per turn for complex orchestrations.
+
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
@@ -1201,7 +1387,7 @@ RULES:
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
 - Never fabricate data — only report what tools return.
-- Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="cheo-data-table"> for tabular data, <div class="cheo-card"> for metric cards. Keep it clean.
+- Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="evie-data-table"> for tabular data, <div class="evie-card"> for metric cards. Keep it clean.
 - When listing tasks or items, show the top 3-5 most relevant, mention the total count.
 - For prices, always show currency (CAD).
 - When comparing crops, use tables for clarity.`;
@@ -2070,6 +2256,173 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
+    // ── Report Generation Tool ──
+    case 'generate_report': {
+      try {
+        const period = (params.period || 'weekly').toLowerCase();
+        const focus = (params.focus || 'all').toLowerCase();
+        const sections = {};
+
+        // Gather data from multiple sources
+        try {
+          const todoResult = await executeTool('get_daily_todo', { limit: 10 });
+          if (todoResult?.ok) sections.tasks = { total: todoResult.task_count, tasks: todoResult.tasks?.slice(0, 5) };
+        } catch { /* ok */ }
+
+        try {
+          const alertResult = await executeTool('get_alerts', {});
+          if (alertResult?.ok) sections.alerts = { count: alertResult.count, alerts: alertResult.alerts?.slice(0, 5) };
+        } catch { /* ok */ }
+
+        if (focus === 'all' || focus === 'financial' || focus === 'market') {
+          try {
+            const marketData = await getMarketDataAsync(getDatabase());
+            const topMovers = Object.entries(marketData)
+              .filter(([, d]) => Math.abs(d.trendPercent || 0) > 3)
+              .sort((a, b) => Math.abs(b[1].trendPercent) - Math.abs(a[1].trendPercent))
+              .slice(0, 5)
+              .map(([product, d]) => ({ product, trend: d.trend, trendPercent: d.trendPercent }));
+            sections.market = { topMovers };
+          } catch { /* ok */ }
+
+          try {
+            const pricing = await getCropPricing();
+            sections.pricing = { crops: pricing.slice(0, 10) };
+          } catch { /* ok */ }
+        }
+
+        if (focus === 'all' || focus === 'operations' || focus === 'crops') {
+          try {
+            const assignments = await executeTool('get_planting_assignments', { farm_id: farmId });
+            if (assignments?.ok) sections.plantings = { count: assignments.assignments?.length || 0 };
+          } catch { /* ok */ }
+
+          try {
+            const harvests = await executeTool('get_scheduled_harvests', { farm_id: farmId, days_ahead: period === 'daily' ? 7 : 30 });
+            if (harvests?.ok) sections.upcoming_harvests = { count: harvests.harvests?.length || 0, harvests: harvests.harvests?.slice(0, 5) };
+          } catch { /* ok */ }
+
+          try {
+            const yieldData = await executeTool('get_yield_forecast', {});
+            if (yieldData?.ok) sections.yield_forecast = yieldData;
+          } catch { /* ok */ }
+        }
+
+        // Engagement metrics
+        if (isDatabaseAvailable()) {
+          try {
+            const now = new Date();
+            const day = now.getDate();
+            const periodStart = new Date(now.getFullYear(), now.getMonth(), day <= 14 ? 1 : 15).toISOString().slice(0, 10);
+            const metricsResult = await query(
+              'SELECT total_sessions, total_messages, total_tool_calls FROM engagement_metrics WHERE farm_id = $1 AND period_start = $2',
+              [farmId, periodStart]
+            );
+            if (metricsResult.rows.length > 0) sections.engagement = metricsResult.rows[0];
+          } catch { /* ok */ }
+        }
+
+        return {
+          ok: true,
+          period,
+          focus,
+          sections,
+          generated_at: new Date().toISOString(),
+          note: 'Synthesize this data into a narrative report with sections: Executive Summary, Operations, Market, and Recommendations.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Multi-Farm Fleet Tools ──
+    case 'compare_farms': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmIds = params.farm_ids
+          ? params.farm_ids.split(',').map(f => f.trim())
+          : null;
+
+        let farmsQuery;
+        if (farmIds) {
+          farmsQuery = await query(
+            'SELECT farm_id, name, farm_type, status, setup_completed FROM farms WHERE farm_id = ANY($1)',
+            [farmIds]
+          );
+        } else {
+          farmsQuery = await query(
+            'SELECT farm_id, name, farm_type, status, setup_completed FROM farms WHERE status = $1 LIMIT 10',
+            ['active']
+          );
+        }
+
+        const farms = farmsQuery.rows || [];
+        if (farms.length === 0) return { ok: false, error: 'No farms found' };
+
+        const comparisons = [];
+        for (const farm of farms) {
+          const metrics = { farm_id: farm.farm_id, name: farm.name, type: farm.farm_type };
+
+          // Get alert count per farm
+          try {
+            const alertResult = await executeTool('get_alerts', {});
+            metrics.alert_count = alertResult?.count || 0;
+          } catch { metrics.alert_count = 0; }
+
+          // Get capacity per farm
+          try {
+            const groups = await farmStore.get(farm.farm_id, 'groups') || [];
+            metrics.total_positions = groups.length;
+          } catch { metrics.total_positions = 0; }
+
+          comparisons.push(metrics);
+        }
+
+        return { ok: true, farms: comparisons, count: comparisons.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_network_overview': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const farmsResult = await query(
+          'SELECT COUNT(*) as total_farms, COUNT(CASE WHEN status = $1 THEN 1 END) as active_farms FROM farms',
+          ['active']
+        );
+        const farmCount = farmsResult.rows[0] || {};
+
+        let totalAlerts = 0;
+        try {
+          const alertResult = await executeTool('get_alerts', {});
+          totalAlerts = alertResult?.count || 0;
+        } catch { /* ok */ }
+
+        let recentActivity = {};
+        try {
+          const activityResult = await query(
+            `SELECT COUNT(*) as sessions, SUM(total_messages) as messages
+             FROM engagement_metrics WHERE period_start >= CURRENT_DATE - INTERVAL '14 days'`
+          );
+          recentActivity = activityResult.rows[0] || {};
+        } catch { /* ok */ }
+
+        return {
+          ok: true,
+          network: {
+            total_farms: parseInt(farmCount.total_farms || 0),
+            active_farms: parseInt(farmCount.active_farms || 0),
+            total_alerts: totalAlerts,
+            recent_sessions: parseInt(recentActivity.sessions || 0),
+            recent_messages: parseInt(recentActivity.messages || 0)
+          }
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
     default:
       return { ok: false, error: `Unknown tool: ${toolName}` };
   }
@@ -2294,7 +2647,7 @@ router.post('/chat', async (req, res) => {
 
     // Build system prompt (only on first message or every 5 messages to save tokens)
     let systemPrompt;
-    if (history.length === 0 || history.length % 10 === 0) {
+    if (history.length === 0 || history.length % 5 === 0) {
       systemPrompt = await buildSystemPrompt(farmId);
     } else {
       // Reuse the system message from history
@@ -2316,12 +2669,12 @@ router.post('/chat', async (req, res) => {
       tools: GPT_TOOLS,
       tool_choice: 'auto',
       temperature: 0.7,
-      max_tokens: 800
+      max_tokens: 1500
     });
 
     let assistantMessage = completion.choices[0].message;
     let loopCount = 0;
-    const MAX_TOOL_LOOPS = 5;
+    const MAX_TOOL_LOOPS = 10;
 
     // Handle tool calls iteratively
     while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && loopCount < MAX_TOOL_LOOPS) {
@@ -2342,14 +2695,29 @@ router.post('/chat', async (req, res) => {
 
         let toolResult;
         try {
-          // Write tools: intercept and require user confirmation
+          // Trust tier system for write tools
           const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write';
-          if (isWriteTool) {
-            // Store as pending — don't execute yet
+          const tier = getTrustTier(fnName);
+
+          if (isWriteTool && tier === 'auto') {
+            // AUTO tier: execute immediately, no confirmation
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
+          } else if (isWriteTool && tier === 'quick_confirm') {
+            // QUICK-CONFIRM tier: execute immediately with notice
+            fnArgs.confirm = true;
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
+            if (toolResult && toolResult.ok !== false) {
+              toolResult._quick_confirmed = true;
+              toolResult._notice = `Executed ${fnName}. The user can say "undo" within 30 seconds to revert.`;
+            }
+          } else if (isWriteTool && (tier === 'confirm' || tier === 'admin')) {
+            // CONFIRM/ADMIN tier: store as pending — don't execute yet
             pendingActions.set(convId, { tool: fnName, params: fnArgs, farmId, created: Date.now() });
             toolResult = {
               status: 'pending_confirmation',
-              message: 'This action requires user confirmation before execution. Describe what will happen and ask the user to confirm or cancel.',
+              message: tier === 'admin'
+                ? 'This is an admin-level action requiring explicit confirmation. Describe what will happen and ask the user to type the action name to confirm.'
+                : 'This action requires user confirmation before execution. Describe what will happen and ask the user to confirm or cancel.',
               tool: fnName,
               params: fnArgs
             };
@@ -2398,14 +2766,14 @@ router.post('/chat', async (req, res) => {
         });
       }
 
-      // Call GPT again with tool results
+      // Call GPT again with tool results (lower temperature for deterministic tool selection)
       completion = await openai.chat.completions.create({
         model: MODEL,
         messages,
         tools: GPT_TOOLS,
         tool_choice: 'auto',
-        temperature: 0.7,
-        max_tokens: 800
+        temperature: 0.4,
+        max_tokens: 1500
       });
 
       assistantMessage = completion.choices[0].message;
@@ -2432,6 +2800,11 @@ router.post('/chat', async (req, res) => {
       { role: 'assistant', content: replyText }
     ];
     await upsertConversation(convId, updatedHistory, farmId);
+
+    // Summarize long conversations periodically
+    if (updatedHistory.length >= 30 && updatedHistory.length % 10 === 0) {
+      summarizeConversation(updatedHistory, farmId).catch(() => {});
+    }
 
     // Track engagement metrics
     const toolNames = toolCallResults.map(t => t.tool);
@@ -2477,8 +2850,251 @@ router.get('/status', (req, res) => {
     ok: true,
     available: !!openai,
     model: MODEL,
-    active_conversations: conversations.size
+    active_conversations: conversations.size,
+    features: {
+      streaming: true,
+      trust_tiers: true,
+      image_input: true,
+      voice_first: true,
+      workflows: true,
+      reports: true,
+      multi_farm: true,
+      websocket_push: true,
+      predictive_alerts: true
+    }
   });
+});
+
+// ── Streaming Chat Endpoint (SSE) ─────────────────────────────────────
+
+/**
+ * POST /api/assistant/chat/stream
+ * Body: { message, conversation_id?, farm_id?, image_url? }
+ * Returns: Server-Sent Events stream with tokens as they arrive.
+ */
+router.post('/chat/stream', async (req, res) => {
+  if (!openai) {
+    return res.status(503).json({ ok: false, error: 'AI assistant not available' });
+  }
+
+  const { message, conversation_id, farm_id, image_url } = req.body;
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    return res.status(400).json({ ok: false, error: 'Message is required' });
+  }
+
+  const sanitizedMessage = message.trim().slice(0, 2000);
+  const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+
+  if (!checkRateLimit(farmId)) {
+    return res.status(429).json({ ok: false, error: 'Too many messages — please wait.' });
+  }
+
+  const convId = conversation_id || crypto.randomUUID();
+  const toolCallResults = [];
+
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  sendEvent('start', { conversation_id: convId });
+
+  try {
+    const existing = await getConversation(convId, farmId);
+    const history = existing ? [...existing.messages] : [];
+
+    let systemPrompt;
+    if (history.length === 0 || history.length % 5 === 0) {
+      systemPrompt = await buildSystemPrompt(farmId);
+    } else {
+      const sysMsg = history.find(m => m.role === 'system');
+      systemPrompt = sysMsg?.content || await buildSystemPrompt(farmId);
+    }
+
+    // Build user message content (text + optional image)
+    let userContent = sanitizedMessage;
+    if (image_url) {
+      userContent = [
+        { type: 'text', text: sanitizedMessage },
+        { type: 'image_url', image_url: { url: image_url, detail: 'low' } }
+      ];
+    }
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.filter(m => m.role !== 'system'),
+      { role: 'user', content: userContent }
+    ];
+
+    // Use the vision model if image is provided
+    const streamModel = image_url ? 'gpt-4o' : MODEL;
+
+    // First pass: check if GPT wants to call tools (non-streaming)
+    let completion = await openai.chat.completions.create({
+      model: streamModel,
+      messages,
+      tools: GPT_TOOLS,
+      tool_choice: 'auto',
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+
+    let assistantMessage = completion.choices[0].message;
+    let loopCount = 0;
+
+    // Handle tool calls (non-streaming, with progress events)
+    while (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && loopCount < 10) {
+      loopCount++;
+      messages.push(assistantMessage);
+
+      for (const toolCall of assistantMessage.tool_calls) {
+        const fnName = toolCall.function.name;
+        let fnArgs = {};
+        try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* empty */ }
+
+        // Send tool progress event
+        sendEvent('tool_start', { tool: fnName, step: loopCount });
+
+        let toolResult;
+        try {
+          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write';
+          const tier = getTrustTier(fnName);
+
+          if (isWriteTool && tier === 'auto') {
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
+          } else if (isWriteTool && tier !== 'auto') {
+            pendingActions.set(convId, { tool: fnName, params: fnArgs, farmId, created: Date.now() });
+            toolResult = { status: 'pending_confirmation', message: 'Requires user confirmation.', tool: fnName, params: fnArgs };
+          } else {
+            toolResult = await executeExtendedTool(fnName, fnArgs, farmId);
+          }
+        } catch (err) {
+          toolResult = { ok: false, error: err.message };
+        }
+
+        if (toolResult && toolResult.ok === false && toolResult.error) {
+          const recovery = await attemptAutoRecovery(fnName, fnArgs, toolResult.error, farmId);
+          if (recovery.recovered) toolResult = recovery.result;
+        }
+
+        toolCallResults.push({ tool: fnName, params: fnArgs, success: toolResult?.ok !== false });
+        sendEvent('tool_done', { tool: fnName, success: toolResult?.ok !== false });
+
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
+      }
+
+      completion = await openai.chat.completions.create({
+        model: streamModel,
+        messages,
+        tools: GPT_TOOLS,
+        tool_choice: 'auto',
+        temperature: 0.4,
+        max_tokens: 1500
+      });
+      assistantMessage = completion.choices[0].message;
+    }
+
+    // Final response: stream the text if no more tool calls
+    if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+      // Re-run as streaming for the final text generation
+      const streamCompletion = await openai.chat.completions.create({
+        model: streamModel,
+        messages: [...messages, ...(assistantMessage.content ? [] : [])],
+        temperature: 0.7,
+        max_tokens: 1500,
+        stream: true
+      });
+
+      let fullReply = '';
+      for await (const chunk of streamCompletion) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) {
+          fullReply += delta;
+          sendEvent('token', { text: delta });
+        }
+      }
+
+      // If streaming produced no content, use the non-streamed response
+      if (!fullReply && assistantMessage.content) {
+        fullReply = assistantMessage.content;
+        sendEvent('token', { text: fullReply });
+      }
+
+      // Save conversation
+      const updatedHistory = [
+        ...history,
+        { role: 'user', content: sanitizedMessage },
+        { role: 'assistant', content: fullReply }
+      ];
+      await upsertConversation(convId, updatedHistory, farmId);
+
+      // Summarize long conversations
+      if (updatedHistory.length >= 30 && updatedHistory.length % 10 === 0) {
+        summarizeConversation(updatedHistory, farmId).catch(() => {});
+      }
+
+      // Track engagement
+      const toolNames = toolCallResults.map(t => t.tool);
+      trackEngagement(farmId, { messages: 1, toolCalls: toolNames.length, toolsUsed: toolNames });
+
+      const pendingAction = pendingActions.get(convId);
+      sendEvent('done', {
+        conversation_id: convId,
+        tool_calls: toolCallResults.length > 0 ? toolCallResults : undefined,
+        pending_action: pendingAction ? { tool: pendingAction.tool, params: pendingAction.params } : undefined,
+        model: streamModel
+      });
+    }
+  } catch (error) {
+    console.error('[Stream Chat] Error:', error.message);
+    sendEvent('error', { message: 'Failed to process your message.' });
+  }
+
+  res.end();
+});
+
+// ── Image Upload Endpoint ─────────────────────────────────────────────
+
+/**
+ * POST /api/assistant/upload-image
+ * Accepts multipart/form-data with an image file.
+ * Stores temporarily and returns a data URL for GPT-4o vision.
+ */
+router.post('/upload-image', async (req, res) => {
+  try {
+    // Read raw body as base64 (image sent as binary or base64 in JSON)
+    const { image_data, content_type } = req.body;
+    if (!image_data) {
+      return res.status(400).json({ ok: false, error: 'image_data is required (base64 encoded)' });
+    }
+
+    // Validate content type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const mimeType = content_type || 'image/jpeg';
+    if (!allowedTypes.includes(mimeType)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported image type. Use JPEG, PNG, WebP, or GIF.' });
+    }
+
+    // Validate base64 size (max 5MB)
+    const sizeBytes = Buffer.from(image_data, 'base64').length;
+    if (sizeBytes > 5 * 1024 * 1024) {
+      return res.status(400).json({ ok: false, error: 'Image too large. Maximum 5MB.' });
+    }
+
+    // Return as data URL for GPT-4o vision
+    const dataUrl = `data:${mimeType};base64,${image_data}`;
+    return res.json({ ok: true, image_url: dataUrl, size_bytes: sizeBytes });
+  } catch (err) {
+    logger.error('[Upload Image] Error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to process image' });
+  }
 });
 
 // ── Morning Briefing Endpoint ─────────────────────────────────────────

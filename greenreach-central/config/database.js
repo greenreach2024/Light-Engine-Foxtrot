@@ -1893,6 +1893,24 @@ async function runMigrations(client) {
     logger.warn('Migration 030b warning:', err.message);
   }
 
+  // Migration 031: Conversation summaries for E.V.I.E. persistent memory
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversation_summaries (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255),
+        summary TEXT NOT NULL,
+        message_count INT DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_convsumm_farm ON conversation_summaries(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_convsumm_created ON conversation_summaries(created_at DESC);
+    `);
+    logger.info('Conversation summaries table ready (migration 031)');
+  } catch (err) {
+    logger.warn('Migration 031 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

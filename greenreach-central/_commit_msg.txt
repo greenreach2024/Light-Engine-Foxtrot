@@ -1,0 +1,9 @@
+Add 7 setup wizard tools so AI can guide farm setup
+
+New tools: update_farm_profile, create_room, list_rooms, create_zone,
+update_certifications, get_onboarding_status, complete_setup
+
+- AI now detects setup_completed=false and proactively offers setup guidance
+- System prompt includes step-by-step setup flow instructions
+- Setup tools added to WRITE confirm list (user must confirm before changes)
+- Farm context now includes setup_completed status

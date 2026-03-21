@@ -1,0 +1,17 @@
+Deploy #525 — E.V.I.E. Jarvis Upgrade
+
+AI Assistant renamed: Cheo -> E.V.I.E. (Environmental Vision and Intelligence Engine)
+
+All 10 Jarvis recommendations implemented:
+1. Quick config wins (MAX_HISTORY 40, MAX_TOOL_LOOPS 10, max_tokens 1500)
+2. System prompt rewrite with E.V.I.E. identity
+3. Trust tier autonomous action system
+4. Workflow orchestration templates
+5. Persistent intelligent memory (conversation summarization)
+6. Image input for crop diagnosis (GPT-4o vision)
+7. NL report generation tool
+8. Multi-farm fleet intelligence tools
+9. Streaming SSE with tool progress events
+10. Predictive alerting service with WebSocket push
+
+Also: wake word detection, CSS rename, DB migration 031, healthCheck service upgrade

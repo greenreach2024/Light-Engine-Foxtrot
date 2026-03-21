@@ -103,7 +103,7 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 
 // Import services
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
-import { startHealthCheckService } from './services/healthCheck.js';
+import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
@@ -4602,6 +4602,23 @@ async function startServer() {
     // Store WebSocket server for use in other modules
     app.locals.wss = wss;
 
+    /**
+     * Broadcast an event to all WebSocket clients subscribed to a specific farm.
+     * @param {string} farmId - Target farm ID (or '*' for all clients)
+     * @param {object} event  - Event payload { type, ... }
+     */
+    app.locals.broadcastToFarm = (farmId, event) => {
+      const payload = JSON.stringify({ ...event, timestamp: new Date().toISOString() });
+      let sent = 0;
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1 /* OPEN */ && (farmId === '*' || client.farmId === farmId)) {
+          client.send(payload);
+          sent++;
+        }
+      });
+      if (sent > 0) logger.debug(`[WS] Broadcast ${event.type} to ${sent} client(s) for farm ${farmId}`);
+    };
+
     // Start background services (require DB)
     if (app.locals.databaseReady) {
       logger.info('Starting background services...');
@@ -4777,6 +4794,8 @@ app.post('/api/network/recipe-versions/push', async (req, res) => {
       wss.close(() => {
         logger.info('WebSocket server closed');
       });
+
+      stopHealthCheckService();
 
       if (typeof app.locals.stopWholesaleNetworkSync === 'function') {
         app.locals.stopWholesaleNetworkSync();

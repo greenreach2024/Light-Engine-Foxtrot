@@ -11,23 +11,28 @@ class FarmAssistant {
     this.isListening = false;
     this.recognition = null;
     this.isSpeaking = false;
-    this.voiceEnabled = JSON.parse(localStorage.getItem('cheo_tts_enabled') ?? 'true');
-    this.ttsVoice = localStorage.getItem('cheo_tts_voice') || 'echo';
+    this.voiceEnabled = JSON.parse(localStorage.getItem('evie_tts_enabled') ?? 'true');
+    this.ttsVoice = localStorage.getItem('evie_tts_voice') || 'echo';
     this.jokes = [];
     this.funFacts = [];
-    this.conversationId = localStorage.getItem('cheo_conversation_id') || null;
+    this.conversationId = localStorage.getItem('evie_conversation_id') || null;
     this.aiAvailable = null;     // null = unknown, true/false after check
     this.pendingAction = null;   // Pending write action awaiting confirmation
     window._farmAssistant = this; // Global ref for confirm/cancel button onclick
     this.nudgeInterval = null;    // Nudge polling interval
     this.settingsOpen = false;   // Settings panel state
     this._speakGeneration = 0;   // TTS generation counter — prevents overlapping playback
+    this._pendingImageUrl = null; // Pending image URL for next AI chat
+    this._ws = null;              // WebSocket connection for real-time alerts
+    this._wakeWordActive = false; // Wake word detection state
     this.init();
     this.initVoiceRecognition();
     this.initTextToSpeech();
     this.checkAIAvailability();
     this.checkMorningBriefing();
     this.startNudgePolling();
+    this._initWebSocket();
+    this._initWakeWord();
   }
 
   async checkAIAvailability() {
@@ -51,12 +56,12 @@ class FarmAssistant {
    */
   checkMorningBriefing() {
     const today = new Date().toISOString().slice(0, 10);
-    const lastBriefing = localStorage.getItem('cheo_briefing_date');
+    const lastBriefing = localStorage.getItem('evie_briefing_date');
     if (lastBriefing === today) return;
 
     setTimeout(async () => {
       try {
-        const greeted = localStorage.getItem('cheo_greeted');
+        const greeted = localStorage.getItem('evie_greeted');
         if (!greeted) return; // Let onboarding greeting happen first
 
         const resp = await this._authFetch(`/api/assistant/morning-briefing?farm_id=${encodeURIComponent(window.FARM_ID || '')}`);
@@ -71,7 +76,7 @@ class FarmAssistant {
         }
 
         this.addMessage(data.briefing);
-        localStorage.setItem('cheo_briefing_date', today);
+        localStorage.setItem('evie_briefing_date', today);
       } catch (e) {
         console.debug('[Farm Assistant] Morning briefing skipped:', e.message);
       }
@@ -97,7 +102,7 @@ class FarmAssistant {
       if (!data.ok || !data.nudges?.length) return;
 
       // Only show nudges we haven't shown in this session
-      const shownKey = 'cheo_shown_nudges';
+      const shownKey = 'evie_shown_nudges';
       const shown = JSON.parse(sessionStorage.getItem(shownKey) || '[]');
 
       for (const nudge of data.nudges) {
@@ -142,7 +147,7 @@ class FarmAssistant {
    * or if the user has never received a greeting.
    */
   checkProactiveGreeting() {
-    const greeted = localStorage.getItem('cheo_greeted');
+    const greeted = localStorage.getItem('evie_greeted');
     if (greeted) return;  // Already shown
 
     setTimeout(async () => {
@@ -180,7 +185,7 @@ class FarmAssistant {
           );
         }
 
-        localStorage.setItem('cheo_greeted', Date.now().toString());
+        localStorage.setItem('evie_greeted', Date.now().toString());
       } catch (e) {
         console.debug('[Farm Assistant] Proactive greeting skipped:', e.message);
       }
@@ -193,7 +198,7 @@ class FarmAssistant {
    */
   showContextHint() {
     const page = this.currentContext.page;
-    const hintKey = `cheo_hint_${page.replace(/\s+/g, '_').toLowerCase()}`;
+    const hintKey = `evie_hint_${page.replace(/\s+/g, '_').toLowerCase()}`;
     if (localStorage.getItem(hintKey)) return;
 
     const hints = {
@@ -341,7 +346,7 @@ class FarmAssistant {
       <div class="assistant-container minimized">
         <div class="assistant-header">
           <div class="header-content">
-            <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo" class="assistant-mascot-thumb" />
+            <img src="/images/cheo-mascot.svg?v=20260304" alt="E.V.I.E." class="assistant-mascot-thumb" />
             <div class="header-text">
               <strong>Farm Assistant</strong>
               <small>${this.currentContext.page}</small>
@@ -360,7 +365,7 @@ class FarmAssistant {
         <div class="assistant-body">
           <div class="chat-messages" id="chatMessages">
             <div class="mascot-welcome">
-              <img src="/images/cheo-mascot.svg?v=20260304" alt="Cheo the Farm Assistant" class="mascot-image" />
+              <img src="/images/cheo-mascot.svg?v=20260304" alt="E.V.I.E. — Environmental Vision & Intelligence Engine" class="mascot-image" />
               <div class="welcome-text">
                 <strong>Farm Assistant</strong>
                 <strong class="love-to-help">Ask me anything, or try one of these:</strong>
@@ -382,6 +387,8 @@ class FarmAssistant {
             <button id="voiceBtn" class="voice-btn" title="Voice command">
               <span class="voice-icon">♪</span>
             </button>
+            <button id="evieImageBtn" class="evie-image-btn" title="Upload image for diagnosis">📷</button>
+            <input type="file" id="evieImageInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" />
             <input 
               type="text" 
               id="assistantInput" 
@@ -391,6 +398,9 @@ class FarmAssistant {
             <button id="sendBtn" class="send-btn">
               <span>↑</span>
             </button>
+          </div>
+          <div id="evieWakeIndicator" class="evie-wake-indicator">
+            <span class="evie-wake-dot"></span> Listening…
           </div>
         </div>
       </div>
@@ -441,6 +451,14 @@ class FarmAssistant {
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.handleUserInput();
     });
+
+    // Image upload for crop diagnosis
+    const imageBtn = document.getElementById('evieImageBtn');
+    const imageInput = document.getElementById('evieImageInput');
+    if (imageBtn && imageInput) {
+      imageBtn.addEventListener('click', () => imageInput.click());
+      imageInput.addEventListener('change', (e) => this._handleImageUpload(e));
+    }
     
     minimizeBtn.addEventListener('click', (e) => {
       e.stopPropagation(); // Prevent drag when clicking minimize
@@ -806,23 +824,23 @@ class FarmAssistant {
   // ── Settings Panel (Phase 5B) ──────────────────────
   toggleSettings() {
     this.settingsOpen = !this.settingsOpen;
-    let panel = document.getElementById('cheoSettingsPanel');
+    let panel = document.getElementById('evieSettingsPanel');
     if (this.settingsOpen && !panel) {
       panel = document.createElement('div');
-      panel.id = 'cheoSettingsPanel';
-      panel.className = 'cheo-settings-panel';
+      panel.id = 'evieSettingsPanel';
+      panel.className = 'evie-settings-panel';
       const voices = ['alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer'];
       const voiceOpts = voices.map(v =>
-        `<button class="cheo-voice-chip${v === this.ttsVoice ? ' active' : ''}" data-voice="${v}">${v}</button>`
+        `<button class="evie-voice-chip${v === this.ttsVoice ? ' active' : ''}" data-voice="${v}">${v}</button>`
       ).join('');
       panel.innerHTML = `
-        <div class="cheo-settings-section">
-          <label class="cheo-settings-label">Voice</label>
-          <div class="cheo-voice-grid">${voiceOpts}</div>
+        <div class="evie-settings-section">
+          <label class="evie-settings-label">Voice</label>
+          <div class="evie-voice-grid">${voiceOpts}</div>
         </div>
-        <div class="cheo-settings-section">
-          <label class="cheo-settings-label">
-            <input type="checkbox" id="cheoTtsToggle" ${this.voiceEnabled ? 'checked' : ''} />
+        <div class="evie-settings-section">
+          <label class="evie-settings-label">
+            <input type="checkbox" id="evieTtsToggle" ${this.voiceEnabled ? 'checked' : ''} />
             Read responses aloud
           </label>
         </div>
@@ -831,21 +849,21 @@ class FarmAssistant {
       body.insertBefore(panel, body.firstChild);
 
       // Voice chip click handlers
-      panel.querySelectorAll('.cheo-voice-chip').forEach(btn => {
+      panel.querySelectorAll('.evie-voice-chip').forEach(btn => {
         btn.addEventListener('click', () => {
-          panel.querySelectorAll('.cheo-voice-chip').forEach(b => b.classList.remove('active'));
+          panel.querySelectorAll('.evie-voice-chip').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           this.ttsVoice = btn.dataset.voice;
-          localStorage.setItem('cheo_tts_voice', this.ttsVoice);
+          localStorage.setItem('evie_tts_voice', this.ttsVoice);
           // Play a short sample
-          this.speak('Hello, I\'m Cheo.');
+          this.speak('Hello, I\'m E.V.I.E.');
         });
       });
 
       // TTS toggle handler
-      document.getElementById('cheoTtsToggle').addEventListener('change', (e) => {
+      document.getElementById('evieTtsToggle').addEventListener('change', (e) => {
         this.voiceEnabled = e.target.checked;
-        localStorage.setItem('cheo_tts_enabled', JSON.stringify(this.voiceEnabled));
+        localStorage.setItem('evie_tts_enabled', JSON.stringify(this.voiceEnabled));
       });
     } else if (panel) {
       panel.remove();
@@ -855,10 +873,10 @@ class FarmAssistant {
 
   // ── Phase 6C: Feedback ──────────────────────────────
   async _submitFeedback(msgId, rating, content) {
-    const container = document.querySelector(`.cheo-feedback[data-msg-id="${msgId}"]`);
+    const container = document.querySelector(`.evie-feedback[data-msg-id="${msgId}"]`);
     if (!container || container.dataset.submitted) return;
     container.dataset.submitted = 'true';
-    container.querySelectorAll('.cheo-fb-btn').forEach(b => {
+    container.querySelectorAll('.evie-fb-btn').forEach(b => {
       b.classList.toggle('selected', b.dataset.rating === rating);
       b.disabled = true;
     });
@@ -879,17 +897,17 @@ class FarmAssistant {
   // ── Phase 6A: Usage-pattern tracking ────────────────
   _trackQuery(text) {
     try {
-      const queries = JSON.parse(localStorage.getItem('cheo_query_log') || '[]');
+      const queries = JSON.parse(localStorage.getItem('evie_query_log') || '[]');
       queries.push({ q: text.slice(0, 200), t: Date.now() });
       // Keep last 200 queries
       if (queries.length > 200) queries.splice(0, queries.length - 200);
-      localStorage.setItem('cheo_query_log', JSON.stringify(queries));
+      localStorage.setItem('evie_query_log', JSON.stringify(queries));
     } catch (_) { /* silent */ }
   }
 
   getQueryStats() {
     try {
-      const queries = JSON.parse(localStorage.getItem('cheo_query_log') || '[]');
+      const queries = JSON.parse(localStorage.getItem('evie_query_log') || '[]');
       const now = Date.now();
       const recent = queries.filter(q => now - q.t < 7 * 86400000);
       const topics = {};
@@ -955,9 +973,9 @@ class FarmAssistant {
     const avatar = type === 'user' ? 'You' : 'AI';
     const msgId = `msg-${Date.now()}`;
     const feedbackHtml = type === 'assistant' && this.aiAvailable
-      ? `<div class="cheo-feedback" data-msg-id="${msgId}">
-           <button class="cheo-fb-btn" data-rating="up" title="Helpful">👍</button>
-           <button class="cheo-fb-btn" data-rating="down" title="Not helpful">👎</button>
+      ? `<div class="evie-feedback" data-msg-id="${msgId}">
+           <button class="evie-fb-btn" data-rating="up" title="Helpful">👍</button>
+           <button class="evie-fb-btn" data-rating="down" title="Not helpful">👎</button>
          </div>` : '';
     
     messageDiv.innerHTML = `
@@ -974,7 +992,7 @@ class FarmAssistant {
 
     // Wire feedback buttons
     if (feedbackHtml) {
-      messageDiv.querySelectorAll('.cheo-fb-btn').forEach(btn => {
+      messageDiv.querySelectorAll('.evie-fb-btn').forEach(btn => {
         btn.addEventListener('click', () => this._submitFeedback(msgId, btn.dataset.rating, content));
       });
     }
@@ -1001,6 +1019,53 @@ class FarmAssistant {
     }
   }
 
+  /**
+   * Handle image file upload for crop diagnosis.
+   */
+  async _handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // Reset input
+
+    if (file.size > 5 * 1024 * 1024) {
+      this.addMessage('Image must be under 5 MB.');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result; // data:image/...;base64,...
+      try {
+        const resp = await this._authFetch('/api/assistant/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 })
+        });
+        if (!resp.ok) {
+          this.addMessage('Image upload failed — please try again.');
+          return;
+        }
+        const data = await resp.json();
+        if (data.ok && data.image_url) {
+          this._pendingImageUrl = data.image_url;
+          // Show a thumbnail preview in chat
+          this.addMessage(`<img src="${base64}" alt="Uploaded image" style="max-width:180px;max-height:140px;border-radius:8px;margin:4px 0" />`, 'user');
+          // Focus the input so user can type a question about the image
+          const input = document.getElementById('assistantInput');
+          if (input) {
+            input.placeholder = 'Describe the issue or ask about this image…';
+            input.focus();
+          }
+        }
+      } catch (err) {
+        console.warn('[E.V.I.E.] Image upload error:', err);
+        this.addMessage('Image upload failed — please try again.');
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   async processQuery(query) {
     // Try GPT-powered AI chat first (if available)
     if (this.aiAvailable !== false) {
@@ -1017,10 +1082,188 @@ class FarmAssistant {
   }
 
   /**
-   * Send query to GPT-powered backend assistant.
+   * Send query to GPT-powered backend assistant with SSE streaming.
    * Returns true if handled, false if should fall through to local.
    */
   async tryAIChat(query) {
+    // Check for pending action confirmation first (non-streaming)
+    if (this.pendingAction) {
+      return this._tryAIChatClassic(query);
+    }
+
+    const body = {
+      message: query,
+      conversation_id: this.conversationId || undefined,
+      farm_id: window.FARM_ID || undefined,
+      image_url: this._pendingImageUrl || undefined
+    };
+    this._pendingImageUrl = null; // Clear after use
+
+    try {
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('token') || localStorage.getItem('token') || '';
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const resp = await fetch('/api/assistant/chat/stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 503) { this.aiAvailable = false; return false; }
+        // Fall back to classic non-streaming
+        return this._tryAIChatClassic(query);
+      }
+
+      this.aiAvailable = true;
+
+      // Parse SSE stream
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let msgDiv = null;
+      let contentEl = null;
+      let fullReply = '';
+      let convId = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        let eventType = null;
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ') && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (eventType === 'start') {
+                convId = data.conversation_id;
+                this.conversationId = convId;
+                try { localStorage.setItem('evie_conversation_id', convId); } catch { /* quota */ }
+              } else if (eventType === 'tool_start') {
+                // Show tool progress inline
+                this.setTypingIndicator(false);
+                if (!msgDiv) {
+                  const messagesContainer = document.getElementById('chatMessages');
+                  msgDiv = document.createElement('div');
+                  msgDiv.className = 'message assistant-message';
+                  msgDiv.innerHTML = '<div class="message-avatar">AI</div><div class="message-content"><span class="evie-stream-text"></span></div>';
+                  messagesContainer.appendChild(msgDiv);
+                  contentEl = msgDiv.querySelector('.evie-stream-text');
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+                const toolLabel = (data.tool || '').replace(/_/g, ' ');
+                contentEl.innerHTML += `<span class="evie-tool-progress">\ud83d\udcca ${toolLabel}…</span> `;
+              } else if (eventType === 'tool_done') {
+                // Update tool status
+                const progEls = contentEl?.querySelectorAll('.evie-tool-progress');
+                if (progEls?.length > 0) {
+                  const last = progEls[progEls.length - 1];
+                  last.classList.add(data.success ? 'done' : 'failed');
+                  last.textContent = last.textContent.replace('…', data.success ? ' ✓' : ' ✗');
+                }
+              } else if (eventType === 'token') {
+                this.setTypingIndicator(false);
+                if (!msgDiv) {
+                  const messagesContainer = document.getElementById('chatMessages');
+                  msgDiv = document.createElement('div');
+                  msgDiv.className = 'message assistant-message';
+                  msgDiv.innerHTML = '<div class="message-avatar">AI</div><div class="message-content"><span class="evie-stream-text"></span></div>';
+                  messagesContainer.appendChild(messagesContainer.lastChild === msgDiv ? null : msgDiv);
+                  messagesContainer.appendChild(msgDiv);
+                  contentEl = msgDiv.querySelector('.evie-stream-text');
+                }
+                fullReply += data.text;
+                // Clear tool progress and show streaming text
+                const toolProgs = contentEl?.querySelectorAll('.evie-tool-progress');
+                if (toolProgs?.length > 0 && !contentEl._toolsCleared) {
+                  contentEl._toolsCleared = true;
+                  // Keep tool progress summary, add line break
+                  contentEl.innerHTML += '<br>';
+                }
+                contentEl.innerHTML = contentEl.innerHTML.replace(/<span class="evie-stream-text">.*?<\/span>/, '') ;
+                // Re-render full reply content
+                const streamSpan = document.createElement('span');
+                streamSpan.className = 'evie-stream-text';
+                streamSpan.innerHTML = fullReply;
+                // Keep tool progress elements if any
+                const existingTools = contentEl.querySelectorAll('.evie-tool-progress');
+                contentEl.innerHTML = '';
+                existingTools.forEach(t => contentEl.appendChild(t));
+                if (existingTools.length > 0) {
+                  contentEl.appendChild(document.createElement('br'));
+                }
+                contentEl.appendChild(streamSpan);
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              } else if (eventType === 'done') {
+                // Add feedback buttons
+                if (msgDiv) {
+                  const msgId = `msg-${Date.now()}`;
+                  const feedbackDiv = document.createElement('div');
+                  feedbackDiv.className = 'evie-feedback';
+                  feedbackDiv.dataset.msgId = msgId;
+                  feedbackDiv.innerHTML = `
+                    <button class="evie-fb-btn" data-rating="up" title="Helpful">\ud83d\udc4d</button>
+                    <button class="evie-fb-btn" data-rating="down" title="Not helpful">\ud83d\udc4e</button>
+                  `;
+                  msgDiv.querySelector('.message-content').appendChild(feedbackDiv);
+                  feedbackDiv.querySelectorAll('.evie-fb-btn').forEach(btn => {
+                    btn.addEventListener('click', () => this._submitFeedback(msgId, btn.dataset.rating, fullReply));
+                  });
+                }
+
+                // Handle pending action
+                if (data.pending_action) {
+                  this.pendingAction = data.pending_action;
+                  const actionButtons = `
+                    <button class="assistant-confirm-btn" onclick="window._farmAssistant.confirmPendingAction()">✓ Confirm</button>
+                    <button class="assistant-cancel-btn" onclick="window._farmAssistant.cancelPendingAction()">✕ Cancel</button>
+                  `;
+                  this.addMessage(actionButtons, 'action');
+                }
+
+                // Speak the reply
+                if (this.voiceEnabled && fullReply) {
+                  const cleanText = fullReply.replace(/<[^>]*>/g, '').replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+                  if (cleanText) this.speak(cleanText);
+                }
+              } else if (eventType === 'error') {
+                this.setTypingIndicator(false);
+                fullReply = data.message || 'Something went wrong.';
+                this.addMessage(fullReply);
+              }
+            } catch { /* skip malformed JSON */ }
+            eventType = null;
+          }
+        }
+      }
+
+      // Save to conversation history
+      if (fullReply) {
+        this.conversationHistory.push({ content: fullReply, type: 'assistant', timestamp: Date.now() });
+        this.saveHistory();
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[Farm Assistant] Streaming failed, trying classic:', err.message);
+      return this._tryAIChatClassic(query);
+    }
+  }
+
+  /**
+   * Classic (non-streaming) AI chat — used as fallback and for confirmations.
+   */
+  async _tryAIChatClassic(query) {
     const body = {
       message: query,
       conversation_id: this.conversationId || undefined,
@@ -1047,7 +1290,7 @@ class FarmAssistant {
 
     // Track conversation for follow-ups
     this.conversationId = data.conversation_id;
-    try { localStorage.setItem('cheo_conversation_id', data.conversation_id); } catch { /* quota */ }
+    try { localStorage.setItem('evie_conversation_id', data.conversation_id); } catch { /* quota */ }
     this.aiAvailable = true;
 
     // Display the AI response
@@ -1960,6 +2203,154 @@ class FarmAssistant {
       localStorage.setItem('farmAssistantHistory', JSON.stringify(toSave));
     } catch (e) {
       console.warn('Failed to save assistant history:', e);
+    }
+  }
+
+  // ── WebSocket Client ─────────────────────────────────────────────────────
+  _initWebSocket() {
+    try {
+      const token = localStorage.getItem('jwt') || localStorage.getItem('token');
+      if (!token) { console.debug('[E.V.I.E. WS] No auth token — skipping WebSocket'); return; }
+
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsPort = window.EVIE_WS_PORT || 3001;
+      const url = `${proto}//${location.hostname}:${wsPort}?token=${encodeURIComponent(token)}`;
+
+      this._ws = new WebSocket(url);
+
+      this._ws.onopen = () => {
+        console.debug('[E.V.I.E. WS] Connected');
+        // Subscribe to current farm
+        if (window.FARM_ID) {
+          this._ws.send(JSON.stringify({ type: 'subscribe', farmId: window.FARM_ID }));
+        }
+      };
+
+      this._ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this._handleWsEvent(data);
+        } catch { /* ignore malformed */ }
+      };
+
+      this._ws.onclose = () => {
+        console.debug('[E.V.I.E. WS] Disconnected — reconnecting in 10s');
+        setTimeout(() => this._initWebSocket(), 10_000);
+      };
+
+      this._ws.onerror = (err) => {
+        console.warn('[E.V.I.E. WS] Error:', err);
+      };
+    } catch (err) {
+      console.warn('[E.V.I.E. WS] Init failed:', err.message);
+    }
+  }
+
+  _handleWsEvent(data) {
+    if (data.type === 'connection' || data.type === 'subscribed') return; // Handshake
+
+    if (data.type === 'evie_alert') {
+      const severityClass = data.alert_type === 'critical' ? 'alert-critical'
+        : data.alert_type === 'warning' ? 'alert-warning' : '';
+      const icon = data.alert_type === 'critical' ? '🚨'
+        : data.alert_type === 'predictive' ? '🔮' : '⚠️';
+
+      const html = `<div class="evie-ws-alert ${severityClass}">
+        <span>${icon}</span>
+        <div>
+          <strong>${data.message || 'Environmental alert'}</strong>
+          ${data.suggestion ? `<br><small>${data.suggestion}</small>` : ''}
+        </div>
+      </div>`;
+
+      this.addMessage(html);
+
+      // Speak critical alerts
+      if (data.alert_type === 'critical' && this.voiceEnabled) {
+        this.speak(data.message);
+      }
+    }
+  }
+
+  // ── Voice-First Mode (Wake Word) ─────────────────────────────────────────
+  _initWakeWord() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      console.debug('[E.V.I.E.] Wake word unavailable — no SpeechRecognition API');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    this._wakeRecognition = new SpeechRecognition();
+    this._wakeRecognition.continuous = true;
+    this._wakeRecognition.interimResults = true;
+    this._wakeRecognition.lang = 'en-US';
+
+    this._wakeRecognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+        // Detect wake phrase "hey evie"
+        if (transcript.includes('hey evie') || transcript.includes('hey e.v.i.e') || transcript.includes('hey ivy')) {
+          if (!this._wakeWordActive) {
+            this._activateWakeWord();
+          }
+        } else if (this._wakeWordActive && event.results[i].isFinal) {
+          // We're in active listening mode — treat final transcript as a command
+          const command = transcript.replace(/hey\s*(evie|e\.v\.i\.e|ivy)/gi, '').trim();
+          if (command.length > 2) {
+            this._wakeWordActive = false;
+            this._updateWakeIndicator(false);
+            // Stop TTS if speaking
+            if (this.isSpeaking) { window.speechSynthesis?.cancel(); this.isSpeaking = false; }
+            // Process the voice command
+            this.addMessage(command, 'user');
+            this.setTypingIndicator(true);
+            this.processQuery(command);
+          }
+        }
+      }
+    };
+
+    this._wakeRecognition.onend = () => {
+      // Auto-restart for continuous wake word listening
+      if (!this.isListening) {
+        try { this._wakeRecognition.start(); } catch { /* already running */ }
+      }
+    };
+
+    this._wakeRecognition.onerror = (e) => {
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        console.warn('[E.V.I.E. Wake] Recognition error:', e.error);
+      }
+    };
+
+    // Start passive listening for wake word
+    try {
+      this._wakeRecognition.start();
+      console.debug('[E.V.I.E.] Wake word detection active — say "Hey EVIE"');
+    } catch (err) {
+      console.warn('[E.V.I.E.] Wake word start failed:', err.message);
+    }
+  }
+
+  _activateWakeWord() {
+    this._wakeWordActive = true;
+    this._updateWakeIndicator(true);
+    // Play a subtle chime / vibration feedback
+    if (navigator.vibrate) navigator.vibrate(100);
+    // Auto-deactivate after 8 seconds of no command
+    this._wakeTimeout = setTimeout(() => {
+      this._wakeWordActive = false;
+      this._updateWakeIndicator(false);
+    }, 8000);
+  }
+
+  _updateWakeIndicator(active) {
+    const indicator = document.getElementById('evieWakeIndicator');
+    if (!indicator) return;
+    if (active) {
+      indicator.classList.add('listening');
+    } else {
+      indicator.classList.remove('listening');
     }
   }
 }
