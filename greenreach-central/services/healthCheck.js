@@ -8,9 +8,7 @@
  */
 
 import { getDatabase } from '../config/database.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('healthCheck');
+import logger from '../utils/logger.js';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // Every 5 minutes
