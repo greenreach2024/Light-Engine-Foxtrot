@@ -164,6 +164,22 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
     let subtotal = 0;
     let taxableSubtotal = 0;
 
+    // Build crop pricing lookup for fallback when farm_inventory prices are $0
+    let cropPriceMap = null;
+    async function getCropPriceMap() {
+      if (cropPriceMap) return cropPriceMap;
+      cropPriceMap = {};
+      try {
+        const pricingData = req.farmStore ? await req.farmStore.get(farmId, 'crop_pricing') : null;
+        if (pricingData?.crops?.length) {
+          for (const c of pricingData.crops) {
+            if (c.crop && c.retailPrice) cropPriceMap[c.crop.toLowerCase()] = Number(c.retailPrice);
+          }
+        }
+      } catch { /* crop_pricing unavailable */ }
+      return cropPriceMap;
+    }
+
     for (const cartItem of items) {
       const product = inventory.find(
         p => (p.sku_id || p.sku || p.product_id) === cartItem.sku_id
@@ -172,7 +188,15 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
         return res.status(400).json({ success: false, error: `Product not found: ${cartItem.sku_id}` });
       }
       const qty = Math.max(1, parseInt(cartItem.quantity) || 1);
-      const unitPrice = Number(product.retail_price || product.price || product.unit_price || 0);
+      let unitPrice = Number(product.retail_price || product.price || product.unit_price || 0);
+
+      // Fallback: if inventory has no price, check the Crop Pricing page
+      if (unitPrice === 0) {
+        const cpm = await getCropPriceMap();
+        const pName = (product.product_name || product.name || '').toLowerCase();
+        if (cpm[pName]) unitPrice = cpm[pName];
+      }
+
       const lineTotal = unitPrice * qty;
       subtotal += lineTotal;
       if (product.is_taxable) taxableSubtotal += lineTotal;

@@ -1,4 +1,7 @@
-Deploy #531 — Seed manual inventory product name from crop registry
+Deploy #532 — Fix manual inventory: remove price fields, add unique constraint
 
-Product Name field now uses datalist populated from crop-registry.json (32 crops).
-Selecting a crop auto-fills the Category dropdown (mapped to dropdown values).
+- Removed Retail/Wholesale price fields from manual entry form + table
+  (pricing managed by Crop Pricing page; wholesale by GreenReach Wholesale)
+- Added UNIQUE index on (farm_id, product_id) so ON CONFLICT UPSERT works
+- Dedup existing rows before creating unique index
+- Updated form description to reference POS/sales terminal flow

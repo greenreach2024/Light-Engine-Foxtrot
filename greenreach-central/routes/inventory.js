@@ -7,6 +7,27 @@ import jwt from 'jsonwebtoken';
 import { createRequire } from 'module';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { farmStore } from '../lib/farm-data-store.js';
+
+/**
+ * Look up retail + wholesale price for a crop from the Crop Pricing page data.
+ * Returns { retailPrice, wholesalePrice } or nulls if not found.
+ */
+async function resolveCropPricing(farmId, productName) {
+  try {
+    const pricingData = await farmStore.get(farmId, 'crop_pricing');
+    if (!pricingData?.crops?.length) return { retailPrice: 0, wholesalePrice: 0 };
+    const nameLC = (productName || '').toLowerCase();
+    const match = pricingData.crops.find(c => (c.crop || '').toLowerCase() === nameLC);
+    if (!match) return { retailPrice: 0, wholesalePrice: 0 };
+    return {
+      retailPrice: Number(match.retailPrice) || 0,
+      wholesalePrice: Number(match.wholesalePrice) || 0
+    };
+  } catch {
+    return { retailPrice: 0, wholesalePrice: 0 };
+  }
+}
 
 // Load crop utilities (Phase 2b)
 const require = createRequire(import.meta.url);
@@ -327,7 +348,12 @@ router.post('/manual', async (req, res) => {
 
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
     const productId = sku || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const unitPrice = Number(price) || 0;
+
+    // Resolve pricing from the Crop Pricing page when not explicitly provided
+    const cropPrices = await resolveCropPricing(farmId, product_name);
+    const unitPrice = Number(price) || cropPrices.retailPrice || 0;
+    const resolvedRetail = Number(retail_price) || cropPrices.retailPrice || unitPrice;
+    const resolvedWholesale = Number(wholesale_price) || cropPrices.wholesalePrice || unitPrice;
 
     const result = await query(
       `INSERT INTO farm_inventory (
@@ -365,8 +391,8 @@ router.post('/manual', async (req, res) => {
         manualQty,                                       // manual_quantity_lbs
         manualQty,                                       // quantity_available (initial; CONFLICT adds auto)
         unit || 'lb',                                    // quantity_unit
-        Number(wholesale_price) || unitPrice,             // wholesale_price
-        Number(retail_price) || unitPrice,                // retail_price
+        resolvedWholesale,                                // wholesale_price
+        resolvedRetail,                                   // retail_price
         category || null,
         variety || null
       ]
