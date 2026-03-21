@@ -755,6 +755,107 @@ const GPT_TOOLS = [
       }
     }
   },
+  // --- Setup Wizard Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'update_farm_profile',
+      description: 'Update the farm profile — set farm name, contact info (name, email, phone, website), and/or location (address, city, province, timezone). Use during farm setup or when the user wants to change their business info.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Farm business name' },
+          contactName: { type: 'string', description: 'Owner/contact person name' },
+          email: { type: 'string', description: 'Contact email' },
+          phone: { type: 'string', description: 'Contact phone number' },
+          website: { type: 'string', description: 'Farm website URL' },
+          city: { type: 'string', description: 'City' },
+          province: { type: 'string', description: 'State or province' },
+          timezone: { type: 'string', description: 'IANA timezone (e.g. America/Toronto)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_room',
+      description: 'Create a grow room during farm setup. Rooms organize zones, sensors, and lights into physical spaces.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Room name (e.g. Main Grow Room, Germination Room)' },
+          type: { type: 'string', description: 'Room type: grow, germination, nursery, drying, or storage' },
+          capacity: { type: 'number', description: 'Number of grow positions/trays the room holds' }
+        },
+        required: ['name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_rooms',
+      description: 'List all grow rooms configured for this farm.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_zone',
+      description: 'Create a zone inside an existing grow room. Zones divide rooms into independently controlled areas.',
+      parameters: {
+        type: 'object',
+        properties: {
+          room_id: { type: 'string', description: 'Room ID to add the zone to (get from list_rooms)' },
+          name: { type: 'string', description: 'Zone name (e.g. Zone 1, Leafy Greens Section)' },
+          capacity: { type: 'number', description: 'Number of grow positions in this zone' }
+        },
+        required: ['room_id', 'name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_certifications',
+      description: 'Set the farm certifications (e.g. Organic, GAP), sustainable practices, and attributes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          certifications: { type: 'array', items: { type: 'string' }, description: 'Certification labels (e.g. ["Organic", "GAP", "Non-GMO"])' },
+          practices: { type: 'array', items: { type: 'string' }, description: 'Practices (e.g. ["No Pesticides", "Water Recycling"])' },
+          attributes: { type: 'array', items: { type: 'string' }, description: 'Farm attributes (e.g. ["Year-Round Production", "Local Delivery"])' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_onboarding_status',
+      description: 'Get the onboarding checklist — shows which setup tasks are done and which remain. Use this to guide the farmer through setup.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'complete_setup',
+      description: 'Mark the farm setup wizard as complete. Call this after all required setup steps are done (farm profile, rooms, zones). This finalizes the farm configuration.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
   // --- User Memory Tool ---
   {
     type: 'function',
@@ -867,7 +968,7 @@ async function buildSystemPrompt(farmId) {
     // Get basic farm info
     if (isDatabaseAvailable()) {
       const farmResult = await query(
-        'SELECT farm_id, name, farm_type, contact_name, contact_phone, email FROM farms WHERE farm_id = $1',
+        'SELECT farm_id, name, farm_type, contact_name, contact_phone, email, setup_completed FROM farms WHERE farm_id = $1',
         [farmId]
       );
       if (farmResult.rows.length > 0) {
@@ -877,6 +978,7 @@ async function buildSystemPrompt(farmId) {
         if (farm.contact_phone) farmContext += `, Phone: ${farm.contact_phone}`;
         if (farm.email) farmContext += `, Email: ${farm.email}`;
         if (farm.contact_name || farm.contact_phone || farm.email) farmContext += '\n';
+        farmContext += `Setup completed: ${farm.setup_completed ? 'Yes' : 'No'}\n`;
       }
     }
   } catch { /* non-fatal */ }
@@ -1082,12 +1184,19 @@ AUTONOMY MINDSET:
 - Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
 - Proactive alerts are generated every 5 minutes for environment, nutrient, and hardware issues. Reference these in your daily briefings.
 ${guardrailsBlock}
+FARM SETUP GUIDANCE:
+- You have tools to guide new farmers through setup: update_farm_profile, create_room, create_zone, list_rooms, update_certifications, get_onboarding_status, complete_setup.
+- If CURRENT FARM STATE shows "Setup completed: No", proactively offer to walk the user through setup.
+- Setup step order: (1) Business profile — farm name + contact info (update_farm_profile), (2) Location — city, province, timezone (update_farm_profile), (3) Rooms & zones — create grow rooms then zones inside them (create_room → create_zone), (4) Certifications — organic, GAP, practices (update_certifications), (5) Seed benchmarks (seed_benchmarks), (6) Finalize (complete_setup).
+- Use get_onboarding_status to check what's done and what's remaining.
+- After completing all steps, call complete_setup to finalize. Then congratulate the farmer and suggest next steps (add inventory, connect devices, create first planting plan).
+
 RULES:
 - Be concise: 2-3 sentences unless the user asks for detail or the question is complex (planning, compatibility, schedule analysis).
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks, update_nutrient_targets): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, seed_benchmarks, update_nutrient_targets): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
@@ -1786,6 +1895,176 @@ async function executeExtendedTool(toolName, params, farmId) {
             created_at: f.created_at
           }
         };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'update_farm_profile': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const { name, contactName, email, phone, website, city, province, timezone } = params;
+        const updates = [];
+        const values = [];
+        let p = 1;
+        if (name) { updates.push(`name = $${p++}`); values.push(name); }
+        if (contactName) { updates.push(`contact_name = $${p++}`); values.push(contactName); }
+        if (email) { updates.push(`email = $${p++}`); values.push(email); }
+        if (phone) { updates.push(`contact_phone = $${p++}`); values.push(phone); }
+        if (city) { updates.push(`city = $${p++}`); values.push(city); }
+        if (province) { updates.push(`state = $${p++}`); values.push(province); }
+        if (timezone) { updates.push(`timezone = $${p++}`); values.push(timezone); }
+        if (updates.length === 0) return { ok: false, error: 'At least one field is required' };
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        values.push(farmId);
+        await query(`UPDATE farms SET ${updates.join(', ')} WHERE farm_id = $${p}`, values);
+        // Also update farmStore profile for website field
+        if (website) {
+          try {
+            const profile = await farmStore.get(farmId, 'farm_profile') || {};
+            profile.website = website;
+            await farmStore.set(farmId, 'farm_profile', profile);
+          } catch { /* non-fatal */ }
+        }
+        return { ok: true, message: 'Farm profile updated', updated_fields: Object.keys(params).filter(k => params[k]) };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'create_room': {
+      try {
+        const { name, type, capacity } = params;
+        if (!name) return { ok: false, error: 'Room name is required' };
+        // Get existing rooms from farmStore and append
+        const existing = await farmStore.get(farmId, 'rooms') || [];
+        const newRoom = {
+          room_id: `room-${Date.now()}`,
+          farm_id: farmId,
+          name,
+          type: type || 'grow',
+          capacity: capacity || null
+        };
+        existing.push(newRoom);
+        await farmStore.set(farmId, 'rooms', existing);
+        // Also try DB insert
+        if (isDatabaseAvailable()) {
+          try {
+            await query(
+              'INSERT INTO rooms (farm_id, name, type, capacity, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) ON CONFLICT DO NOTHING',
+              [farmId, name, type || 'grow', capacity || null]
+            );
+          } catch { /* non-fatal — farmStore is source of truth */ }
+        }
+        return { ok: true, room: newRoom, message: `Room "${name}" created`, total_rooms: existing.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'list_rooms': {
+      try {
+        const rooms = await farmStore.get(farmId, 'rooms') || [];
+        return { ok: true, rooms, count: rooms.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'create_zone': {
+      try {
+        const { room_id, name, capacity } = params;
+        if (!room_id || !name) return { ok: false, error: 'room_id and name are required' };
+        const rooms = await farmStore.get(farmId, 'rooms') || [];
+        const room = rooms.find(r => r.room_id === room_id);
+        if (!room) return { ok: false, error: `Room ${room_id} not found. Use list_rooms to see available rooms.` };
+        if (!room.zones) room.zones = [];
+        const newZone = { id: `zone-${room.zones.length + 1}`, name, capacity: capacity || null };
+        room.zones.push(newZone);
+        await farmStore.set(farmId, 'rooms', rooms);
+        return { ok: true, zone: newZone, room_name: room.name, message: `Zone "${name}" added to ${room.name}`, total_zones: room.zones.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'update_certifications': {
+      try {
+        const { certifications, practices, attributes } = params;
+        const profile = await farmStore.get(farmId, 'farm_profile') || {};
+        const updatedCerts = {
+          certifications: certifications || profile.certifications?.certifications || [],
+          practices: practices || profile.certifications?.practices || [],
+          attributes: attributes || profile.certifications?.attributes || []
+        };
+        profile.certifications = updatedCerts;
+        await farmStore.set(farmId, 'farm_profile', profile);
+        // Also update DB if available
+        if (isDatabaseAvailable()) {
+          try {
+            await query('UPDATE farms SET certifications = $1, updated_at = CURRENT_TIMESTAMP WHERE farm_id = $2',
+              [JSON.stringify(updatedCerts.certifications), farmId]);
+          } catch { /* non-fatal */ }
+        }
+        return { ok: true, certifications: updatedCerts, message: 'Certifications updated' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_onboarding_status': {
+      try {
+        // Check key setup milestones
+        let profile = {};
+        let roomCount = 0;
+        let hasContact = false;
+        let setupDone = false;
+        if (isDatabaseAvailable()) {
+          try {
+            const r = await query('SELECT name, contact_name, email, setup_completed FROM farms WHERE farm_id = $1', [farmId]);
+            if (r.rows.length > 0) {
+              hasContact = !!r.rows[0].contact_name;
+              setupDone = r.rows[0].setup_completed === true;
+            }
+          } catch { /* non-fatal */ }
+        }
+        try {
+          profile = await farmStore.get(farmId, 'farm_profile') || {};
+          const rooms = await farmStore.get(farmId, 'rooms') || [];
+          roomCount = rooms.length;
+          if (!setupDone && profile.setup_completed) setupDone = true;
+          if (!hasContact && profile.contact?.name) hasContact = true;
+        } catch { /* non-fatal */ }
+        const groups = await farmStore.get(farmId, 'groups') || [];
+        const tasks = [
+          { step: 'Farm Profile', done: hasContact, hint: 'Set farm name and contact info with update_farm_profile' },
+          { step: 'Grow Rooms', done: roomCount > 0, hint: 'Create at least one room with create_room' },
+          { step: 'Zones', done: roomCount > 0 && groups.length > 0, hint: 'Add zones to rooms with create_zone, or groups will create zones automatically' },
+          { step: 'Certifications', done: !!profile.certifications, hint: 'Optional — set with update_certifications' },
+          { step: 'Benchmarks', done: groups.length > 0, hint: 'Seed crop benchmarks with seed_benchmarks' },
+          { step: 'Setup Complete', done: setupDone, hint: 'Finalize with complete_setup' }
+        ];
+        const completed = tasks.filter(t => t.done).length;
+        return { ok: true, tasks, completed, total: tasks.length, all_done: completed === tasks.length, setup_completed: setupDone };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'complete_setup': {
+      try {
+        // Mark setup as complete in both DB and farmStore
+        if (isDatabaseAvailable()) {
+          await query(
+            'UPDATE farms SET setup_completed = true, setup_completed_at = COALESCE(setup_completed_at, NOW()), updated_at = NOW() WHERE farm_id = $1',
+            [farmId]
+          );
+        }
+        const profile = await farmStore.get(farmId, 'farm_profile') || {};
+        profile.setup_completed = true;
+        profile.setup_completed_at = profile.setup_completed_at || new Date().toISOString();
+        await farmStore.set(farmId, 'farm_profile', profile);
+        return { ok: true, message: 'Setup wizard marked complete! The farm is ready for operations.' };
       } catch (err) {
         return { ok: false, error: err.message };
       }
