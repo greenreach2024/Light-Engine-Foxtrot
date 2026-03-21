@@ -158,7 +158,7 @@ const TRUST_TIERS = {
   // CONFIRM: Ask before executing (default for write tools)
   confirm: new Set([
     'update_crop_price', 'create_planting_assignment', 'update_order_status',
-    'add_inventory_item', 'update_target_ranges', 'set_light_schedule',
+    'add_inventory_item', 'update_manual_inventory', 'update_target_ranges', 'set_light_schedule',
     'update_nutrient_targets', 'register_device', 'auto_assign_devices',
     'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
     'update_certifications', 'complete_setup'
@@ -624,6 +624,25 @@ const GPT_TOOLS = [
           farm_id: { type: 'string', description: 'Farm ID (optional)' }
         },
         required: ['crop_name', 'quantity']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_manual_inventory',
+      description: 'Update manual crop inventory by weight (lbs) in the wholesale/retail inventory table. Use when a grower reports available stock like "we have 23 lbs of basil" or "update tomato inventory to 50 lbs". Writes manual_quantity_lbs; total available = auto (tray sync) + manual. WRITE operation — confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          crop_name: { type: 'string', description: 'Crop/product name (e.g. "Genovese Basil", "Roma Tomatoes")' },
+          quantity_lbs: { type: 'number', description: 'Available weight in lbs' },
+          price: { type: 'number', description: 'Retail price per lb (optional)' },
+          wholesale_price: { type: 'number', description: 'Wholesale price per lb (optional)' },
+          category: { type: 'string', description: 'Product category: Leafy Greens, Herbs, Microgreens, Vegetables, Fruit, Flowers (optional)' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['crop_name', 'quantity_lbs']
       }
     }
   },
@@ -1368,6 +1387,17 @@ MULTI-FARM INTELLIGENCE:
 - If the farmer manages multiple farms, use compare_farms or get_network_overview for cross-farm insights.
 - Share best practices across farms: "Farm A's basil yield is 20% higher — they use a 16h photoperiod."
 
+MANUAL INVENTORY MANAGEMENT:
+- Some growers manage inventory by weight without using the tray automation system.
+- When a grower says "update basil inventory, we have 23 lbs available" or "set tomato stock to 50 lbs":
+  1. Parse the crop name and weight in lbs from their message.
+  2. If they give weight in oz or kg, convert to lbs (1 kg = 2.205 lbs, 16 oz = 1 lb).
+  3. Call update_manual_inventory with crop_name and quantity_lbs.
+  4. Report the result: auto lbs (from tray sync) + manual lbs = total available.
+- To review current inventory, call get_inventory_summary — it returns both auto and manual quantities.
+- The manual_quantity_lbs column is separate from auto_quantity_lbs — they stack (total = auto + manual).
+- Manual inventory appears in the wholesale catalog and POS immediately.
+
 IMAGE DIAGNOSIS:
 - When a farmer uploads an image, analyse it for: plant species, growth stage, visible issues (nutrient deficiency, pest damage, disease, environmental stress), severity, and recommended corrective action.
 - Cross-reference visual diagnosis with the farm's current environment data — if you detect calcium deficiency, check the nutrient dashboard to confirm.
@@ -1382,7 +1412,7 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).

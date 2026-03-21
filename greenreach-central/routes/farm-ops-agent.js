@@ -799,14 +799,39 @@ export const TOOL_CATALOG = {
     }
   },
   'get_inventory_summary': {
-    description: 'Get current crop inventory counts and statuses',
+    description: 'Get current crop inventory — includes both tray-synced (auto) and manual inventory with quantities in lbs, source type, and pricing.',
     category: 'read',
     required: [],
     optional: ['farm_id'],
     handler: async (params) => {
       const farm_id = params.farm_id || 'demo-farm';
-      const inventory = await farmStore.get(farm_id, 'inventory') || [];
-      return { ok: true, inventory, count: Array.isArray(inventory) ? inventory.length : Object.keys(inventory).length };
+      // Read from farmStore (legacy JSON)
+      const storeInventory = await farmStore.get(farm_id, 'inventory') || [];
+      // Read from farm_inventory DB table (auto + manual quantities)
+      let dbInventory = [];
+      if (isDatabaseAvailable()) {
+        try {
+          const result = await dbQuery(
+            `SELECT product_id, product_name, sku, unit,
+                    COALESCE(auto_quantity_lbs, 0) AS auto_lbs,
+                    COALESCE(manual_quantity_lbs, 0) AS manual_lbs,
+                    COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) AS available_lbs,
+                    quantity_unit, wholesale_price, retail_price,
+                    inventory_source, category, available_for_wholesale,
+                    last_updated
+             FROM farm_inventory WHERE farm_id = $1
+             ORDER BY product_name`, [farm_id]
+          );
+          dbInventory = result.rows;
+        } catch { /* table may not exist yet */ }
+      }
+      return {
+        ok: true,
+        farm_inventory: dbInventory,
+        store_inventory: Array.isArray(storeInventory) ? storeInventory : Object.values(storeInventory),
+        db_count: dbInventory.length,
+        store_count: Array.isArray(storeInventory) ? storeInventory.length : Object.keys(storeInventory).length
+      };
     }
   },
   'get_crop_info': {
@@ -1713,6 +1738,105 @@ export const TOOL_CATALOG = {
   },
 
   // --- Nutrient Management Tools ---
+  'update_manual_inventory': {
+    description: 'Update manual crop inventory weight in the farm_inventory table. Use when a grower says something like "we have 23 lbs of basil available" or "update tomato inventory to 50 lbs". Resolves crop name to product_id, converts to lbs, writes manual_quantity_lbs. WRITE operation — confirm with user first.',
+    category: 'write',
+    required: ['crop_name', 'quantity_lbs'],
+    optional: ['farm_id', 'price', 'wholesale_price', 'retail_price', 'category', 'available_for_wholesale'],
+    undoable: true,
+    handler: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const farm_id = params.farm_id || 'demo-farm';
+      const cropName = String(params.crop_name).trim();
+      const manualQty = Math.max(0, Number(params.quantity_lbs) || 0);
+      const productId = cropName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const unitPrice = Number(params.price || params.retail_price) || 0;
+
+      // Check if product already exists
+      const existing = await dbQuery(
+        'SELECT product_id, manual_quantity_lbs, auto_quantity_lbs, inventory_source FROM farm_inventory WHERE farm_id = $1 AND product_id = $2',
+        [farm_id, productId]
+      );
+
+      let previousState = null;
+      let result;
+
+      if (existing.rows.length) {
+        // Update existing row
+        previousState = { ...existing.rows[0] };
+        const setClauses = [
+          'manual_quantity_lbs = $2',
+          'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2',
+          `inventory_source = CASE WHEN COALESCE(auto_quantity_lbs, 0) > 0 THEN 'hybrid' ELSE 'manual' END`,
+          'last_updated = NOW()'
+        ];
+        const updateParams = [farm_id, manualQty];
+        let idx = 3;
+        if (unitPrice > 0) {
+          setClauses.push(`retail_price = $${idx}`, `price = $${idx}`);
+          updateParams.push(unitPrice); idx++;
+        }
+        if (params.wholesale_price) {
+          setClauses.push(`wholesale_price = $${idx}`);
+          updateParams.push(Number(params.wholesale_price)); idx++;
+        }
+        updateParams.push(productId);
+        result = await dbQuery(
+          `UPDATE farm_inventory SET ${setClauses.join(', ')} WHERE farm_id = $1 AND product_id = $${idx} RETURNING *`,
+          updateParams
+        );
+      } else {
+        // Insert new row
+        result = await dbQuery(
+          `INSERT INTO farm_inventory (
+            farm_id, product_id, product_name, sku, quantity, unit, price,
+            available_for_wholesale, manual_quantity_lbs, quantity_available,
+            quantity_unit, wholesale_price, retail_price, inventory_source,
+            category, last_updated
+          ) VALUES ($1,$2,$3,$4,$5,'lb',$6,$7,$8,$9,'lb',$10,$11,'manual',$12,NOW())
+          RETURNING *`,
+          [
+            farm_id, productId, cropName, productId, manualQty, unitPrice,
+            params.available_for_wholesale !== false,
+            manualQty, manualQty,
+            Number(params.wholesale_price) || unitPrice,
+            unitPrice,
+            params.category || null
+          ]
+        );
+      }
+
+      const row = result.rows[0];
+      return {
+        ok: true,
+        crop: cropName,
+        manual_lbs: Number(row.manual_quantity_lbs),
+        auto_lbs: Number(row.auto_quantity_lbs || 0),
+        total_available_lbs: Number(row.quantity_available),
+        inventory_source: row.inventory_source,
+        isUpdate: !!previousState,
+        _undo_state: { farm_id, productId, previousState }
+      };
+    },
+    undoHandler: async (params, prevState) => {
+      if (prevState.previousState) {
+        await dbQuery(
+          `UPDATE farm_inventory SET
+            manual_quantity_lbs = $2,
+            quantity_available = COALESCE(auto_quantity_lbs, 0) + $2,
+            inventory_source = $3,
+            last_updated = NOW()
+           WHERE farm_id = $1 AND product_id = $4`,
+          [prevState.farm_id, prevState.previousState.manual_quantity_lbs || 0,
+           prevState.previousState.inventory_source || 'auto', prevState.productId]
+        );
+      } else {
+        await dbQuery('DELETE FROM farm_inventory WHERE farm_id = $1 AND product_id = $2',
+          [prevState.farm_id, prevState.productId]);
+      }
+      return { ok: true, message: 'Manual inventory change reverted' };
+    }
+  },
   'get_nutrient_status': {
     description: 'Get current nutrient solution status — pH, EC, temperature, autodose config, tank info, recent dosing events',
     category: 'read',
