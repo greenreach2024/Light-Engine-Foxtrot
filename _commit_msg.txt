@@ -1,1 +1,9 @@
-Deploy #527 — Critical hotfix: fix healthCheck.js logger import (default export, not named createLogger)
+Deploy #528 — Manual inventory: dual-quantity columns on farm_inventory
+
+- Migration 024: adds auto_quantity_lbs, manual_quantity_lbs, inventory_source
+  + extended columns (quantity_available, wholesale_price, retail_price, etc.)
+- Sync endpoint: upserts auto_quantity_lbs, preserves manual entries
+- New endpoints: POST/PUT/DELETE /api/inventory/manual for grower entry
+- POS checkout: decrements quantity_available + manual_quantity_lbs on sale
+- UI: Manual Entry tab on farm-inventory.html with add/remove form
+- Wholesale catalog DB path now has matching columns (quantity_available)

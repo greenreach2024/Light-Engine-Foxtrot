@@ -210,32 +210,57 @@ router.post('/:farmId/sync', async (req, res) => {
 
     console.log(`[Inventory Sync] Received ${products.length} products from farm ${farmId}`);
 
-    // Clear existing inventory for this farm
-    await query('DELETE FROM farm_inventory WHERE farm_id = $1', [farmId]);
-
-    // Insert new inventory (match migration schema)
+    // Upsert each product — only touch auto columns, preserve manual entries
     for (const product of products) {
+      const productId = product.product_id || product.sku;
+      const autoQty = Number(product.quantity) || 0;
+      const unitPrice = Number(product.price) || 0;
+
       await query(
         `INSERT INTO farm_inventory (
-          farm_id, 
-          product_id,
-          product_name,
-          sku, 
-          quantity, 
-          unit, 
-          price,
-          available_for_wholesale,
-          last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          farm_id, product_id, product_name, sku, quantity, unit, price,
+          available_for_wholesale, auto_quantity_lbs, quantity_available,
+          quantity_unit, wholesale_price, retail_price, inventory_source,
+          category, variety, synced_at, last_updated
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW())
+        ON CONFLICT (farm_id, product_id) DO UPDATE SET
+          product_name = EXCLUDED.product_name,
+          sku = EXCLUDED.sku,
+          quantity = EXCLUDED.quantity,
+          unit = EXCLUDED.unit,
+          price = EXCLUDED.price,
+          available_for_wholesale = EXCLUDED.available_for_wholesale,
+          auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
+          quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0),
+          quantity_unit = EXCLUDED.quantity_unit,
+          wholesale_price = EXCLUDED.wholesale_price,
+          retail_price = EXCLUDED.retail_price,
+          inventory_source = CASE
+            WHEN COALESCE(farm_inventory.manual_quantity_lbs, 0) > 0 THEN 'hybrid'
+            ELSE 'auto'
+          END,
+          category = COALESCE(EXCLUDED.category, farm_inventory.category),
+          variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
+          synced_at = NOW(),
+          last_updated = NOW()
+        `,
         [
           farmId,
-          product.product_id || product.sku,
+          productId,
           product.product_name,
-          product.sku || product.product_id,
-          product.quantity || 0,
-          product.unit || 'unit',
-          product.price || 0,
-          (product.available_for_wholesale !== undefined ? product.available_for_wholesale : 1)
+          product.sku || productId,
+          autoQty,
+          product.unit || 'lb',
+          unitPrice,
+          (product.available_for_wholesale !== undefined ? product.available_for_wholesale : true),
+          autoQty,                              // auto_quantity_lbs
+          autoQty,                              // quantity_available (initial; ON CONFLICT adds manual)
+          product.unit || 'lb',                 // quantity_unit
+          unitPrice,                            // wholesale_price
+          unitPrice,                            // retail_price
+          'auto',                               // inventory_source (initial; ON CONFLICT may set 'hybrid')
+          product.category || null,             // category
+          product.variety || null               // variety
         ]
       );
     }
@@ -261,7 +286,9 @@ router.get('/:farmId', async (req, res) => {
     const { farmId } = req.params;
 
     const result = await query(
-      'SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name',
+      `SELECT *,
+        COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) AS available_lbs
+       FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name`,
       [farmId]
     );
 
@@ -273,6 +300,201 @@ router.get('/:farmId', async (req, res) => {
   } catch (error) {
     console.error('[Inventory] Error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MANUAL INVENTORY — for growers not using tray-based automation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/inventory/manual
+ * Add or update a product with manual quantity (weight-based).
+ * Body: { product_name, sku?, quantity_lbs, unit?, price, wholesale_price?,
+ *         category?, variety?, available_for_wholesale? }
+ */
+router.post('/manual', async (req, res) => {
+  try {
+    const farmId = resolveFarmId(req);
+    if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
+
+    const { product_name, sku, quantity_lbs, unit, price, wholesale_price,
+            retail_price, category, variety, available_for_wholesale } = req.body;
+
+    if (!product_name || quantity_lbs === undefined) {
+      return res.status(400).json({ error: 'product_name and quantity_lbs are required' });
+    }
+
+    const manualQty = Math.max(0, Number(quantity_lbs) || 0);
+    const productId = sku || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const unitPrice = Number(price) || 0;
+
+    const result = await query(
+      `INSERT INTO farm_inventory (
+        farm_id, product_id, product_name, sku, quantity, unit, price,
+        available_for_wholesale, manual_quantity_lbs, quantity_available,
+        quantity_unit, wholesale_price, retail_price, inventory_source,
+        category, variety, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'manual',$14,$15,NOW())
+      ON CONFLICT (farm_id, product_id) DO UPDATE SET
+        product_name = EXCLUDED.product_name,
+        manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
+        quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs,
+        quantity_unit = EXCLUDED.quantity_unit,
+        wholesale_price = EXCLUDED.wholesale_price,
+        retail_price = EXCLUDED.retail_price,
+        price = EXCLUDED.price,
+        available_for_wholesale = EXCLUDED.available_for_wholesale,
+        inventory_source = CASE
+          WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'
+          ELSE 'manual'
+        END,
+        category = COALESCE(EXCLUDED.category, farm_inventory.category),
+        variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
+        last_updated = NOW()
+      RETURNING *`,
+      [
+        farmId,
+        productId,
+        product_name,
+        sku || productId,
+        manualQty,                                       // quantity (legacy)
+        unit || 'lb',
+        unitPrice,
+        available_for_wholesale !== false,                // default true for manual growers
+        manualQty,                                       // manual_quantity_lbs
+        manualQty,                                       // quantity_available (initial; CONFLICT adds auto)
+        unit || 'lb',                                    // quantity_unit
+        Number(wholesale_price) || unitPrice,             // wholesale_price
+        Number(retail_price) || unitPrice,                // retail_price
+        category || null,
+        variety || null
+      ]
+    );
+
+    console.log(`[Manual Inventory] ${farmId}: ${product_name} → ${manualQty} ${unit || 'lb'}`);
+
+    res.json({
+      success: true,
+      product: result.rows[0],
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Manual Inventory] Error:', error);
+    res.status(500).json({ error: 'Failed to save manual inventory' });
+  }
+});
+
+/**
+ * PUT /api/inventory/manual/:productId
+ * Update manual quantity for an existing product.
+ * Body: { quantity_lbs, price?, wholesale_price?, retail_price?, available_for_wholesale? }
+ */
+router.put('/manual/:productId', async (req, res) => {
+  try {
+    const farmId = resolveFarmId(req);
+    if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
+
+    const { productId } = req.params;
+    const { quantity_lbs, price, wholesale_price, retail_price, available_for_wholesale } = req.body;
+
+    if (quantity_lbs === undefined) {
+      return res.status(400).json({ error: 'quantity_lbs is required' });
+    }
+
+    const manualQty = Math.max(0, Number(quantity_lbs) || 0);
+
+    const setClauses = [
+      'manual_quantity_lbs = $2',
+      'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2',
+      `inventory_source = CASE WHEN COALESCE(auto_quantity_lbs, 0) > 0 THEN 'hybrid' ELSE 'manual' END`,
+      'last_updated = NOW()'
+    ];
+    const params = [farmId, manualQty];
+    let idx = 3;
+
+    if (price !== undefined) {
+      setClauses.push(`price = $${idx}`);
+      params.push(Number(price));
+      idx++;
+    }
+    if (wholesale_price !== undefined) {
+      setClauses.push(`wholesale_price = $${idx}`);
+      params.push(Number(wholesale_price));
+      idx++;
+    }
+    if (retail_price !== undefined) {
+      setClauses.push(`retail_price = $${idx}`);
+      params.push(Number(retail_price));
+      idx++;
+    }
+    if (available_for_wholesale !== undefined) {
+      setClauses.push(`available_for_wholesale = $${idx}`);
+      params.push(Boolean(available_for_wholesale));
+      idx++;
+    }
+
+    params.push(productId);
+
+    const result = await query(
+      `UPDATE farm_inventory SET ${setClauses.join(', ')}
+       WHERE farm_id = $1 AND product_id = $${idx}
+       RETURNING *`,
+      params
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    res.json({ success: true, product: result.rows[0] });
+  } catch (error) {
+    console.error('[Manual Inventory] Update error:', error);
+    res.status(500).json({ error: 'Failed to update inventory' });
+  }
+});
+
+/**
+ * DELETE /api/inventory/manual/:productId
+ * Remove a manual inventory entry (only if source is 'manual').
+ */
+router.delete('/manual/:productId', async (req, res) => {
+  try {
+    const farmId = resolveFarmId(req);
+    if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
+
+    const { productId } = req.params;
+
+    // If hybrid, just zero out manual portion instead of deleting
+    const check = await query(
+      'SELECT inventory_source, auto_quantity_lbs FROM farm_inventory WHERE farm_id = $1 AND product_id = $2',
+      [farmId, productId]
+    );
+
+    if (!check.rows.length) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    if (check.rows[0].inventory_source === 'hybrid' || Number(check.rows[0].auto_quantity_lbs) > 0) {
+      // Has auto data — zero out manual, revert to auto-only
+      await query(
+        `UPDATE farm_inventory SET
+          manual_quantity_lbs = 0,
+          quantity_available = COALESCE(auto_quantity_lbs, 0),
+          inventory_source = 'auto',
+          last_updated = NOW()
+         WHERE farm_id = $1 AND product_id = $2`,
+        [farmId, productId]
+      );
+      return res.json({ success: true, action: 'cleared_manual', product_id: productId });
+    }
+
+    // Pure manual — safe to delete
+    await query('DELETE FROM farm_inventory WHERE farm_id = $1 AND product_id = $2', [farmId, productId]);
+    res.json({ success: true, action: 'deleted', product_id: productId });
+  } catch (error) {
+    console.error('[Manual Inventory] Delete error:', error);
+    res.status(500).json({ error: 'Failed to delete inventory item' });
   }
 });
 

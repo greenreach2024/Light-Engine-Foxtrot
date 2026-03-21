@@ -326,7 +326,15 @@ router.post('/farm-sales/pos/checkout', authMiddleware, async (req, res) => {
         if (paymentRecord.status === 'completed') {
           for (const item of lineItems) {
             await query(
-              `UPDATE farm_inventory SET quantity = GREATEST(quantity - $1, 0), updated_at = NOW()
+              `UPDATE farm_inventory SET
+                quantity = GREATEST(quantity - $1, 0),
+                quantity_available = GREATEST(quantity_available - $1, 0),
+                manual_quantity_lbs = CASE
+                  WHEN inventory_source IN ('manual','hybrid')
+                  THEN GREATEST(COALESCE(manual_quantity_lbs, 0) - $1, 0)
+                  ELSE COALESCE(manual_quantity_lbs, 0)
+                END,
+                last_updated = NOW()
                WHERE farm_id = $2 AND (sku = $3 OR product_id = $3)`,
               [item.quantity, farmId, item.sku_id]
             ).catch(() => {});

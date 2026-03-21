@@ -472,6 +472,84 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* ── Manual Inventory Panel ──────────────────────────── */
+    .manual-inv-panel { padding: 1rem 0; }
+    .manual-inv-form {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
+      gap: 0.75rem;
+      align-items: end;
+      margin-bottom: 1.5rem;
+    }
+    .manual-inv-form label { font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.25rem; display: block; }
+    .manual-inv-form input, .manual-inv-form select {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 0.95rem;
+    }
+    .manual-inv-form input:focus, .manual-inv-form select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    .manual-inv-form .btn-add {
+      padding: 0.6rem 1.25rem;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .manual-inv-form .btn-add:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
+    .manual-tbl { width: 100%; border-collapse: collapse; }
+    .manual-tbl th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .manual-tbl td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 0.95rem;
+    }
+    .manual-tbl tr:hover td { background: rgba(59, 130, 246, 0.05); }
+    .source-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .source-badge.auto    { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .source-badge.manual  { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .source-badge.hybrid  { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+    .btn-sm {
+      padding: 0.3rem 0.6rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-sm.danger { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .btn-sm.danger:hover { background: rgba(239, 68, 68, 0.35); }
+    @media (max-width: 768px) {
+      .manual-inv-form { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body class="le-theme">
@@ -552,6 +630,7 @@
         <button class="view-tab active" onclick="switchView('location', event)">By Location</button>
         <button class="view-tab" onclick="switchView('crop', event)">By Crop</button>
         <button class="view-tab" onclick="switchView('harvest', event)">By Harvest Time</button>
+        <button class="view-tab" onclick="switchView('manual', event)">📦 Manual Entry</button>
       </div>
       <div id="locationView" class="inventory-view active">
         <!-- Dynamic location tree -->
@@ -561,6 +640,36 @@
       </div>
       <div id="harvestView" class="inventory-view">
         <!-- Dynamic harvest timeline -->
+      </div>
+      <div id="manualView" class="inventory-view">
+        <div class="manual-inv-panel">
+          <p style="color:#94a3b8; margin-bottom:1rem;">Add crop inventory by weight for wholesale &amp; retail sales. Items entered here appear alongside tray-synced inventory in the catalog.</p>
+          <form id="manualInvForm" class="manual-inv-form" onsubmit="return false;">
+            <div><label>Product Name *</label><input id="mi-name" placeholder="e.g. Roma Tomatoes" required></div>
+            <div><label>Weight (lbs) *</label><input id="mi-qty" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+            <div><label>Retail $/lb</label><input id="mi-retail" type="number" step="0.01" min="0" placeholder="0.00"></div>
+            <div><label>Wholesale $/lb</label><input id="mi-wholesale" type="number" step="0.01" min="0" placeholder="0.00"></div>
+            <div><label>Category</label>
+              <select id="mi-category">
+                <option value="">—</option>
+                <option>Leafy Greens</option>
+                <option>Herbs</option>
+                <option>Microgreens</option>
+                <option>Vegetables</option>
+                <option>Fruit</option>
+                <option>Flowers</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div style="padding-top:1.2rem;"><button class="btn-add" onclick="submitManualEntry()">+ Add</button></div>
+          </form>
+          <table class="manual-tbl">
+            <thead><tr>
+              <th>Product</th><th>Auto (lbs)</th><th>Manual (lbs)</th><th>Total</th><th>Retail $</th><th>Wholesale $</th><th>Source</th><th></th>
+            </tr></thead>
+            <tbody id="manualTbody"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading inventory…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1462,8 +1571,112 @@
     window.toggleHarvest = toggleHarvest;
     window.toggleNode = toggleNode;
 
+    // ═══════════════════════════════════════════════════════
+    // MANUAL INVENTORY FUNCTIONS
+    // ═══════════════════════════════════════════════════════
+
+    async function loadManualInventory() {
+      const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId') || 'local-farm';
+      try {
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/${encodeURIComponent(farmId)}`);
+        if (!resp.ok) throw new Error('Failed to load inventory');
+        const data = await resp.json();
+        renderManualTable(data.products || []);
+      } catch (err) {
+        console.error('[ManualInv] Load error:', err);
+        document.getElementById('manualTbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#f87171;padding:2rem;">Failed to load inventory</td></tr>';
+      }
+    }
+
+    function renderManualTable(products) {
+      const tbody = document.getElementById('manualTbody');
+      if (!products.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">No inventory items yet. Add your first product above.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(p => {
+        const autoLbs = Number(p.auto_quantity_lbs || 0).toFixed(2);
+        const manualLbs = Number(p.manual_quantity_lbs || 0).toFixed(2);
+        const totalLbs = Number(p.available_lbs || p.quantity_available || (Number(autoLbs) + Number(manualLbs))).toFixed(2);
+        const retail = Number(p.retail_price || p.price || 0).toFixed(2);
+        const wholesale = Number(p.wholesale_price || p.price || 0).toFixed(2);
+        const src = p.inventory_source || 'auto';
+        return `<tr>
+          <td style="font-weight:600;">${escHtml(p.product_name)}</td>
+          <td>${autoLbs}</td>
+          <td>${manualLbs}</td>
+          <td style="color:#34d399;font-weight:600;">${totalLbs} lb</td>
+          <td>$${retail}</td>
+          <td>$${wholesale}</td>
+          <td><span class="source-badge ${src}">${src}</span></td>
+          <td>${src !== 'auto' ? `<button class="btn-sm danger" onclick="deleteManualItem('${escAttr(p.product_id)}')">Remove</button>` : ''}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function escAttr(s) { return String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+    async function submitManualEntry() {
+      const name = document.getElementById('mi-name').value.trim();
+      const qty = parseFloat(document.getElementById('mi-qty').value);
+      const retail = parseFloat(document.getElementById('mi-retail').value) || 0;
+      const wholesale = parseFloat(document.getElementById('mi-wholesale').value) || 0;
+      const category = document.getElementById('mi-category').value || null;
+
+      if (!name || isNaN(qty) || qty < 0) {
+        alert('Product name and a valid weight are required.');
+        return;
+      }
+
+      try {
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/manual`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_name: name,
+            quantity_lbs: qty,
+            price: retail,
+            retail_price: retail,
+            wholesale_price: wholesale,
+            category,
+            available_for_wholesale: true
+          })
+        });
+        if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error || 'Save failed'); }
+
+        // Reset form & reload
+        document.getElementById('mi-name').value = '';
+        document.getElementById('mi-qty').value = '';
+        document.getElementById('mi-retail').value = '';
+        document.getElementById('mi-wholesale').value = '';
+        document.getElementById('mi-category').value = '';
+        await loadManualInventory();
+      } catch (err) {
+        console.error('[ManualInv] Save error:', err);
+        alert('Failed to save: ' + err.message);
+      }
+    }
+
+    async function deleteManualItem(productId) {
+      if (!confirm('Remove this manual inventory entry?')) return;
+      try {
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/manual/${encodeURIComponent(productId)}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Delete failed');
+        await loadManualInventory();
+      } catch (err) {
+        console.error('[ManualInv] Delete error:', err);
+        alert('Failed to remove item.');
+      }
+    }
+
+    // Expose to global scope for onclick handlers
+    window.submitManualEntry = submitManualEntry;
+    window.deleteManualItem = deleteManualItem;
+
     // Load inventory on page load
     loadInventory();
+    loadManualInventory();
 
     // ESC key handler
     document.addEventListener('keydown', (e) => {
