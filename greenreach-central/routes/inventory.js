@@ -237,6 +237,15 @@ router.post('/:farmId/sync', async (req, res) => {
       const autoQty = Number(product.quantity) || 0;
       const unitPrice = Number(product.price) || 0;
 
+      // Resolve prices from Crop Pricing page when edge device doesn't supply them
+      let syncRetail = unitPrice;
+      let syncWholesale = unitPrice;
+      if (!unitPrice && product.product_name) {
+        const cropPrices = await resolveCropPricing(farmId, product.product_name);
+        syncRetail = cropPrices.retailPrice || 0;
+        syncWholesale = cropPrices.wholesalePrice || 0;
+      }
+
       await query(
         `INSERT INTO farm_inventory (
           farm_id, product_id, product_name, sku, quantity, unit, price,
@@ -254,8 +263,8 @@ router.post('/:farmId/sync', async (req, res) => {
           auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
           quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0),
           quantity_unit = EXCLUDED.quantity_unit,
-          wholesale_price = EXCLUDED.wholesale_price,
-          retail_price = EXCLUDED.retail_price,
+          wholesale_price = CASE WHEN EXCLUDED.wholesale_price > 0 THEN EXCLUDED.wholesale_price ELSE COALESCE(NULLIF(farm_inventory.wholesale_price, 0), EXCLUDED.wholesale_price) END,
+          retail_price = CASE WHEN EXCLUDED.retail_price > 0 THEN EXCLUDED.retail_price ELSE COALESCE(NULLIF(farm_inventory.retail_price, 0), EXCLUDED.retail_price) END,
           inventory_source = CASE
             WHEN COALESCE(farm_inventory.manual_quantity_lbs, 0) > 0 THEN 'hybrid'
             ELSE 'auto'
@@ -277,8 +286,8 @@ router.post('/:farmId/sync', async (req, res) => {
           autoQty,                              // auto_quantity_lbs
           autoQty,                              // quantity_available (initial; ON CONFLICT adds manual)
           product.unit || 'lb',                 // quantity_unit
-          unitPrice,                            // wholesale_price
-          unitPrice,                            // retail_price
+          syncWholesale,                        // wholesale_price
+          syncRetail,                           // retail_price
           'auto',                               // inventory_source (initial; ON CONFLICT may set 'hybrid')
           product.category || null,             // category
           product.variety || null               // variety

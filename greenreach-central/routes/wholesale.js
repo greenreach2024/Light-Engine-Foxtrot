@@ -51,6 +51,7 @@ import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../servi
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
 import { processSquarePayments } from '../services/squarePaymentService.js';
 import emailService from '../services/email-service.js';
+import { farmStore } from '../lib/farm-data-store.js';
 
 const router = express.Router();
 
@@ -746,6 +747,38 @@ router.get('/catalog', async (req, res, next) => {
       ORDER BY i.synced_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `, params);
+
+    // Fill missing wholesale prices from Crop Pricing page
+    const blankPriceFarmIds = [...new Set(
+      catalogResult.rows
+        .filter(r => !r.wholesale_price || Number(r.wholesale_price) <= 0)
+        .map(r => r.farm_id)
+    )];
+    const farmPriceMaps = {};
+    for (const fid of blankPriceFarmIds) {
+      try {
+        const store = req.farmStore || farmStore;
+        const data = store ? await store.get(fid, 'crop_pricing') : null;
+        if (data?.crops) {
+          farmPriceMaps[fid] = {};
+          for (const c of data.crops) {
+            if (c.crop) farmPriceMaps[fid][c.crop.toLowerCase()] = c;
+          }
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+    for (const row of catalogResult.rows) {
+      if (Number(row.wholesale_price || 0) <= 0 || Number(row.retail_price || 0) <= 0) {
+        const pm = farmPriceMaps[row.farm_id];
+        if (pm) {
+          const match = pm[(row.product_name || '').toLowerCase()];
+          if (match) {
+            if (Number(row.wholesale_price || 0) <= 0 && match.wholesalePrice > 0) row.wholesale_price = match.wholesalePrice;
+            if (Number(row.retail_price || 0) <= 0 && match.retailPrice > 0) row.retail_price = match.retailPrice;
+          }
+        }
+      }
+    }
 
     // Format response
     const items = catalogResult.rows.map(row => ({

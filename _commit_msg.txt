@@ -1,7 +1,8 @@
-Deploy #532 — Fix manual inventory: remove price fields, add unique constraint
+Deploy #533 — Bridge Crop Pricing to inventory + POS checkout
 
-- Removed Retail/Wholesale price fields from manual entry form + table
-  (pricing managed by Crop Pricing page; wholesale by GreenReach Wholesale)
-- Added UNIQUE index on (farm_id, product_id) so ON CONFLICT UPSERT works
-- Dedup existing rows before creating unique index
-- Updated form description to reference POS/sales terminal flow
+- POST /api/inventory/manual now resolves retail_price & wholesale_price
+  from Crop Pricing page (farmStore crop_pricing) when not explicitly provided
+- POS checkout adds fallback: if farm_inventory retail_price = 0,
+  looks up crop pricing before computing line totals
+- Wholesale catalog inherits correct wholesale_price at write time
+- Eliminates $0.00 pricing gap for manually entered inventory items
