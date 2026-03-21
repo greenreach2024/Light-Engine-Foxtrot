@@ -743,6 +743,18 @@ const GPT_TOOLS = [
       }
     }
   },
+  // --- Farm Profile Tool ---
+  {
+    type: 'function',
+    function: {
+      name: 'get_farm_profile',
+      description: 'Get the full farm profile including contact info, setup status, and location. Use this to answer questions about the farm owner, contact details, or farm configuration.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
   // --- User Memory Tool ---
   {
     type: 'function',
@@ -855,12 +867,16 @@ async function buildSystemPrompt(farmId) {
     // Get basic farm info
     if (isDatabaseAvailable()) {
       const farmResult = await query(
-        'SELECT farm_id, name, farm_type FROM farms WHERE farm_id = $1',
+        'SELECT farm_id, name, farm_type, contact_name, contact_phone, email FROM farms WHERE farm_id = $1',
         [farmId]
       );
       if (farmResult.rows.length > 0) {
         const farm = farmResult.rows[0];
         farmContext += `Farm: ${farm.name} (${farm.farm_id}), Type: ${farm.farm_type || 'Indoor CEA'}\n`;
+        if (farm.contact_name) farmContext += `Contact: ${farm.contact_name}`;
+        if (farm.contact_phone) farmContext += `, Phone: ${farm.contact_phone}`;
+        if (farm.email) farmContext += `, Email: ${farm.email}`;
+        if (farm.contact_name || farm.contact_phone || farm.email) farmContext += '\n';
       }
     }
   } catch { /* non-fatal */ }
@@ -1737,6 +1753,39 @@ async function executeExtendedTool(toolName, params, farmId) {
         if (!key || !value) return { ok: false, error: 'key and value are required' };
         const saved = await saveUserMemory(farmId, key, value);
         return { ok: saved, key, value, message: saved ? `Remembered: ${key} = ${value}` : 'Failed to save' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_farm_profile': {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await query(
+          `SELECT farm_id, name, farm_type, contact_name, contact_phone, email,
+                  plan_type, status, city, state, location, setup_completed, created_at
+           FROM farms WHERE farm_id = $1`,
+          [farmId]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Farm not found' };
+        const f = result.rows[0];
+        return {
+          ok: true,
+          profile: {
+            farm_id: f.farm_id,
+            name: f.name,
+            farm_type: f.farm_type,
+            contact_name: f.contact_name || '',
+            contact_phone: f.contact_phone || '',
+            email: f.email || '',
+            plan_type: f.plan_type || 'cloud',
+            status: f.status,
+            city: f.city || '',
+            state: f.state || '',
+            setup_completed: f.setup_completed || false,
+            created_at: f.created_at
+          }
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }
