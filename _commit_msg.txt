@@ -1,8 +1,20 @@
-Deploy #533 — Bridge Crop Pricing to inventory + POS checkout
+EB#544 - Wire double-entry accounting into wholesale checkout
 
-- POST /api/inventory/manual now resolves retail_price & wholesale_price
-  from Crop Pricing page (farmStore crop_pricing) when not explicitly provided
-- POS checkout adds fallback: if farm_inventory retail_price = 0,
-  looks up crop pricing before computing line totals
-- Wholesale catalog inherits correct wholesale_price at write time
-- Eliminates $0.00 pricing gap for manually entered inventory items
+Chart of Accounts:
+- Add 6 missing accounts: AR-Buyer (110000), Revenue-Subs (210000),
+  AP-Farm Payouts (250000), Sales Tax (310000), Revenue-Wholesale (400100),
+  Broker Fee Revenue (640000)
+
+Revenue Accounting Connector:
+- Fix ingestPaymentRevenue() account codes
+- Fix ingestRefundReversal() to use corrected codes
+- Add ingestFarmPayables(): Debit COGS 500000, Credit AP-Farms 250000
+- Add ingestFarmPayout(): Debit AP-Farms 250000, Credit Cash 100000
+
+Wholesale Memory Store:
+- Remove premature ingestPaymentRevenue() from createPayment()
+- Add finalizePayment() to re-persist payment after status mutation
+
+Wholesale Routes:
+- Wire accounting into checkout/execute (fire-and-forget)
+- Wire accounting into demo checkout path

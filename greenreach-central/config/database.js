@@ -721,19 +721,25 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_valuation_snapshots_date ON valuation_snapshots(snapshot_date);
   `);
 
-  // Seed minimal chart of accounts (pre-revenue baseline)
+  // Seed chart of accounts
   await client.query(`
     INSERT INTO accounting_accounts (account_code, account_name, account_class, account_type)
     VALUES
       ('100000', 'Cash', 'asset', 'current_asset'),
+      ('110000', 'Accounts Receivable - Buyer', 'asset', 'current_asset'),
       ('120000', 'Accounts Receivable', 'asset', 'current_asset'),
       ('200000', 'Accounts Payable', 'liability', 'current_liability'),
+      ('210000', 'Revenue - Subscriptions', 'income', 'operating_income'),
+      ('250000', 'Accounts Payable - Farm Payouts', 'liability', 'current_liability'),
       ('300000', 'Owner Equity', 'equity', 'equity'),
+      ('310000', 'Sales Tax Payable', 'liability', 'current_liability'),
       ('400000', 'Revenue', 'income', 'operating_income'),
+      ('400100', 'Revenue - Wholesale', 'income', 'operating_income'),
       ('500000', 'Cost of Goods Sold', 'expense', 'cogs'),
       ('610000', 'Cloud Infrastructure', 'expense', 'operating_expense'),
       ('620000', 'Developer Tools', 'expense', 'operating_expense'),
       ('630000', 'Payment Processing Fees', 'expense', 'operating_expense'),
+      ('640000', 'Broker Fee Revenue', 'income', 'operating_income'),
       ('710000', 'R&D Expense', 'expense', 'research_development')
     ON CONFLICT (account_code) DO NOTHING;
   `);

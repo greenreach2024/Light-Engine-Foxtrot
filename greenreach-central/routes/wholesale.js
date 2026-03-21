@@ -10,6 +10,7 @@ import {
   createBuyer,
   createOrder,
   createPayment,
+  finalizePayment,
   getBuyerById,
   getBuyerByEmail,
   getOrderById,
@@ -50,6 +51,7 @@ import {
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
 import { processSquarePayments } from '../services/squarePaymentService.js';
+import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
 import { farmStore } from '../lib/farm-data-store.js';
 
@@ -1572,6 +1574,44 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
       // If any reservation fails, roll back all previous reservations and fail the checkout.
       order.payment = payment;
 
+      // ── Accounting: record buyer payment + farm payables ──
+      finalizePayment(payment);
+
+      // Record buyer payment in the accounting ledger (fire-and-forget)
+      ingestPaymentRevenue({
+        payment_id: payment.payment_id,
+        order_id: order.master_order_id,
+        amount: payment.amount,
+        provider: payment.provider,
+        broker_fee: payment.broker_fee_amount || 0,
+        tax_amount: orderTotals.tax_total || 0,
+        source_type: 'wholesale',
+      }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
+
+      // Record farm payables: each sub-order is an obligation to pay the farm
+      ingestFarmPayables({
+        order_id: order.master_order_id,
+        payment_id: payment.payment_id,
+        farm_sub_orders: result.allocation.farm_sub_orders,
+      }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
+
+      // If Square payments succeeded, farms were paid immediately via app_fee_money —
+      // record each farm payout to settle the payable
+      if (paymentSuccess && payment.square_details?.payments) {
+        for (const pr of payment.square_details.payments) {
+          if (!pr.success) continue;
+          const farmSub = result.allocation.farm_sub_orders.find(s => s.farm_id === pr.farmId);
+          ingestFarmPayout({
+            payout_id: pr.paymentId || `payout-${order.master_order_id}-${pr.farmId}`,
+            order_id: order.master_order_id,
+            farm_id: pr.farmId,
+            farm_name: farmSub?.farm_name || pr.farmId,
+            amount: Number(((pr.amountMoney?.amount || 0) - (pr.brokerFeeMoney?.amount || 0)) / 100),
+            provider: 'square',
+          }).catch(err => console.warn(`[Accounting] Farm payout ingest error (${pr.farmId}):`, err.message));
+        }
+      }
+
       const farms = await listNetworkFarms();
       const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
       const farmApiKeys = loadFarmApiKeys();
@@ -1761,6 +1801,25 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
     });
     payment.status = 'completed';
     order.payment = payment;
+
+    // ── Accounting (demo path): record buyer payment + farm payables ──
+    finalizePayment(payment);
+    ingestPaymentRevenue({
+      payment_id: payment.payment_id,
+      order_id: order.master_order_id,
+      amount: payment.amount,
+      provider: payment.provider || 'demo',
+      broker_fee: payment.broker_fee_amount || 0,
+      tax_amount: orderTotals.tax_total || 0,
+      source_type: 'wholesale',
+    }).catch(err => console.warn('[Accounting] Demo revenue ingest error:', err.message));
+
+    ingestFarmPayables({
+      order_id: order.master_order_id,
+      payment_id: payment.payment_id,
+      farm_sub_orders: result.allocation.farm_sub_orders,
+    }).catch(err => console.warn('[Accounting] Demo farm payable ingest error:', err.message));
+
     await saveOrder(order).catch(() => {});
     await persistDeliveryLedger({
       order,
