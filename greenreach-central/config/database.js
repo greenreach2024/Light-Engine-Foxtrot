@@ -1956,6 +1956,65 @@ async function runMigrations(client) {
     logger.warn('Migration 032 warning:', err.message);
   }
 
+  // Migration 033 — F.A.Y.E. admin assistant tables
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_assistant_conversations (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER NOT NULL,
+        conversation_id VARCHAR(200) NOT NULL,
+        messages JSONB NOT NULL DEFAULT '[]',
+        message_count INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(admin_id, conversation_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_conv_admin ON admin_assistant_conversations(admin_id);
+      CREATE INDEX IF NOT EXISTS idx_admin_conv_updated ON admin_assistant_conversations(updated_at);
+
+      CREATE TABLE IF NOT EXISTS admin_assistant_memory (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER NOT NULL,
+        key VARCHAR(100) NOT NULL,
+        value TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(admin_id, key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_memory_admin ON admin_assistant_memory(admin_id);
+
+      CREATE TABLE IF NOT EXISTS admin_assistant_summaries (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER NOT NULL,
+        summary TEXT NOT NULL,
+        message_count INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_summaries_admin ON admin_assistant_summaries(admin_id);
+
+      CREATE TABLE IF NOT EXISTS admin_alerts (
+        id BIGSERIAL PRIMARY KEY,
+        domain VARCHAR(50) NOT NULL,
+        severity VARCHAR(20) NOT NULL DEFAULT 'warning',
+        title VARCHAR(255) NOT NULL,
+        detail TEXT,
+        source VARCHAR(100),
+        metadata JSONB DEFAULT '{}',
+        acknowledged BOOLEAN DEFAULT FALSE,
+        acknowledged_by INTEGER,
+        acknowledged_at TIMESTAMPTZ,
+        resolved BOOLEAN DEFAULT FALSE,
+        resolved_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_alerts_open ON admin_alerts(resolved, created_at DESC) WHERE resolved = FALSE;
+      CREATE INDEX IF NOT EXISTS idx_admin_alerts_domain ON admin_alerts(domain, created_at DESC);
+    `);
+    logger.info('F.A.Y.E. admin assistant tables ready (migration 033)');
+  } catch (err) {
+    logger.warn('Migration 033 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

@@ -80,6 +80,8 @@ import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
 import stripePaymentsRouter from './routes/stripe-payments.js';
 import paymentWebhooksRouter from './routes/payment-webhooks.js';
+import adminAssistantRouter from './routes/admin-assistant.js';
+import adminOpsAgentRouter from './routes/admin-ops-agent.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
@@ -3060,6 +3062,8 @@ app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesal
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
+app.use('/api/admin/assistant', adminAuthMiddleware, adminAssistantRouter); // F.A.Y.E. admin AI assistant
+app.use('/api/admin/ops', adminAuthMiddleware, adminOpsAgentRouter); // F.A.Y.E. tool catalog & gateway
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/tts', ttsRoutes); // OpenAI TTS voice synthesis (rate-limited per IP, no auth needed)
