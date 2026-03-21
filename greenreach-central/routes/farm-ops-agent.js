@@ -590,6 +590,23 @@ router.get('/daily-todo', (req, res) => {
  */
 export const TOOL_CATALOG = {
   // --- Read tools ---
+  'get_system_health': {
+    description: 'Get the latest nightly system audit results — checks database, inventory pricing, POS readiness, wholesale catalog, farm sync freshness, AI services, payment gateways, Light Engine reachability, and auth. Returns overall status (pass/warn/fail) with per-check details.',
+    category: 'read',
+    required: [],
+    optional: ['run_fresh'],
+    handler: async (params) => {
+      try {
+        const { getLatestAudit, runNightlyAudit } = await import('../services/nightly-audit.js');
+        const result = params.run_fresh === true
+          ? await runNightlyAudit()
+          : await getLatestAudit();
+        return { ok: true, ...result };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
   'get_daily_todo': {
     description: 'Generate the ranked daily to-do list',
     category: 'read',

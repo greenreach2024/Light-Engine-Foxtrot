@@ -1,10 +1,9 @@
-Fix $0 pricing in edge sync and wholesale catalog
+Add nightly system audit service (10-check automated health monitor)
 
-- inventory.js: Edge sync now calls resolveCropPricing() when device
-  sends $0 price, resolving retail/wholesale from Crop Pricing page.
-  ON CONFLICT preserves existing non-zero prices instead of overwriting
-  with $0 from edge.
-
-- wholesale.js: DB catalog path fills missing wholesale_price and
-  retail_price from Crop Pricing (farmStore) before building response.
-  Prevents $0 products from appearing in buyer catalog.
+- New service: services/nightly-audit.js runs at 3 AM ET daily
+- 10 checks: DB, farm sync, inventory pricing, POS, wholesale catalog,
+  background services, Light Engine, AI, payment gateways, auth
+- Results in system_audits table (migration 032)
+- Admin API: GET/POST /api/admin/system-audit + /history
+- E.V.I.E. get_system_health tool for how is the system queries
+- server.js: startNightlyAuditService() in background services block

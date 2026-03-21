@@ -104,6 +104,7 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 // Import services
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
+import { startNightlyAuditService } from './services/nightly-audit.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
@@ -4623,6 +4624,7 @@ async function startServer() {
     if (app.locals.databaseReady) {
       logger.info('Starting background services...');
       startHealthCheckService(app);
+      startNightlyAuditService();
       startSyncMonitor(app);
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startAwsCostExplorerScheduler(); // Optional AWS Cost Explorer accounting sync

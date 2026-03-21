@@ -4059,4 +4059,43 @@ router.get('/recipe-requests', async (req, res) => {
     }
 });
 
+// ── Nightly System Audit ────────────────────────────────────────────
+router.get('/system-audit', async (req, res) => {
+  try {
+    const { getLatestAudit } = await import('../services/nightly-audit.js');
+    const result = await getLatestAudit();
+    res.json({ success: true, audit: result });
+  } catch (error) {
+    console.error('[SystemAudit] Error:', error);
+    res.status(500).json({ success: false, error: 'Failed to retrieve audit results' });
+  }
+});
+
+router.post('/system-audit/run', async (req, res) => {
+  try {
+    const { runNightlyAudit } = await import('../services/nightly-audit.js');
+    const result = await runNightlyAudit();
+    res.json({ success: true, audit: result });
+  } catch (error) {
+    console.error('[SystemAudit] Run error:', error);
+    res.status(500).json({ success: false, error: 'Failed to run audit' });
+  }
+});
+
+router.get('/system-audit/history', async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days || '30'), 90);
+    const result = await query(
+      `SELECT audit_date, status, summary, created_at
+       FROM system_audits
+       ORDER BY audit_date DESC
+       LIMIT $1`, [days]
+    );
+    res.json({ success: true, audits: result.rows });
+  } catch (error) {
+    console.error('[SystemAudit] History error:', error);
+    res.status(500).json({ success: false, error: 'Failed to retrieve audit history' });
+  }
+});
+
 export default router;

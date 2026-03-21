@@ -1930,6 +1930,26 @@ async function runMigrations(client) {
     logger.warn('Migration 031 warning:', err.message);
   }
 
+  // Migration 032 — Nightly system audit results
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_audits (
+        id SERIAL PRIMARY KEY,
+        audit_date DATE NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pass',
+        checks JSONB DEFAULT '[]',
+        summary JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(audit_date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_system_audits_date ON system_audits(audit_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_audits_status ON system_audits(status);
+    `);
+    logger.info('System audits table ready (migration 032)');
+  } catch (err) {
+    logger.warn('Migration 032 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

@@ -1,0 +1,443 @@
+/**
+ * Nightly System Audit — GreenReach Central
+ *
+ * Runs every 24 hours (default 3 AM ET) and programmatically verifies every
+ * critical path: database, inventory pricing, POS readiness, wholesale catalog,
+ * farm sync freshness, AI services, payment gateways, and Light Engine
+ * reachability.  Results are persisted to `system_audits` and surfaced via
+ * the admin API and E.V.I.E.'s `get_system_health` tool.
+ */
+
+import { query, isDatabaseAvailable, getDatabase } from '../config/database.js';
+import { farmStore } from '../lib/farm-data-store.js';
+import logger from '../utils/logger.js';
+
+// ── Configuration ───────────────────────────────────────────────────
+const AUDIT_HOUR = parseInt(process.env.NIGHTLY_AUDIT_HOUR || '3', 10); // 3 AM
+const TAG = '[NightlyAudit]';
+
+let auditInterval = null;
+
+// ── Public API ──────────────────────────────────────────────────────
+
+export function startNightlyAuditService() {
+  // Calculate ms until next AUDIT_HOUR
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(AUDIT_HOUR, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  const msUntilNext = next - now;
+
+  logger.info(`${TAG} Scheduled for ${next.toISOString()} (in ${Math.round(msUntilNext / 60000)} min)`);
+
+  setTimeout(() => {
+    runNightlyAudit().catch(e => logger.error(`${TAG} Fatal:`, e));
+    auditInterval = setInterval(() => {
+      runNightlyAudit().catch(e => logger.error(`${TAG} Fatal:`, e));
+    }, 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+}
+
+export function stopNightlyAuditService() {
+  if (auditInterval) { clearInterval(auditInterval); auditInterval = null; }
+}
+
+/**
+ * Return the latest audit result (for E.V.I.E. / admin API).
+ * If no DB row exists yet, runs a fresh lightweight audit.
+ */
+export async function getLatestAudit() {
+  if (!isDatabaseAvailable()) return { status: 'unavailable', reason: 'Database offline' };
+  try {
+    const { rows } = await query(
+      `SELECT * FROM system_audits ORDER BY created_at DESC LIMIT 1`
+    );
+    if (rows.length) return rows[0];
+  } catch { /* table may not exist yet */ }
+  // No prior result — run a fresh one
+  return runNightlyAudit();
+}
+
+// ── Core Audit Runner ───────────────────────────────────────────────
+
+export async function runNightlyAudit() {
+  const startMs = Date.now();
+  logger.info(`${TAG} Starting nightly audit...`);
+
+  const checks = [];
+
+  // 1. Database connectivity
+  checks.push(await checkDatabase());
+
+  // 2. Active farms + sync freshness
+  checks.push(await checkFarmSync());
+
+  // 3. Inventory pricing integrity
+  checks.push(await checkInventoryPricing());
+
+  // 4. POS readiness
+  checks.push(await checkPOSReadiness());
+
+  // 5. Wholesale catalog
+  checks.push(await checkWholesaleCatalog());
+
+  // 6. Background service freshness
+  checks.push(await checkBackgroundServices());
+
+  // 7. Light Engine reachability
+  checks.push(await checkLightEngine());
+
+  // 8. AI services
+  checks.push(await checkAIServices());
+
+  // 9. Payment gateway credentials
+  checks.push(await checkPaymentGateways());
+
+  // 10. Auth system
+  checks.push(await checkAuthSystem());
+
+  // Summarise
+  const failures = checks.filter(c => c.status === 'fail');
+  const warnings = checks.filter(c => c.status === 'warn');
+  const overallStatus = failures.length > 0 ? 'fail' : warnings.length > 0 ? 'warn' : 'pass';
+
+  const result = {
+    audit_date: new Date().toISOString().slice(0, 10),
+    status: overallStatus,
+    checks,
+    summary: {
+      total: checks.length,
+      passed: checks.filter(c => c.status === 'pass').length,
+      warnings: warnings.length,
+      failures: failures.length,
+      duration_ms: Date.now() - startMs
+    }
+  };
+
+  // Persist to DB
+  try {
+    if (isDatabaseAvailable()) {
+      await query(
+        `INSERT INTO system_audits (audit_date, status, checks, summary, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (audit_date) DO UPDATE SET
+           status = EXCLUDED.status,
+           checks = EXCLUDED.checks,
+           summary = EXCLUDED.summary,
+           created_at = NOW()`,
+        [result.audit_date, result.status, JSON.stringify(checks), JSON.stringify(result.summary)]
+      );
+    }
+  } catch (err) {
+    logger.warn(`${TAG} Could not persist audit results:`, err.message);
+  }
+
+  // Log summary
+  const emoji = overallStatus === 'pass' ? '✅' : overallStatus === 'warn' ? '⚠️' : '❌';
+  logger.info(`${TAG} ${emoji} Audit complete: ${result.summary.passed}/${result.summary.total} passed, ${result.summary.warnings} warnings, ${result.summary.failures} failures (${result.summary.duration_ms}ms)`);
+
+  if (failures.length > 0) {
+    logger.error(`${TAG} FAILURES:`, failures.map(f => `${f.name}: ${f.message}`).join('; '));
+  }
+
+  return result;
+}
+
+// ── Individual Checks ───────────────────────────────────────────────
+
+async function checkDatabase() {
+  const name = 'database_connectivity';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'fail', message: 'Database pool not initialised' };
+    const { rows } = await query('SELECT COUNT(*) AS cnt FROM farms');
+    const cnt = parseInt(rows[0]?.cnt || 0);
+    if (cnt === 0) return { name, status: 'warn', message: 'No farms registered' };
+    return { name, status: 'pass', message: `${cnt} farm(s) in database`, details: { farm_count: cnt } };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkFarmSync() {
+  const name = 'farm_sync_freshness';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'fail', message: 'DB unavailable' };
+    const { rows } = await query(
+      `SELECT farm_id, name,
+              MAX(synced_at) AS last_sync,
+              EXTRACT(EPOCH FROM (NOW() - MAX(synced_at)))/3600 AS hours_since_sync
+       FROM farm_inventory
+       JOIN farms USING (farm_id)
+       GROUP BY farm_id, name
+       ORDER BY hours_since_sync DESC`
+    );
+    if (!rows.length) return { name, status: 'warn', message: 'No inventory sync records found' };
+
+    const stale = rows.filter(r => parseFloat(r.hours_since_sync) > 48);
+    if (stale.length > 0) {
+      return {
+        name, status: 'warn',
+        message: `${stale.length} farm(s) not synced in 48h: ${stale.map(f => f.name || f.farm_id).join(', ')}`,
+        details: { stale_farms: stale.map(f => ({ farm_id: f.farm_id, hours_ago: Math.round(parseFloat(f.hours_since_sync)) })) }
+      };
+    }
+    return { name, status: 'pass', message: `All ${rows.length} farm(s) synced within 48h` };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkInventoryPricing() {
+  const name = 'inventory_pricing';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'fail', message: 'DB unavailable' };
+
+    // Find items with quantity > 0 and $0 prices
+    const { rows } = await query(
+      `SELECT farm_id, product_name,
+              COALESCE(auto_quantity_lbs,0) + COALESCE(manual_quantity_lbs,0) AS available_lbs,
+              COALESCE(retail_price,0) AS retail_price,
+              COALESCE(wholesale_price,0) AS wholesale_price
+       FROM farm_inventory
+       WHERE (COALESCE(auto_quantity_lbs,0) + COALESCE(manual_quantity_lbs,0)) > 0
+         AND (COALESCE(retail_price,0) = 0 OR COALESCE(wholesale_price,0) = 0)`
+    );
+
+    if (rows.length > 0) {
+      const zeroRetail = rows.filter(r => parseFloat(r.retail_price) === 0);
+      const zeroWholesale = rows.filter(r => parseFloat(r.wholesale_price) === 0);
+      return {
+        name, status: 'warn',
+        message: `${rows.length} in-stock item(s) with $0 pricing (${zeroRetail.length} retail, ${zeroWholesale.length} wholesale)`,
+        details: {
+          zero_price_items: rows.slice(0, 20).map(r => ({
+            farm_id: r.farm_id,
+            product: r.product_name,
+            available_lbs: parseFloat(r.available_lbs),
+            retail: parseFloat(r.retail_price),
+            wholesale: parseFloat(r.wholesale_price)
+          }))
+        }
+      };
+    }
+    return { name, status: 'pass', message: 'All in-stock items have non-zero pricing' };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkPOSReadiness() {
+  const name = 'pos_readiness';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'fail', message: 'DB unavailable' };
+
+    // Check that at least one farm has priced inventory for POS
+    const { rows } = await query(
+      `SELECT DISTINCT farm_id FROM farm_inventory
+       WHERE COALESCE(retail_price,0) > 0
+         AND (COALESCE(auto_quantity_lbs,0) + COALESCE(manual_quantity_lbs,0)) > 0`
+    );
+
+    // Also check crop pricing is configured
+    let cropPricingCount = 0;
+    try {
+      const farms = await query('SELECT farm_id FROM farms');
+      for (const farm of farms.rows.slice(0, 50)) {
+        const pricing = await farmStore.get(farm.farm_id, 'crop_pricing');
+        if (pricing?.crops?.length > 0) cropPricingCount++;
+      }
+    } catch { /* farmStore may not be ready */ }
+
+    if (rows.length === 0 && cropPricingCount === 0) {
+      return { name, status: 'warn', message: 'No farms have POS-ready inventory or crop pricing configured' };
+    }
+    return {
+      name, status: 'pass',
+      message: `${rows.length} farm(s) have POS-ready inventory, ${cropPricingCount} have crop pricing configured`
+    };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkWholesaleCatalog() {
+  const name = 'wholesale_catalog';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'fail', message: 'DB unavailable' };
+
+    const { rows } = await query(
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE COALESCE(wholesale_price,0) = 0) AS zero_price,
+              COUNT(*) FILTER (WHERE available_for_wholesale = true) AS wholesale_enabled
+       FROM farm_inventory
+       WHERE (COALESCE(auto_quantity_lbs,0) + COALESCE(manual_quantity_lbs,0)) > 0`
+    );
+
+    const { total, zero_price, wholesale_enabled } = rows[0] || {};
+    const t = parseInt(total || 0);
+    const zp = parseInt(zero_price || 0);
+    const we = parseInt(wholesale_enabled || 0);
+
+    if (t === 0) return { name, status: 'warn', message: 'No in-stock items in catalog' };
+    if (zp > 0) {
+      return {
+        name, status: 'warn',
+        message: `${zp}/${t} in-stock items have $0 wholesale price`,
+        details: { total_items: t, zero_price_items: zp, wholesale_enabled: we }
+      };
+    }
+    return {
+      name, status: 'pass',
+      message: `${we} wholesale-enabled items, all priced`,
+      details: { total_items: t, wholesale_enabled: we }
+    };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkBackgroundServices() {
+  const name = 'background_services';
+  try {
+    if (!isDatabaseAvailable()) return { name, status: 'warn', message: 'DB unavailable — cannot check service timestamps' };
+
+    const stale = [];
+
+    // Check AI usage (ai_recommendations_pusher writes daily)
+    try {
+      const { rows } = await query(
+        `SELECT MAX(created_at) AS last_run FROM ai_usage WHERE created_at > NOW() - INTERVAL '48 hours'`
+      );
+      if (!rows[0]?.last_run) stale.push('ai_recommendations');
+    } catch { /* table may not exist */ }
+
+    // Check market data freshness
+    try {
+      const { rows } = await query(
+        `SELECT MAX(fetched_at) AS last_fetch FROM market_prices WHERE fetched_at > NOW() - INTERVAL '48 hours'`
+      );
+      if (!rows[0]?.last_fetch) stale.push('market_data_fetcher');
+    } catch { /* table may not exist */ }
+
+    // Check experiment/benchmark freshness
+    try {
+      const { rows } = await query(
+        `SELECT MAX(recorded_at) AS last_record FROM experiment_records WHERE recorded_at > NOW() - INTERVAL '14 days'`
+      );
+      if (!rows[0]?.last_record) stale.push('benchmark_aggregation');
+    } catch { /* table may not exist */ }
+
+    if (stale.length > 0) {
+      return { name, status: 'warn', message: `Stale background services: ${stale.join(', ')}`, details: { stale_services: stale } };
+    }
+    return { name, status: 'pass', message: 'All background services ran within expected windows' };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkLightEngine() {
+  const name = 'light_engine_reachability';
+  try {
+    const edgeUrl = process.env.FARM_EDGE_URL;
+    if (!edgeUrl) return { name, status: 'warn', message: 'FARM_EDGE_URL not configured — Light Engine connectivity not tested' };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(`${edgeUrl}/health`, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      clearTimeout(timeout);
+      if (res.ok) return { name, status: 'pass', message: `Light Engine reachable (${res.status})` };
+      return { name, status: 'warn', message: `Light Engine responded ${res.status}` };
+    } catch (err) {
+      clearTimeout(timeout);
+      return { name, status: 'warn', message: `Light Engine unreachable: ${err.message}` };
+    }
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkAIServices() {
+  const name = 'ai_services';
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return { name, status: 'fail', message: 'OPENAI_API_KEY not set' };
+    if (apiKey.length < 20) return { name, status: 'fail', message: 'OPENAI_API_KEY appears invalid (too short)' };
+
+    // Lightweight model list check (no tokens consumed)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        signal: controller.signal,
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+      clearTimeout(timeout);
+      if (res.ok) return { name, status: 'pass', message: 'OpenAI API key valid and reachable' };
+      if (res.status === 401) return { name, status: 'fail', message: 'OpenAI API key rejected (401)' };
+      return { name, status: 'warn', message: `OpenAI API returned ${res.status}` };
+    } catch (err) {
+      clearTimeout(timeout);
+      return { name, status: 'warn', message: `OpenAI API unreachable: ${err.message}` };
+    }
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkPaymentGateways() {
+  const name = 'payment_gateways';
+  try {
+    const issues = [];
+
+    // Check Stripe
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      issues.push('STRIPE_SECRET_KEY not set');
+    } else if (!stripeKey.startsWith('sk_')) {
+      issues.push('STRIPE_SECRET_KEY format invalid');
+    }
+
+    // Check Square — per-farm credentials in farmStore
+    let squareFarms = 0;
+    try {
+      if (isDatabaseAvailable()) {
+        const { rows } = await query('SELECT farm_id FROM farms');
+        for (const farm of rows.slice(0, 50)) {
+          const oauth = await farmStore.get(farm.farm_id, 'square_oauth');
+          if (oauth?.access_token) squareFarms++;
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    if (issues.length > 0) {
+      return { name, status: 'warn', message: issues.join('; '), details: { square_connected_farms: squareFarms } };
+    }
+    return {
+      name, status: 'pass',
+      message: `Stripe configured, ${squareFarms} farm(s) with Square connected`,
+      details: { square_connected_farms: squareFarms }
+    };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}
+
+async function checkAuthSystem() {
+  const name = 'auth_system';
+  try {
+    const jwtSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+    if (!jwtSecret) return { name, status: 'fail', message: 'JWT_SECRET not configured' };
+    if (jwtSecret.length < 16) return { name, status: 'warn', message: 'JWT_SECRET is too short (< 16 chars)' };
+    if (jwtSecret === 'changeme' || jwtSecret === 'secret') {
+      return { name, status: 'fail', message: 'JWT_SECRET is set to an insecure default value' };
+    }
+    return { name, status: 'pass', message: 'JWT secret configured and adequate length' };
+  } catch (err) {
+    return { name, status: 'fail', message: err.message };
+  }
+}

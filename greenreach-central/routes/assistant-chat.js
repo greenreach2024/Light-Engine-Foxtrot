@@ -259,6 +259,19 @@ const GPT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_system_health',
+      description: 'Get the latest nightly system audit results. Checks database connectivity, inventory pricing integrity ($0 detection), POS readiness, wholesale catalog health, farm sync freshness, background service status, Light Engine reachability, AI services, payment gateways, and auth. Returns overall status (pass/warn/fail) with per-check details. Use when the farmer asks "how is the system?", "any issues?", "system status", or "health check".',
+      parameters: {
+        type: 'object',
+        properties: {
+          run_fresh: { type: 'boolean', description: 'If true, runs a fresh audit now instead of returning cached results. Default: false.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_daily_todo',
       description: 'Get today\'s prioritized task list for the farm. Returns scored tasks across categories: wholesale orders, harvest readiness, seeding windows, environment anomalies, alerts.',
       parameters: {
@@ -1386,6 +1399,13 @@ REPORT GENERATION:
 MULTI-FARM INTELLIGENCE:
 - If the farmer manages multiple farms, use compare_farms or get_network_overview for cross-farm insights.
 - Share best practices across farms: "Farm A's basil yield is 20% higher — they use a 16h photoperiod."
+
+SYSTEM HEALTH & NIGHTLY AUDIT:
+- GreenReach Central runs a nightly automated audit (3 AM ET) that checks 10 critical systems: database, farm sync freshness, inventory pricing ($0 detection), POS readiness, wholesale catalog, background services, Light Engine, AI services, payment gateways, and auth.
+- When a farmer asks "how's the system?", "any issues?", "health check", or "system status" — call get_system_health.
+- Results include per-check status (pass/warn/fail) and a summary. Present failures first, then warnings, then a brief count of passing checks.
+- If audit shows $0 pricing warnings, advise the farmer to check their Crop Pricing page.
+- You can run a fresh audit on-demand with run_fresh=true, but prefer cached results for normal queries.
 
 MANUAL INVENTORY MANAGEMENT:
 - Some growers manage inventory by weight without using the tray automation system.
