@@ -13,6 +13,7 @@ import {
   resetBuyerPassword,
   deactivateBuyer,
   reactivateBuyer,
+  hydrateBuyerById,
   getOrderAuditLog,
   logOrderEvent,
   createRefund,
@@ -27,6 +28,18 @@ import {
 } from '../services/orderStateMachine.js';
 
 const router = express.Router();
+
+/**
+ * Load a buyer from DB into the in-memory store when not found in memory.
+ * Returns the hydrated buyer object (unsanitized) or null.
+ */
+async function hydrateBuyerFromDb(buyerId) {
+  try {
+    return await hydrateBuyerById(buyerId);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /api/admin/wholesale/buyers
@@ -333,7 +346,14 @@ router.get('/buyers/:buyerId', async (req, res) => {
  */
 router.post('/buyers/:buyerId/deactivate', async (req, res) => {
     try {
-        const buyer = deactivateBuyer(req.params.buyerId);
+        let buyer = deactivateBuyer(req.params.buyerId);
+
+        // DB fallback: buyer exists in postgres but not in memory (e.g. after restart)
+        if (!buyer) {
+            buyer = await hydrateBuyerFromDb(req.params.buyerId);
+            if (buyer) buyer = deactivateBuyer(req.params.buyerId);
+        }
+
         if (!buyer) {
             return res.status(404).json({ status: 'error', message: 'Buyer not found' });
         }
@@ -351,7 +371,14 @@ router.post('/buyers/:buyerId/deactivate', async (req, res) => {
  */
 router.post('/buyers/:buyerId/reactivate', async (req, res) => {
     try {
-        const buyer = reactivateBuyer(req.params.buyerId);
+        let buyer = reactivateBuyer(req.params.buyerId);
+
+        // DB fallback: buyer exists in postgres but not in memory (e.g. after restart)
+        if (!buyer) {
+            buyer = await hydrateBuyerFromDb(req.params.buyerId);
+            if (buyer) buyer = reactivateBuyer(req.params.buyerId);
+        }
+
         if (!buyer) {
             return res.status(404).json({ status: 'error', message: 'Buyer not found' });
         }

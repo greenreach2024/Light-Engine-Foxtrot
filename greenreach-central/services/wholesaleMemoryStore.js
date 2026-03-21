@@ -140,23 +140,7 @@ export async function loadBuyersFromDb() {
   try {
     const result = await query('SELECT * FROM wholesale_buyers ORDER BY created_at ASC');
     for (const row of result.rows) {
-      const buyer = {
-        id: row.id,
-        businessName: row.business_name,
-        contactName: row.contact_name,
-        email: row.email,
-        buyerType: row.buyer_type,
-        location: row.location || null,
-        passwordHash: row.password_hash,
-        status: row.status || 'active',
-        phone: row.phone || null,
-        createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
-      };
-      const key = buyer.email.trim().toLowerCase();
-      if (!buyersByEmail.has(key)) {
-        buyersByEmail.set(key, buyer);
-        buyersById.set(buyer.id, buyer);
-      }
+      hydrateRowIntoMaps(row);
     }
     console.log(`[BuyerPersist] Loaded ${result.rows.length} buyers from DB`);
   } catch (err) {
@@ -164,6 +148,43 @@ export async function loadBuyersFromDb() {
       console.warn('[BuyerPersist] Load failed:', err.message);
     }
   }
+}
+
+/**
+ * Load a single buyer from the DB into the in-memory Maps.
+ * Returns the buyer object if found, otherwise null.
+ */
+export async function hydrateBuyerById(buyerId) {
+  if (!isDatabaseAvailable()) return null;
+  try {
+    const result = await query('SELECT * FROM wholesale_buyers WHERE id = $1 LIMIT 1', [buyerId]);
+    if (!result.rows.length) return null;
+    return hydrateRowIntoMaps(result.rows[0]);
+  } catch {
+    return null;
+  }
+}
+
+/** Internal: convert a DB row into a buyer object and store in both Maps. */
+function hydrateRowIntoMaps(row) {
+  const buyer = {
+    id: row.id,
+    businessName: row.business_name,
+    contactName: row.contact_name,
+    email: row.email,
+    buyerType: row.buyer_type,
+    location: row.location || null,
+    passwordHash: row.password_hash,
+    status: row.status || 'active',
+    phone: row.phone || null,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
+  };
+  const key = buyer.email.trim().toLowerCase();
+  if (!buyersByEmail.has(key)) {
+    buyersByEmail.set(key, buyer);
+    buyersById.set(buyer.id, buyer);
+  }
+  return buyer;
 }
 
 export async function updateBuyer(buyerId, updates) {

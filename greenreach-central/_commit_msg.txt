@@ -1,9 +1,13 @@
-Add email alert notifications to nightly audit service
+Fix wholesale buyer deactivate/reactivate 'Buyer not found' error
 
-- Import emailService into nightly-audit.js
-- New sendAuditAlert() sends HTML + text email on failures or warnings
-- Email includes: failure/warning callout boxes, full check table,
-  status icons, actionable detail for each failed check
-- Recipient configured via ADMIN_ALERT_EMAIL or ADMIN_EMAIL env var
-- Graceful skip when no alert email is configured
-- Non-blocking: alert email errors are logged but do not fail the audit
+Root cause: deactivateBuyer() and reactivateBuyer() only checked the
+in-memory buyersById Map. After server restarts, the GET /buyers list
+falls back to the DB and shows buyers, but the deactivate/reactivate
+handlers could not find them in memory.
+
+- wholesaleMemoryStore.js: extract hydrateRowIntoMaps() helper, add
+  new hydrateBuyerById() export that loads a single buyer from DB
+  into the in-memory Maps
+- admin-wholesale.js: add DB fallback to both /deactivate and
+  /reactivate handlers — if in-memory lookup fails, hydrate from DB
+  then retry
