@@ -1135,6 +1135,13 @@
       this.showLoading('Processing your order...');
 
       try {
+        // Tokenize the card via Square SDK (skipped if Square not loaded)
+        let paymentSource = { type: 'manual' };
+        if (this.squarePayments && this.squareCard) {
+          const token = await this.createPaymentToken();
+          paymentSource = { source_id: token };
+        }
+
         const sourcing = this.getSourcingSelection();
         const { response, json } = await this.apiFetch('/api/wholesale/checkout/execute', {
           method: 'POST',
@@ -1158,7 +1165,7 @@
             cart: this.cart.map((item) => ({ sku_id: item.sku_id, quantity: item.quantity })),
             allocation_strategy: 'cheapest',
             payment_provider: 'square',
-            payment_source: { type: 'demo', nonce: `demo-${Date.now()}` },
+            payment_source: paymentSource,
             po_number: document.getElementById('po-number')?.value?.trim() || '',
             fulfillment_method: this.selectedFulfillment,
             delivery_fee: this.selectedFulfillment === 'delivery' && this.deliveryQuote ? Number(this.deliveryQuote.fee || 0) : 0,
@@ -1963,9 +1970,16 @@
         return;
       }
       try {
-        // Sandbox credentials – in production these should come from the server
-        const appId = 'sandbox-sq0idb-ByoyD4t2Zy96QhAUZd9_SA';
-        const locationId = 'TC4Z3ZEBKRXRH';
+        // Fetch Square credentials from server
+        const cfgRes = await fetch('/api/wholesale/payment/config');
+        const cfgJson = await cfgRes.json();
+        const appId = cfgJson?.data?.appId;
+        const locationId = cfgJson?.data?.locationId;
+
+        if (!appId || !locationId) {
+          console.warn('Square credentials not configured on server');
+          return;
+        }
 
         this.squarePayments = window.Square.payments(appId, locationId);
         this.squareCard = await this.squarePayments.card();
@@ -1997,120 +2011,6 @@
 
       const msgs = (result.errors || []).map(e => e.message).join('; ');
       throw new Error(msgs || 'Card tokenization failed');
-    },
-
-    /**
-     * Place wholesale order with payment authorization
-     */
-    async placeOrder() {
-      const placeOrderBtn = document.getElementById('place-order-btn');
-      const placeOrderText = document.getElementById('place-order-text');
-      const placeOrderSpinner = document.getElementById('place-order-spinner');
-      
-      if (!placeOrderBtn) return;
-      
-      try {
-        // Disable button
-        placeOrderBtn.disabled = true;
-        placeOrderText.style.display = 'none';
-        placeOrderSpinner.style.display = 'inline';
-        
-        // Validate cart
-        if (this.cart.length === 0) {
-          throw new Error('Your cart is empty');
-        }
-        
-        // Validate form
-        const form = document.getElementById('checkout-form');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          throw new Error('Please fill in all required fields');
-        }
-        
-        // Tokenize card via Square
-        const paymentToken = await this.createPaymentToken();
-
-        // Prepare order data
-        const orderData = {
-          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
-          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
-          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
-          buyer_phone: this.currentBuyer?.phone || '',
-          delivery_address: document.getElementById('delivery-address')?.value,
-          delivery_city: document.getElementById('delivery-city')?.value,
-          delivery_province: document.getElementById('delivery-province')?.value,
-          delivery_postal_code: document.getElementById('delivery-postal')?.value,
-          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
-          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
-          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
-          cart_items: this.cart.map(item => ({
-            sku_id: item.sku_id,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit: item.unit,
-            price_per_unit: item.price_per_unit,
-            farm_id: item.farm_id
-          })),
-          payment_token: paymentToken,
-          payment_provider: 'square'
-        };
-        
-        // Submit order to backend
-        const response = await fetch('/api/wholesale/orders/create', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
-          },
-          body: JSON.stringify(orderData)
-        });
-        
-        const result = await response.json();
-        
-        if (!response.ok || !result.ok) {
-          throw new Error(result.message || 'Failed to place order');
-        }
-        
-        // Success!
-        this.showToast('Order placed successfully!', 'success');
-        
-        // Clear cart
-        this.cart = [];
-        this.renderCart();
-        
-        // Show success message and order details
-        const successMessage = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
-            <h2>Order Placed Successfully!</h2>
-            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
-            <p style="margin: 1rem 0; color: var(--text-secondary);">
-              Your payment has been authorized but <strong>not charged yet</strong>.
-              <br/>Farms have 24 hours to confirm their portions.
-              <br/>You'll receive an email when farms respond.
-            </p>
-            <p style="margin: 1.5rem 0;">
-              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
-            </p>
-            <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
-          </div>
-        `;
-        
-        document.querySelector('.checkout-container').innerHTML = successMessage;
-        
-      } catch (error) {
-        console.error('Order placement error:', error);
-        this.showToast(error.message || 'Failed to place order', 'error');
-        const cardErrors = document.getElementById('card-errors');
-        if (cardErrors) {
-          cardErrors.textContent = error.message;
-        }
-      } finally {
-        // Re-enable button
-        placeOrderBtn.disabled = false;
-        placeOrderText.style.display = 'inline';
-        placeOrderSpinner.style.display = 'none';
-      }
     },
 
     // === PRODUCT REQUESTS ===

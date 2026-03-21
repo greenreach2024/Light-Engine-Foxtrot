@@ -417,6 +417,17 @@ function requireWholesaleDbForCriticalPaths(req, res, next) {
 const requireBuyerPortalAuth = [requireWholesaleDbForCriticalPaths, requireBuyerAuth];
 
 /**
+ * GET /api/wholesale/payment/config
+ * Return public Square credentials for the frontend payment form.
+ */
+router.get('/payment/config', (req, res) => {
+  const appId = process.env.SQUARE_APP_ID || '';
+  const locationId = process.env.SQUARE_LOCATION_ID || '';
+  const environment = process.env.SQUARE_ENVIRONMENT || 'sandbox';
+  res.json({ status: 'ok', data: { appId, locationId, environment } });
+});
+
+/**
  * POST /api/wholesale/delivery/quote
  * Buyer-auth delivery quote endpoint for checkout UX.
  */
@@ -1384,7 +1395,7 @@ router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuye
       throw new ValidationError('Cart is required');
     }
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
@@ -1458,7 +1469,7 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
