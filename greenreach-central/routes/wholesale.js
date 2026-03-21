@@ -1577,23 +1577,26 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
       // ── Accounting: record buyer payment + farm payables ──
       finalizePayment(payment);
 
-      // Record buyer payment in the accounting ledger (fire-and-forget)
-      ingestPaymentRevenue({
-        payment_id: payment.payment_id,
-        order_id: order.master_order_id,
-        amount: payment.amount,
-        provider: payment.provider,
-        broker_fee: payment.broker_fee_amount || 0,
-        tax_amount: orderTotals.tax_total || 0,
-        source_type: 'wholesale',
-      }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
+      // Only record revenue + payables when payment actually went through
+      if (payment.status === 'completed' || payment.status === 'pending') {
+        ingestPaymentRevenue({
+          payment_id: payment.payment_id,
+          order_id: order.master_order_id,
+          amount: payment.amount,
+          provider: payment.provider,
+          broker_fee: payment.broker_fee_amount || 0,
+          tax_amount: orderTotals.tax_total || 0,
+          source_type: 'wholesale',
+        }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
 
-      // Record farm payables: each sub-order is an obligation to pay the farm
-      ingestFarmPayables({
-        order_id: order.master_order_id,
-        payment_id: payment.payment_id,
-        farm_sub_orders: result.allocation.farm_sub_orders,
-      }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
+        ingestFarmPayables({
+          order_id: order.master_order_id,
+          payment_id: payment.payment_id,
+          farm_sub_orders: result.allocation.farm_sub_orders,
+        }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
+      } else {
+        console.warn(`[Accounting] Skipped revenue/payable ingestion — payment status: ${payment.status}`);
+      }
 
       // If Square payments succeeded, farms were paid immediately via app_fee_money —
       // record each farm payout to settle the payable
@@ -1761,96 +1764,24 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
       return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
     }
 
-    if (!canUseDemoWholesalePaths()) {
-      return res.status(503).json({
-        status: 'error',
-        message: 'Wholesale checkout is not configured for this environment'
-      });
+    // ── SAFETY: Never fall through to demo for checkout ──
+    // If we reach here, network allocation didn't run — something is misconfigured.
+    // Block the order and alert admin immediately.
+    console.error('[Checkout] BLOCKED: checkout fell through to demo fallback. Network allocation did not run. Buyer:', req.wholesaleBuyer?.id);
+    const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.SES_FROM_EMAIL;
+    if (adminEmail) {
+      emailService.sendEmail({
+        to: adminEmail,
+        subject: '[CRITICAL] Wholesale checkout fell to demo fallback — order blocked',
+        text: `A wholesale checkout attempt was BLOCKED because network allocation did not run.\n\nBuyer: ${req.wholesaleBuyer?.id} (${buyer_account?.email})\nCart items: ${cart?.length || 0}\nTime: ${new Date().toISOString()}\n\nThis means shouldUseNetworkAllocation() returned false. Check WHOLESALE_CATALOG_MODE, database readiness, and network farm connectivity.`
+      }).catch(err => console.error('[Alert] Failed to send checkout fallback alert:', err.message));
     }
 
-    const demoCatalog = await loadWholesaleDemoCatalog();
-    const result = await allocateCartFromDemo({ cart, demoCatalog, commissionRate });
-
-    if (!result.allocation.farm_sub_orders?.length) {
-      return res.status(400).json({ status: 'error', message: 'Unable to allocate items with current inventory' });
-    }
-
-    const orderTotals = {
-      ...result.allocation,
-      delivery_fee: deliveryFee,
-      grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
-    };
-
-    const order = createOrder({
-      buyerId: req.wholesaleBuyer.id,
-      buyerAccount: buyer_account,
-      deliveryDate: delivery_date,
-      deliveryAddress: normalizedDeliveryAddress,
-      recurrence: recurrence || { cadence: 'one_time' },
-      farmSubOrders: result.allocation.farm_sub_orders,
-      totals: orderTotals
+    return res.status(503).json({
+      status: 'error',
+      message: 'Checkout is temporarily unavailable. Please try again or contact support.',
+      code: 'CHECKOUT_NETWORK_UNAVAILABLE'
     });
-    order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
-    order.delivery_fee = deliveryFee;
-
-    const payment = createPayment({
-      orderId: order.master_order_id,
-      provider: payment_provider || 'demo',
-      split: result.payment_split,
-      totals: orderTotals
-    });
-    payment.status = 'completed';
-    order.payment = payment;
-
-    // ── Accounting (demo path): record buyer payment + farm payables ──
-    finalizePayment(payment);
-    ingestPaymentRevenue({
-      payment_id: payment.payment_id,
-      order_id: order.master_order_id,
-      amount: payment.amount,
-      provider: payment.provider || 'demo',
-      broker_fee: payment.broker_fee_amount || 0,
-      tax_amount: orderTotals.tax_total || 0,
-      source_type: 'wholesale',
-    }).catch(err => console.warn('[Accounting] Demo revenue ingest error:', err.message));
-
-    ingestFarmPayables({
-      order_id: order.master_order_id,
-      payment_id: payment.payment_id,
-      farm_sub_orders: result.allocation.farm_sub_orders,
-    }).catch(err => console.warn('[Accounting] Demo farm payable ingest error:', err.message));
-
-    await saveOrder(order).catch(() => {});
-    await persistDeliveryLedger({
-      order,
-      allocation: result.allocation,
-      deliveryFee,
-      deliveryDate: delivery_date,
-      deliveryAddress: normalizedDeliveryAddress,
-      fulfillmentMethod: order.fulfillment_method
-    }).catch((err) => {
-      console.warn('[Wholesale] Delivery ledger persistence failed:', err.message);
-    });
-
-    // Notify farms (dev stub): broadcast over WS if available.
-    const wss = req.app?.locals?.wss;
-    if (wss?.clients?.size) {
-      const payload = JSON.stringify({
-        type: 'wholesale_order_created',
-        order_id: order.master_order_id,
-        created_at: order.created_at
-      });
-
-      wss.clients.forEach((client) => {
-        if (client.readyState === 1) client.send(payload);
-      });
-    }
-
-    // Order confirmation email + audit (non-blocking)
-    logOrderEvent(order.master_order_id, 'order_created', { buyer_id: req.wholesaleBuyer.id, payment_id: payment.payment_id, total: order.grand_total });
-    emailService.sendOrderConfirmation(order, req.wholesaleBuyer).catch(err => console.warn('[Email] Confirmation failed:', err.message));
-
-    return res.json({ status: 'ok', data: order, meta: { payment_id: payment.payment_id } });
   } catch (error) {
     return next(error);
   }

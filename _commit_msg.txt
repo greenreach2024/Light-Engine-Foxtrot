@@ -1,20 +1,12 @@
-EB#544 - Wire double-entry accounting into wholesale checkout
+EB#545 - Block demo fallback on checkout + payment verification guards
 
-Chart of Accounts:
-- Add 6 missing accounts: AR-Buyer (110000), Revenue-Subs (210000),
-  AP-Farm Payouts (250000), Sales Tax (310000), Revenue-Wholesale (400100),
-  Broker Fee Revenue (640000)
-
-Revenue Accounting Connector:
-- Fix ingestPaymentRevenue() account codes
-- Fix ingestRefundReversal() to use corrected codes
-- Add ingestFarmPayables(): Debit COGS 500000, Credit AP-Farms 250000
-- Add ingestFarmPayout(): Debit AP-Farms 250000, Credit Cash 100000
-
-Wholesale Memory Store:
-- Remove premature ingestPaymentRevenue() from createPayment()
-- Add finalizePayment() to re-persist payment after status mutation
-
-Wholesale Routes:
-- Wire accounting into checkout/execute (fire-and-forget)
-- Wire accounting into demo checkout path
+CRITICAL SAFETY FIX:
+- Remove entire demo checkout path from POST /checkout/execute
+  Previously: if network allocation didn't run, demo path would create
+  an order with provider='demo', status='completed' — no real payment
+  collected but order looked fulfilled.
+- Replace with hard 503 block + admin email alert when checkout would
+  have fallen to demo fallback
+- Guard accounting ingestion: revenue and farm payables only recorded
+  when payment.status is 'completed' or 'pending', not 'failed'
+- Log warning when accounting is skipped due to failed payment
