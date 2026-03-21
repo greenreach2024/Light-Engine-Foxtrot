@@ -520,6 +520,14 @@ async function runMigrations(client) {
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_last_updated ON farm_inventory(last_updated DESC);
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_source ON farm_inventory(inventory_source);
 
+      -- Required for ON CONFLICT (farm_id, product_id) UPSERT in sync + manual routes
+      -- Deduplicate before creating unique index (keep row with highest id)
+      DELETE FROM farm_inventory a USING farm_inventory b
+        WHERE a.farm_id = b.farm_id AND a.product_id = b.product_id AND a.id < b.id;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_inventory_farm_product
+        ON farm_inventory(farm_id, product_id);
+
       -- Backfill auto_quantity_lbs from existing quantity for rows that haven't been set yet
       UPDATE farm_inventory
          SET auto_quantity_lbs = COALESCE(quantity, 0)

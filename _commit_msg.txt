@@ -1,5 +1,4 @@
-Deploy #530 — Fix inventory 500: add auto/manual_quantity_lbs columns to startup migration
+Deploy #531 — Seed manual inventory product name from crop registry
 
-Migration 024 columns (auto_quantity_lbs, manual_quantity_lbs, inventory_source)
-were not wired into database.js startup migration. GET /api/inventory/:farmId
-queried those columns and hit a PG error → 500. Now added inline.
+Product Name field now uses datalist populated from crop-registry.json (32 crops).
+Selecting a crop auto-fills the Category dropdown (mapped to dropdown values).
