@@ -1,9 +1,7 @@
-Deploy #528 — Manual inventory: dual-quantity columns on farm_inventory
+Deploy #529 — E.V.I.E. update_manual_inventory tool
 
-- Migration 024: adds auto_quantity_lbs, manual_quantity_lbs, inventory_source
-  + extended columns (quantity_available, wholesale_price, retail_price, etc.)
-- Sync endpoint: upserts auto_quantity_lbs, preserves manual entries
-- New endpoints: POST/PUT/DELETE /api/inventory/manual for grower entry
-- POS checkout: decrements quantity_available + manual_quantity_lbs on sale
-- UI: Manual Entry tab on farm-inventory.html with add/remove form
-- Wholesale catalog DB path now has matching columns (quantity_available)
+- get_inventory_summary now queries farm_inventory DB table (auto + manual lbs)
+- New update_manual_inventory tool: AI-driven manual inventory updates
+- System prompt: MANUAL INVENTORY MANAGEMENT section with weight conversion
+- Added to write-ops confirmation tier
+- Growers can say \"update basil inventory, we have 23 lbs\" and E.V.I.E. handles it

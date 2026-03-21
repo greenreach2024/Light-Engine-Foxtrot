@@ -501,6 +501,11 @@ async function runMigrations(client) {
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
+      -- Migration 024: dual-quantity columns for manual inventory
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS auto_quantity_lbs DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS manual_quantity_lbs DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS inventory_source VARCHAR(10) DEFAULT 'auto';
+
       UPDATE farm_inventory
          SET product_id = COALESCE(product_id, sku)
        WHERE product_id IS NULL;
@@ -513,6 +518,12 @@ async function runMigrations(client) {
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_product_id ON farm_inventory(product_id);
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_sku ON farm_inventory(sku);
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_last_updated ON farm_inventory(last_updated DESC);
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_source ON farm_inventory(inventory_source);
+
+      -- Backfill auto_quantity_lbs from existing quantity for rows that haven't been set yet
+      UPDATE farm_inventory
+         SET auto_quantity_lbs = COALESCE(quantity, 0)
+       WHERE auto_quantity_lbs = 0 AND COALESCE(quantity, 0) > 0;
     `);
     logger.info('farm_inventory compatibility migration completed');
   } catch (err) {
