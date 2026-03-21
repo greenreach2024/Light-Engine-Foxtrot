@@ -1219,7 +1219,7 @@ async function buildSystemPrompt(farmId) {
           if (!byCategory[cat]) byCategory[cat] = [];
           byCategory[cat].push(`- ${r.content}`);
         }
-        guardrails${summariesBlock}Block = '\nFARM ENVIRONMENT GUARDRAILS:\n' +
+        guardrailsBlock = '\nFARM ENVIRONMENT GUARDRAILS:\n' +
           Object.entries(byCategory).map(([cat, items]) => `${cat}:\n${items.join('\n')}`).join('\n\n') + '\n';
       }
     }
@@ -3003,28 +3003,33 @@ router.post('/chat/stream', async (req, res) => {
 
     // Final response: stream the text if no more tool calls
     if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
-      // Re-run as streaming for the final text generation
-      const streamCompletion = await openai.chat.completions.create({
-        model: streamModel,
-        messages: [...messages, ...(assistantMessage.content ? [] : [])],
-        temperature: 0.7,
-        max_tokens: 1500,
-        stream: true
-      });
-
       let fullReply = '';
-      for await (const chunk of streamCompletion) {
-        const delta = chunk.choices[0]?.delta?.content;
-        if (delta) {
-          fullReply += delta;
-          sendEvent('token', { text: delta });
-        }
-      }
 
-      // If streaming produced no content, use the non-streamed response
-      if (!fullReply && assistantMessage.content) {
+      if (assistantMessage.content) {
+        // Content already available from tool-result follow-up — stream it directly (no extra LLM call)
         fullReply = assistantMessage.content;
-        sendEvent('token', { text: fullReply });
+        // Emit in small chunks for a streaming feel
+        const chunkSize = 12;
+        for (let i = 0; i < fullReply.length; i += chunkSize) {
+          sendEvent('token', { text: fullReply.slice(i, i + chunkSize) });
+        }
+      } else {
+        // No content yet — do a streaming completion
+        const streamCompletion = await openai.chat.completions.create({
+          model: streamModel,
+          messages,
+          temperature: 0.7,
+          max_tokens: 1500,
+          stream: true
+        });
+
+        for await (const chunk of streamCompletion) {
+          const delta = chunk.choices[0]?.delta?.content;
+          if (delta) {
+            fullReply += delta;
+            sendEvent('token', { text: delta });
+          }
+        }
       }
 
       // Save conversation

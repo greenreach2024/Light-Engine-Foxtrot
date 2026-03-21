@@ -7,8 +7,8 @@
  * Part of the E.V.I.E. (Environmental Vision & Intelligence Engine) upgrade.
  */
 
-import { getDatabase } from '../database.js';
-import { createLogger } from '../logger.js';
+import { getDatabase } from '../config/database.js';
+import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('healthCheck');
 
