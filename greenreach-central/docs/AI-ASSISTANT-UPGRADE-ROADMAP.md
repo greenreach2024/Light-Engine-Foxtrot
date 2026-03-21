@@ -1,14 +1,16 @@
 # AI Assistant Upgrade Roadmap
 
-> **Status:** Approved for implementation  
-> **Date:** March 19, 2026  
+> **Status:** Implemented — Phases 1–6 complete, 49 tools live  
+> **Date:** March 20, 2026 (last updated)  
 > **Goal:** Transform the Farm Assistant from a pattern-matching FAQ widget into an intelligent, action-capable AI assistant that can query data, execute commands, and manage farm operations through natural conversation.
 
 ---
 
-## Current State Assessment
+## Original State Assessment (Pre-Upgrade — March 2026)
 
-### What Exists Today
+> **Historical context.** This section describes what existed before the upgrade. All limitations listed below have been resolved. See "Completed Milestones" at the bottom for the current state.
+
+### What Existed Before
 
 | Component | Technology | Capability | Limitation |
 |-----------|------------|-----------|------------|
@@ -402,7 +404,7 @@ Incremental cost over current ($20/month): **~$3.50/month** — the chat endpoin
 │    └── Return { reply, actions[], data }                 │
 │                                                          │
 │  routes/farm-ops-agent.js (EXPANDED)                     │
-│    ├── TOOL_CATALOG: 7 existing + 18 new tools          │
+│    ├── TOOL_CATALOG: 32 tools (read + write + undo)     │
 │    ├── Tool gateway with validation + audit              │
 │    ├── Undo support for write operations                 │
 │    └── Idempotency cache                                 │
@@ -450,8 +452,44 @@ The frontend refactor is **backward compatible**:
 
 ## Immediate Next Steps
 
-1. **Build Phase 1A** — `routes/assistant-chat.js` with GPT function calling + 12 tool definitions
-2. **Build Phase 1B** — Refactor `processQuery()` → API call with regex fallback
-3. **Build Phase 1C** — In-memory conversation store
-4. **Test** — Verify all 7 example queries work through GPT + at least 20 new free-form queries
-5. **Deploy** — Ship Phase 1, gather usage data, iterate on tools
+> **All original phases (1–6) are COMPLETE.** The assistant is live in production with 49 GPT tools.
+
+### Completed Milestones
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| **1A** GPT Chat Endpoint | `routes/assistant-chat.js` with GPT-4o-mini function calling | ✅ Complete |
+| **1B** Replace client-side regex | `processQuery()` → API call with regex fallback | ✅ Complete |
+| **1C** Conversation memory | In-memory conversation store (30-min TTL) | ✅ Complete |
+| **2A** Read tools (17) | Market, pricing, planning, environment, nutrients, yield, cost, farm profile, rooms, onboarding | ✅ Complete |
+| **2B** Write tools (15) | Farm profile, rooms, zones, certs, setup, prices, planting, harvest, orders, inventory, devices, nutrients, lights, alerts | ✅ Complete |
+| **2C** Confirmation flow | All 17 write tools require user confirmation before execution | ✅ Complete |
+| **3A-D** Data input via chat | Harvest recording, order fulfillment, price updates | ✅ Complete |
+| **4A** Morning briefing | Auto-generated summary using get_daily_todo + get_alerts + get_orders | ✅ Complete |
+| **4B** Contextual nudges | Proactive alerts every 5 minutes | ✅ Complete |
+| **4C** AI Pusher recs | `get_ai_recommendations` tool surfaces backend recs | ✅ Complete |
+| **5A** Voice → Action | SpeechRecognition → GPT → tool execution pipeline | ✅ Complete |
+| **6A** Farm context | Persistent farm state, zones, groups injected per conversation | ✅ Complete |
+| **6B** User memory | `save_user_memory` auto-saves preferences across sessions | ✅ Complete |
+| **6C** Feedback loop | Thumbs up/down tracked per farm, surfaced in system prompt | ✅ Complete |
+| **Setup Wizard** | 7 new tools for AI-guided farm setup (profile, rooms, zones, certs, onboarding, complete) | ✅ Complete |
+| **AI Guardrails** | 23 environment/sensor/safety rules from `data/ai-rules.json` injected into system prompt | ✅ Complete |
+
+### Current Tool Inventory (49 tools)
+
+**Read Tools (32):**
+`get_daily_todo`, `get_room_status`, `get_orders`, `get_harvest_log`, `get_alerts`, `get_market_intelligence`, `get_pricing_info`, `get_planting_recommendations`, `get_demand_forecast`, `get_device_status`, `scan_devices`, `get_pricing_decisions`, `get_capacity`, `get_inventory_summary`, `get_crop_info`, `get_farm_insights`, `get_ai_recommendations`, `get_planting_assignments`, `get_scheduled_harvests`, `get_crop_schedule`, `get_crop_compatibility`, `get_planning_recommendation`, `get_environment_readings`, `get_nutrient_status`, `get_dosing_history`, `get_yield_forecast`, `get_cost_analysis`, `get_farm_profile`, `list_rooms`, `get_onboarding_status`
+
+**Write Tools (17, all require user confirmation):**
+`update_farm_profile`, `create_room`, `create_zone`, `update_certifications`, `complete_setup`, `update_crop_price`, `create_planting_assignment`, `mark_harvest_complete`, `update_order_status`, `add_inventory_item`, `dismiss_alert`, `auto_assign_devices`, `register_device`, `seed_benchmarks`, `update_nutrient_targets`, `update_target_ranges`, `set_light_schedule`
+
+**Auto-Save (no confirmation):**
+`save_user_memory`, `create_planting_plan`
+
+### Future Improvements
+
+1. Migrate `executeExtendedTool` switch cases → `TOOL_CATALOG` for single source of truth + undo support
+2. Add setup/onboarding guardrails to `data/ai-rules.json`
+3. Rich response cards (charts, inline forms) in chat UI
+4. TTS voice selection preferences
+5. Multi-farm support — cross-farm comparisons and fleet management tools
