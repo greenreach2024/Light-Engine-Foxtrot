@@ -2015,6 +2015,28 @@ async function runMigrations(client) {
     logger.warn('Migration 033 warning:', err.message);
   }
 
+  // Migration 034 — F.A.Y.E. Phase 3-4: Decision log + accounting classification uniqueness
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS faye_decision_log (
+        id BIGSERIAL PRIMARY KEY,
+        tool_name VARCHAR(100) NOT NULL,
+        params JSONB DEFAULT '{}',
+        result_ok BOOLEAN DEFAULT TRUE,
+        result_summary TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_faye_decision_log_created ON faye_decision_log(created_at DESC);
+    `);
+    // Ensure unique index on accounting_classifications.transaction_id for ON CONFLICT
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_acct_class_txn_unique ON accounting_classifications(transaction_id);
+    `).catch(() => {}); // may fail if duplicate rows exist — non-fatal
+    logger.info('F.A.Y.E. Phase 3-4 tables ready (migration 034)');
+  } catch (err) {
+    logger.warn('Migration 034 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

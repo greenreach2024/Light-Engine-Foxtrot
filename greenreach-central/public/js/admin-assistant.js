@@ -142,6 +142,27 @@
     }
     .faye-quick-btn:hover { background: rgba(16,185,129,0.3); }
 
+    .faye-confirm-bar {
+      display: flex; gap: 8px; padding: 8px 16px; align-self: flex-start;
+    }
+    .faye-confirm-btn {
+      padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      border: none; cursor: pointer; transition: background 0.2s;
+    }
+    .faye-confirm-btn.yes {
+      background: #10b981; color: white;
+    }
+    .faye-confirm-btn.yes:hover { background: #059669; }
+    .faye-confirm-btn.no {
+      background: #374151; color: #e0e0e0; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .faye-confirm-btn.no:hover { background: #4b5563; }
+    .faye-pending-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 4px; font-size: 11px;
+      background: rgba(245,158,11,0.2); color: #fbbf24; margin: 4px 2px;
+    }
+
     @media (max-width: 480px) {
       #faye-chat-panel { width: calc(100vw - 16px); right: 8px; bottom: 80px; max-height: 70vh; }
     }
@@ -319,6 +340,21 @@
         conversationId = data.conversation_id;
         if (data.tool_calls) addToolBadges(data.tool_calls);
         addMessage('assistant', data.reply);
+
+        // Show confirm/cancel buttons if pending action
+        if (data.pending_action) {
+          showConfirmBar(data.pending_action);
+        }
+
+        // Show executed action badge
+        if (data.action_executed) {
+          const badge = document.createElement('div');
+          badge.className = 'faye-tool-badge';
+          badge.style.cssText = data.action_executed.success ? 'background:rgba(16,185,129,0.2);color:#6ee7b7' : 'background:rgba(239,68,68,0.2);color:#fca5a5';
+          badge.textContent = (data.action_executed.success ? '✓ Executed: ' : '✗ Failed: ') + data.action_executed.tool.replace(/_/g, ' ');
+          messagesEl.appendChild(badge);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
       } else {
         addMessage('system', 'Error: ' + (data.error || 'Unknown error'));
       }
@@ -330,6 +366,36 @@
     isLoading = false;
     sendBtn.disabled = false;
     inputEl.focus();
+  }
+
+  function showConfirmBar(pendingAction) {
+    // Remove any existing confirm bars
+    const existing = document.getElementById('faye-confirm-bar');
+    if (existing) existing.remove();
+
+    const bar = document.createElement('div');
+    bar.className = 'faye-confirm-bar';
+    bar.id = 'faye-confirm-bar';
+
+    const badge = document.createElement('span');
+    badge.className = 'faye-pending-badge';
+    badge.textContent = '⚡ ' + (pendingAction.tier === 'admin' ? 'CRITICAL' : 'Action Pending');
+
+    const yesBtn = document.createElement('button');
+    yesBtn.className = 'faye-confirm-btn yes';
+    yesBtn.textContent = pendingAction.tier === 'admin' ? '✓ Confirm Action' : '✓ Yes, proceed';
+    yesBtn.addEventListener('click', () => { bar.remove(); sendMessage('yes'); });
+
+    const noBtn = document.createElement('button');
+    noBtn.className = 'faye-confirm-btn no';
+    noBtn.textContent = 'Cancel';
+    noBtn.addEventListener('click', () => { bar.remove(); sendMessage('cancel'); });
+
+    bar.appendChild(badge);
+    bar.appendChild(yesBtn);
+    bar.appendChild(noBtn);
+    messagesEl.appendChild(bar);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   // ── Simple Markdown Renderer ──────────────────────────────────

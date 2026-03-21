@@ -21,7 +21,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
-import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool } from './admin-ops-agent.js';
+import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool, getTrustTier } from './admin-ops-agent.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
 
@@ -69,8 +69,24 @@ async function getOpenAIClient() {
 
 // ── Conversation Memory (in-memory + DB) ──────────────────────────
 const conversations = new Map();
+const pendingActions = new Map(); // convId → { tool, params, description, created_at }
 const CONVERSATION_TTL_MS = 60 * 60 * 1000; // 1h for admin sessions
 const MAX_HISTORY = 40;
+
+// ── Decision Logging ───────────────────────────────────────────────
+async function logDecision(toolName, params, result) {
+  if (!isDatabaseAvailable()) return;
+  try {
+    await query(
+      `INSERT INTO faye_decision_log (tool_name, params, result_ok, result_summary, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [toolName, JSON.stringify(params), result?.ok !== false, JSON.stringify(result).slice(0, 1000)]
+    );
+  } catch { /* best-effort */ }
+}
+
+// ── Confirmation Pattern Detection ─────────────────────────────────
+const CONFIRM_PATTERNS = /^(yes|confirm|do it|go ahead|proceed|approve|ok|execute|run it|yep|yeah)$/i;
 
 async function getConversation(convId, adminId) {
   const cached = conversations.get(convId);
@@ -259,7 +275,13 @@ You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these 
 - Email: SES connectivity
 
 Always use tools to verify data before answering. Never fabricate numbers.
-For Phase 1, all tools are READ-only. Write tools come in Phase 2.
+
+## Write Tool Safety
+Some tools can make changes (refunds, emails, alerts). These have trust tiers:
+- **Auto**: Safe writes (acknowledge alerts, save notes) — execute immediately.
+- **Quick-Confirm / Confirm**: Describe the action clearly, then tell the admin: "Shall I proceed?" Wait for confirmation.
+- **Admin**: Critical actions (refunds) — describe the full impact, amount, and target, then ask the admin to explicitly confirm.
+When a write tool requires confirmation, you will receive a "pending_confirmation" result. Explain the action to the admin and wait for them to confirm before it runs.
 ${memorySection}${summarySection}
 
 ## Response Style
@@ -277,7 +299,7 @@ function estimateClaudeCost(inputTokens, outputTokens) {
   return (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
 }
 
-async function chatWithClaude(systemPrompt, messages, tools) {
+async function chatWithClaude(systemPrompt, messages, tools, convId) {
   const client = await getAnthropicClient();
   if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
 
@@ -285,6 +307,7 @@ async function chatWithClaude(systemPrompt, messages, tools) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let loopCount = 0;
+  let hasPendingAction = false;
 
   // Initial call
   let response = await client.messages.create({
@@ -311,14 +334,34 @@ async function chatWithClaude(systemPrompt, messages, tools) {
       const { id, name, input } = block;
       console.log(`[F.A.Y.E.] Tool call #${loopCount}: ${name}(${JSON.stringify(input)})`);
 
+      const tier = getTrustTier(name);
       let result;
-      try {
-        result = await executeAdminTool(name, input || {});
-      } catch (err) {
-        result = { ok: false, error: err.message };
+
+      if (tier !== 'auto') {
+        // Store as pending action — requires admin confirmation
+        pendingActions.set(convId, {
+          tool: name, params: input || {}, tier,
+          description: ADMIN_TOOL_CATALOG[name]?.description || name,
+          created_at: Date.now()
+        });
+        result = {
+          ok: false, status: 'pending_confirmation', tier,
+          message: `Action "${name}" requires ${tier === 'admin' ? 'explicit admin' : ''} confirmation before execution. Describe the action to the admin and ask them to confirm.`
+        };
+        hasPendingAction = true;
+      } else {
+        try {
+          result = await executeAdminTool(name, input || {});
+          // Log write tool executions
+          if (ADMIN_TOOL_CATALOG[name]?.category === 'write') {
+            logDecision(name, input, result).catch(() => {});
+          }
+        } catch (err) {
+          result = { ok: false, error: err.message };
+        }
       }
 
-      toolCallResults.push({ tool: name, params: input, success: result?.ok !== false });
+      toolCallResults.push({ tool: name, params: input, success: result?.ok !== false, tier });
       toolResults.push({
         type: 'tool_result',
         tool_use_id: id,
@@ -329,6 +372,9 @@ async function chatWithClaude(systemPrompt, messages, tools) {
     // Append assistant response + tool results to messages
     messages.push({ role: 'assistant', content: response.content });
     messages.push({ role: 'user', content: toolResults });
+
+    // If a pending action was stored, let the LLM produce its confirmation message then stop
+    if (hasPendingAction && loopCount >= 2) break;
 
     // Follow-up call (lower temperature for deterministic tool follow-ups)
     response = await client.messages.create({
@@ -359,7 +405,8 @@ async function chatWithClaude(systemPrompt, messages, tools) {
     },
     model: CLAUDE_MODEL,
     provider: 'anthropic',
-    loop_count: loopCount
+    loop_count: loopCount,
+    pending_action: hasPendingAction ? pendingActions.get(convId) : null
   };
 }
 
@@ -481,6 +528,59 @@ router.post('/chat', async (req, res) => {
   const tools = buildToolDefinitions();
 
   try {
+    // ── Check for pending action confirmation ──
+    const pending = pendingActions.get(convId);
+    if (pending && CONFIRM_PATTERNS.test(sanitized.trim())) {
+      pendingActions.delete(convId);
+      // Pending action confirmed — execute it now
+      let actionResult;
+      try {
+        actionResult = await executeAdminTool(pending.tool, pending.params);
+        logDecision(pending.tool, pending.params, actionResult).catch(() => {});
+      } catch (err) {
+        actionResult = { ok: false, error: err.message };
+      }
+
+      // Have Claude summarize the result
+      const existing = await getConversation(convId, adminId);
+      const history = existing ? [...existing.messages] : [];
+      const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole);
+      const summaryMessages = [
+        ...history.filter(m => m.role !== 'system'),
+        { role: 'user', content: `The admin confirmed the action "${pending.tool}". Here is the result:\n${JSON.stringify(actionResult)}\n\nSummarize what happened.` }
+      ];
+
+      let result;
+      try {
+        result = await chatWithClaude(systemPrompt, summaryMessages, tools, convId);
+      } catch {
+        result = { reply: actionResult.ok !== false ? `✅ Action "${pending.tool}" completed successfully.` : `❌ Action "${pending.tool}" failed: ${actionResult.error}`,
+          toolCalls: [{ tool: pending.tool, params: pending.params, success: actionResult.ok !== false }],
+          usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0 },
+          model: 'none', provider: 'none' };
+      }
+
+      const updatedHistory = [...history, { role: 'user', content: sanitized }, { role: 'assistant', content: result.reply }];
+      await upsertConversation(convId, updatedHistory, adminId);
+
+      return res.json({
+        ok: true, reply: result.reply, conversation_id: convId,
+        action_executed: { tool: pending.tool, success: actionResult.ok !== false },
+        tool_calls: result.toolCalls?.length > 0 ? result.toolCalls : undefined,
+        model: result.model, provider: result.provider
+      });
+    }
+
+    // ── Check for pending action cancellation ──
+    if (pending && /^(no|cancel|stop|nevermind|abort|don't|nope|nah)$/i.test(sanitized.trim())) {
+      pendingActions.delete(convId);
+      const existing = await getConversation(convId, adminId);
+      const history = existing ? [...existing.messages] : [];
+      const updatedHistory = [...history, { role: 'user', content: sanitized }, { role: 'assistant', content: `Understood — cancelled the pending "${pending.tool}" action.` }];
+      await upsertConversation(convId, updatedHistory, adminId);
+      return res.json({ ok: true, reply: `Understood — cancelled the pending "${pending.tool}" action.`, conversation_id: convId, action_cancelled: true });
+    }
+
     // Load conversation history
     const existing = await getConversation(convId, adminId);
     const history = existing ? [...existing.messages] : [];
@@ -494,7 +594,7 @@ router.post('/chat', async (req, res) => {
 
     let result;
     try {
-      result = await chatWithClaude(systemPrompt, llmMessages, tools);
+      result = await chatWithClaude(systemPrompt, llmMessages, tools, convId);
     } catch (claudeErr) {
       console.warn('[F.A.Y.E.] Claude unavailable, falling back to OpenAI:', claudeErr.message);
       try {
@@ -536,6 +636,7 @@ router.post('/chat', async (req, res) => {
       reply: result.reply,
       conversation_id: convId,
       tool_calls: result.toolCalls.length > 0 ? result.toolCalls : undefined,
+      pending_action: result.pending_action ? { tool: result.pending_action.tool, tier: result.pending_action.tier, description: result.pending_action.description } : undefined,
       model: result.model,
       provider: result.provider
     });
@@ -618,10 +719,27 @@ router.post('/chat/stream', async (req, res) => {
 
         for (const block of toolUseBlocks) {
           sendEvent('tool_start', { tool: block.name, step: loopCount });
+
+          const tier = getTrustTier(block.name);
           let toolResult;
-          try { toolResult = await executeAdminTool(block.name, block.input || {}); }
-          catch (err) { toolResult = { ok: false, error: err.message }; }
-          toolCallResults.push({ tool: block.name, params: block.input, success: toolResult?.ok !== false });
+          if (tier !== 'auto') {
+            pendingActions.set(convId, {
+              tool: block.name, params: block.input || {}, tier,
+              description: ADMIN_TOOL_CATALOG[block.name]?.description || block.name,
+              created_at: Date.now()
+            });
+            toolResult = { ok: false, status: 'pending_confirmation', tier,
+              message: `Action "${block.name}" requires confirmation.` };
+            sendEvent('pending_action', { tool: block.name, tier });
+          } else {
+            try { toolResult = await executeAdminTool(block.name, block.input || {}); }
+            catch (err) { toolResult = { ok: false, error: err.message }; }
+            if (ADMIN_TOOL_CATALOG[block.name]?.category === 'write') {
+              logDecision(block.name, block.input, toolResult).catch(() => {});
+            }
+          }
+
+          toolCallResults.push({ tool: block.name, params: block.input, success: toolResult?.ok !== false, tier });
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(toolResult) });
           sendEvent('tool_done', { tool: block.name, success: toolResult?.ok !== false });
         }

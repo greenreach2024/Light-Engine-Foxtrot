@@ -107,6 +107,7 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
 import { startNightlyAuditService } from './services/nightly-audit.js';
+import { startFayeIntelligence } from './services/faye-intelligence.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
 import { seedDemoFarm } from './services/seedDemoFarm.js';
@@ -4635,6 +4636,7 @@ async function startServer() {
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
       startMarketDataFetcher(); // Phase 1A: daily USDA price ingestion
       startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
+      startFayeIntelligence(); // F.A.Y.E. Phase 3: anomaly detection + daily briefing
 
       // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)
       // Run once after 5 min, then weekly

@@ -3,12 +3,15 @@
  * Farm Autonomy & Yield Engine
  *
  * Phase 1: READ tools across all GreenReach domains.
+ * Phase 2: WRITE tools with trust-tier safety gates.
+ * Phase 4: Analytics & trend tools.
  * Mirrors E.V.I.E.'s farm-ops-agent.js pattern for the admin/management side.
  */
 import express from 'express';
 import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
-import { listAllOrders, listPayments, listRefunds, listAllBuyers } from '../services/wholesaleMemoryStore.js';
+import { listAllOrders, listPayments, listRefunds, listAllBuyers, createRefund, getOrderById } from '../services/wholesaleMemoryStore.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
+import emailService from '../services/email-service.js';
 
 const router = express.Router();
 
@@ -648,10 +651,392 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, assessments: result.rows };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // Phase 2: WRITE Tools (trust-tier gated)
+  // ══════════════════════════════════════════════════════════════
+
+  // ── Alerts Management ──
+
+  'create_alert': {
+    description: 'Create a new admin alert for an operational issue. Use when anomalies or problems are detected.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['domain', 'severity', 'title'],
+    optional: ['detail', 'source', 'metadata'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `INSERT INTO admin_alerts (domain, severity, title, detail, source, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+          [params.domain, params.severity, params.title, params.detail || null,
+           params.source || 'faye', JSON.stringify(params.metadata || {})]
+        );
+        return { ok: true, alert_id: result.rows[0].id, created_at: result.rows[0].created_at };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'acknowledge_alert': {
+    description: 'Mark an admin alert as acknowledged. Requires the alert ID.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['alert_id'],
+    optional: ['admin_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE admin_alerts SET acknowledged = TRUE, acknowledged_by = $2, acknowledged_at = NOW()
+           WHERE id = $1 AND acknowledged = FALSE RETURNING id`,
+          [parseInt(params.alert_id, 10), params.admin_id ? parseInt(params.admin_id, 10) : null]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Alert not found or already acknowledged' };
+        return { ok: true, alert_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'resolve_alert': {
+    description: 'Mark an admin alert as resolved. Requires the alert ID.',
+    category: 'write',
+    trust_tier: 'quick_confirm',
+    required: ['alert_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE admin_alerts SET resolved = TRUE, resolved_at = NOW()
+           WHERE id = $1 AND resolved = FALSE RETURNING id`,
+          [parseInt(params.alert_id, 10)]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Alert not found or already resolved' };
+        return { ok: true, alert_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Accounting Write Tools ──
+
+  'classify_transaction': {
+    description: 'Classify an unclassified accounting transaction. Assigns a category and updates the classification status.',
+    category: 'write',
+    trust_tier: 'confirm',
+    required: ['transaction_id', 'category'],
+    optional: ['confidence', 'notes'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const txnCheck = await dbQuery('SELECT id, description, total_amount FROM accounting_transactions WHERE id = $1', [parseInt(params.transaction_id, 10)]);
+        if (txnCheck.rows.length === 0) return { ok: false, error: 'Transaction not found' };
+
+        await dbQuery(
+          `INSERT INTO accounting_classifications (transaction_id, suggested_category, confidence, status, reviewer, approved_at)
+           VALUES ($1, $2, $3, 'classified', 'faye', NOW())
+           ON CONFLICT (transaction_id)
+           DO UPDATE SET suggested_category = $2, confidence = $3, status = 'classified', reviewer = 'faye', approved_at = NOW()`,
+          [parseInt(params.transaction_id, 10), params.category, parseFloat(params.confidence) || 0.9]
+        );
+        return { ok: true, transaction_id: params.transaction_id, category: params.category, txn: txnCheck.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Order & Refund Write Tools ──
+
+  'process_refund': {
+    description: 'Process a refund for a wholesale order. CRITICAL: Verify order exists and payment is refundable before calling. Requires explicit admin confirmation.',
+    category: 'write',
+    trust_tier: 'admin',
+    required: ['order_id', 'amount', 'reason'],
+    optional: ['admin_id'],
+    handler: async (params) => {
+      try {
+        const order = await getOrderById(params.order_id);
+        if (!order) return { ok: false, error: `Order ${params.order_id} not found` };
+
+        const amount = parseFloat(params.amount);
+        if (isNaN(amount) || amount <= 0) return { ok: false, error: 'Invalid refund amount' };
+        if (amount > parseFloat(order.grand_total || order.total || 0)) {
+          return { ok: false, error: `Refund amount $${amount} exceeds order total $${order.grand_total || order.total}` };
+        }
+
+        const refund = await createRefund({
+          orderId: params.order_id,
+          amount,
+          reason: params.reason,
+          adminId: params.admin_id || 'faye'
+        });
+        return { ok: true, refund };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Communication Tools ──
+
+  'send_admin_email': {
+    description: 'Send an email to a GreenReach admin or operations team member. Use for escalations, reports, or critical alerts.',
+    category: 'write',
+    trust_tier: 'confirm',
+    required: ['to', 'subject', 'body'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const result = await emailService.sendEmail({
+          to: params.to,
+          subject: `[F.A.Y.E.] ${params.subject}`,
+          text: params.body,
+          html: `<div style="font-family:sans-serif;max-width:600px"><h3 style="color:#10b981">F.A.Y.E. — Operations Alert</h3><div style="white-space:pre-wrap">${params.body.replace(/</g, '&lt;')}</div><hr style="border:none;border-top:1px solid #ddd;margin:20px 0"><p style="font-size:12px;color:#888">Sent by F.A.Y.E. (Farm Autonomy & Yield Engine)</p></div>`
+        });
+        return { ok: true, messageId: result.messageId, stub: result.stub || false };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Farm Management Write Tools ──
+
+  'update_farm_notes': {
+    description: 'Update internal notes for a farm in the network. Used for tracking issues, observations, and admin annotations.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['farm_id', 'notes'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE farms SET admin_notes = COALESCE(admin_notes, '') || E'\\n' || $2, updated_at = NOW()
+           WHERE farm_id = $1 RETURNING farm_id, farm_name`,
+          [params.farm_id, `[${new Date().toISOString()}] ${params.notes}`]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Farm not found' };
+        return { ok: true, farm: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Memory / Learning Tools ──
+
+  'save_admin_memory': {
+    description: 'Save a persistent note or preference for the current admin. Used to remember instructions, preferences, or operational context.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['key', 'value'],
+    optional: ['admin_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        await dbQuery(
+          `INSERT INTO admin_assistant_memory (admin_id, key, value, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (admin_id, key)
+           DO UPDATE SET value = $3, updated_at = NOW()`,
+          [parseInt(params.admin_id, 10) || 0, params.key.slice(0, 100), String(params.value).slice(0, 2000)]
+        );
+        return { ok: true, key: params.key };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // Phase 4: Analytics & Trend Tools
+  // ══════════════════════════════════════════════════════════════
+
+  'analyze_revenue_trend': {
+    description: 'Analyze revenue trends over time — daily/weekly/monthly breakdown with growth rates and forecasting.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'granularity'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 90;
+        const gran = params.granularity === 'weekly' ? 'week' : params.granularity === 'monthly' ? 'month' : 'day';
+        const result = await dbQuery(`
+          SELECT date_trunc($2, t.txn_date)::date AS period,
+                 COUNT(*) AS order_count,
+                 SUM(t.total_amount) AS revenue
+          FROM accounting_transactions t
+          JOIN accounting_sources s ON t.source_id = s.id
+          WHERE s.source_key LIKE 'wholesale_%'
+            AND t.txn_date >= CURRENT_DATE - $1::int
+          GROUP BY period ORDER BY period ASC
+        `, [days, gran]);
+
+        const periods = result.rows;
+        // Calculate growth rates
+        for (let i = 1; i < periods.length; i++) {
+          const prev = Number(periods[i - 1].revenue) || 1;
+          periods[i].growth_pct = (((Number(periods[i].revenue) - prev) / prev) * 100).toFixed(1);
+        }
+        const totalRevenue = periods.reduce((s, p) => s + Number(p.revenue || 0), 0);
+        const avgPeriod = periods.length > 0 ? totalRevenue / periods.length : 0;
+
+        return {
+          ok: true, days, granularity: gran,
+          periods, total_revenue: totalRevenue.toFixed(2),
+          avg_per_period: avgPeriod.toFixed(2),
+          period_count: periods.length
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'analyze_order_patterns': {
+    description: 'Analyze order patterns — peak days, buyer concentration, average basket size, repeat rate.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        const allOrders = await listAllOrders({ limit: 500 });
+        const orders = allOrders.orders || allOrders;
+        const days = parseInt(params.days, 10) || 30;
+        const cutoff = new Date(Date.now() - days * 86400000);
+        const recent = orders.filter(o => new Date(o.created_at) > cutoff);
+
+        // Day-of-week distribution
+        const dayDist = [0, 0, 0, 0, 0, 0, 0];
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        recent.forEach(o => dayDist[new Date(o.created_at).getDay()]++);
+
+        // Buyer concentration
+        const buyerCounts = {};
+        recent.forEach(o => {
+          const buyer = o.buyer_account?.email || o.buyer_id || 'unknown';
+          buyerCounts[buyer] = (buyerCounts[buyer] || 0) + 1;
+        });
+        const topBuyers = Object.entries(buyerCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([buyer, count]) => ({ buyer, orders: count, pct: ((count / recent.length) * 100).toFixed(1) }));
+
+        // Basket size
+        const totals = recent.map(o => parseFloat(o.grand_total || o.total || 0)).filter(t => t > 0);
+        const avgBasket = totals.length > 0 ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
+
+        return {
+          ok: true, period_days: days, total_orders: recent.length,
+          day_of_week: dayNames.map((d, i) => ({ day: d, orders: dayDist[i] })),
+          peak_day: dayNames[dayDist.indexOf(Math.max(...dayDist))],
+          top_buyers: topBuyers,
+          avg_basket_size: avgBasket.toFixed(2),
+          unique_buyers: Object.keys(buyerCounts).length
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'analyze_farm_performance': {
+    description: 'Compare farm performance across the network — fulfillment rates, revenue contribution, reliability scores.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 30;
+        // Revenue per farm from accounting ledger
+        const revenue = await dbQuery(`
+          SELECT t.raw_payload->>'farm_id' AS farm_id,
+                 t.raw_payload->>'farm_name' AS farm_name,
+                 COUNT(*) AS order_count,
+                 SUM(t.total_amount) AS total_revenue
+          FROM accounting_transactions t
+          JOIN accounting_sources s ON t.source_id = s.id
+          WHERE s.source_key LIKE 'wholesale_%'
+            AND t.txn_date >= CURRENT_DATE - $1::int
+            AND t.raw_payload->>'farm_id' IS NOT NULL
+          GROUP BY t.raw_payload->>'farm_id', t.raw_payload->>'farm_name'
+          ORDER BY total_revenue DESC
+        `, [days]);
+
+        // Heartbeat reliability
+        const heartbeats = await dbQuery(`
+          SELECT farm_id,
+                 EXTRACT(EPOCH FROM (NOW() - last_seen_at)) AS seconds_since,
+                 cpu_percent, memory_percent
+          FROM farm_heartbeats
+        `).catch(() => ({ rows: [] }));
+        const hbMap = Object.fromEntries(heartbeats.rows.map(h => [h.farm_id, h]));
+
+        const farms = revenue.rows.map(r => ({
+          farm_id: r.farm_id, farm_name: r.farm_name,
+          order_count: Number(r.order_count),
+          revenue: Number(Number(r.total_revenue).toFixed(2)),
+          online: hbMap[r.farm_id] ? hbMap[r.farm_id].seconds_since < 900 : null,
+          cpu: hbMap[r.farm_id]?.cpu_percent, memory: hbMap[r.farm_id]?.memory_percent
+        }));
+
+        return { ok: true, period_days: days, farms };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_anomaly_report': {
+    description: 'Get the latest anomaly detection report — payment failures, stale farms, order volume spikes, accounting imbalances.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(`
+          SELECT * FROM admin_alerts
+          WHERE created_at > NOW() - INTERVAL '24 hours'
+          ORDER BY created_at DESC LIMIT 20
+        `);
+        return { ok: true, anomalies: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_decision_log': {
+    description: 'Get the F.A.Y.E. decision log — actions taken, confirmations given, patterns recognized.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+        const limit = parseInt(params.limit, 10) || 20;
+        const result = await dbQuery(`
+          SELECT * FROM faye_decision_log
+          WHERE created_at > NOW() - ($1 || ' days')::interval
+          ORDER BY created_at DESC LIMIT $2
+        `, [days, limit]);
+        return { ok: true, decisions: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
 
-// ── Build Anthropic tool definitions from catalog ──
+// ── Trust Tier Definitions ────────────────────────────────────────
+// AUTO: Execute immediately (low-risk reads & safe writes)
+// QUICK_CONFIRM: Execute with brief undo window
+// CONFIRM: Describe impact, require admin to say "yes"
+// ADMIN: Critical action — require admin to type the action name
+
+export const TRUST_TIERS = {
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes']),
+  quick_confirm: new Set(['resolve_alert', 'classify_transaction']),
+  confirm: new Set(['send_admin_email']),
+  admin: new Set(['process_refund'])
+};
+
+export function getTrustTier(toolName) {
+  const tool = ADMIN_TOOL_CATALOG[toolName];
+  if (!tool || tool.category === 'read') return 'auto';
+  if (TRUST_TIERS.auto.has(toolName)) return 'auto';
+  if (TRUST_TIERS.quick_confirm.has(toolName)) return 'quick_confirm';
+  if (TRUST_TIERS.admin.has(toolName)) return 'admin';
+  if (TRUST_TIERS.confirm.has(toolName)) return 'confirm';
+  return 'confirm'; // Default for unknown writes
+}
 
 export function buildToolDefinitions() {
   return Object.entries(ADMIN_TOOL_CATALOG).map(([name, tool]) => ({
