@@ -16,6 +16,7 @@
 import { query, isDatabaseAvailable } from '../config/database.js';
 import emailService from '../services/email-service.js';
 import logger from '../utils/logger.js';
+import { trackPattern, storeInsight } from '../services/faye-learning.js';
 
 const TAG = '[F.A.Y.E. Intelligence]';
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -44,6 +45,11 @@ async function createAlert(domain, severity, title, detail, source = 'faye-intel
   }
 }
 
+// Escape SQL LIKE wildcards to prevent pattern injection
+function escapeLikePattern(str) {
+  return str.replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 // Deduplicate: don't re-alert within 2 hours for the same domain+title
 async function hasRecentAlert(domain, titlePattern) {
   if (!isDatabaseAvailable()) return true; // fail-safe: skip if DB is down
@@ -54,10 +60,10 @@ async function hasRecentAlert(domain, titlePattern) {
          AND created_at > NOW() - INTERVAL '2 hours'
          AND resolved = FALSE
        LIMIT 1`,
-      [domain, `%${titlePattern}%`]
+      [domain, `%${escapeLikePattern(titlePattern)}%`]
     );
     return result.rows.length > 0;
-  } catch { return true; }
+  } catch { return false; } // query error: allow alert creation rather than silently suppressing
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -82,6 +88,9 @@ async function checkPaymentFailures() {
         await createAlert('payments', 'high',
           `Payment failure rate spike: ${(failRate * 100).toFixed(0)}%`,
           `${failures} of ${total} transactions failed in the last hour. Normal rate is < 5%.`);
+        await trackPattern('payment_failure_spike', 'payments',
+          `Payment failure rate spiked to ${(failRate * 100).toFixed(0)}%`,
+          { failures: Number(failures), total: Number(total), rate: failRate });
       }
     }
   } catch (err) { logger.warn(`${TAG} Payment check error:`, err.message); }
@@ -104,6 +113,9 @@ async function checkFarmHeartbeats() {
         await createAlert('farms', severity,
           `Farm offline: ${farm.farm_name || farm.farm_id}`,
           `No heartbeat for ${mins} minutes. Farm may be experiencing connectivity or hardware issues.`);
+        await trackPattern(`farm_offline:${farm.farm_id}`, 'farms',
+          `Farm "${farm.farm_name || farm.farm_id}" went offline (${mins} min)`,
+          { farm_id: farm.farm_id, minutes_stale: mins, severity });
       }
     }
   } catch (err) { logger.warn(`${TAG} Heartbeat check error:`, err.message); }
@@ -139,6 +151,9 @@ async function checkOrderVolumeAnomaly() {
           await createAlert('orders', 'high',
             `Order volume drop: ${todayCount} today vs ${avgCount.toFixed(0)} avg`,
             `Today's order count is ${((todayCount / avgCount) * 100).toFixed(0)}% of the 7-day average.`);
+          await trackPattern('order_volume_drop', 'orders',
+            `Order volume dropped to ${((todayCount / avgCount) * 100).toFixed(0)}% of average`,
+            { today: todayCount, avg: avgCount });
         }
       }
       // Alert if today is > 300% of average (unusual spike)
@@ -147,6 +162,9 @@ async function checkOrderVolumeAnomaly() {
           await createAlert('orders', 'medium',
             `Order volume spike: ${todayCount} today vs ${avgCount.toFixed(0)} avg`,
             `Today's order count is ${((todayCount / avgCount) * 100).toFixed(0)}% of the 7-day average. This may be positive activity or an anomaly.`);
+          await trackPattern('order_volume_spike', 'orders',
+            `Order volume spiked to ${((todayCount / avgCount) * 100).toFixed(0)}% of average`,
+            { today: todayCount, avg: avgCount });
         }
       }
     }
@@ -173,6 +191,9 @@ async function checkAccountingBalance() {
         await createAlert('accounting', 'high',
           `Accounting imbalance detected: $${imbalance.toFixed(2)}`,
           `24h totals — Debits: $${debits.toFixed(2)}, Credits: $${credits.toFixed(2)}. Double-entry integrity may be compromised.`);
+        await trackPattern('accounting_imbalance', 'accounting',
+          `Accounting imbalance of $${imbalance.toFixed(2)} detected`,
+          { debits, credits, imbalance });
       }
     }
   } catch (err) { logger.warn(`${TAG} Accounting balance check error:`, err.message); }
@@ -195,6 +216,9 @@ async function checkUnclassifiedTransactions() {
         await createAlert('accounting', 'medium',
           `${unclassified} unclassified transactions (7-day backlog)`,
           `There are ${unclassified} transactions from the past 7 days without accounting classifications.`);
+        await trackPattern('unclassified_txn_backlog', 'accounting',
+          `${unclassified} unclassified transactions accumulated over 7 days`,
+          { count: unclassified });
       }
     }
   } catch (err) { logger.warn(`${TAG} Unclassified txn check error:`, err.message); }
@@ -205,6 +229,10 @@ async function checkUnclassifiedTransactions() {
 // ══════════════════════════════════════════════════════════════════
 
 export async function runAnomalyCheck() {
+  if (!isDatabaseAvailable()) {
+    logger.warn(`${TAG} Skipping anomaly check — database unavailable`);
+    return;
+  }
   logger.info(`${TAG} Running anomaly detection cycle...`);
   const start = Date.now();
 

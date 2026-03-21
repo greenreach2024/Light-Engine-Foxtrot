@@ -24,6 +24,7 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool, getTrustTier } from './admin-ops-agent.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
+import { buildLearningContext, learnFromConversation } from '../services/faye-learning.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +49,7 @@ const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 const OPENAI_MODEL = 'gpt-4o';
 const MAX_TOOL_LOOPS = 10;
 const MAX_TOKENS = 2048;
+const MAX_LLM_MESSAGES = 20; // Limit messages sent to LLM to control token usage/cost
 
 async function getAnthropicClient() {
   if (anthropicClient) return anthropicClient;
@@ -217,9 +219,10 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
   let farmCount = 0, orderCount = 0, buyerCount = 0, alertCount = 0;
   let recentSummaries = [];
   let adminMemory = {};
+  let learningContext = '';
 
   try {
-    const [farms, orders, buyers, summaries, memory, alerts] = await Promise.all([
+    const [farms, orders, buyers, summaries, memory, alerts, learned] = await Promise.all([
       listNetworkFarms().catch(() => []),
       listAllOrders({ limit: 1 }).catch(() => ({ total: 0 })),
       Promise.resolve(listAllBuyers()).catch(() => []),
@@ -227,7 +230,8 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
       getAdminMemory(adminId).catch(() => ({})),
       isDatabaseAvailable()
         ? query('SELECT COUNT(*) AS cnt FROM admin_alerts WHERE resolved = FALSE').catch(() => ({ rows: [{ cnt: 0 }] }))
-        : Promise.resolve({ rows: [{ cnt: 0 }] })
+        : Promise.resolve({ rows: [{ cnt: 0 }] }),
+      buildLearningContext().catch(() => '')
     ]);
     farmCount = Array.isArray(farms) ? farms.length : 0;
     orderCount = orders?.total || 0;
@@ -235,6 +239,7 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
     alertCount = Number(alerts.rows[0]?.cnt || 0);
     recentSummaries = summaries;
     adminMemory = memory;
+    learningContext = learned;
   } catch { /* best-effort */ }
 
   const memorySection = Object.keys(adminMemory).length > 0
@@ -273,6 +278,7 @@ You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these 
 - Delivery: pipeline, scheduling
 - Subscriptions & ESG: billing overview, assessments
 - Email: SES connectivity
+- Learning: knowledge base, outcome tracking, pattern recognition, alert accuracy
 
 Always use tools to verify data before answering. Never fabricate numbers.
 
@@ -282,7 +288,16 @@ Some tools can make changes (refunds, emails, alerts). These have trust tiers:
 - **Quick-Confirm / Confirm**: Describe the action clearly, then tell the admin: "Shall I proceed?" Wait for confirmation.
 - **Admin**: Critical actions (refunds) — describe the full impact, amount, and target, then ask the admin to explicitly confirm.
 When a write tool requires confirmation, you will receive a "pending_confirmation" result. Explain the action to the admin and wait for them to confirm before it runs.
-${memorySection}${summarySection}
+
+## Learning
+You have a persistent knowledge base. Use it to get better over time:
+- When you discover an operational pattern, admin preference, or lesson learned, use **store_insight** to remember it.
+- When a recommendation succeeds or fails, use **record_outcome** to track the result.
+- When an admin tells you an alert was a false alarm, use **rate_alert** to reduce future noise.
+- Use **get_knowledge** and **search_knowledge** to recall what you have learned before answering.
+- Use **get_patterns** to check for recurring issues before diagnosing a new one.
+- Proactively learn. If a conversation reveals something reusable, store it without being asked.
+${memorySection}${summarySection}${learningContext}
 
 ## Response Style
 - Be direct, professional, and concise
@@ -299,7 +314,7 @@ function estimateClaudeCost(inputTokens, outputTokens) {
   return (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
 }
 
-async function chatWithClaude(systemPrompt, messages, tools, convId) {
+async function chatWithClaude(systemPrompt, messages, tools, convId, adminId) {
   const client = await getAnthropicClient();
   if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
 
@@ -332,6 +347,17 @@ async function chatWithClaude(systemPrompt, messages, tools, convId) {
 
     for (const block of toolUseBlocks) {
       const { id, name, input } = block;
+
+      // If a pending action is already queued, skip further tool calls
+      if (hasPendingAction) {
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: id,
+          content: JSON.stringify({ ok: false, error: 'Skipped — a prior action is awaiting confirmation.' })
+        });
+        continue;
+      }
+
       console.log(`[F.A.Y.E.] Tool call #${loopCount}: ${name}(${JSON.stringify(input)})`);
 
       const tier = getTrustTier(name);
@@ -351,7 +377,10 @@ async function chatWithClaude(systemPrompt, messages, tools, convId) {
         hasPendingAction = true;
       } else {
         try {
-          result = await executeAdminTool(name, input || {});
+          // Inject admin context into write-tool params
+          const enrichedInput = ADMIN_TOOL_CATALOG[name]?.category === 'write'
+            ? { ...input, admin_id: adminId || input?.admin_id } : input;
+          result = await executeAdminTool(name, enrichedInput || {});
           // Log write tool executions
           if (ADMIN_TOOL_CATALOG[name]?.category === 'write') {
             logDecision(name, input, result).catch(() => {});
@@ -423,13 +452,14 @@ function anthropicToolsToOpenAI(tools) {
   }));
 }
 
-async function chatWithOpenAI(systemPrompt, userMessages, tools) {
+async function chatWithOpenAI(systemPrompt, userMessages, tools, convId, adminId) {
   const client = await getOpenAIClient();
   if (!client) throw new Error('OPENAI_API_KEY not configured');
 
   const openaiTools = anthropicToolsToOpenAI(tools);
   const toolCallResults = [];
   let loopCount = 0;
+  let hasPendingAction = false;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -460,11 +490,38 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools) {
       try { fnArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { /* empty */ }
 
       console.log(`[F.A.Y.E. OpenAI fallback] Tool call #${loopCount}: ${fnName}`);
-      let result;
-      try { result = await executeAdminTool(fnName, fnArgs); } catch (err) { result = { ok: false, error: err.message }; }
 
-      toolCallResults.push({ tool: fnName, params: fnArgs, success: result?.ok !== false });
+      const tier = getTrustTier(fnName);
+      let result;
+
+      if (tier !== 'auto') {
+        // Same trust-tier gate as Claude path
+        if (convId) {
+          pendingActions.set(convId, {
+            tool: fnName, params: fnArgs, tier,
+            description: ADMIN_TOOL_CATALOG[fnName]?.description || fnName,
+            created_at: Date.now()
+          });
+        }
+        result = {
+          ok: false, status: 'pending_confirmation', tier,
+          message: `Action "${fnName}" requires ${tier === 'admin' ? 'explicit admin ' : ''}confirmation before execution.`
+        };
+        hasPendingAction = true;
+      } else {
+        // Inject admin context into write-tool params
+        const enrichedArgs = ADMIN_TOOL_CATALOG[fnName]?.category === 'write'
+          ? { ...fnArgs, admin_id: adminId || fnArgs.admin_id } : fnArgs;
+        try { result = await executeAdminTool(fnName, enrichedArgs); } catch (err) { result = { ok: false, error: err.message }; }
+        if (ADMIN_TOOL_CATALOG[fnName]?.category === 'write') {
+          logDecision(fnName, fnArgs, result).catch(() => {});
+        }
+      }
+
+      toolCallResults.push({ tool: fnName, params: fnArgs, success: result?.ok !== false, tier });
       messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
+
+      if (hasPendingAction) break; // Stop processing further tools after a pending action
     }
 
     completion = await client.chat.completions.create({
@@ -487,7 +544,8 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools) {
     },
     model: OPENAI_MODEL,
     provider: 'openai',
-    loop_count: loopCount
+    loop_count: loopCount,
+    pending_action: hasPendingAction && convId ? pendingActions.get(convId) : null
   };
 }
 
@@ -552,9 +610,9 @@ router.post('/chat', async (req, res) => {
 
       let result;
       try {
-        result = await chatWithClaude(systemPrompt, summaryMessages, tools, convId);
+        result = await chatWithClaude(systemPrompt, summaryMessages, tools, convId, adminId);
       } catch {
-        result = { reply: actionResult.ok !== false ? `✅ Action "${pending.tool}" completed successfully.` : `❌ Action "${pending.tool}" failed: ${actionResult.error}`,
+        result = { reply: actionResult.ok !== false ? `Action "${pending.tool}" completed successfully.` : `Action "${pending.tool}" failed: ${actionResult.error}`,
           toolCalls: [{ tool: pending.tool, params: pending.params, success: actionResult.ok !== false }],
           usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0 },
           model: 'none', provider: 'none' };
@@ -586,19 +644,20 @@ router.post('/chat', async (req, res) => {
     const history = existing ? [...existing.messages] : [];
     const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole);
 
-    // Build messages for the LLM (Anthropic format: no system in messages)
+    // Build messages for the LLM — limit to recent messages to control token usage
+    const filteredHistory = history.filter(m => m.role !== 'system');
     const llmMessages = [
-      ...history.filter(m => m.role !== 'system'),
+      ...filteredHistory.slice(-MAX_LLM_MESSAGES),
       { role: 'user', content: sanitized }
     ];
 
     let result;
     try {
-      result = await chatWithClaude(systemPrompt, llmMessages, tools, convId);
+      result = await chatWithClaude(systemPrompt, llmMessages, tools, convId, adminId);
     } catch (claudeErr) {
       console.warn('[F.A.Y.E.] Claude unavailable, falling back to OpenAI:', claudeErr.message);
       try {
-        result = await chatWithOpenAI(systemPrompt, llmMessages, tools);
+        result = await chatWithOpenAI(systemPrompt, llmMessages, tools, convId, adminId);
       } catch (openaiErr) {
         console.error('[F.A.Y.E.] Both LLMs unavailable:', openaiErr.message);
         return res.status(503).json({ ok: false, error: 'AI service unavailable — neither Claude nor GPT-4o responded.' });
@@ -732,7 +791,11 @@ router.post('/chat/stream', async (req, res) => {
               message: `Action "${block.name}" requires confirmation.` };
             sendEvent('pending_action', { tool: block.name, tier });
           } else {
-            try { toolResult = await executeAdminTool(block.name, block.input || {}); }
+            try {
+              const enrichedInput = ADMIN_TOOL_CATALOG[block.name]?.category === 'write'
+                ? { ...block.input, admin_id: adminId || block.input?.admin_id } : block.input;
+              toolResult = await executeAdminTool(block.name, enrichedInput || {});
+            }
             catch (err) { toolResult = { ok: false, error: err.message }; }
             if (ADMIN_TOOL_CATALOG[block.name]?.category === 'write') {
               logDecision(block.name, block.input, toolResult).catch(() => {});
@@ -773,7 +836,7 @@ router.post('/chat/stream', async (req, res) => {
     } catch (claudeErr) {
       console.warn('[F.A.Y.E. Stream] Claude unavailable, using OpenAI fallback:', claudeErr.message);
       sendEvent('fallback', { provider: 'openai', reason: claudeErr.message });
-      result = await chatWithOpenAI(systemPrompt, llmMessages, tools);
+      result = await chatWithOpenAI(systemPrompt, llmMessages, tools, convId, adminId);
 
       // Stream the OpenAI reply in chunks
       const chunkSize = 12;

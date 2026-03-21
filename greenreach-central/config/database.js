@@ -2037,6 +2037,55 @@ async function runMigrations(client) {
     logger.warn('Migration 034 warning:', err.message);
   }
 
+  // Migration 035 — F.A.Y.E. Phase 5: Learning Engine (knowledge base, outcomes, patterns)
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS faye_knowledge (
+        id BIGSERIAL PRIMARY KEY,
+        domain VARCHAR(60) NOT NULL,
+        topic VARCHAR(200) NOT NULL,
+        insight TEXT NOT NULL,
+        source VARCHAR(120) DEFAULT 'conversation',
+        confidence NUMERIC(3,2) DEFAULT 0.7,
+        access_count INT DEFAULT 0,
+        archived BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(domain, topic)
+      );
+      CREATE INDEX IF NOT EXISTS idx_faye_knowledge_domain ON faye_knowledge(domain, confidence DESC);
+      CREATE INDEX IF NOT EXISTS idx_faye_knowledge_active ON faye_knowledge(archived, confidence DESC, updated_at DESC) WHERE archived = FALSE;
+
+      CREATE TABLE IF NOT EXISTS faye_outcomes (
+        id BIGSERIAL PRIMARY KEY,
+        decision_id BIGINT REFERENCES faye_decision_log(id) ON DELETE SET NULL,
+        outcome VARCHAR(30) NOT NULL,
+        feedback TEXT,
+        admin_id INT DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_faye_outcomes_decision ON faye_outcomes(decision_id);
+      CREATE INDEX IF NOT EXISTS idx_faye_outcomes_created ON faye_outcomes(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS faye_patterns (
+        id BIGSERIAL PRIMARY KEY,
+        pattern_key VARCHAR(200) NOT NULL UNIQUE,
+        domain VARCHAR(60) NOT NULL,
+        description TEXT NOT NULL,
+        metadata JSONB DEFAULT '{}',
+        occurrence_count INT DEFAULT 1,
+        suppressed BOOLEAN DEFAULT FALSE,
+        first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        last_seen_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_faye_patterns_domain ON faye_patterns(domain, occurrence_count DESC);
+      CREATE INDEX IF NOT EXISTS idx_faye_patterns_active ON faye_patterns(suppressed, last_seen_at DESC) WHERE suppressed = FALSE;
+    `);
+    logger.info('F.A.Y.E. Phase 5 learning tables ready (migration 035)');
+  } catch (err) {
+    logger.warn('Migration 035 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

@@ -1012,6 +1012,133 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, decisions: result.rows, count: result.rows.length };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── Learning & Knowledge ──
+
+  'store_insight': {
+    description: 'Store a learned insight into F.A.Y.E.\'s knowledge base. Use this when you discover something worth remembering for future operations — patterns, admin preferences, operational facts, or lessons learned.',
+    category: 'write',
+    required: ['domain', 'topic', 'insight'],
+    optional: ['confidence'],
+    handler: async (params) => {
+      try {
+        const { storeInsight } = await import('../services/faye-learning.js');
+        const confidence = parseFloat(params.confidence) || 0.7;
+        const id = await storeInsight(params.domain, params.topic, params.insight, 'conversation', confidence);
+        return id ? { ok: true, id, message: `Insight stored: ${params.domain}/${params.topic}` } : { ok: false, error: 'Failed to store insight' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_knowledge': {
+    description: 'Retrieve learned insights from F.A.Y.E.\'s knowledge base. Filter by domain (accounting, farm_network, orders, operations, commerce, delivery) or get all.',
+    category: 'read',
+    required: [],
+    optional: ['domain', 'limit'],
+    handler: async (params) => {
+      try {
+        if (params.domain) {
+          const { getInsights } = await import('../services/faye-learning.js');
+          const insights = await getInsights(params.domain, parseInt(params.limit, 10) || 10);
+          return { ok: true, insights, count: insights.length };
+        }
+        const { getTopInsights } = await import('../services/faye-learning.js');
+        const insights = await getTopInsights(parseInt(params.limit, 10) || 15);
+        return { ok: true, insights, count: insights.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'search_knowledge': {
+    description: 'Search F.A.Y.E.\'s knowledge base by keyword. Finds relevant insights across all domains.',
+    category: 'read',
+    required: ['keyword'],
+    optional: ['limit'],
+    handler: async (params) => {
+      try {
+        const { searchInsights } = await import('../services/faye-learning.js');
+        const results = await searchInsights(params.keyword, parseInt(params.limit, 10) || 10);
+        return { ok: true, results, count: results.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'archive_insight': {
+    description: 'Archive (soft-delete) a learned insight that is no longer valid or accurate.',
+    category: 'write',
+    required: ['domain', 'topic'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const { archiveInsight } = await import('../services/faye-learning.js');
+        const ok = await archiveInsight(params.domain, params.topic);
+        return { ok, message: ok ? `Archived: ${params.domain}/${params.topic}` : 'Insight not found' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'record_outcome': {
+    description: 'Record the outcome of a previous recommendation or action. Links to a decision_log entry if available. Outcome should be: positive, negative, neutral, or false_positive.',
+    category: 'write',
+    required: ['outcome', 'feedback'],
+    optional: ['decision_id'],
+    handler: async (params) => {
+      try {
+        const { recordOutcome } = await import('../services/faye-learning.js');
+        const adminId = params.admin_id || 0;
+        const id = await recordOutcome(
+          params.decision_id ? parseInt(params.decision_id, 10) : null,
+          params.outcome,
+          params.feedback,
+          adminId
+        );
+        return id ? { ok: true, id, message: `Outcome recorded: ${params.outcome}` } : { ok: false, error: 'Failed to record outcome' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'rate_alert': {
+    description: 'Rate the accuracy of an alert. Was it a true alert or a false positive? Helps F.A.Y.E. learn to reduce noise.',
+    category: 'write',
+    required: ['alert_id', 'accurate'],
+    optional: ['notes'],
+    handler: async (params) => {
+      try {
+        const { trackAlertAccuracy } = await import('../services/faye-learning.js');
+        const wasAccurate = params.accurate === 'true' || params.accurate === true;
+        const ok = await trackAlertAccuracy(parseInt(params.alert_id, 10), wasAccurate, params.notes);
+        return { ok, message: ok ? `Alert ${params.alert_id} rated: ${wasAccurate ? 'accurate' : 'false positive'}` : 'Failed to rate alert' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_patterns': {
+    description: 'Get recognized recurring patterns across operations. Shows patterns like repeated farm outages, recurring order anomalies, etc.',
+    category: 'read',
+    required: [],
+    optional: ['domain', 'limit'],
+    handler: async (params) => {
+      try {
+        const { getPatterns } = await import('../services/faye-learning.js');
+        const patterns = await getPatterns(params.domain || null, parseInt(params.limit, 10) || 10);
+        return { ok: true, patterns, count: patterns.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_outcome_stats': {
+    description: 'Get outcome statistics for F.A.Y.E.\'s recommendations. Shows success/failure rates by tool or overall.',
+    category: 'read',
+    required: [],
+    optional: ['tool_name', 'days'],
+    handler: async (params) => {
+      try {
+        const { getOutcomeStats } = await import('../services/faye-learning.js');
+        const stats = await getOutcomeStats(params.tool_name || null, parseInt(params.days, 10) || 30);
+        return stats ? { ok: true, ...stats } : { ok: false, error: 'Failed to get outcome stats' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
 
@@ -1022,8 +1149,8 @@ export const ADMIN_TOOL_CATALOG = {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes']),
-  quick_confirm: new Set(['resolve_alert', 'classify_transaction']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert']),
+  quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight']),
   confirm: new Set(['send_admin_email']),
   admin: new Set(['process_refund'])
 };
