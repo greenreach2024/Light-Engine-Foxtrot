@@ -7,7 +7,9 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import QRCode from 'qrcode';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import emailService from '../services/email-service.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -558,5 +560,276 @@ function renderPackingSlipHTML(slip) {
 </body></html>`;
 }
 
+// ─── POST /api/lots/assign-to-order ──────────────────────────────────
+// Attach lot numbers to wholesale order items during fulfillment.
+// Updates the JSONB order_data.farm_sub_orders[].items[] with lot_number.
+router.post('/assign-to-order', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { farmId, orderId, items } = req.body;
+    if (!farmId || !orderId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'farmId, orderId, and items[] are required' });
+    }
+
+    // Fetch current order
+    const orderResult = await query(
+      'SELECT id, order_data FROM wholesale_orders WHERE id = $1 OR master_order_id = $1',
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const row = orderResult.rows[0];
+    const orderData = typeof row.order_data === 'string'
+      ? JSON.parse(row.order_data)
+      : row.order_data;
+
+    // Build lookup: product_name -> lot_number from request
+    const lotMap = new Map();
+    for (const item of items) {
+      if (item.product_name && item.lot_number) {
+        lotMap.set(item.product_name.toLowerCase(), item.lot_number);
+      }
+    }
+
+    // Walk order_data.farm_sub_orders matching this farm
+    let assigned = 0;
+    const subOrders = orderData.farm_sub_orders || [];
+    for (const sub of subOrders) {
+      if (sub.farm_id !== farmId) continue;
+      for (const orderItem of (sub.items || [])) {
+        const key = (orderItem.product_name || orderItem.sku_id || '').toLowerCase();
+        if (lotMap.has(key)) {
+          orderItem.lot_number = lotMap.get(key);
+          assigned++;
+        }
+      }
+    }
+
+    // Persist updated order_data
+    await query(
+      'UPDATE wholesale_orders SET order_data = $1, updated_at = NOW() WHERE id = $2',
+      [JSON.stringify(orderData), row.id]
+    );
+
+    logger.info(`[LotSystem] Assigned ${assigned} lot(s) to order ${orderId} for farm ${farmId}`);
+    res.json({ success: true, assigned, order_id: orderId });
+  } catch (error) {
+    logger.error('[LotSystem] Assign lot to order error:', error);
+    res.status(500).json({ error: 'Failed to assign lots to order' });
+  }
+});
+
+// ─── GET /api/lots/orders-by-lot/:lotNumber ──────────────────────────
+// Find wholesale orders containing a specific lot number (for recalls).
+router.get('/orders-by-lot/:lotNumber', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { lotNumber } = req.params;
+    // Search JSONB order_data for lot_number match
+    const result = await query(
+      `SELECT id, master_order_id, buyer_email, status, order_data, created_at
+         FROM wholesale_orders
+        WHERE order_data::text LIKE $1
+        ORDER BY created_at DESC`,
+      [`%${lotNumber}%`]
+    );
+
+    // Filter to only orders that actually contain this lot in items
+    const orders = result.rows.filter(row => {
+      const data = typeof row.order_data === 'string' ? JSON.parse(row.order_data) : row.order_data;
+      return (data.farm_sub_orders || []).some(sub =>
+        (sub.items || []).some(item => item.lot_number === lotNumber)
+      );
+    }).map(row => ({
+      id: row.id,
+      master_order_id: row.master_order_id,
+      buyer_email: row.buyer_email,
+      status: row.status,
+      created_at: row.created_at
+    }));
+
+    res.json({ success: true, lot_number: lotNumber, orders, count: orders.length });
+  } catch (error) {
+    logger.error('[LotSystem] Orders by lot lookup error:', error);
+    res.status(500).json({ error: 'Failed to look up orders by lot' });
+  }
+});
+
+// ─── POST /api/lots/qr ───────────────────────────────────────────────
+// Generate a QR code image for a lot's traceability data.
+// Returns PNG as base64 data URL or SVG string.
+router.post('/qr', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { farmId, lotNumber, format } = req.body;
+    if (!farmId || !lotNumber) {
+      return res.status(400).json({ error: 'farmId and lotNumber are required' });
+    }
+
+    const lotResult = await query(
+      'SELECT * FROM lot_records WHERE farm_id = $1 AND lot_number = $2',
+      [farmId, lotNumber]
+    );
+    if (lotResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const lot = lotResult.rows[0];
+    const qrPayload = JSON.stringify({
+      lot: lot.lot_number,
+      crop: lot.crop_name,
+      farm: lot.farm_id,
+      harvested: lot.harvest_date,
+      bestBy: lot.best_by_date,
+      grade: gradeFromScore(lot.quality_score),
+      seed: lot.seed_source || undefined
+    });
+
+    if (format === 'svg') {
+      const svg = await QRCode.toString(qrPayload, { type: 'svg', margin: 1 });
+      res.json({ success: true, lot_number: lotNumber, format: 'svg', qr: svg });
+    } else {
+      // Default: PNG data URL
+      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 256, margin: 1 });
+      res.json({ success: true, lot_number: lotNumber, format: 'png', qr: dataUrl });
+    }
+  } catch (error) {
+    logger.error('[LotSystem] QR generation error:', error);
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
+});
+
+// ─── POST /api/lots/recall ───────────────────────────────────────────
+// Initiate a lot recall: mark lot as recalled, find affected orders,
+// and send notification emails to affected buyers.
+router.post('/recall', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const { farmId, lotNumber, reason } = req.body;
+    if (!farmId || !lotNumber || !reason) {
+      return res.status(400).json({ error: 'farmId, lotNumber, and reason are required' });
+    }
+
+    // 1. Verify lot exists and mark as recalled
+    const lotResult = await query(
+      'SELECT * FROM lot_records WHERE farm_id = $1 AND lot_number = $2',
+      [farmId, lotNumber]
+    );
+    if (lotResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const lot = lotResult.rows[0];
+    await query(
+      `UPDATE lot_records SET status = 'recalled', metadata = metadata || $1 WHERE id = $2`,
+      [JSON.stringify({ recall_reason: reason, recalled_at: new Date().toISOString() }), lot.id]
+    );
+
+    // 2. Find affected orders (search JSONB for lot_number)
+    const orderResult = await query(
+      `SELECT id, master_order_id, buyer_email, order_data
+         FROM wholesale_orders
+        WHERE order_data::text LIKE $1`,
+      [`%${lotNumber}%`]
+    );
+
+    const affectedOrders = orderResult.rows.filter(row => {
+      const data = typeof row.order_data === 'string' ? JSON.parse(row.order_data) : row.order_data;
+      return (data.farm_sub_orders || []).some(sub =>
+        (sub.items || []).some(item => item.lot_number === lotNumber)
+      );
+    });
+
+    // 3. Send recall notifications to unique buyer emails
+    const notified = [];
+    const seen = new Set();
+    for (const order of affectedOrders) {
+      const email = order.buyer_email;
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+
+      await emailService.sendEmail({
+        to: email,
+        subject: `Product Recall Notice - Lot ${lotNumber}`,
+        text: [
+          'IMPORTANT: Product Recall Notice',
+          '',
+          `Lot Number: ${lotNumber}`,
+          `Product: ${lot.crop_name}`,
+          `Harvest Date: ${lot.harvest_date}`,
+          `Reason: ${reason}`,
+          '',
+          `This recall affects your order #${order.master_order_id}.`,
+          '',
+          'Please discontinue use of this product immediately.',
+          'Contact us for a replacement or refund.',
+          '',
+          '-- GreenReach Farms'
+        ].join('\n')
+      }).catch(err => {
+        logger.warn(`[LotSystem] Recall email failed for ${email}:`, err.message);
+      });
+
+      notified.push({ email, order_id: order.master_order_id });
+    }
+
+    logger.info(`[LotSystem] Recall initiated: lot=${lotNumber}, reason=${reason}, orders=${affectedOrders.length}, notified=${notified.length}`);
+
+    res.json({
+      success: true,
+      lot_number: lotNumber,
+      status: 'recalled',
+      affected_orders: affectedOrders.length,
+      notifications_sent: notified.length,
+      notified
+    });
+  } catch (error) {
+    logger.error('[LotSystem] Recall error:', error);
+    res.status(500).json({ error: 'Failed to process recall' });
+  }
+});
+
+// ─── Auto-Expire Scheduler ───────────────────────────────────────────
+// Marks lots past their best_by_date as expired. Runs nightly.
+async function expireOverdueLots() {
+  try {
+    if (!isDatabaseAvailable()) return;
+    const result = await query(
+      `UPDATE lot_records
+          SET status = 'expired',
+              metadata = metadata || '{"auto_expired": true}'::jsonb
+        WHERE best_by_date < CURRENT_DATE
+          AND status = 'active'
+      RETURNING lot_number, farm_id, crop_name, best_by_date`
+    );
+    if (result.rows.length > 0) {
+      logger.info(`[LotSystem] Auto-expired ${result.rows.length} lot(s): ${result.rows.map(r => r.lot_number).join(', ')}`);
+    }
+  } catch (error) {
+    logger.warn('[LotSystem] Auto-expire check failed (non-fatal):', error.message);
+  }
+}
+
+function startLotExpiryScheduler() {
+  // Run once after 2 minutes of boot, then every 24 hours
+  setTimeout(() => expireOverdueLots(), 2 * 60 * 1000);
+  setInterval(() => expireOverdueLots(), 24 * 60 * 60 * 1000);
+  logger.info('[LotSystem] Lot expiry scheduler enabled (daily)');
+}
+
 export default router;
-export { generateLotNumber, calculateBestByDate, gradeFromScore };
+export { generateLotNumber, calculateBestByDate, gradeFromScore, startLotExpiryScheduler };

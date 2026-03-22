@@ -65,7 +65,7 @@ import marketIntelligenceRoutes from './routes/market-intelligence.js';
 import cropPricingRoutes from './routes/crop-pricing.js';
 import qualityReportsRoutes from './routes/quality-reports.js';
 import sustainabilityRoutes from './routes/sustainability.js';
-import lotSystemRoutes from './routes/lot-system.js';
+import lotSystemRoutes, { startLotExpiryScheduler } from './routes/lot-system.js';
 
 // Phase 2 — Cloud SaaS API gap routes
 import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
@@ -4691,6 +4691,7 @@ async function startServer() {
       startAIPusher(); // AI recommendations pusher (GPT-4)
       startAwsCostExplorerScheduler(); // Optional AWS Cost Explorer accounting sync
       startBenchmarkScheduler(); // AI Vision Phase 1: nightly crop benchmark aggregation
+      startLotExpiryScheduler(); // Nightly: auto-expire lots past best-by date
       startMarketDataFetcher(); // Phase 1A: daily USDA price ingestion
       startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
       startFayeIntelligence(); // F.A.Y.E. Phase 3: anomaly detection + daily briefing
