@@ -69,8 +69,8 @@ router.get('/readiness', async (req, res) => {
   }
 });
 
-// All remaining delivery routes require admin or operations role
-router.use(requireAdminRole('admin', 'operations'));
+// All remaining delivery routes require admin or editor role
+router.use(requireAdminRole('admin', 'editor'));
 
 // In-memory fallback for non-DB fields (drivers, fees, stats not yet in DB)
 const deliveryConfig = {
@@ -115,31 +115,36 @@ async function getDriversForFarm(farmId) {
   if (!isDatabaseAvailable()) {
     return deliveryConfig.drivers;
   }
-  const result = await query(
-    `SELECT driver_id, name, phone, email, vehicle, zones,
-            pay_per_delivery, cold_chain_bonus, cold_chain_certified,
-            deliveries_30d, rating, status, hired_at, updated_at
-       FROM delivery_drivers
-      WHERE farm_id = $1
-      ORDER BY name ASC`,
-    [farmId]
-  );
-  return result.rows.map(r => ({
-    id: r.driver_id,
-    name: r.name,
-    phone: r.phone,
-    email: r.email || '',
-    vehicle: r.vehicle || '',
-    zones: Array.isArray(r.zones) ? r.zones : [],
-    pay_per_delivery: Number(r.pay_per_delivery || 5.5),
-    cold_chain_bonus: Number(r.cold_chain_bonus || 2),
-    cold_chain_certified: Boolean(r.cold_chain_certified),
-    deliveries_30d: Number(r.deliveries_30d || 0),
-    rating: r.rating == null ? null : Number(r.rating),
-    status: r.status || 'active',
-    hired_at: r.hired_at,
-    updated_at: r.updated_at
-  }));
+  try {
+    const result = await query(
+      `SELECT driver_id, name, phone, email, vehicle, zones,
+              pay_per_delivery, cold_chain_bonus, cold_chain_certified,
+              deliveries_30d, rating, status, hired_at, updated_at
+         FROM delivery_drivers
+        WHERE farm_id = $1
+        ORDER BY name ASC`,
+      [farmId]
+    );
+    return result.rows.map(r => ({
+      id: r.driver_id,
+      name: r.name,
+      phone: r.phone,
+      email: r.email || '',
+      vehicle: r.vehicle || '',
+      zones: Array.isArray(r.zones) ? r.zones : [],
+      pay_per_delivery: Number(r.pay_per_delivery || 5.5),
+      cold_chain_bonus: Number(r.cold_chain_bonus || 2),
+      cold_chain_certified: Boolean(r.cold_chain_certified),
+      deliveries_30d: Number(r.deliveries_30d || 0),
+      rating: r.rating == null ? null : Number(r.rating),
+      status: r.status || 'active',
+      hired_at: r.hired_at,
+      updated_at: r.updated_at
+    }));
+  } catch (error) {
+    console.warn('[Admin Delivery] Drivers query fallback:', error.message);
+    return deliveryConfig.drivers;
+  }
 }
 
 async function getDeliveryStatsForFarm(farmId) {

@@ -10844,6 +10844,10 @@ async function saveDeliverySettings(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
         });
+        if (!res) {
+            alert('Session expired. Please log in again.');
+            return;
+        }
         const data = await res.json();
         if (data.success) {
             alert('Delivery settings saved!');
@@ -10853,7 +10857,7 @@ async function saveDeliverySettings(event) {
         }
     } catch (error) {
         console.error('[Delivery] Save error:', error);
-        alert('Settings saved locally. API endpoint will be available after deployment.');
+        alert('Failed to save delivery settings. Check console for details.');
     }
 }
 
