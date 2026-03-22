@@ -1,0 +1,1051 @@
+/* ============================================================================
+   F.A.Y.E. CORE — Design Language
+   ============================================================================
+   Signature shape:  Concentric rings (awareness)
+   Signature motion: Orbital rotation (monitoring), pulse (idle), sweep (analyzing)
+   Signature colors: Emerald confidence scale, amber uncertainty, red alert
+   ============================================================================ */
+
+:root {
+  /* F.A.Y.E. Confidence Scale */
+  --faye-confident: #10b981;
+  --faye-confident-glow: rgba(16, 185, 129, 0.4);
+  --faye-normal: rgba(16, 185, 129, 0.6);
+  --faye-uncertain: #f59e0b;
+  --faye-uncertain-glow: rgba(245, 158, 11, 0.4);
+  --faye-alert: #ef4444;
+  --faye-alert-glow: rgba(239, 68, 68, 0.4);
+  --faye-learning: #8b5cf6;
+  --faye-learning-glow: rgba(139, 92, 246, 0.4);
+
+  /* F.A.Y.E. Surfaces */
+  --faye-bg-deep: #0a0f1e;
+  --faye-bg-panel: #111827;
+  --faye-bg-card: #1a2332;
+  --faye-bg-card-hover: #1f2937;
+  --faye-bg-input: #2a2a40;
+  --faye-border: rgba(255, 255, 255, 0.08);
+  --faye-border-active: rgba(16, 185, 129, 0.3);
+
+  /* F.A.Y.E. Text */
+  --faye-text: #e5e7eb;
+  --faye-text-secondary: #9ca3af;
+  --faye-text-muted: #6b7280;
+  --faye-text-accent: #6ee7b7;
+}
+
+/* ── Orb: The Intelligence Nucleus ─────────────────────────── */
+
+.faye-orb-container {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.faye-orb-core {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 16px; height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--faye-confident);
+  box-shadow: 0 0 12px var(--faye-confident-glow), 0 0 24px var(--faye-confident-glow);
+  z-index: 3;
+  transition: background 0.6s, box-shadow 0.6s;
+}
+
+.faye-orb-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  border-radius: 50%;
+  border: 1.5px solid var(--faye-confident);
+  opacity: 0.5;
+  transition: border-color 0.6s, opacity 0.6s;
+}
+
+.faye-orb-ring--inner {
+  width: 32px; height: 32px;
+  transform: translate(-50%, -50%);
+  animation: faye-orbit 8s linear infinite;
+  z-index: 2;
+}
+
+.faye-orb-ring--middle {
+  width: 48px; height: 48px;
+  transform: translate(-50%, -50%);
+  animation: faye-orbit 12s linear infinite reverse;
+  opacity: 0.35;
+  z-index: 1;
+}
+
+.faye-orb-ring--outer {
+  width: 64px; height: 64px;
+  transform: translate(-50%, -50%);
+  border-style: dashed;
+  border-width: 1px;
+  animation: faye-pulse-ring 3s ease-in-out infinite;
+  opacity: 0.25;
+  z-index: 0;
+}
+
+/* Orb States */
+
+/* Idle: soft pulse */
+.faye-orb-container.faye-state-idle .faye-orb-core {
+  animation: faye-core-pulse 3s ease-in-out infinite;
+}
+
+/* Listening: expanding rings */
+.faye-orb-container.faye-state-listening .faye-orb-ring--outer {
+  animation: faye-expand-ring 1.5s ease-out infinite;
+  opacity: 0.6;
+}
+.faye-orb-container.faye-state-listening .faye-orb-ring--middle {
+  animation: faye-expand-ring 1.5s ease-out infinite 0.3s;
+  opacity: 0.5;
+}
+
+/* Analyzing: faster rotation + scan */
+.faye-orb-container.faye-state-analyzing .faye-orb-ring--inner {
+  animation: faye-orbit 2s linear infinite;
+  opacity: 0.8;
+  border-color: var(--faye-learning);
+}
+.faye-orb-container.faye-state-analyzing .faye-orb-ring--middle {
+  animation: faye-orbit 3s linear infinite reverse;
+  opacity: 0.6;
+  border-color: var(--faye-learning);
+}
+.faye-orb-container.faye-state-analyzing .faye-orb-core {
+  background: var(--faye-learning);
+  box-shadow: 0 0 12px var(--faye-learning-glow), 0 0 24px var(--faye-learning-glow);
+}
+
+/* Alerting: tight pulse, warm shift */
+.faye-orb-container.faye-state-alerting .faye-orb-core {
+  background: var(--faye-alert);
+  box-shadow: 0 0 12px var(--faye-alert-glow), 0 0 24px var(--faye-alert-glow);
+  animation: faye-core-pulse-fast 1s ease-in-out infinite;
+}
+.faye-orb-container.faye-state-alerting .faye-orb-ring--inner {
+  border-color: var(--faye-alert);
+  opacity: 0.7;
+  animation: faye-orbit 3s linear infinite;
+}
+.faye-orb-container.faye-state-alerting .faye-orb-ring--middle {
+  border-color: var(--faye-alert);
+  opacity: 0.4;
+}
+
+/* Executing: directional pulse */
+.faye-orb-container.faye-state-executing .faye-orb-core {
+  animation: faye-core-execute 0.8s ease-in-out infinite;
+}
+.faye-orb-container.faye-state-executing .faye-orb-ring--inner {
+  animation: faye-orbit 1.5s linear infinite;
+  opacity: 0.8;
+}
+
+/* Uncertain: flicker */
+.faye-orb-container.faye-state-uncertain .faye-orb-core {
+  background: var(--faye-uncertain);
+  box-shadow: 0 0 8px var(--faye-uncertain-glow);
+  animation: faye-flicker 0.3s ease-in-out infinite alternate;
+}
+.faye-orb-container.faye-state-uncertain .faye-orb-ring--inner {
+  border-color: var(--faye-uncertain);
+  opacity: 0.4;
+}
+.faye-orb-container.faye-state-uncertain .faye-orb-ring--outer {
+  border-color: var(--faye-uncertain);
+}
+
+/* Confident: stable crisp glow */
+.faye-orb-container.faye-state-confident .faye-orb-core {
+  box-shadow: 0 0 16px var(--faye-confident-glow), 0 0 32px var(--faye-confident-glow);
+}
+.faye-orb-container.faye-state-confident .faye-orb-ring--inner {
+  opacity: 0.7;
+}
+.faye-orb-container.faye-state-confident .faye-orb-ring--middle {
+  opacity: 0.5;
+}
+.faye-orb-container.faye-state-confident .faye-orb-ring--outer {
+  opacity: 0.35;
+}
+
+/* ── Orb Keyframes ──────────────────────────────────────────── */
+
+@keyframes faye-orbit {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes faye-core-pulse {
+  0%, 100% { box-shadow: 0 0 12px var(--faye-confident-glow), 0 0 24px var(--faye-confident-glow); }
+  50% { box-shadow: 0 0 18px var(--faye-confident-glow), 0 0 36px var(--faye-confident-glow); }
+}
+
+@keyframes faye-core-pulse-fast {
+  0%, 100% { box-shadow: 0 0 8px var(--faye-alert-glow); transform: translate(-50%, -50%) scale(1); }
+  50% { box-shadow: 0 0 20px var(--faye-alert-glow), 0 0 40px var(--faye-alert-glow); transform: translate(-50%, -50%) scale(1.15); }
+}
+
+@keyframes faye-core-execute {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 0 20px var(--faye-confident-glow), 0 0 40px var(--faye-confident-glow); }
+}
+
+@keyframes faye-pulse-ring {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes faye-expand-ring {
+  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+}
+
+@keyframes faye-flicker {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes faye-bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+
+/* ── Signal Cards ───────────────────────────────────────────── */
+
+.faye-signal-card {
+  background: var(--faye-bg-card);
+  border: 1px solid var(--faye-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.faye-signal-card:hover {
+  border-color: var(--faye-border-active);
+  background: var(--faye-bg-card-hover);
+}
+
+.faye-signal-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+  border-radius: 3px 0 0 3px;
+  background: var(--faye-confident);
+  transition: background 0.3s;
+}
+
+.faye-signal-card.signal-alert::before { background: var(--faye-alert); }
+.faye-signal-card.signal-warning::before { background: var(--faye-uncertain); }
+.faye-signal-card.signal-learning::before { background: var(--faye-learning); }
+.faye-signal-card.signal-ok::before { background: var(--faye-confident); }
+
+.faye-signal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--faye-text);
+  margin-bottom: 4px;
+}
+
+.faye-signal-detail {
+  font-size: 12px;
+  color: var(--faye-text-secondary);
+  line-height: 1.4;
+}
+
+.faye-signal-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--faye-text-muted);
+}
+
+/* ── Confidence Bar ─────────────────────────────────────────── */
+
+.faye-confidence-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.faye-confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease, background 0.4s;
+  background: var(--faye-confident);
+}
+
+.faye-confidence-fill.conf-high { background: var(--faye-confident); }
+.faye-confidence-fill.conf-medium { background: var(--faye-uncertain); }
+.faye-confidence-fill.conf-low { background: var(--faye-alert); }
+
+/* ── Domain Badge ───────────────────────────────────────────── */
+
+.faye-domain-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+.faye-domain-badge.domain-owned {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--faye-text-accent);
+}
+
+.faye-domain-badge.domain-learning {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+}
+
+.faye-domain-badge.domain-observing {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.faye-domain-badge.domain-baseline {
+  background: rgba(107, 114, 128, 0.12);
+  border-color: rgba(107, 114, 128, 0.3);
+  color: var(--faye-text-muted);
+}
+
+/* ── Domain Level Ring ──────────────────────────────────────── */
+
+.faye-domain-ring {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--faye-text-muted);
+  position: relative;
+}
+
+.faye-domain-ring.level-0 { border-color: var(--faye-text-muted); border-style: dashed; }
+.faye-domain-ring.level-1 { border-color: #3b82f6; border-style: dashed; }
+.faye-domain-ring.level-2 { border-color: var(--faye-learning); }
+.faye-domain-ring.level-3 { border-color: var(--faye-confident); }
+.faye-domain-ring.level-4 { border-color: var(--faye-confident); box-shadow: 0 0 6px var(--faye-confident-glow); }
+
+/* ── Reason Stack ("because" chains) ───────────────────────── */
+
+.faye-reason-stack {
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+
+.faye-reason-item {
+  position: relative;
+  padding: 4px 0 4px 20px;
+  font-size: 12px;
+  color: var(--faye-text-secondary);
+  line-height: 1.4;
+}
+
+.faye-reason-item::before {
+  content: '';
+  position: absolute;
+  left: 6px; top: 12px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--faye-border-active);
+}
+
+/* Connecting line between reasons */
+.faye-reason-item + .faye-reason-item::after {
+  content: '';
+  position: absolute;
+  left: 8px; top: 0;
+  width: 1px; height: 12px;
+  background: rgba(16, 185, 129, 0.2);
+}
+
+/* ── Action Card ────────────────────────────────────────────── */
+
+.faye-action-card {
+  background: var(--faye-bg-card);
+  border: 1px solid var(--faye-border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+
+.faye-action-card:hover {
+  border-color: var(--faye-border-active);
+}
+
+.faye-action-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.faye-action-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--faye-text);
+}
+
+.faye-action-confidence {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--faye-text-accent);
+}
+
+.faye-action-approval {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.faye-action-approval.requires-approval {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.faye-action-approval.auto-approved {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--faye-text-accent);
+}
+
+/* ── Mode Tabs ──────────────────────────────────────────────── */
+
+.faye-mode-tabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.faye-mode-tab {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--faye-text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background: none;
+  white-space: nowrap;
+}
+
+.faye-mode-tab:hover {
+  color: var(--faye-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.faye-mode-tab.active {
+  color: var(--faye-text);
+  background: var(--faye-bg-card);
+}
+
+/* ── Section Headers ────────────────────────────────────────── */
+
+.faye-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--faye-text-muted);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+/* ── Status Indicator ───────────────────────────────────────── */
+
+.faye-status-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--faye-confident);
+  margin-right: 6px;
+  animation: faye-core-pulse 3s ease-in-out infinite;
+}
+
+.faye-status-dot.status-alert { background: var(--faye-alert); animation: faye-core-pulse-fast 1s ease-in-out infinite; }
+.faye-status-dot.status-warning { background: var(--faye-uncertain); }
+.faye-status-dot.status-learning { background: var(--faye-learning); }
+
+/* ── Tool Badge ─────────────────────────────────────────────── */
+
+.faye-tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--faye-text-accent);
+}
+
+.faye-tool-badge.tool-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+/* ── Autonomy Progress ──────────────────────────────────────── */
+
+.faye-autonomy-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 6px;
+}
+
+.faye-autonomy-segment {
+  flex: 1;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  transition: background 0.4s;
+}
+
+.faye-autonomy-segment.filled {
+  background: var(--faye-confident);
+}
+
+.faye-autonomy-segment.partial {
+  background: linear-gradient(90deg, var(--faye-confident) 50%, rgba(255, 255, 255, 0.06) 50%);
+}
+
+/* ── Proactive Notices (ambient cues) ───────────────────────── */
+
+.faye-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--faye-text);
+  line-height: 1.4;
+}
+
+.faye-notice-icon {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: var(--faye-text-accent);
+}
+
+.faye-notice.notice-alert {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.faye-notice.notice-warning {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.15);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+
+.faye-scroll::-webkit-scrollbar { width: 5px; }
+.faye-scroll::-webkit-scrollbar-track { background: transparent; }
+.faye-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
+.faye-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+
+/* ============================================================================
+   LAYER 1 — Ambient Presence (persistent orb across platform)
+   ============================================================================ */
+
+.faye-ambient {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.faye-ambient-orb {
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  width: 56px;
+  height: 56px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.faye-ambient-orb .faye-orb-core {
+  width: 14px; height: 14px;
+}
+
+.faye-ambient-orb .faye-orb-ring--inner { width: 28px; height: 28px; }
+.faye-ambient-orb .faye-orb-ring--middle { width: 42px; height: 42px; }
+.faye-ambient-orb .faye-orb-ring--outer { width: 56px; height: 56px; }
+
+/* Ambient status line beside orb */
+.faye-ambient-status {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid var(--faye-border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--faye-text-secondary);
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.faye-ambient:hover .faye-ambient-status,
+.faye-ambient.show-status .faye-ambient-status {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Ambient alert badge */
+.faye-ambient-badge {
+  position: absolute;
+  top: 0; right: 0;
+  min-width: 16px; height: 16px;
+  border-radius: 8px;
+  background: var(--faye-alert);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.faye-ambient-badge:empty { display: none; }
+
+
+/* ============================================================================
+   LAYER 2 — Intelligence Panel (slide-out side panel)
+   ============================================================================ */
+
+.faye-intel-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: 400px;
+  height: 100vh;
+  background: var(--faye-bg-panel);
+  border-left: 1px solid var(--faye-border);
+  z-index: 10002;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.faye-intel-panel.open {
+  transform: translateX(0);
+}
+
+.faye-intel-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 10001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.faye-intel-panel-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Panel Header */
+.faye-intel-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--faye-border);
+  flex-shrink: 0;
+}
+
+.faye-intel-header-orb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.faye-intel-header-orb .faye-orb-core { width: 10px; height: 10px; }
+.faye-intel-header-orb .faye-orb-ring--inner { width: 22px; height: 22px; }
+.faye-intel-header-orb .faye-orb-ring--middle { width: 32px; height: 32px; }
+.faye-intel-header-orb .faye-orb-ring--outer { width: 40px; height: 40px; }
+
+.faye-intel-header-text {
+  flex: 1;
+}
+
+.faye-intel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--faye-text);
+  line-height: 1.2;
+}
+
+.faye-intel-subtitle {
+  font-size: 11px;
+  color: var(--faye-text-muted);
+  margin-top: 1px;
+}
+
+.faye-intel-close {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--faye-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.faye-intel-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--faye-text);
+}
+
+/* Panel Body */
+.faye-intel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.faye-intel-body::-webkit-scrollbar { width: 5px; }
+.faye-intel-body::-webkit-scrollbar-track { background: transparent; }
+.faye-intel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
+
+/* Panel Sections */
+.faye-intel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.faye-intel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.faye-intel-section-count {
+  font-size: 11px;
+  color: var(--faye-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+/* Panel Footer — Chat Entry */
+.faye-intel-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--faye-border);
+  flex-shrink: 0;
+}
+
+.faye-intel-chat-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.faye-intel-chat-input textarea {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--faye-bg-input);
+  border: 1px solid var(--faye-border);
+  color: var(--faye-text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  min-height: 36px;
+  max-height: 80px;
+  line-height: 1.4;
+}
+
+.faye-intel-chat-input textarea::placeholder { color: var(--faye-text-muted); }
+.faye-intel-chat-input textarea:focus { border-color: var(--faye-border-active); }
+
+.faye-intel-send {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: var(--faye-confident);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.faye-intel-send:hover { background: #059669; }
+.faye-intel-send:disabled { background: #374151; cursor: not-allowed; }
+
+
+/* ============================================================================
+   LAYER 3 — Conversation Mode (within intelligence panel)
+   ============================================================================ */
+
+.faye-conversation {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.faye-conversation.active { display: flex; }
+
+.faye-conversation-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faye-conversation-messages::-webkit-scrollbar { width: 5px; }
+.faye-conversation-messages::-webkit-scrollbar-track { background: transparent; }
+.faye-conversation-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
+
+.faye-conv-msg {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.faye-conv-msg.user {
+  align-self: flex-end;
+  background: #2563eb;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.faye-conv-msg.assistant {
+  align-self: flex-start;
+  background: var(--faye-bg-card);
+  color: var(--faye-text);
+  border: 1px solid var(--faye-border);
+  border-bottom-left-radius: 4px;
+}
+
+.faye-conv-msg.system {
+  align-self: center;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--faye-text-accent);
+  font-size: 12px;
+  border-radius: 8px;
+  text-align: center;
+  max-width: 100%;
+}
+
+
+/* ============================================================================
+   F.A.Y.E. Core Home Screen
+   ============================================================================ */
+
+.faye-core-page {
+  background: var(--faye-bg-deep);
+  min-height: 100vh;
+  color: var(--faye-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.faye-core-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px 32px;
+  position: relative;
+}
+
+.faye-core-hero-orb {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+}
+
+.faye-core-hero-orb .faye-orb-core { width: 28px; height: 28px; }
+.faye-core-hero-orb .faye-orb-ring--inner { width: 56px; height: 56px; }
+.faye-core-hero-orb .faye-orb-ring--middle { width: 88px; height: 88px; }
+.faye-core-hero-orb .faye-orb-ring--outer { width: 120px; height: 120px; }
+
+.faye-core-hero-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--faye-text);
+  letter-spacing: 0.5px;
+}
+
+.faye-core-hero-subtitle {
+  font-size: 13px;
+  color: var(--faye-text-muted);
+  margin-top: 4px;
+}
+
+.faye-core-hero-state {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--faye-text-secondary);
+}
+
+.faye-core-hero-state-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Core Grid Layout */
+.faye-core-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 24px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.faye-core-grid-full {
+  grid-column: 1 / -1;
+}
+
+/* Core Section Card */
+.faye-core-section {
+  background: var(--faye-bg-panel);
+  border: 1px solid var(--faye-border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.faye-core-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--faye-text-muted);
+  font-weight: 600;
+}
+
+.faye-core-section .faye-signal-card + .faye-signal-card {
+  margin-top: 8px;
+}
+
+/* Quick Chat Bar on Core Page */
+.faye-core-chat-bar {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+}
+
+.faye-core-chat-bar-inner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--faye-bg-panel);
+  border: 1px solid var(--faye-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  transition: border-color 0.2s;
+}
+
+.faye-core-chat-bar-inner:focus-within {
+  border-color: var(--faye-border-active);
+}
+
+.faye-core-chat-bar-inner textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--faye-text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  min-height: 36px;
+  max-height: 80px;
+  line-height: 1.4;
+}
+
+.faye-core-chat-bar-inner textarea::placeholder { color: var(--faye-text-muted); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .faye-intel-panel { width: 100vw; }
+  .faye-core-grid { grid-template-columns: 1fr; }
+  .faye-ambient { bottom: 16px; right: 16px; }
+}
+
+@media (max-width: 480px) {
+  .faye-core-hero { padding: 32px 16px 24px; }
+  .faye-core-grid { padding: 0 16px 16px; }
+  .faye-core-hero-orb { width: 88px; height: 88px; }
+  .faye-core-hero-orb .faye-orb-core { width: 20px; height: 20px; }
+  .faye-core-hero-orb .faye-orb-ring--inner { width: 40px; height: 40px; }
+  .faye-core-hero-orb .faye-orb-ring--middle { width: 64px; height: 64px; }
+  .faye-core-hero-orb .faye-orb-ring--outer { width: 88px; height: 88px; }
+}

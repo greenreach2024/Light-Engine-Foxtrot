@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "bash .github/hooks/deploy-gate.sh",
+        "timeout": 10,
+        "events": ["run_in_terminal"]
+      }
+    ]
+  }
+}
