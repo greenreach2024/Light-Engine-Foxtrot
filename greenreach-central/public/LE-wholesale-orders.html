@@ -407,6 +407,63 @@
       margin-bottom: 1rem;
       color: var(--text);
     }
+
+    .inventory-warning {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      color: #92400e;
+    }
+
+    .inventory-warning h4 {
+      margin-bottom: 0.75rem;
+      color: #92400e;
+      font-size: 1.1rem;
+    }
+
+    .inventory-warning p {
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .shortfall-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .shortfall-table th {
+      text-align: left;
+      padding: 0.5rem;
+      border-bottom: 2px solid #d97706;
+      color: #78350f;
+    }
+
+    .shortfall-table td {
+      padding: 0.5rem;
+      border-bottom: 1px solid #fbbf24;
+    }
+
+    .shortfall-table .shortfall-amount {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .inventory-ok {
+      background: #d1fae5;
+      border: 1px solid #10b981;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      color: #065f46;
+    }
+
+    .inventory-ok h4 {
+      margin-bottom: 0.25rem;
+    }
   </style>
 </head>
 <body>
@@ -439,6 +496,20 @@
       <h2>Pending Orders (Require Your Response)</h2>
       <div id="orders-container">
         <!-- Orders populated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory Check Modal -->
+  <div id="inventory-check-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">Confirm Inventory Before Accepting</div>
+      <div id="inventory-check-body">
+        <!-- Populated dynamically -->
+      </div>
+      <div class="action-buttons">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-check-modal')">Go Back</button>
+        <button type="button" class="btn btn-success" id="confirm-accept-btn">Accept Order</button>
       </div>
     </div>
   </div>
@@ -639,8 +710,99 @@
       },
 
       async acceptOrder(subOrderId) {
-        if (!confirm('Accept this order? You will be committed to fulfilling it.')) return;
+        const order = this.orders.find(o => o.id === subOrderId);
+        if (!order) return;
 
+        const items = order.items || [];
+        if (items.length === 0) {
+          await this.confirmAcceptOrder(subOrderId);
+          return;
+        }
+
+        // Fetch current farm inventory and compare against order
+        let inventory = [];
+        try {
+          const invResp = await fetch(`/api/inventory/${this.farmId}`);
+          const invData = await invResp.json();
+          inventory = invData.products || [];
+        } catch (err) {
+          console.error('Inventory fetch failed:', err);
+        }
+
+        // Build comparison: match order items to inventory by product name
+        const comparisons = items.map(item => {
+          const name = (item.product_name || '').toLowerCase().trim();
+          const match = inventory.find(p => {
+            const pName = (p.product_name || '').toLowerCase().trim();
+            return pName === name || pName.includes(name) || name.includes(pName);
+          });
+          const available = match
+            ? Number(match.available_lbs || match.quantity_available || 0)
+            : null;
+          return {
+            product_name: item.product_name,
+            ordered: item.quantity,
+            unit: item.unit,
+            available: available,
+            shortfall: available !== null ? item.quantity - available : null
+          };
+        });
+
+        const shortfalls = comparisons.filter(c => c.shortfall !== null && c.shortfall > 0);
+        const unknowns = comparisons.filter(c => c.available === null);
+
+        // Build modal body
+        const body = document.getElementById('inventory-check-body');
+        let html = '';
+
+        if (shortfalls.length > 0) {
+          html += `<div class="inventory-warning">
+            <h4>Inventory Shortfall Detected</h4>
+            <p>The following items exceed your recorded inventory. Confirm you have enough stock before accepting.</p>
+            <table class="shortfall-table">
+              <thead><tr><th>Product</th><th>Ordered</th><th>Available</th><th>Short</th></tr></thead>
+              <tbody>${shortfalls.map(s => `
+                <tr>
+                  <td>${s.product_name}</td>
+                  <td>${s.ordered} ${s.unit}</td>
+                  <td>${s.available.toFixed(1)} lbs</td>
+                  <td class="shortfall-amount">${s.shortfall.toFixed(1)} lbs</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+        }
+
+        if (unknowns.length > 0) {
+          html += `<div class="inventory-warning">
+            <h4>Inventory Not Tracked</h4>
+            <p>These items were not found in your inventory records. Make sure you have stock before accepting.</p>
+            <ul style="margin: 0.5rem 0 0 1.25rem;">
+              ${unknowns.map(u => `<li>${u.product_name} -- ${u.ordered} ${u.unit} ordered</li>`).join('')}
+            </ul>
+          </div>`;
+        }
+
+        if (shortfalls.length === 0 && unknowns.length === 0) {
+          html += `<div class="inventory-ok">
+            <h4>Inventory looks good</h4>
+            <p>All ordered items are within your recorded stock levels.</p>
+          </div>`;
+        }
+
+        body.innerHTML = html;
+
+        // Wire confirm button to this specific order
+        const confirmBtn = document.getElementById('confirm-accept-btn');
+        confirmBtn.onclick = async () => {
+          closeModal('inventory-check-modal');
+          await this.confirmAcceptOrder(subOrderId);
+        };
+
+        document.getElementById('inventory-check-modal').classList.add('active');
+      },
+
+      async confirmAcceptOrder(subOrderId) {
         try {
           const response = await fetch('/api/wholesale/orders/farm-verify', {
             method: 'POST',
