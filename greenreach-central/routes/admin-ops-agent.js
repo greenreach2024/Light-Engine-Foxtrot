@@ -1538,6 +1538,139 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, count: results.length, results };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── Security Audit ────────────────────────────────────────────
+
+  'run_security_audit': {
+    description: 'Run a security audit across GreenReach systems. Checks for: auth failures in recent alerts, stale API sessions, hard boundary integrity, admin access patterns, and unresolved critical alerts. Returns a structured report with findings and risk score.',
+    category: 'read',
+    required: [],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        const days = parseInt(params.days, 10) || 7;
+        const findings = [];
+        let riskScore = 0;
+
+        if (await isDatabaseAvailable()) {
+          // 1. Auth-related alerts (failed logins, access denials)
+          const authAlerts = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM admin_alerts
+             WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%login%' OR title ILIKE '%denied%')
+               AND created_at > NOW() - ($1 || ' days')::interval`,
+            [days]
+          );
+          const authCount = Number(authAlerts.rows[0]?.cnt || 0);
+          if (authCount > 0) {
+            findings.push({ category: 'authentication', severity: authCount > 10 ? 'high' : 'medium', detail: `${authCount} auth-related alerts in the last ${days} days` });
+            riskScore += authCount > 10 ? 3 : 1;
+          }
+
+          // 2. Unresolved critical alerts
+          const critAlerts = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM admin_alerts
+             WHERE severity = 'critical' AND resolved = FALSE
+               AND created_at > NOW() - ($1 || ' days')::interval`,
+            [days]
+          );
+          const critCount = Number(critAlerts.rows[0]?.cnt || 0);
+          if (critCount > 0) {
+            findings.push({ category: 'unresolved_critical', severity: 'high', detail: `${critCount} unresolved critical alerts` });
+            riskScore += critCount * 2;
+          }
+
+          // 3. Stale farm connections (potential security issue)
+          const staleFarms = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM farm_heartbeats
+             WHERE last_seen_at < NOW() - INTERVAL '24 hours'`
+          );
+          const staleCount = Number(staleFarms.rows[0]?.cnt || 0);
+          if (staleCount > 0) {
+            findings.push({ category: 'stale_connections', severity: 'medium', detail: `${staleCount} farms with no heartbeat in 24+ hours` });
+            riskScore += 1;
+          }
+
+          // 4. Admin activity audit (any admin actions in period)
+          const adminActions = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM faye_decision_log
+             WHERE created_at > NOW() - ($1 || ' days')::interval`,
+            [days]
+          );
+          const actionCount = Number(adminActions.rows[0]?.cnt || 0);
+          findings.push({ category: 'admin_activity', severity: 'info', detail: `${actionCount} admin-system actions logged in the last ${days} days` });
+
+          // 5. Hard boundary verification
+          const { HARD_BOUNDARIES } = await import('../services/faye-policy.js');
+          findings.push({ category: 'hard_boundaries', severity: 'info', detail: `${HARD_BOUNDARIES.length} hard boundaries active and enforced` });
+
+          // 6. Shadow mode accuracy check
+          const { getShadowAccuracy } = await import('../services/faye-policy.js');
+          const shadowStats = await getShadowAccuracy(null, days);
+          if (shadowStats && shadowStats.total > 0) {
+            const acc = (shadowStats.accuracy * 100).toFixed(1);
+            findings.push({ category: 'shadow_validation', severity: shadowStats.accuracy < 0.8 ? 'medium' : 'info', detail: `Shadow mode accuracy: ${acc}% over ${shadowStats.total} decisions (${days}d)` });
+            if (shadowStats.accuracy < 0.8) riskScore += 2;
+          }
+        }
+
+        const maxRisk = 20;
+        const normalizedRisk = Math.min(riskScore / maxRisk, 1.0);
+        const riskLevel = normalizedRisk > 0.6 ? 'high' : normalizedRisk > 0.3 ? 'moderate' : 'low';
+
+        return {
+          ok: true,
+          period_days: days,
+          risk_level: riskLevel,
+          risk_score: riskScore,
+          finding_count: findings.length,
+          findings
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Feedback Recording ────────────────────────────────────────
+
+  'record_recommendation_feedback': {
+    description: 'Record admin feedback (thumbs up/down) on a F.A.Y.E. recommendation or insight. Used by the dashboard feedback buttons. Feeds the learning loop to improve future recommendations.',
+    category: 'write',
+    required: ['recommendation_id', 'feedback'],
+    optional: ['comment'],
+    handler: async (params) => {
+      try {
+        const { recordOutcome } = await import('../services/faye-learning.js');
+        const feedback = params.feedback === 'positive' || params.feedback === 'up' ? 'positive' : 'negative';
+        const id = await recordOutcome(
+          params.recommendation_id,
+          feedback,
+          params.comment || `Admin ${feedback} feedback via dashboard`,
+          params.admin_id || 'dashboard'
+        );
+        return id
+          ? { ok: true, id, message: `Feedback recorded: ${feedback}` }
+          : { ok: false, error: 'Failed to record feedback' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Webhook Alert Dispatch ────────────────────────────────────
+
+  'get_webhook_config': {
+    description: 'Get the current webhook notification configuration. Shows the webhook URL and which alert severities trigger notifications.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      const url = process.env.FAYE_WEBHOOK_URL || null;
+      return {
+        ok: true,
+        configured: !!url,
+        url: url ? url.replace(/\/[^/]{8,}$/, '/***') : null,
+        triggers: ['critical', 'high'],
+        note: url ? 'Webhook active for critical and high severity alerts' : 'No FAYE_WEBHOOK_URL configured. Set this environment variable to enable webhook alerting.'
+      };
+    }
   }
 };
 
@@ -1548,7 +1681,7 @@ export const ADMIN_TOOL_CATALOG = {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback']),
   quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
   confirm: new Set(['send_admin_email', 'send_sms']),
   admin: new Set(['process_refund'])

@@ -110,7 +110,12 @@ export const TOOL_ACTION_MAP = {
 
   // conversation history recall
   'recall_conversations': 'recommend',
-  'search_past_conversations': 'recommend'
+  'search_past_conversations': 'recommend',
+
+  // security & feedback
+  'run_security_audit': 'recommend',
+  'record_recommendation_feedback': 'classify',
+  'get_webhook_config': 'recommend'
 };
 
 /**

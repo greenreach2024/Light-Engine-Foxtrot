@@ -56,6 +56,53 @@
       color: var(--faye-text-muted);
       font-size: 12px;
     }
+    /* Feedback buttons */
+    .faye-feedback-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .faye-feedback-btn {
+      background: transparent;
+      border: 1px solid var(--faye-border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--faye-text-muted);
+      transition: all 0.15s;
+    }
+    .faye-feedback-btn:hover { border-color: var(--faye-text-accent); color: var(--faye-text-accent); }
+    .faye-feedback-btn.selected-up { border-color: #10b981; color: #10b981; background: rgba(16,185,129,0.1); }
+    .faye-feedback-btn.selected-down { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); }
+    /* Mini chart bars */
+    .faye-chart-container { padding: 12px 0; }
+    .faye-bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 80px; padding: 0 4px; }
+    .faye-bar {
+      flex: 1;
+      min-width: 8px;
+      background: var(--faye-text-accent);
+      border-radius: 2px 2px 0 0;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+      position: relative;
+    }
+    .faye-bar:hover { opacity: 1; }
+    .faye-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--faye-text-muted);
+      padding: 4px 4px 0;
+    }
+    .faye-chart-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--faye-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
     /* Chat expansion area */
     .faye-core-chat-expansion {
       max-width: 900px;
@@ -180,6 +227,12 @@
       <div class="faye-core-section-title">Trust &amp; Autonomy</div>
       <div id="trust-list" class="faye-scroll"></div>
     </div>
+
+    <!-- Dashboard Charts (full width) -->
+    <div class="faye-core-section faye-core-grid-full">
+      <div class="faye-core-section-title">Performance Charts</div>
+      <div id="charts-section" class="faye-scroll"></div>
+    </div>
   </section>
 
   <!-- Quick Chat Bar -->
@@ -302,16 +355,21 @@
         var el = document.getElementById('action-list');
         if (!el) return;
         if (!items || !items.length) { el.innerHTML = '<div class="faye-empty">No recommended actions</div>'; return; }
-        el.innerHTML = items.map(function(it) {
+        el.innerHTML = items.map(function(it, idx) {
           var conf = it.confidence != null ? Math.round(it.confidence * 100) + '%' : '';
           var approval = it.requires_approval !== false
             ? '<span class="faye-action-approval requires-approval">Requires approval</span>'
             : '<span class="faye-action-approval auto-approved">Auto-approved</span>';
+          var feedbackId = it.id || ('rec-' + idx);
           return '<div class="faye-action-card">' +
             '<div class="faye-action-title"><span class="faye-action-name">' + esc(it.label || it.title) + '</span>' +
             (conf ? '<span class="faye-action-confidence">' + conf + '</span>' : '') + '</div>' +
             '<div class="faye-signal-detail">' + esc(it.detail || it.description || '') + '</div>' +
             approval +
+            '<div class="faye-feedback-row">' +
+              '<button class="faye-feedback-btn" data-rec="' + esc(feedbackId) + '" data-vote="up" onclick="sendFeedback(this)" title="Helpful">+ Helpful</button>' +
+              '<button class="faye-feedback-btn" data-rec="' + esc(feedbackId) + '" data-vote="down" onclick="sendFeedback(this)" title="Not useful">- Not useful</button>' +
+            '</div>' +
           '</div>';
         }).join('');
       }
@@ -345,6 +403,93 @@
             buildAutonomySegments(levelNum) +
           '</div>';
         }).join('') + '</div>';
+      }
+
+      // -- Feedback Handler -----------------------------------------------
+      window.sendFeedback = function(btn) {
+        var rec = btn.getAttribute('data-rec');
+        var vote = btn.getAttribute('data-vote');
+        var row = btn.parentElement;
+        var buttons = row.querySelectorAll('.faye-feedback-btn');
+        buttons.forEach(function(b) { b.classList.remove('selected-up', 'selected-down'); b.disabled = true; });
+        btn.classList.add(vote === 'up' ? 'selected-up' : 'selected-down');
+
+        fetch(API + '/tool-gateway', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+          body: JSON.stringify({
+            tool: 'record_recommendation_feedback',
+            params: { recommendation_id: rec, feedback: vote === 'up' ? 'positive' : 'negative' }
+          })
+        }).catch(function() { /* silent */ });
+      };
+
+      // -- Dashboard Charts -----------------------------------------------
+      function renderCharts(stats, trust) {
+        var container = document.getElementById('charts-section');
+        if (!container) return;
+        var html = '';
+
+        // Revenue trend (from stats.revenue_trend if available)
+        if (stats && stats.revenue_trend && stats.revenue_trend.length) {
+          var vals = stats.revenue_trend.map(function(d) { return d.value || 0; });
+          var maxVal = Math.max.apply(null, vals) || 1;
+          html += '<div class="faye-chart-container">' +
+            '<div class="faye-chart-title">Revenue Trend (7d)</div>' +
+            '<div class="faye-bar-chart">' +
+            stats.revenue_trend.map(function(d) {
+              var pct = Math.max(4, (d.value / maxVal) * 100);
+              return '<div class="faye-bar" style="height:' + pct + '%" title="' + esc(d.label || '') + ': $' + (d.value || 0).toFixed(0) + '"></div>';
+            }).join('') +
+            '</div>' +
+            '<div class="faye-bar-label"><span>' + esc(stats.revenue_trend[0].label || '') + '</span><span>' + esc(stats.revenue_trend[stats.revenue_trend.length - 1].label || '') + '</span></div>' +
+          '</div>';
+        }
+
+        // Shadow accuracy gauge
+        if (stats && stats.shadow_accuracy != null) {
+          var acc = Math.round(stats.shadow_accuracy * 100);
+          var accColor = acc >= 90 ? '#10b981' : acc >= 70 ? '#f59e0b' : '#ef4444';
+          html += '<div class="faye-chart-container">' +
+            '<div class="faye-chart-title">Shadow Mode Accuracy</div>' +
+            '<div style="display:flex;align-items:center;gap:12px;padding:4px;">' +
+              '<div style="flex:1;height:8px;background:var(--faye-border);border-radius:4px;overflow:hidden;">' +
+                '<div style="width:' + acc + '%;height:100%;background:' + accColor + ';border-radius:4px;"></div>' +
+              '</div>' +
+              '<span style="font-size:14px;font-weight:600;color:' + accColor + ';">' + acc + '%</span>' +
+            '</div>' +
+          '</div>';
+        }
+
+        // Trust tier progression
+        if (trust && trust.length) {
+          var tierCounts = { auto: 0, quick_confirm: 0, confirm: 0, admin: 0 };
+          trust.forEach(function(t) {
+            var tier = t.trust_tier || t.status || 'baseline';
+            if (tier === 'elevated' || tier === 'auto') tierCounts.auto++;
+            else if (tier === 'quick_confirm' || tier === 'growing') tierCounts.quick_confirm++;
+            else if (tier === 'confirm' || tier === 'baseline') tierCounts.confirm++;
+            else tierCounts.admin++;
+          });
+          var total = trust.length || 1;
+          html += '<div class="faye-chart-container">' +
+            '<div class="faye-chart-title">Trust Distribution</div>' +
+            '<div style="display:flex;height:24px;border-radius:4px;overflow:hidden;">' +
+              (tierCounts.auto ? '<div style="flex:' + tierCounts.auto + ';background:#10b981;" title="Auto: ' + tierCounts.auto + '/' + total + '"></div>' : '') +
+              (tierCounts.quick_confirm ? '<div style="flex:' + tierCounts.quick_confirm + ';background:#3b82f6;" title="Quick confirm: ' + tierCounts.quick_confirm + '/' + total + '"></div>' : '') +
+              (tierCounts.confirm ? '<div style="flex:' + tierCounts.confirm + ';background:#f59e0b;" title="Confirm: ' + tierCounts.confirm + '/' + total + '"></div>' : '') +
+              (tierCounts.admin ? '<div style="flex:' + tierCounts.admin + ';background:#ef4444;" title="Admin only: ' + tierCounts.admin + '/' + total + '"></div>' : '') +
+            '</div>' +
+            '<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;font-size:10px;color:var(--faye-text-muted);">' +
+              '<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#10b981;display:inline-block;"></span> Auto</span>' +
+              '<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;display:inline-block;"></span> Quick</span>' +
+              '<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#f59e0b;display:inline-block;"></span> Confirm</span>' +
+              '<span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#ef4444;display:inline-block;"></span> Admin</span>' +
+            '</div>' +
+          '</div>';
+        }
+
+        container.innerHTML = html || '<div class="faye-empty">Chart data not yet available</div>';
       }
 
       // -- Load State -----------------------------------------------------
@@ -383,6 +528,7 @@
           renderActions(s.recommendations || s.actions || []);
           renderLearning(s.insights || s.learning || []);
           renderTrust(s.trust || s.domains || []);
+          renderCharts(stats, s.trust || s.domains || []);
         })
         .catch(function() { /* silent */ });
       }

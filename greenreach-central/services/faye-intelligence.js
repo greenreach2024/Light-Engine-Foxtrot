@@ -38,6 +38,12 @@ async function createAlert(domain, severity, title, detail, source = 'faye-intel
       [domain, severity, title, detail, source, JSON.stringify({ auto: true, ts: Date.now() })]
     );
     logger.info(`${TAG} Alert created: [${severity}] ${title}`);
+
+    // Fire webhook for critical/high alerts
+    if (severity === 'critical' || severity === 'high') {
+      dispatchWebhookAlert({ id: result.rows[0]?.id, domain, severity, title, detail });
+    }
+
     return result.rows[0]?.id;
   } catch (err) {
     logger.error(`${TAG} Failed to create alert:`, err.message);
@@ -225,6 +231,78 @@ async function checkUnclassifiedTransactions() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Webhook Dispatch (fire-and-forget for critical/high alerts)
+// ══════════════════════════════════════════════════════════════════
+
+function dispatchWebhookAlert(alert) {
+  const url = process.env.FAYE_WEBHOOK_URL;
+  if (!url) return;
+
+  const payload = JSON.stringify({
+    source: 'faye-intelligence',
+    event: 'alert',
+    severity: alert.severity,
+    title: alert.title,
+    detail: alert.detail,
+    domain: alert.domain,
+    alert_id: alert.id,
+    timestamp: new Date().toISOString()
+  });
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    signal: AbortSignal.timeout(10000)
+  })
+  .then(r => { if (!r.ok) logger.warn(`${TAG} Webhook returned ${r.status}`); })
+  .catch(err => logger.warn(`${TAG} Webhook dispatch failed:`, err.message));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Auto-Resolve Known Patterns
+// ══════════════════════════════════════════════════════════════════
+
+async function checkAutoResolvePatterns() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    // Find open alerts whose pattern has been resolved positively 3+ times
+    const candidates = await query(`
+      SELECT a.id, a.domain, a.title, a.severity,
+             fp.pattern_key, fp.occurrences, fp.last_outcome
+      FROM admin_alerts a
+      JOIN faye_patterns fp ON fp.domain = a.domain
+        AND a.title LIKE '%' || fp.pattern_key || '%'
+      WHERE a.resolved = FALSE
+        AND a.severity IN ('low', 'medium')
+        AND fp.occurrences >= 3
+        AND fp.last_outcome = 'resolved_benign'
+        AND a.created_at > NOW() - INTERVAL '24 hours'
+      LIMIT 10
+    `);
+
+    for (const c of candidates.rows) {
+      await query(
+        `UPDATE admin_alerts SET resolved = TRUE, resolved_at = NOW(),
+         metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{auto_resolved}', 'true')
+         WHERE id = $1`,
+        [c.id]
+      );
+      logger.info(`${TAG} Auto-resolved alert #${c.id}: "${c.title}" (pattern "${c.pattern_key}" seen ${c.occurrences}x)`);
+      await storeInsight('auto_resolve', c.domain,
+        `Auto-resolved "${c.title}" — pattern "${c.pattern_key}" historically benign (${c.occurrences} occurrences)`,
+        { alert_id: c.id, pattern_key: c.pattern_key, occurrences: c.occurrences });
+    }
+
+    if (candidates.rows.length > 0) {
+      await trackPattern('auto_resolve_batch', 'system',
+        `Auto-resolved ${candidates.rows.length} alerts based on known benign patterns`,
+        { count: candidates.rows.length });
+    }
+  } catch (err) { logger.warn(`${TAG} Auto-resolve check error:`, err.message); }
+}
+
+// ══════════════════════════════════════════════════════════════════
 // Main Anomaly Check Runner
 // ══════════════════════════════════════════════════════════════════
 
@@ -241,7 +319,8 @@ export async function runAnomalyCheck() {
     checkFarmHeartbeats(),
     checkOrderVolumeAnomaly(),
     checkAccountingBalance(),
-    checkUnclassifiedTransactions()
+    checkUnclassifiedTransactions(),
+    checkAutoResolvePatterns()
   ]);
 
   logger.info(`${TAG} Anomaly cycle complete in ${Date.now() - start}ms`);

@@ -1148,6 +1148,38 @@ router.get('/state', async (_req, res) => {
         confidence: i.confidence
       }));
 
+    // Chart data: 7-day revenue trend + shadow accuracy
+    let revenueTrend = [];
+    let shadowAccuracy = null;
+    if (isDatabaseAvailable()) {
+      try {
+        const revResult = await query(`
+          SELECT d::date AS day,
+                 COALESCE(SUM(t.total_amount), 0) AS value
+          FROM generate_series(CURRENT_DATE - 6, CURRENT_DATE, '1 day') d
+          LEFT JOIN accounting_transactions t ON t.txn_date::date = d::date
+          GROUP BY d ORDER BY d
+        `);
+        revenueTrend = revResult.rows.map(r => ({
+          label: new Date(r.day).toLocaleDateString('en-US', { weekday: 'short' }),
+          value: Number(r.value || 0)
+        }));
+      } catch { /* revenue chart best-effort */ }
+
+      try {
+        const shadowResult = await query(`
+          SELECT COUNT(*) FILTER (WHERE outcome = 'match') AS matches,
+                 COUNT(*) AS total
+          FROM faye_decision_log
+          WHERE mode = 'shadow' AND decided_at > NOW() - INTERVAL '30 days'
+        `);
+        const { matches, total } = shadowResult.rows[0] || {};
+        if (Number(total) > 0) {
+          shadowAccuracy = Number(matches) / Number(total);
+        }
+      } catch { /* shadow accuracy best-effort */ }
+    }
+
     // Overall confidence: average of domain confidence levels
     const domainConfs = domains.filter(d => d.confidence > 0).map(d => d.confidence);
     const confidence = domainConfs.length > 0
@@ -1166,7 +1198,14 @@ router.get('/state', async (_req, res) => {
       confidence,
       farm_count: farmCount,
       actions_today: actionsToday,
-      proactive_message: proactiveMessage
+      proactive_message: proactiveMessage,
+      stats: {
+        farms_monitored: farmCount,
+        active_alerts: alerts,
+        actions_today: actionsToday,
+        revenue_trend: revenueTrend,
+        shadow_accuracy: shadowAccuracy
+      }
     });
   } catch (err) {
     console.error('[F.A.Y.E. State] Error:', err.message);
