@@ -459,7 +459,7 @@ router.post('/manual', async (req, res) => {
     }
 
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
-    const legacyQty = Math.round(manualQty); // legacy quantity column may be INTEGER
+    const legacyQty = Math.round(manualQty);
     const productId = sku || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     // Resolve pricing from the Crop Pricing page when not explicitly provided
@@ -468,50 +468,98 @@ router.post('/manual', async (req, res) => {
     const resolvedRetail = Number(retail_price) || cropPrices.retailPrice || unitPrice;
     const resolvedWholesale = Number(wholesale_price) || cropPrices.wholesalePrice || unitPrice;
 
-    const result = await query(
-      `INSERT INTO farm_inventory (
-        farm_id, product_id, product_name, sku, quantity, unit, price,
-        available_for_wholesale, manual_quantity_lbs, quantity_available,
-        quantity_unit, wholesale_price, retail_price, inventory_source,
-        category, variety, last_updated
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'manual',$14,$15,NOW())
-      ON CONFLICT (farm_id, product_id) DO UPDATE SET
-        product_name = EXCLUDED.product_name,
-        manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
-        quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs,
-        quantity_unit = EXCLUDED.quantity_unit,
-        wholesale_price = EXCLUDED.wholesale_price,
-        retail_price = EXCLUDED.retail_price,
-        price = EXCLUDED.price,
-        available_for_wholesale = EXCLUDED.available_for_wholesale,
-        inventory_source = CASE
-          WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'
-          ELSE 'manual'
-        END,
-        category = COALESCE(EXCLUDED.category, farm_inventory.category),
-        variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
-        last_updated = NOW()
-      RETURNING *`,
-      [
-        farmId,
-        productId,
-        product_name,
-        sku || productId,
-        legacyQty,                                       // quantity (legacy INTEGER column)
-        unit || 'lb',
-        unitPrice,
-        available_for_wholesale !== false,                // default true for manual growers
-        manualQty,                                       // manual_quantity_lbs
-        manualQty,                                       // quantity_available (initial; CONFLICT adds auto)
-        unit || 'lb',                                    // quantity_unit
-        resolvedWholesale,                                // wholesale_price
-        resolvedRetail,                                   // retail_price
-        category || null,
-        variety || null
-      ]
-    );
+    console.log(`[Manual Inventory] Attempting: farm=${farmId} product=${product_name} qty=${manualQty} id=${productId}`);
 
-    console.log(`[Manual Inventory] ${farmId}: ${product_name} → ${manualQty} ${unit || 'lb'}`);
+    let result;
+    try {
+      // Full INSERT with all extended columns (requires compatibility migration)
+      result = await query(
+        `INSERT INTO farm_inventory (
+          farm_id, product_id, product_name, sku, quantity, unit, price,
+          available_for_wholesale, manual_quantity_lbs, quantity_available,
+          quantity_unit, wholesale_price, retail_price, inventory_source,
+          category, variety, last_updated
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'manual',$14,$15,NOW())
+        ON CONFLICT (farm_id, product_id) DO UPDATE SET
+          product_name = EXCLUDED.product_name,
+          manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
+          quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs,
+          quantity_unit = EXCLUDED.quantity_unit,
+          wholesale_price = EXCLUDED.wholesale_price,
+          retail_price = EXCLUDED.retail_price,
+          price = EXCLUDED.price,
+          available_for_wholesale = EXCLUDED.available_for_wholesale,
+          inventory_source = CASE
+            WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'
+            ELSE 'manual'
+          END,
+          category = COALESCE(EXCLUDED.category, farm_inventory.category),
+          variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
+          last_updated = NOW()
+        RETURNING *`,
+        [
+          farmId,
+          productId,
+          product_name,
+          sku || productId,
+          legacyQty,
+          unit || 'lb',
+          unitPrice,
+          available_for_wholesale !== false,
+          manualQty,
+          manualQty,
+          unit || 'lb',
+          resolvedWholesale,
+          resolvedRetail,
+          category || null,
+          variety || null
+        ]
+      );
+    } catch (insertErr) {
+      // Log the full PG error for diagnostics
+      console.error('[Manual Inventory] Full INSERT failed:', {
+        message: insertErr.message,
+        code: insertErr.code,
+        detail: insertErr.detail,
+        hint: insertErr.hint,
+        column: insertErr.column,
+        table: insertErr.table,
+        constraint: insertErr.constraint,
+        where: insertErr.where,
+        stack: insertErr.stack
+      });
+
+      // Fallback: use only the base columns from migration 009
+      // (farm_id, product_id, product_name, sku, quantity, unit, price,
+      //  available_for_wholesale, last_updated)
+      console.log('[Manual Inventory] Trying fallback INSERT with base columns only');
+      result = await query(
+        `INSERT INTO farm_inventory (
+          farm_id, product_id, product_name, sku, quantity, unit, price,
+          available_for_wholesale, last_updated
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        ON CONFLICT (farm_id, product_id) DO UPDATE SET
+          product_name = EXCLUDED.product_name,
+          quantity = EXCLUDED.quantity,
+          price = EXCLUDED.price,
+          available_for_wholesale = EXCLUDED.available_for_wholesale,
+          last_updated = NOW()
+        RETURNING *`,
+        [
+          farmId,
+          productId,
+          product_name,
+          sku || productId,
+          legacyQty,
+          unit || 'lb',
+          unitPrice,
+          available_for_wholesale !== false
+        ]
+      );
+      console.log('[Manual Inventory] Fallback INSERT succeeded');
+    }
+
+    console.log(`[Manual Inventory] Saved: ${farmId}: ${product_name} = ${manualQty} ${unit || 'lb'}`);
 
     res.json({
       success: true,
@@ -519,8 +567,19 @@ router.post('/manual', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('[Manual Inventory] Error:', error);
-    res.status(500).json({ error: 'Failed to save manual inventory', detail: error.message });
+    const errDetail = typeof error === 'string' ? error
+      : (error?.message || error?.detail || JSON.stringify(error) || 'Unknown error');
+    console.error('[Manual Inventory] Error:', {
+      message: error?.message,
+      code: error?.code,
+      detail: error?.detail,
+      hint: error?.hint,
+      column: error?.column,
+      table: error?.table,
+      constraint: error?.constraint,
+      stack: error?.stack
+    });
+    res.status(500).json({ error: 'Failed to save manual inventory', detail: errDetail });
   }
 });
 
