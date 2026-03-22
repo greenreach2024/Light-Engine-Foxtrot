@@ -1421,6 +1421,123 @@ export const ADMIN_TOOL_CATALOG = {
         };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── Inter-Agent Communication (F.A.Y.E. <-> E.V.I.E.) ─────────
+
+  'send_message_to_evie': {
+    description: 'Send a message to E.V.I.E. — your subordinate agent. Use for directives (instructions), observations (shared intelligence), responses (replying to escalations), or status updates. Messages are persisted and E.V.I.E. will see them in her next interaction. Priority: low, normal, high, critical.',
+    category: 'write',
+    required: ['message_type', 'subject', 'body'],
+    optional: ['priority', 'context', 'reply_to_id'],
+    handler: async (params) => {
+      try {
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const context = params.context ? JSON.parse(params.context) : {};
+        const result = await sendAgentMessage(
+          'faye', 'evie',
+          params.message_type,
+          params.subject,
+          params.body,
+          context,
+          params.priority || 'normal',
+          params.reply_to_id ? parseInt(params.reply_to_id, 10) : null
+        );
+        return result
+          ? { ok: true, message: `Message sent to E.V.I.E.: "${params.subject}"`, message_id: result.id }
+          : { ok: false, error: 'Failed to send message to E.V.I.E.' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_evie_messages': {
+    description: 'Get messages from E.V.I.E. — escalations, observations, and status updates she has sent you. Shows unread messages by default. Use this to check for escalated grower issues and cross-farm patterns.',
+    category: 'read',
+    required: [],
+    optional: ['include_read', 'message_type', 'limit'],
+    handler: async (params) => {
+      try {
+        const { getUnreadMessages, getAgentMessageHistory, markMessagesRead } = await import('../services/faye-learning.js');
+        let messages;
+        if (params.include_read === 'true') {
+          messages = await getAgentMessageHistory(parseInt(params.limit, 10) || 30, params.message_type || null);
+          messages = messages.filter(m => m.recipient === 'faye' || m.sender === 'faye');
+        } else {
+          messages = await getUnreadMessages('faye', parseInt(params.limit, 10) || 20);
+        }
+        // Auto-mark unread as read
+        const unreadIds = messages.filter(m => m.status === 'unread' && m.recipient === 'faye').map(m => m.id);
+        if (unreadIds.length > 0) {
+          await markMessagesRead('faye', unreadIds);
+        }
+        return { ok: true, count: messages.length, messages };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_agent_conversation': {
+    description: 'Get the full message thread between F.A.Y.E. and E.V.I.E. for a specific context — e.g. all messages about a farm, order, or alert. Pass context_key and context_value to filter.',
+    category: 'read',
+    required: ['context_key', 'context_value'],
+    optional: ['limit'],
+    handler: async (params) => {
+      try {
+        const { getMessagesByContext } = await import('../services/faye-learning.js');
+        const messages = await getMessagesByContext(
+          params.context_key, params.context_value,
+          parseInt(params.limit, 10) || 20
+        );
+        return { ok: true, count: messages.length, messages };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Conversation History Recall ────────────────────────────────
+
+  'recall_conversations': {
+    description: 'Recall past conversation summaries from previous sessions. Use this when you need context about what was discussed in earlier conversations with the admin — topics, decisions, action items, and key metrics. Defaults to the last 30 days.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'limit'],
+    handler: async (params) => {
+      try {
+        const { getConversationRecap } = await import('../services/faye-learning.js');
+        const adminId = params.admin_id || 'unknown';
+        const recap = await getConversationRecap(
+          adminId,
+          parseInt(params.days, 10) || 30,
+          parseInt(params.limit, 10) || 20
+        );
+        return {
+          ok: true,
+          count: recap.length,
+          summaries: recap.map(r => ({
+            summary: r.summary,
+            message_count: r.message_count,
+            date: new Date(r.created_at).toLocaleDateString('en-CA')
+          }))
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'search_past_conversations': {
+    description: 'Search past conversations and summaries by keyword. Use this when you need to find specific topics, decisions, or context from prior sessions. Returns matching conversation fragments and summaries.',
+    category: 'read',
+    required: ['keyword'],
+    optional: ['limit'],
+    handler: async (params) => {
+      try {
+        const { searchConversationHistory } = await import('../services/faye-learning.js');
+        const adminId = params.admin_id || 'unknown';
+        const results = await searchConversationHistory(
+          adminId,
+          params.keyword,
+          parseInt(params.limit, 10) || 10
+        );
+        return { ok: true, count: results.length, results };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
 
@@ -1431,7 +1548,7 @@ export const ADMIN_TOOL_CATALOG = {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie']),
   quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
   confirm: new Set(['send_admin_email', 'send_sms']),
   admin: new Set(['process_refund'])

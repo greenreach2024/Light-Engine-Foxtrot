@@ -153,7 +153,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'save_user_memory']),
+  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['mark_harvest_complete']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -1053,6 +1053,55 @@ const GPT_TOOLS = [
         properties: {}
       }
     }
+  },
+  // --- Inter-Agent Communication (E.V.I.E. -> F.A.Y.E.) ---
+  {
+    type: 'function',
+    function: {
+      name: 'escalate_to_faye',
+      description: 'Escalate an issue to F.A.Y.E. (your senior agent) when a grower request has business implications you cannot handle — pricing decisions, refund requests, order disputes, network-level issues, or cross-farm patterns. F.A.Y.E. will review and act. Provide clear context so she can respond without needing to ask follow-up questions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          subject: { type: 'string', description: 'Brief subject line for the escalation (e.g. "Grower requests bulk discount", "Suspected overselling on microgreens")' },
+          body: { type: 'string', description: 'Full context: what the grower asked, what you observed, why this needs F.A.Y.E.\'s attention, and any relevant data (order IDs, amounts, farm IDs).' },
+          priority: { type: 'string', description: 'Priority: low, normal, high, critical. Use high/critical for financial or time-sensitive issues.' },
+          farm_id: { type: 'string', description: 'The farm_id this escalation relates to.' }
+        },
+        required: ['subject', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_faye_directives',
+      description: 'Check for messages and directives from F.A.Y.E. — instructions, responses to your escalations, observations, and status updates. Call this when starting a conversation or when a grower asks about something F.A.Y.E. may have addressed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          include_read: { type: 'string', description: 'Set to "true" to include previously read messages. Default: only unread.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'reply_to_faye',
+      description: 'Send a reply, observation, or status update to F.A.Y.E. Use this to report back on a directive she gave, share a cross-farm observation, or provide a status update on an ongoing issue.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message_type: { type: 'string', description: 'Type: "response" (replying to her message), "observation" (sharing intelligence), "status_update" (progress on an ongoing item).' },
+          subject: { type: 'string', description: 'Brief subject line.' },
+          body: { type: 'string', description: 'Full message content.' },
+          reply_to_id: { type: 'string', description: 'The message ID you are replying to (from get_faye_directives results).' },
+          farm_id: { type: 'string', description: 'The farm_id this relates to.' }
+        },
+        required: ['message_type', 'subject', 'body']
+      }
+    }
   }
 ];
 
@@ -1258,6 +1307,13 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal — guardrails enhance but aren't required */ }
 
+  // Load inter-agent context (directives from F.A.Y.E.)
+  let interAgentBlock = '';
+  try {
+    const { buildInterAgentContext } = await import('../services/faye-learning.js');
+    interAgentBlock = await buildInterAgentContext('evie') || '';
+  } catch { /* non-fatal */ }
+
   return `You are E.V.I.E. (Environmental Vision & Intelligence Engine) — the GreenReach Farm Assistant and an expert indoor vertical-farming advisor. You help farmers manage their CEA (Controlled Environment Agriculture) operations through natural conversation. You have access to real-time farm data, 50 crop growth recipes, market intelligence, and can execute actions. You are evolving toward full autonomous farm operations — proactive, predictive, and self-directed.
 
 CURRENT FARM STATE:
@@ -1375,7 +1431,15 @@ AUTONOMY MINDSET:
 - When presenting yield forecasts, connect them to market pricing trends — suggest timing harvest/sales for maximum revenue.
 - Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
 - Proactive alerts are generated every 5 minutes for environment, nutrient, and hardware issues. Reference these in your daily briefings.
-${guardrailsBlock}
+${guardrailsBlock}${interAgentBlock}
+INTER-AGENT COMMUNICATION:
+- F.A.Y.E. is your senior agent. She handles business operations, pricing, refunds, and network management.
+- Use escalate_to_faye when a grower request has business implications you cannot handle (pricing disputes, refund requests, order modifications, cross-farm issues).
+- Use get_faye_directives at the start of each conversation to check for standing directives or responses from F.A.Y.E.
+- Use reply_to_faye to send observations, status updates, or responses back to F.A.Y.E.
+- Never expose inter-agent messages to growers. Summarize relevant information naturally.
+- If F.A.Y.E. sends a directive, follow it unless it conflicts with a hard safety boundary.
+
 FARM SETUP GUIDANCE:
 - You have tools to guide new farmers through setup: update_farm_profile, create_room, create_zone, list_rooms, update_certifications, get_onboarding_status, complete_setup.
 - If CURRENT FARM STATE shows "Setup completed: No", proactively offer to walk the user through setup.
@@ -2469,6 +2533,71 @@ async function executeExtendedTool(toolName, params, farmId) {
             recent_messages: parseInt(recentActivity.messages || 0)
           }
         };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Inter-Agent Communication (E.V.I.E. -> F.A.Y.E.) ──
+
+    case 'escalate_to_faye': {
+      try {
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const context = { farm_id: params.farm_id || farmId };
+        const result = await sendAgentMessage(
+          'evie', 'faye',
+          'escalation',
+          String(params.subject).slice(0, 200),
+          String(params.body).slice(0, 2000),
+          context,
+          params.priority || 'normal'
+        );
+        return result
+          ? { ok: true, message: `Escalation sent to F.A.Y.E.: "${params.subject}". She will review and respond.`, escalation_id: result.id }
+          : { ok: false, error: 'Failed to send escalation. F.A.Y.E. may be unavailable.' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_faye_directives': {
+      try {
+        const { getUnreadMessages, getAgentMessageHistory, markMessagesRead } = await import('../services/faye-learning.js');
+        let messages;
+        if (params.include_read === 'true') {
+          messages = await getAgentMessageHistory(20, null);
+          messages = messages.filter(m => m.recipient === 'evie' || m.sender === 'evie');
+        } else {
+          messages = await getUnreadMessages('evie', 20);
+        }
+        // Auto-mark as read
+        const unreadIds = messages.filter(m => m.status === 'unread' && m.recipient === 'evie').map(m => m.id);
+        if (unreadIds.length > 0) {
+          await markMessagesRead('evie', unreadIds);
+        }
+        return { ok: true, count: messages.length, messages };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'reply_to_faye': {
+      try {
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const msgType = ['response', 'observation', 'status_update'].includes(params.message_type) ? params.message_type : 'response';
+        const context = { farm_id: params.farm_id || farmId };
+        const result = await sendAgentMessage(
+          'evie', 'faye',
+          msgType,
+          String(params.subject).slice(0, 200),
+          String(params.body).slice(0, 2000),
+          context,
+          'normal',
+          params.reply_to_id ? parseInt(params.reply_to_id, 10) : null
+        );
+        return result
+          ? { ok: true, message: `Message sent to F.A.Y.E.: "${params.subject}"`, message_id: result.id }
+          : { ok: false, error: 'Failed to send message to F.A.Y.E.' };
       } catch (err) {
         return { ok: false, error: err.message };
       }

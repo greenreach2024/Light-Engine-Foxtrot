@@ -25,8 +25,8 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool, getTrustTier } from './admin-ops-agent.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
-import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights } from '../services/faye-learning.js';
-import { buildPolicyContext } from '../services/faye-policy.js';
+import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights, buildInterAgentContext, getConversationRecap } from '../services/faye-learning.js';
+import { buildPolicyContext, checkIntegrityGate, checkSecurityGate } from '../services/faye-policy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -226,7 +226,7 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
   let policyContext = '';
 
   try {
-    const [farms, orders, buyers, summaries, memory, alerts, learned, autonomy] = await Promise.all([
+    const [farms, orders, buyers, summaries, memory, alerts, learned, autonomy, interAgentCtx] = await Promise.all([
       listNetworkFarms().catch(() => []),
       listAllOrders({ limit: 1 }).catch(() => ({ total: 0 })),
       Promise.resolve(listAllBuyers()).catch(() => []),
@@ -236,7 +236,8 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
         ? query('SELECT COUNT(*) AS cnt FROM admin_alerts WHERE resolved = FALSE').catch(() => ({ rows: [{ cnt: 0 }] }))
         : Promise.resolve({ rows: [{ cnt: 0 }] }),
       buildLearningContext().catch(() => ''),
-      buildAutonomyContext().catch(() => '')
+      buildAutonomyContext().catch(() => ''),
+      buildInterAgentContext('faye').catch(() => '')
     ]);
     farmCount = Array.isArray(farms) ? farms.length : 0;
     orderCount = orders?.total || 0;
@@ -334,7 +335,12 @@ You have a persistent knowledge base with confidence calibration:
 - Track your domain ownership levels. Work to advance them through demonstrated competence.
 
 Confidence calibration: insights confirmed by positive outcomes gain confidence. Insights contradicted by negative outcomes lose confidence. Low-confidence insights are eventually archived. This is how you self-correct.
-${memorySection}${summarySection}${learningContext}${autonomyContext}
+${memorySection}${summarySection}${learningContext}${autonomyContext}${interAgentCtx}
+
+## Inter-Agent Communication
+You can send messages to and receive messages from E.V.I.E. using send_message_to_evie and get_evie_messages tools. Check for unread E.V.I.E. messages at the start of every conversation. Respond to escalations promptly. When sending directives, be specific about what you need E.V.I.E. to do.
+
+You also have persistent conversation memory. Use recall_conversations to review past session summaries and search_past_conversations to find specific topics from previous interactions. Reference relevant history when it helps the current discussion.
 
 ## Response Style
 - Be direct, professional, and concise
@@ -416,13 +422,24 @@ async function chatWithClaude(systemPrompt, messages, tools, convId, adminId) {
         hasPendingAction = true;
       } else {
         try {
-          // Inject admin context into write-tool params
-          const enrichedInput = ADMIN_TOOL_CATALOG[name]?.category === 'write'
-            ? { ...input, admin_id: adminId || input?.admin_id } : input;
-          result = await executeAdminTool(name, enrichedInput || {});
-          // Log write tool executions
-          if (ADMIN_TOOL_CATALOG[name]?.category === 'write') {
-            logDecision(name, input, result).catch(() => {});
+          // Policy gate checks — block writes when integrity/security is degraded
+          const secGate = checkSecurityGate(name);
+          if (!secGate.allowed) {
+            result = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
+          } else {
+            const intGate = checkIntegrityGate(name);
+            if (!intGate.allowed) {
+              result = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
+            } else {
+              // Inject admin context into write-tool params
+              const enrichedInput = ADMIN_TOOL_CATALOG[name]?.category === 'write'
+                ? { ...input, admin_id: adminId || input?.admin_id } : input;
+              result = await executeAdminTool(name, enrichedInput || {});
+              // Log write tool executions
+              if (ADMIN_TOOL_CATALOG[name]?.category === 'write') {
+                logDecision(name, input, result).catch(() => {});
+              }
+            }
           }
         } catch (err) {
           result = { ok: false, error: err.message };
@@ -548,12 +565,23 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools, convId, adminId
         };
         hasPendingAction = true;
       } else {
-        // Inject admin context into write-tool params
-        const enrichedArgs = ADMIN_TOOL_CATALOG[fnName]?.category === 'write'
-          ? { ...fnArgs, admin_id: adminId || fnArgs.admin_id } : fnArgs;
-        try { result = await executeAdminTool(fnName, enrichedArgs); } catch (err) { result = { ok: false, error: err.message }; }
-        if (ADMIN_TOOL_CATALOG[fnName]?.category === 'write') {
-          logDecision(fnName, fnArgs, result).catch(() => {});
+        // Policy gate checks — block writes when integrity/security is degraded
+        const secGate = checkSecurityGate(fnName);
+        if (!secGate.allowed) {
+          result = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
+        } else {
+          const intGate = checkIntegrityGate(fnName);
+          if (!intGate.allowed) {
+            result = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
+          } else {
+            // Inject admin context into write-tool params
+            const enrichedArgs = ADMIN_TOOL_CATALOG[fnName]?.category === 'write'
+              ? { ...fnArgs, admin_id: adminId || fnArgs.admin_id } : fnArgs;
+            try { result = await executeAdminTool(fnName, enrichedArgs); } catch (err) { result = { ok: false, error: err.message }; }
+            if (ADMIN_TOOL_CATALOG[fnName]?.category === 'write') {
+              logDecision(fnName, fnArgs, result).catch(() => {});
+            }
+          }
         }
       }
 
@@ -831,9 +859,20 @@ router.post('/chat/stream', async (req, res) => {
             sendEvent('pending_action', { tool: block.name, tier });
           } else {
             try {
-              const enrichedInput = ADMIN_TOOL_CATALOG[block.name]?.category === 'write'
-                ? { ...block.input, admin_id: adminId || block.input?.admin_id } : block.input;
-              toolResult = await executeAdminTool(block.name, enrichedInput || {});
+              // Policy gate checks — block writes when integrity/security is degraded
+              const secGate = checkSecurityGate(block.name);
+              if (!secGate.allowed) {
+                toolResult = { ok: false, error: `Security pause active: ${secGate.reason}. Only read operations permitted.` };
+              } else {
+                const intGate = checkIntegrityGate(block.name);
+                if (!intGate.allowed) {
+                  toolResult = { ok: false, error: `Data integrity degraded: ${intGate.reason}. Action blocked — advisory mode only.` };
+                } else {
+                  const enrichedInput = ADMIN_TOOL_CATALOG[block.name]?.category === 'write'
+                    ? { ...block.input, admin_id: adminId || block.input?.admin_id } : block.input;
+                  toolResult = await executeAdminTool(block.name, enrichedInput || {});
+                }
+              }
             }
             catch (err) { toolResult = { ok: false, error: err.message }; }
             if (ADMIN_TOOL_CATALOG[block.name]?.category === 'write') {

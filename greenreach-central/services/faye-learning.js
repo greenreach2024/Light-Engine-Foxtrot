@@ -21,6 +21,7 @@
 
 import { query, isDatabaseAvailable } from '../config/database.js';
 import logger from '../utils/logger.js';
+import { checkSensitiveContent } from './faye-policy.js';
 
 const TAG = '[F.A.Y.E. Learning]';
 
@@ -28,6 +29,7 @@ const TAG = '[F.A.Y.E. Learning]';
 
 /**
  * Store a learned insight. Upserts by domain + topic.
+ * Screens for sensitive content before storage.
  * @param {string} domain - e.g. 'accounting', 'farm_network', 'orders', 'operations'
  * @param {string} topic - specific topic key within domain
  * @param {string} insight - the learned information
@@ -36,6 +38,14 @@ const TAG = '[F.A.Y.E. Learning]';
  */
 export async function storeInsight(domain, topic, insight, source = 'conversation', confidence = 0.7) {
   if (!isDatabaseAvailable()) return null;
+
+  // Governance: check for sensitive content
+  const contentCheck = checkSensitiveContent(insight);
+  if (!contentCheck.safe) {
+    logger.warn(`${TAG} Blocked insight storage — sensitive content detected in: ${domain}/${topic}`);
+    return { blocked: true, reason: 'Sensitive content detected (PII, credentials, or financial tokens). Cannot store in knowledge base.' };
+  }
+
   try {
     const result = await query(`
       INSERT INTO faye_knowledge (domain, topic, insight, source, confidence, access_count)
@@ -622,5 +632,262 @@ export async function buildLearningContext() {
   } catch (err) {
     logger.error(`${TAG} Failed to build learning context:`, err.message);
     return '';
+  }
+}
+
+// ── Inter-Agent Communication ────────────────────────────────────
+// F.A.Y.E. <-> E.V.I.E. messaging system.
+// Messages are persisted in the agent_messages table for audit trail
+// and recalled by both agents when needed.
+
+/**
+ * Message types for inter-agent communication:
+ * - escalation: E.V.I.E. escalates a grower issue to F.A.Y.E.
+ * - directive: F.A.Y.E. sends an instruction/directive to E.V.I.E.
+ * - observation: Either agent shares an observation with the other.
+ * - response: Reply to a prior message.
+ * - status_update: Informational update about an ongoing item.
+ */
+const VALID_MESSAGE_TYPES = ['escalation', 'directive', 'observation', 'response', 'status_update'];
+const VALID_PRIORITIES = ['low', 'normal', 'high', 'critical'];
+
+let agentMessagesTableEnsured = false;
+async function ensureAgentMessagesTable() {
+  if (agentMessagesTableEnsured || !isDatabaseAvailable()) return;
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS agent_messages (
+        id SERIAL PRIMARY KEY,
+        sender VARCHAR(20) NOT NULL,
+        recipient VARCHAR(20) NOT NULL,
+        message_type VARCHAR(30) NOT NULL,
+        subject VARCHAR(200) NOT NULL,
+        body TEXT NOT NULL,
+        context JSONB DEFAULT '{}',
+        priority VARCHAR(10) DEFAULT 'normal',
+        reply_to_id INTEGER REFERENCES agent_messages(id),
+        status VARCHAR(10) DEFAULT 'unread',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    agentMessagesTableEnsured = true;
+  } catch (err) {
+    logger.warn(`${TAG} Failed to ensure agent_messages table:`, err.message);
+  }
+}
+
+/**
+ * Send an inter-agent message.
+ * @param {string} sender - 'faye' or 'evie'
+ * @param {string} recipient - 'faye' or 'evie'
+ * @param {string} messageType - one of VALID_MESSAGE_TYPES
+ * @param {string} subject - brief subject line
+ * @param {string} body - full message content
+ * @param {object} context - additional context (farm_id, order_id, alert_id, etc.)
+ * @param {string} priority - low, normal, high, critical
+ * @param {number} replyToId - if replying to a previous message
+ */
+export async function sendAgentMessage(sender, recipient, messageType, subject, body, context = {}, priority = 'normal', replyToId = null) {
+  if (!isDatabaseAvailable()) {
+    logger.warn(`${TAG} Cannot send agent message: DB unavailable`);
+    return null;
+  }
+  await ensureAgentMessagesTable();
+  if (!VALID_MESSAGE_TYPES.includes(messageType)) {
+    logger.warn(`${TAG} Invalid message type: ${messageType}`);
+    return null;
+  }
+  if (!VALID_PRIORITIES.includes(priority)) {
+    priority = 'normal';
+  }
+  if (!['faye', 'evie'].includes(sender) || !['faye', 'evie'].includes(recipient)) {
+    logger.warn(`${TAG} Invalid sender/recipient: ${sender} -> ${recipient}`);
+    return null;
+  }
+
+  try {
+    const result = await query(`
+      INSERT INTO agent_messages (sender, recipient, message_type, subject, body, context, priority, reply_to_id, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'unread', NOW())
+      RETURNING id, created_at
+    `, [sender, recipient, messageType, subject, body, JSON.stringify(context), priority, replyToId]);
+
+    const row = result.rows[0];
+    logger.info(`${TAG} Agent message sent: ${sender} -> ${recipient} [${messageType}] "${subject}" (id: ${row.id})`);
+    return { id: row.id, created_at: row.created_at };
+  } catch (err) {
+    logger.error(`${TAG} Failed to send agent message:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Get unread messages for an agent.
+ */
+export async function getUnreadMessages(recipient, limit = 20) {
+  if (!isDatabaseAvailable()) return [];
+  await ensureAgentMessagesTable();
+  try {
+    const result = await query(`
+      SELECT id, sender, message_type, subject, body, context, priority, reply_to_id, created_at
+      FROM agent_messages
+      WHERE recipient = $1 AND status = 'unread'
+      ORDER BY
+        CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+        created_at DESC
+      LIMIT $2
+    `, [recipient, limit]);
+    return result.rows;
+  } catch (err) {
+    logger.error(`${TAG} Failed to get unread messages:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Get message history between agents (both directions).
+ */
+export async function getAgentMessageHistory(limit = 50, messageType = null) {
+  if (!isDatabaseAvailable()) return [];
+  try {
+    let sql = `
+      SELECT id, sender, recipient, message_type, subject, body, context, priority, status, reply_to_id, created_at
+      FROM agent_messages
+    `;
+    const values = [];
+    if (messageType) {
+      sql += ' WHERE message_type = $1';
+      values.push(messageType);
+    }
+    sql += ` ORDER BY created_at DESC LIMIT $${values.length + 1}`;
+    values.push(limit);
+
+    const result = await query(sql, values);
+    return result.rows;
+  } catch (err) {
+    logger.error(`${TAG} Failed to get agent message history:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Mark messages as read.
+ */
+export async function markMessagesRead(recipient, messageIds) {
+  if (!isDatabaseAvailable() || !messageIds?.length) return false;
+  try {
+    await query(`
+      UPDATE agent_messages SET status = 'read'
+      WHERE recipient = $1 AND id = ANY($2::int[])
+    `, [recipient, messageIds]);
+    return true;
+  } catch (err) {
+    logger.error(`${TAG} Failed to mark messages read:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Get messages for a specific context (e.g. all messages about a particular farm or order).
+ */
+export async function getMessagesByContext(contextKey, contextValue, limit = 20) {
+  if (!isDatabaseAvailable()) return [];
+  try {
+    const result = await query(`
+      SELECT id, sender, recipient, message_type, subject, body, context, priority, status, created_at
+      FROM agent_messages
+      WHERE context::jsonb ->> $1 = $2
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [contextKey, String(contextValue), limit]);
+    return result.rows;
+  } catch (err) {
+    logger.error(`${TAG} Failed to get messages by context:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Build inter-agent context for system prompt injection.
+ * Shows recent unread messages and active threads.
+ */
+export async function buildInterAgentContext(agentName) {
+  try {
+    const unread = await getUnreadMessages(agentName, 10);
+    if (unread.length === 0) return '';
+
+    const parts = ['\n## Inter-Agent Messages'];
+    parts.push(`You have ${unread.length} unread message(s) from ${agentName === 'faye' ? 'E.V.I.E.' : 'F.A.Y.E.'}:`);
+    for (const msg of unread) {
+      const priority = msg.priority === 'critical' || msg.priority === 'high' ? ` [${msg.priority.toUpperCase()}]` : '';
+      parts.push(`- [${msg.message_type}]${priority} "${msg.subject}" — ${msg.body.slice(0, 200)}${msg.body.length > 200 ? '...' : ''} (${new Date(msg.created_at).toLocaleString('en-CA')})`);
+    }
+    parts.push('');
+    parts.push('Use get_evie_messages (or get_faye_directives) to see full details. Reply with send_message_to_evie (or escalate_to_faye).');
+    return parts.join('\n');
+  } catch (err) {
+    logger.error(`${TAG} Failed to build inter-agent context:`, err.message);
+    return '';
+  }
+}
+
+// ── Conversation History Recall ──────────────────────────────────
+// Persistent conversation recall — lets F.A.Y.E. access past
+// conversations beyond the current session.
+
+/**
+ * Get recent conversation summaries for F.A.Y.E. to recall context
+ * from past sessions.
+ */
+export async function getConversationRecap(adminId, days = 30, limit = 20) {
+  if (!isDatabaseAvailable()) return [];
+  try {
+    const result = await query(`
+      SELECT summary, message_count, created_at
+      FROM admin_assistant_summaries
+      WHERE admin_id = $1
+        AND created_at > NOW() - ($2 || ' days')::interval
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [adminId, days, limit]);
+    return result.rows;
+  } catch (err) {
+    logger.error(`${TAG} Failed to get conversation recap:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Search past conversations by keyword.
+ * Searches across both conversation messages and summaries.
+ */
+export async function searchConversationHistory(adminId, keyword, limit = 10) {
+  if (!isDatabaseAvailable() || !keyword) return [];
+  try {
+    const searchTerm = `%${keyword.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+    // Search summaries first (faster, already distilled)
+    const summaryResult = await query(`
+      SELECT 'summary' AS source, summary AS content, message_count, created_at
+      FROM admin_assistant_summaries
+      WHERE admin_id = $1 AND summary ILIKE $2
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [adminId, searchTerm, limit]);
+
+    // Also search raw conversation messages
+    const convResult = await query(`
+      SELECT 'conversation' AS source, messages::text AS content, message_count, updated_at AS created_at
+      FROM admin_assistant_conversations
+      WHERE admin_id = $1 AND messages::text ILIKE $2
+      ORDER BY updated_at DESC
+      LIMIT $3
+    `, [adminId, searchTerm, limit]);
+
+    return [...summaryResult.rows, ...convResult.rows]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, limit);
+  } catch (err) {
+    logger.error(`${TAG} Failed to search conversation history:`, err.message);
+    return [];
   }
 }
