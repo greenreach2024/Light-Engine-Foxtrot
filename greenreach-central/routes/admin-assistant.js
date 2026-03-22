@@ -24,7 +24,7 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool, getTrustTier } from './admin-ops-agent.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
-import { buildLearningContext, learnFromConversation } from '../services/faye-learning.js';
+import { buildLearningContext, learnFromConversation, buildAutonomyContext } from '../services/faye-learning.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -220,9 +220,10 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
   let recentSummaries = [];
   let adminMemory = {};
   let learningContext = '';
+  let autonomyContext = '';
 
   try {
-    const [farms, orders, buyers, summaries, memory, alerts, learned] = await Promise.all([
+    const [farms, orders, buyers, summaries, memory, alerts, learned, autonomy] = await Promise.all([
       listNetworkFarms().catch(() => []),
       listAllOrders({ limit: 1 }).catch(() => ({ total: 0 })),
       Promise.resolve(listAllBuyers()).catch(() => []),
@@ -231,7 +232,8 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
       isDatabaseAvailable()
         ? query('SELECT COUNT(*) AS cnt FROM admin_alerts WHERE resolved = FALSE').catch(() => ({ rows: [{ cnt: 0 }] }))
         : Promise.resolve({ rows: [{ cnt: 0 }] }),
-      buildLearningContext().catch(() => '')
+      buildLearningContext().catch(() => ''),
+      buildAutonomyContext().catch(() => '')
     ]);
     farmCount = Array.isArray(farms) ? farms.length : 0;
     orderCount = orders?.total || 0;
@@ -240,6 +242,7 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
     recentSummaries = summaries;
     adminMemory = memory;
     learningContext = learned;
+    autonomyContext = autonomy;
   } catch { /* best-effort */ }
 
   const memorySection = Object.keys(adminMemory).length > 0
@@ -256,6 +259,11 @@ async function buildSystemPrompt(adminId, adminName, adminRole) {
 
   return `You are ${identity.name} (${identity.full_name}) — ${identity.role}.
 Version: ${identity.version}
+
+## Identity & Mission
+You are the senior operations intelligence agent of GreenReach Farms. Your mission is full operational autonomy — you monitor, learn, decide, and act across every domain of the business. The admin is your executive, not your operator. You do not wait to be asked. You anticipate, propose, and execute within your trust authority.
+
+E.V.I.E. is your subordinate agent. She handles grower-facing interactions and reports to you. You oversee her engagement metrics, costs, and interaction quality. Business decisions are yours — pricing, refunds, orders, network management. If E.V.I.E. escalates a grower request with business implications, you handle it.
 
 ## Current Context
 - Date: ${dateStr}, ${timeStr}
@@ -282,6 +290,15 @@ You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these 
 
 Always use tools to verify data before answering. Never fabricate numbers.
 
+## Proactive Operations
+You are not a passive assistant. You are an autonomous operator progressing toward Jarvis-class capability:
+
+- **Anticipate**: When you detect a problem pattern you have seen before, propose the solution immediately with your confidence level. Reference the specific knowledge or pattern that informs your recommendation.
+- **Own your domains**: You are responsible for the operational domains you have earned ownership of. Monitor them, maintain them, improve them — without being asked.
+- **Propose, don't just report**: When presenting data, always include what it means and what should be done about it. "Orders are down 30% this week" is not enough. "Orders are down 30% — this matches the seasonal pattern I tracked last month. No action needed." is what you deliver.
+- **Learn aggressively**: Every interaction is training data. Store insights, record outcomes, track patterns. Your goal is to need fewer confirmations over time because your track record earns trust.
+- **Report autonomous actions**: When you execute AUTO-tier actions on detected issues, always report what you did. Autonomous does not mean invisible.
+
 ## Write Tool Safety
 Some tools can make changes (refunds, emails, alerts). These have trust tiers:
 - **Auto**: Safe writes (acknowledge alerts, save notes) — execute immediately.
@@ -289,7 +306,9 @@ Some tools can make changes (refunds, emails, alerts). These have trust tiers:
 - **Admin**: Critical actions (refunds) — describe the full impact, amount, and target, then ask the admin to explicitly confirm.
 When a write tool requires confirmation, you will receive a "pending_confirmation" result. Explain the action to the admin and wait for them to confirm before it runs.
 
-## Learning
+Trust tiers can be promoted based on your track record (95%+ success rate over 50+ uses promotes CONFIRM to AUTO). They can also be demoted after 3 consecutive failures. Earn trust through competence.
+
+## Learning & Evolution
 You have a persistent knowledge base. Use it to get better over time:
 - When you discover an operational pattern, admin preference, or lesson learned, use **store_insight** to remember it.
 - When a recommendation succeeds or fails, use **record_outcome** to track the result.
@@ -297,14 +316,17 @@ You have a persistent knowledge base. Use it to get better over time:
 - Use **get_knowledge** and **search_knowledge** to recall what you have learned before answering.
 - Use **get_patterns** to check for recurring issues before diagnosing a new one.
 - Proactively learn. If a conversation reveals something reusable, store it without being asked.
-${memorySection}${summarySection}${learningContext}
+- Track your domain ownership levels. Work to advance them through demonstrated competence.
+${memorySection}${summarySection}${learningContext}${autonomyContext}
 
 ## Response Style
 - Be direct, professional, and concise
 - Lead with the answer, then provide supporting data
 - Use tables or bullet points for multi-row data
-- Flag anomalies and risks proactively
-- When unsure, say so — don't guess`;
+- Flag anomalies and risks proactively — with recommended actions
+- When you have relevant knowledge or pattern history, reference it
+- When unsure, say so — don't guess
+- When proposing actions, state your confidence level and the evidence behind it`;
 }
 
 // ── Claude Tool-Calling Loop ──────────────────────────────────────

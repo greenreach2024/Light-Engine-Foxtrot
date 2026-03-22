@@ -1,6 +1,6 @@
 /**
- * F.A.Y.E. Learning Engine — Phase 5
- * ====================================
+ * F.A.Y.E. Learning Engine — Phase 6 (Autonomy)
+ * ================================================
  * Persistent learning system that allows F.A.Y.E. to:
  *
  * 1. Track outcomes of recommendations and actions
@@ -8,13 +8,15 @@
  * 3. Recognize recurring patterns across alerts, issues, and operations
  * 4. Build a knowledge base that improves responses over time
  * 5. Self-evaluate alert accuracy (false positive tracking)
+ * 6. Evaluate trust tier promotions based on tool success rates
+ * 7. Track domain ownership levels and advancement criteria
  *
  * Tables:
  *   faye_knowledge     — Reusable insights keyed by domain + topic
  *   faye_outcomes      — Action/recommendation outcome tracking
  *   faye_patterns      — Recurring pattern detection across alerts/operations
  *
- * Future: This is the foundation for F.A.Y.E. evolving the app from within.
+ * See FAYE_VISION.md for the full autonomy progression framework.
  */
 
 import { query, isDatabaseAvailable } from '../config/database.js';
@@ -337,6 +339,199 @@ export async function getFalsePositiveRate(domain, days = 30) {
   } catch (err) {
     logger.error(`${TAG} Failed to get false positive rate:`, err.message);
     return null;
+  }
+}
+
+// ── Trust Tier Promotion ─────────────────────────────────────────
+
+/**
+ * Evaluate whether a tool qualifies for trust tier promotion.
+ * Returns promotion recommendation or null if no change.
+ *
+ * Thresholds (from FAYE_VISION.md):
+ *   CONFIRM -> AUTO: success rate > 95% over 50+ uses
+ *   ADMIN -> CONFIRM: success rate > 98% over 100+ uses
+ *   Demotion: 3 consecutive negative outcomes
+ */
+export async function evaluateTrustPromotion(toolName, currentTier, days = 60) {
+  if (!isDatabaseAvailable()) return null;
+  try {
+    // Get outcome stats for this tool
+    const result = await query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE o.outcome = 'positive') AS positives,
+        COUNT(*) FILTER (WHERE o.outcome = 'negative') AS negatives
+      FROM faye_outcomes o
+      LEFT JOIN faye_decision_log d ON d.id = o.decision_id
+      WHERE d.tool_name = $1
+        AND o.created_at > NOW() - ($2 || ' days')::interval
+    `, [toolName, days]);
+
+    const { total, positives, negatives } = result.rows[0] || {};
+    const totalNum = Number(total) || 0;
+    const posNum = Number(positives) || 0;
+    const negNum = Number(negatives) || 0;
+
+    if (totalNum === 0) return null;
+
+    const successRate = posNum / totalNum;
+
+    // Check for demotion: 3 consecutive failures
+    const recentResult = await query(`
+      SELECT o.outcome FROM faye_outcomes o
+      LEFT JOIN faye_decision_log d ON d.id = o.decision_id
+      WHERE d.tool_name = $1
+      ORDER BY o.created_at DESC
+      LIMIT 3
+    `, [toolName]);
+
+    const recentOutcomes = recentResult.rows.map(r => r.outcome);
+    const consecutiveFailures = recentOutcomes.length === 3 &&
+      recentOutcomes.every(o => o === 'negative');
+
+    if (consecutiveFailures) {
+      logger.info(`${TAG} Trust demotion candidate: ${toolName} (3 consecutive failures)`);
+      return {
+        tool: toolName,
+        action: 'demote',
+        currentTier,
+        reason: `3 consecutive negative outcomes`,
+        successRate,
+        totalUses: totalNum
+      };
+    }
+
+    // Check for promotion
+    if (currentTier === 'CONFIRM' && successRate > 0.95 && totalNum >= 50) {
+      logger.info(`${TAG} Trust promotion candidate: ${toolName} CONFIRM->AUTO (${(successRate * 100).toFixed(1)}% over ${totalNum} uses)`);
+      return {
+        tool: toolName,
+        action: 'promote',
+        currentTier: 'CONFIRM',
+        newTier: 'AUTO',
+        reason: `${(successRate * 100).toFixed(1)}% success rate over ${totalNum} uses`,
+        successRate,
+        totalUses: totalNum
+      };
+    }
+
+    if (currentTier === 'ADMIN' && successRate > 0.98 && totalNum >= 100) {
+      logger.info(`${TAG} Trust promotion candidate: ${toolName} ADMIN->CONFIRM (${(successRate * 100).toFixed(1)}% over ${totalNum} uses)`);
+      return {
+        tool: toolName,
+        action: 'promote',
+        currentTier: 'ADMIN',
+        newTier: 'CONFIRM',
+        reason: `${(successRate * 100).toFixed(1)}% success rate over ${totalNum} uses`,
+        successRate,
+        totalUses: totalNum
+      };
+    }
+
+    return null;
+  } catch (err) {
+    logger.error(`${TAG} Failed to evaluate trust promotion:`, err.message);
+    return null;
+  }
+}
+
+// ── Domain Ownership Tracking ────────────────────────────────────
+
+const DOMAIN_LEVELS = ['L0', 'L1', 'L2', 'L3', 'L4'];
+const DOMAINS = [
+  'alert_triage', 'accounting', 'farm_health',
+  'orders', 'payments', 'network', 'evie_oversight', 'market_intel'
+];
+
+/**
+ * Get current autonomy level for an operational domain.
+ * Stored in faye_knowledge with domain='autonomy'.
+ */
+export async function getDomainOwnership(domainName) {
+  if (!isDatabaseAvailable()) return { domain: domainName, level: 'L0', detail: 'No data' };
+  try {
+    const result = await query(`
+      SELECT insight, confidence, updated_at
+      FROM faye_knowledge
+      WHERE domain = 'autonomy' AND topic = $1 AND archived = FALSE
+    `, [`domain_ownership:${domainName}`]);
+
+    if (result.rows.length === 0) {
+      return { domain: domainName, level: 'L0', detail: 'Not yet tracked' };
+    }
+
+    const row = result.rows[0];
+    // Insight format: "L2: Advisory — proposes actions with confidence levels"
+    const levelMatch = row.insight.match(/^(L\d)/);
+    return {
+      domain: domainName,
+      level: levelMatch ? levelMatch[1] : 'L0',
+      detail: row.insight,
+      confidence: row.confidence,
+      updatedAt: row.updated_at
+    };
+  } catch (err) {
+    logger.error(`${TAG} Failed to get domain ownership:`, err.message);
+    return { domain: domainName, level: 'L0', detail: 'Error' };
+  }
+}
+
+/**
+ * Get ownership levels for all operational domains.
+ */
+export async function getAllDomainOwnership() {
+  const results = [];
+  for (const d of DOMAINS) {
+    results.push(await getDomainOwnership(d));
+  }
+  return results;
+}
+
+/**
+ * Update the autonomy level for a domain.
+ * @param {string} domainName - one of DOMAINS
+ * @param {string} level - L0 through L4
+ * @param {string} detail - description of current capability at this level
+ */
+export async function setDomainOwnership(domainName, level, detail) {
+  if (!DOMAINS.includes(domainName)) {
+    logger.warn(`${TAG} Unknown domain: ${domainName}`);
+    return null;
+  }
+  if (!DOMAIN_LEVELS.includes(level)) {
+    logger.warn(`${TAG} Invalid level: ${level}`);
+    return null;
+  }
+
+  const insight = `${level}: ${detail}`;
+  const confidence = DOMAIN_LEVELS.indexOf(level) / (DOMAIN_LEVELS.length - 1); // L0=0, L4=1.0
+  return storeInsight('autonomy', `domain_ownership:${domainName}`, insight, 'self_assessment', confidence);
+}
+
+/**
+ * Build autonomy context for system prompt injection.
+ * Shows current domain ownership levels and any pending trust promotions.
+ */
+export async function buildAutonomyContext() {
+  try {
+    const ownership = await getAllDomainOwnership();
+    const parts = [];
+
+    const tracked = ownership.filter(o => o.level !== 'L0' || o.detail !== 'Not yet tracked');
+    if (tracked.length > 0) {
+      parts.push('');
+      parts.push('## Domain Ownership Status');
+      parts.push('Your current autonomy level per operational domain:');
+      for (const o of ownership) {
+        parts.push(`- **${o.domain}**: ${o.level} — ${o.detail}`);
+      }
+    }
+
+    return parts.length > 0 ? parts.join('\n') : '';
+  } catch (err) {
+    logger.error(`${TAG} Failed to build autonomy context:`, err.message);
+    return '';
   }
 }
 

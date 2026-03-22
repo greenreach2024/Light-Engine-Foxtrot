@@ -1139,6 +1139,63 @@ export const ADMIN_TOOL_CATALOG = {
         return stats ? { ok: true, ...stats } : { ok: false, error: 'Failed to get outcome stats' };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── Autonomy & Domain Ownership Tools (Phase 6) ────────────────
+
+  'evaluate_trust_promotion': {
+    description: 'Evaluate whether a tool qualifies for trust tier promotion or demotion based on outcome history. Returns promotion recommendation if thresholds are met (95%+ success over 50 uses for CONFIRM->AUTO, 98%+ over 100 for ADMIN->CONFIRM). 3 consecutive failures trigger demotion.',
+    category: 'read',
+    required: ['tool_name', 'current_tier'],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        const { evaluateTrustPromotion } = await import('../services/faye-learning.js');
+        const result = await evaluateTrustPromotion(
+          params.tool_name,
+          params.current_tier,
+          parseInt(params.days, 10) || 60
+        );
+        return result
+          ? { ok: true, recommendation: result }
+          : { ok: true, recommendation: null, message: 'No promotion or demotion warranted at this time' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_domain_ownership': {
+    description: 'Get F.A.Y.E.\'s current autonomy level for a specific operational domain or all domains. Levels: L0 (Reactive), L1 (Observant), L2 (Advisory), L3 (Proactive), L4 (Autonomous).',
+    category: 'read',
+    required: [],
+    optional: ['domain'],
+    handler: async (params) => {
+      try {
+        if (params.domain) {
+          const { getDomainOwnership } = await import('../services/faye-learning.js');
+          const result = await getDomainOwnership(params.domain);
+          return { ok: true, ...result };
+        }
+        const { getAllDomainOwnership } = await import('../services/faye-learning.js');
+        const results = await getAllDomainOwnership();
+        return { ok: true, domains: results };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'set_domain_ownership': {
+    description: 'Update F.A.Y.E.\'s autonomy level for an operational domain. Domains: alert_triage, accounting, farm_health, orders, payments, network, evie_oversight, market_intel. Levels: L0-L4.',
+    category: 'write',
+    required: ['domain', 'level', 'detail'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const { setDomainOwnership } = await import('../services/faye-learning.js');
+        const id = await setDomainOwnership(params.domain, params.level, params.detail);
+        return id
+          ? { ok: true, message: `Domain ${params.domain} set to ${params.level}`, id }
+          : { ok: false, error: 'Failed to set domain ownership — check domain name and level' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
 
@@ -1150,7 +1207,7 @@ export const ADMIN_TOOL_CATALOG = {
 
 export const TRUST_TIERS = {
   auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert']),
-  quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight']),
+  quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
   confirm: new Set(['send_admin_email']),
   admin: new Set(['process_refund'])
 };
