@@ -162,7 +162,8 @@ const TRUST_TIERS = {
     'add_inventory_item', 'update_manual_inventory', 'update_target_ranges', 'set_light_schedule',
     'update_nutrient_targets', 'register_device', 'auto_assign_devices',
     'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
-    'update_certifications', 'complete_setup'
+    'update_certifications', 'complete_setup',
+    'update_group_crop', 'create_procurement_order'
   ]),
   // ADMIN: Require explicit typed confirmation
   admin: new Set([])
@@ -1102,6 +1103,107 @@ const GPT_TOOLS = [
         required: ['message_type', 'subject', 'body']
       }
     }
+  },
+  // --- Operations Command Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'update_group_crop',
+      description: 'Update the crop assignment for a grow group (e.g. "seed group 1 with Kale"). Sets the crop/recipe for all trays in the group and records the seed date. WRITE operation -- confirm with user first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_id: { type: 'string', description: 'Group name or ID (e.g. "Group 1", "zone-1")' },
+          crop_name: { type: 'string', description: 'Crop to assign (e.g. "Kale", "Genovese Basil"). Auto-resolved from aliases.' },
+          seed_date: { type: 'string', description: 'Seed date (YYYY-MM-DD). Defaults to today.' },
+          notes: { type: 'string', description: 'Optional notes (e.g. "Full reseed after harvest")' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        },
+        required: ['group_id', 'crop_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_procurement_order',
+      description: 'Create a procurement order for farm supplies (seeds, nutrients, packaging, equipment, media, lab supplies). Items MUST exist in the procurement catalog -- no off-catalog products allowed. All orders go through the procurement portal. WRITE operation -- requires explicit user approval of items and quantities before executing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                sku: { type: 'string', description: 'Product SKU from procurement catalog' },
+                name: { type: 'string', description: 'Product name (used to look up SKU if not provided)' },
+                quantity: { type: 'number', description: 'Quantity to order' }
+              },
+              required: ['quantity']
+            },
+            description: 'Array of items to order. Each must reference a catalog product by SKU or name.'
+          },
+          notes: { type: 'string', description: 'Order notes or special instructions' },
+          reorder_previous: { type: 'boolean', description: 'If true, repeat the most recent procurement order instead of specifying items.' }
+        },
+        required: ['items']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_seeding_schedule',
+      description: 'Get the current seeding and planting schedule for the upcoming period. Combines active plantings, upcoming seed dates, and harvest windows into one view. Use when the farmer asks "what is our seeding schedule", "what are we planting this week", or "whats coming up".',
+      parameters: {
+        type: 'object',
+        properties: {
+          days_ahead: { type: 'number', description: 'Look-ahead window in days (default: 7)' },
+          farm_id: { type: 'string', description: 'Farm ID (optional)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_wholesale_packing_list',
+      description: 'Get today\'s wholesale orders formatted as a packing list for labeling and fulfillment. Returns order details, line items, buyer info, and quantities ready for label printing. Use when the farmer asks to "print labels", "packing list", or "what needs to ship today".',
+      parameters: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'Date to pull orders for (YYYY-MM-DD). Defaults to today.' },
+          status: { type: 'string', description: 'Filter by status: confirmed, packed, pending. Default: confirmed.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_qc_summary',
+      description: 'Get a quality control summary: environment compliance, sensor alerts, nutrient status, and any active anomalies that need inspection. Use when the farmer asks to "review quality", "QC check", "quality control", or "any quality issues".',
+      parameters: {
+        type: 'object',
+        properties: {
+          zone_id: { type: 'string', description: 'Optional zone to focus on' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_sales_summary',
+      description: 'Get sales summary for a period: total revenue, order count, top-selling crops, average order value, and comparison to previous period. Use when the farmer asks "how are sales", "month to date", "revenue this month", or "sales report".',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: { type: 'string', description: 'Period: "today", "week", "mtd" (month-to-date), "month", "ytd" (year-to-date). Default: mtd.' }
+        }
+      }
+    }
   }
 ];
 
@@ -1472,6 +1574,36 @@ SYSTEM HEALTH & NIGHTLY AUDIT:
 - If audit shows $0 pricing warnings, advise the farmer to check their Crop Pricing page.
 - You can run a fresh audit on-demand with run_fresh=true, but prefer cached results for normal queries.
 
+PROCUREMENT ORDERING:
+- Orders for farm supplies (seeds, nutrients, packaging, equipment) go through the procurement portal ONLY.
+- Use create_procurement_order to place orders. Every item MUST exist in the procurement catalog -- refuse off-catalog requests.
+- Do NOT suggest "alternative suppliers" or external sources. All purchasing flows through the portal.
+- Before executing an order, ALWAYS read back the full item list with quantities and estimated cost. Wait for explicit verbal/typed approval ("yes", "confirm", "place it").
+- For repeat orders, ask: "Would you like to repeat your last order, or specify new quantities?"
+- Verify quantities: if the grower says "order more nutrient A", ask how much before proceeding. Offer the previous order quantity as a default.
+- To see what products are available for ordering, check the procurement catalog.
+
+SEEDING & GROW GROUPS:
+- When a grower says "seed group 1 with Kale" or "I'm seeding all trays in group 1", use update_group_crop to set the crop assignment.
+- Always confirm the group name and crop before updating.
+- After updating, report the group name, crop, tray count, and seed date.
+- Use get_seeding_schedule to show the current week's planting plan.
+
+WHOLESALE PACKING & LABELS:
+- Use get_wholesale_packing_list to pull today's orders for labeling/fulfillment.
+- Present the packing list in a clear, printable format: one section per order with buyer name, items, quantities, and delivery notes.
+- The grower can print this from the chat interface.
+
+QUALITY CONTROL:
+- Use get_qc_summary for a consolidated QC dashboard: environment compliance, sensor alerts, nutrient status.
+- Flag critical and warning items prominently. Suggest corrective actions for out-of-range readings.
+- For image-based QC, the grower can upload photos and you'll diagnose via vision.
+
+SALES & REVENUE:
+- Use get_sales_summary for period-based sales reports (today, this week, month-to-date, year-to-date).
+- Always include: revenue, order count, top-selling crops, and comparison to prior period.
+- Present financial data with clear formatting and CAD currency.
+
 MANUAL INVENTORY MANAGEMENT:
 - Some growers manage inventory by weight without using the tray automation system.
 - When a grower says "update basil inventory, we have 23 lbs available" or "set tomato stock to 50 lbs":
@@ -1497,7 +1629,8 @@ RULES:
 - For complex planning questions, a thorough structured answer is better than a short one. Use rich formatting.
 - When you call a tool, summarize the result naturally — don't dump raw JSON.
 - Use the tools proactively — if a user asks you to do something and you have a tool for it, use the tool. Do not ask the user for information the tools can provide.
-- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- For WRITE operations (update_farm_profile, create_room, create_zone, update_certifications, complete_setup, update_crop_price, create_planting_assignment, mark_harvest_complete, update_order_status, add_inventory_item, update_manual_inventory, dismiss_alert, auto_assign_devices, register_device, seed_benchmarks, update_nutrient_targets, update_target_ranges, set_light_schedule, update_group_crop, create_procurement_order): you MUST describe the proposed change and ask the user to confirm BEFORE calling the tool. Do NOT call write tools until the user says "yes", "confirm", "do it", or similar.
+- PROCUREMENT SAFETY: create_procurement_order requires reading back the full order summary (items, quantities, cost) and getting explicit approval. Never place orders without confirmed quantities. Never source from outside the procurement catalog.
 - After any WRITE operation succeeds, verify by calling the corresponding read tool and report the confirmed result.
 - If you can't help, say so briefly and suggest what you CAN do.
 - Use Canadian English (colour, favourite, centre).
@@ -2598,6 +2731,398 @@ async function executeExtendedTool(toolName, params, farmId) {
         return result
           ? { ok: true, message: `Message sent to F.A.Y.E.: "${params.subject}"`, message_id: result.id }
           : { ok: false, error: 'Failed to send message to F.A.Y.E.' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // ── Operations Command Tools ──
+
+    case 'update_group_crop': {
+      try {
+        const groupId = params.group_id;
+        const cropName = params.crop_name;
+        const seedDate = params.seed_date || new Date().toISOString().slice(0, 10);
+
+        // Resolve crop from registry
+        const registry = readJSON('crop-registry.json', {});
+        const crops = registry.crops || {};
+        const cropKey = Object.keys(crops).find(k => k.toLowerCase() === cropName.toLowerCase());
+        const cropEntry = cropKey ? crops[cropKey] : null;
+        const resolvedName = cropEntry?.name || cropName;
+        const planId = cropEntry?.planId || `crop-${cropName.toLowerCase().replace(/\s+/g, '-')}`;
+
+        // Load current groups
+        const groupsData = await farmStore.get(farmId, 'groups') || [];
+        const groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+        const groupMatch = groups.find(g =>
+          g.id === groupId || g.name === groupId ||
+          (g.name || '').toLowerCase() === (groupId || '').toLowerCase()
+        );
+        if (!groupMatch) {
+          return { ok: false, error: `Group "${groupId}" not found. Available groups: ${groups.map(g => g.name || g.id).join(', ') || 'none'}` };
+        }
+
+        // Update the group crop assignment
+        groupMatch.crop = resolvedName;
+        groupMatch.recipe = resolvedName;
+        groupMatch.plan = planId;
+        groupMatch.planId = planId;
+        if (!groupMatch.planConfig) groupMatch.planConfig = {};
+        if (!groupMatch.planConfig.anchor) groupMatch.planConfig.anchor = {};
+        groupMatch.planConfig.anchor.seedDate = seedDate;
+
+        await farmStore.set(farmId, 'groups', Array.isArray(groupsData) ? groups : { ...groupsData, groups });
+
+        return {
+          ok: true,
+          group: groupMatch.name || groupMatch.id,
+          crop: resolvedName,
+          seed_date: seedDate,
+          trays: groupMatch.trays || 0,
+          message: `Group "${groupMatch.name || groupMatch.id}" updated: now seeding ${resolvedName} (${groupMatch.trays || 0} trays, seed date ${seedDate})`
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'create_procurement_order': {
+      try {
+        // Load catalog to validate items
+        const catalog = await farmStore.get(farmId, 'procurement_catalog') || { products: [] };
+        const products = catalog.products || [];
+
+        if (params.reorder_previous) {
+          const ordersData = await farmStore.get(farmId, 'procurement_orders') || { orders: [] };
+          const lastOrder = (ordersData.orders || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+          if (!lastOrder) return { ok: false, error: 'No previous procurement orders found to reorder.' };
+          params.items = (lastOrder.items || []).map(i => ({ sku: i.sku, name: i.name, quantity: i.quantity }));
+        }
+
+        if (!params.items || !params.items.length) {
+          return { ok: false, error: 'No items specified. Provide items from the procurement catalog.' };
+        }
+
+        // Validate every item against catalog
+        const resolvedItems = [];
+        const rejected = [];
+        for (const item of params.items) {
+          let product = null;
+          if (item.sku) {
+            product = products.find(p => p.sku === item.sku);
+          }
+          if (!product && item.name) {
+            const nameLC = (item.name || '').toLowerCase();
+            product = products.find(p => (p.name || '').toLowerCase().includes(nameLC));
+          }
+          if (!product) {
+            rejected.push(item.name || item.sku || 'unknown');
+            continue;
+          }
+          resolvedItems.push({
+            sku: product.sku,
+            name: product.name,
+            quantity: Math.max(1, Math.round(item.quantity || 1)),
+            price: product.price || 0,
+            total: Math.round((product.price || 0) * (item.quantity || 1) * 100) / 100,
+            category: product.category || 'general'
+          });
+        }
+
+        if (rejected.length > 0 && resolvedItems.length === 0) {
+          return {
+            ok: false,
+            error: `None of the requested items are in the procurement catalog. Rejected: ${rejected.join(', ')}. Only products from the catalog can be ordered.`,
+            catalog_categories: [...new Set(products.map(p => p.category))],
+            catalog_count: products.length
+          };
+        }
+
+        // Create the order
+        const ordersData = await farmStore.get(farmId, 'procurement_orders') || { orders: [] };
+        const subtotal = resolvedItems.reduce((s, i) => s + i.total, 0);
+        const orderId = `PO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const order = {
+          id: orderId,
+          orderId,
+          farmId,
+          items: resolvedItems,
+          subtotal: Math.round(subtotal * 100) / 100,
+          itemCount: resolvedItems.reduce((s, i) => s + i.quantity, 0),
+          status: 'pending',
+          paymentMethod: 'invoice',
+          paymentStatus: 'pending',
+          notes: params.notes || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        ordersData.orders = ordersData.orders || [];
+        ordersData.orders.push(order);
+        await farmStore.set(farmId, 'procurement_orders', ordersData);
+
+        const result = {
+          ok: true,
+          order_id: orderId,
+          items: resolvedItems.map(i => `${i.quantity}x ${i.name} ($${i.total})`),
+          subtotal: `$${order.subtotal.toFixed(2)}`,
+          status: 'pending',
+          message: `Procurement order ${orderId} created with ${resolvedItems.length} items totaling $${order.subtotal.toFixed(2)}.`
+        };
+        if (rejected.length > 0) {
+          result.rejected_items = rejected;
+          result.warning = `${rejected.length} item(s) not found in catalog and were skipped: ${rejected.join(', ')}`;
+        }
+        return result;
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_seeding_schedule': {
+      try {
+        const daysAhead = params.days_ahead || 7;
+        const sections = {};
+
+        // Active plantings
+        try {
+          const assignments = await executeTool('get_planting_assignments', { farm_id: farmId, status: 'active' });
+          if (assignments?.ok) sections.active_plantings = assignments.assignments || [];
+        } catch { /* ok */ }
+
+        // Upcoming harvests
+        try {
+          const harvests = await executeTool('get_scheduled_harvests', { farm_id: farmId, days_ahead: daysAhead });
+          if (harvests?.ok) sections.upcoming_harvests = harvests.harvests || [];
+        } catch { /* ok */ }
+
+        // Grow groups with seed dates
+        try {
+          const groupsData = await farmStore.get(farmId, 'groups') || [];
+          const groups = Array.isArray(groupsData) ? groupsData : (groupsData.groups || []);
+          const now = new Date();
+          const cutoff = new Date(now.getTime() + daysAhead * 86400000);
+          sections.groups = groups.map(g => ({
+            name: g.name || g.id,
+            crop: g.crop || g.recipe || 'unassigned',
+            trays: g.trays || 0,
+            seed_date: g.planConfig?.anchor?.seedDate || null,
+            room: g.room || g.roomId || null
+          }));
+        } catch { /* ok */ }
+
+        return {
+          ok: true,
+          period: `Next ${daysAhead} days`,
+          ...sections,
+          generated_at: new Date().toISOString()
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_wholesale_packing_list': {
+      try {
+        const targetDate = params.date || new Date().toISOString().slice(0, 10);
+        const statusFilter = params.status || 'confirmed';
+
+        // Query wholesale orders
+        const { listAllOrders } = await import('../services/wholesaleMemoryStore.js');
+        const allOrders = await listAllOrders({ status: statusFilter });
+
+        // Filter to orders for this farm on the target date
+        const packingOrders = (allOrders || []).filter(o => {
+          const orderDate = (o.created_at || '').slice(0, 10);
+          const matchDate = orderDate === targetDate;
+          const farmSubs = (o.farm_sub_orders || []).filter(s => s.farm_id === farmId);
+          return matchDate && farmSubs.length > 0;
+        });
+
+        if (!packingOrders.length) {
+          return {
+            ok: true,
+            date: targetDate,
+            status: statusFilter,
+            orders: [],
+            total_items: 0,
+            message: `No ${statusFilter} wholesale orders found for ${targetDate}.`
+          };
+        }
+
+        const packingList = packingOrders.map(o => {
+          const farmSub = (o.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+          const lineItems = farmSub.line_items || o.line_items || [];
+          return {
+            order_id: o.master_order_id || o.id,
+            buyer: o.buyer_name || o.buyer_email || 'Unknown',
+            status: o.status,
+            items: lineItems.map(li => ({
+              product: li.product_name || li.name,
+              quantity: li.quantity,
+              unit: li.unit || 'lb',
+              weight_lbs: li.weight_lbs || li.quantity
+            })),
+            delivery_notes: o.delivery_notes || farmSub.delivery_notes || null
+          };
+        });
+
+        const totalItems = packingList.reduce((s, o) => s + o.items.length, 0);
+        return {
+          ok: true,
+          date: targetDate,
+          status: statusFilter,
+          orders: packingList,
+          order_count: packingList.length,
+          total_items: totalItems,
+          message: `${packingList.length} orders with ${totalItems} line items ready for packing/labeling on ${targetDate}.`,
+          note: 'Present this as a formatted packing list. Each order is one shipment to a buyer. Include product names, quantities, and buyer info for label printing.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_qc_summary': {
+      try {
+        const qc = {};
+
+        // Environment compliance
+        try {
+          const env = await executeTool('get_environment_readings', { zone_id: params.zone_id });
+          if (env?.ok) {
+            const readings = env.readings || env.zones || [];
+            const outOfRange = Array.isArray(readings) ? readings.filter(r => r.status === 'warning' || r.status === 'critical') : [];
+            qc.environment = {
+              total_zones: Array.isArray(readings) ? readings.length : 0,
+              compliant: Array.isArray(readings) ? readings.length - outOfRange.length : 0,
+              out_of_range: outOfRange.length,
+              issues: outOfRange.map(r => ({ zone: r.zone || r.zone_id, metric: r.metric, value: r.value, target: r.target }))
+            };
+          }
+        } catch { /* ok */ }
+
+        // Active alerts
+        try {
+          const alerts = await executeTool('get_alerts', {});
+          if (alerts?.ok) {
+            qc.alerts = {
+              total: alerts.count || 0,
+              critical: (alerts.alerts || []).filter(a => a.severity === 'critical').length,
+              warnings: (alerts.alerts || []).filter(a => a.severity === 'warning').length,
+              items: (alerts.alerts || []).slice(0, 10)
+            };
+          }
+        } catch { /* ok */ }
+
+        // Nutrient status
+        try {
+          const nutrients = await executeTool('get_nutrient_status', {});
+          if (nutrients?.ok) {
+            qc.nutrients = nutrients;
+          }
+        } catch { /* ok */ }
+
+        return {
+          ok: true,
+          summary: qc,
+          generated_at: new Date().toISOString(),
+          note: 'Present as a quality control dashboard. Flag any critical/warning items prominently. Include recommendations for out-of-range readings.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_sales_summary': {
+      try {
+        const period = (params.period || 'mtd').toLowerCase();
+        const now = new Date();
+        let startDate, prevStart, prevEnd, periodLabel;
+
+        if (period === 'today') {
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          prevStart = new Date(startDate.getTime() - 86400000);
+          prevEnd = new Date(startDate.getTime());
+          periodLabel = 'Today';
+        } else if (period === 'week') {
+          const dayOfWeek = now.getDay();
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+          prevStart = new Date(startDate.getTime() - 7 * 86400000);
+          prevEnd = new Date(startDate.getTime());
+          periodLabel = 'This Week';
+        } else if (period === 'month' || period === 'mtd') {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = 'Month to Date';
+        } else {
+          startDate = new Date(now.getFullYear(), 0, 1);
+          prevStart = new Date(now.getFullYear() - 1, 0, 1);
+          prevEnd = new Date(now.getFullYear(), 0, 1);
+          periodLabel = 'Year to Date';
+        }
+
+        // Query wholesale orders
+        const { listAllOrders } = await import('../services/wholesaleMemoryStore.js');
+        const allOrders = await listAllOrders({});
+
+        const currentOrders = (allOrders || []).filter(o => {
+          const d = new Date(o.created_at);
+          const farmSubs = (o.farm_sub_orders || []).filter(s => s.farm_id === farmId);
+          return d >= startDate && d <= now && farmSubs.length > 0;
+        });
+
+        const prevOrders = (allOrders || []).filter(o => {
+          const d = new Date(o.created_at);
+          const farmSubs = (o.farm_sub_orders || []).filter(s => s.farm_id === farmId);
+          return d >= prevStart && d < prevEnd && farmSubs.length > 0;
+        });
+
+        // Calculate revenue from farm sub-orders
+        function calcRevenue(orders) {
+          let revenue = 0;
+          let itemCount = 0;
+          const cropSales = {};
+          for (const o of orders) {
+            const farmSub = (o.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+            const subTotal = Number(farmSub.subtotal || farmSub.total || 0);
+            revenue += subTotal;
+            for (const li of (farmSub.line_items || [])) {
+              const crop = li.product_name || li.name || 'Unknown';
+              const qty = Number(li.quantity || 0);
+              cropSales[crop] = (cropSales[crop] || 0) + qty;
+              itemCount += qty;
+            }
+          }
+          return { revenue: Math.round(revenue * 100) / 100, itemCount, cropSales };
+        }
+
+        const current = calcRevenue(currentOrders);
+        const prev = calcRevenue(prevOrders);
+        const topCrops = Object.entries(current.cropSales)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([crop, qty]) => ({ crop, quantity_sold: qty }));
+
+        return {
+          ok: true,
+          period: periodLabel,
+          revenue: `$${current.revenue.toFixed(2)}`,
+          order_count: currentOrders.length,
+          items_sold: current.itemCount,
+          average_order_value: currentOrders.length > 0 ? `$${(current.revenue / currentOrders.length).toFixed(2)}` : '$0.00',
+          top_crops: topCrops,
+          previous_period: {
+            revenue: `$${prev.revenue.toFixed(2)}`,
+            order_count: prevOrders.length
+          },
+          change: prev.revenue > 0
+            ? `${((current.revenue - prev.revenue) / prev.revenue * 100).toFixed(1)}%`
+            : 'N/A (no prior data)',
+          generated_at: new Date().toISOString()
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }
