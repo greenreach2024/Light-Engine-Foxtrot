@@ -4,6 +4,7 @@
  * POST /api/assistant/chat          — Standard request/response chat
  * POST /api/assistant/chat/stream   — SSE streaming chat with real-time tokens
  * POST /api/assistant/upload-image  — Image upload for crop diagnosis (GPT-4o vision)
+ * GET  /api/assistant/state         — Presence state (rooms, crops, tasks, alerts)
  *
  * Features: Streaming SSE, trust-tier autonomous actions, workflow orchestration,
  * persistent memory with conversation summarization, image diagnosis,
@@ -2887,6 +2888,201 @@ router.post('/chat', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Failed to process your message. Please try again.'
+    });
+  }
+});
+
+// ── GET /state — E.V.I.E. Presence State ──────────────────────────────
+// Aggregates environment, crops, tasks, alerts, and farm profile
+// for the ambient orb and intelligence panel.
+
+router.get('/state', async (req, res) => {
+  try {
+    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+
+    // Rooms + environment readings
+    const roomsRaw = readJSON('rooms.json', {});
+    const roomList = (roomsRaw.rooms || Object.values(roomsRaw)).filter(r => typeof r === 'object' && r.id);
+    const envCache = readJSON('env-cache.json', {});
+    const targetRanges = readJSON('target-ranges.json', {});
+    const defaults = targetRanges.defaults || {};
+    const zoneTgts = targetRanges.zones || {};
+
+    const rooms = roomList.map(function (r) {
+      const rid = r.id || r.room_id;
+      const env = envCache[rid] || {};
+      const zones = env.zones || {};
+      var maxDrift = 0;
+      var temp = null;
+      var humidity = null;
+
+      for (var zid in zones) {
+        var z = zones[zid];
+        var t = zoneTgts[zid] || defaults;
+        if (z.temperature != null) {
+          temp = z.temperature;
+          var tTarget = ((t.temp_min || 20) + (t.temp_max || 26)) / 2;
+          var tDrift = Math.abs(z.temperature - tTarget);
+          if (tDrift > maxDrift) maxDrift = tDrift;
+        }
+        if (z.humidity != null) {
+          humidity = z.humidity;
+        }
+      }
+      return {
+        name: r.name || r.label || rid,
+        id: rid,
+        temp: temp,
+        temp_unit: 'C',
+        humidity: humidity,
+        drift: maxDrift
+      };
+    });
+
+    // Crops (active plantings)
+    const crops = [];
+    const cropRegistry = readJSON('crop-registry.json', {});
+    const cropsDb = cropRegistry.crops || cropRegistry;
+
+    for (var ri = 0; ri < roomList.length; ri++) {
+      var rm = roomList[ri];
+      var rmId = rm.id || rm.room_id;
+      var roomMap = readJSON('room-map-' + rmId + '.json', null);
+      if (!roomMap) continue;
+      var zoneArr = roomMap.zones || [];
+      for (var zi = 0; zi < zoneArr.length; zi++) {
+        var zone = zoneArr[zi];
+        var trays = zone.trays || zone.positions || [];
+        for (var ti = 0; ti < trays.length; ti++) {
+          var tray = trays[ti];
+          if (!tray.crop || !tray.planted_date) continue;
+          var cropInfo = cropsDb[tray.crop] || {};
+          var cycleDays = cropInfo.cycle_days || cropInfo.growthDays || 28;
+          var plantedMs = new Date(tray.planted_date).getTime();
+          var dayNum = Math.floor((Date.now() - plantedMs) / 86400000);
+          var harvestIn = Math.max(0, cycleDays - dayNum);
+          var stg = dayNum < 5 ? 'Germination' : dayNum < 14 ? 'Seedling' : dayNum < cycleDays - 5 ? 'Vegetative' : 'Harvest Ready';
+          crops.push({
+            name: tray.crop,
+            room: rm.name || rmId,
+            stage: stg,
+            day: dayNum,
+            harvest_in: harvestIn
+          });
+        }
+      }
+    }
+
+    // Alerts
+    var alertsRaw = readJSON('system-alerts.json', []);
+    var alertArr = (Array.isArray(alertsRaw) ? alertsRaw : (alertsRaw.alerts || [])).filter(function (a) { return !a.resolved && !a.dismissed; });
+    var alertItems = alertArr.map(function (a) {
+      return {
+        title: a.title || a.message || 'Alert',
+        detail: a.detail || a.description || '',
+        domain: a.domain || a.category || 'general',
+        severity: a.severity || a.level || 'info',
+        since: a.created_at || a.timestamp
+      };
+    });
+
+    // Risks = high/critical alerts
+    var risks = alertItems.filter(function (a) { return a.severity === 'high' || a.severity === 'critical'; });
+
+    // Tasks (daily todo, lightweight)
+    var tasks = [];
+    try {
+      var todoResult = await executeTool('get_daily_todo', { limit: 8 });
+      if (todoResult && todoResult.tasks) {
+        tasks = todoResult.tasks.map(function (t) {
+          return {
+            title: t.title || t.label || 'Task',
+            detail: t.why || t.reason || '',
+            score: t.score || 0
+          };
+        });
+      }
+    } catch (e) { /* non-fatal */ }
+
+    // Recommendations: environment drift warnings + harvest readiness
+    var recommendations = [];
+    rooms.forEach(function (r) {
+      if (r.drift && r.drift > 2) {
+        recommendations.push({
+          title: r.name + ' environment drift',
+          detail: 'Temperature drifting ' + r.drift.toFixed(1) + ' degrees from target. Check HVAC and ventilation.',
+          domain: 'environment',
+          confidence: 0.8
+        });
+      }
+    });
+    crops.forEach(function (c) {
+      if (c.harvest_in <= 2 && c.stage === 'Harvest Ready') {
+        recommendations.push({
+          title: c.name + ' ready to harvest',
+          detail: c.name + ' in ' + c.room + ' is at day ' + c.day + '. Schedule harvest soon.',
+          domain: 'crops',
+          confidence: 0.9
+        });
+      }
+    });
+
+    // Insights from user memory (if DB available)
+    var insights = [];
+    if (isDatabaseAvailable()) {
+      try {
+        var memResult = await query(
+          'SELECT key, value, updated_at FROM user_memory WHERE farm_id = $1 ORDER BY updated_at DESC LIMIT 10',
+          [farmId]
+        );
+        insights = memResult.rows.map(function (r) {
+          return { topic: r.key, insight: r.value, domain: 'memory' };
+        });
+      } catch (e) { /* non-fatal */ }
+    }
+
+    // Farm profile
+    var farmName = '';
+    var farmLocation = '';
+    if (isDatabaseAvailable()) {
+      try {
+        var farmResult = await query('SELECT name, location FROM farms WHERE farm_id = $1 LIMIT 1', [farmId]);
+        if (farmResult.rows.length > 0) {
+          farmName = farmResult.rows[0].name || '';
+          farmLocation = farmResult.rows[0].location || '';
+        }
+      } catch (e) { /* non-fatal */ }
+    }
+
+    // Proactive message
+    var proactiveMessage = null;
+    if (risks.length > 0) {
+      proactiveMessage = risks[0].title;
+    } else if (recommendations.length > 0) {
+      proactiveMessage = recommendations[0].title;
+    }
+
+    return res.json({
+      ok: true,
+      alerts: alertItems.length,
+      alert_items: alertItems,
+      rooms: rooms,
+      crops: crops,
+      tasks: tasks,
+      risks: risks,
+      recommendations: recommendations,
+      insights: insights,
+      farm_name: farmName,
+      farm_location: farmLocation,
+      proactive_message: proactiveMessage
+    });
+  } catch (err) {
+    logger.error('[E.V.I.E. State] Error:', err.message);
+    return res.json({
+      ok: true,
+      alerts: 0, alert_items: [], rooms: [], crops: [], tasks: [],
+      risks: [], recommendations: [], insights: [],
+      farm_name: '', farm_location: '', proactive_message: null
     });
   }
 });

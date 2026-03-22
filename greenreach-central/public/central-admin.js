@@ -1332,6 +1332,7 @@ function renderContextualSidebar() {
                 {
                     title: 'AI Governance',
                     items: [
+                        { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
                         { label: 'AI Rules', view: 'ai-rules' },
                         { label: 'AI Reference Sites', view: 'ai-reference' },
                         { label: 'AI Agent Monitor', view: 'ai-monitoring' }

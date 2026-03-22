@@ -1,47 +1,21 @@
-EB#547 — F.A.Y.E. Phases 2-4: WRITE tools, trust tiers, intelligence loop, analytics
+F.A.Y.E. + E.V.I.E. Presence Systems -- 3-Layer Ambient Intelligence
 
-Phase 2 — WRITE Tools + Trust Tiers:
-- admin-ops-agent.js: 9 new WRITE tools (create/acknowledge/resolve alerts,
-  classify transactions, process refunds, send emails, update farm notes,
-  save admin memory) + 5 analytics READ tools
-- Trust tier system: AUTO (safe writes execute immediately), QUICK_CONFIRM,
-  CONFIRM (describe impact + wait for yes), ADMIN (critical — explicit confirm)
-- admin-assistant.js: Pending action confirmation flow — write tools that
-  need confirmation are stored, admin sees confirm/cancel buttons, "yes"
-  executes the action, "cancel" aborts. Works in both /chat and /chat/stream.
-- Updated system prompt: removed "Phase 1 read-only" placeholder, added
-  write tool safety instructions with tier descriptions.
+Both AI assistants gain visual identity, ambient presence, intelligence panels,
+and dedicated core pages. F.A.Y.E. (admin/network) and E.V.I.E. (farm/grower)
+each have distinct design languages and independent state APIs.
 
-Phase 3 — Proactive Intelligence:
-- NEW services/faye-intelligence.js: Background loop (every 15 min) running
-  5 anomaly detectors: payment failure rate, farm heartbeat staleness,
-  order volume drops/spikes, accounting debit/credit imbalances,
-  unclassified transaction backlog.
-- Auto-creates admin_alerts with deduplication (2h cooldown per domain+title).
-- Daily briefing email at 7 AM to ADMIN_BRIEFING_EMAIL via SES.
-- Wired into server.js startup alongside nightly audit service.
+F.A.Y.E. (Admin Intelligence):
+- NEW: public/styles/faye-core.css - full design system (concentric ring orb, 7 states, 3 layers)
+- NEW: public/js/faye-presence.js - 3-layer ambient presence (orb, panel, conversation)
+- NEW: public/faye-core.html - dedicated F.A.Y.E. Core home page
+- UPDATE: routes/admin-assistant.js - GET /state endpoint (alerts, domains, insights, recommendations)
+- UPDATE: public/GR-central-admin.html - faye-core.css + faye-presence.js wired in
+- UPDATE: public/central-admin.js - F.A.Y.E. Core sidebar link added
 
-Phase 4 — Analytics & Pattern Learning:
-- 5 new analytics tools: analyze_revenue_trend (daily/weekly/monthly with
-  growth rates), analyze_order_patterns (peak days, buyer concentration,
-  basket size), analyze_farm_performance (revenue per farm, heartbeat
-  reliability), get_anomaly_report, get_decision_log.
-- Decision logging: all write tool executions recorded to faye_decision_log
-  table for pattern analysis and audit trail.
-- Migration 034: faye_decision_log table + unique index on
-  accounting_classifications.transaction_id for ON CONFLICT support.
-
-Rules & Frontend:
-- admin-ai-rules.json v2.0.0: 5 new rules (wrt-001 through wrt-003 for
-  write safety, int-001/002 for intelligence behavior).
-- admin-assistant.js (frontend): Confirmation bar UI with "Yes, proceed" /
-  "Cancel" buttons, pending action badge, executed action success/fail badge.
-
-Files changed (7 modified, 1 new):
-  config/database.js          — Migration 034
-  data/admin-ai-rules.json    — v2.0.0 with write + intelligence rules
-  public/js/admin-assistant.js — Confirmation UI
-  routes/admin-assistant.js   — Trust tier engine + confirmation flow
-  routes/admin-ops-agent.js   — 14 new tools (9 write + 5 analytics)
-  server.js                   — Wire faye-intelligence startup
-  services/faye-intelligence.js — NEW: Intelligence loop service
+E.V.I.E. (Farm Intelligence):
+- NEW: EVIE_VISION.md - Phase 1 product definition, boundary separation, 5 user modes
+- NEW: public/styles/evie-core.css - full design system (organic radial orb, 9 states, 3 layers)
+- NEW: public/js/evie-presence.js - 3-layer ambient presence (orb, 4-mode panel, chat)
+- NEW: public/evie-core.html - dedicated E.V.I.E. Core farm intelligence page
+- UPDATE: routes/assistant-chat.js - GET /state endpoint (rooms, crops, tasks, risks, recommendations)
+- UPDATE: public/LE-farm-admin.html - evie-core.css + evie-presence.js + Intelligence sidebar

@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F.A.Y.E. Core — GreenReach Operations Intelligence</title>
+  <script>
+    (function() {
+      var token = localStorage.getItem('admin_token');
+      if (!token) {
+        var loginUrl = window.location.hostname.includes('greenreachgreens.com')
+          ? 'https://greenreachgreens.com/GR-central-admin-login.html'
+          : window.location.origin + '/GR-central-admin-login.html';
+        window.location.replace(loginUrl);
+        throw new Error('Redirecting to login');
+      }
+      window.API_BASE = window.location.hostname.includes('greenreachgreens.com')
+        ? 'https://greenreachgreens.com'
+        : window.location.origin;
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles/faye-core.css">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--faye-bg-deep);
+      color: var(--faye-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* Top Nav Bar */
+    .faye-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--faye-bg-panel);
+      border-bottom: 1px solid var(--faye-border);
+    }
+    .faye-topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--faye-text-secondary);
+      text-decoration: none;
+    }
+    .faye-topbar-brand:hover { color: var(--faye-text); }
+    .faye-topbar-nav {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .faye-topbar-link {
+      font-size: 13px;
+      color: var(--faye-text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .faye-topbar-link:hover { color: var(--faye-text); }
+
+    /* Hero loading pulse */
+    .faye-core-hero-orb.loading .faye-orb-core {
+      animation: faye-core-pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Section loading placeholder */
+    .faye-placeholder {
+      color: var(--faye-text-muted);
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    /* Empty state */
+    .faye-empty {
+      text-align: center;
+      padding: 20px;
+      color: var(--faye-text-muted);
+      font-size: 13px;
+    }
+
+    /* Action button within cards */
+    .faye-card-action {
+      margin-top: 10px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--faye-border-active);
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--faye-text-accent);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .faye-card-action:hover { background: rgba(16, 185, 129, 0.2); }
+
+    /* Summary stats row */
+    .faye-stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      padding: 0 24px 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .faye-stat {
+      text-align: center;
+    }
+    .faye-stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--faye-text);
+      line-height: 1.2;
+    }
+    .faye-stat-label {
+      font-size: 11px;
+      color: var(--faye-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .faye-stat-value.alert-color { color: var(--faye-alert); }
+    .faye-stat-value.warn-color { color: var(--faye-uncertain); }
+    .faye-stat-value.ok-color { color: var(--faye-confident); }
+
+    @media (max-width: 640px) {
+      .faye-stats-row { gap: 16px; flex-wrap: wrap; }
+      .faye-stat-value { font-size: 22px; }
+    }
+  </style>
+</head>
+<body class="faye-core-page">
+
+  <!-- Top Navigation -->
+  <nav class="faye-topbar">
+    <a class="faye-topbar-brand" href="/GR-central-admin.html">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+      GreenReach Central
+    </a>
+    <div class="faye-topbar-nav">
+      <a class="faye-topbar-link" href="/GR-central-admin.html">Operations</a>
+      <a class="faye-topbar-link" href="/GR-admin.html">Wholesale</a>
+      <a class="faye-topbar-link" href="#" style="color:var(--faye-text-accent)">F.A.Y.E. Core</a>
+    </div>
+  </nav>
+
+  <!-- Hero: Central Animated Identity -->
+  <div class="faye-core-hero">
+    <div class="faye-core-hero-orb faye-orb-container faye-state-idle loading" id="hero-orb">
+      <div class="faye-orb-core"></div>
+      <div class="faye-orb-ring faye-orb-ring--inner"></div>
+      <div class="faye-orb-ring faye-orb-ring--middle"></div>
+      <div class="faye-orb-ring faye-orb-ring--outer"></div>
+    </div>
+    <div class="faye-core-hero-title">F.A.Y.E. Core</div>
+    <div class="faye-core-hero-subtitle" id="hero-subtitle">Initializing...</div>
+    <div class="faye-core-hero-state" id="hero-state">
+      <div class="faye-core-hero-state-item">
+        <span class="faye-status-dot"></span>
+        <span id="hero-mode">Observing</span>
+      </div>
+      <div class="faye-core-hero-state-item" id="hero-confidence-wrap" style="display:none">
+        Confidence: <span id="hero-confidence">--</span>
+      </div>
+      <div class="faye-core-hero-state-item" id="hero-uptime-wrap" style="display:none">
+        Uptime: <span id="hero-uptime">--</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="faye-stats-row" id="stats-row">
+    <div class="faye-stat">
+      <div class="faye-stat-value ok-color" id="stat-farms">--</div>
+      <div class="faye-stat-label">Farms Monitored</div>
+    </div>
+    <div class="faye-stat">
+      <div class="faye-stat-value" id="stat-alerts">--</div>
+      <div class="faye-stat-label">Active Alerts</div>
+    </div>
+    <div class="faye-stat">
+      <div class="faye-stat-value" id="stat-actions">--</div>
+      <div class="faye-stat-label">Actions Today</div>
+    </div>
+    <div class="faye-stat">
+      <div class="faye-stat-value ok-color" id="stat-domains">--</div>
+      <div class="faye-stat-label">Domains Owned</div>
+    </div>
+    <div class="faye-stat">
+      <div class="faye-stat-value" id="stat-insights">--</div>
+      <div class="faye-stat-label">Learned Insights</div>
+    </div>
+  </div>
+
+  <!-- Core Grid -->
+  <div class="faye-core-grid">
+
+    <!-- What I'm Watching -->
+    <div class="faye-core-section">
+      <div class="faye-core-section-title">What I'm Watching</div>
+      <div id="section-watching">
+        <div class="faye-placeholder">Loading monitoring data...</div>
+      </div>
+    </div>
+
+    <!-- Active Risks -->
+    <div class="faye-core-section">
+      <div class="faye-core-section-title">Active Risks</div>
+      <div id="section-risks">
+        <div class="faye-placeholder">Loading risk assessment...</div>
+      </div>
+    </div>
+
+    <!-- Recommended Actions -->
+    <div class="faye-core-section">
+      <div class="faye-core-section-title">Recommended Actions</div>
+      <div id="section-recommendations">
+        <div class="faye-placeholder">Loading recommendations...</div>
+      </div>
+    </div>
+
+    <!-- What I've Learned -->
+    <div class="faye-core-section">
+      <div class="faye-core-section-title">What I've Learned</div>
+      <div id="section-insights">
+        <div class="faye-placeholder">Loading knowledge base...</div>
+      </div>
+    </div>
+
+    <!-- Trust & Autonomy (full width) -->
+    <div class="faye-core-section faye-core-grid-full">
+      <div class="faye-core-section-title">Trust &amp; Autonomy</div>
+      <div id="section-domains" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+        <div class="faye-placeholder">Loading domain ownership...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Quick Chat Bar -->
+  <div class="faye-core-chat-bar">
+    <div class="faye-core-chat-bar-inner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--faye-text-muted)" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+      <textarea id="core-chat-input" rows="1" placeholder="Ask F.A.Y.E. anything..."></textarea>
+      <button class="faye-intel-send" id="core-chat-send" title="Send">&#9654;</button>
+    </div>
+  </div>
+
+  <!-- Chat Expansion Area -->
+  <div id="core-chat-thread" style="max-width:1200px;margin:0 auto;padding:0 24px 32px;display:none">
+    <div id="core-chat-messages" style="display:flex;flex-direction:column;gap:10px;padding:16px 0"></div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    var API = '/api/admin/assistant';
+    var conversationId = null;
+    var isLoading = false;
+
+    function getHeaders() {
+      var token = localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token');
+      return token
+        ? { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+        : { 'Content-Type': 'application/json' };
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      var d = document.createElement('div');
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+
+    function timeAgo(ts) {
+      var diff = (Date.now() - new Date(ts).getTime()) / 1000;
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function setHeroOrb(state) {
+      var orb = document.getElementById('hero-orb');
+      orb.className = orb.className.replace(/faye-state-\S+/g, '').replace('loading', '').trim();
+      orb.classList.add('faye-state-' + state);
+    }
+
+    // ── Load State ──────────────────────────────────────────────
+    async function loadState() {
+      try {
+        var resp = await fetch(API + '/state', { headers: getHeaders() });
+        if (!resp.ok) throw new Error('State endpoint returned ' + resp.status);
+        var data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'State fetch failed');
+
+        render(data);
+      } catch (e) {
+        document.getElementById('hero-subtitle').textContent = 'Operational intelligence layer';
+        setHeroOrb('idle');
+        // Still render with empty data on first load
+        renderEmpty();
+      }
+    }
+
+    function render(data) {
+      // Hero
+      var alertCount = data.alerts || 0;
+      setHeroOrb(alertCount > 0 ? 'alerting' : 'confident');
+      document.getElementById('hero-subtitle').textContent =
+        alertCount > 0
+          ? 'Monitoring ' + alertCount + ' active risk' + (alertCount === 1 ? '' : 's')
+          : 'All systems nominal';
+      document.getElementById('hero-mode').textContent =
+        alertCount > 0 ? 'Alert' : 'Observing';
+
+      if (data.confidence != null) {
+        document.getElementById('hero-confidence-wrap').style.display = '';
+        document.getElementById('hero-confidence').textContent = Math.round(data.confidence * 100) + '%';
+      }
+
+      // Stats
+      document.getElementById('stat-farms').textContent = data.farm_count != null ? data.farm_count : '--';
+      var alertEl = document.getElementById('stat-alerts');
+      alertEl.textContent = alertCount;
+      alertEl.className = 'faye-stat-value' + (alertCount > 0 ? ' alert-color' : ' ok-color');
+      document.getElementById('stat-actions').textContent = data.actions_today != null ? data.actions_today : '--';
+      var owned = (data.domains || []).filter(function(d) { return d.level >= 3; }).length;
+      document.getElementById('stat-domains').textContent = owned + '/' + (data.domains || []).length;
+      document.getElementById('stat-insights').textContent = (data.insights || []).length;
+
+      // Watching
+      renderWatching(data.watching || []);
+      renderRisks(data.risks || []);
+      renderRecommendations(data.recommendations || []);
+      renderInsights(data.insights || []);
+      renderDomains(data.domains || []);
+    }
+
+    function renderEmpty() {
+      renderWatching([]);
+      renderRisks([]);
+      renderRecommendations([]);
+      renderInsights([]);
+      renderDomains([]);
+    }
+
+    function renderWatching(items) {
+      var el = document.getElementById('section-watching');
+      if (items.length === 0) {
+        el.innerHTML = '<div class="faye-notice">All systems nominal. No active watches.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      items.forEach(function(w) {
+        var card = document.createElement('div');
+        card.className = 'faye-signal-card signal-' + (w.severity || 'ok');
+        card.innerHTML =
+          '<div class="faye-signal-title">' + esc(w.title) + '</div>' +
+          '<div class="faye-signal-detail">' + esc(w.detail) + '</div>' +
+          '<div class="faye-signal-meta"><span>' + esc(w.domain || '') + '</span>' +
+          (w.since ? '<span>' + timeAgo(w.since) + '</span>' : '') + '</div>';
+        el.appendChild(card);
+      });
+    }
+
+    function renderRisks(items) {
+      var el = document.getElementById('section-risks');
+      if (items.length === 0) {
+        el.innerHTML = '<div class="faye-notice">No active risks detected.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      items.forEach(function(r) {
+        var card = document.createElement('div');
+        card.className = 'faye-signal-card signal-' + (r.severity || 'warning');
+        card.innerHTML =
+          '<div class="faye-signal-title">' + esc(r.title) + '</div>' +
+          '<div class="faye-signal-detail">' + esc(r.detail) + '</div>' +
+          '<div class="faye-signal-meta"><span>' + esc(r.domain || '') + '</span></div>';
+        el.appendChild(card);
+      });
+    }
+
+    function renderRecommendations(items) {
+      var el = document.getElementById('section-recommendations');
+      if (items.length === 0) {
+        el.innerHTML = '<div class="faye-notice">No recommendations at this time.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      items.forEach(function(r) {
+        var card = document.createElement('div');
+        card.className = 'faye-action-card';
+        var confPct = Math.round((r.confidence || 0) * 100);
+        var confClass = confPct >= 80 ? 'conf-high' : confPct >= 50 ? 'conf-medium' : 'conf-low';
+        var reasons = r.reasons || [];
+        var html =
+          '<div class="faye-action-title">' +
+          '  <span class="faye-action-name">' + esc(r.title) + '</span>' +
+          '  <span class="faye-action-confidence">' + confPct + '%</span>' +
+          '</div>' +
+          '<div class="faye-confidence-bar"><div class="faye-confidence-fill ' + confClass + '" style="width:' + confPct + '%"></div></div>';
+        if (reasons.length > 0) {
+          html += '<ul class="faye-reason-stack">';
+          reasons.forEach(function(reason) { html += '<li class="faye-reason-item">' + esc(reason) + '</li>'; });
+          html += '</ul>';
+        }
+        var approvalClass = r.requires_approval ? 'requires-approval' : 'auto-approved';
+        html += '<div class="faye-action-approval ' + approvalClass + '">' +
+          (r.requires_approval ? 'Approval required' : 'Auto-approved') + '</div>';
+        card.innerHTML = html;
+
+        if (r.action_prompt) {
+          var btn = document.createElement('button');
+          btn.className = 'faye-card-action';
+          btn.textContent = 'Execute';
+          btn.addEventListener('click', (function(prompt) {
+            return function() { sendChat(prompt); };
+          })(r.action_prompt));
+          card.appendChild(btn);
+        }
+        el.appendChild(card);
+      });
+    }
+
+    function renderInsights(items) {
+      var el = document.getElementById('section-insights');
+      if (items.length === 0) {
+        el.innerHTML = '<div class="faye-notice">No learned insights yet. F.A.Y.E. builds knowledge over time.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      items.slice(0, 6).forEach(function(ins) {
+        var card = document.createElement('div');
+        card.className = 'faye-signal-card signal-ok';
+        var confPct = Math.round((ins.confidence || 0) * 100);
+        card.innerHTML =
+          '<div class="faye-signal-title">' + esc(ins.topic) + '</div>' +
+          '<div class="faye-signal-detail">' + esc(ins.insight) + '</div>' +
+          '<div class="faye-signal-meta">' +
+          '<span class="faye-domain-badge domain-observing">' + esc(ins.domain) + '</span>' +
+          '<span>' + confPct + '% confidence</span></div>';
+        el.appendChild(card);
+      });
+    }
+
+    function renderDomains(items) {
+      var el = document.getElementById('section-domains');
+      if (items.length === 0) {
+        el.innerHTML = '<div class="faye-notice" style="grid-column:1/-1">Domain ownership data will populate as F.A.Y.E. operates across systems.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      items.forEach(function(d) {
+        var level = d.level || 0;
+        var levelClass = 'level-' + level;
+        var badgeClass = level >= 3 ? 'domain-owned' : level >= 2 ? 'domain-learning' : level >= 1 ? 'domain-observing' : 'domain-baseline';
+        var card = document.createElement('div');
+        card.className = 'faye-signal-card signal-ok';
+        var segs = '';
+        for (var i = 0; i < 4; i++) segs += '<div class="faye-autonomy-segment' + (i < level ? ' filled' : '') + '"></div>';
+        card.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px">' +
+          '  <div class="faye-domain-ring ' + levelClass + '"></div>' +
+          '  <div><div class="faye-signal-title">' + esc(d.domain) + '</div>' +
+          '  <span class="faye-domain-badge ' + badgeClass + '">L' + level + ' ' + esc(d.label || '') + '</span></div>' +
+          '</div>' +
+          '<div style="margin-top:8px"><div class="faye-autonomy-track">' + segs + '</div></div>' +
+          (d.detail ? '<div class="faye-signal-detail" style="margin-top:6px">' + esc(d.detail) + '</div>' : '');
+        el.appendChild(card);
+      });
+    }
+
+    // ── Chat on Core Page ───────────────────────────────────────
+    var chatInput = document.getElementById('core-chat-input');
+    var chatSend = document.getElementById('core-chat-send');
+    var chatThread = document.getElementById('core-chat-thread');
+    var chatMessages = document.getElementById('core-chat-messages');
+
+    chatSend.addEventListener('click', function() {
+      var text = chatInput.value.trim();
+      if (text) sendChat(text);
+    });
+
+    chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        var text = chatInput.value.trim();
+        if (text) sendChat(text);
+      }
+    });
+
+    chatInput.addEventListener('input', function() {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 80) + 'px';
+    });
+
+    function addChatMsg(role, content) {
+      chatThread.style.display = '';
+      var div = document.createElement('div');
+      div.className = 'faye-conv-msg ' + role;
+      if (role === 'assistant') {
+        div.innerHTML = renderMarkdown(content);
+      } else {
+        div.textContent = content;
+      }
+      chatMessages.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      return div;
+    }
+
+    function renderMarkdown(text) {
+      if (!text) return '';
+      var safe = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return safe
+        .replace(/```([\s\S]*?)```/g, '<pre style="background:#1e1e2e;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px;margin:4px 0"><code>$1</code></pre>')
+        .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-size:12px">$1</code>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^### (.+)$/gm, '<div style="font-weight:600;font-size:14px;margin:8px 0 4px;color:var(--faye-text-accent)">$1</div>')
+        .replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:15px;margin:8px 0 4px;color:var(--faye-text-accent)">$1</div>')
+        .replace(/^[\-\*] (.+)$/gm, '<div style="padding-left:12px;margin:2px 0">&#8226; $1</div>')
+        .replace(/^(\d+)\. (.+)$/gm, '<div style="padding-left:12px;margin:2px 0">$1. $2</div>')
+        .replace(/\n/g, '<br>');
+    }
+
+    async function sendChat(text) {
+      if (isLoading) return;
+      isLoading = true;
+      chatSend.disabled = true;
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+
+      addChatMsg('user', text);
+      setHeroOrb('analyzing');
+
+      try {
+        var resp = await fetch(API + '/chat', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ message: text, conversation_id: conversationId })
+        });
+        var data = await resp.json();
+        if (data.ok) {
+          conversationId = data.conversation_id;
+          if (data.tool_calls && data.tool_calls.length > 0) {
+            var toolDiv = document.createElement('div');
+            toolDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-self:flex-start';
+            data.tool_calls.forEach(function(t) {
+              var badge = document.createElement('span');
+              badge.className = 'faye-tool-badge' + (t.success ? '' : ' tool-failed');
+              badge.textContent = (t.success ? '+ ' : '- ') + t.tool.replace(/_/g, ' ');
+              toolDiv.appendChild(badge);
+            });
+            chatMessages.appendChild(toolDiv);
+          }
+          addChatMsg('assistant', data.reply);
+          setHeroOrb('confident');
+        } else {
+          addChatMsg('system', 'Error: ' + (data.error || 'Unknown error'));
+          setHeroOrb('uncertain');
+        }
+      } catch (err) {
+        addChatMsg('system', 'Connection error: ' + err.message);
+        setHeroOrb('uncertain');
+      }
+
+      isLoading = false;
+      chatSend.disabled = false;
+      chatInput.focus();
+      setTimeout(function() { setHeroOrb('idle'); }, 4000);
+    }
+
+    // ── Init ────────────────────────────────────────────────────
+    loadState();
+    setInterval(loadState, 30000);
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E.V.I.E. -- Farm Intelligence</title>
+  <script src="/auth-guard.js"></script>
+  <link rel="stylesheet" href="/styles/evie-core.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--evie-bg-deep); color: var(--evie-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    a { color: inherit; text-decoration: none; }
+    .evie-core-farm-name { font-size: 13px; color: var(--evie-text-secondary); margin-top: 8px; }
+    .evie-core-chat-thread { display: none; max-height: 300px; overflow-y: auto; padding: 12px 0; }
+    .evie-core-chat-thread.active { display: block; }
+    .evie-chat-msg { padding: 6px 0; font-size: 13px; line-height: 1.5; }
+    .evie-chat-msg.user { color: var(--evie-sensing); }
+    .evie-chat-msg.assistant { color: var(--evie-text); }
+    .evie-chat-msg.system { color: var(--evie-text-muted); font-style: italic; font-size: 12px; }
+  </style>
+</head>
+<body class="evie-core-page">
+
+  <!-- Topbar -->
+  <div class="evie-core-topbar">
+    <h1>E.V.I.E.</h1>
+    <div style="display:flex;gap:16px;align-items:center">
+      <a href="/LE-farm-admin.html">Back to Farm</a>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="evie-core-hero">
+    <div class="evie-orb-container evie-orb--hero evie-state-idle" id="hero-orb">
+      <div class="evie-orb-core"></div>
+      <div class="evie-orb-halo evie-orb-halo--inner"></div>
+      <div class="evie-orb-halo evie-orb-halo--mid"></div>
+      <div class="evie-orb-halo evie-orb-halo--outer"></div>
+    </div>
+    <div class="evie-core-hero-label">Environmental Vision & Intelligence Engine</div>
+    <div class="evie-core-farm-name" id="hero-farm-name"></div>
+  </div>
+
+  <!-- Stats Row -->
+  <div style="max-width:960px;margin:0 auto;padding:0 24px">
+    <div class="evie-stats-row">
+      <div class="evie-stat">
+        <div class="evie-stat-value" id="stat-rooms">--</div>
+        <div class="evie-stat-label">Rooms</div>
+      </div>
+      <div class="evie-stat">
+        <div class="evie-stat-value" id="stat-crops">--</div>
+        <div class="evie-stat-label">Crops</div>
+      </div>
+      <div class="evie-stat">
+        <div class="evie-stat-value" id="stat-alerts">--</div>
+        <div class="evie-stat-label">Alerts</div>
+      </div>
+      <div class="evie-stat">
+        <div class="evie-stat-value" id="stat-tasks">--</div>
+        <div class="evie-stat-label">Tasks</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div class="evie-core-grid">
+
+    <!-- Environment -->
+    <div class="evie-core-section">
+      <div class="evie-core-section-title">Environment <span class="count" id="section-env-count">0</span></div>
+      <div id="section-env">
+        <div class="evie-placeholder">Loading environment data...</div>
+      </div>
+    </div>
+
+    <!-- Active Crops -->
+    <div class="evie-core-section">
+      <div class="evie-core-section-title">Active Crops <span class="count" id="section-crop-count">0</span></div>
+      <div id="section-crops">
+        <div class="evie-placeholder">Loading crop data...</div>
+      </div>
+    </div>
+
+    <!-- Alerts & Risks -->
+    <div class="evie-core-section">
+      <div class="evie-core-section-title">Alerts <span class="count" id="section-alert-count">0</span></div>
+      <div id="section-alerts">
+        <div class="evie-placeholder">Checking alerts...</div>
+      </div>
+    </div>
+
+    <!-- Today's Tasks -->
+    <div class="evie-core-section">
+      <div class="evie-core-section-title">Tasks <span class="count" id="section-task-count">0</span></div>
+      <div id="section-tasks">
+        <div class="evie-placeholder">Loading tasks...</div>
+      </div>
+    </div>
+
+    <!-- Recommendations (full width) -->
+    <div class="evie-core-section full-width">
+      <div class="evie-core-section-title">Recommendations <span class="count" id="section-rec-count">0</span></div>
+      <div id="section-recs">
+        <div class="evie-placeholder">No recommendations at this time.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Chat Bar -->
+  <div class="evie-core-chat-bar">
+    <div class="evie-core-chat-thread" id="chat-thread"></div>
+    <div class="evie-conv-input-row">
+      <input class="evie-conv-input" id="chat-input" placeholder="Ask E.V.I.E. about your farm..." />
+      <button class="evie-conv-send" id="chat-send">&#8593;</button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var API_BASE = '/api/assistant';
+    var conversationId = null;
+    var pollTimer = null;
+
+    function getAuthHeaders() {
+      var token = localStorage.getItem('token') || sessionStorage.getItem('token')
+        || localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      return token
+        ? { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
+        : { 'Content-Type': 'application/json' };
+    }
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    function timeAgo(ts) {
+      if (!ts) return '';
+      var ms = Date.now() - new Date(ts).getTime();
+      var m = Math.floor(ms / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return m + 'm ago';
+      var h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
+    }
+
+    function setHeroState(state) {
+      var orb = document.getElementById('hero-orb');
+      if (!orb) return;
+      orb.className = orb.className.replace(/evie-state-\S+/g, '').trim();
+      orb.classList.add('evie-state-' + state);
+    }
+
+    // ── Load State ───────────────────────────────────────────────
+
+    async function loadState() {
+      try {
+        var resp = await fetch(API_BASE + '/state', { headers: getAuthHeaders() });
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'State fetch failed');
+        render(data);
+      } catch (e) {
+        console.warn('[E.V.I.E. Core] State load error:', e.message);
+      }
+    }
+
+    function render(data) {
+      // Hero
+      var alertCount = data.alerts || 0;
+      if (alertCount > 0) setHeroState('alert');
+      else setHeroState('idle');
+
+      var farmNameEl = document.getElementById('hero-farm-name');
+      if (farmNameEl && data.farm_name) farmNameEl.textContent = data.farm_name;
+
+      // Stats
+      document.getElementById('stat-rooms').textContent = (data.rooms || []).length;
+      document.getElementById('stat-crops').textContent = (data.crops || []).length;
+      document.getElementById('stat-alerts').textContent = alertCount;
+      document.getElementById('stat-tasks').textContent = (data.tasks || []).length;
+
+      // Sections
+      renderEnvironment(data.rooms || []);
+      renderCrops(data.crops || []);
+      renderAlerts(data.alert_items || []);
+      renderTasks(data.tasks || []);
+      renderRecommendations(data.recommendations || []);
+    }
+
+    function renderEnvironment(rooms) {
+      var el = document.getElementById('section-env');
+      var count = document.getElementById('section-env-count');
+      if (count) count.textContent = rooms.length;
+      if (!el) return;
+      if (rooms.length === 0) { el.innerHTML = '<div class="evie-notice">No room data available.</div>'; return; }
+      el.innerHTML = '';
+      rooms.forEach(function (r) {
+        var sev = 'info';
+        if (r.drift && r.drift > 0) sev = r.drift > 2 ? 'high' : 'medium';
+        var card = document.createElement('div');
+        card.className = 'evie-signal-card signal-' + sev;
+        card.innerHTML =
+          '<div class="evie-signal-title">' + esc(r.name) + '</div>' +
+          '<div class="evie-signal-detail">' +
+          (r.temp != null ? 'Temp: ' + r.temp + (r.temp_unit || 'C') + ' ' : '') +
+          (r.humidity != null ? 'RH: ' + r.humidity + '% ' : '') +
+          '</div>' +
+          (r.drift ? '<div class="evie-signal-meta"><span>Drift: ' + r.drift.toFixed(1) + '</span></div>' : '');
+        el.appendChild(card);
+      });
+    }
+
+    function renderCrops(crops) {
+      var el = document.getElementById('section-crops');
+      var count = document.getElementById('section-crop-count');
+      if (count) count.textContent = crops.length;
+      if (!el) return;
+      if (crops.length === 0) { el.innerHTML = '<div class="evie-notice">No active plantings.</div>'; return; }
+      el.innerHTML = '';
+      crops.forEach(function (c) {
+        var card = document.createElement('div');
+        card.className = 'evie-signal-card signal-info';
+        card.innerHTML =
+          '<div class="evie-signal-title">' + esc(c.name) + '</div>' +
+          '<div class="evie-signal-detail">' +
+          (c.stage ? esc(c.stage) + ' ' : '') +
+          (c.room ? 'in ' + esc(c.room) + ' ' : '') +
+          (c.day != null ? '(Day ' + c.day + ')' : '') +
+          '</div>' +
+          (c.harvest_in != null ? '<div class="evie-signal-meta"><span>Harvest in ~' + c.harvest_in + ' days</span></div>' : '');
+        el.appendChild(card);
+      });
+    }
+
+    function renderAlerts(alerts) {
+      var el = document.getElementById('section-alerts');
+      var count = document.getElementById('section-alert-count');
+      if (count) count.textContent = alerts.length;
+      if (!el) return;
+      if (alerts.length === 0) { el.innerHTML = '<div class="evie-notice">All systems nominal.</div>'; return; }
+      el.innerHTML = '';
+      alerts.forEach(function (a) {
+        var card = document.createElement('div');
+        card.className = 'evie-signal-card signal-' + (a.severity || 'info');
+        card.innerHTML =
+          '<div class="evie-signal-title">' + esc(a.title) + '</div>' +
+          '<div class="evie-signal-detail">' + esc(a.detail) + '</div>' +
+          '<div class="evie-signal-meta">' +
+          (a.domain ? '<span>' + esc(a.domain) + '</span>' : '') +
+          (a.since ? '<span>' + timeAgo(a.since) + '</span>' : '') +
+          '</div>';
+        el.appendChild(card);
+      });
+    }
+
+    function renderTasks(tasks) {
+      var el = document.getElementById('section-tasks');
+      var count = document.getElementById('section-task-count');
+      if (count) count.textContent = tasks.length;
+      if (!el) return;
+      if (tasks.length === 0) { el.innerHTML = '<div class="evie-notice">No tasks for today.</div>'; return; }
+      el.innerHTML = '';
+      tasks.forEach(function (t) {
+        var card = document.createElement('div');
+        card.className = 'evie-signal-card signal-info';
+        card.innerHTML =
+          '<div class="evie-signal-title">' + esc(t.title) + '</div>' +
+          '<div class="evie-signal-detail">' + esc(t.detail) + '</div>' +
+          (t.score != null ? '<div class="evie-confidence-bar"><div class="evie-confidence-fill" style="width:' + Math.round(t.score * 100) + '%"></div></div>' : '');
+        el.appendChild(card);
+      });
+    }
+
+    function renderRecommendations(recs) {
+      var el = document.getElementById('section-recs');
+      var count = document.getElementById('section-rec-count');
+      if (count) count.textContent = recs.length;
+      if (!el) return;
+      if (recs.length === 0) { el.innerHTML = '<div class="evie-notice">No recommendations at this time.</div>'; return; }
+      el.innerHTML = '';
+      recs.forEach(function (r) {
+        var card = document.createElement('div');
+        card.className = 'evie-signal-card signal-info';
+        card.innerHTML =
+          '<div class="evie-signal-title">' + esc(r.title) + '</div>' +
+          '<div class="evie-signal-detail">' + esc(r.detail) + '</div>' +
+          (r.confidence != null ? '<div class="evie-confidence-bar"><div class="evie-confidence-fill" style="width:' + Math.round(r.confidence * 100) + '%"></div></div>' : '');
+        el.appendChild(card);
+      });
+    }
+
+    // ── Chat ─────────────────────────────────────────────────────
+
+    function addChatMsg(role, text) {
+      var thread = document.getElementById('chat-thread');
+      if (!thread) return;
+      thread.classList.add('active');
+      var msg = document.createElement('div');
+      msg.className = 'evie-chat-msg ' + role;
+      msg.innerHTML = (role === 'user' ? '<strong>You:</strong> ' : role === 'assistant' ? '<strong>E.V.I.E.:</strong> ' : '') + esc(text);
+      thread.appendChild(msg);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    async function sendChat() {
+      var inp = document.getElementById('chat-input');
+      var text = (inp.value || '').trim();
+      if (!text) return;
+      inp.value = '';
+
+      addChatMsg('user', text);
+      setHeroState('thinking');
+
+      try {
+        var body = { message: text };
+        if (conversationId) body.conversation_id = conversationId;
+
+        var resp = await fetch(API_BASE + '/chat', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        var data = await resp.json();
+        if (data.ok !== false && data.reply) {
+          conversationId = data.conversation_id || conversationId;
+          if (data.tool_calls && data.tool_calls.length > 0) {
+            data.tool_calls.forEach(function (t) {
+              addChatMsg('system', 'Used tool: ' + (t.name || t.tool || 'unknown'));
+            });
+          }
+          addChatMsg('assistant', data.reply);
+          setHeroState('explaining');
+          setTimeout(function () { setHeroState('idle'); }, 3000);
+        } else {
+          addChatMsg('system', 'Error: ' + (data.error || 'Unknown error'));
+          setHeroState('uncertain');
+        }
+      } catch (e) {
+        addChatMsg('system', 'Connection error.');
+        setHeroState('offline');
+        setTimeout(function () { setHeroState('idle'); }, 5000);
+      }
+    }
+
+    // ── Init ─────────────────────────────────────────────────────
+
+    var inp = document.getElementById('chat-input');
+    var btn = document.getElementById('chat-send');
+    if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
+    if (btn) btn.addEventListener('click', sendChat);
+
+    loadState();
+    pollTimer = setInterval(loadState, 30000);
+  })();
+  </script>
+</body>
+</html>

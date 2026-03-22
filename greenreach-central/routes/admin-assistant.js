@@ -6,6 +6,7 @@
  * POST /chat          — Request/response chat with tool-calling loop
  * POST /chat/stream   — SSE streaming chat
  * GET  /briefing      — Operations briefing (morning report)
+ * GET  /state         — Presence state (alerts, domains, insights)
  * GET  /status        — Service health check
  * GET  /memory        — Get admin memory
  * POST /memory        — Save admin memory
@@ -24,7 +25,7 @@ import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import { ADMIN_TOOL_CATALOG, buildToolDefinitions, executeAdminTool, getTrustTier } from './admin-ops-agent.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import { listAllOrders, listAllBuyers } from '../services/wholesaleMemoryStore.js';
-import { buildLearningContext, learnFromConversation, buildAutonomyContext } from '../services/faye-learning.js';
+import { buildLearningContext, learnFromConversation, buildAutonomyContext, getAllDomainOwnership, getTopInsights } from '../services/faye-learning.js';
 import { buildPolicyContext } from '../services/faye-policy.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -986,6 +987,133 @@ router.get('/briefing', async (req, res) => {
   } catch (err) {
     console.error('[F.A.Y.E. Briefing] Error:', err.message);
     return res.status(500).json({ ok: false, error: 'Failed to generate briefing.' });
+  }
+});
+
+// ── GET /state — F.A.Y.E. Presence State ─────────────────────────
+// Aggregates alerts, risks, domains, insights, and farm status
+// for the ambient orb and intelligence panel.
+
+router.get('/state', async (_req, res) => {
+  try {
+    let alerts = 0;
+    let watching = [];
+    let risks = [];
+    let farmCount = 0;
+    let actionsToday = 0;
+    let proactiveMessage = null;
+
+    if (isDatabaseAvailable()) {
+      // Active unresolved alerts
+      const alertRows = await query(
+        `SELECT id, domain, severity, title, detail, created_at
+         FROM admin_alerts
+         WHERE resolved = FALSE
+         ORDER BY created_at DESC
+         LIMIT 20`
+      );
+      alerts = alertRows.rows.length;
+
+      // Split alerts into watching (low/medium) vs risks (high/critical)
+      for (const a of alertRows.rows) {
+        const entry = {
+          title: a.title,
+          detail: a.detail || '',
+          domain: a.domain || 'general',
+          severity: a.severity || 'info',
+          since: a.created_at
+        };
+        if (a.severity === 'high' || a.severity === 'critical') {
+          risks.push(entry);
+        } else {
+          watching.push(entry);
+        }
+      }
+
+      // Farm count
+      try {
+        const farmResult = await query(`SELECT COUNT(*) AS cnt FROM farms`);
+        farmCount = Number(farmResult.rows[0]?.cnt || 0);
+      } catch { /* farms table may not exist */ }
+
+      // Actions taken today
+      try {
+        const decisionResult = await query(
+          `SELECT COUNT(*) AS cnt FROM faye_decision_log
+           WHERE decided_at > CURRENT_DATE`
+        );
+        actionsToday = Number(decisionResult.rows[0]?.cnt || 0);
+      } catch { /* table may not exist */ }
+
+      // Proactive message: most recent high-severity unresolved alert
+      if (risks.length > 0) {
+        proactiveMessage = risks[0].title;
+      }
+    }
+
+    // Domain ownership levels
+    let domains = [];
+    try {
+      const raw = await getAllDomainOwnership();
+      domains = raw.map(d => {
+        const lvl = d.level || 'L0';
+        const num = parseInt(lvl.replace('L', ''), 10) || 0;
+        return { name: d.domain, level: num, label: lvl, detail: d.detail, confidence: d.confidence || 0 };
+      });
+    } catch { /* best-effort */ }
+
+    // Top insights
+    let insights = [];
+    try {
+      const raw = await getTopInsights(10);
+      insights = raw.map(i => ({
+        domain: i.domain,
+        topic: i.topic,
+        insight: i.insight,
+        confidence: i.confidence,
+        source: i.source
+      }));
+    } catch { /* best-effort */ }
+
+    // Recommendations: surface insights with high confidence as suggestions
+    const recommendations = insights
+      .filter(i => i.confidence >= 0.7)
+      .slice(0, 5)
+      .map(i => ({
+        title: i.topic,
+        detail: i.insight,
+        domain: i.domain,
+        confidence: i.confidence
+      }));
+
+    // Overall confidence: average of domain confidence levels
+    const domainConfs = domains.filter(d => d.confidence > 0).map(d => d.confidence);
+    const confidence = domainConfs.length > 0
+      ? domainConfs.reduce((a, b) => a + b, 0) / domainConfs.length
+      : 0;
+
+    return res.json({
+      ok: true,
+      alerts,
+      watching,
+      risks,
+      recommendations,
+      automations: [],
+      insights,
+      domains,
+      confidence,
+      farm_count: farmCount,
+      actions_today: actionsToday,
+      proactive_message: proactiveMessage
+    });
+  } catch (err) {
+    console.error('[F.A.Y.E. State] Error:', err.message);
+    return res.json({
+      ok: true,
+      alerts: 0, watching: [], risks: [], recommendations: [],
+      automations: [], insights: [], domains: [], confidence: 0,
+      farm_count: 0, actions_today: 0, proactive_message: null
+    });
   }
 });
 
