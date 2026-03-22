@@ -1635,7 +1635,7 @@
             category
           })
         });
-        if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error || 'Save failed'); }
+        if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.detail || e.error || 'Save failed'); }
 
         // Reset form & reload
         document.getElementById('mi-name').value = '';

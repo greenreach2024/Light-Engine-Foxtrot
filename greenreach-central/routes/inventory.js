@@ -65,7 +65,7 @@ function resolveFarmId(req) {
     }
   }
 
-  return req.query.farmId || req.headers['x-farm-id'] || null;
+  return req.query.farmId || req.headers['x-farm-id'] || req.user?.farmId || null;
 }
 
 function coerceNumber(value) {
@@ -356,6 +356,7 @@ router.post('/manual', async (req, res) => {
     }
 
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
+    const legacyQty = Math.round(manualQty); // legacy quantity column may be INTEGER
     const productId = sku || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     // Resolve pricing from the Crop Pricing page when not explicitly provided
@@ -393,7 +394,7 @@ router.post('/manual', async (req, res) => {
         productId,
         product_name,
         sku || productId,
-        manualQty,                                       // quantity (legacy)
+        legacyQty,                                       // quantity (legacy INTEGER column)
         unit || 'lb',
         unitPrice,
         available_for_wholesale !== false,                // default true for manual growers
@@ -416,7 +417,7 @@ router.post('/manual', async (req, res) => {
     });
   } catch (error) {
     console.error('[Manual Inventory] Error:', error);
-    res.status(500).json({ error: 'Failed to save manual inventory' });
+    res.status(500).json({ error: 'Failed to save manual inventory', detail: error.message });
   }
 });
 

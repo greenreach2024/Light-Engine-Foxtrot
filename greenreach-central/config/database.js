@@ -501,6 +501,9 @@ async function runMigrations(client) {
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
+      -- Ensure quantity column is NUMERIC (may have been created as INTEGER by older migration)
+      ALTER TABLE farm_inventory ALTER COLUMN quantity TYPE NUMERIC(12,3) USING quantity::NUMERIC(12,3);
+
       -- Migration 024: dual-quantity columns for manual inventory
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS auto_quantity_lbs DECIMAL(10,2) DEFAULT 0;
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS manual_quantity_lbs DECIMAL(10,2) DEFAULT 0;
