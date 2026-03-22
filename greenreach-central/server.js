@@ -74,6 +74,7 @@ import networkGrowersRouter from './routes/network-growers.js';
 import experimentRecordsRouter, { startBenchmarkScheduler } from './routes/experiment-records.js';
 import { runYieldRegression } from './jobs/yield-regression.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
+import producerPortalRouter from './routes/producer-portal.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
 import purchaseRouter from './routes/purchase.js';
@@ -3505,6 +3506,7 @@ app.use('/api', authMiddleware, networkGrowersRouter);                       // 
 app.use('/api', authMiddleware, experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
 app.use('/api/wholesale', authMiddleware, wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
 app.use('/api/wholesale/exports', authOrAdminMiddleware, wholesaleExportsRouter);   // /api/wholesale/exports/orders, payments, tax-summary
+app.use('/api/producer', producerPortalRouter);                           // Producer portal: registration, login, products, orders
 
 // Phase 2 Task 2.8: Demand analysis endpoint
 app.get('/api/wholesale/demand-analysis', authMiddleware, async (req, res) => {

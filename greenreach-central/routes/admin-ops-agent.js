@@ -1798,6 +1798,174 @@ export const ADMIN_TOOL_CATALOG = {
       const total = Object.keys(results).length;
       return { ok: true, healthy: `${healthy}/${total}`, services: results };
     }
+  },
+
+  // ── Producer Portal Management ──
+
+  'review_producer_applications': {
+    description: 'List producer applications awaiting review. Shows business name, contact, certifications, product types, and submission date. Use status filter to see pending, approved, rejected, or all.',
+    category: 'read',
+    required: [],
+    optional: ['status', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const status = params.status || 'pending';
+        const limit = Math.min(Math.max(parseInt(params.limit) || 20, 1), 100);
+        let where = '';
+        const values = [limit];
+        if (status !== 'all') {
+          where = 'WHERE status = $2';
+          values.push(status);
+        }
+        const result = await dbQuery(
+          `SELECT id, business_name, contact_name, email, phone, website,
+                  location, certifications, practices, product_types,
+                  description, status, reviewed_by, review_notes,
+                  created_at, reviewed_at
+           FROM producer_applications ${where}
+           ORDER BY created_at DESC LIMIT $1`,
+          values
+        );
+        return {
+          ok: true,
+          count: result.rows.length,
+          filter: status,
+          applications: result.rows
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'approve_producer_application': {
+    description: 'Approve a producer application. Creates a farm record and producer account so the producer can log in and manage products. Requires the application ID. Optionally set a tier (standard or premium).',
+    category: 'write',
+    required: ['application_id'],
+    optional: ['tier', 'notes'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const appId = parseInt(params.application_id);
+        if (!Number.isFinite(appId)) return { ok: false, error: 'Invalid application_id' };
+
+        // Load application
+        const appResult = await dbQuery(
+          'SELECT * FROM producer_applications WHERE id = $1', [appId]
+        );
+        if (!appResult.rows.length) return { ok: false, error: 'Application not found' };
+        const app = appResult.rows[0];
+        if (app.status !== 'pending') return { ok: false, error: `Application is already ${app.status}` };
+
+        // Generate farm_id
+        const { randomUUID } = await import('crypto');
+        const farmId = `producer-${randomUUID().slice(0, 8)}`;
+        const tier = params.tier === 'premium' ? 'premium' : 'standard';
+
+        // Create farm record
+        const metadata = {
+          contact: {
+            name: app.contact_name,
+            email: app.email,
+            phone: app.phone || null,
+            website: app.website || null
+          },
+          location: app.location || {},
+          certifications: app.certifications || [],
+          practices: app.practices || [],
+          attributes: [],
+          tier,
+          status: 'active',
+          source: 'producer_portal'
+        };
+
+        await dbQuery(
+          `INSERT INTO farms (farm_id, farm_name, metadata, status, created_at, updated_at)
+           VALUES ($1, $2, $3, 'active', NOW(), NOW())
+           ON CONFLICT (farm_id) DO NOTHING`,
+          [farmId, app.business_name, JSON.stringify(metadata)]
+        );
+
+        // Create producer account (password carried from application)
+        await dbQuery(
+          `INSERT INTO producer_accounts (farm_id, email, password_hash, display_name, role, status)
+           VALUES ($1, $2, $3, $4, 'owner', 'active')`,
+          [farmId, app.email, app.password_hash, app.contact_name]
+        );
+
+        // Update application status
+        await dbQuery(
+          `UPDATE producer_applications
+           SET status = 'approved', farm_id = $1, reviewed_by = 'faye',
+               review_notes = $2, reviewed_at = NOW(), updated_at = NOW()
+           WHERE id = $3`,
+          [farmId, params.notes || 'Approved via FAYE', appId]
+        );
+
+        // Send approval email (non-blocking)
+        try {
+          const { default: emailSvc } = await import('../services/email-service.js');
+          emailSvc.sendEmail({
+            to: app.email,
+            subject: 'GreenReach Producer Application Approved',
+            text: `Hi ${app.contact_name},\n\nYour producer application for "${app.business_name}" has been approved.\n\nYou can now log in at the Producer Portal using the email and password you registered with.\n\nNext steps:\n1. Log in to your producer dashboard\n2. Add your products with wholesale pricing\n3. Products will appear in the wholesale catalog for buyers\n\n-- GreenReach Farms`
+          }).catch(() => {});
+        } catch (_) {}
+
+        return {
+          ok: true,
+          message: `Application approved. Farm "${app.business_name}" created.`,
+          farm_id: farmId,
+          email: app.email,
+          tier
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'reject_producer_application': {
+    description: 'Reject a producer application with a reason. The applicant can see the rejection notes when checking their application status.',
+    category: 'write',
+    required: ['application_id', 'reason'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const appId = parseInt(params.application_id);
+        if (!Number.isFinite(appId)) return { ok: false, error: 'Invalid application_id' };
+        if (!params.reason || !params.reason.trim()) return { ok: false, error: 'A reason is required for rejection' };
+
+        const appResult = await dbQuery(
+          'SELECT id, business_name, email, contact_name, status FROM producer_applications WHERE id = $1', [appId]
+        );
+        if (!appResult.rows.length) return { ok: false, error: 'Application not found' };
+        const app = appResult.rows[0];
+        if (app.status !== 'pending') return { ok: false, error: `Application is already ${app.status}` };
+
+        await dbQuery(
+          `UPDATE producer_applications
+           SET status = 'rejected', reviewed_by = 'faye',
+               review_notes = $1, reviewed_at = NOW(), updated_at = NOW()
+           WHERE id = $2`,
+          [params.reason.trim(), appId]
+        );
+
+        // Send rejection email (non-blocking)
+        try {
+          const { default: emailSvc } = await import('../services/email-service.js');
+          emailSvc.sendEmail({
+            to: app.email,
+            subject: 'GreenReach Producer Application Update',
+            text: `Hi ${app.contact_name},\n\nThank you for your interest in joining GreenReach as a producer.\n\nAfter review, we are unable to approve your application at this time.\n\nReason: ${params.reason.trim()}\n\nYou are welcome to submit a new application if your circumstances change.\n\n-- GreenReach Farms`
+          }).catch(() => {});
+        } catch (_) {}
+
+        return {
+          ok: true,
+          message: `Application for "${app.business_name}" rejected.`,
+          reason: params.reason.trim()
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
 
@@ -1808,8 +1976,9 @@ export const ADMIN_TOOL_CATALOG = {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications']),
   quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
+  confirm: new Set(['send_admin_email', 'send_sms', 'approve_producer_application', 'reject_producer_application']),
   confirm: new Set(['send_admin_email', 'send_sms']),
   admin: new Set(['process_refund'])
 };
