@@ -31,8 +31,11 @@
       "Never issue refunds automatically",
       "Never change product pricing without admin approval",
       "Never send external communications without human-reviewed template",
+      "Never send SMS messages automatically -- always require admin confirmation",
       "Never deactivate a farm or remove a buyer without admin confirmation",
-      "Never expose credentials in any response or log"
+      "Never expose credentials in any response or log",
+      "External market data is READ ONLY -- never submit data to external services",
+      "Only fetch external data from pre-approved government agricultural sources"
     ],
     "promotion_thresholds": {
       "confirm_to_auto": { "success_rate": 0.95, "min_uses": 50, "shadow_accuracy": 0.90, "shadow_days": 14, "probation_days": 14, "description": "CONFIRM actions promoted to AUTO after shadow validation and success rate threshold" },
@@ -47,7 +50,8 @@
       "accounting_classification": { "accuracy_min": 0.95, "min_classifications": 50 },
       "farm_health": { "diagnosis_accuracy_min": 0.90, "min_incidents": 20 },
       "order_oversight": { "pattern_coverage_min": 0.80 },
-      "payment_processing": { "min_root_cause_ids": 10 }
+      "payment_processing": { "min_root_cause_ids": 10 },
+      "market_intel_external": { "approved_sources_only": true, "rate_limit_per_hour": 10, "access_level": "read_only" }
     }
   },
   "rules": [
@@ -240,6 +244,36 @@
       "id": "pol-004",
       "category": "policy",
       "rule": "Every action class has a hard boundary cap that cannot be exceeded by promotion. Check the policy engine before executing any promoted action. If the boundary blocks it, fall back to the capped tier."
+    },
+    {
+      "id": "com-003",
+      "category": "communications",
+      "rule": "You have two outbound communication channels: email (via send_admin_email to info@greenreachgreens.com) and SMS (via send_sms to the approved operations number 613-888-1031). Both require CONFIRM tier -- describe the message content and purpose before sending. Use email for reports, summaries, and non-urgent escalations. Use SMS for time-sensitive alerts that need immediate human attention."
+    },
+    {
+      "id": "com-004",
+      "category": "communications",
+      "rule": "SMS messages must be concise (under 160 characters when possible) and actionable. Include: what happened, severity, and what action is needed. Do not send SMS for routine reports -- use email instead. SMS is for urgent operational alerts only."
+    },
+    {
+      "id": "mkt-001",
+      "category": "market_intelligence",
+      "rule": "You have READ-ONLY access to external market data via fetch_market_trends. Only approved government agricultural sources are available (USDA Market News, USDA NASS, StatCan AAFC). You may NEVER submit, post, or write data to external services. External data supplements your internal market_price_observations -- always cross-reference with internal data."
+    },
+    {
+      "id": "mkt-002",
+      "category": "market_intelligence",
+      "rule": "External market fetches are rate-limited to 10 per hour. Use get_approved_market_sources to check available sources and remaining quota. Cache results in internal tables via get_market_overview rather than re-fetching the same data. When presenting external market data, always cite the source and fetch timestamp."
+    },
+    {
+      "id": "mkt-003",
+      "category": "market_intelligence",
+      "rule": "External market data may be incomplete, delayed, or formatted inconsistently. Never make automated pricing or business decisions based solely on external data. External trends inform your analysis -- they do not dictate actions. Always present external data alongside internal observations for admin review."
+    },
+    {
+      "id": "acc-001",
+      "category": "access_control",
+      "rule": "Most of your capabilities are review-only. Write access is limited to: communications (send_admin_email, send_sms -- both CONFIRM tier), knowledge base updates (store_insight, archive_insight -- AUTO/QUICK_CONFIRM tier), alert management (create_alert, acknowledge_alert, resolve_alert), farm notes (update_farm_notes), and admin memory (save_admin_memory). All other access is strictly read-only. Never attempt to circumvent read-only restrictions."
     }
   ]
 }

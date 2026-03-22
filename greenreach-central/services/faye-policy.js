@@ -94,9 +94,14 @@ export const TOOL_ACTION_MAP = {
   'resolve_alert': 'modify',
   'archive_insight': 'modify',
   'send_admin_email': 'modify',
+  'send_sms': 'modify',
 
   // transact
-  'process_refund': 'transact'
+  'process_refund': 'transact',
+
+  // read-only external access (maps to recommend -- no write actions)
+  'fetch_market_trends': 'recommend',
+  'get_approved_market_sources': 'recommend'
 };
 
 /**
@@ -139,6 +144,13 @@ export const HARD_BOUNDARIES = [
     id: 'hb-003',
     rule: 'Never send external customer-facing communications without a human-reviewed template.',
     applies_to: ['send_admin_email'],
+    action_class: 'modify',
+    max_tier: 'confirm'
+  },
+  {
+    id: 'hb-003b',
+    rule: 'Never send SMS messages automatically. All SMS requires admin confirmation. Recipient is hardcoded to approved numbers only.',
+    applies_to: ['send_sms'],
     action_class: 'modify',
     max_tier: 'confirm'
   },

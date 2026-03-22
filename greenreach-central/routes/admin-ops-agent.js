@@ -12,8 +12,49 @@ import { query as dbQuery, isDatabaseAvailable } from '../config/database.js';
 import { listAllOrders, listPayments, listRefunds, listAllBuyers, createRefund, getOrderById } from '../services/wholesaleMemoryStore.js';
 import { listNetworkFarms } from '../services/networkFarmsStore.js';
 import emailService from '../services/email-service.js';
+import smsService from '../services/sms-service.js';
 
 const router = express.Router();
+
+// ── External Market Data: Approved Sources ────────────────────
+// Only these domains may be contacted for market intelligence.
+// Adding a source requires a code change + deploy (intentional safety gate).
+const APPROVED_MARKET_SOURCES = [
+  {
+    id: 'usda_mars',
+    name: 'USDA Market News',
+    baseUrl: 'https://marketnews.usda.gov/mnp/api',
+    description: 'USDA Agricultural Marketing Service -- fruit, vegetable, and specialty crop prices'
+  },
+  {
+    id: 'usda_nass',
+    name: 'USDA NASS QuickStats',
+    baseUrl: 'https://quickstats.nass.usda.gov/api',
+    description: 'USDA National Agricultural Statistics Service -- crop production and pricing'
+  },
+  {
+    id: 'statcan_aafc',
+    name: 'StatCan / AAFC',
+    baseUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en',
+    description: 'Statistics Canada Agriculture and Agri-Food -- Canadian farm product pricing'
+  }
+];
+
+// Rate limit: max external market fetches per hour
+const MARKET_FETCH_LIMIT = 10;
+let marketFetchCount = 0;
+let marketFetchWindowStart = Date.now();
+
+function checkMarketRateLimit() {
+  const now = Date.now();
+  if (now - marketFetchWindowStart > 3600000) {
+    marketFetchCount = 0;
+    marketFetchWindowStart = now;
+  }
+  if (marketFetchCount >= MARKET_FETCH_LIMIT) return false;
+  marketFetchCount++;
+  return true;
+}
 
 // ── Tool Catalog ──────────────────────────────────────────────
 
@@ -463,6 +504,109 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+  'fetch_market_trends': {
+    description: 'Fetch external market price data from approved government agricultural sources (USDA Market News, USDA NASS, StatCan AAFC). READ ONLY -- retrieves pricing trends for crops relevant to GreenReach operations. Results are stored in the internal market_price_observations table for audit. Rate limited to 10 fetches per hour. Use this to supplement internal market data with current external benchmarks.',
+    category: 'read',
+    required: ['source', 'crop'],
+    optional: ['date_range'],
+    handler: async (params) => {
+      try {
+        // Validate source is in allowlist
+        const source = APPROVED_MARKET_SOURCES.find(s => s.id === params.source);
+        if (!source) {
+          return {
+            ok: false,
+            error: `Unknown source: ${params.source}. Approved sources: ${APPROVED_MARKET_SOURCES.map(s => s.id).join(', ')}`,
+            approved_sources: APPROVED_MARKET_SOURCES.map(s => ({ id: s.id, name: s.name, description: s.description }))
+          };
+        }
+
+        // Rate limit check
+        if (!checkMarketRateLimit()) {
+          return { ok: false, error: 'Market data rate limit exceeded (max 10 fetches per hour). Try again later or use get_market_overview for cached data.' };
+        }
+
+        const crop = (params.crop || '').trim();
+        if (!crop) return { ok: false, error: 'Crop name is required' };
+
+        // Build request URL based on source
+        let url;
+        const encodedCrop = encodeURIComponent(crop);
+        if (source.id === 'usda_mars') {
+          url = `${source.baseUrl}/search?commodity=${encodedCrop}&format=json`;
+        } else if (source.id === 'usda_nass') {
+          const apiKey = process.env.USDA_NASS_API_KEY;
+          if (!apiKey) return { ok: false, error: 'USDA NASS API key not configured (USDA_NASS_API_KEY env var)' };
+          url = `${source.baseUrl}/api_GET/?key=${apiKey}&commodity_desc=${encodedCrop}&format=json&year__GE=${new Date().getFullYear() - 1}`;
+        } else if (source.id === 'statcan_aafc') {
+          url = `${source.baseUrl}/dtl!downloadEntireTable.action?pid=3210000701&lang=en`;
+        }
+
+        console.log(`[market] Fetching from ${source.name}: ${crop}`);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        let data;
+        try {
+          const resp = await fetch(url, {
+            headers: { 'User-Agent': 'GreenReach-FAYE/1.0 (agricultural-market-research)' },
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+          if (!resp.ok) {
+            return { ok: false, error: `${source.name} returned HTTP ${resp.status}`, source: source.id };
+          }
+          const contentType = resp.headers.get('content-type') || '';
+          if (contentType.includes('json')) {
+            data = await resp.json();
+          } else {
+            const text = await resp.text();
+            data = { raw_text: text.substring(0, 5000), note: 'Non-JSON response truncated to 5000 chars' };
+          }
+        } catch (fetchErr) {
+          clearTimeout(timeout);
+          return { ok: false, error: `Failed to reach ${source.name}: ${fetchErr.message}`, source: source.id };
+        }
+
+        // Store observation in audit table
+        if (isDatabaseAvailable()) {
+          try {
+            await dbQuery(
+              `INSERT INTO market_price_observations (product, source, observed_at, raw_data)
+               VALUES ($1, $2, NOW(), $3)
+               ON CONFLICT DO NOTHING`,
+              [crop, source.id, JSON.stringify(data).substring(0, 10000)]
+            );
+          } catch (_dbErr) { /* non-fatal audit logging */ }
+        }
+
+        return {
+          ok: true,
+          source: { id: source.id, name: source.name },
+          crop,
+          data,
+          fetched_at: new Date().toISOString(),
+          note: 'External market data -- review only. Cross-reference with internal get_market_overview for validated pricing.'
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_approved_market_sources': {
+    description: 'List the approved external data sources for market trend research. F.A.Y.E. may only fetch data from these pre-approved government agricultural sources.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      return {
+        ok: true,
+        sources: APPROVED_MARKET_SOURCES.map(s => ({ id: s.id, name: s.name, description: s.description })),
+        rate_limit: `${MARKET_FETCH_LIMIT} fetches per hour`,
+        remaining: Math.max(0, MARKET_FETCH_LIMIT - marketFetchCount)
+      };
+    }
+  },
+
   // ── AI & Cost Management ──
 
   'get_ai_usage_costs': {
@@ -792,6 +936,27 @@ export const ADMIN_TOOL_CATALOG = {
           html: `<div style="font-family:sans-serif;max-width:600px"><h3 style="color:#10b981">F.A.Y.E. — Operations Alert</h3><div style="white-space:pre-wrap">${params.body.replace(/</g, '&lt;')}</div><hr style="border:none;border-top:1px solid #ddd;margin:20px 0"><p style="font-size:12px;color:#888">Sent by F.A.Y.E. (Farm Autonomy & Yield Engine)</p></div>`
         });
         return { ok: true, messageId: result.messageId, stub: result.stub || false };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'send_sms': {
+    description: 'Send an SMS text message to the approved GreenReach operations phone number (613-888-1031). Use for urgent alerts, time-sensitive notifications, or operational updates that need immediate attention. Recipient is hardcoded -- you cannot choose who receives the text.',
+    category: 'write',
+    trust_tier: 'confirm',
+    required: ['message'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const message = `[F.A.Y.E.] ${params.message}`;
+        const result = await smsService.sendSms({
+          to: '+16138881031',
+          message
+        });
+        if (result.success) {
+          return { ok: true, messageId: result.messageId, recipient: '613-888-1031', stub: result.stub || false };
+        }
+        return { ok: false, error: result.error };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },
@@ -1268,7 +1433,7 @@ export const ADMIN_TOOL_CATALOG = {
 export const TRUST_TIERS = {
   auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision']),
   quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
-  confirm: new Set(['send_admin_email']),
+  confirm: new Set(['send_admin_email', 'send_sms']),
   admin: new Set(['process_refund'])
 };
 
