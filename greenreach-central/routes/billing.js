@@ -149,6 +149,11 @@ router.get('/usage/:farmId', async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Farm ID required' });
   }
 
+  // Scope check: authenticated farm can only query its own usage (admins bypass)
+  if (req.farmId && req.farmId !== farmId && req.role !== 'admin') {
+    return res.status(403).json({ status: 'error', message: 'Access denied' });
+  }
+
   try {
     let deviceCount = 0;
     let dataTypes = 0;
@@ -339,6 +344,11 @@ router.post('/subscription', async (req, res) => {
 router.get('/ai-costs/:farmId', async (req, res) => {
   const { farmId } = req.params;
   if (!farmId) return res.status(400).json({ status: 'error', message: 'Farm ID required' });
+
+  // Scope check: authenticated farm can only query its own usage (admins bypass)
+  if (req.farmId && req.farmId !== farmId && req.role !== 'admin') {
+    return res.status(403).json({ status: 'error', message: 'Access denied' });
+  }
 
   try {
     if (!isDatabaseAvailable()) {

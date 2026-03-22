@@ -269,15 +269,20 @@ async function checkAutoResolvePatterns() {
     // Find open alerts whose pattern has been resolved positively 3+ times
     const candidates = await query(`
       SELECT a.id, a.domain, a.title, a.severity,
-             fp.pattern_key, fp.occurrences, fp.last_outcome
+             fp.pattern_key, fp.occurrence_count
       FROM admin_alerts a
       JOIN faye_patterns fp ON fp.domain = a.domain
         AND a.title LIKE '%' || fp.pattern_key || '%'
       WHERE a.resolved = FALSE
         AND a.severity IN ('low', 'medium')
-        AND fp.occurrences >= 3
-        AND fp.last_outcome = 'resolved_benign'
+        AND fp.occurrence_count >= 3
         AND a.created_at > NOW() - INTERVAL '24 hours'
+        AND EXISTS (
+          SELECT 1 FROM admin_alerts prev
+          WHERE prev.domain = a.domain AND prev.title = a.title
+            AND prev.resolved = TRUE
+            AND prev.created_at > NOW() - INTERVAL '30 days'
+        )
       LIMIT 10
     `);
 
@@ -288,10 +293,10 @@ async function checkAutoResolvePatterns() {
          WHERE id = $1`,
         [c.id]
       );
-      logger.info(`${TAG} Auto-resolved alert #${c.id}: "${c.title}" (pattern "${c.pattern_key}" seen ${c.occurrences}x)`);
-      await storeInsight('auto_resolve', c.domain,
-        `Auto-resolved "${c.title}" — pattern "${c.pattern_key}" historically benign (${c.occurrences} occurrences)`,
-        { alert_id: c.id, pattern_key: c.pattern_key, occurrences: c.occurrences });
+      logger.info(`${TAG} Auto-resolved alert #${c.id}: "${c.title}" (pattern "${c.pattern_key}" seen ${c.occurrence_count}x)`);
+      await storeInsight(c.domain, 'auto_resolve',
+        `Auto-resolved "${c.title}" — pattern "${c.pattern_key}" historically benign (${c.occurrence_count} occurrences)`,
+        'intelligence_loop', 0.9);
     }
 
     if (candidates.rows.length > 0) {

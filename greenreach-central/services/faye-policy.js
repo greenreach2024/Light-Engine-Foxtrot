@@ -150,7 +150,7 @@ export const HARD_BOUNDARIES = [
   {
     id: 'hb-002',
     rule: 'Never change product pricing without explicit admin approval.',
-    applies_to: [],
+    applies_to: ['update_pricing', 'set_product_price', 'bulk_price_update'],
     action_class: 'transact',
     max_tier: 'admin'
   },

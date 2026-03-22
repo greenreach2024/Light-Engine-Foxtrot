@@ -91,7 +91,7 @@ export async function ingestPaymentRevenue({
     // Build idempotency key to prevent duplicates
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`revenue|${payment_id}|${order_id}|${amount}`)
+      .update(`revenue|${provider}|${payment_id}|${order_id}|${amount}`)
       .digest('hex');
 
     // Call the accounting ingest endpoint logic directly (same DB)
@@ -165,7 +165,7 @@ export async function ingestRefundReversal({
 
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`refund|${refund_id}|${order_id}|${amount}`)
+      .update(`refund|${provider}|${refund_id}|${order_id}|${amount}`)
       .digest('hex');
 
     const sourceKey = `payment_${provider}`;
@@ -236,7 +236,7 @@ export async function ingestFarmPayables({
 
       const crypto = await import('crypto');
       const idempotencyKey = crypto.createHash('sha256')
-        .update(`farm_payable|${order_id}|${sub.farm_id}|${farmAmount}`)
+        .update(`farm_payable|${provider}|${order_id}|${sub.farm_id}|${farmAmount}`)
         .digest('hex');
 
       const sourceKey = 'wholesale_payable';
@@ -316,7 +316,7 @@ export async function ingestFarmPayout({
 
     const crypto = await import('crypto');
     const idempotencyKey = crypto.createHash('sha256')
-      .update(`farm_payout|${payout_id}|${farm_id}|${amount}`)
+      .update(`farm_payout|${provider}|${payout_id}|${farm_id}|${amount}`)
       .digest('hex');
 
     const sourceKey = `payout_${provider}`;

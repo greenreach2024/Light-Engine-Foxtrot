@@ -5,6 +5,30 @@ import { ingestPaymentRevenue, ingestRefundReversal } from '../services/revenue-
 
 const router = express.Router();
 
+// ── Webhook Event Deduplication ──────────────────────────────────
+let dedupTableReady = false;
+async function ensureDedupTable() {
+  if (dedupTableReady || !isDatabaseAvailable()) return;
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS webhook_events_processed (
+      event_id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      received_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    dedupTableReady = true;
+  } catch { /* table may already exist */ dedupTableReady = true; }
+}
+async function isEventProcessed(eventId, provider) {
+  if (!eventId || !isDatabaseAvailable()) return false;
+  await ensureDedupTable();
+  try {
+    const r = await query('SELECT 1 FROM webhook_events_processed WHERE event_id = $1', [eventId]);
+    if (r.rows.length > 0) return true;
+    await query('INSERT INTO webhook_events_processed (event_id, provider) VALUES ($1, $2) ON CONFLICT DO NOTHING', [eventId, provider]);
+    return false;
+  } catch { return false; }
+}
+
 // ──────────────────────────────────────────────────────────
 // Square Webhook Receiver
 // ──────────────────────────────────────────────────────────
@@ -56,6 +80,12 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
 
   try {
     if (!isDatabaseAvailable()) return;
+
+    // Dedup: skip if this event was already processed
+    if (await isEventProcessed(event.event_id, 'square')) {
+      console.log(`[Webhook:Square] Duplicate event ${event.event_id} — skipping`);
+      return;
+    }
 
     if (eventType === 'payment.created' || eventType === 'payment.updated') {
       const payment = event.data?.object?.payment;
@@ -155,6 +185,13 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 
   try {
     if (!isDatabaseAvailable()) return;
+
+    // Dedup: skip if this event was already processed
+    if (await isEventProcessed(event.id, 'stripe')) {
+      console.log(`[Webhook:Stripe] Duplicate event ${event.id} — skipping`);
+      return;
+    }
+
     const obj = event.data?.object;
     if (!obj) return;
 
