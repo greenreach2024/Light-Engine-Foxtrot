@@ -464,6 +464,66 @@
     .inventory-ok h4 {
       margin-bottom: 0.25rem;
     }
+
+    .stock-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      margin-left: 0.5rem;
+    }
+
+    .stock-badge.ok {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .stock-badge.warn {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .stock-badge.unknown {
+      background: #e5e7eb;
+      color: #6b7280;
+    }
+
+    .stock-inline {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+
+    .stock-inline.short {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .order-stock-summary {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin: 0.75rem 0;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .order-stock-summary.all-ok {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .order-stock-summary.has-shortfall {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .order-stock-summary.no-data {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
   </style>
 </head>
 <body>
@@ -563,6 +623,7 @@
     const app = {
       farmId: 'GR-00001', // Will be loaded from auth
       orders: [],
+      inventory: [],
 
       async init() {
         // Get farm ID from localStorage or config
@@ -579,11 +640,20 @@
 
       async loadOrders() {
         try {
-          const response = await fetch(`/api/wholesale/orders/pending-verification/${this.farmId}`);
-          const data = await response.json();
-          
-          if (data.ok) {
-            this.orders = data.orders || [];
+          const [ordersResp, invResp] = await Promise.all([
+            fetch(`/api/wholesale/orders/pending-verification/${this.farmId}`),
+            fetch(`/api/inventory/${this.farmId}`)
+          ]);
+          const ordersData = await ordersResp.json();
+          try {
+            const invData = await invResp.json();
+            this.inventory = invData.products || [];
+          } catch (e) {
+            this.inventory = [];
+          }
+
+          if (ordersData.ok) {
+            this.orders = ordersData.orders || [];
             this.renderOrders();
             this.updateStats();
           }
@@ -617,6 +687,22 @@
 
         const items = order.items || [];
         const total = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
+
+        // Compare each item against inventory
+        const stockChecks = items.map(item => this.checkItemStock(item));
+        const shortfalls = stockChecks.filter(s => s.status === 'short');
+        const unknowns = stockChecks.filter(s => s.status === 'unknown');
+
+        let stockSummaryHtml = '';
+        if (this.inventory.length === 0) {
+          stockSummaryHtml = `<div class="order-stock-summary no-data">Inventory data unavailable -- verify stock before accepting</div>`;
+        } else if (shortfalls.length > 0) {
+          stockSummaryHtml = `<div class="order-stock-summary has-shortfall">${shortfalls.length} item${shortfalls.length > 1 ? 's' : ''} may exceed available stock -- review before accepting</div>`;
+        } else if (unknowns.length > 0) {
+          stockSummaryHtml = `<div class="order-stock-summary no-data">${unknowns.length} item${unknowns.length > 1 ? 's' : ''} not tracked in inventory</div>`;
+        } else {
+          stockSummaryHtml = `<div class="order-stock-summary all-ok">All items within recorded stock levels</div>`;
+        }
 
         return `
           <div class="order-card ${isUrgent ? 'urgent' : ''}">
@@ -656,25 +742,39 @@
                 <tr>
                   <th>Product</th>
                   <th>Quantity</th>
+                  <th>Stock</th>
                   <th>Price/Unit</th>
                   <th>Subtotal</th>
                 </tr>
               </thead>
               <tbody>
-                ${items.map(item => `
+                ${items.map((item, i) => {
+                  const sc = stockChecks[i];
+                  let stockCell = '';
+                  if (sc.status === 'ok') {
+                    stockCell = `<span class="stock-inline">${sc.available.toFixed(1)} lbs</span>`;
+                  } else if (sc.status === 'short') {
+                    stockCell = `<span class="stock-inline short">${sc.available.toFixed(1)} lbs (short ${sc.shortfall.toFixed(1)})</span>`;
+                  } else {
+                    stockCell = `<span class="stock-inline">--</span>`;
+                  }
+                  return `
                   <tr>
                     <td>${item.product_name}</td>
                     <td>${item.quantity} ${item.unit}</td>
+                    <td>${stockCell}</td>
                     <td>$${Number(item.price_per_unit).toFixed(2)}</td>
                     <td>$${(item.price_per_unit * item.quantity).toFixed(2)}</td>
-                  </tr>
-                `).join('')}
+                  </tr>`;
+                }).join('')}
                 <tr class="total-row">
-                  <td colspan="3">Total</td>
+                  <td colspan="4">Total</td>
                   <td>$${total.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
+
+            ${stockSummaryHtml}
 
             ${order.delivery_instructions ? `
               <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin: 1rem 0;">
@@ -709,6 +809,19 @@
         document.getElementById('total-value').textContent = '$' + totalValue.toFixed(2);
       },
 
+      checkItemStock(item) {
+        const name = (item.product_name || '').toLowerCase().trim();
+        const match = this.inventory.find(p => {
+          const pName = (p.product_name || '').toLowerCase().trim();
+          return pName === name || pName.includes(name) || name.includes(pName);
+        });
+        if (!match) return { status: 'unknown', available: null, shortfall: null };
+        const available = Number(match.available_lbs || match.quantity_available || 0);
+        const shortfall = item.quantity - available;
+        if (shortfall > 0) return { status: 'short', available, shortfall };
+        return { status: 'ok', available, shortfall: 0 };
+      },
+
       async acceptOrder(subOrderId) {
         const order = this.orders.find(o => o.id === subOrderId);
         if (!order) return;
@@ -719,37 +832,21 @@
           return;
         }
 
-        // Fetch current farm inventory and compare against order
-        let inventory = [];
-        try {
-          const invResp = await fetch(`/api/inventory/${this.farmId}`);
-          const invData = await invResp.json();
-          inventory = invData.products || [];
-        } catch (err) {
-          console.error('Inventory fetch failed:', err);
-        }
-
-        // Build comparison: match order items to inventory by product name
+        // Use already-loaded inventory (refreshed every 30s with orders)
         const comparisons = items.map(item => {
-          const name = (item.product_name || '').toLowerCase().trim();
-          const match = inventory.find(p => {
-            const pName = (p.product_name || '').toLowerCase().trim();
-            return pName === name || pName.includes(name) || name.includes(pName);
-          });
-          const available = match
-            ? Number(match.available_lbs || match.quantity_available || 0)
-            : null;
+          const sc = this.checkItemStock(item);
           return {
             product_name: item.product_name,
             ordered: item.quantity,
             unit: item.unit,
-            available: available,
-            shortfall: available !== null ? item.quantity - available : null
+            available: sc.available,
+            shortfall: sc.shortfall,
+            status: sc.status
           };
         });
 
-        const shortfalls = comparisons.filter(c => c.shortfall !== null && c.shortfall > 0);
-        const unknowns = comparisons.filter(c => c.available === null);
+        const shortfalls = comparisons.filter(c => c.status === 'short');
+        const unknowns = comparisons.filter(c => c.status === 'unknown');
 
         // Build modal body
         const body = document.getElementById('inventory-check-body');
