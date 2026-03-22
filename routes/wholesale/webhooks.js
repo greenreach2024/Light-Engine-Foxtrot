@@ -64,8 +64,8 @@ router.post('/square', async (req, res) => {
 
     // Verify webhook signature
     const squareProvider = PaymentProviderFactory.create('square', {
-      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo',
-      environment: 'sandbox',
+      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.SQUARE_ENVIRONMENT || 'production',
       webhookSecret
     });
 
@@ -292,8 +292,8 @@ router.get('/payments/:paymentId/status', async (req, res) => {
     console.log('[Webhook] Polling payment status:', paymentId);
 
     const squareProvider = PaymentProviderFactory.create('square', {
-      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo',
-      environment: 'sandbox'
+      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.SQUARE_ENVIRONMENT || 'production'
     });
 
     const status = await squareProvider.getPaymentStatus(paymentId);
@@ -397,8 +397,8 @@ router.post('/reconcile', async (req, res) => {
     console.log('[Webhook] Starting manual reconciliation...');
 
     const squareProvider = PaymentProviderFactory.create('square', {
-      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo',
-      environment: 'sandbox'
+      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.SQUARE_ENVIRONMENT || 'production'
     });
 
     const reconciliationResults = [];

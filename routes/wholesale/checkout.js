@@ -123,7 +123,7 @@ router.post('/preview', async (req, res) => {
 
     // Allocate order
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,
@@ -223,7 +223,7 @@ router.post('/execute', async (req, res) => {
     // Step 2: Allocate order
     console.log('[Checkout] Step 2: Allocating order...');
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,
@@ -280,16 +280,22 @@ router.post('/execute', async (req, res) => {
         
         let providerConfig;
         if (farmPaymentProvider === 'stripe') {
+          if (!process.env.STRIPE_SECRET_KEY) {
+            throw new Error('STRIPE_SECRET_KEY environment variable is required for Stripe payments');
+          }
           providerConfig = {
-            stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'demo-stripe-key',
+            stripeSecretKey: process.env.STRIPE_SECRET_KEY,
             webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
             connectedAccountId: subOrder.stripe_account_id || null
           };
         } else {
+          if (!process.env.SQUARE_ACCESS_TOKEN) {
+            throw new Error('SQUARE_ACCESS_TOKEN environment variable is required for Square payments');
+          }
           providerConfig = {
-            squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo-token',
-            environment: 'sandbox',
-            brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID || 'greenreach-merchant-id'
+            squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+            environment: process.env.SQUARE_ENVIRONMENT || 'production',
+            brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID || null
           };
         }
 
@@ -299,8 +305,8 @@ router.post('/execute', async (req, res) => {
         // Execute payment
         const paymentResult = await paymentProvider.createPayment({
           farmSubOrderId: subOrderId,
-          farmMerchantId: subOrder.farm_id, // TODO: Use actual Square merchant ID
-          farmLocationId: 'demo-location-id', // TODO: Get from farm record
+          farmMerchantId: subOrder.farm_id,
+          farmLocationId: subOrder.location_id || process.env.SQUARE_LOCATION_ID,
           amountMoney: {
             amount: Math.round(subOrder.total * 100), // Convert to cents
             currency: process.env.PAYMENT_CURRENCY || 'CAD'

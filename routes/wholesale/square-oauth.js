@@ -35,7 +35,7 @@ const farmTokens = new Map();
 
 const WHOLESALE_READ_FROM_DB = process.env.WHOLESALE_READ_FROM_DB === 'true';
 
-const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox';
+const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'production';
 const SQUARE_APPLICATION_ID = process.env.SQUARE_APPLICATION_ID;
 const SQUARE_APPLICATION_SECRET = process.env.SQUARE_APPLICATION_SECRET;
 const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || 'http://localhost:8091/api/wholesale/oauth/square/callback';
@@ -47,6 +47,16 @@ if (IS_PROD_LIKE && !process.env.TOKEN_ENCRYPTION_KEY) {
 }
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY || crypto.randomBytes(32);
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function encryptToken(token) {
   const iv = crypto.randomBytes(16);
@@ -354,12 +364,12 @@ router.get('/callback', async (req, res) => {
         <body>
           <h1>GreenReach Wholesale Onboarding Complete</h1>
           <div class="success">
-            <strong>Success!</strong> ${farm_name} is now connected to Square.
+            <strong>Success!</strong> ${escapeHtml(farm_name)} is now connected to Square.
           </div>
           <div class="info">
             <dl>
               <dt>Farm:</dt>
-              <dd>${farm_name}</dd>
+              <dd>${escapeHtml(farm_name)}</dd>
               <dt>Square Merchant ID:</dt>
               <dd>${merchantId}</dd>
               <dt>Default Location:</dt>
@@ -368,7 +378,7 @@ router.get('/callback', async (req, res) => {
               <dd>Active - Ready to receive wholesale orders</dd>
             </dl>
           </div>
-          <p>Your farm can now accept wholesale orders through GreenReach. Payments will be processed through your Square account, with a 10% broker fee automatically collected by GreenReach.</p>
+          <p>Your farm can now accept wholesale orders through GreenReach. Payments will be processed through your Square account.</p>
           <a href="/">Return to Dashboard</a>
         </body>
       </html>
@@ -382,7 +392,7 @@ router.get('/callback', async (req, res) => {
         <head><title>OAuth Error</title></head>
         <body>
           <h1>OAuth Error</h1>
-          <p>${error.message}</p>
+          <p>${escapeHtml(error.message)}</p>
           <p>Please contact support if this issue persists.</p>
           <a href="/">Return to Dashboard</a>
         </body>

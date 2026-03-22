@@ -401,7 +401,13 @@
   // ── Simple Markdown Renderer ──────────────────────────────────
   function renderMarkdown(text) {
     if (!text) return '';
-    return text
+    // Escape HTML entities first to prevent XSS from LLM or tool output
+    var safe = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    return safe
       // Code blocks
       .replace(/```([\s\S]*?)```/g, '<pre style="background:#1e1e2e;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px;margin:4px 0"><code>$1</code></pre>')
       // Inline code

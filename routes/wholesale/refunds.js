@@ -132,9 +132,15 @@ router.post('/', async (req, res) => {
     console.log(`  Broker fee refund: $${brokerFeeRefundCents / 100}`);
 
     // Create payment provider
+    if (!process.env.SQUARE_ACCESS_TOKEN) {
+      return res.status(500).json({
+        ok: false,
+        error: 'SQUARE_ACCESS_TOKEN not configured'
+      });
+    }
     const squareProvider = PaymentProviderFactory.create('square', {
-      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo',
-      environment: 'sandbox'
+      squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
+      environment: process.env.SQUARE_ENVIRONMENT || 'production'
     });
 
     // Generate idempotency key

@@ -45,7 +45,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 import adminRoutes from './routes/admin.js';
 import driverApplicationsRoutes from './routes/driver-applications.js';
 import campaignRoutes from './routes/campaign.js';
-import { adminAuthMiddleware } from './middleware/adminAuth.js';
+import { adminAuthMiddleware, requireAdminRole } from './middleware/adminAuth.js';
 import networkDevicesRoutes from './routes/network-devices.js';
 import reportsRoutes from './routes/reports.js';
 import farmSettingsRoutes from './routes/farm-settings.js';
@@ -3063,8 +3063,8 @@ app.use('/api/admin', adminRoutes); // Admin dashboard API (sub-mounts /wholesal
 app.use('/api/delivery/driver-applications', driverApplicationsRoutes); // Public driver enrollment
 app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
-app.use('/api/admin/assistant', adminAuthMiddleware, adminAssistantRouter); // F.A.Y.E. admin AI assistant
-app.use('/api/admin/ops', adminAuthMiddleware, adminOpsAgentRouter); // F.A.Y.E. tool catalog & gateway
+app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminAssistantRouter); // F.A.Y.E. admin AI assistant
+app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter); // F.A.Y.E. tool catalog & gateway
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/tts', ttsRoutes); // OpenAI TTS voice synthesis (rate-limited per IP, no auth needed)
