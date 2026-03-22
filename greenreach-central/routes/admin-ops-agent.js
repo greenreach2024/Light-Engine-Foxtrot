@@ -1183,17 +1183,77 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'set_domain_ownership': {
-    description: 'Update F.A.Y.E.\'s autonomy level for an operational domain. Domains: alert_triage, accounting, farm_health, orders, payments, network, evie_oversight, market_intel. Levels: L0-L4.',
+    description: 'Update F.A.Y.E.\'s autonomy level for an operational domain. Level tracks maturity (L0-L4). Confidence (0-1) tracks certainty of the assessment — these are independent. Domains: alert_triage, accounting, farm_health, orders, payments, network, evie_oversight, market_intel.',
     category: 'write',
     required: ['domain', 'level', 'detail'],
-    optional: [],
+    optional: ['confidence'],
     handler: async (params) => {
       try {
         const { setDomainOwnership } = await import('../services/faye-learning.js');
-        const id = await setDomainOwnership(params.domain, params.level, params.detail);
+        const conf = params.confidence !== undefined ? parseFloat(params.confidence) : 0.5;
+        const id = await setDomainOwnership(params.domain, params.level, params.detail, conf);
         return id
-          ? { ok: true, message: `Domain ${params.domain} set to ${params.level}`, id }
-          : { ok: false, error: 'Failed to set domain ownership — check domain name and level' };
+          ? { ok: true, message: `Domain ${params.domain} set to ${params.level} (confidence: ${conf})`, id }
+          : { ok: false, error: 'Failed to set domain ownership — check domain name, level, and confidence range' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  // ── Shadow Mode & Policy Tools (Phase 6.1) ─────────────────────
+
+  'log_shadow_decision': {
+    description: 'Log a shadow mode decision: what F.A.Y.E. would have done vs what the admin actually decided. Used to validate trust tier promotions before they become permanent.',
+    category: 'write',
+    required: ['tool_name', 'action_class', 'proposed_action', 'actual_outcome'],
+    optional: ['proposed_params'],
+    handler: async (params) => {
+      try {
+        const { logShadowDecision } = await import('../services/faye-policy.js');
+        const id = await logShadowDecision(
+          params.tool_name,
+          params.action_class,
+          params.proposed_action,
+          params.proposed_params || '{}',
+          params.actual_outcome
+        );
+        return id
+          ? { ok: true, message: 'Shadow decision logged', id }
+          : { ok: false, error: 'Failed to log shadow decision' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_shadow_accuracy': {
+    description: 'Get shadow mode accuracy for a tool: how often F.A.Y.E.\'s proposed action matched the admin\'s actual decision. Used to validate promotion readiness.',
+    category: 'read',
+    required: ['tool_name'],
+    optional: ['days'],
+    handler: async (params) => {
+      try {
+        const { getShadowAccuracy } = await import('../services/faye-policy.js');
+        const result = await getShadowAccuracy(params.tool_name, parseInt(params.days, 10) || 30);
+        return result
+          ? { ok: true, ...result }
+          : { ok: false, error: 'Failed to get shadow accuracy' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_action_class': {
+    description: 'Get the action class and effective trust tier for a tool. Action classes: recommend, classify, notify, modify, transact, override.',
+    category: 'read',
+    required: ['tool_name'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const { getActionClass, getActionClassTier, getHardBoundaryCap } = await import('../services/faye-policy.js');
+        return {
+          ok: true,
+          tool: params.tool_name,
+          action_class: getActionClass(params.tool_name),
+          default_tier: getActionClassTier(params.tool_name),
+          hard_boundary_cap: getHardBoundaryCap(params.tool_name)
+        };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   }
@@ -1206,7 +1266,7 @@ export const ADMIN_TOOL_CATALOG = {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision']),
   quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
   confirm: new Set(['send_admin_email']),
   admin: new Set(['process_refund'])

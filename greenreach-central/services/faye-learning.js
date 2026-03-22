@@ -44,7 +44,7 @@ export async function storeInsight(domain, topic, insight, source = 'conversatio
       DO UPDATE SET
         insight = EXCLUDED.insight,
         source = EXCLUDED.source,
-        confidence = GREATEST(faye_knowledge.confidence, EXCLUDED.confidence),
+        confidence = EXCLUDED.confidence,
         updated_at = NOW(),
         access_count = faye_knowledge.access_count + 1
       RETURNING id
@@ -85,21 +85,24 @@ export async function getTopInsights(limit = 15) {
   if (!isDatabaseAvailable()) return [];
   try {
     const result = await query(`
-      SELECT domain, topic, insight, confidence
+      SELECT id, domain, topic, insight, confidence
       FROM faye_knowledge
       WHERE archived = FALSE AND confidence >= 0.5
       ORDER BY confidence DESC, access_count DESC, updated_at DESC
       LIMIT $1
     `, [limit]);
-    // Bump access_count for retrieved insights
-    const ids = result.rows.map((_, i) => i + 1); // just for logging
+    // Bump access_count only for the rows actually returned
     if (result.rows.length > 0) {
-      await query(`
-        UPDATE faye_knowledge SET access_count = access_count + 1
-        WHERE archived = FALSE AND confidence >= 0.5
-      `).catch(() => {}); // Non-critical
+      const ids = result.rows.map(r => r.id).filter(Boolean);
+      if (ids.length > 0) {
+        await query(`
+          UPDATE faye_knowledge SET access_count = access_count + 1
+          WHERE id = ANY($1::int[])
+        `, [ids]).catch(() => {}); // Non-critical
+      }
     }
-    return result.rows;
+    // Strip internal id before returning
+    return result.rows.map(({ id, ...rest }) => rest);
   } catch (err) {
     logger.error(`${TAG} Failed to get top insights:`, err.message);
     return [];
@@ -202,6 +205,9 @@ export async function getOutcomeStats(toolName, days = 30) {
 export async function trackPattern(patternKey, domain, description, metadata = {}) {
   if (!isDatabaseAvailable()) return null;
   try {
+    // Append to metadata history instead of overwriting.
+    // Stores an array of timestamped occurrences for root-cause analysis.
+    const occurrence = { ts: new Date().toISOString(), ...metadata };
     const result = await query(`
       INSERT INTO faye_patterns (pattern_key, domain, description, metadata, occurrence_count, last_seen_at)
       VALUES ($1, $2, $3, $4, 1, NOW())
@@ -209,13 +215,26 @@ export async function trackPattern(patternKey, domain, description, metadata = {
       DO UPDATE SET
         occurrence_count = faye_patterns.occurrence_count + 1,
         last_seen_at = NOW(),
-        metadata = $4,
+        metadata = (
+          CASE
+            WHEN jsonb_typeof(faye_patterns.metadata::jsonb) = 'object'
+              AND faye_patterns.metadata::jsonb ? 'history'
+            THEN jsonb_set(
+              faye_patterns.metadata::jsonb,
+              '{history}',
+              (faye_patterns.metadata::jsonb -> 'history') || $5::jsonb
+            )
+            ELSE jsonb_build_object(
+              'history', jsonb_build_array(faye_patterns.metadata::jsonb, $5::jsonb)
+            )
+          END
+        )::text,
         description = CASE
           WHEN faye_patterns.occurrence_count >= 3 THEN faye_patterns.description
           ELSE EXCLUDED.description
         END
       RETURNING id, occurrence_count
-    `, [patternKey, domain, description, JSON.stringify(metadata)]);
+    `, [patternKey, domain, description, JSON.stringify({ history: [occurrence] }), JSON.stringify(occurrence)]);
     const row = result.rows[0];
     if (row && row.occurrence_count >= 3) {
       logger.info(`${TAG} Recurring pattern detected (${row.occurrence_count}x): ${patternKey}`);
@@ -317,19 +336,28 @@ export async function trackAlertAccuracy(alertId, wasAccurate, notes) {
 export async function getFalsePositiveRate(domain, days = 30) {
   if (!isDatabaseAvailable()) return null;
   try {
+    // Filter by domain via the feedback field which stores "alert:{id} -- {notes}"
+    // and cross-reference with admin_alerts to match the specific domain
     const result = await query(`
       SELECT
-        COUNT(*) FILTER (WHERE outcome = 'false_positive') AS false_positives,
-        COUNT(*) FILTER (WHERE outcome = 'positive') AS true_positives,
+        COUNT(*) FILTER (WHERE o.outcome = 'false_positive') AS false_positives,
+        COUNT(*) FILTER (WHERE o.outcome = 'positive') AS true_positives,
         COUNT(*) AS total
-      FROM faye_outcomes
-      WHERE feedback LIKE 'alert:%'
-        AND created_at > NOW() - ($1 || ' days')::interval
-    `, [days]);
+      FROM faye_outcomes o
+      LEFT JOIN admin_alerts a ON a.id = (
+        CASE WHEN o.feedback LIKE 'alert:%'
+          THEN CAST(NULLIF(split_part(split_part(o.feedback, ':', 2), ' ', 1), '') AS INTEGER)
+          ELSE NULL
+        END
+      )
+      WHERE o.feedback LIKE 'alert:%'
+        AND o.created_at > NOW() - ($1 || ' days')::interval
+        AND ($2::varchar IS NULL OR a.domain = $2)
+    `, [days, domain || null]);
     const row = result.rows[0];
     const total = Number(row.total);
     return {
-      domain,
+      domain: domain || 'all',
       days,
       false_positives: Number(row.false_positives),
       true_positives: Number(row.true_positives),
@@ -438,6 +466,8 @@ export async function evaluateTrustPromotion(toolName, currentTier, days = 60) {
 
 // ── Domain Ownership Tracking ────────────────────────────────────
 
+// L5 (Strategic) is defined in the vision but capped here until strategy features ship.
+// The engine currently supports L0-L4. L5 will be added in v3.3.
 const DOMAIN_LEVELS = ['L0', 'L1', 'L2', 'L3', 'L4'];
 const DOMAINS = [
   'alert_triage', 'accounting', 'farm_health',
@@ -494,7 +524,16 @@ export async function getAllDomainOwnership() {
  * @param {string} level - L0 through L4
  * @param {string} detail - description of current capability at this level
  */
-export async function setDomainOwnership(domainName, level, detail) {
+/**
+ * Update the autonomy level for a domain.
+ * Level and confidence are independent: a domain can be at L2 with weak evidence
+ * or at L2 with strong evidence. Level tracks maturity, confidence tracks certainty.
+ * @param {string} domainName - one of DOMAINS
+ * @param {string} level - L0 through L4
+ * @param {string} detail - description of current capability at this level
+ * @param {number} confidence - 0.0 to 1.0, how certain we are about this assessment (default: 0.5)
+ */
+export async function setDomainOwnership(domainName, level, detail, confidence = 0.5) {
   if (!DOMAINS.includes(domainName)) {
     logger.warn(`${TAG} Unknown domain: ${domainName}`);
     return null;
@@ -503,9 +542,12 @@ export async function setDomainOwnership(domainName, level, detail) {
     logger.warn(`${TAG} Invalid level: ${level}`);
     return null;
   }
+  if (confidence < 0 || confidence > 1) {
+    logger.warn(`${TAG} Confidence out of range: ${confidence}`);
+    return null;
+  }
 
   const insight = `${level}: ${detail}`;
-  const confidence = DOMAIN_LEVELS.indexOf(level) / (DOMAIN_LEVELS.length - 1); // L0=0, L4=1.0
   return storeInsight('autonomy', `domain_ownership:${domainName}`, insight, 'self_assessment', confidence);
 }
 

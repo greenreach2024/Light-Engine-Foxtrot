@@ -1,18 +1,18 @@
 # F.A.Y.E. — Vision & Autonomy Roadmap
 
 **Farm Autonomy & Yield Engine**
-**Version**: 3.0.0
-**Last Updated**: 2025-07-16
+**Version**: 3.1.0
+**Last Updated**: 2026-03-21
 
 ---
 
-## The Jarvis Principle
+## Positioning
 
-F.A.Y.E. is not a chatbot. She is the operations brain of GreenReach Farms.
+F.A.Y.E. is a governed farm operations intelligence layer that observes, learns, recommends, and progressively automates decisions across the GreenReach network.
 
-The end-state is full operational autonomy — a system that monitors, learns, decides, and acts across every domain of the business. The admin does not manage the farm through F.A.Y.E.; F.A.Y.E. manages the farm, and the admin provides strategic direction and final approval on high-impact decisions.
+The end-state is supervised autonomy — a system that monitors, learns, decides, and acts across every domain of the business under explicit decision governance. The admin does not manage the farm through F.A.Y.E.; F.A.Y.E. manages the farm, and the admin provides strategic direction and final approval on high-impact decisions.
 
-The reference model is J.A.R.V.I.S. from Iron Man: an AI that anticipates needs, owns operational domains, evolves through experience, and escalates only when human judgment is genuinely required. The admin's role shifts from operator to executive — reviewing F.A.Y.E.'s daily briefings, approving her proposals, and setting strategic goals.
+The design principles are: **supervised autonomy**, **operational memory**, **decision governance**, and **closed-loop farm intelligence**. Every autonomous action is built on a track record of correct decisions, governed by hard policy boundaries, and auditable at any time.
 
 ---
 
@@ -36,24 +36,21 @@ F.A.Y.E. and E.V.I.E. are separate agents with a clear chain of command.
 
 ---
 
-## Current State: Phase 5 — Learning Foundation
+## Current State: Phase 6 — Governed Autonomy
 
-What exists today (v2.1.0):
+What exists today (v3.1.0):
 
 - **Intelligence Loop**: 15-minute anomaly detection across 5 domains (payments, heartbeats, orders, accounting, transactions)
-- **Learning Engine**: Persistent knowledge base (faye_knowledge), outcome tracking (faye_outcomes), pattern recognition (faye_patterns)
-- **Admin Tools**: 50+ tools spanning system health, accounting, orders, farm network, market intelligence, AI costs, delivery, subscriptions, ESG, and email
-- **Trust Tiers**: AUTO / CONFIRM / ADMIN for write safety
+- **Learning Engine**: Persistent knowledge base (faye_knowledge), outcome tracking (faye_outcomes), pattern recognition (faye_patterns) with metadata history
+- **Policy Engine**: Hard boundary enforcement, action-class trust model, shadow mode validation
+- **Admin Tools**: 50+ tools spanning system health, accounting, orders, farm network, market intelligence, AI costs, delivery, subscriptions, ESG, email, and autonomy management
+- **Trust Tiers**: AUTO / QUICK_CONFIRM / CONFIRM / ADMIN for write safety, governed by action classes
 - **Decision Logging**: All tool calls logged to faye_decision_log
-- **Alert Accuracy**: False positive tracking with domain-level rates
+- **Alert Accuracy**: Per-domain false positive tracking
+- **Confidence Calibration**: Insight confidence rises and falls based on outcomes; low-confidence insights auto-archive
+- **Domain Ownership**: Level and confidence tracked independently per operational domain
+- **Shadow Mode**: Proposed-vs-actual decision logging for promotion validation
 - **Daily Briefing**: 7 AM email summary of overnight operations
-
-What is missing:
-- F.A.Y.E. waits to be asked. She does not propose actions on her own.
-- Trust tiers are static. Good performance does not earn more autonomy.
-- No concept of domain ownership — F.A.Y.E. assists, but does not own.
-- E.V.I.E. relationship is undefined in the system.
-- No self-improvement strategy beyond storing insights.
 
 ---
 
@@ -61,48 +58,92 @@ What is missing:
 
 F.A.Y.E.'s autonomy grows through demonstrated competence. Trust is earned, not given.
 
+### Action Classes
+
+Trust attaches to **action types**, not just tools. A single tool can perform actions with very different risk profiles. The six action classes, in ascending risk order:
+
+| Class | Description | Default Tier | Examples |
+|---|---|---|---|
+| recommend | Propose a course of action | auto | suggest classification, propose diagnosis |
+| classify | Assign a category or label | quick_confirm | classify transaction, tag alert |
+| notify | Internal alerts and summaries | auto | create alert, daily briefing |
+| modify | Change system state | confirm | update farm notes, resolve alert |
+| transact | Financial operations | admin | process refund, adjust pricing |
+| override | Safety control overrides | admin | force-resolve, bypass confirmation |
+
+### Policy Boundaries (Non-Negotiable)
+
+These hard boundaries are enforced regardless of trust level, learning outcomes, or promotion status:
+
+1. Never issue refunds automatically. All refunds require explicit admin confirmation.
+2. Never change product pricing without explicit admin approval.
+3. Never send external customer-facing communications without a human-reviewed template.
+4. Never deactivate a farm or remove a buyer without admin confirmation.
+5. Never expose API keys, tokens, or credentials in any response or log.
+
+Hard boundaries set a ceiling that promotion cannot breach. `process_refund` is permanently capped at `admin` tier.
+
 ### Trust Tier Promotion
 
-Tools and domains start at their default trust tier. As F.A.Y.E. demonstrates consistent success, tiers are promoted:
+Promotion follows a rigorous validation process:
 
 | Metric | Threshold | Effect |
 |---|---|---|
-| Tool success rate > 95% over 50+ uses | Promotes CONFIRM -> AUTO | F.A.Y.E. can execute without asking |
-| Tool success rate > 98% over 100+ uses | Promotes ADMIN -> CONFIRM | Reduces friction on high-impact actions |
+| Action success rate > 95% over 50+ uses | Promotes CONFIRM -> AUTO | Execute without asking |
+| Action success rate > 98% over 100+ uses | Promotes ADMIN -> CONFIRM | Reduces friction on high-impact actions |
 | Domain false positive rate < 5% over 30 days | Domain alerts become trusted | Admin can opt into auto-resolve |
-| 3 consecutive failed outcomes on a tool | Demotes one tier | Safety brake — regression loses trust |
+| 3 consecutive failed outcomes | Demotes one tier | Safety brake — regression loses trust |
+| Hard boundary applies | Cannot promote past cap | Policy firewall |
 
-Promotion is logged, reversible, and visible in the admin dashboard. The admin can override any promotion or freeze a tool at a specific tier.
+**Promotion requirements:**
+- Minimum sample size met (50 or 100 uses depending on tier)
+- Rolling success rate over most recent 60 days (recency weighting)
+- Shadow mode validation passes (proposed-vs-actual accuracy > 90%)
+- 14-day probation window before promotion becomes permanent
+- Admin can override any promotion or freeze a tool at a specific tier
+
+### Shadow Mode
+
+Before F.A.Y.E. executes actions automatically at a newly promoted tier, she runs in **shadow mode**: she logs what she WOULD have done without actually executing. The admin's actual decision is recorded alongside.
+
+Shadow mode progression:
+1. **Shadow**: Log proposed decisions, compare against admin choices
+2. **Canary**: Execute on one farm or a small percentage of actions
+3. **Full**: Execute across the domain with audit logging
+
+Promotion becomes permanent only after shadow mode accuracy exceeds 90% over 14+ days.
 
 ### Autonomy Levels
 
 | Level | Name | Description | Trigger |
 |---|---|---|---|
-| L0 | Reactive | Responds only when asked. Current baseline. | Default |
-| L1 | Observant | Detects anomalies and surfaces them as alerts. | Intelligence loop (active today) |
-| L2 | Advisory | Proposes specific actions with confidence levels when patterns are detected. | Pattern count >= 3 + knowledge base match |
-| L3 | Proactive | Executes AUTO-tier actions on detected issues, reports what she did. | Tool trust promotion + admin opt-in |
-| L4 | Autonomous | Owns entire operational domains. Admin reviews daily briefing, not individual actions. | Domain ownership earned |
-| L5 | Strategic | Proposes business strategy changes, budget reallocations, and growth initiatives based on trend analysis. | Future |
+| L0 | Reactive | Responds only when asked. | Default |
+| L1 | Observant | Detects anomalies and surfaces them as alerts. | Intelligence loop (active) |
+| L2 | Advisory | Proposes specific actions with confidence levels. | Pattern count >= 3 + knowledge base match |
+| L2.5 | Shadow | Simulates decisions, logs proposed-vs-actual, does not execute. | Shadow mode enabled |
+| L3 | Proactive | Executes AUTO-tier actions on detected issues, reports what was done. | Shadow accuracy > 90% + admin opt-in |
+| L4 | Autonomous | Owns entire operational domains. Admin reviews daily briefing, not individual actions. | Domain exit criteria met |
 
-The system starts at L1 (intelligence loop is already running). The goal of v3.0 is to reach L2-L3 across core domains.
+L5 (Strategic) is defined as a future state: proposes business strategy changes, budget reallocations, and growth initiatives. The current engine is capped at L4 until strategy features are introduced in v3.3.
 
 ---
 
 ## Domain Ownership Matrix
 
-F.A.Y.E. can own operational domains — meaning she is responsible for monitoring, maintaining, and improving that domain without being asked. Ownership is earned through track record.
+F.A.Y.E. can own operational domains — she is responsible for monitoring, maintaining, and improving that domain without being asked. Ownership is earned through track record.
 
-| Domain | Current State | Target State (v3.0) | Ownership Criteria |
-|---|---|---|---|
-| **Alert Triage** | L1: Detects, creates alerts | L3: Auto-resolves known patterns | False positive rate < 5%, 30+ resolved alerts |
-| **Accounting Classification** | L0: Classifies when asked | L2: Proposes batch classifications | 95%+ accuracy over 50 classifications |
-| **Farm Health Monitoring** | L1: Heartbeat alerts | L2: Diagnoses + proposes fixes | 90%+ diagnosis accuracy over 20 incidents |
-| **Order Oversight** | L0: Reports when asked | L2: Flags anomalies with context | Pattern library covers 80% of anomaly types |
-| **Payment Processing** | L1: Failure rate alerts | L2: Root cause analysis + recommendation | 10+ successful root cause identifications |
-| **Network Management** | L0: Lists farms when asked | L1: Correlation analysis across farms | Baseline |
-| **E.V.I.E. Oversight** | L0: Reports cost metrics | L2: Reviews quality, adjusts parameters | Future |
-| **Market Intelligence** | L0: Fetches prices when asked | L2: Proactive trend alerts | Future |
+| Domain | Current Level | Target (v3.1) | Entry Criteria | Exit / Rollback |
+|---|---|---|---|---|
+| **Alert Triage** | L1 | L3 | FP rate < 5% over 30 days, 30+ resolved | FP rate > 10% over 7 days demotes to L1 |
+| **Accounting Classification** | L0 | L2 | 95%+ accuracy over 50 classifications | 3 misclassifications in 7 days demotes to L0 |
+| **Farm Health Monitoring** | L1 | L2 | 90%+ diagnosis accuracy over 20 incidents | Missed critical incident demotes to L1 |
+| **Order Oversight** | L0 | L2 | Pattern library covers 80% of anomaly types | Undetected anomaly with revenue impact demotes to L0 |
+| **Payment Processing** | L1 | L2 | 10+ successful root cause identifications | Incorrect root cause on critical payment demotes to L1 |
+| **Network Management** | L0 | L1 | Baseline — first correlation analysis shipped | N/A at L1 |
+| **E.V.I.E. Oversight** | L0 | L2 | Cost-per-interaction trending, quality scoring active | Future |
+| **Market Intelligence** | L0 | L2 | Proactive trend alerts with confirmed accuracy | Future |
+
+**Rollback rules:** Any domain demotion triggers a 30-day probation window. During probation, the domain cannot be re-promoted — F.A.Y.E. must rebuild the track record from scratch at the demoted level. Probation resets if another failure occurs during the window.
 
 Ownership is tracked in `faye_knowledge` with domain = 'autonomy' and topic = 'domain_ownership:{domain}'.
 
@@ -110,31 +151,53 @@ Ownership is tracked in `faye_knowledge` with domain = 'autonomy' and topic = 'd
 
 ## Self-Improvement Strategy
 
-F.A.Y.E. does not just store data — she refines her own operations.
+F.A.Y.E. does not just store data — she refines her own operations through structured feedback loops.
+
+### Outcome Taxonomy
+
+Every F.A.Y.E. recommendation or action receives a labeled outcome. The taxonomy is:
+
+| Outcome | Who Labels | When | Meaning |
+|---|---|---|---|
+| positive | Admin or auto | Immediately after action | Correct action, desired result |
+| negative | Admin | Immediately after action | Wrong action, wrong diagnosis, or harmful result |
+| neutral | Auto | 48h timeout with no admin response | Admin did not engage — no signal either way |
+| shadow | Auto | On every shadow-mode decision | Proposed-vs-actual comparison logged |
+| fp_confirmed | Admin | On alert review | Alert was a false positive |
+| fp_rejected | Admin | On alert review | Alert was a true positive |
+
+**Labeling rules:**
+- Admin-provided labels take priority over auto-labels.
+- Neutral outcomes do NOT count toward promotion metrics (they are no-signal, not positive-signal).
+- Shadow outcomes drive shadow-mode accuracy but do not affect trust tiers directly.
+- Only positive and negative outcomes count toward trust tier promotion/demotion.
 
 ### Feedback Loops
 
-1. **Outcome Loop**: Every recommendation or action gets a recorded outcome (positive/negative/neutral). Success rates drive trust promotion. Failure rates trigger demotion and insight review.
+1. **Outcome Loop**: Every recommendation or action gets a recorded outcome. Success rates (positive / (positive + negative)) drive trust promotion. 3 consecutive negative outcomes trigger demotion and insight review.
 
-2. **Pattern Loop**: Recurring patterns (3+ occurrences) become knowledge base entries. Knowledge base entries with high confidence (>0.8) influence F.A.Y.E.'s recommendations directly through system prompt injection.
+2. **Pattern Loop**: Recurring patterns (3+ occurrences) become knowledge base entries with timestamped history. Knowledge base entries with high confidence (>0.8) influence F.A.Y.E.'s recommendations directly through system prompt injection.
 
 3. **Alert Accuracy Loop**: False positive tracking per domain feeds back into anomaly detection thresholds. If F.A.Y.E. learns that a certain alert type is noise, she adjusts her response (suppress, downgrade severity, or archive the pattern).
 
 4. **Admin Correction Loop**: When an admin overrides F.A.Y.E.'s recommendation, that is a learning signal. The override is stored as a negative outcome with the admin's reasoning, updating future behavior.
 
+5. **Shadow Accuracy Loop**: Shadow mode decisions are compared against actual admin choices. Match rate > 90% over 14+ days is the gate to promotion. Low match rate means F.A.Y.E.'s model of the domain is still miscalibrated.
+
 ### Confidence Calibration
 
-- New insights start at confidence 0.5-0.7
-- Confirmed by positive outcome: confidence += 0.1 (max 1.0)
-- Contradicted by negative outcome: confidence -= 0.2 (min 0.0)
+- New insights start at confidence 0.5 (not higher — earned, not assumed)
+- Confirmed by positive outcome: confidence can increase (exact amount depends on context, set by storeInsight)
+- Contradicted by negative outcome: confidence decreases (the new value REPLACES the old — confidence can go down)
 - Insights below 0.3 confidence are auto-archived
 - Insights above 0.9 confidence are treated as operational rules
+- Confidence and domain level are independent axes — a domain can be at L3 with confidence 0.6 (high autonomy, moderate certainty)
 
 ---
 
 ## Implementation Roadmap
 
-### v3.0 — Proactive Operations (Current)
+### v3.0 — Proactive Operations (Shipped)
 
 - [x] Vision document and roadmap
 - [x] Autonomy progression rules in admin-ai-rules.json
@@ -143,25 +206,31 @@ F.A.Y.E. does not just store data — she refines her own operations.
 - [x] Domain ownership tracking in knowledge base
 - [x] E.V.I.E. hierarchy defined in rules and prompt
 
-### v3.1 — Domain Ownership (Next)
+### v3.1 — Governed Autonomy (Current)
 
-- [ ] Auto-resolve known alert patterns (L3 for Alert Triage)
-- [ ] Batch classification proposals for unclassified transactions
+- [x] Policy engine above learning engine (faye-policy.js)
+- [x] Action-class trust model (6 classes with default tiers and hard boundary caps)
+- [x] Shadow mode framework (log proposed-vs-actual, track accuracy)
+- [x] Hard boundaries (5 non-negotiable rules with max_tier caps)
+- [x] Measurement layer bug fixes (confidence decay, domain FP rates, access_count, pattern history, level/confidence separation)
+- [x] System prompt rewrite — governed operations intelligence language
+- [x] Outcome taxonomy (positive, negative, neutral, shadow, fp_confirmed, fp_rejected)
+- [x] Promotion validation against hard boundary caps
 - [ ] Admin dashboard showing F.A.Y.E. autonomy levels per domain
 - [ ] Weekly self-assessment report (what improved, what regressed)
 
-### v3.2 — Autonomous Operations
+### v3.2 — Domain Ownership
 
-- [ ] F.A.Y.E. proposes her own intelligence loop improvements
-- [ ] E.V.I.E. quality review and parameter adjustment
+- [ ] Auto-resolve known alert patterns (L3 for Alert Triage via shadow mode validation)
+- [ ] Batch classification proposals for unclassified transactions
 - [ ] Cross-domain correlation (e.g., payment failures + farm health)
 - [ ] Predictive alerts (anticipate issues before they happen)
 
 ### v3.3 — Strategic Intelligence
 
+- [ ] L5 strategy features (budget optimization, growth initiative proposals)
 - [ ] Market trend analysis driving pricing recommendations
-- [ ] Budget and cost optimization proposals
-- [ ] Growth initiative identification from order/buyer patterns
+- [ ] E.V.I.E. quality review and parameter adjustment
 - [ ] Quarterly business review generation
 
 ---
@@ -170,14 +239,18 @@ F.A.Y.E. does not just store data — she refines her own operations.
 
 1. **Earn trust, don't assume it.** Every autonomous action is built on a track record of correct decisions. No shortcuts.
 
-2. **Transparency over opacity.** F.A.Y.E. always explains what she did and why. The admin can audit any decision at any time.
+2. **Policy above learning.** The learning engine suggests what F.A.Y.E. could do. The policy engine decides what she is allowed to do. Hard boundaries are non-negotiable.
 
-3. **Graceful degradation.** If confidence is low, F.A.Y.E. asks. If a system is down, she falls back to the last known state. She never guesses.
+3. **Transparency over opacity.** F.A.Y.E. always explains what she did and why. The admin can audit any decision at any time. Shadow mode logs everything.
 
-4. **The admin is the executive, not the operator.** F.A.Y.E.'s job is to make the admin's job smaller every week. The measure of success is how few things the admin has to manually handle.
+4. **Measure before you automate.** No promotion without validated metrics. Neutral outcomes are not positive signal. Sample size minimums are enforced.
 
-5. **Learn from mistakes fast.** A single failure is a data point. A repeated failure is a bug. F.A.Y.E. logs, adjusts, and moves forward.
+5. **Graceful degradation.** If confidence is low, F.A.Y.E. asks. If a system is down, she falls back to the last known state. She never guesses.
+
+6. **The admin is the executive, not the operator.** F.A.Y.E.'s job is to make the admin's job smaller every week. The measure of success is how few things the admin has to manually handle.
+
+7. **Learn from mistakes fast.** A single failure is a data point. A repeated failure is a bug. F.A.Y.E. logs, adjusts, and moves forward. But 3 consecutive failures trigger demotion — mistakes have consequences.
 
 ---
 
-*F.A.Y.E. is not a product feature. She is the operational core of GreenReach Farms.*
+*F.A.Y.E. is the operational core of GreenReach Farms — a governed intelligence layer that earns autonomy through demonstrated competence.*
