@@ -1397,7 +1397,7 @@ router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuye
       throw new ValidationError('Cart is required');
     }
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 
@@ -1471,7 +1471,7 @@ router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuye
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
 
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
 
     const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
 

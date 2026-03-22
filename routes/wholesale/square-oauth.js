@@ -378,7 +378,7 @@ router.get('/callback', async (req, res) => {
               <dd>Active - Ready to receive wholesale orders</dd>
             </dl>
           </div>
-          <p>Your farm can now accept wholesale orders through GreenReach. Payments will be processed through your Square account.</p>
+          <p>Your farm can now accept wholesale orders through GreenReach. Payments will be processed through your Square account, with a 12% broker fee automatically collected by GreenReach.</p>
           <a href="/">Return to Dashboard</a>
         </body>
       </html>

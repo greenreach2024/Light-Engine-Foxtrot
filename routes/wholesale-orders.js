@@ -256,7 +256,7 @@ router.post('/create', async (req, res) => {
     
     // STEP 3: Calculate totals and logistics summary
     const total_amount = items.reduce((sum, item) => sum + (item.price_per_unit * item.quantity), 0);
-    const platform_fee = total_amount * 0.10; // 10% platform fee
+    const platform_fee = total_amount * 0.12; // 12% broker fee
     
     // Calculate logistics efficiency metrics for buyer visibility
     const clusters = [...new Set(Object.values(farmItems)

@@ -43,8 +43,8 @@ Copy `.env.example` to `.env` and fill in all required values.
 | `DB_SSL`                      | `true`    | Set `false` for localhost only      |
 | `ADMIN_API_KEY`               | —         | API key for admin endpoints         |
 | `ADMIN_EMAIL` / `PASSWORD`    | —         | Bootstrap admin credentials         |
-| `SQUARE_ENVIRONMENT`          | `sandbox` | `sandbox` or `production`           |
-| `WHOLESALE_COMMISSION_RATE`   | `0.15`    | 15% wholesale broker fee            |
+| `SQUARE_ENVIRONMENT`          | `production` | `sandbox` or `production`        |
+| `WHOLESALE_COMMISSION_RATE`   | `0.12`    | 12% wholesale broker fee            |
 | `PROCUREMENT_COMMISSION_RATE` | `0.10`    | 10% procurement commission          |
 | `OPENAI_API_KEY`              | —         | Enables AI agent features           |
 | `SES_ENABLED`                 | `false`   | Enable AWS SES email                |

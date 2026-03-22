@@ -72,7 +72,7 @@
 | Gap | Impact | Severity |
 |-----|--------|----------|
 | Payment processing uses demo tokens | No real money charged/collected | **CRITICAL** for revenue |
-| `broker_fee_percent: 10.0` hardcoded in checkout.js | Cannot configure commission per farm | MEDIUM |
+| ~~`broker_fee_percent: 10.0` hardcoded in checkout.js~~ | Fixed: now env-driven via WHOLESALE_COMMISSION_RATE (default 12%) | ~~MEDIUM~~ RESOLVED |
 | Catalog URL hardcoded to `localhost:8091` in checkout.js | Central cannot fetch Foxtrot catalog in production | **HIGH** |
 | Refund `TODO: Get farm URL from sub_order_id lookup` | Farm-side refund propagation incomplete | MEDIUM |
 | Square webhook handler has no idempotency | Duplicate payment events could double-process | MEDIUM |

@@ -158,7 +158,7 @@ Example special instructions:
 **Method 2: Credit Card** (if enrolled)
 - Card charged when farm confirms order
 - Secure payment via Stripe
-- 3.5% processing fee included in platform fee
+- 12% broker fee applies (includes payment processing)
 - Immediate confirmation
 
 **Method 3: Invoice Terms** (approved accounts only)

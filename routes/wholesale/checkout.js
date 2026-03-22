@@ -123,7 +123,7 @@ router.post('/preview', async (req, res) => {
 
     // Allocate order
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,
@@ -223,7 +223,7 @@ router.post('/execute', async (req, res) => {
     // Step 2: Allocate order
     console.log('[Checkout] Step 2: Allocating order...');
     const taxConfig = loadFarmTaxConfig();
-    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0);
+    const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,

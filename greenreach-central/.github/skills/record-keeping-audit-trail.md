@@ -111,7 +111,7 @@ File: `migrations/005-record-keeping.sql`
 - Currency is always CAD
 - No emojis in any output
 - No fabricated fees or pricing
-- Wholesale has no platform fee
+- Wholesale broker fee is 12% (collected via Square app_fee_money)
 - Square credentials are production -- never downgrade to sandbox
 - Test with `npm test -- --runInBand`
 - Deploy with `eb deploy --staged`
