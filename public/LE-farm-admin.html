@@ -859,6 +859,22 @@
             border-color: #06b6d4;
         }
 
+        /* Getting Started - Green/Blue gradient */
+        .nav-button.getting-started {
+            background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(59,130,246,0.2));
+            border-color: #10b981;
+            color: #6ee7b7;
+        }
+
+        .nav-button.getting-started:hover {
+            background: linear-gradient(135deg, rgba(16,185,129,0.35), rgba(59,130,246,0.35));
+            border-color: #34d399;
+        }
+
+        .nav-item.getting-started .dropdown-menu {
+            border-color: #10b981;
+        }
+
         .nav-item.sales .dropdown-item:hover {
             background: rgba(6, 182, 212, 0.3);
         }
@@ -1096,7 +1112,7 @@
             margin-top: 12px;
         }
     </style>
-  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/evie-core.css">
   <script src="/lib/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -1131,6 +1147,20 @@
         </div>
         <div class="header-actions">
             <nav class="nav-menu">
+                <!-- Getting Started AI Assist -->
+                <div class="nav-item getting-started" id="ai-assist-getting-started">
+                    <button class="nav-button getting-started" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(16,185,129,0.3);">
+                        🚀 Getting Started
+                        <span class="nav-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu" style="width: 320px;">
+                        <div id="ai-assist-steps" style="padding: 12px 16px;">
+                            <p style="margin: 0 0 10px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Recommended Next Steps</p>
+                            <div id="ai-assist-items" style="display: flex; flex-direction: column; gap: 4px;">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Dropdown 1: Inventory Management (Amber) -->
                 <div class="nav-item inventory">
                     <button class="nav-button inventory active">
@@ -1322,6 +1352,14 @@
                     <a href="mailto:support@lightengine.io" class="nav-item" data-help-title="Contact Support" data-help="Email our support team for technical assistance, feature requests, or to report issues. Response time typically within 24 hours.">
                         <span class="nav-item-icon">■</span>
                         Contact Support
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Intelligence</div>
+                    <a href="/evie-core.html" class="nav-item" data-help-title="E.V.I.E. Core" data-help="Open the E.V.I.E. farm intelligence dashboard. Monitor farm health, get AI recommendations, and interact with your farm intelligence layer.">
+                        <span class="nav-item-icon">■</span>
+                        E.V.I.E. Core
                     </a>
                 </div>
             </nav>
@@ -3186,6 +3224,15 @@
                                         <option value="suspended">Suspended</option>
                                     </select>
                                 </div>
+                                <!-- Reset Password Section -->
+                                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: rgba(59, 130, 246, 0.05);">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Reset Password</label>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="password" id="edit-user-new-password" placeholder="New password (min 8 chars)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                                        <button type="button" class="btn" onclick="resetUserPassword()" style="background: var(--accent-blue); color: white; white-space: nowrap;">Reset Password</button>
+                                    </div>
+                                    <small style="color: var(--text-muted); display: block; margin-top: 6px;">Leave blank if you don't want to change the password.</small>
+                                </div>
                                 <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 12px;">
                                     <button type="button" class="btn" onclick="removeUser()" style="background: var(--accent-red); color: white;">Remove User</button>
                                     <div style="display: flex; gap: 12px;">
@@ -3205,11 +3252,21 @@
                     <p class="header-subtitle">Configure your farm profile, integrations, and system preferences</p>
                 </div>
 
+                <!-- Onboarding Checklist Banner -->
+                <div id="onboarding-checklist-container" style="display: none; margin-top: 20px;"></div>
+
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Farm Profile -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Farm Profile</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Farm Profile</h2>
+                            <span id="plan-type-badge" style="padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;"></span>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm Name</label>
+                                <input type="text" id="settings-farm-name" placeholder="Your farm name" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Farm ID</label>
                                 <input type="text" id="settings-farm-id" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-family: monospace;">
@@ -3236,9 +3293,44 @@
                         </div>
                     </div>
 
+                    <!-- Contact Information -->
+                    <div class="card">
+                        <h2 style="margin-bottom: 20px;">Contact Information</h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Contact Name</label>
+                                <input type="text" id="settings-contact-name" placeholder="e.g., John Smith" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Email</label>
+                                <input type="email" id="settings-contact-email" placeholder="e.g., john@farm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Phone</label>
+                                <input type="tel" id="settings-contact-phone" placeholder="e.g., (555) 123-4567" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">Website</label>
+                                <input type="url" id="settings-website" placeholder="e.g., https://yourfarm.com" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary);">City / Region</label>
+                                <input type="text" id="settings-city" placeholder="e.g., Toronto, ON" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary);">
+                            </div>
+                            <div style="padding-top: 8px; border-top: 1px solid var(--border);">
+                                <button class="btn" onclick="saveProfileSettings()" style="width: 100%; background: var(--accent-green); color: white; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                    Save Profile
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Certifications & Practices -->
                     <div class="card">
-                        <h2 style="margin-bottom: 20px;">Certifications & Practices</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Certifications & Practices</h2>
+                            <button class="btn-secondary" onclick="openEditCertificationsModal()" style="font-size: 12px; padding: 6px 14px;">Edit</button>
+                        </div>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
                                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
@@ -3540,6 +3632,47 @@
                     <button class="btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
                 </div>
+
+                <!-- Edit Certifications Modal -->
+                <div id="editCertificationsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: none; align-items: center; justify-content: center;">
+                    <div style="background: var(--bg-card); border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Edit Certifications & Practices</h2>
+                            <button onclick="closeEditCertificationsModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;">&times;</button>
+                        </div>
+                        <form id="editCertificationsForm" onsubmit="saveEditCertifications(event)">
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Certifications</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="USDA Organic"><span>USDA Organic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Canada Organic"><span>Canada Organic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Non-GMO"><span>Non-GMO</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Fair Trade"><span>Fair Trade</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="GAP Certified"><span>GAP Certified</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Biodynamic"><span>Biodynamic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="certifications" value="Rainforest Alliance"><span>Rainforest Alliance</span></label>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-secondary);">Growing Practices</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Hydroponic"><span>Hydroponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aquaponic"><span>Aquaponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Aeroponic"><span>Aeroponic</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Vertical Farming"><span>Vertical Farming</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="No-Till"><span>No-Till</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Regenerative"><span>Regenerative</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Permaculture"><span>Permaculture</span></label>
+                                    <label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" name="practices" value="Cover Cropping"><span>Cover Cropping</span></label>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 15px; border-top: 1px solid var(--border);">
+                                <button type="button" class="btn-secondary" onclick="closeEditCertificationsModal()">Cancel</button>
+                                <button type="submit" class="btn-primary">Save Certifications</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             <div id="section-crop-value" class="content-section" style="display: none;">
@@ -3711,7 +3844,85 @@
         }
       })();
     </script>
-    <script src="/farm-admin.js?v=20260309-embedded-nav-fix"></script>
+    <script src="/farm-admin.js?v=20260320-settings-certs-fix"></script>
+    <script src="/js/plan-features.js?v=20260313"></script>
+    <script src="/js/onboarding-checklist.js?v=20260313"></script>
+
+    <!-- AI Assist Getting Started Dropdown -->
+    <script>
+    (function initAiAssistGettingStarted() {
+      const container = document.getElementById('ai-assist-items');
+      if (!container) return;
+
+      async function loadSteps() {
+        try {
+          const headers = {};
+          const token = window.currentSession?.token || localStorage.getItem('auth_token');
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const res = await fetch('/api/setup/onboarding-status', { headers });
+          if (!res.ok) { container.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Unable to load steps</span>'; return; }
+          const data = await res.json();
+          if (!data.success || !data.tasks) return;
+
+          // Client-side check for display_prefs
+          const farmSettings = localStorage.getItem('farmSettings');
+          data.tasks.forEach(t => { if (t.id === 'display_prefs' && farmSettings) t.completed = true; });
+
+          const incomplete = data.tasks.filter(t => !t.completed);
+          const complete = data.tasks.filter(t => t.completed);
+          const pct = data.tasks.length > 0 ? Math.round((complete.length / data.tasks.length) * 100) : 0;
+
+          // Update the button badge
+          const btn = document.querySelector('#ai-assist-getting-started .nav-button');
+          if (btn && complete.length === data.tasks.length) {
+            btn.innerHTML = '✅ All Set Up <span class="nav-arrow">▼</span>';
+          }
+
+          // Build contextual suggestions — show up to 4 most important next steps
+          let html = `<div style="margin-bottom:10px;">
+            <div style="background:var(--bg-secondary);border-radius:4px;height:5px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:var(--accent-green);border-radius:4px;transition:width 0.5s ease;"></div>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted);">${complete.length} of ${data.tasks.length} complete</span>
+          </div>`;
+
+          if (incomplete.length === 0) {
+            html += '<div style="padding:8px 0;font-size:13px;color:var(--accent-green);">🎉 All setup steps complete! You\'re ready to grow.</div>';
+          } else {
+            const top = incomplete.slice(0, 4);
+            top.forEach(task => {
+              const badge = task.edgeOnly ? ' <span style="font-size:9px;background:rgba(139,92,246,0.15);color:#a78bfa;padding:1px 5px;border-radius:3px;">Edge</span>' : '';
+              html += `<a href="#" onclick="event.preventDefault();navigateOnboardingTask('${task.link}','${task.linkUrl||''}');return false;"
+                style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;text-decoration:none;color:var(--text-primary);font-size:13px;transition:background 0.15s;"
+                onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
+                <span style="font-size:16px;">${task.icon || '○'}</span>
+                <span style="flex:1;">${task.label}${badge}</span>
+                <span style="color:var(--text-muted);font-size:12px;">→</span>
+              </a>`;
+            });
+            if (incomplete.length > 4) {
+              html += `<div style="padding:6px 10px;font-size:11px;color:var(--text-muted);">+ ${incomplete.length - 4} more in Settings → Getting Started</div>`;
+            }
+          }
+
+          container.innerHTML = html;
+        } catch (e) {
+          console.warn('[AI Assist] Failed to load steps:', e);
+          container.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Setup guide unavailable</span>';
+        }
+      }
+
+      // Load on first open (lazy) and refresh periodically
+      let loaded = false;
+      const trigger = document.querySelector('#ai-assist-getting-started .nav-button');
+      if (trigger) {
+        trigger.addEventListener('click', () => { if (!loaded) { loaded = true; loadSteps(); } });
+      }
+      // Also load after page is ready
+      setTimeout(() => { if (!loaded) { loaded = true; loadSteps(); } }, 2000);
+    })();
+    </script>
     
     <!-- Production Planning JS REMOVED — consolidated into Planting Scheduler -->
 
@@ -4655,30 +4866,63 @@
         let utilityBills = [];
         let sustainabilityMetrics = null;
 
+        function fetchWithFarmAuth(url, opts = {}) {
+            const headers = Object.assign({}, opts.headers || {});
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const farmId =
+                sessionStorage.getItem('farm_id') ||
+                sessionStorage.getItem('farmId') ||
+                localStorage.getItem('farm_id') ||
+                localStorage.getItem('farmId');
+
+            if (token && !headers['Authorization']) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            if (farmId && !headers['x-farm-id']) {
+                headers['x-farm-id'] = farmId;
+            }
+
+            return fetch(url, Object.assign({}, opts, { headers }));
+        }
+
+        async function safeJson(response) {
+            try {
+                return await response.json();
+            } catch (_) {
+                return { ok: false, error: `HTTP ${response.status}` };
+            }
+        }
+
         async function loadSustainabilityDashboard() {
             try {
                 const [metricsRes, billsRes, foodRes, trendsRes] = await Promise.all([
-                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
-                    fetch(`${SUSTAINABILITY_API}/food-miles`),
-                    fetch(`${SUSTAINABILITY_API}/trends?days=30`)
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/food-miles`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/trends?days=30`)
                 ]);
                 
-                const metrics = await metricsRes.json();
-                const billsData = await billsRes.json();
-                const food = await foodRes.json();
-                const trends = await trendsRes.json();
+                const metrics = await safeJson(metricsRes);
+                const billsData = await safeJson(billsRes);
+                const food = await safeJson(foodRes);
+                const trends = await safeJson(trendsRes);
                 
                 if (metrics.ok) {
                     sustainabilityMetrics = metrics;
                     displaySustMetrics(metrics);
+                } else {
+                    console.warn('[Sustainability] Metrics unavailable:', metricsRes.status, metrics.error || 'Unknown error');
                 }
                 if (billsData.ok) {
                     utilityBills = billsData.bills || [];
                     renderUtilityBills();
+                } else {
+                    console.warn('[Sustainability] Utility bills unavailable:', billsRes.status, billsData.error || 'Unknown error');
                 }
                 if (food.ok) displayFoodMiles(food);
+                else console.warn('[Sustainability] Food miles unavailable:', foodRes.status, food.error || 'Unknown error');
                 if (trends.ok) createSustainabilityCharts(trends.trends);
+                else console.warn('[Sustainability] Trends unavailable:', trendsRes.status, trends.error || 'Unknown error');
             } catch (error) {
                 console.error('Error loading sustainability dashboard:', error);
             }
@@ -4813,12 +5057,12 @@
                 return;
             }
             try {
-                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills`, {
+                const res = await fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(bill)
                 });
-                const data = await res.json();
+                const data = await safeJson(res);
                 if (data.ok) {
                     closeUtilityBillModal();
                     loadSustainabilityDashboard();
@@ -4835,8 +5079,8 @@
         async function deleteUtilityBill(id) {
             if (!confirm('Delete this utility bill?')) return;
             try {
-                const res = await fetch(`${SUSTAINABILITY_API}/utility-bills/${id}`, { method: 'DELETE' });
-                const data = await res.json();
+                const res = await fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills/${id}`, { method: 'DELETE' });
+                const data = await safeJson(res);
                 if (data.ok) {
                     loadSustainabilityDashboard();
                     if (typeof showNotification === 'function') showNotification('Bill deleted', 'success');
@@ -4878,13 +5122,13 @@
         async function exportESGReport() {
             try {
                 const [metricsRes, billsRes, foodRes] = await Promise.all([
-                    fetch(`${SUSTAINABILITY_API}/metrics?days=30`),
-                    fetch(`${SUSTAINABILITY_API}/utility-bills`),
-                    fetch(`${SUSTAINABILITY_API}/food-miles`)
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/metrics?days=30`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/utility-bills`),
+                    fetchWithFarmAuth(`${SUSTAINABILITY_API}/food-miles`)
                 ]);
-                const metrics = await metricsRes.json();
-                const billsData = await billsRes.json();
-                const food = await foodRes.json();
+                const metrics = await safeJson(metricsRes);
+                const billsData = await safeJson(billsRes);
+                const food = await safeJson(foodRes);
 
                 // Build CSV
                 const rows = [['Sustainability & ESG Report', new Date().toISOString().split('T')[0]]];
@@ -4961,6 +5205,7 @@
           <div class="setup-progress-step" data-step="4" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="5" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
           <div class="setup-progress-step" data-step="6" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
+          <div class="setup-progress-step" data-step="7" style="flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: all 0.3s;"></div>
         </div>
       </div>
       
@@ -5084,6 +5329,15 @@
               <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;">
                 No rooms added yet. Add at least one room to continue.
               </div>
+            </div>
+
+            <!-- Room Mapper Tip -->
+            <div id="setup-room-mapper-tip" style="display: none; margin-top: 16px; padding: 14px 18px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px;">
+              <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+                <strong style="color: var(--accent-blue);">💡 Tip:</strong> After setup, use the
+                <a href="/views/room-mapper.html" target="_blank" style="color: var(--accent-blue); text-decoration: underline;">Room Mapper</a>
+                to visually place sensors and equipment in each room for accurate heat maps and monitoring.
+              </p>
             </div>
           </div>
         </div>
@@ -5209,7 +5463,6 @@
     </div>
   </div>
 
-    <script src="/js/farm-assistant.js?v=20260318e"></script>
   
   <!-- Export Functions -->
   <script>
@@ -5313,5 +5566,6 @@
     });
   </script>
   <script src="/js/light-engine-help.js"></script>
+  <script src="/js/evie-presence.js"></script>
 </body>
 </html>

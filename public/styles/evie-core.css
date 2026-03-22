@@ -1,0 +1,830 @@
+/* ============================================================================
+   E.V.I.E. CORE -- Design Language
+   ============================================================================
+   Environmental Vision & Intelligence Engine
+   Signature shape:  Organic radial glow (living presence)
+   Signature motion: Breathing pulse (idle), ripple (listening), bloom (alert)
+   Signature colors: Vitality green, sensing cyan, thinking violet, amber alert
+   ============================================================================ */
+
+:root {
+  /* E.V.I.E. Vitality Scale */
+  --evie-vitality: #10b981;
+  --evie-vitality-glow: rgba(16, 185, 129, 0.35);
+  --evie-sensing: #06b6d4;
+  --evie-sensing-glow: rgba(6, 182, 212, 0.35);
+  --evie-thinking: #8b5cf6;
+  --evie-thinking-glow: rgba(139, 92, 246, 0.35);
+  --evie-alert: #f59e0b;
+  --evie-alert-glow: rgba(245, 158, 11, 0.35);
+  --evie-critical: #ef4444;
+  --evie-critical-glow: rgba(239, 68, 68, 0.35);
+  --evie-explaining: #e2e8f0;
+  --evie-explaining-glow: rgba(226, 232, 240, 0.2);
+  --evie-confirming: #34d399;
+  --evie-confirming-glow: rgba(52, 211, 153, 0.4);
+
+  /* E.V.I.E. Surfaces -- warmer, more organic than F.A.Y.E. */
+  --evie-bg-deep: #0c1220;
+  --evie-bg-panel: #121d2e;
+  --evie-bg-card: #182535;
+  --evie-bg-card-hover: #1e3044;
+  --evie-bg-input: #1a2a3d;
+  --evie-border: rgba(255, 255, 255, 0.06);
+  --evie-border-active: rgba(16, 185, 129, 0.25);
+
+  /* E.V.I.E. Text */
+  --evie-text: #e5e7eb;
+  --evie-text-secondary: #94a3b8;
+  --evie-text-muted: #64748b;
+  --evie-text-accent: #6ee7b7;
+}
+
+/* ======================================================================
+   ORB: The Living Presence
+   ====================================================================== */
+
+.evie-orb-container {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.evie-orb-core {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 20px; height: 20px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--evie-vitality), rgba(16, 185, 129, 0.6));
+  box-shadow: 0 0 16px var(--evie-vitality-glow), 0 0 32px var(--evie-vitality-glow);
+  z-index: 3;
+  transition: background 0.8s, box-shadow 0.8s;
+}
+
+.evie-orb-halo {
+  position: absolute;
+  top: 50%; left: 50%;
+  border-radius: 50%;
+  opacity: 0.3;
+  transition: opacity 0.8s, border-color 0.8s, box-shadow 0.8s;
+}
+
+.evie-orb-halo--inner {
+  width: 36px; height: 36px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid var(--evie-vitality);
+  opacity: 0.4;
+  z-index: 2;
+}
+
+.evie-orb-halo--mid {
+  width: 52px; height: 52px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--evie-vitality);
+  opacity: 0.2;
+  z-index: 1;
+}
+
+.evie-orb-halo--outer {
+  width: 64px; height: 64px;
+  transform: translate(-50%, -50%);
+  border: 1px solid transparent;
+  box-shadow: 0 0 24px var(--evie-vitality-glow);
+  opacity: 0.15;
+  z-index: 0;
+}
+
+/* -- Orb Size Variants ------------------------------------------------- */
+
+.evie-orb-container.evie-orb--hero {
+  width: 120px; height: 120px;
+}
+.evie-orb--hero .evie-orb-core   { width: 36px; height: 36px; }
+.evie-orb--hero .evie-orb-halo--inner  { width: 64px; height: 64px; }
+.evie-orb--hero .evie-orb-halo--mid    { width: 90px; height: 90px; }
+.evie-orb--hero .evie-orb-halo--outer  { width: 120px; height: 120px; }
+
+.evie-orb-container.evie-orb--compact {
+  width: 40px; height: 40px;
+}
+.evie-orb--compact .evie-orb-core { width: 12px; height: 12px; }
+.evie-orb--compact .evie-orb-halo--inner { width: 22px; height: 22px; }
+.evie-orb--compact .evie-orb-halo--mid   { width: 32px; height: 32px; }
+.evie-orb--compact .evie-orb-halo--outer { width: 40px; height: 40px; }
+
+/* ======================================================================
+   ORB STATES
+   ====================================================================== */
+
+/* -- Idle: gentle breathing -------------------------------------------- */
+.evie-state-idle .evie-orb-core {
+  animation: evie-breathe 4s ease-in-out infinite;
+}
+.evie-state-idle .evie-orb-halo--outer {
+  animation: evie-halo-pulse 4s ease-in-out infinite;
+}
+
+/* -- Wake: brightens, halos expand ------------------------------------- */
+.evie-state-wake .evie-orb-core {
+  animation: evie-wake-bloom 0.8s ease-out forwards;
+  box-shadow: 0 0 20px var(--evie-vitality-glow), 0 0 40px var(--evie-vitality-glow);
+}
+.evie-state-wake .evie-orb-halo--inner {
+  opacity: 0.6;
+  animation: evie-halo-expand 0.8s ease-out forwards;
+}
+.evie-state-wake .evie-orb-halo--mid {
+  opacity: 0.4;
+  animation: evie-halo-expand 0.8s ease-out 0.1s forwards;
+}
+
+/* -- Listening: cyan glow, gentle oscillation -------------------------- */
+.evie-state-listening .evie-orb-core {
+  background: radial-gradient(circle, var(--evie-sensing), rgba(6, 182, 212, 0.6));
+  box-shadow: 0 0 16px var(--evie-sensing-glow), 0 0 32px var(--evie-sensing-glow);
+  animation: evie-listen-oscillate 2s ease-in-out infinite;
+}
+.evie-state-listening .evie-orb-halo--inner {
+  border-color: var(--evie-sensing);
+  opacity: 0.6;
+  animation: evie-ripple 2s ease-out infinite;
+}
+.evie-state-listening .evie-orb-halo--mid {
+  border-color: var(--evie-sensing);
+  opacity: 0.4;
+  animation: evie-ripple 2s ease-out 0.3s infinite;
+}
+.evie-state-listening .evie-orb-halo--outer {
+  box-shadow: 0 0 24px var(--evie-sensing-glow);
+  opacity: 0.3;
+}
+
+/* -- Thinking: violet shimmer, halo rotation --------------------------- */
+.evie-state-thinking .evie-orb-core {
+  background: radial-gradient(circle, var(--evie-thinking), rgba(139, 92, 246, 0.6));
+  box-shadow: 0 0 16px var(--evie-thinking-glow), 0 0 32px var(--evie-thinking-glow);
+  animation: evie-think-shimmer 1.5s ease-in-out infinite;
+}
+.evie-state-thinking .evie-orb-halo--inner {
+  border-color: var(--evie-thinking);
+  opacity: 0.6;
+  animation: evie-think-rotate 3s linear infinite;
+}
+.evie-state-thinking .evie-orb-halo--mid {
+  border-color: var(--evie-thinking);
+  opacity: 0.4;
+  animation: evie-think-rotate 4s linear infinite reverse;
+}
+
+/* -- Explaining: warm white radiance ----------------------------------- */
+.evie-state-explaining .evie-orb-core {
+  background: radial-gradient(circle, var(--evie-explaining), rgba(226, 232, 240, 0.5));
+  box-shadow: 0 0 20px var(--evie-explaining-glow), 0 0 40px var(--evie-explaining-glow);
+  animation: evie-explain-radiance 3s ease-in-out infinite;
+}
+.evie-state-explaining .evie-orb-halo--inner {
+  border-color: var(--evie-explaining);
+  opacity: 0.5;
+}
+.evie-state-explaining .evie-orb-halo--mid {
+  border-color: rgba(226, 232, 240, 0.2);
+  opacity: 0.3;
+}
+
+/* -- Confirming: green flash, brief expansion -------------------------- */
+.evie-state-confirming .evie-orb-core {
+  background: radial-gradient(circle, var(--evie-confirming), rgba(52, 211, 153, 0.6));
+  box-shadow: 0 0 24px var(--evie-confirming-glow), 0 0 48px var(--evie-confirming-glow);
+  animation: evie-confirm-flash 0.6s ease-out;
+}
+.evie-state-confirming .evie-orb-halo--inner {
+  border-color: var(--evie-confirming);
+  opacity: 0.7;
+  animation: evie-halo-expand 0.6s ease-out;
+}
+
+/* -- Alert: amber pulse, ring intensifies ------------------------------ */
+.evie-state-alert .evie-orb-core {
+  background: radial-gradient(circle, var(--evie-alert), rgba(245, 158, 11, 0.6));
+  box-shadow: 0 0 18px var(--evie-alert-glow), 0 0 36px var(--evie-alert-glow);
+  animation: evie-alert-pulse 1.5s ease-in-out infinite;
+}
+.evie-state-alert .evie-orb-halo--inner {
+  border-color: var(--evie-alert);
+  opacity: 0.7;
+  animation: evie-alert-ring 1.5s ease-in-out infinite;
+}
+.evie-state-alert .evie-orb-halo--mid {
+  border-color: var(--evie-alert);
+  opacity: 0.4;
+}
+
+/* -- Uncertain: muted violet, gentle sway ------------------------------ */
+.evie-state-uncertain .evie-orb-core {
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.7), rgba(139, 92, 246, 0.3));
+  box-shadow: 0 0 10px var(--evie-thinking-glow);
+  animation: evie-uncertain-sway 3s ease-in-out infinite;
+}
+.evie-state-uncertain .evie-orb-halo--inner {
+  border-color: rgba(139, 92, 246, 0.3);
+  opacity: 0.3;
+}
+
+/* -- Offline: dimmed gray, no animation -------------------------------- */
+.evie-state-offline .evie-orb-core {
+  background: #4b5563;
+  box-shadow: none;
+  animation: none;
+}
+.evie-state-offline .evie-orb-halo--inner,
+.evie-state-offline .evie-orb-halo--mid,
+.evie-state-offline .evie-orb-halo--outer {
+  border-color: #374151;
+  box-shadow: none;
+  opacity: 0.15;
+  animation: none;
+}
+
+/* ======================================================================
+   KEYFRAMES
+   ====================================================================== */
+
+@keyframes evie-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 16px var(--evie-vitality-glow), 0 0 32px var(--evie-vitality-glow); }
+  50%      { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 0 22px var(--evie-vitality-glow), 0 0 44px var(--evie-vitality-glow); }
+}
+
+@keyframes evie-halo-pulse {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.25; }
+}
+
+@keyframes evie-wake-bloom {
+  0%   { transform: translate(-50%, -50%) scale(1); }
+  50%  { transform: translate(-50%, -50%) scale(1.2); }
+  100% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+@keyframes evie-halo-expand {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 0.2; }
+  50%  { transform: translate(-50%, -50%) scale(1.15); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
+}
+
+@keyframes evie-listen-oscillate {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  25%      { transform: translate(-50%, -50%) scale(1.04); }
+  75%      { transform: translate(-50%, -50%) scale(0.97); }
+}
+
+@keyframes evie-ripple {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+}
+
+@keyframes evie-think-shimmer {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.7; }
+}
+
+@keyframes evie-think-rotate {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes evie-explain-radiance {
+  0%, 100% { box-shadow: 0 0 20px var(--evie-explaining-glow), 0 0 40px var(--evie-explaining-glow); }
+  50%      { box-shadow: 0 0 28px var(--evie-explaining-glow), 0 0 56px var(--evie-explaining-glow); }
+}
+
+@keyframes evie-confirm-flash {
+  0%   { transform: translate(-50%, -50%) scale(1); }
+  40%  { transform: translate(-50%, -50%) scale(1.3); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes evie-alert-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 18px var(--evie-alert-glow); }
+  50%      { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 28px var(--evie-alert-glow), 0 0 48px var(--evie-alert-glow); }
+}
+
+@keyframes evie-alert-ring {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.9; }
+}
+
+@keyframes evie-uncertain-sway {
+  0%, 100% { transform: translate(-50%, -50%); }
+  25%      { transform: translate(calc(-50% + 2px), -50%); }
+  75%      { transform: translate(calc(-50% - 2px), -50%); }
+}
+
+/* ======================================================================
+   LAYER 1: AMBIENT PRESENCE
+   ====================================================================== */
+
+.evie-ambient {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 99999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.evie-ambient-orb {
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+}
+
+.evie-ambient-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 18px; height: 18px;
+  border-radius: 9px;
+  background: var(--evie-critical);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.evie-ambient-badge:empty { opacity: 0; }
+
+.evie-ambient-status {
+  background: var(--evie-bg-card);
+  border: 1px solid var(--evie-border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--evie-text-secondary);
+  font-size: 12px;
+  max-width: 240px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s, transform 0.4s;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.evie-ambient.show-status .evie-ambient-status {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ======================================================================
+   LAYER 2: INTELLIGENCE PANEL
+   ====================================================================== */
+
+.evie-intel-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: 400px;
+  height: 100vh;
+  background: var(--evie-bg-panel);
+  border-left: 1px solid var(--evie-border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+  z-index: 99998;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.evie-intel-panel.open {
+  transform: translateX(0);
+}
+
+.evie-intel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--evie-border);
+  flex-shrink: 0;
+}
+
+.evie-intel-header-text {
+  flex: 1;
+}
+.evie-intel-header-text h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--evie-text);
+  letter-spacing: 0.5px;
+}
+.evie-intel-header-text small {
+  color: var(--evie-text-muted);
+  font-size: 11px;
+}
+
+.evie-intel-close {
+  background: none;
+  border: 1px solid var(--evie-border);
+  color: var(--evie-text-secondary);
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.2s, color 0.2s;
+}
+.evie-intel-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--evie-text);
+}
+
+/* -- Mode Tabs --------------------------------------------------------- */
+
+.evie-mode-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--evie-border);
+  flex-shrink: 0;
+}
+
+.evie-mode-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--evie-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  transition: color 0.2s, border-color 0.2s;
+  text-align: center;
+}
+.evie-mode-tab:hover {
+  color: var(--evie-text-secondary);
+}
+.evie-mode-tab.active {
+  color: var(--evie-text-accent);
+  border-bottom-color: var(--evie-vitality);
+}
+
+/* -- Panel Body -------------------------------------------------------- */
+
+.evie-intel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.evie-intel-section {
+  margin-bottom: 20px;
+}
+
+.evie-intel-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--evie-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.evie-intel-section-title .count {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.evie-notice {
+  color: var(--evie-text-muted);
+  font-size: 13px;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* -- Signal Cards ------------------------------------------------------ */
+
+.evie-signal-card {
+  background: var(--evie-bg-card);
+  border: 1px solid var(--evie-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--evie-vitality);
+  transition: background 0.2s;
+}
+.evie-signal-card:hover {
+  background: var(--evie-bg-card-hover);
+}
+.evie-signal-card.signal-high,
+.evie-signal-card.signal-critical {
+  border-left-color: var(--evie-critical);
+}
+.evie-signal-card.signal-medium {
+  border-left-color: var(--evie-alert);
+}
+.evie-signal-card.signal-info {
+  border-left-color: var(--evie-sensing);
+}
+
+.evie-signal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--evie-text);
+  margin-bottom: 4px;
+}
+
+.evie-signal-detail {
+  font-size: 12px;
+  color: var(--evie-text-secondary);
+  line-height: 1.4;
+}
+
+.evie-signal-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--evie-text-muted);
+}
+
+/* -- Confidence Bar ---------------------------------------------------- */
+
+.evie-confidence-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.evie-confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+  background: var(--evie-vitality);
+}
+
+/* -- Domain Labels ----------------------------------------------------- */
+
+.evie-domain-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--evie-text-accent);
+}
+
+/* -- Farm Stats Row ---------------------------------------------------- */
+
+.evie-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.evie-stat {
+  flex: 1;
+  min-width: 80px;
+  background: var(--evie-bg-card);
+  border: 1px solid var(--evie-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.evie-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--evie-text);
+  line-height: 1.1;
+}
+.evie-stat-label {
+  font-size: 10px;
+  color: var(--evie-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-top: 4px;
+}
+
+/* ======================================================================
+   LAYER 3: CONVERSATION MODE
+   ====================================================================== */
+
+.evie-conversation {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.evie-conv-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.evie-conv-msg {
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--evie-text);
+}
+.evie-conv-msg.user {
+  color: var(--evie-sensing);
+}
+.evie-conv-msg.system {
+  color: var(--evie-text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.evie-conv-input-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--evie-border);
+  flex-shrink: 0;
+}
+
+.evie-conv-input {
+  flex: 1;
+  background: var(--evie-bg-input);
+  border: 1px solid var(--evie-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--evie-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.evie-conv-input:focus {
+  border-color: var(--evie-border-active);
+}
+.evie-conv-input::placeholder {
+  color: var(--evie-text-muted);
+}
+
+.evie-conv-send {
+  background: var(--evie-vitality);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  width: 38px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+.evie-conv-send:hover { opacity: 0.85; }
+.evie-conv-send:disabled { opacity: 0.4; cursor: default; }
+
+/* ======================================================================
+   E.V.I.E. CORE PAGE -- Dedicated Farm Intelligence Screen
+   ====================================================================== */
+
+.evie-core-page {
+  min-height: 100vh;
+  background: linear-gradient(170deg, var(--evie-bg-deep) 0%, #0e1a2b 40%, #0c1520 100%);
+  color: var(--evie-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.evie-core-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--evie-border);
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.evie-core-topbar h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--evie-text);
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+.evie-core-topbar a {
+  color: var(--evie-text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+}
+.evie-core-topbar a:hover {
+  color: var(--evie-text);
+}
+
+.evie-core-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 20px;
+  text-align: center;
+}
+.evie-core-hero-label {
+  font-size: 11px;
+  color: var(--evie-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 16px;
+}
+.evie-core-hero-confidence {
+  font-size: 14px;
+  color: var(--evie-text-secondary);
+  margin-top: 4px;
+}
+
+.evie-core-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 20px 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.evie-core-section {
+  background: var(--evie-bg-card);
+  border: 1px solid var(--evie-border);
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 120px;
+}
+.evie-core-section.full-width {
+  grid-column: 1 / -1;
+}
+
+.evie-core-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--evie-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.evie-core-section-title .count {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.evie-core-chat-bar {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+}
+.evie-core-chat-bar .evie-conv-input-row {
+  border-top: none;
+}
+
+.evie-placeholder {
+  color: var(--evie-text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* ======================================================================
+   RESPONSIVE
+   ====================================================================== */
+
+@media (max-width: 768px) {
+  .evie-intel-panel {
+    width: 100vw;
+  }
+  .evie-core-grid {
+    grid-template-columns: 1fr;
+    padding: 12px 16px;
+  }
+  .evie-ambient {
+    bottom: 16px;
+    right: 16px;
+  }
+}
