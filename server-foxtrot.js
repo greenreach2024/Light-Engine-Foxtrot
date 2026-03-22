@@ -23523,6 +23523,22 @@ app.use('/light-engine/public', express.static(LIGHT_ENGINE_DIR, {
   }
 }));
 
+// Serve greenreach-central/public/ FIRST so the canonical source-of-truth HTML
+// and assets (E.V.I.E., F.A.Y.E.) take precedence over stale root copies.
+const CENTRAL_PUBLIC = path.join(__dirname, 'greenreach-central', 'public');
+app.use(express.static(CENTRAL_PUBLIC, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+  }
+}));
+
 // Serve static files from public/ (AFTER demo middleware so demo data takes precedence)
 // Add cache control headers to force fresh content
 // Disable index.html auto-serving so we control root URL routing
