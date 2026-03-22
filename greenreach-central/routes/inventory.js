@@ -475,13 +475,14 @@ router.post('/manual', async (req, res) => {
       // Full INSERT with all extended columns (requires compatibility migration)
       result = await query(
         `INSERT INTO farm_inventory (
-          farm_id, product_id, product_name, sku, quantity, unit, price,
+          farm_id, product_id, product_name, sku_id, sku, quantity, unit, price,
           available_for_wholesale, manual_quantity_lbs, quantity_available,
           quantity_unit, wholesale_price, retail_price, inventory_source,
           category, variety, last_updated
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'manual',$14,$15,NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual',$15,$16,NOW())
         ON CONFLICT (farm_id, product_id) DO UPDATE SET
           product_name = EXCLUDED.product_name,
+          sku_id = EXCLUDED.sku_id,
           manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
           quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs,
           quantity_unit = EXCLUDED.quantity_unit,
@@ -501,6 +502,7 @@ router.post('/manual', async (req, res) => {
           farmId,
           productId,
           product_name,
+          sku || productId,
           sku || productId,
           legacyQty,
           unit || 'lb',
@@ -535,11 +537,12 @@ router.post('/manual', async (req, res) => {
       console.log('[Manual Inventory] Trying fallback INSERT with base columns only');
       result = await query(
         `INSERT INTO farm_inventory (
-          farm_id, product_id, product_name, sku, quantity, unit, price,
+          farm_id, product_id, product_name, sku_id, sku, quantity, unit, price,
           available_for_wholesale, last_updated
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
         ON CONFLICT (farm_id, product_id) DO UPDATE SET
           product_name = EXCLUDED.product_name,
+          sku_id = EXCLUDED.sku_id,
           quantity = EXCLUDED.quantity,
           price = EXCLUDED.price,
           available_for_wholesale = EXCLUDED.available_for_wholesale,
@@ -549,6 +552,7 @@ router.post('/manual', async (req, res) => {
           farmId,
           productId,
           product_name,
+          sku || productId,
           sku || productId,
           legacyQty,
           unit || 'lb',
