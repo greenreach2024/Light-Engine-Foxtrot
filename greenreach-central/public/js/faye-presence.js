@@ -98,7 +98,7 @@
 
   var ambientOrb = document.createElement('div');
   ambientOrb.className = 'faye-ambient-orb';
-  var orbEl = buildOrb();
+  var orbEl = buildOrb('faye-orb--ambient');
   ambientOrb.appendChild(orbEl);
 
   var ambientBadge = document.createElement('div');
@@ -260,7 +260,7 @@
 
   // Insert orb into panel header
   var panelOrbWrap = document.getElementById('faye-panel-orb-wrap');
-  var panelOrb = buildOrb();
+  var panelOrb = buildOrb('faye-orb--panel');
   panelOrbWrap.appendChild(panelOrb);
 
   // -- Panel Controls -----------------------------------------------
