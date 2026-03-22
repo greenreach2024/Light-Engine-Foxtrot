@@ -1671,6 +1671,133 @@ export const ADMIN_TOOL_CATALOG = {
         note: url ? 'Webhook active for critical and high severity alerts' : 'No FAYE_WEBHOOK_URL configured. Set this environment variable to enable webhook alerting.'
       };
     }
+  },
+
+  // ── Error Telemetry (F.A.Y.E. Diagnostics) ──────────────────────
+
+  'get_recent_errors': {
+    description: 'Get recent application errors captured server-side. Shows route, error type, message, frequency, and when they started/last occurred. Use this to diagnose issues reported by users or detected by alerts.',
+    category: 'read',
+    required: [],
+    optional: ['hours', 'route', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const hours = parseInt(params.hours, 10) || 24;
+        let sql = `SELECT id, method, route, status_code, error_type, message, count,
+                          first_seen, last_seen
+                   FROM app_errors WHERE last_seen > NOW() - ($1 || ' hours')::interval`;
+        const values = [hours];
+        let idx = 2;
+        if (params.route) { sql += ` AND route ILIKE $${idx++}`; values.push(`%${params.route}%`); }
+        sql += ' ORDER BY last_seen DESC';
+        const limit = Math.min(parseInt(params.limit, 10) || 25, 50);
+        sql += ` LIMIT $${idx++}`;
+        values.push(limit);
+        const result = await dbQuery(sql, values);
+        const totalHits = result.rows.reduce((s, r) => s + r.count, 0);
+        return { ok: true, window_hours: hours, unique_errors: result.rows.length, total_occurrences: totalHits, errors: result.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_error_summary': {
+    description: 'Get an aggregated summary of application errors grouped by route and error type. Shows which routes are most problematic and error frequency trends.',
+    category: 'read',
+    required: [],
+    optional: ['hours'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const hours = parseInt(params.hours, 10) || 24;
+
+        // Top routes by error volume
+        const byRoute = await dbQuery(
+          `SELECT route, SUM(count) AS total_errors, COUNT(*) AS unique_errors,
+                  MAX(last_seen) AS most_recent, MIN(first_seen) AS earliest
+           FROM app_errors WHERE last_seen > NOW() - ($1 || ' hours')::interval
+           GROUP BY route ORDER BY total_errors DESC LIMIT 10`, [hours]);
+
+        // By status code
+        const byStatus = await dbQuery(
+          `SELECT status_code, SUM(count) AS total
+           FROM app_errors WHERE last_seen > NOW() - ($1 || ' hours')::interval
+           GROUP BY status_code ORDER BY total DESC`, [hours]);
+
+        // By error type
+        const byType = await dbQuery(
+          `SELECT error_type, SUM(count) AS total
+           FROM app_errors WHERE last_seen > NOW() - ($1 || ' hours')::interval
+           GROUP BY error_type ORDER BY total DESC LIMIT 10`, [hours]);
+
+        const grandTotal = byRoute.rows.reduce((s, r) => s + Number(r.total_errors), 0);
+
+        return {
+          ok: true, window_hours: hours, total_error_occurrences: grandTotal,
+          by_route: byRoute.rows, by_status_code: byStatus.rows, by_error_type: byType.rows
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'check_dependencies': {
+    description: 'Check connectivity to external services: database, Square API, Stripe API, AWS SES, and SwitchBot. Use this to quickly diagnose if a failure is caused by an unreachable dependency.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      const results = {};
+      const check = async (name, fn) => {
+        const start = Date.now();
+        try { await fn(); results[name] = { status: 'ok', latency_ms: Date.now() - start }; }
+        catch (err) { results[name] = { status: 'error', error: err.message, latency_ms: Date.now() - start }; }
+      };
+
+      // Database
+      await check('database', async () => {
+        if (!isDatabaseAvailable()) throw new Error('Pool not initialized');
+        const r = await dbQuery('SELECT 1 AS alive');
+        if (!r.rows.length) throw new Error('Empty response');
+      });
+
+      // Square API
+      await check('square_api', async () => {
+        const token = process.env.SQUARE_ACCESS_TOKEN;
+        if (!token) throw new Error('SQUARE_ACCESS_TOKEN not configured');
+        const r = await fetch('https://connect.squareup.com/v2/locations', {
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      });
+
+      // AWS SES
+      await check('aws_ses', async () => {
+        const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+        if (!region) throw new Error('AWS_REGION not configured');
+        // Light check: verify the SES endpoint resolves
+        const r = await fetch(`https://email.${region}.amazonaws.com`, {
+          method: 'GET', signal: AbortSignal.timeout(5000)
+        });
+        // SES returns 403 without auth, but that proves reachability
+        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
+      });
+
+      // SwitchBot
+      await check('switchbot_api', async () => {
+        const token = process.env.SWITCHBOT_TOKEN;
+        if (!token) throw new Error('SWITCHBOT_TOKEN not configured');
+        const r = await fetch('https://api.switch-bot.com/v1.1/devices', {
+          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      });
+
+      const healthy = Object.values(results).filter(r => r.status === 'ok').length;
+      const total = Object.keys(results).length;
+      return { ok: true, healthy: `${healthy}/${total}`, services: results };
+    }
   }
 };
 

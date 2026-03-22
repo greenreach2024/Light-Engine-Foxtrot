@@ -96,7 +96,7 @@ if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
 }
 
 // Import middleware
-import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler, initErrorCapture } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { authMiddleware, authOrAdminMiddleware } from './middleware/auth.js';
 import { farmDataMiddleware, farmDataWriteMiddleware } from './middleware/farm-data.js';
@@ -4536,6 +4536,8 @@ async function startServer() {
       app.locals.databaseReady = true;
       app.locals.dbPool = getDatabase();
       logger.info('Database connected successfully');
+      // Wire error capture to database for F.A.Y.E. diagnostics
+      initErrorCapture(query, isDatabaseAvailable);
 
       // Sync marketing skill system prompts with correct brand identity
       try {
