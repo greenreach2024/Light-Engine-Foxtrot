@@ -686,13 +686,18 @@
       // Use current server origin for API calls (works on localhost and AWS)
       const API_BASE = window.location.origin;
 
+      function getParentFarmId() {
+        try { return window.parent && window.parent.currentFarmId; } catch (_) { return null; }
+      }
+
       function fetchWithFarmAuth(url, opts = {}) {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token') || localStorage.getItem('admin_token');
         const farmId =
           sessionStorage.getItem('farm_id') ||
           sessionStorage.getItem('farmId') ||
           localStorage.getItem('farm_id') ||
-          localStorage.getItem('farmId');
+          localStorage.getItem('farmId') ||
+          getParentFarmId();
         const headers = Object.assign({}, opts.headers || {});
         if (token) headers['Authorization'] = `Bearer ${token}`;
         if (farmId && !headers['x-farm-id']) headers['x-farm-id'] = farmId;
@@ -1574,7 +1579,7 @@
     // ═══════════════════════════════════════════════════════
 
     async function loadManualInventory() {
-      const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId') || 'local-farm';
+      const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId') || getParentFarmId() || 'local-farm';
       try {
         const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/${encodeURIComponent(farmId)}`);
         if (!resp.ok) throw new Error('Failed to load inventory');

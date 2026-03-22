@@ -143,7 +143,7 @@ function getJwtSecret() {
 }
 const JWT_SECRET = getJwtSecret();
 
-function resolveFarmId(req) {
+async function resolveFarmId(req) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
@@ -158,7 +158,17 @@ function resolveFarmId(req) {
     }
   }
 
-  return req.query.farmId || req.headers['x-farm-id'] || req.user?.farmId || null;
+  const farmId = req.query.farmId || req.headers['x-farm-id'] || req.user?.farmId || null;
+
+  // Admin JWT sets farmId to literal 'ADMIN' — resolve to the actual farm
+  if (farmId === 'ADMIN' && await isDatabaseAvailable()) {
+    try {
+      const result = await query('SELECT farm_id FROM farms LIMIT 1');
+      if (result.rows.length > 0) return result.rows[0].farm_id;
+    } catch (_) { /* fall through */ }
+  }
+
+  return farmId;
 }
 
 function coerceNumber(value) {
@@ -196,7 +206,7 @@ async function loadFarmGroups(farmId) {
  */
 router.get('/current', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = await resolveFarmId(req);
     if (!farmId) {
       return res.status(400).json({
         status: 'error',
@@ -255,7 +265,7 @@ router.get('/current', async (req, res) => {
  */
 router.get('/forecast/:days?', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = await resolveFarmId(req);
     if (!farmId) {
       return res.status(400).json({
         status: 'error',
@@ -438,7 +448,7 @@ router.get('/:farmId', async (req, res) => {
  */
 router.post('/manual', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = await resolveFarmId(req);
     if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
 
     const { product_name, sku, quantity_lbs, unit, price, wholesale_price,
@@ -521,7 +531,7 @@ router.post('/manual', async (req, res) => {
  */
 router.put('/manual/:productId', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = await resolveFarmId(req);
     if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
 
     const { productId } = req.params;
@@ -589,7 +599,7 @@ router.put('/manual/:productId', async (req, res) => {
  */
 router.delete('/manual/:productId', async (req, res) => {
   try {
-    const farmId = resolveFarmId(req);
+    const farmId = await resolveFarmId(req);
     if (!farmId) return res.status(401).json({ error: 'Farm ID required' });
 
     const { productId } = req.params;
