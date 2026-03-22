@@ -304,7 +304,14 @@
     activeMode = mode;
     MODES.forEach(function (m) {
       var el = document.getElementById('faye-mode-' + m);
-      if (el) el.style.display = m === mode ? '' : 'none';
+      if (!el) return;
+      if (m === mode) {
+        el.style.display = '';
+        el.classList.add('active');
+      } else {
+        el.style.display = 'none';
+        el.classList.remove('active');
+      }
     });
     var tabs = document.querySelectorAll('#faye-mode-tabs .faye-mode-tab');
     tabs.forEach(function (tab) {
