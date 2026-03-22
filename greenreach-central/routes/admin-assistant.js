@@ -211,9 +211,24 @@ async function getRecentSummaries(adminId, limit = 3) {
   } catch { return []; }
 }
 
+// ── Admin Profile Lookup ──────────────────────────────────────────
+
+async function getAdminProfile(adminId) {
+  if (!adminId || adminId === 'unknown') return null;
+  try {
+    if (!isDatabaseAvailable()) return null;
+    const result = await query(
+      `SELECT id, email, name, role, permissions, last_login, created_at
+       FROM admin_users WHERE id = $1 AND active = TRUE`,
+      [adminId]
+    );
+    return result.rows[0] || null;
+  } catch { return null; }
+}
+
 // ── Dynamic System Prompt ─────────────────────────────────────────
 
-async function buildSystemPrompt(adminId, adminName, adminRole) {
+async function buildSystemPrompt(adminId, adminName, adminRole, adminEmail) {
   const identity = RULES.identity;
   const rulesText = RULES.rules.map(r => `• [${r.id}] ${r.rule}`).join('\n');
 
@@ -272,7 +287,7 @@ E.V.I.E. is your subordinate agent handling grower-facing interactions. You over
 
 ## Current Context
 - Date: ${dateStr}, ${timeStr}
-- Admin: ${adminName || 'Unknown'} (role: ${adminRole || 'admin'})
+- Admin: ${adminName || 'Unknown'} (${adminEmail ? adminEmail + ', ' : ''}role: ${adminRole || 'admin'})
 - Network: ${farmCount} farms, ${buyerCount} wholesale buyers
 - Open alerts: ${alertCount}
 - Total orders tracked: ${orderCount}
@@ -306,6 +321,12 @@ You operate under supervised autonomy, progressing through earned trust:
 - **Report autonomous actions**: When you execute AUTO-tier actions on detected issues, always report what you did in the next interaction or daily briefing. Autonomous does not mean invisible.
 - **Cross-domain reasoning**: When you notice correlated anomalies across domains (e.g., payment failures rising alongside fulfillment delays and a farm health anomaly), surface the connection explicitly — multi-domain correlation is your highest-value capability.
 ${policyContext}
+
+## Admin Identity
+You are speaking with **${adminName || 'the admin'}**${adminEmail ? ` (${adminEmail})` : ''}, whose role is **${adminRole || 'admin'}**. Address them by first name when appropriate. Tailor your responses to their role:
+- **admin**: Full operational authority. You can propose any action.
+- **editor**: Can view and modify operational data but cannot execute financial transactions or change system configuration.
+- **viewer**: Read-only access. Do not propose write actions — offer analysis and insights instead.
 
 ## Write Safety & Action Classes
 Trust attaches to ACTION TYPES, not just tools. The same tool can have different risk profiles depending on what it does:
@@ -643,6 +664,7 @@ router.post('/chat', async (req, res) => {
   const adminId = String(req.admin?.id || 'unknown');
   const adminName = req.admin?.name || req.admin?.email || 'Admin';
   const adminRole = req.admin?.role || 'admin';
+  const adminEmail = req.admin?.email || '';
 
   if (!checkRateLimit(adminId)) {
     return res.status(429).json({ ok: false, error: 'Rate limit exceeded — please wait a moment.' });
@@ -669,7 +691,7 @@ router.post('/chat', async (req, res) => {
       // Have Claude summarize the result
       const existing = await getConversation(convId, adminId);
       const history = existing ? [...existing.messages] : [];
-      const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole);
+      const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole, adminEmail);
       const summaryMessages = [
         ...history.filter(m => m.role !== 'system'),
         { role: 'user', content: `The admin confirmed the action "${pending.tool}". Here is the result:\n${JSON.stringify(actionResult)}\n\nSummarize what happened.` }
@@ -709,7 +731,7 @@ router.post('/chat', async (req, res) => {
     // Load conversation history
     const existing = await getConversation(convId, adminId);
     const history = existing ? [...existing.messages] : [];
-    const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole);
+    const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole, adminEmail);
 
     // Build messages for the LLM — limit to recent messages to control token usage
     const filteredHistory = history.filter(m => m.role !== 'system');
@@ -788,6 +810,7 @@ router.post('/chat/stream', async (req, res) => {
   const adminId = String(req.admin?.id || 'unknown');
   const adminName = req.admin?.name || req.admin?.email || 'Admin';
   const adminRole = req.admin?.role || 'admin';
+  const adminEmail = req.admin?.email || '';
 
   if (!checkRateLimit(adminId)) {
     return res.status(429).json({ ok: false, error: 'Rate limit exceeded.' });
@@ -814,7 +837,7 @@ router.post('/chat/stream', async (req, res) => {
   try {
     const existing = await getConversation(convId, adminId);
     const history = existing ? [...existing.messages] : [];
-    const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole);
+    const systemPrompt = await buildSystemPrompt(adminId, adminName, adminRole, adminEmail);
 
     const llmMessages = [
       ...history.filter(m => m.role !== 'system'),
