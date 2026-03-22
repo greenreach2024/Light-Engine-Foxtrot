@@ -1,86 +1,74 @@
 # Skill: Label and Document Generation
 
 ## Purpose
-Build server-side label, packing slip, and QR code generation for GreenReach -- product labels, shipping labels, packing slips, and the existing QR tray label generator.
+Server-side label, packing slip, and QR code generation for GreenReach -- product labels with lot traceability, packing slips for wholesale orders, and the QR tray label system.
 
-## Context
-- PDFKit is already in package.json (used only for grant-wizard.js currently)
-- QR generator frontend exists at `public/LE-qr-generator.html` calling:
-  - `GET /api/qr-generator/available-range?farmId=&prefix=` (MISSING)
-  - `POST /api/qr-generator/generate` (MISSING)
-  - `POST /api/qr-generator/generate-groups` (MISSING from groups-v2.js)
-- Linked from 5+ farm UI pages (LE-farm-admin.html, farm-summary.html, tray-inventory.html, planting-scheduler.html)
-- Packing slip is currently a raw innerHTML dump via `window.print()` in farm-admin.js:2946
-- No barcode library in package.json (need bwip-js or similar)
-- No thermal/ZPL printer support
+## Current State (Implemented)
+- **Lot-based labels and packing slips** are fully implemented in `routes/lot-system.js`
+- PDFKit is in package.json (used by grant-wizard.js)
+- QR generator frontend exists at `public/LE-qr-generator.html` (frontend-only, backend endpoints still missing)
+- Packing slip in `farm-admin.js` uses raw `window.print()` -- the lot-system provides a server-rendered alternative
 
-## Implementation Plan
+## Implemented Endpoints (routes/lot-system.js)
 
-### 1. Install Dependencies
-```bash
-npm install qrcode bwip-js
-```
-- `qrcode` -- QR code PNG/SVG generation (small, no native deps)
-- `bwip-js` -- barcode generation (Code128, EAN-13, etc.)
+### POST /api/lots/label
+Generates a printable label for a lot record.
+- Body: `{ farmId, lotNumber, format }` (format: 'json' or 'html')
+- JSON response includes: lot_number, product_name, farm_id, harvest_date, best_by_date, weight_oz, weight_lbs, quality_grade, seed_source, qr_data (JSON string for QR encoding)
+- HTML response: 4-inch thermal-printer-friendly label with table layout, print media CSS
+- Label content: product name, LOT number (bold), farm, harvest date, best-by, weight, grade, seed source
 
-### 2. QR Generator Backend
-File: `routes/qr-generator.js`
+### POST /api/lots/packing-slip
+Generates a packing slip with per-item lot traceability.
+- Body: `{ farmId, orderId, items: [{ sku_name, qty, unit }], format }`
+- For each item, looks up the most recent active lot via crop_id match
+- Response includes per-item: product, quantity, unit, lot_number, harvest_date, best_by_date, quality_grade
+- HTML format: print-ready table with order ID, farm ID, generation timestamp
 
-Endpoints:
-- `GET /api/qr-generator/available-range?farmId=&prefix=` -- check existing QR codes and return next available sequence range
-- `POST /api/qr-generator/generate` -- generate PDF sheet of sequential QR codes
-  - Body: `{ farmId, prefix, startNumber, count, labelSize }`
-  - Response: PDF stream (Content-Type: application/pdf)
-  - Use PDFKit to render grid of QR codes with labels beneath each
-- `POST /api/qr-generator/generate-groups` -- generate QR codes for group/room IDs
+## Not Yet Implemented
 
-Mount in server.js: `app.use('/api/qr-generator', authMiddleware, qrGeneratorRouter);`
+### QR Code Backend
+`public/LE-qr-generator.html` calls these endpoints that do not exist:
+- `GET /api/qr-generator/available-range?farmId=&prefix=`
+- `POST /api/qr-generator/generate`
+- `POST /api/qr-generator/generate-groups`
 
-### 3. Product Label Generator
-File: `routes/labels.js`
+To implement: Install `qrcode` package, create `routes/qr-generator.js`, mount with auth.
 
-Endpoints:
-- `POST /api/labels/product` -- generate product label PDF
-  - Body: `{ farmId, products: [{ name, sku, lot_code, weight, unit, harvest_date }], labelSize }`
-  - Include: farm name, product name, lot code barcode, harvest date, weight, "Product of Canada"
-- `POST /api/labels/shipping` -- generate shipping label PDF
-  - Body: `{ orderId }` -- pulls order data for address, farm return address
-- `GET /api/labels/packing-slip/:orderId` -- structured packing slip PDF
-  - Line items with quantities, weights, lot codes
-  - Order total, delivery date, special instructions
-  - Farm name and address header
+### PDF Label Generation
+Current labels are HTML. For thermal printer integration or PDF output:
+- Use PDFKit (already in package.json) for PDF rendering
+- Encode `qr_data` field from label endpoint into actual QR code image
+- Support label sizes: 4x6 (shipping), 2x1 (small product), 4x3 (medium)
 
-Label sizes to support:
-- `4x6` -- standard shipping label
-- `2x1` -- small product label
-- `4x3` -- medium product label (default)
-- `letter` -- full page packing slip
+### Barcode Generation
+No barcode library installed. For Code128/EAN-13 barcodes on physical labels:
+- Install `bwip-js` for server-side barcode generation
+- Encode lot_number as Code128 barcode on product labels
 
-### 4. PDFKit Template Helpers
-File: `services/labelTemplateService.js`
-- `renderProductLabel(doc, product, options)` -- reusable label rendering
-- `renderQRCode(doc, data, x, y, size)` -- QR code placement helper
-- `renderBarcode(doc, data, x, y, options)` -- barcode placement helper
-- `renderPackingSlip(doc, order)` -- full packing slip layout
+## Integration with Lot System
 
-### 5. Integration
-- Replace `printPackingSlip()` in farm-admin.js to call `/api/labels/packing-slip/:orderId` and open the PDF
-- POS checkout receipt: add QR code linking to order lookup page
-- Wholesale order detail: add "Print Packing Slip" and "Print Shipping Label" buttons
+The label system reads from lot_records (created by `POST /api/lots/harvest`):
+1. Harvest recorded -> lot_record created with lot_number, quality_score, best_by_date
+2. `POST /api/lots/label` reads lot_record and renders label
+3. `POST /api/lots/packing-slip` matches order items to active lots by crop_id
+4. SFCR export (`GET /api/lots/:farmId/sfcr-export`) provides regulatory-grade traceability data
 
 ## Validation Checklist
-- [ ] QR generator endpoints respond (fix dead 404s)
-- [ ] Product labels include lot code, farm name, harvest date
-- [ ] Packing slips include line items with lot codes
-- [ ] Shipping labels include buyer delivery address
-- [ ] PDF generation does not block event loop (use streams)
-- [ ] Existing tests pass (44/44)
-- [ ] No XSS in label content (sanitize all text inputs before PDF rendering)
+- [x] Lot label JSON endpoint returns structured data
+- [x] Lot label HTML endpoint renders print-ready label
+- [x] Packing slip links order items to lots automatically
+- [x] Quality grade displayed on all outputs
+- [ ] QR generator backend endpoints (currently 404)
+- [ ] PDF label generation via PDFKit
+- [ ] Barcode generation on physical labels
+- [ ] Thermal printer ZPL support
 
 ## Rules
 - Currency is always CAD
 - No emojis in any output
 - No fabricated fees
 - PDFKit is already available -- no need for new PDF libs
+- Sanitize all text inputs before rendering (XSS prevention)
 - Test with `npm test -- --runInBand`
 - Deploy with `eb deploy --staged`

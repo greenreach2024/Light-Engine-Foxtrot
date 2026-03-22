@@ -3107,7 +3107,7 @@ app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/t
 
 app.use('/api/inventory', authOrAdminMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
 app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
-app.use('/api/lots', lotSystemRoutes);
+app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key

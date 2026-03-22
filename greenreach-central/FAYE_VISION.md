@@ -235,6 +235,82 @@ Every F.A.Y.E. recommendation or action receives a labeled outcome. The taxonomy
 
 ---
 
+## Lot System and Traceability Oversight
+
+F.A.Y.E. owns the network-level view of the lot system. While E.V.I.E. handles individual farm harvest recording, F.A.Y.E. monitors traceability health, SFCR compliance readiness, quality trends across farms, and lot-to-order linkage for the wholesale pipeline.
+
+### F.A.Y.E.'s Role in the Pipeline
+
+| Responsibility | How F.A.Y.E. Handles It |
+|----------------|------------------------|
+| Traceability completeness | Monitors whether all active lots have seed_source, seed_lot, quality_score, and best_by_date populated. Surfaces gaps as medium-severity alerts. |
+| Cross-farm quality analysis | Compares quality_score distributions across farms and crops. Detects if a specific crop is underperforming network-wide (pattern tracking via faye_patterns). |
+| SFCR compliance readiness | Can run `GET /api/lots/:farmId/sfcr-export` across farms to verify export-ready data. Flags farms with incomplete traceability chains. |
+| Expiring inventory | Queries lot_records + farm_inventory for lots approaching best_by_date with remaining stock. Creates alerts for lots within 3 days of expiry. |
+| Lot recall coordination | When a lot needs recall, F.A.Y.E. identifies affected orders, generates the buyer notification list, and coordinates the recall (admin-tier action -- requires explicit approval). |
+| Wholesale packing verification | `POST /api/lots/packing-slip` generates packing slips with lot traceability for each wholesale order. F.A.Y.E. can verify slips are generated before dispatch. |
+
+### Network-Level Lot Workflow
+
+```
+Farm A harvests (E.V.I.E. records via POST /api/lots/harvest)
+       |
+       v
+F.A.Y.E. intelligence loop (15-min cycle):
+  -> checkAutoResolvePatterns(): auto-resolves known benign lot alerts
+  -> Detects new lots, checks traceability completeness
+  -> Flags expiring lots approaching best_by_date
+  -> Tracks quality patterns across farms
+       |
+       v
+F.A.Y.E. daily briefing:
+  -> "3 new lots created yesterday. Farm A: 2 (Grade A, A). Farm B: 1 (Grade C -- below network avg)."
+  -> "2 lots expire within 3 days: GREE-20260319-001 (4 lbs Buttercrunch), FARM-20260320-002 (2 lbs basil)."
+  -> "SFCR export ready for Farm A. Farm B missing seed_source on 3 active lots."
+```
+
+### Admin Tools for Lot System
+
+Tools available in ADMIN_TOOL_CATALOG for lot operations:
+
+| Tool | Category | Trust Tier | Purpose |
+|------|----------|-----------|---------|
+| `run_security_audit` | read | recommend | Includes lot system auth and data integrity in security findings |
+| `get_wholesale_overview` | read | auto | Shows order data that can be cross-referenced with lot records |
+
+Future lot-specific tools (v3.2):
+- `get_lot_traceability_report` -- Cross-farm lot health dashboard
+- `initiate_lot_recall` -- Recall workflow with buyer notification (admin tier, hard boundary: requires explicit approval)
+- `get_expiring_lots` -- Query lots within N days of best_by_date across all farms
+
+### Lot System Database Schema
+
+Migration 036 in `config/database.js` creates:
+- `harvest_events` -- yield and quality data per harvest (links to planting_assignments via farm_id + group_id)
+- `lot_records` -- unique lot_number per harvest with full seed-to-shelf chain (seed_source, seed_lot, seed_date, harvest_date, best_by_date, quality_score, weight_oz)
+- Traceability columns on `planting_assignments` (seed_source, seed_lot) and `farm_inventory` (lot_number, quality_score, best_by_date, harvest_event_id)
+
+### API Endpoints (routes/lot-system.js)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/lots/harvest` | authOrAdmin | Record harvest + create lot |
+| GET | `/api/lots/:farmId` | authOrAdmin | List lots for a farm |
+| GET | `/api/lots/:farmId/lot/:lotNumber` | authOrAdmin | Full lot traceability view |
+| GET | `/api/lots/:farmId/harvest-events` | authOrAdmin | List harvest events |
+| POST | `/api/lots/label` | authOrAdmin | Generate printable label |
+| POST | `/api/lots/packing-slip` | authOrAdmin | Generate packing slip with lot data |
+| GET | `/api/lots/:farmId/sfcr-export` | authOrAdmin | SFCR regulatory traceability export |
+
+### Remaining Gaps (v3.2 Targets)
+
+- **Lot-to-order forward linkage**: Wholesale orders store items in JSONB (`order_data`). Lot numbers should be attached to line items during order fulfillment, not just looked up in reverse at packing time.
+- **QR code backend**: `LE-qr-generator.html` calls endpoints that do not exist. Server-side QR generation needed for lot labels.
+- **Recall notification**: `emailService.sendRecallNotification()` is referenced but not implemented. Recall is a safety-critical path that needs implementation.
+- **Auto-expire lots**: Lots past best_by_date should auto-transition from 'active' to 'expired' status. Currently requires manual intervention.
+
+---
+
 ## Guiding Principles
 
 1. **Earn trust, don't assume it.** Every autonomous action is built on a track record of correct decisions. No shortcuts.

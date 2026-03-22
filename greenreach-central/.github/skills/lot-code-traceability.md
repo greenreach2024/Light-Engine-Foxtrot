@@ -1,88 +1,136 @@
 # Skill: Lot Code and Traceability System
 
 ## Purpose
-Implement end-to-end lot code generation, assignment, and traceability for GreenReach farms -- from harvest through order fulfillment to customer receipt and recall capability.
+End-to-end lot code generation, assignment, and traceability for GreenReach farms -- from seed source through harvest, lot creation, inventory linkage, quality grading, and SFCR regulatory export.
 
-## Context
+## Current State (Implemented)
 - Platform: Node.js ESM / Express / PostgreSQL
-- Existing lot_code references: optional JSONB field in `experiment_records.outcomes`, free-text in lab reports (`quality-reports.js`), synthetic traceability_id in wholesale-admin.js client-side export
-- Traceability proxy endpoints exist in server.js (lines 2003-2055) forwarding to farm edge servers but Central stores zero traceability data itself
-- Recall endpoint (`email-routes.js:88`) exists but calls `emailService.sendRecallNotification()` which does not exist -- will crash at runtime
-- ESG scoring engine checks `experiment_records.outcomes->>'lot_code'` for traceability percentage
+- **Fully implemented** in `routes/lot-system.js` (565 lines)
+- Mounted at `/api/lots` with `authOrAdminMiddleware` in `server.js`
+- Schema: Migration 036 in `config/database.js` creates `lot_records`, `harvest_events`, and adds traceability columns to `planting_assignments` and `farm_inventory`
+- Crop registry (`public/data/crop-registry.json`) provides per-crop `daysToHarvest` and shelf-life data
 
-## Implementation Plan
+## Database Schema (Migration 036)
 
-### 1. Database Schema
-Create migration `XXX_create_lot_codes.sql`:
+### harvest_events
 ```sql
-CREATE TABLE lot_codes (
+CREATE TABLE harvest_events (
   id SERIAL PRIMARY KEY,
-  lot_code VARCHAR(64) UNIQUE NOT NULL,
   farm_id VARCHAR(255) NOT NULL,
-  crop VARCHAR(255),
-  group_id VARCHAR(255),
-  harvest_date DATE,
-  quantity NUMERIC(10,2),
-  unit VARCHAR(50) DEFAULT 'kg',
-  status VARCHAR(30) DEFAULT 'active',  -- active, recalled, expired
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  group_id VARCHAR(255) NOT NULL,
+  crop_id VARCHAR(255) NOT NULL,
+  crop_name VARCHAR(255),
+  harvest_date DATE NOT NULL,
+  plants_harvested INTEGER,
+  gross_weight_oz DECIMAL(10,2),
+  net_weight_oz DECIMAL(10,2),
+  quality_score DECIMAL(3,2) DEFAULT 0.70,
+  quality_notes TEXT,
+  harvested_by VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
 );
-CREATE INDEX idx_lot_codes_farm ON lot_codes(farm_id);
-CREATE INDEX idx_lot_codes_crop ON lot_codes(crop);
-CREATE INDEX idx_lot_codes_status ON lot_codes(status);
 ```
 
-Create `lot_code_order_links` table:
+### lot_records
 ```sql
-CREATE TABLE lot_code_order_links (
+CREATE TABLE lot_records (
   id SERIAL PRIMARY KEY,
-  lot_code VARCHAR(64) REFERENCES lot_codes(lot_code),
-  order_id VARCHAR(64) NOT NULL,
-  sku_id VARCHAR(255),
-  quantity NUMERIC(10,2),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  lot_number VARCHAR(64) UNIQUE NOT NULL,
+  farm_id VARCHAR(255) NOT NULL,
+  harvest_event_id INTEGER,
+  group_id VARCHAR(255),
+  crop_id VARCHAR(255) NOT NULL,
+  crop_name VARCHAR(255),
+  seed_date DATE,
+  harvest_date DATE NOT NULL,
+  seed_source VARCHAR(255),
+  seed_lot VARCHAR(255),
+  weight_oz DECIMAL(10,2),
+  quality_score DECIMAL(3,2),
+  best_by_date DATE,
+  status VARCHAR(50) DEFAULT 'active',
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW(),
+  FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE,
+  FOREIGN KEY (harvest_event_id) REFERENCES harvest_events(id) ON DELETE SET NULL
 );
-CREATE INDEX idx_lcol_lot ON lot_code_order_links(lot_code);
-CREATE INDEX idx_lcol_order ON lot_code_order_links(order_id);
 ```
 
-### 2. Lot Code Generation Function
-File: `services/lotCodeService.js`
-- Format: `{FARM_PREFIX}-{CROP_CODE}-{YYYYMMDD}-{SEQ}` (e.g., `GR01-BAS-20260315-001`)
-- Auto-generate on harvest status change in `planting_assignments`
-- Expose: `generateLotCode(farmId, crop, harvestDate)`, `assignLotToOrder(lotCode, orderId, skuId, qty)`
-- Reverse lookup: `getOrdersByLotCode(lotCode)`, `getLotCodesByOrder(orderId)`
+### Columns added to existing tables
+```sql
+-- planting_assignments
+ALTER TABLE planting_assignments ADD COLUMN IF NOT EXISTS seed_source VARCHAR(255);
+ALTER TABLE planting_assignments ADD COLUMN IF NOT EXISTS seed_lot VARCHAR(255);
 
-### 3. Route Endpoints
-File: `routes/traceability.js`
-- `POST /api/traceability/lot-codes` -- generate a new lot code
-- `GET /api/traceability/lot-codes?farm_id=&crop=&status=` -- list lot codes
-- `GET /api/traceability/lot-codes/:lotCode` -- lot code detail + linked orders
-- `GET /api/traceability/lot-codes/:lotCode/orders` -- reverse lookup (which orders got this lot?)
-- `POST /api/traceability/lot-codes/:lotCode/recall` -- initiate recall (set status, email affected buyers)
-- `GET /api/traceability/export` -- CSV export with lot codes
+-- farm_inventory
+ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS lot_number VARCHAR(64);
+ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS quality_score DECIMAL(3,2);
+ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS best_by_date DATE;
+ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS harvest_event_id INTEGER;
+```
 
-### 4. Integration Points
-- Wholesale checkout (`routes/wholesale.js`): attach lot_code to order line items, insert into `lot_code_order_links`
-- POS checkout (`routes/farm-sales.js`): same lot code linkage for direct sales
-- Wholesale exports (`routes/wholesale-exports.js`): add `lot_code` column to order CSV
-- Client-side compliance export (`wholesale-admin.js`): replace synthetic traceability_id with real lot codes
+## Lot Number Format
+`{FARM_PREFIX}-{YYYYMMDD}-{SEQ}` (e.g., `GREE-20260322-001`)
+- Prefix: first 4 chars of farm_id, uppercased
+- Sequence: zero-padded 3-digit, unique per farm+date via DB count
+- Generated by `generateLotNumber(farmId, harvestDate)` in `lot-system.js`
 
-### 5. Fix Recall Email
-File: `services/email-service.js`
-- Add `sendRecallNotification({ to, lotCode, productName, reason, customerName })` method
-- Template: plain text with lot code, product, reason, and action instructions
+## API Endpoints (routes/lot-system.js)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/lots/harvest` | Record harvest event + create lot in one operation |
+| GET | `/api/lots/:farmId` | List lots for a farm (filter by status, crop) |
+| GET | `/api/lots/:farmId/lot/:lotNumber` | Full traceability view for a single lot |
+| GET | `/api/lots/:farmId/harvest-events` | List harvest events for a farm |
+| POST | `/api/lots/label` | Generate label data (JSON or HTML) for a lot |
+| POST | `/api/lots/packing-slip` | Generate packing slip with lot traceability |
+| GET | `/api/lots/:farmId/sfcr-export` | SFCR regulatory traceability export |
+
+## Harvest-to-Lot Pipeline
+
+`POST /api/lots/harvest` executes this sequence:
+1. Create `harvest_events` row with yield and quality data
+2. Look up `seed_date` from `planting_assignments` for the group
+3. Generate unique lot number via `generateLotNumber()`
+4. Calculate best-by date via `calculateBestByDate()` (crop-category shelf life)
+5. Create `lot_records` row linking harvest event, seed source, quality, best-by
+6. Update `farm_inventory` with lot_number, quality_score, best_by_date, auto_quantity_lbs
+
+## Shelf Life (Best-By Calculation)
+Category-based defaults from `SHELF_LIFE_DAYS`:
+- lettuce: 10 days, herb: 14, microgreens: 7, tomato: 14, berry: 5, default: 10
+- Crop category resolved via `crop-registry.json`
+
+## Quality Grading
+`gradeFromScore(score)`: A (>=0.9), B (>=0.75), C (>=0.6), D (<0.6)
+- Score is 0-1 float, captured at harvest time
+- Displayed on labels, packing slips, and SFCR exports
+
+## Label & Packing Slip Generation
+- `POST /api/lots/label`: Returns JSON label data or 4-inch HTML print label
+- `POST /api/lots/packing-slip`: Returns JSON or HTML packing slip with per-item lot traceability
+- Both include: lot_number, harvest_date, best_by_date, quality_grade, weight, seed_source
+
+## SFCR Export
+`GET /api/lots/:farmId/sfcr-export?from=&to=`
+- Full traceability chain: seed_source -> seed_lot -> seed_date -> harvest_date -> lot_number -> quality -> best_by
+- Joins lot_records + harvest_events + planting_assignments
+- Filterable by date range
 
 ## Validation Checklist
-- [ ] Lot codes auto-generated at harvest
-- [ ] Lot codes flow: farm -> product -> order line items -> customer receipt
-- [ ] Reverse lookup works: lot code -> all affected orders/buyers
-- [ ] Recall notification emails send successfully
-- [ ] CSV exports include lot_code column
-- [ ] ESG traceability scoring still works
-- [ ] Existing tests pass (44/44)
+- [x] harvest_events and lot_records tables created (migration 036)
+- [x] Lot numbers auto-generated at harvest
+- [x] Seed-to-lot traceability chain complete
+- [x] Lot-to-inventory linkage via farm_inventory columns
+- [x] Quality grading (A/B/C/D) and best-by calculation
+- [x] Label and packing slip HTML generation
+- [x] SFCR regulatory export endpoint
+- [x] Auth middleware on /api/lots (authOrAdminMiddleware)
+- [ ] Lot-to-order linkage (wholesale order_data JSONB needs lot_number per item)
+- [ ] QR code backend generation (frontend-only currently)
+- [ ] Recall notification email (sendRecallNotification stub)
 
 ## Rules
 - Currency is always CAD

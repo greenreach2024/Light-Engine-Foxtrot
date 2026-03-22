@@ -150,3 +150,56 @@ The finished experience should have six visible qualities:
 | 8     | Memory + personalization       | Existing    |
 | 9     | Controlled autonomy            | Existing    |
 | 10    | Polish + product hardening     | Planned     |
+
+---
+
+## Lot System and Harvest Workflow
+
+E.V.I.E. is the grower-facing interface for the entire seed-to-shelf traceability pipeline. When a grower interacts with the lot system, E.V.I.E. provides guidance, context, and plain-language explanations.
+
+### E.V.I.E.'s Role in the Pipeline
+
+| Step | What Happens | E.V.I.E.'s Involvement |
+|------|-------------|----------------------|
+| Planting | Grower assigns crop to group, records seed source and seed lot | E.V.I.E. surfaces planting reminders, confirms assignments, explains why seed traceability matters |
+| Growing | Environment monitored via sensors, recipe targets tracked | E.V.I.E. monitors drift from recipe targets (PPFD, EC, pH, VPD), alerts on environment anomalies |
+| Harvest Timing | `daysToHarvest` from crop registry determines readiness | E.V.I.E. proactively tells the grower when a tray is approaching harvest day, using crop-specific growth days from the registry (35-day fallback only when crop entry is missing) |
+| Harvest Recording | `POST /api/lots/harvest` creates harvest_event + lot_record | E.V.I.E. can guide the grower through recording: weight, quality score, quality notes. Explains what the quality grade (A/B/C/D) means for pricing and shelf placement |
+| Lot Lookup | `GET /api/lots/:farmId/lot/:lotNumber` shows full traceability | E.V.I.E. translates lot data into plain language: "This batch of Buttercrunch was seeded on March 5, harvested March 22, grade A, good until April 1" |
+| Label Printing | `POST /api/lots/label` generates print-ready labels | E.V.I.E. can explain what goes on the label and why (lot number, best-by date, quality grade, seed source) |
+| Quality Grading | Score 0-1 mapped to A/B/C/D grades | E.V.I.E. explains grading criteria to growers and suggests improvements when quality trends downward |
+
+### Harvest Flow (Grower Perspective)
+
+```
+Grower harvests tray
+       |
+       v
+E.V.I.E.: "Ready to record this harvest? I need the weight and a quality check."
+       |
+       v
+POST /api/lots/harvest
+  -> harvest_event created (yield, quality, harvested_by)
+  -> lot_number generated (GREE-20260322-001)
+  -> best_by_date calculated (category shelf life)
+  -> farm_inventory updated (auto_quantity_lbs, lot linkage)
+       |
+       v
+E.V.I.E.: "Lot GREE-20260322-001 recorded. Grade B, best by April 1.
+           Label ready to print. Next harvest: Group B3 in 2 days."
+```
+
+### What E.V.I.E. Surfaces Proactively
+
+- **Approaching harvest**: "Group A2 (Bibb Butterhead) is at day 30 of 32. Harvest window opens in 2 days."
+- **Quality trends**: "Last 3 harvests of Salad Bowl Oakleaf scored below 0.75. Consider adjusting EC or light spectrum."
+- **Shelf life urgency**: "Lot GREE-20260320-002 best-by is March 27 -- 5 days remaining. 4 lbs still in inventory."
+- **Traceability gaps**: "Group C1 has no seed source recorded. Add it for SFCR compliance."
+
+### Escalation to F.A.Y.E.
+
+E.V.I.E. handles single-farm lot operations. She escalates to F.A.Y.E. when:
+- Quality scoring reveals a cross-farm pattern (multiple farms seeing quality drops on the same crop)
+- A lot needs recall (business operation with buyer impact)
+- SFCR audit data is requested at the network level (multi-farm export)
+- Pricing decisions are needed based on quality grades
