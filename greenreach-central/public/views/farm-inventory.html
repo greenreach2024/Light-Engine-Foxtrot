@@ -687,7 +687,7 @@
       const API_BASE = window.location.origin;
 
       function fetchWithFarmAuth(url, opts = {}) {
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token') || localStorage.getItem('admin_token');
         const farmId =
           sessionStorage.getItem('farm_id') ||
           sessionStorage.getItem('farmId') ||

@@ -2616,7 +2616,7 @@ app.get('/api/ai/status', authMiddleware, async (_req, res) => {
   }
 });
 
-app.get('/api/inventory/current', authMiddleware, async (req, res) => {
+app.get('/api/inventory/current', authOrAdminMiddleware, async (req, res) => {
   try {
     const trays = await getInventoryTraysForCompat(req.farmId);
     const activeTrays = trays.filter((tray) => (tray.status || '').toLowerCase() !== 'harvested');
@@ -2640,7 +2640,7 @@ app.get('/api/inventory/current', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/inventory/forecast', authMiddleware, async (req, res) => {
+app.get('/api/inventory/forecast', authOrAdminMiddleware, async (req, res) => {
   try {
     const trays = await getInventoryTraysForCompat(req.farmId);
     const buckets = splitForecastBuckets(trays);
@@ -3105,8 +3105,8 @@ app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 // Path alias: frontend calls /api/inventory/tray-formats but handler is at /api/tray-formats
 app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/tray-formats'); });
 
-app.use('/api/inventory', authMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
-app.use('/api/inventory', authMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
+app.use('/api/inventory', authOrAdminMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
+app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
 app.use('/api/lots', lotSystemRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);

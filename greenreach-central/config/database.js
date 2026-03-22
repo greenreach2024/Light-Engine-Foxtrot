@@ -1282,6 +1282,93 @@ async function runMigrations(client) {
     }
   }
 
+  // Migration 010: Wholesale pricing authority tables
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS farm_cost_surveys (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(50) NOT NULL,
+        crop VARCHAR(100) NOT NULL,
+        cost_per_unit DECIMAL(10, 2) NOT NULL,
+        unit VARCHAR(20) NOT NULL DEFAULT 'lb',
+        cost_breakdown JSONB,
+        survey_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        valid_until DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(farm_id, crop, survey_date)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_farm_cost_surveys_farm_id ON farm_cost_surveys(farm_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_farm_cost_surveys_crop ON farm_cost_surveys(crop)`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pricing_offers (
+        offer_id VARCHAR(50) PRIMARY KEY,
+        crop VARCHAR(100) NOT NULL,
+        wholesale_price DECIMAL(10, 2) NOT NULL,
+        unit VARCHAR(20) NOT NULL DEFAULT 'lb',
+        reasoning TEXT,
+        confidence DECIMAL(3, 2),
+        predicted_acceptance DECIMAL(3, 2),
+        offer_date TIMESTAMPTZ DEFAULT NOW(),
+        effective_date DATE,
+        expires_at TIMESTAMPTZ,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        created_by VARCHAR(100),
+        tier VARCHAR(50),
+        metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_pricing_offers_crop ON pricing_offers(crop)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_pricing_offers_status ON pricing_offers(status)`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pricing_responses (
+        response_id SERIAL PRIMARY KEY,
+        offer_id VARCHAR(50) NOT NULL,
+        farm_id VARCHAR(50) NOT NULL,
+        response VARCHAR(10) NOT NULL,
+        counter_price DECIMAL(10, 2),
+        justification TEXT,
+        notes TEXT,
+        responded_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(offer_id, farm_id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_pricing_responses_offer_id ON pricing_responses(offer_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_pricing_responses_farm_id ON pricing_responses(farm_id)`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pricing_history (
+        history_id SERIAL PRIMARY KEY,
+        crop VARCHAR(100) NOT NULL,
+        wholesale_price DECIMAL(10, 2) NOT NULL,
+        unit VARCHAR(20) NOT NULL DEFAULT 'lb',
+        offer_date DATE NOT NULL,
+        total_farms_offered INT NOT NULL DEFAULT 0,
+        farms_accepted INT NOT NULL DEFAULT 0,
+        farms_rejected INT NOT NULL DEFAULT 0,
+        farms_countered INT NOT NULL DEFAULT 0,
+        acceptance_rate DECIMAL(5, 4),
+        avg_counter_price DECIMAL(10, 2),
+        reasoning TEXT,
+        tier VARCHAR(50),
+        metadata JSONB,
+        archived_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_pricing_history_crop ON pricing_history(crop)`);
+
+    logger.info('Wholesale pricing tables ready (migration 010)');
+  } catch (err) {
+    logger.warn('Wholesale pricing tables migration warning:', err.message);
+  }
+
   // Migration 020: Driver applications table (public enrollment)
   {
     try {

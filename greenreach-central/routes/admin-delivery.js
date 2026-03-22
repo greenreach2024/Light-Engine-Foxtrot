@@ -410,8 +410,24 @@ router.put('/zones/:id', async (req, res) => {
       const existing = await query(
         'SELECT * FROM farm_delivery_zones WHERE farm_id = $1 AND zone_id = $2', [farm_id, zoneId]
       );
+
       if (existing.rows.length === 0) {
-        return res.status(404).json({ success: false, error: 'Zone not found' });
+        // Zone doesn't exist yet (e.g. default fallback zone) -- create it
+        await query(
+          `INSERT INTO farm_delivery_zones (farm_id, zone_id, name, description, fee, min_order, postal_prefix, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            farm_id, zoneId,
+            name || zoneId,
+            description || '',
+            fee !== undefined ? parseFloat(fee) : 0,
+            min_order !== undefined ? parseFloat(min_order) : 0,
+            postal_prefix || '',
+            status || 'active'
+          ]
+        );
+        console.log('[Admin Delivery] Zone created via upsert:', zoneId, 'for farm:', farm_id);
+        return res.json({ success: true, zone_id: zoneId, created: true });
       }
 
       const row = existing.rows[0];

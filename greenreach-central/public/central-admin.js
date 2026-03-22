@@ -11148,8 +11148,8 @@ function toggleDriverStatus(driverId) {
 async function loadAiMonitoring() {
     try {
         // Load AI agent status
-        const statusRes = await authenticatedFetch(`${API_BASE}/api/farm-sales/ai-agent/status`);
-        const statusData = statusRes.ok ? await statusRes.json() : {};
+        // AI agent status defaults (farm-sales endpoint not accessible from admin context)
+        const statusData = {};
         
         // Load AI monitoring data
         const monitorRes = await authenticatedFetch(`${API_BASE}/api/admin/ai/monitoring`);
