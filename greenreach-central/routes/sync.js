@@ -15,6 +15,7 @@ import logger from '../utils/logger.js';
 import { evaluateAndGenerateAlerts, autoResolveAlerts } from '../services/alert-manager.js';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { upsertNetworkFarm } from '../services/networkFarmsStore.js';
+import { recalculateAutoInventoryFromGroups } from './inventory.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -377,6 +378,11 @@ router.post('/groups', authenticateFarm, async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
+    // Fire-and-forget: recalculate auto inventory after groups change
+    recalculateAutoInventoryFromGroups(farmId).catch(err =>
+      logger.error(`[Sync] Background inventory recalc failed for farm ${farmId}:`, err)
+    );
+
   } catch (error) {
     logger.error('[Sync] Error syncing groups:', error);
     res.status(500).json({ 
@@ -1124,11 +1130,31 @@ router.get('/:farmId/groups', authenticateFarm, async (req, res) => {
  * Build synthetic tray inventory from groups data.
  * Each group with a trays count expands into individual tray records.
  */
-function buildSyntheticTraysFromGroups(groups) {
+async function buildSyntheticTraysFromGroups(groups) {
   if (!Array.isArray(groups) || groups.length === 0) return [];
+
+  // Load crop registry and tray formats
+  let cropRegistry = {};
+  let trayFormats = [];
+  try {
+    const crPath = path.join(process.cwd(), 'public', 'data', 'crop-registry.json');
+    if (fs.existsSync(crPath)) {
+      cropRegistry = JSON.parse(fs.readFileSync(crPath, 'utf8')).crops || {};
+    }
+    const tfPath = path.join(process.cwd(), 'public', 'data', 'tray-formats.json');
+    if (fs.existsSync(tfPath)) {
+      trayFormats = JSON.parse(fs.readFileSync(tfPath, 'utf8'));
+    }
+  } catch (_) { /* data files optional */ }
+
+  const trayFormatMap = {};
+  for (const fmt of trayFormats) {
+    if (fmt.trayFormatId) trayFormatMap[fmt.trayFormatId] = fmt;
+  }
 
   const now = new Date();
   const fallbackGrowthDays = 35;
+  const msPerDay = 1000 * 60 * 60 * 24;
   const trays = [];
 
   for (const group of groups) {
@@ -1138,24 +1164,43 @@ function buildSyntheticTraysFromGroups(groups) {
     const trayCount = Math.max(0, Number(group?.trays || 0));
     if (!trayCount) continue;
 
+    // Resolve crop info from registry
+    const cropName = group?.crop || group?.recipe || group?.plan || 'Unknown';
+    const cropEntry = cropRegistry[cropName] || null;
+    const cropGrowthDays = cropEntry?.growth?.daysToHarvest || fallbackGrowthDays;
+    const yieldFactor = cropEntry?.growth?.yieldFactor || 0.85;
+
+    // Resolve tray format if linked
+    const trayFormat = group?.trayFormatId ? trayFormatMap[group.trayFormatId] : null;
+
     const totalPlants = Number(group?.plants || 0);
-    const plantsPerTray = Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
-    const recipeName = group?.recipe || group?.crop || group?.plan || 'Unknown';
+    const plantsPerTray = trayFormat
+      ? trayFormat.plantSiteCount
+      : Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
+
+    const recipeName = group?.recipe || cropName;
 
     const seedDateRaw = group?.planConfig?.anchor?.seedDate;
     const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
-    const msPerDay = 1000 * 60 * 60 * 24;
     const daysOld = seedDate && !Number.isNaN(seedDate.getTime())
       ? Math.max(1, Math.floor((now - seedDate) / msPerDay) + 1)
       : 1;
-    const daysToHarvest = Math.max(0, fallbackGrowthDays - daysOld);
+    const daysToHarvest = Math.max(0, cropGrowthDays - daysOld);
+
+    // Estimate weight per tray: plants x yieldFactor x targetWeightPerSite (oz)
+    const weightPerSiteOz = trayFormat?.isWeightBased && trayFormat.targetWeightPerSite
+      ? trayFormat.targetWeightPerSite
+      : null;
+    const estimatedWeightOz = weightPerSiteOz
+      ? plantsPerTray * yieldFactor * weightPerSiteOz
+      : null;
 
     const roomLabel = group?.roomId || group?.room || 'ROOM-1';
     const zoneLabel = group?.zoneId || (group?.zone != null ? `ZONE-${group.zone}` : 'ZONE-1');
     const location = `${roomLabel} - ${zoneLabel}`;
 
     for (let i = 0; i < trayCount; i++) {
-      trays.push({
+      const tray = {
         tray_code: `${groupId}#${i + 1}`,
         trayId: `${groupId}#${i + 1}`,
         groupId,
@@ -1167,9 +1212,24 @@ function buildSyntheticTraysFromGroups(groups) {
         daysOld,
         days_to_harvest: daysToHarvest,
         daysToHarvest,
+        crop_growth_days: cropGrowthDays,
         location,
         status: group?.active === false ? 'inactive' : 'active'
-      });
+      };
+
+      if (trayFormat) {
+        tray.trayFormatId = trayFormat.trayFormatId;
+        tray.trayFormatName = trayFormat.name;
+        tray.systemType = trayFormat.systemType;
+      }
+      if (estimatedWeightOz !== null) {
+        tray.estimated_weight_oz = Math.round(estimatedWeightOz * 100) / 100;
+      }
+      if (yieldFactor) {
+        tray.yield_factor = yieldFactor;
+      }
+
+      trays.push(tray);
     }
   }
 
@@ -1238,7 +1298,7 @@ router.get('/:farmId/inventory', authenticateFarm, async (req, res) => {
       }
 
       if (groups.length > 0) {
-        inventory = buildSyntheticTraysFromGroups(groups);
+        inventory = await buildSyntheticTraysFromGroups(groups);
         logger.info(`[Sync] Built ${inventory.length} synthetic trays from ${groups.length} groups for farm ${farmId}`);
       }
     } else {

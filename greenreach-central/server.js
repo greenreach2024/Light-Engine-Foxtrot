@@ -65,6 +65,7 @@ import marketIntelligenceRoutes from './routes/market-intelligence.js';
 import cropPricingRoutes from './routes/crop-pricing.js';
 import qualityReportsRoutes from './routes/quality-reports.js';
 import sustainabilityRoutes from './routes/sustainability.js';
+import lotSystemRoutes from './routes/lot-system.js';
 
 // Phase 2 — Cloud SaaS API gap routes
 import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
@@ -683,6 +684,28 @@ function extractCropNameFromPlanId(planId) {
 function buildSyntheticTraysFromGroups(groups) {
   if (!Array.isArray(groups) || groups.length === 0) return [];
 
+  // Load crop registry and tray formats
+  let cropRegistry = {};
+  let trayFormats = [];
+  try {
+    const registryPath = path.join(process.cwd(), 'public', 'data', 'crop-registry.json');
+    if (fs.existsSync(registryPath)) {
+      const registryData = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      cropRegistry = registryData.crops || {};
+    }
+  } catch (_) { /* optional */ }
+  try {
+    const tfPath = path.join(process.cwd(), 'public', 'data', 'tray-formats.json');
+    if (fs.existsSync(tfPath)) {
+      trayFormats = JSON.parse(fs.readFileSync(tfPath, 'utf8'));
+    }
+  } catch (_) { /* optional */ }
+
+  let trayFormatMap = {};
+  for (const fmt of trayFormats) {
+    if (fmt.trayFormatId) trayFormatMap[fmt.trayFormatId] = fmt;
+  }
+
   const now = new Date();
   const fallbackGrowthDays = 35;
   const syntheticTrays = [];
@@ -700,10 +723,20 @@ function buildSyntheticTraysFromGroups(groups) {
     const trayCount = Math.max(0, Number(group?.trays || 0));
     if (!trayCount) return;
 
-    const totalPlants = Number(group?.plants || 0);
-    const plantCountPerTray = Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
+    // Resolve crop info from registry
     const planId = group?.plan || group?.planId || null;
     const recipeName = group?.recipe || group?.crop || extractCropNameFromPlanId(planId);
+    const cropEntry = cropRegistry[recipeName] || null;
+    const cropGrowthDays = cropEntry?.growth?.daysToHarvest || fallbackGrowthDays;
+    const yieldFactor = cropEntry?.growth?.yieldFactor || 0.85;
+
+    // Resolve tray format if linked
+    const trayFormat = group?.trayFormatId ? trayFormatMap[group.trayFormatId] : null;
+
+    const totalPlants = Number(group?.plants || 0);
+    const plantCountPerTray = trayFormat
+      ? trayFormat.plantSiteCount
+      : Math.max(1, Math.round((totalPlants > 0 ? totalPlants : trayCount * 12) / trayCount));
 
     const seedDateRaw = group?.planConfig?.anchor?.seedDate;
     const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
@@ -712,16 +745,24 @@ function buildSyntheticTraysFromGroups(groups) {
       : 1;
 
     const currentDay = daysOld;
-    const daysToHarvest = Math.max(0, fallbackGrowthDays - currentDay);
+    const daysToHarvest = Math.max(0, cropGrowthDays - currentDay);
     const estimatedHarvestDateObj = new Date(now);
     estimatedHarvestDateObj.setDate(estimatedHarvestDateObj.getDate() + daysToHarvest);
+
+    // Estimate weight per tray
+    const weightPerSiteOz = trayFormat?.isWeightBased && trayFormat.targetWeightPerSite
+      ? trayFormat.targetWeightPerSite
+      : null;
+    const estimatedWeightOz = weightPerSiteOz
+      ? plantCountPerTray * yieldFactor * weightPerSiteOz
+      : null;
 
     const roomLabel = group?.roomId || group?.room || 'ROOM-1';
     const zoneLabel = group?.zoneId || (group?.zone != null ? `ZONE-${group.zone}` : 'ZONE-1');
     const location = `${roomLabel} - ${zoneLabel}`;
 
     for (let index = 0; index < trayCount; index += 1) {
-      syntheticTrays.push({
+      const tray = {
         trayId: `${groupId}#${index + 1}`,
         groupId,
         recipe: recipeName,
@@ -731,11 +772,26 @@ function buildSyntheticTraysFromGroups(groups) {
         daysOld,
         daysToHarvest,
         harvestIn: daysToHarvest,
+        crop_growth_days: cropGrowthDays,
         seedingDate: seedDate && !Number.isNaN(seedDate.getTime()) ? seedDate.toISOString() : null,
         estimatedHarvestDate: formatDateYYYYMMDD(estimatedHarvestDateObj),
         location,
         status: group?.active === false ? 'inactive' : 'active'
-      });
+      };
+
+      if (trayFormat) {
+        tray.trayFormatId = trayFormat.trayFormatId;
+        tray.trayFormatName = trayFormat.name;
+        tray.systemType = trayFormat.systemType;
+      }
+      if (estimatedWeightOz !== null) {
+        tray.estimated_weight_oz = Math.round(estimatedWeightOz * 100) / 100;
+      }
+      if (yieldFactor) {
+        tray.yield_factor = yieldFactor;
+      }
+
+      syntheticTrays.push(tray);
     }
   });
 
@@ -3051,6 +3107,7 @@ app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/t
 
 app.use('/api/inventory', authMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
 app.use('/api/inventory', authMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
+app.use('/api/lots', lotSystemRoutes);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key

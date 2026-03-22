@@ -4,10 +4,103 @@
  */
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
 import { createRequire } from 'module';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { farmStore } from '../lib/farm-data-store.js';
+
+// Load crop registry for weight estimation
+let cropRegistryCache = null;
+function getCropRegistry() {
+  if (cropRegistryCache) return cropRegistryCache;
+  try {
+    const crPath = path.join(process.cwd(), 'public', 'data', 'crop-registry.json');
+    if (fs.existsSync(crPath)) {
+      cropRegistryCache = JSON.parse(fs.readFileSync(crPath, 'utf8')).crops || {};
+    }
+  } catch (_) { /* optional */ }
+  return cropRegistryCache || {};
+}
+
+/**
+ * Calculate auto_quantity_lbs from groups/trays for a farm.
+ * Aggregates: total_plants * yieldFactor * avg_weight_per_plant (from benchmarks or crop defaults).
+ * Only updates products that have inventory_source='auto' (does not overwrite manual entries).
+ */
+export async function recalculateAutoInventoryFromGroups(farmId) {
+  if (!isDatabaseAvailable()) return { updated: 0 };
+
+  // Get groups for this farm
+  let groups = [];
+  const gResult = await query(
+    'SELECT data FROM farm_data WHERE farm_id = $1 AND data_type = $2',
+    [farmId, 'groups']
+  );
+  if (gResult.rows.length > 0) {
+    const raw = gResult.rows[0].data;
+    groups = Array.isArray(raw) ? raw : (raw?.groups || []);
+  }
+  if (groups.length === 0) return { updated: 0 };
+
+  const cropRegistry = getCropRegistry();
+
+  // Try to load benchmark data for more accurate weights
+  let benchmarks = {};
+  try {
+    const bResult = await query('SELECT crop, avg_weight_per_plant_oz FROM crop_benchmarks');
+    for (const row of bResult.rows) {
+      benchmarks[row.crop] = Number(row.avg_weight_per_plant_oz) || 0;
+    }
+  } catch (_) { /* benchmarks optional */ }
+
+  // Aggregate by crop: total plants, yield factor, weight per plant
+  const cropTotals = {};
+  for (const group of groups) {
+    if (group?.active === false) continue;
+    const cropName = group?.crop || group?.recipe || group?.plan;
+    if (!cropName || cropName === 'Unknown') continue;
+
+    const totalPlants = Number(group?.plants || 0) || (Number(group?.trays || 0) * 12);
+    if (totalPlants <= 0) continue;
+
+    const cropEntry = cropRegistry[cropName];
+    const yieldFactor = cropEntry?.growth?.yieldFactor || 0.85;
+    // Weight source priority: farm benchmarks > hardcoded estimate (2 oz per plant avg)
+    const avgWeightOz = benchmarks[cropName] || 2.0;
+
+    if (!cropTotals[cropName]) {
+      cropTotals[cropName] = { totalPlants: 0, yieldFactor, avgWeightOz };
+    }
+    cropTotals[cropName].totalPlants += totalPlants;
+  }
+
+  // Upsert weight estimates into farm_inventory
+  let updated = 0;
+  for (const [cropName, data] of Object.entries(cropTotals)) {
+    const estimatedOz = data.totalPlants * data.yieldFactor * data.avgWeightOz;
+    const estimatedLbs = Math.round((estimatedOz / 16) * 100) / 100;
+
+    const productId = cropName.toLowerCase().replace(/\s+/g, '-');
+    await query(
+      `INSERT INTO farm_inventory (
+        farm_id, product_id, product_name, quantity, auto_quantity_lbs,
+        quantity_available, unit, quantity_unit, inventory_source, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,'lb','lb','auto',NOW())
+      ON CONFLICT (farm_id, product_id) DO UPDATE SET
+        auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
+        quantity = EXCLUDED.quantity,
+        quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0),
+        last_updated = NOW()
+      WHERE farm_inventory.inventory_source != 'manual'`,
+      [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs]
+    );
+    updated++;
+  }
+
+  return { updated, crops: Object.keys(cropTotals) };
+}
 
 /**
  * Look up retail + wholesale price for a crop from the Crop Pricing page data.

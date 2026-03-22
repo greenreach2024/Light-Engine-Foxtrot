@@ -2089,6 +2089,83 @@ async function runMigrations(client) {
     logger.warn('Migration 035 warning:', err.message);
   }
 
+  // ─── Migration 036: Traceability, Lots, Harvest Events, Label System ──
+  try {
+    // harvest_events: records each harvest with yield and quality data
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS harvest_events (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        group_id VARCHAR(255) NOT NULL,
+        crop_id VARCHAR(255) NOT NULL,
+        crop_name VARCHAR(255),
+        harvest_date DATE NOT NULL,
+        plants_harvested INTEGER,
+        gross_weight_oz DECIMAL(10,2),
+        net_weight_oz DECIMAL(10,2),
+        quality_score DECIMAL(3,2) DEFAULT 0.70,
+        quality_notes TEXT,
+        harvested_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_harvest_events_farm ON harvest_events(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_harvest_events_group ON harvest_events(group_id);
+      CREATE INDEX IF NOT EXISTS idx_harvest_events_date ON harvest_events(harvest_date);
+      CREATE INDEX IF NOT EXISTS idx_harvest_events_crop ON harvest_events(crop_id);
+    `);
+
+    // lot_records: each harvest creates a lot for traceability
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lot_records (
+        id SERIAL PRIMARY KEY,
+        lot_number VARCHAR(64) UNIQUE NOT NULL,
+        farm_id VARCHAR(255) NOT NULL,
+        harvest_event_id INTEGER,
+        group_id VARCHAR(255),
+        crop_id VARCHAR(255) NOT NULL,
+        crop_name VARCHAR(255),
+        seed_date DATE,
+        harvest_date DATE NOT NULL,
+        seed_source VARCHAR(255),
+        seed_lot VARCHAR(255),
+        weight_oz DECIMAL(10,2),
+        quality_score DECIMAL(3,2),
+        best_by_date DATE,
+        status VARCHAR(50) DEFAULT 'active',
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        FOREIGN KEY (farm_id) REFERENCES farms(farm_id) ON DELETE CASCADE,
+        FOREIGN KEY (harvest_event_id) REFERENCES harvest_events(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_lot_records_farm ON lot_records(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_lot_records_lot ON lot_records(lot_number);
+      CREATE INDEX IF NOT EXISTS idx_lot_records_crop ON lot_records(crop_id);
+      CREATE INDEX IF NOT EXISTS idx_lot_records_harvest_date ON lot_records(harvest_date);
+      CREATE INDEX IF NOT EXISTS idx_lot_records_status ON lot_records(status);
+    `);
+
+    // Add traceability columns to existing tables
+    await client.query(`
+      ALTER TABLE planting_assignments ADD COLUMN IF NOT EXISTS seed_source VARCHAR(255);
+      ALTER TABLE planting_assignments ADD COLUMN IF NOT EXISTS seed_lot VARCHAR(255);
+    `);
+
+    await client.query(`
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS lot_number VARCHAR(64);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS quality_score DECIMAL(3,2);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS best_by_date DATE;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS harvest_event_id INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_lot ON farm_inventory(lot_number);
+    `);
+
+    logger.info('Traceability, lots, harvest events tables ready (migration 036)');
+  } catch (err) {
+    logger.warn('Migration 036 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 

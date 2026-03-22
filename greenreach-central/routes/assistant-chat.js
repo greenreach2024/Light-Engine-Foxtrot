@@ -163,7 +163,8 @@ const TRUST_TIERS = {
     'update_nutrient_targets', 'register_device', 'auto_assign_devices',
     'seed_benchmarks', 'update_farm_profile', 'create_room', 'create_zone',
     'update_certifications', 'complete_setup',
-    'update_group_crop', 'create_procurement_order'
+    'update_group_crop', 'create_procurement_order',
+    'record_harvest'
   ]),
   // ADMIN: Require explicit typed confirmation
   admin: new Set([])
@@ -1204,6 +1205,113 @@ const GPT_TOOLS = [
         }
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'record_harvest',
+      description: 'Record a harvest event and automatically generate a lot number with traceability. Use when the farmer says "we harvested", "harvest complete", "just picked", or asks to log a harvest. Creates harvest event, lot record, updates inventory, and calculates best-by date.',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_id: { type: 'string', description: 'The group/zone ID that was harvested.' },
+          crop_id: { type: 'string', description: 'Crop identifier (e.g. "crop-bibb-butterhead").' },
+          crop_name: { type: 'string', description: 'Human-readable crop name (e.g. "Bibb Butterhead").' },
+          plants_harvested: { type: 'number', description: 'Number of plants harvested.' },
+          gross_weight_oz: { type: 'number', description: 'Total weight before trimming (oz).' },
+          net_weight_oz: { type: 'number', description: 'Marketable weight after trimming (oz).' },
+          quality_score: { type: 'number', description: 'Quality 0.0-1.0 (default 0.70). 0.9+ = Grade A, 0.75+ = B, 0.6+ = C.' },
+          quality_notes: { type: 'string', description: 'Notes on quality (e.g. "slight tip burn on outer leaves").' },
+          seed_source: { type: 'string', description: 'Seed supplier name.' },
+          seed_lot: { type: 'string', description: 'Seed lot number from supplier.' }
+        },
+        required: ['group_id', 'crop_id', 'crop_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_lot_traceability',
+      description: 'Look up full traceability for a lot number: seed source, seed date, harvest date, weight, quality grade, best-by date, and inventory status. Use when farmer asks "trace lot", "where did lot X come from", or "lot details".',
+      parameters: {
+        type: 'object',
+        properties: {
+          lot_number: { type: 'string', description: 'The lot number to look up (e.g. "GREE-20260322-001").' }
+        },
+        required: ['lot_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_lots',
+      description: 'List lot records for the farm with optional filters. Use when farmer asks "show lots", "active lots", "lot history", or "what lots do we have".',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'Filter by status: "active", "sold", "expired", "recalled". Default: all.' },
+          crop: { type: 'string', description: 'Filter by crop name (partial match).' },
+          limit: { type: 'number', description: 'Max results (default 20).' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_label',
+      description: 'Generate a printable produce label for a lot. Returns label data with lot number, product name, harvest date, best-by date, weight, and grade. Use when farmer asks "print label", "make a label", or "label for lot X".',
+      parameters: {
+        type: 'object',
+        properties: {
+          lot_number: { type: 'string', description: 'The lot number to generate a label for.' },
+          format: { type: 'string', description: '"json" (default) or "html" for printable HTML.' }
+        },
+        required: ['lot_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_packing_slip',
+      description: 'Generate a packing slip for a wholesale order with lot traceability. Includes product, quantity, lot number, harvest date, best-by, and quality grade per item. Use when farmer asks "packing slip", "pack order", or "shipping list".',
+      parameters: {
+        type: 'object',
+        properties: {
+          order_id: { type: 'string', description: 'The wholesale order ID.' },
+          items: {
+            type: 'array',
+            description: 'Order line items. Each: { sku_name, qty, unit }.',
+            items: {
+              type: 'object',
+              properties: {
+                sku_name: { type: 'string' },
+                qty: { type: 'number' },
+                unit: { type: 'string' }
+              }
+            }
+          }
+        },
+        required: ['order_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_sfcr_export',
+      description: 'Generate SFCR (Safe Food for Canadians Regulations) traceability export. Returns all lots with full chain from seed to harvest to inventory. Use when farmer asks about "SFCR", "traceability report", "food safety audit", or "regulatory export".',
+      parameters: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', description: 'Start date filter (YYYY-MM-DD). Optional.' },
+          to: { type: 'string', description: 'End date filter (YYYY-MM-DD). Optional.' }
+        }
+      }
+    }
   }
 ];
 
@@ -1533,6 +1641,20 @@ AUTONOMY MINDSET:
 - When presenting yield forecasts, connect them to market pricing trends — suggest timing harvest/sales for maximum revenue.
 - Track patterns: if the farmer repeatedly asks about the same metric, remember their focus areas using save_user_memory.
 - Proactive alerts are generated every 5 minutes for environment, nutrient, and hardware issues. Reference these in your daily briefings.
+
+LOT SYSTEM / TRACEABILITY:
+- Use record_harvest when the farmer logs a harvest. This creates a harvest event, generates a unique lot number, calculates the best-by date, assigns a quality grade, and links to inventory.
+- Lot numbers follow the format FARM-YYYYMMDD-SEQ (e.g. GREE-20260322-001).
+- Quality grades: A (0.9+), B (0.75+), C (0.6+), D (<0.6). Default score is 0.70 (Grade B).
+- Best-by dates are calculated automatically from harvest date + crop-category shelf life (lettuce: 10d, herbs: 14d, microgreens: 7d, berries: 5d, tomatoes: 14d).
+- Use get_lot_traceability to trace a specific lot from seed to harvest to inventory.
+- Use list_lots to show the farmer their lot history, filtered by status or crop.
+- Use generate_label to create a produce label for a lot (lot number, product, harvest date, best-by, weight, grade).
+- Use generate_packing_slip for wholesale orders — maps each order item to its most recent lot with traceability data.
+- Use get_sfcr_export when the farmer asks about food safety compliance, regulatory audits, or SFCR (Safe Food for Canadians Regulations).
+- When a harvest is recorded, always mention: the lot number, quality grade, and best-by date in your response.
+- Seed source and seed lot can be optionally tracked per harvest for full supply chain traceability.
+
 ${guardrailsBlock}${interAgentBlock}
 INTER-AGENT COMMUNICATION:
 - F.A.Y.E. is your senior agent. She handles business operations, pricing, refunds, and network management.
@@ -1614,6 +1736,8 @@ MANUAL INVENTORY MANAGEMENT:
 - To review current inventory, call get_inventory_summary — it returns both auto and manual quantities.
 - The manual_quantity_lbs column is separate from auto_quantity_lbs — they stack (total = auto + manual).
 - Manual inventory appears in the wholesale catalog and POS immediately.
+- Inventory rows now carry lot_number, quality_score, and best_by_date from the most recent harvest.
+- auto_quantity_lbs is recalculated from groups whenever groups are synced (plants * yieldFactor * avgWeight).
 
 IMAGE DIAGNOSIS:
 - When a farmer uploads an image, analyse it for: plant species, growth stage, visible issues (nutrient deficiency, pest damage, disease, environmental stress), severity, and recommended corrective action.
@@ -3128,6 +3252,291 @@ async function executeExtendedTool(toolName, params, farmId) {
       }
     }
 
+    // ── Lot System / Traceability Tools ────────────────────────────────
+    case 'record_harvest': {
+      try {
+        const { generateLotNumber, calculateBestByDate, gradeFromScore } = await import('./lot-system.js');
+        const harvestDate = new Date();
+        const quality = Math.min(1, Math.max(0, Number(params.quality_score) || 0.70));
+
+        // 1. Create harvest event
+        const heResult = await pool.query(
+          `INSERT INTO harvest_events
+            (farm_id, group_id, crop_id, crop_name, harvest_date,
+             plants_harvested, gross_weight_oz, net_weight_oz,
+             quality_score, quality_notes, harvested_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [farmId, params.group_id, params.crop_id, params.crop_name,
+           harvestDate, params.plants_harvested || null,
+           params.gross_weight_oz || null, params.net_weight_oz || null,
+           quality, params.quality_notes || null, null]
+        );
+        const harvestEventId = heResult.rows[0].id;
+
+        // 2. Seed date from planting
+        let seedDate = null;
+        const paRes = await pool.query(
+          'SELECT seed_date FROM planting_assignments WHERE farm_id = $1 AND group_id = $2',
+          [farmId, params.group_id]
+        );
+        if (paRes.rows.length > 0) seedDate = paRes.rows[0].seed_date;
+
+        // 3. Generate lot + best-by
+        const lotNumber = await generateLotNumber(farmId, harvestDate);
+        const bestByDate = calculateBestByDate(harvestDate, params.crop_name);
+        const weightOz = Number(params.net_weight_oz) || Number(params.gross_weight_oz) || null;
+
+        await pool.query(
+          `INSERT INTO lot_records
+            (lot_number, farm_id, harvest_event_id, group_id, crop_id, crop_name,
+             seed_date, harvest_date, seed_source, seed_lot,
+             weight_oz, quality_score, best_by_date, status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active')`,
+          [lotNumber, farmId, harvestEventId, params.group_id, params.crop_id,
+           params.crop_name, seedDate, harvestDate,
+           params.seed_source || null, params.seed_lot || null,
+           weightOz, quality, bestByDate]
+        );
+
+        // 4. Link to inventory
+        if (weightOz) {
+          const productId = params.crop_name.toLowerCase().replace(/\s+/g, '-');
+          const weightLbs = Math.round((weightOz / 16) * 100) / 100;
+          await pool.query(
+            `UPDATE farm_inventory
+                SET lot_number = $3, quality_score = $4, best_by_date = $5,
+                    harvest_event_id = $6,
+                    auto_quantity_lbs = COALESCE(auto_quantity_lbs, 0) + $7,
+                    quantity_available = COALESCE(auto_quantity_lbs, 0) + $7 + COALESCE(manual_quantity_lbs, 0),
+                    last_updated = NOW()
+              WHERE farm_id = $1 AND product_id = $2`,
+            [farmId, productId, lotNumber, quality, bestByDate, harvestEventId, weightLbs]
+          );
+        }
+
+        return {
+          ok: true,
+          harvest_event_id: harvestEventId,
+          lot_number: lotNumber,
+          best_by_date: bestByDate.toISOString().slice(0, 10),
+          quality_grade: gradeFromScore(quality),
+          quality_score: quality,
+          weight_oz: weightOz,
+          note: 'Present the lot number, grade, and best-by date clearly. If weight was provided, confirm the inventory was updated.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_lot_traceability': {
+      try {
+        const { gradeFromScore } = await import('./lot-system.js');
+        const lotResult = await pool.query(
+          `SELECT l.*, h.plants_harvested, h.gross_weight_oz, h.net_weight_oz,
+                  h.harvested_by, h.quality_notes
+             FROM lot_records l
+             LEFT JOIN harvest_events h ON l.harvest_event_id = h.id
+            WHERE l.farm_id = $1 AND l.lot_number = $2`,
+          [farmId, params.lot_number]
+        );
+        if (lotResult.rows.length === 0) {
+          return { ok: false, error: `Lot "${params.lot_number}" not found for this farm.` };
+        }
+        const lot = lotResult.rows[0];
+        return {
+          ok: true,
+          lot_number: lot.lot_number,
+          crop: lot.crop_name,
+          seed_source: lot.seed_source || 'Not recorded',
+          seed_lot: lot.seed_lot || 'Not recorded',
+          seed_date: lot.seed_date,
+          harvest_date: lot.harvest_date,
+          best_by_date: lot.best_by_date,
+          weight_oz: lot.weight_oz,
+          quality_score: lot.quality_score,
+          quality_grade: gradeFromScore(lot.quality_score),
+          plants_harvested: lot.plants_harvested,
+          harvested_by: lot.harvested_by,
+          quality_notes: lot.quality_notes,
+          status: lot.status,
+          note: 'Present as a traceability card: lot number, crop, seed-to-harvest chain, quality grade, and best-by date.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'list_lots': {
+      try {
+        const { gradeFromScore } = await import('./lot-system.js');
+        let sql = 'SELECT * FROM lot_records WHERE farm_id = $1';
+        const sqlParams = [farmId];
+        let idx = 2;
+        if (params.status) { sql += ` AND status = $${idx++}`; sqlParams.push(params.status); }
+        if (params.crop) { sql += ` AND crop_name ILIKE $${idx++}`; sqlParams.push(`%${params.crop}%`); }
+        sql += ` ORDER BY harvest_date DESC LIMIT $${idx}`;
+        sqlParams.push(Math.min(Number(params.limit) || 20, 100));
+
+        const result = await pool.query(sql, sqlParams);
+        return {
+          ok: true,
+          lots: result.rows.map(r => ({
+            lot_number: r.lot_number,
+            crop: r.crop_name,
+            harvest_date: r.harvest_date,
+            best_by_date: r.best_by_date,
+            quality_grade: gradeFromScore(r.quality_score),
+            weight_oz: r.weight_oz,
+            status: r.status
+          })),
+          count: result.rows.length,
+          note: 'Present as a table with columns: Lot #, Crop, Harvested, Best By, Grade, Weight, Status.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'generate_label': {
+      try {
+        const { gradeFromScore } = await import('./lot-system.js');
+        const lotResult = await pool.query(
+          'SELECT * FROM lot_records WHERE farm_id = $1 AND lot_number = $2',
+          [farmId, params.lot_number]
+        );
+        if (lotResult.rows.length === 0) {
+          return { ok: false, error: `Lot "${params.lot_number}" not found.` };
+        }
+        const lot = lotResult.rows[0];
+        const weightOz = Number(lot.weight_oz) || 0;
+        return {
+          ok: true,
+          label: {
+            lot_number: lot.lot_number,
+            product_name: lot.crop_name,
+            farm_id: lot.farm_id,
+            harvest_date: lot.harvest_date,
+            best_by_date: lot.best_by_date,
+            weight_oz: weightOz,
+            weight_lbs: Math.round((weightOz / 16) * 100) / 100,
+            quality_grade: gradeFromScore(lot.quality_score),
+            seed_source: lot.seed_source || 'N/A'
+          },
+          note: 'Present the label data clearly. If the farmer wants a printable version, suggest visiting /api/lots/label with format=html.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'generate_packing_slip': {
+      try {
+        const { gradeFromScore } = await import('./lot-system.js');
+        const items = params.items || [];
+
+        // If no items given, try to look up order
+        let lineItems = items;
+        if (lineItems.length === 0 && params.order_id) {
+          const { listAllOrders } = await import('../services/wholesaleMemoryStore.js');
+          const allOrders = await listAllOrders({});
+          const order = allOrders.find(o =>
+            o.master_order_id === params.order_id ||
+            (o.farm_sub_orders || []).some(s => s.sub_order_id === params.order_id)
+          );
+          if (order) {
+            const farmSub = (order.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+            lineItems = (farmSub.line_items || []).map(li => ({
+              sku_name: li.sku_name || li.product_name || li.name,
+              qty: li.qty || li.quantity,
+              unit: li.unit || 'lb'
+            }));
+          }
+        }
+
+        const slipItems = [];
+        for (const item of lineItems) {
+          const cropId = (item.sku_name || '').toLowerCase().replace(/\s+/g, '-');
+          const lotResult = await pool.query(
+            `SELECT lot_number, best_by_date, quality_score, harvest_date
+               FROM lot_records WHERE farm_id = $1 AND crop_id = $2 AND status = 'active'
+               ORDER BY harvest_date DESC LIMIT 1`,
+            [farmId, cropId]
+          );
+          const lot = lotResult.rows[0];
+          slipItems.push({
+            product: item.sku_name,
+            quantity: item.qty,
+            unit: item.unit || 'lb',
+            lot_number: lot?.lot_number || 'N/A',
+            harvest_date: lot?.harvest_date || 'N/A',
+            best_by_date: lot?.best_by_date || 'N/A',
+            quality_grade: lot ? gradeFromScore(lot.quality_score) : 'N/A'
+          });
+        }
+
+        return {
+          ok: true,
+          packing_slip: {
+            order_id: params.order_id,
+            farm_id: farmId,
+            generated_at: new Date().toISOString(),
+            items: slipItems
+          },
+          note: 'Present as a packing slip table. For printable HTML, suggest /api/lots/packing-slip with format=html.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'get_sfcr_export': {
+      try {
+        const { gradeFromScore } = await import('./lot-system.js');
+        let dateSql = '';
+        const sqlParams = [farmId];
+        let idx = 2;
+        if (params.from) { dateSql += ` AND l.harvest_date >= $${idx++}`; sqlParams.push(params.from); }
+        if (params.to) { dateSql += ` AND l.harvest_date <= $${idx++}`; sqlParams.push(params.to); }
+
+        const result = await pool.query(
+          `SELECT l.lot_number, l.crop_name, l.seed_source, l.seed_lot,
+                  l.seed_date, l.harvest_date, l.best_by_date,
+                  l.weight_oz, l.quality_score, l.status,
+                  h.plants_harvested, h.gross_weight_oz, h.net_weight_oz,
+                  h.harvested_by, h.quality_notes
+             FROM lot_records l
+             LEFT JOIN harvest_events h ON l.harvest_event_id = h.id
+            WHERE l.farm_id = $1 ${dateSql}
+            ORDER BY l.harvest_date DESC`,
+          sqlParams
+        );
+
+        return {
+          ok: true,
+          export_type: 'SFCR',
+          record_count: result.rows.length,
+          records: result.rows.map(r => ({
+            lot_number: r.lot_number,
+            product: r.crop_name,
+            seed_source: r.seed_source || 'Unknown',
+            seed_lot: r.seed_lot || 'Unknown',
+            seed_date: r.seed_date,
+            harvest_date: r.harvest_date,
+            best_by_date: r.best_by_date,
+            weight_oz: r.weight_oz,
+            quality_grade: gradeFromScore(r.quality_score),
+            plants_harvested: r.plants_harvested,
+            harvested_by: r.harvested_by || 'Unknown',
+            status: r.status
+          })),
+          note: 'Present as a regulatory compliance table. Each row is a traceable lot. This data supports SFCR (Safe Food for Canadians Regulations) audit requirements.'
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
     default:
       return { ok: false, error: `Unknown tool: ${toolName}` };
   }
@@ -3401,7 +3810,7 @@ router.post('/chat', async (req, res) => {
         let toolResult;
         try {
           // Trust tier system for write tools
-          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write';
+          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write' || TRUST_TIERS.confirm.has(fnName) || TRUST_TIERS.admin.has(fnName);
           const tier = getTrustTier(fnName);
 
           if (isWriteTool && tier === 'auto') {
@@ -3864,7 +4273,7 @@ router.post('/chat/stream', async (req, res) => {
 
         let toolResult;
         try {
-          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write';
+          const isWriteTool = TOOL_CATALOG[fnName]?.category === 'write' || TRUST_TIERS.confirm.has(fnName) || TRUST_TIERS.admin.has(fnName);
           const tier = getTrustTier(fnName);
 
           if (isWriteTool && tier === 'auto') {
