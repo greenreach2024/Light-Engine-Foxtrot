@@ -542,6 +542,7 @@ async function runMigrations(client) {
   }
 
   // Create wholesale_buyers table for wholesale admin + buyer auth
+  try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS wholesale_buyers (
       id VARCHAR(255) PRIMARY KEY,
@@ -560,6 +561,7 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_email ON wholesale_buyers(email);
     CREATE INDEX IF NOT EXISTS idx_wholesale_buyers_created ON wholesale_buyers(created_at);
   `);
+  } catch (err) { logger.warn('wholesale_buyers create warning:', err.message); }
 
   // Migrate existing wholesale_buyers table if id column is integer (SERIAL)
   try {
@@ -582,6 +584,7 @@ async function runMigrations(client) {
   }
 
   // Create wholesale_orders table for persisted wholesale orders
+  try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS wholesale_orders (
       id SERIAL PRIMARY KEY,
@@ -598,8 +601,10 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_orders_buyer ON wholesale_orders(buyer_id);
     CREATE INDEX IF NOT EXISTS idx_wholesale_orders_created ON wholesale_orders(created_at);
   `);
+  } catch (err) { logger.warn('wholesale_orders create warning:', err.message); }
 
   // Create payment_records table for persistent payment storage
+  try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS payment_records (
       id SERIAL PRIMARY KEY,
@@ -617,8 +622,10 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_payment_records_order ON payment_records(order_id);
     CREATE INDEX IF NOT EXISTS idx_payment_records_created ON payment_records(created_at);
   `);
+  } catch (err) { logger.warn('payment_records create warning:', err.message); }
 
   // Canonical accounting ledger foundation
+  try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS accounting_sources (
       id SERIAL PRIMARY KEY,
@@ -723,8 +730,10 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_accounting_period_closes_key ON accounting_period_closes(period_key);
     CREATE INDEX IF NOT EXISTS idx_valuation_snapshots_date ON valuation_snapshots(snapshot_date);
   `);
+  } catch (err) { logger.warn('Accounting tables create warning:', err.message); }
 
   // Seed chart of accounts
+  try {
   await client.query(`
     INSERT INTO accounting_accounts (account_code, account_name, account_class, account_type)
     VALUES
@@ -746,8 +755,10 @@ async function runMigrations(client) {
       ('710000', 'R&D Expense', 'expense', 'research_development')
     ON CONFLICT (account_code) DO NOTHING;
   `);
+  } catch (err) { logger.warn('Chart of accounts seed warning:', err.message); }
 
   // Create audit_log table for persistent audit trail
+  try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS audit_log (
       id SERIAL PRIMARY KEY,
@@ -763,6 +774,7 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_log_event ON audit_log(event_type);
   `);
+  } catch (err) { logger.warn('audit_log create warning:', err.message); }
 
   // Grant wizard tables (migration 011)
   if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
