@@ -200,6 +200,7 @@ import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleAdminRouter from './routes/wholesale-admin.js';
 import cropPricingRouter from './routes/crop-pricing.js';
 import adminPricingRouter from "./routes/admin-pricing.js";
+import inventoryManualRouter from "./routes/inventory-manual.js";
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
@@ -20201,6 +20202,10 @@ app.post('/api/inventory/supplies/:id/usage', (req, res) => {
   res.json({ ok: true, supply });
 });
 
+
+// Manual Inventory Routes (farm_inventory table -- manual entry, list, delete)
+// Mounted AFTER inline /api/inventory/* routes so /:farmId does not shadow them
+app.use("/api/inventory", inventoryManualRouter);
 // =====================================================
 // PLANTING ASSIGNMENTS & PLAN API
 // =====================================================
