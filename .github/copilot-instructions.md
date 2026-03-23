@@ -10,6 +10,7 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 **Read `.github/SENSOR_DATA_PIPELINE.md` for the complete sensor data flow.**
 **Read `.github/CRITICAL_CONFIGURATION.md` for all credentials, env vars, and config files.**
 **Read `.github/TROUBLESHOOTING_ENV_DATA.md` before debugging any sensor data issues.**
+**Read `.github/COMPLETE_SYSTEM_MAP.md` for the full platform mapping -- every page, route, table, data flow, button, sensor, and known error. Consult this BEFORE making changes to understand cross-system impacts.**
 
 ### Critical Facts Every Agent Must Know
 

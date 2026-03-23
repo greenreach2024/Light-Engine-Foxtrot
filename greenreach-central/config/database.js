@@ -2346,6 +2346,31 @@ async function runMigrations(client) {
     logger.warn('Migration 037 warning:', err.message);
   }
 
+  // ─── Migration 038: App Errors table (FAYE error telemetry) ────────
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_errors (
+        id SERIAL PRIMARY KEY,
+        method TEXT NOT NULL,
+        route TEXT NOT NULL,
+        status_code INTEGER NOT NULL DEFAULT 500,
+        error_type TEXT,
+        message TEXT NOT NULL,
+        stack_hash TEXT,
+        count INTEGER NOT NULL DEFAULT 1,
+        first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        metadata JSONB DEFAULT '{}'
+      );
+      CREATE INDEX IF NOT EXISTS idx_app_errors_last_seen ON app_errors(last_seen DESC);
+      CREATE INDEX IF NOT EXISTS idx_app_errors_stack_hash ON app_errors(stack_hash);
+    `);
+
+    logger.info('App errors table ready (migration 038)');
+  } catch (err) {
+    logger.warn('Migration 038 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
