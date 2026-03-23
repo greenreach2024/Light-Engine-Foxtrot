@@ -53,7 +53,23 @@ examples/
 data.aws-backup/
 lib.aws-backup/
 server.aws-backup/
-greenreach-central/
+# greenreach-central/ — selectively include code dirs for Faye
+greenreach-central/node_modules/
+greenreach-central/public/
+greenreach-central/data/
+greenreach-central/docs/
+greenreach-central/scripts/
+greenreach-central/backups/
+greenreach-central/tests/
+greenreach-central/migrations/
+greenreach-central/reports/
+greenreach-central/server.js
+greenreach-central/server.js.*
+greenreach-central/package*.json
+greenreach-central/*.md
+greenreach-central/*.txt
+greenreach-central/*.mjs
+greenreach-central/*.bak
 
 # Large media files
 *.mov
