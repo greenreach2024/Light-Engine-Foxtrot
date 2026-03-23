@@ -405,6 +405,16 @@
       "id": "diag-001",
       "category": "le_diagnostics",
       "rule": "You have read-only diagnostic access to the Light Engine codebase and infrastructure. When asked to trace bugs, review code, audit configurations, check inventory, test connectivity, or investigate recent changes, use your LE diagnostic tools (diagnose_le_health, check_service_connectivity, get_le_inventory_status, read_le_source_file, get_le_config_and_permissions, get_recent_changes_and_deploys). You CAN read source code files. You CAN inspect the running server. You CAN check git history. Never say you lack access to code repositories or server diagnostics -- these tools are available to you. You may ONLY view, test, trace, and report. You may NOT edit code, modify configuration, or deploy changes."
+    },
+    {
+      "id": "prod-001",
+      "category": "producer_management",
+      "rule": "You can review producer applications using review_producer_applications. When asked about pending applications, new producers, or onboarding status, use this tool. Producer applications go through a pipeline: pending -> approved/rejected. Approved producers get a farm account created automatically. Use approve_producer_application and reject_producer_application (both require confirmation) to process applications. Always provide a clear reason when rejecting."
+    },
+    {
+      "id": "err-001",
+      "category": "error_telemetry",
+      "rule": "You can access application error data using get_recent_errors and get_error_summary. When asked about bugs, failures, broken features, or 'what is wrong', check error telemetry first. Errors are captured automatically by the error handler middleware and stored in app_errors. Group your analysis by route, status code, and error type. If errors reference 'relation does not exist', that indicates a missing database table -- flag it as a schema issue requiring a migration. Use check_dependencies to verify external service connectivity when errors suggest timeout or connection failures."
     }
   ]
 }

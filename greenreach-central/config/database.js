@@ -2296,6 +2296,56 @@ async function runMigrations(client) {
     logger.warn('Migration 036 warning:', err.message);
   }
 
+  // ─── Migration 037: Producer Portal Tables ────────────────────────────────
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS producer_applications (
+        id SERIAL PRIMARY KEY,
+        business_name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        website TEXT,
+        location JSONB DEFAULT '{}',
+        certifications TEXT[] DEFAULT '{}',
+        practices TEXT[] DEFAULT '{}',
+        product_types TEXT[] DEFAULT '{}',
+        description TEXT,
+        password_hash VARCHAR(255) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'pending',
+        reviewed_by VARCHAR(255),
+        review_notes TEXT,
+        farm_id VARCHAR(255),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reviewed_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_producer_applications_email ON producer_applications(email);
+      CREATE INDEX IF NOT EXISTS idx_producer_applications_status ON producer_applications(status);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS producer_accounts (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        role VARCHAR(50) NOT NULL DEFAULT 'producer',
+        status VARCHAR(50) NOT NULL DEFAULT 'active',
+        last_login TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_producer_accounts_email ON producer_accounts(email);
+      CREATE INDEX IF NOT EXISTS idx_producer_accounts_farm ON producer_accounts(farm_id);
+    `);
+
+    logger.info('Producer portal tables ready (migration 037)');
+  } catch (err) {
+    logger.warn('Migration 037 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
