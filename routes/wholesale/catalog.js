@@ -85,11 +85,64 @@ router.get('/', async (req, res) => {
     if (delivery_date) console.log('  Filter: delivery_date =', delivery_date);
     if (zip) console.log('  Buyer zip:', zip);
 
-    // Farms don't have inventory endpoints yet, so return empty catalog with farm info
-    const catalogItems = [];
+    // Farms don't have inventory endpoints yet, so start with empty catalog
+    // but merge in any farm_inventory rows from PostgreSQL
+    let catalogItems = [];
+
+    try {
+      const invResult = await query(
+        `SELECT fi.*, f.name AS farm_name
+         FROM farm_inventory fi
+         LEFT JOIN farms f ON f.farm_id = fi.farm_id
+         WHERE fi.available_for_wholesale = true
+           AND COALESCE(fi.quantity_available, fi.quantity, 0) > 0
+         ORDER BY fi.product_name`
+      );
+
+      // Group by sku_id to merge across farms
+      const skuMap = {};
+      for (const row of invResult.rows) {
+        const skuKey = row.sku_id || row.product_id;
+        if (!skuMap[skuKey]) {
+          skuMap[skuKey] = {
+            sku_id: skuKey,
+            sku_name: row.product_name,
+            category: row.category || 'produce',
+            unit: row.unit || 'lb',
+            pack_size: 1,
+            total_available: 0,
+            min_price: Infinity,
+            max_price: 0,
+            farms: []
+          };
+        }
+        const qty = Number(row.quantity_available || row.quantity || 0);
+        const price = Number(row.wholesale_price || row.retail_price || row.price || 0);
+        skuMap[skuKey].total_available += qty;
+        skuMap[skuKey].min_price = Math.min(skuMap[skuKey].min_price, price || Infinity);
+        skuMap[skuKey].max_price = Math.max(skuMap[skuKey].max_price, price);
+        skuMap[skuKey].farms.push({
+          farm_id: row.farm_id,
+          farm_name: row.farm_name || row.farm_id,
+          qty_available: qty,
+          price_per_unit: price,
+          quality_flags: []
+        });
+      }
+
+      catalogItems = Object.values(skuMap).map(item => ({
+        ...item,
+        min_price: item.min_price === Infinity ? 0 : item.min_price
+      }));
+
+      if (category) {
+        catalogItems = catalogItems.filter(i => i.category === category);
+      }
+    } catch (invErr) {
+      console.warn('[Wholesale Catalog] farm_inventory query failed:', invErr.message);
+    }
     
     console.log(`[Wholesale Catalog] Returning ${catalogItems.length} SKUs from ${REGISTERED_FARMS.length} farms`);
-    console.log('[Wholesale Catalog] Note: Farms do not have inventory yet - showing farms but empty catalog');
 
     res.json({
       ok: true,
@@ -128,13 +181,30 @@ router.get('/sku/:skuId', async (req, res) => {
     // Get active farms from database
     const REGISTERED_FARMS = await getActiveFarms();
 
-    // Farms don't have inventory endpoints yet
+    // Query farm_inventory for this SKU
+    const invResult = await query(
+      `SELECT fi.*, f.name AS farm_name
+       FROM farm_inventory fi
+       LEFT JOIN farms f ON f.farm_id = fi.farm_id
+       WHERE (fi.sku_id = $1 OR fi.product_id = $1)
+         AND fi.available_for_wholesale = true
+       ORDER BY f.name`,
+      [skuId]
+    );
+
+    const farms = invResult.rows.map(row => ({
+      farm_id: row.farm_id,
+      farm_name: row.farm_name || row.farm_id,
+      qty_available: Number(row.quantity_available || row.quantity || 0),
+      price_per_unit: Number(row.wholesale_price || row.retail_price || row.price || 0),
+      quality_flags: []
+    }));
+
     res.json({
       ok: true,
       sku_id: skuId,
-      farms: [],
-      total_available: 0,
-      message: 'Farms do not have inventory yet'
+      farms,
+      total_available: farms.reduce((sum, f) => sum + f.qty_available, 0)
     });
 
   } catch (error) {

@@ -22,12 +22,56 @@ router.use(farmAuthMiddleware);
  * - available_only: Only show items with quantity > 0
  * - search: Search by name
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { category, available_only, search } = req.query;
     const farmId = req.farm_id; // From auth middleware
     
     let products = farmStores.inventory.getAllForFarm(farmId);
+
+    // Merge manual inventory from PostgreSQL farm_inventory table
+    const db = req.app.locals.db;
+    if (db) {
+      try {
+        const pgResult = await db.query(
+          'SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name',
+          [farmId]
+        );
+        const existingSkus = new Set(products.map(p => p.sku_id));
+        for (const row of pgResult.rows) {
+          const skuKey = row.sku_id || row.product_id;
+          if (!existingSkus.has(skuKey)) {
+            products.push({
+              sku_id: skuKey,
+              product_id: row.product_id,
+              name: row.product_name,
+              product_name: row.product_name,
+              sku_name: row.sku_name || row.product_name,
+              sku: row.sku || skuKey,
+              category: row.category || 'produce',
+              unit: row.unit || 'lb',
+              quantity: Number(row.quantity_available || row.quantity || 0),
+              available: Number(row.quantity_available || row.quantity || 0),
+              quantity_available: Number(row.quantity_available || row.quantity || 0),
+              reserved: 0,
+              unit_price: Number(row.retail_price || row.price || 0),
+              retail_price: Number(row.retail_price || row.price || 0),
+              wholesale_price: Number(row.wholesale_price || row.price || 0),
+              price: Number(row.retail_price || row.price || 0),
+              inventory_source: row.inventory_source || 'manual',
+              last_updated: row.last_updated,
+              updated_at: row.last_updated
+            });
+            existingSkus.add(skuKey);
+          }
+        }
+        if (pgResult.rows.length > 0) {
+          console.log(`[farm-sales] Merged ${pgResult.rows.length} PostgreSQL inventory rows for farm ${farmId}`);
+        }
+      } catch (pgErr) {
+        console.warn('[farm-sales] PostgreSQL inventory query failed, using NeDB only:', pgErr.message);
+      }
+    }
 
     // Apply filters
     if (category) {
@@ -87,10 +131,48 @@ router.get('/', (req, res) => {
  *   }]
  * }
  */
-router.get('/wholesale', (req, res) => {
+router.get('/wholesale', async (req, res) => {
   try {
     const farmId = req.farm_id;
-    const products = farmStores.inventory.getAllForFarm(farmId);
+    let products = farmStores.inventory.getAllForFarm(farmId);
+
+    // Merge manual inventory from PostgreSQL
+    const db = req.app.locals.db;
+    if (db) {
+      try {
+        const pgResult = await db.query(
+          "SELECT * FROM farm_inventory WHERE farm_id = $1 AND available_for_wholesale = true ORDER BY product_name",
+          [farmId]
+        );
+        const existingSkus = new Set(products.map(p => p.sku_id));
+        for (const row of pgResult.rows) {
+          const skuKey = row.sku_id || row.product_id;
+          if (!existingSkus.has(skuKey)) {
+            products.push({
+              sku_id: skuKey,
+              product_id: row.product_id,
+              name: row.product_name,
+              product_name: row.product_name,
+              sku_name: row.sku_name || row.product_name,
+              sku: row.sku || skuKey,
+              category: row.category || 'produce',
+              unit: row.unit || 'lb',
+              quantity: Number(row.quantity_available || row.quantity || 0),
+              available: Number(row.quantity_available || row.quantity || 0),
+              reserved: 0,
+              unit_price: Number(row.wholesale_price || row.retail_price || row.price || 0),
+              retail_price: Number(row.retail_price || row.price || 0),
+              wholesale_price: Number(row.wholesale_price || row.price || 0),
+              inventory_source: row.inventory_source || 'manual',
+              last_updated: row.last_updated
+            });
+            existingSkus.add(skuKey);
+          }
+        }
+      } catch (pgErr) {
+        console.warn('[farm-sales] PostgreSQL wholesale query failed:', pgErr.message);
+      }
+    }
     
     // Convert farm inventory to wholesale lot format
     const wholesaleInventory = convertToWholesaleLots(farmId, products);
