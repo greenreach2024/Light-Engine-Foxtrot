@@ -239,9 +239,10 @@ async function buildSystemPrompt(adminId, adminName, adminRole, adminEmail) {
   let learningContext = '';
   let autonomyContext = '';
   let policyContext = '';
+  let interAgentCtx = '';
 
   try {
-    const [farms, orders, buyers, summaries, memory, alerts, learned, autonomy, interAgentCtx] = await Promise.all([
+    const [farms, orders, buyers, summaries, memory, alerts, learned, autonomy, interAgentResult] = await Promise.all([
       listNetworkFarms().catch(() => []),
       listAllOrders({ limit: 1 }).catch(() => ({ total: 0 })),
       Promise.resolve(listAllBuyers()).catch(() => []),
@@ -263,6 +264,7 @@ async function buildSystemPrompt(adminId, adminName, adminRole, adminEmail) {
     learningContext = learned;
     autonomyContext = autonomy;
     policyContext = buildPolicyContext();
+    interAgentCtx = interAgentResult;
   } catch { /* best-effort */ }
 
   const memorySection = Object.keys(adminMemory).length > 0
