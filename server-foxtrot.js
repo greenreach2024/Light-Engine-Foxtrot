@@ -199,6 +199,7 @@ import wholesaleReservationsRouter, { cleanupExpiredReservations } from './route
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import wholesaleAdminRouter from './routes/wholesale-admin.js';
 import cropPricingRouter from './routes/crop-pricing.js';
+import adminPricingRouter from "./routes/admin-pricing.js";
 import wholesaleCatalogRouter from './routes/wholesale/catalog.js';
 import wholesaleCheckoutRouter from './routes/wholesale/checkout.js';
 import wholesaleBuyersRouter from './routes/wholesale-buyers.js';
@@ -12926,6 +12927,7 @@ app.use('/api/admin/health', adminHealthRouter);
  * - GET /api/crop-pricing/:cropName: Get specific crop pricing
  */
 app.use('/api/crop-pricing', cropPricingRouter);
+app.use("/api/admin/pricing", adminPricingRouter);
 
 /**
  * Light Engine: Wholesale Inventory Sync Routes
