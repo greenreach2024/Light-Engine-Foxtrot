@@ -1986,19 +1986,19 @@ export const ADMIN_TOOL_CATALOG = {
         const timeout = AbortSignal.timeout(8000);
 
         // Fetch multiple health endpoints in parallel
-        const [healthzRes, healthRes, vitalityRes] = await Promise.all([
-          fetch(`${farmUrl}/healthz`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message })),
+        const [healthRes, vitalityRes, setupRes] = await Promise.all([
           fetch(`${farmUrl}/health`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message })),
           params.include_vitality === 'true'
             ? fetch(`${farmUrl}/api/health/vitality`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }))
-            : Promise.resolve(null)
+            : Promise.resolve(null),
+          fetch(`${farmUrl}/api/setup/status`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }))
         ]);
 
         return {
           ok: true,
           farm_url: farmUrl,
-          healthz: healthzRes,
           health: healthRes,
+          setup: setupRes,
           vitality: vitalityRes,
           checked_at: new Date().toISOString()
         };
@@ -2020,7 +2020,7 @@ export const ADMIN_TOOL_CATALOG = {
         if (farmUrl) {
           const leStart = Date.now();
           try {
-            const r = await fetch(`${farmUrl}/healthz`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const r = await fetch(`${farmUrl}/health`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
             results.light_engine = { reachable: true, status: r.status, latency_ms: Date.now() - leStart, url: farmUrl };
           } catch (e) {
             results.light_engine = { reachable: false, error: e.message, latency_ms: Date.now() - leStart, url: farmUrl };
