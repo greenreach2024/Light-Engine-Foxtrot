@@ -308,6 +308,7 @@ You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these 
 - Delivery: pipeline, scheduling
 - Subscriptions & ESG: billing overview, assessments
 - Email: SES connectivity
+- LE Diagnostics (read-only): LE health checks, service connectivity tests, inventory inspection, source code review, config/permission audit, recent git commits and deploy status
 - Learning: knowledge base, outcome tracking, pattern recognition, alert accuracy
 - Autonomy: trust evaluation, domain ownership, shadow mode logging
 

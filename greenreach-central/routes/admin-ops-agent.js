@@ -1966,8 +1966,395 @@ export const ADMIN_TOOL_CATALOG = {
         };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // ── Light Engine Diagnostics (Read-Only) ──
+  // Phase 5: Diagnostic tools for tracing, testing, and reviewing LE subsystems.
+  // FAYE may view, test, and trace — never edit.
+
+  'diagnose_le_health': {
+    description: 'Fetch Light Engine health status, recent application errors, and subsystem checks. Calls the LE /health and /healthz endpoints and returns system vitals, DB connectivity, uptime, and any error indicators.',
+    category: 'read',
+    required: [],
+    optional: ['include_vitality'],
+    handler: async (params) => {
+      try {
+        const farmUrl = await _getLeUrl();
+        if (!farmUrl) return { ok: false, error: 'No active Light Engine URL configured. Check FARM_EDGE_URL or farms table.' };
+
+        const headers = _leHeaders();
+        const timeout = AbortSignal.timeout(8000);
+
+        // Fetch multiple health endpoints in parallel
+        const [healthzRes, healthRes, vitalityRes] = await Promise.all([
+          fetch(`${farmUrl}/healthz`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message })),
+          fetch(`${farmUrl}/health`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message })),
+          params.include_vitality === 'true'
+            ? fetch(`${farmUrl}/api/health/vitality`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }))
+            : Promise.resolve(null)
+        ]);
+
+        return {
+          ok: true,
+          farm_url: farmUrl,
+          healthz: healthzRes,
+          health: healthRes,
+          vitality: vitalityRes,
+          checked_at: new Date().toISOString()
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'check_service_connectivity': {
+    description: 'Test connectivity from Central to the Light Engine server and its external service integrations (Square payment API, SwitchBot IoT). Returns response status and latency for each service.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        const farmUrl = await _getLeUrl();
+        const results = {};
+
+        // 1. Light Engine connectivity
+        if (farmUrl) {
+          const leStart = Date.now();
+          try {
+            const r = await fetch(`${farmUrl}/healthz`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            results.light_engine = { reachable: true, status: r.status, latency_ms: Date.now() - leStart, url: farmUrl };
+          } catch (e) {
+            results.light_engine = { reachable: false, error: e.message, latency_ms: Date.now() - leStart, url: farmUrl };
+          }
+        } else {
+          results.light_engine = { reachable: false, error: 'No LE URL configured' };
+        }
+
+        // 2. Square API connectivity (read-only status check via LE)
+        if (farmUrl) {
+          const sqStart = Date.now();
+          try {
+            const r = await fetch(`${farmUrl}/api/farm/square/status`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            results.square = { reachable: true, status: r.status, latency_ms: Date.now() - sqStart, response: body };
+          } catch (e) {
+            results.square = { reachable: false, error: e.message, latency_ms: Date.now() - sqStart };
+          }
+        }
+
+        // 3. LE config/app endpoint (checks farm config and feature flags)
+        if (farmUrl) {
+          const cfgStart = Date.now();
+          try {
+            const r = await fetch(`${farmUrl}/api/config/app`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            results.le_config = { reachable: true, status: r.status, latency_ms: Date.now() - cfgStart, config: body };
+          } catch (e) {
+            results.le_config = { reachable: false, error: e.message, latency_ms: Date.now() - cfgStart };
+          }
+        }
+
+        // 4. LE sync status
+        if (farmUrl) {
+          const syncStart = Date.now();
+          try {
+            const r = await fetch(`${farmUrl}/api/sync/status`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            results.sync_service = { reachable: true, status: r.status, latency_ms: Date.now() - syncStart, response: body };
+          } catch (e) {
+            results.sync_service = { reachable: false, error: e.message, latency_ms: Date.now() - syncStart };
+          }
+        }
+
+        // 5. Central DB health
+        if (isDatabaseAvailable()) {
+          const dbStart = Date.now();
+          try {
+            await dbQuery('SELECT 1');
+            results.central_db = { reachable: true, latency_ms: Date.now() - dbStart };
+          } catch (e) {
+            results.central_db = { reachable: false, error: e.message, latency_ms: Date.now() - dbStart };
+          }
+        } else {
+          results.central_db = { reachable: false, error: 'Database marked unavailable' };
+        }
+
+        return { ok: true, services: results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_le_inventory_status': {
+    description: 'Fetch the Light Engine farm-sales inventory to verify if products are logged, their stock levels, categories, and pricing. Read-only inspection of the LE inventory system.',
+    category: 'read',
+    required: [],
+    optional: ['sku_id', 'include_categories'],
+    handler: async (params) => {
+      try {
+        const farmUrl = await _getLeUrl();
+        if (!farmUrl) return { ok: false, error: 'No active Light Engine URL configured' };
+
+        const headers = _leHeaders();
+        const timeout = AbortSignal.timeout(8000);
+        const results = {};
+
+        // Fetch main inventory
+        if (params.sku_id) {
+          const r = await fetch(`${farmUrl}/api/farm-sales/inventory/${encodeURIComponent(params.sku_id)}`, { headers, signal: timeout });
+          results.product = await r.json().catch(() => ({}));
+        } else {
+          const r = await fetch(`${farmUrl}/api/farm-sales/inventory`, { headers, signal: timeout });
+          results.inventory = await r.json().catch(() => ({}));
+        }
+
+        // Also fetch legacy inventory endpoint for cross-reference
+        const legacyRes = await fetch(`${farmUrl}/api/inventory/current`, { headers, signal: timeout }).then(r => r.json()).catch(() => null);
+        if (legacyRes) results.legacy_inventory = legacyRes;
+
+        // Categories
+        if (params.include_categories === 'true') {
+          const catRes = await fetch(`${farmUrl}/api/farm-sales/inventory/categories/list`, { headers, signal: timeout }).then(r => r.json()).catch(() => null);
+          if (catRes) results.categories = catRes;
+        }
+
+        // Wholesale inventory reserved check
+        const reservedRes = await fetch(`${farmUrl}/api/wholesale/inventory/reserved`, { headers, signal: timeout }).then(r => r.json()).catch(() => null);
+        if (reservedRes) results.wholesale_reserved = reservedRes;
+
+        return { ok: true, farm_url: farmUrl, ...results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'read_le_source_file': {
+    description: 'Read a source file from the Light Engine codebase for tracing and debugging. Returns file contents (max 500 lines). Allowed paths: server-foxtrot.js, routes/*, public/*.js, public/*.html, services/*, config/*, package.json. FAYE may ONLY read, never edit.',
+    category: 'read',
+    required: ['file_path'],
+    optional: ['start_line', 'end_line', 'search_pattern'],
+    handler: async (params) => {
+      try {
+        const fs = await import('fs');
+        const pathMod = await import('path');
+        const { fileURLToPath } = await import('url');
+
+        // Resolve LE root relative to Central
+        const centralDir = pathMod.default.dirname(fileURLToPath(import.meta.url));
+        const leRoot = pathMod.default.resolve(centralDir, '..', '..');
+
+        // Sanitize: resolve and enforce path stays within LE root
+        const requested = pathMod.default.resolve(leRoot, params.file_path);
+        if (!requested.startsWith(leRoot)) {
+          return { ok: false, error: 'Path traversal blocked. File must be within the Light Engine project.' };
+        }
+
+        // Allowlist: only code files, not secrets or env
+        const rel = pathMod.default.relative(leRoot, requested);
+        const ALLOWED_PATTERNS = [
+          /^server-foxtrot\.js$/,
+          /^routes\/.+\.js$/,
+          /^public\/.+\.(js|html|css)$/,
+          /^services\/.+\.js$/,
+          /^config\/.+\.js$/,
+          /^package\.json$/,
+          /^greenreach-central\/routes\/.+\.js$/,
+          /^greenreach-central\/services\/.+\.js$/,
+          /^greenreach-central\/server\.js$/,
+          /^greenreach-central\/config\/.+\.js$/,
+          /^greenreach-central\/public\/.+\.(js|html|css)$/,
+          /^greenreach-central\/package\.json$/
+        ];
+        const BLOCKED_PATTERNS = [
+          /\.env/i, /secret/i, /credential/i, /\.pem$/i, /\.key$/i, /password/i, /token/i
+        ];
+
+        if (BLOCKED_PATTERNS.some(p => p.test(rel))) {
+          return { ok: false, error: 'Access denied: credential and secret files are blocked.' };
+        }
+        if (!ALLOWED_PATTERNS.some(p => p.test(rel))) {
+          return { ok: false, error: `Access denied: "${rel}" is not in the allowed file list. Allowed: server-foxtrot.js, routes/*.js, public/*.{js,html,css}, services/*.js, config/*.js, package.json (and greenreach-central/ equivalents).` };
+        }
+
+        if (!fs.default.existsSync(requested)) {
+          return { ok: false, error: `File not found: ${rel}` };
+        }
+
+        const content = fs.default.readFileSync(requested, 'utf8');
+        const lines = content.split('\n');
+        const totalLines = lines.length;
+
+        // If search_pattern is provided, return matching lines with context
+        if (params.search_pattern) {
+          const pattern = new RegExp(params.search_pattern, 'gi');
+          const matches = [];
+          for (let i = 0; i < lines.length; i++) {
+            if (pattern.test(lines[i])) {
+              const ctxStart = Math.max(0, i - 2);
+              const ctxEnd = Math.min(lines.length - 1, i + 2);
+              matches.push({
+                line: i + 1,
+                match: lines[i].trim(),
+                context: lines.slice(ctxStart, ctxEnd + 1).map((l, idx) => `${ctxStart + idx + 1}: ${l}`).join('\n')
+              });
+            }
+          }
+          return {
+            ok: true, file: rel, total_lines: totalLines,
+            pattern: params.search_pattern,
+            match_count: matches.length,
+            matches: matches.slice(0, 50) // Cap at 50 matches
+          };
+        }
+
+        // Line range reading
+        const start = Math.max(1, parseInt(params.start_line, 10) || 1);
+        const end = Math.min(totalLines, parseInt(params.end_line, 10) || Math.min(start + 499, totalLines));
+        const slice = lines.slice(start - 1, end);
+
+        return {
+          ok: true, file: rel, total_lines: totalLines,
+          range: { start, end },
+          content: slice.join('\n')
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_le_config_and_permissions': {
+    description: 'Inspect the Light Engine configuration, feature flags, authentication settings, and permission rules. Shows what services are enabled, auth requirements, and data sharing config.',
+    category: 'read',
+    required: [],
+    optional: ['section'],
+    handler: async (params) => {
+      try {
+        const farmUrl = await _getLeUrl();
+        if (!farmUrl) return { ok: false, error: 'No active Light Engine URL configured' };
+
+        const headers = _leHeaders();
+        const timeout = AbortSignal.timeout(8000);
+        const results = {};
+
+        // App config and feature flags
+        const configRes = await fetch(`${farmUrl}/api/config/app`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        results.app_config = configRes;
+
+        // Setup status (permissions/completion state)
+        const setupRes = await fetch(`${farmUrl}/api/setup/status`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        results.setup_status = setupRes;
+
+        // Square payment integration status
+        const squareRes = await fetch(`${farmUrl}/api/farm/square/status`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        results.square_status = squareRes;
+
+        // Credential vault summary (names only, no values)
+        const credRes = await fetch(`${farmUrl}/api/credentials`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        if (credRes && Array.isArray(credRes.credentials)) {
+          results.credentials = credRes.credentials.map(c => ({
+            key: c.key, group: c.group, has_value: !!c.value, rotated_at: c.rotated_at
+          }));
+        } else {
+          results.credentials = credRes;
+        }
+
+        // Cert/TLS status
+        const certRes = await fetch(`${farmUrl}/api/certs/status`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        results.tls_certs = certRes;
+
+        // Farm identity
+        const farmJsonRes = await fetch(`${farmUrl}/data/farm.json`, { headers, signal: timeout }).then(r => r.json()).catch(e => ({ error: e.message }));
+        results.farm_identity = farmJsonRes;
+
+        return { ok: true, farm_url: farmUrl, ...results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_recent_changes_and_deploys': {
+    description: 'Get recent git commits and deployment history for the Light Engine codebase. Shows what changed recently that might affect inventory, payments, or POS functionality.',
+    category: 'read',
+    required: [],
+    optional: ['limit', 'path_filter'],
+    handler: async (params) => {
+      try {
+        const { execSync } = await import('child_process');
+        const pathMod = await import('path');
+        const { fileURLToPath } = await import('url');
+
+        const centralDir = pathMod.default.dirname(fileURLToPath(import.meta.url));
+        const leRoot = pathMod.default.resolve(centralDir, '..', '..');
+
+        const limit = Math.min(parseInt(params.limit, 10) || 20, 50);
+        const results = {};
+
+        // Recent git commits
+        try {
+          let gitCmd = `git -C "${leRoot}" log --oneline --no-decorate -n ${limit}`;
+          if (params.path_filter) {
+            // Sanitize path filter - only allow safe characters
+            const safePath = params.path_filter.replace(/[^a-zA-Z0-9_.\/\-*]/g, '');
+            gitCmd += ` -- "${safePath}"`;
+          }
+          const gitLog = execSync(gitCmd, { encoding: 'utf8', timeout: 5000 });
+          results.recent_commits = gitLog.trim().split('\n').map(line => {
+            const [hash, ...rest] = line.split(' ');
+            return { hash, message: rest.join(' ') };
+          });
+        } catch (e) {
+          results.recent_commits = { error: e.message };
+        }
+
+        // Files changed in last commit
+        try {
+          const diff = execSync(`git -C "${leRoot}" diff --name-only HEAD~1`, { encoding: 'utf8', timeout: 5000 });
+          results.last_commit_files = diff.trim().split('\n');
+        } catch (e) {
+          results.last_commit_files = { error: e.message };
+        }
+
+        // Current branch and status
+        try {
+          const branch = execSync(`git -C "${leRoot}" branch --show-current`, { encoding: 'utf8', timeout: 3000 }).trim();
+          const status = execSync(`git -C "${leRoot}" status --short`, { encoding: 'utf8', timeout: 3000 }).trim();
+          results.git_state = { branch, uncommitted_changes: status || '(clean)' };
+        } catch (e) {
+          results.git_state = { error: e.message };
+        }
+
+        // EB environment status (if AWS CLI available)
+        try {
+          const ebStatus = execSync(
+            'aws elasticbeanstalk describe-environments --environment-names light-engine-foxtrot-prod-v3 --region us-east-1 --query "Environments[0].{Status:Status,Health:Health,HealthStatus:HealthStatus,VersionLabel:VersionLabel}" --output json',
+            { encoding: 'utf8', timeout: 10000 }
+          );
+          results.eb_environment = JSON.parse(ebStatus);
+        } catch (e) {
+          results.eb_environment = { error: e.message };
+        }
+
+        return { ok: true, ...results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
 };
+
+// ── LE URL + Header Helpers (used by diagnostic tools) ────────────
+
+async function _getLeUrl() {
+  // Priority: env var > DB farms table
+  if (process.env.FARM_EDGE_URL) return process.env.FARM_EDGE_URL;
+  try {
+    if (!isDatabaseAvailable()) return null;
+    const result = await dbQuery("SELECT api_url FROM farms WHERE status = 'active' AND api_url IS NOT NULL LIMIT 1");
+    return result.rows[0]?.api_url || null;
+  } catch { return null; }
+}
+
+function _leHeaders(extra = {}) {
+  const headers = { 'Accept': 'application/json', ...extra };
+  const farmId = process.env.FARM_ID;
+  if (farmId) headers['X-Farm-ID'] = farmId;
+  const apiKey = process.env.GREENREACH_API_KEY;
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  return headers;
+}
 
 // ── Trust Tier Definitions ────────────────────────────────────────
 // AUTO: Execute immediately (low-risk reads & safe writes)
