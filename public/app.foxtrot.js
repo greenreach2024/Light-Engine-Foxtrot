@@ -6617,7 +6617,7 @@ async function loadLightSetups() {
 
 async function fetchPlansDocument() {
   try {
-    const resp = await fetch('/plans', { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth('/plans', { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6653,7 +6653,7 @@ async function publishPlansDocument(doc) {
     const payload = Array.isArray(doc)
       ? { plans: doc }
       : (doc && typeof doc === 'object' ? doc : { plans: [] });
-    const resp = await fetch('/plans', {
+    const resp = await fetchWithFarmAuth('/plans', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

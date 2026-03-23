@@ -220,7 +220,7 @@ async function initDashboard() {
         currentSession = {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
-            farmName: 'Light Engine Farm',
+            farmName: currentSession?.farmName || localStorage.getItem('farm_name') || 'My Farm',
             email: 'admin@local-farm.com',
             role: 'admin'
         };
@@ -337,8 +337,23 @@ async function handleLogin(e) {
             
             showAlert('success', 'Login successful! Redirecting...');
             
+            // Check if user needs first-time setup (password change + farm profile)
+            // mustChangePassword forces wizard; setupCompleted===false does too
+            // unless localStorage already shows setup was done (prevents re-trigger for established farms)
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            const needsSetup = data.mustChangePassword || (data.setupCompleted === false && !localSetupDone);
+            
+            // Store setupCompleted in localStorage to prevent future false redirects
+            if (data.setupCompleted) {
+                localStorage.setItem('setup_completed', 'true');
+            }
+            
             setTimeout(() => {
-                window.location.href = getPostLoginRedirectPath();
+                if (needsSetup) {
+                    window.location.href = '/setup-wizard.html';
+                } else {
+                    window.location.href = getPostLoginRedirectPath();
+                }
             }, 1000);
             
         } else {
@@ -1196,70 +1211,40 @@ const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
 const PRICING_VERSION = '2025-12-09-v2';
 
-// Default pricing (per oz, CAD) — Updated March 2026
-// Greens $1.47/oz ($23.52/lb), Specialty greens $1.57/oz ($25.12/lb), Herbs $2.70/oz ($43.20/lb)
+// Default pricing (per oz) - Based on organic market research Dec 2025
+// Prices calculated from actual retail packages and converted to per-oz rates
 const defaultPricing = {
-    // Lettuce varieties — standard greens $1.47/oz
-    'Butterhead Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Buttercrunch Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Bibb Butterhead': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Romaine Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Parris Island Cos Romaine': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Leaf Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Oak Leaf Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Salad Bowl Oakleaf': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Mixed Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Lettuce': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-
-    // Basil / Herb varieties — $2.70/oz
-    'Genovese Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Thai Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Purple Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Lemon Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Holy Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Basil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Santo Cilantro': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Italian Parsley': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'French Tarragon': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Common Thyme': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Greek Oregano': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Chervil': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Dill Bouquet': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Rosemary': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Sage': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Marjoram': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Lemon Balm': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Lovage': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Sorrel': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-    'Kentucky Colonel Spearmint': { retail: 2.70, ws1: 12, ws2: 20, ws3: 30 },
-
-    // Arugula varieties — specialty greens $1.57/oz
-    'Astro Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Baby Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Cultivated Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Wild Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Wasabi Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Arugula': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-
-    // Kale varieties — standard greens $1.47/oz
-    'Curly Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Lacinato Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Dinosaur Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Baby Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Russian Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-    'Kale': { retail: 1.47, ws1: 15, ws2: 25, ws3: 35 },
-
-    // Asian / Specialty greens — $1.57/oz
-    'Mei Qing Pak Choi': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Tatsoi': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Komatsuna Mustard Spinach': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Mizuna Mustard Greens': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Bloomsdale Spinach': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Frisée Endive': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Escarole Batavian': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Fordhook Giant Swiss Chard': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 },
-    'Watercress': { retail: 1.57, ws1: 15, ws2: 25, ws3: 35 }
+    // Lettuce varieties - Premium butterhead, standard for others
+    'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
+    'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
+    'Red Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Oak Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Mixed Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },       // Standard lettuce pricing
+    'Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },             // Generic lettuce
+    
+    // Basil varieties - Premium herb pricing
+    'Genovese Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
+    'Thai Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Purple Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },        // Same as Genovese
+    'Lemon Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },         // Same as Genovese
+    'Holy Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },               // Generic basil
+    
+    // Arugula varieties - Specialty green pricing
+    'Baby Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
+    'Cultivated Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // Standard arugula
+    'Wild Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // Standard arugula
+    'Wasabi Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },      // Standard arugula
+    'Red Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },         // Standard arugula
+    'Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },             // Generic arugula
+    
+    // Kale varieties - Standard pricing
+    'Curly Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
+    'Lacinato Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Dinosaur kale
+    'Dinosaur Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Same as Lacinato
+    'Baby Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },           // Tender baby leaves
+    'Red Russian Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },    // Standard kale
+    'Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 }                 // Generic kale
 };
 
 /**
@@ -1839,7 +1824,7 @@ function closeAIPricingAssistant() {
 }
 
 /**
- * Run AI pricing analysis
+ * Run AI pricing analysis — fetches live market data + AI analysis from backend
  */
 async function runAIPricingAnalysis() {
     const statusDiv = document.getElementById('ai-analysis-status');
@@ -1850,32 +1835,77 @@ async function runAIPricingAnalysis() {
     recommendationsDiv.style.display = 'none';
     
     const steps = [
-        'Fetching current USD to CAD exchange rate...',
-        'Searching organic retailers in North America...',
-        'Analyzing Whole Foods pricing data...',
-        'Checking Trader Joes and specialty stores...',
-        'Scanning Canadian grocers: Sobeys, Metro, Loblaws, Farm Boy...',
-        'Reviewing independent organic markets...',
-        'Converting US prices to CAD (Canadian prices unchanged)...',
-        'Calculating cost per oz and per 25g...',
-        'Monitoring market trends and news...',
+        'Connecting to market intelligence service...',
+        'Fetching real-time price observations from DB...',
+        'Loading AI market analysis (GPT-4o-mini)...',
+        'Retrieving Bank of Canada USD/CAD exchange rate...',
+        'Analysing price trends across retailers...',
+        'Matching crops to your pricing table...',
         'Generating competitive pricing recommendations...'
     ];
     
-    for (let i = 0; i < steps.length; i++) {
-        statusText.textContent = steps[i];
-        await new Promise(resolve => setTimeout(resolve, 700));
-    }
+    // Show progress steps while fetching in parallel
+    const stepPromise = (async () => {
+        for (let i = 0; i < steps.length; i++) {
+            statusText.textContent = steps[i];
+            await new Promise(resolve => setTimeout(resolve, 600));
+        }
+    })();
 
-    // Ensure pricing data is loaded before analysis (needed for current-price comparisons)
+    // Ensure pricing data is loaded before analysis
     if (!Array.isArray(pricingData) || pricingData.length === 0) {
         await loadCropsFromDatabase();
     }
+
+    // Fetch live pricing recommendations from backend
+    let liveData = null;
+    try {
+        const res = await fetch(`${API_BASE}/api/market-intelligence/pricing-recommendations`, {
+            headers: currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : undefined
+        });
+        if (res.ok) {
+            liveData = await res.json();
+        }
+    } catch (e) {
+        console.warn('Live pricing recommendations unavailable:', e.message);
+    }
+
+    // Wait for progress animation to finish
+    await stepPromise;
+
+    // Use live data if available, otherwise fall back to local hardcoded sources
+    if (liveData?.ok && liveData.recommendations?.length > 0) {
+        currentExchangeRate = liveData.fxRate || currentExchangeRate;
+        // Populate marketDataSources cache from live data so resolveMarketDataForCrop works
+        for (const rec of liveData.recommendations) {
+            marketDataSources[rec.product] = {
+                retailers: rec.retailers || [],
+                avgPriceCAD: rec.avgPriceCAD || 0,
+                avgPriceUSD: (rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
+                avgWeightOz: 1, // DB data is already per-unit
+                priceRange: (rec.priceRange || [0, 0]).map(p => p * 1), // already per oz
+                trend: rec.trend || 'stable',
+                trendPercent: rec.trendPercent ?? 0,
+                country: 'Canada',
+                articles: [],
+                // AI enrichment
+                _aiOutlook: rec.aiOutlook,
+                _aiConfidence: rec.aiConfidence,
+                _aiForecastPrice: rec.aiForecastPrice,
+                _aiAction: rec.aiAction,
+                _aiReasoning: rec.aiReasoning,
+                _dataSource: rec.dataSource || 'database',
+                _observationCount: rec.observationCount || 0,
+            };
+        }
+        console.log(`✅ Loaded ${liveData.recommendations.length} live pricing recommendations (FX: ${currentExchangeRate})`);
+    } else {
+        // Fallback: use hardcoded marketDataSources + fake FX
+        await fetchExchangeRate();
+        console.warn('⚠ Using hardcoded market data (backend unavailable)');
+    }
     
-    // Simulate fetching exchange rate (in production, call real API)
-    await fetchExchangeRate();
-    
-    // Generate recommendations
+    // Generate recommendations using the (now-updated) marketDataSources
     const recommendations = generateRecommendations();
     
     // Store recommendations
@@ -1965,12 +1995,30 @@ function generateRecommendations() {
     );
 
     // Analyze full recipe universe: market-supported recipes + current pricing recipes
-    const analysisCrops = [...new Set([
-        ...Object.keys(marketDataSources),
-        ...(pricingData || []).map(item => item.crop)
-    ])].sort();
+    // Deduplicate: if a marketDataSources key and a pricingData name resolve to the
+    // same market source, keep only the pricingData name (the farm's actual crop name).
+    const seenMarketKeys = new Set();
+    const analysisCrops = [];
 
-    analysisCrops.forEach(cropName => {
+    // First pass: add pricingData crop names (primary — these are the farm's real names)
+    for (const item of (pricingData || [])) {
+        const md = resolveMarketDataForCrop(item.crop);
+        if (md) {
+            // Track which market source key this resolved to, to avoid duplicates
+            const mdKey = Object.keys(marketDataSources).find(k => marketDataSources[k] === md);
+            if (mdKey) seenMarketKeys.add(mdKey);
+        }
+        analysisCrops.push(item.crop);
+    }
+
+    // Second pass: add marketDataSources keys that weren't already covered
+    for (const key of Object.keys(marketDataSources)) {
+        if (!seenMarketKeys.has(key)) {
+            analysisCrops.push(key);
+        }
+    }
+
+    analysisCrops.sort().forEach(cropName => {
         const marketData = resolveMarketDataForCrop(cropName);
         if (!marketData) return;
 
@@ -1978,44 +2026,60 @@ function generateRecommendations() {
         const defaultItem = defaultPricing[cropName] || null;
         
         // Calculate price per oz from market data
-        const pricePerOzUSD = marketData.avgPriceUSD / marketData.avgWeightOz;
-        
-        // Convert to CAD if source is outside Canada
-        const pricePerOzCAD = marketData.country !== 'Canada' ? 
-            pricePerOzUSD * currentExchangeRate : 
-            pricePerOzUSD;
+        // Live DB data has avgWeightOz=1 (already per-unit), hardcoded has actual weight
+        const avgWeight = marketData.avgWeightOz || 1;
+        const pricePerOzCAD = marketData.country === 'Canada' || marketData._dataSource === 'database'
+            ? (marketData.avgPriceCAD || 0) / avgWeight
+            : ((marketData.avgPriceUSD || 0) / avgWeight) * currentExchangeRate;
+        const pricePerOzUSD = pricePerOzCAD / currentExchangeRate;
         
         // Calculate price per 25g (1 oz = 28.35g, so 25g = 0.8818 oz)
         const pricePer25gCAD = pricePerOzCAD * 0.8818;
         
         const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? pricePerOzCAD);
         const marketAvg = pricePerOzCAD;
-        const difference = ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1);
+        const difference = marketAvg > 0 ? ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1) : '0.0';
         
         let recommendation = marketAvg;
         let reasoning = '';
         let priceChangeType = 'stable';
-        
-        if (marketData.trend === 'increasing') {
-            recommendation = marketAvg * 1.05; // Suggest 5% above average
+
+        // Use AI reasoning if available from backend
+        const aiReasoning = marketData._aiReasoning;
+        const aiOutlook = marketData._aiOutlook;
+        const aiAction = marketData._aiAction;
+        const aiForecast = marketData._aiForecastPrice;
+
+        if (aiOutlook && aiReasoning) {
+            // AI-powered recommendation
+            if (aiForecast && aiForecast > 0) {
+                recommendation = aiForecast;
+            } else if (aiOutlook === 'bullish') {
+                recommendation = marketAvg * 1.05;
+            } else if (aiOutlook === 'bearish') {
+                recommendation = marketAvg * 0.95;
+            }
+
+            priceChangeType = aiOutlook === 'bullish' ? 'up' : aiOutlook === 'bearish' ? 'down' : 'stable';
+            reasoning = `🤖 AI Analysis: ${aiReasoning}`;
+            if (aiAction) reasoning += ` Action: ${aiAction.replace(/_/g, ' ')}.`;
+        } else if (marketData.trend === 'increasing') {
+            recommendation = marketAvg * 1.05;
             reasoning = `Market analysis shows ${cropName} prices are trending upward. `;
             priceChangeType = 'up';
-            
-            if (marketData.articles.length > 0) {
+            if (marketData.articles && marketData.articles.length > 0) {
                 reasoning += `Recent reports indicate supply constraints and increased demand. `;
             }
-            
             reasoning += `Recommended to adjust pricing to capitalize on market conditions.`;
         } else if (marketData.trend === 'decreasing') {
-            recommendation = marketAvg * 0.95; // Suggest 5% below average
+            recommendation = marketAvg * 0.95;
             reasoning = `Market prices for ${cropName} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
             priceChangeType = 'down';
         } else {
             recommendation = marketAvg;
             reasoning = `Current ${cropName} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
-            
-            if (Math.abs(difference) > 10) {
-                reasoning += difference > 0 ? 
+            if (Math.abs(parseFloat(difference)) > 10) {
+                reasoning += parseFloat(difference) > 0 ? 
                     'Consider reducing price to match market expectations.' : 
                     'You have room to increase margins without losing competitiveness.';
             } else {
@@ -2024,9 +2088,9 @@ function generateRecommendations() {
         }
         
         // Calculate range in CAD
-        const priceRangeCAD = marketData.country !== 'Canada' ?
-            marketData.priceRange.map(p => (p / marketData.avgWeightOz) * currentExchangeRate) :
-            marketData.priceRange.map(p => p / marketData.avgWeightOz);
+        const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
+            ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeight) * currentExchangeRate)
+            : (marketData.priceRange || [0, 0]).map(p => p / avgWeight);
         
         recommendations.push({
             crop: cropName,
@@ -2038,13 +2102,17 @@ function generateRecommendations() {
             pricePerOzUSD: pricePerOzUSD,
             priceRange: priceRangeCAD,
             exchangeRate: currentExchangeRate,
-            sourceCountry: marketData.country,
+            sourceCountry: marketData.country || 'Canada',
             trend: marketData.trend,
             reasoning: reasoning,
             priceChangeType: priceChangeType,
-            articles: marketData.articles,
-            retailers: marketData.retailers,
+            articles: marketData.articles || [],
+            retailers: marketData.retailers || [],
             hasPricingRow: Boolean(pricingItem),
+            aiOutlook: aiOutlook || null,
+            aiConfidence: marketData._aiConfidence || null,
+            dataSource: marketData._dataSource || 'static',
+            observationCount: marketData._observationCount || 0,
             timestamp: Date.now()
         });
     });
@@ -2071,19 +2139,32 @@ function displayRecommendations(recommendations) {
     }
     
     contentDiv.innerHTML = recommendations.map(rec => {
-        const priceChange = ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1);
+        const priceChange = rec.currentPrice > 0
+            ? ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1)
+            : '0.0';
         const hasSignificantChange = Math.abs(priceChange) > 5;
         
-        // Show currency conversion info if from USA
-        const conversionInfo = rec.sourceCountry !== 'Canada' ? 
-            `<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+        // Data source badge
+        const isLive = rec.dataSource === 'database';
+        const sourceBadge = isLive
+            ? `<span style="padding: 2px 6px; background: rgba(34,197,94,0.2); color: #4ade80; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">LIVE DATA</span>`
+            : `<span style="padding: 2px 6px; background: rgba(156,163,175,0.2); color: #9ca3af; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">STATIC</span>`;
+
+        // AI confidence badge
+        const aiBadge = rec.aiOutlook
+            ? `<span style="padding: 2px 6px; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px;">AI ${(rec.aiConfidence || 'medium').toUpperCase()}</span>`
+            : '';
+
+        // FX info
+        const conversionInfo = !isLive && rec.sourceCountry !== 'Canada'
+            ? `<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
                 💱 Prices converted from USD at rate: 1 USD = ${rec.exchangeRate.toFixed(4)} CAD
             </div>` : '';
         
         return `
             <div class="recommendation-card ${hasSignificantChange ? 'updated' : ''}">
                 <div class="recommendation-header">
-                    <div class="crop-title">${rec.crop}</div>
+                    <div class="crop-title">${rec.crop}${sourceBadge}${aiBadge}</div>
                     ${hasSignificantChange ? 
                         `<span style="padding: 4px 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-radius: 4px; font-size: 12px; font-weight: 600;">UPDATE RECOMMENDED</span>` 
                         : ''}
@@ -2102,12 +2183,14 @@ function displayRecommendations(recommendations) {
                         </div>
                     </div>
                     <div>
-                        <div class="price-label">Source (USD)</div>
+                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : 'Source (USD)'}</div>
                         <div style="font-size: 16px; font-weight: 600; color: var(--text-muted);">
-                            $${rec.pricePerOzUSD.toFixed(2)}/oz
+                            ${rec.dataSource === 'database'
+                                ? `${rec.observationCount || '—'} obs`
+                                : `$${rec.pricePerOzUSD.toFixed(2)}/oz`}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
-                            ${rec.sourceCountry}
+                            ${rec.dataSource === 'database' ? `${(rec.retailers || []).length} retailers` : rec.sourceCountry}
                         </div>
                     </div>
                 </div>
@@ -2139,10 +2222,10 @@ function displayRecommendations(recommendations) {
                 </div>
                 
                 <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                    <strong>Retailers surveyed:</strong> ${rec.retailers.join(', ')}
+                    <strong>Retailers surveyed:</strong> ${(rec.retailers || []).length > 0 ? rec.retailers.join(', ') : 'N/A'}
                 </div>
                 
-                ${rec.articles.length > 0 ? `
+                ${(rec.articles || []).length > 0 ? `
                     <div>
                         <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Related News:</div>
                         <div class="news-links">
@@ -2168,71 +2251,7 @@ function displayRecommendations(recommendations) {
         `;
     }).join('');
     
-    // Add "Apply All" button above recommendations if any have significant changes
-    const significantCount = recommendations.filter(r => Math.abs(((r.recommendedPrice - r.currentPrice) / r.currentPrice * 100)) > 5).length;
-    if (significantCount > 0) {
-        contentDiv.insertAdjacentHTML('afterbegin', `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); border-radius: 8px;">
-                <div>
-                    <strong style="color: var(--accent-green);">${significantCount} crop${significantCount !== 1 ? 's' : ''} with recommended price updates</strong>
-                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Apply all AI-recommended prices at once, then save to persist.</div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn" onclick="applyAllRecommendedPrices()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--accent-green), #059669); color: white; border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
-                        Apply All ${significantCount} Updates
-                    </button>
-                    <button class="btn" onclick="applyAllRecommendedPricesAndSave()" style="padding: 10px 20px; background: linear-gradient(135deg, var(--accent-purple), #6d28d9); color: white; border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
-                        Apply &amp; Save All
-                    </button>
-                </div>
-            </div>
-        `);
-    }
-
     recommendationsDiv.style.display = 'block';
-}
-
-/**
- * Apply ALL recommended prices at once (multi-crop batch)
- */
-function applyAllRecommendedPrices() {
-    const cached = localStorage.getItem(AI_PRICING_KEY);
-    if (!cached) { alert('No recommendations to apply.'); return; }
-    const recommendations = JSON.parse(cached);
-    let applied = 0;
-
-    recommendations.forEach(rec => {
-        const diff = Math.abs(((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100));
-        if (diff > 5) {
-            const index = pricingData.findIndex(item => item.crop === rec.crop);
-            if (index !== -1) {
-                pricingData[index].retail = rec.recommendedPrice;
-                applied++;
-            }
-        }
-    });
-
-    renderPricingTable();
-
-    // Mark all individual Apply buttons as applied
-    document.querySelectorAll('.apply-recommendation-btn').forEach(btn => {
-        btn.textContent = '✅ Applied';
-        btn.disabled = true;
-        btn.style.opacity = '0.6';
-        btn.style.cursor = 'default';
-    });
-
-    showPricingToast(`${applied} crop price${applied !== 1 ? 's' : ''} updated — remember to save!`);
-}
-
-/**
- * Apply ALL recommended prices and save immediately
- */
-async function applyAllRecommendedPricesAndSave() {
-    applyAllRecommendedPrices();
-    await savePricing();
-    showPricingToast('All prices applied and saved!');
-    setTimeout(() => closeAIPricingAssistant(), 1500);
 }
 
 /**
@@ -2249,9 +2268,21 @@ function displayCachedRecommendations() {
 /**
  * Apply recommended price to a crop
  */
-function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
-    const index = pricingData.findIndex(item => item.crop === cropName);
+async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
+    // Exact match first, then fuzzy match
+    let index = pricingData.findIndex(item => item.crop === cropName);
+
+    if (index === -1) {
+        // Fuzzy match: normalize and compare substrings
+        const norm = cropName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        index = pricingData.findIndex(item => {
+            const itemNorm = item.crop.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            return itemNorm.includes(norm) || norm.includes(itemNorm);
+        });
+    }
+
     if (index !== -1) {
+        const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
         renderPricingTable();
         
@@ -2263,8 +2294,70 @@ function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             btnEl.style.cursor = 'default';
         }
 
-        // Non-blocking toast inside the modal
-        showPricingToast(`Updated ${cropName} to $${recommendedPrice.toFixed(2)} — remember to save`);
+        // Auto-save to backend
+        await savePricingQuiet();
+
+        // Phase 3B: Record pricing decision for feedback loop
+        try {
+            const cached = JSON.parse(localStorage.getItem(AI_PRICING_KEY) || '[]');
+            const rec = cached.find(r => r.crop === cropName) || {};
+            await fetch(`${API_BASE}/api/crop-pricing/decisions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+                },
+                body: JSON.stringify({ decisions: [{
+                    crop: pricingData[index].crop,
+                    previous_price: previousPrice,
+                    recommended_price: recommendedPrice,
+                    applied_price: recommendedPrice,
+                    market_average: rec.marketAverage || null,
+                    ai_outlook: rec.aiOutlook || null,
+                    ai_action: null,
+                    trend: rec.trend || null,
+                    data_source: rec.dataSource || 'static',
+                    decision: 'accepted'
+                }]})
+            });
+        } catch (e) {
+            console.warn('Decision recording failed:', e.message);
+        }
+
+        showPricingToast(`Updated ${pricingData[index].crop} to $${recommendedPrice.toFixed(2)} — saved`);
+    } else {
+        showPricingToast(`⚠ Could not match "${cropName}" to any crop in your pricing table`);
+    }
+}
+
+/**
+ * Save pricing data silently (no alert). Used by applyRecommendedPrice.
+ */
+async function savePricingQuiet() {
+    try {
+        pricingData.forEach(item => {
+            localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
+        });
+        const crops = pricingData.map(item => ({
+            crop: item.crop,
+            unit: 'lb',
+            retailPrice: parseFloat(item.retail),
+            wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
+            ws1Discount: item.ws1Discount,
+            ws2Discount: item.ws2Discount,
+            ws3Discount: item.ws3Discount,
+            isTaxable: item.isTaxable || false
+        }));
+        await fetch(`${API_BASE}/api/crop-pricing`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+            },
+            body: JSON.stringify({ crops })
+        });
+    } catch (e) {
+        console.warn('Auto-save failed:', e.message);
     }
 }
 
@@ -2379,63 +2472,43 @@ function checkForScheduledPriceUpdates() {
 // Growth parameters by crop type (days to harvest and retail price per POUND)
 // Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
-    // Lettuce varieties — $23.52/lb CAD
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Parris Island Cos Romaine': { daysToHarvest: 35, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Salad Bowl Oakleaf': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-
-    // Kale varieties — $23.52/lb CAD
-    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 23.52, yieldFactor: 0.88 },
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
-    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 23.52, yieldFactor: 0.88 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
-
-    // Asian / Specialty greens — $25.12/lb CAD
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.91 },
-    'Komatsuna Mustard Spinach': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-    'Mizuna Mustard Greens': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-    'Bloomsdale Spinach': { daysToHarvest: 30, retailPricePerLb: 25.12, yieldFactor: 0.91 },
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
-    'Escarole Batavian': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
-    'Fordhook Giant Swiss Chard': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.88 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-
-    // Arugula varieties — $25.12/lb CAD (specialty)
-    'Astro Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.91 },
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 25.12, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 25.12, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 25.12, yieldFactor: 0.90 },
-
-    // Herb varieties — $43.20/lb CAD ($2.70/oz)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.86 },
-    'Santo Cilantro': { daysToHarvest: 22, retailPricePerLb: 43.20, yieldFactor: 0.88 },
-    'Italian Parsley': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'French Tarragon': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
-    'Common Thyme': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
-    'Greek Oregano': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.86 },
-    'Chervil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Dill Bouquet': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Rosemary': { daysToHarvest: 35, retailPricePerLb: 43.20, yieldFactor: 0.84 },
-    'Sage': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
-    'Marjoram': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.86 },
-    'Lemon Balm': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Lovage': { daysToHarvest: 30, retailPricePerLb: 43.20, yieldFactor: 0.85 },
-    'Sorrel': { daysToHarvest: 28, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Kentucky Colonel Spearmint': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.87 }
+    // Lettuce varieties - 28-35 day cycle, priced per lb
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    
+    // Kale varieties - 35-42 day cycle, priced per lb
+    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
+    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
+    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
+    
+    // Asian Greens - priced per lb
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
+    
+    // Specialty Greens - priced per lb
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
+    
+    // Arugula varieties - 21-28 day cycle, priced per lb
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    
+    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
 };
 
 // Global crop value data
@@ -2498,7 +2571,98 @@ function getGrowthStage(crop, daysPostSeed) {
  */
 async function loadCropValueData() {
     try {
-        console.log(' Loading crop value data...');
+        console.log('Loading crop value data...');
+
+        const session = (typeof getSession === 'function') ? getSession() : null;
+        const authHeaders = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {};
+
+        // Prefer product inventory because manual edits are written to farm_inventory.
+        try {
+            const productResponse = await fetch(`${API_BASE}/api/farm-sales/inventory`, {
+                headers: authHeaders
+            });
+
+            if (productResponse.ok) {
+                const productData = await productResponse.json();
+                const inventoryItems = Array.isArray(productData?.inventory) ? productData.inventory : [];
+
+                if (inventoryItems.length > 0) {
+                    const trayDetails = [];
+                    let totalValue = 0;
+                    let totalPlants = 0;
+                    const cropSummary = {};
+                    const stageSummary = {
+                        'Manual Inventory': {
+                            trays: 0,
+                            plants: 0,
+                            value: 0,
+                            minDays: 0,
+                            maxDays: 0
+                        }
+                    };
+
+                    for (const item of inventoryItems) {
+                        const crop = item.product_name || item.name || item.sku_name || item.sku || 'Unknown';
+                        const plantCount = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
+                        if (plantCount <= 0) continue;
+
+                        const unitPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0);
+                        const value = plantCount * unitPrice;
+
+                        trayDetails.push({
+                            trayId: item.product_id || item.sku_id || item.sku || crop,
+                            crop,
+                            seedingDate: 'Manual',
+                            daysPostSeed: 0,
+                            plantCount,
+                            value,
+                            growthPercent: 100,
+                            growthStage: 'Manual Inventory'
+                        });
+
+                        totalValue += value;
+                        totalPlants += plantCount;
+
+                        if (!cropSummary[crop]) {
+                            cropSummary[crop] = {
+                                trays: 0,
+                                plants: 0,
+                                value: 0,
+                                totalDays: 0
+                            };
+                        }
+                        cropSummary[crop].trays++;
+                        cropSummary[crop].plants += plantCount;
+                        cropSummary[crop].value += value;
+
+                        stageSummary['Manual Inventory'].trays++;
+                        stageSummary['Manual Inventory'].plants += plantCount;
+                        stageSummary['Manual Inventory'].value += value;
+                    }
+
+                    if (trayDetails.length > 0) {
+                        trayDetails.sort((a, b) => b.value - a.value);
+
+                        cropValueData = {
+                            totalValue,
+                            activeTrays: trayDetails.length,
+                            totalPlants,
+                            cropCount: Object.keys(cropSummary).length,
+                            avgValuePerTray: trayDetails.length > 0 ? totalValue / trayDetails.length : 0,
+                            cropSummary,
+                            stageSummary,
+                            trayDetails,
+                            timestamp: new Date().toISOString()
+                        };
+
+                        console.log(' Crop value data loaded from product inventory:', cropValueData);
+                        return cropValueData;
+                    }
+                }
+            }
+        } catch (productError) {
+            console.warn(' Falling back to tray inventory for crop value:', productError);
+        }
         
         // Fetch current inventory
         const inventoryResponse = await fetch(`${API_BASE}/api/inventory/current`);
@@ -2652,7 +2816,7 @@ async function renderCropValue() {
     Object.entries(data.cropSummary).forEach(([crop, summary]) => {
         const avgDays = summary.totalDays / summary.trays;
         const percentOfTotal = (summary.value / data.totalValue * 100).toFixed(1);
-        const params = cropGrowthParams[crop] || { retailPricePerUnit: 0 };
+        const params = cropGrowthParams[crop] || { retailPricePerLb: 0 };
         
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -2660,7 +2824,7 @@ async function renderCropValue() {
             <td>${summary.trays}</td>
             <td>${summary.plants}</td>
             <td>${avgDays.toFixed(0)} days</td>
-            <td>$${params.retailPricePerUnit.toFixed(2)}/unit</td>
+            <td>$${(params.retailPricePerLb || 0).toFixed(2)}/lb</td>
             <td style="font-weight: 600;">$${summary.value.toFixed(2)}</td>
             <td><span style="color: var(--accent-green);">${percentOfTotal}%</span></td>
         `;
@@ -3454,6 +3618,7 @@ async function loadOperationsData(startDate) {
     try {
         // Fetch from crop/tray data
         const response = await fetch(`${API_BASE}/data/farm-summary.json`);
+        if (!response.ok) { throw new Error(`farm-summary.json ${response.status}`); }
         const data = await response.json();
         
         let plantsSeeded = 0;
@@ -3841,15 +4006,15 @@ async function syncQuickBooksCustomers() {
  */
 async function loadPaymentMethods() {
     try {
-        // Check Square connection status
-        const statusResponse = await fetch(`${API_BASE}/api/farm/square/status`, {
+        // Check Square connection status via proxy
+        const statusResponse = await fetch(`${API_BASE}/api/square-proxy/`, {
             headers: { 'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM' }
         });
         const statusData = await statusResponse.json();
         
         const statusContainer = document.getElementById('square-status-container');
         
-        if (statusData.connected) {
+        if (statusData.configured && statusData.connected) {
             statusContainer.innerHTML = `
                 <div style="padding: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3858,8 +4023,8 @@ async function loadPaymentMethods() {
                                 ✓ Square Connected
                             </div>
                             <div style="color: var(--text-secondary);">
-                                <div>Merchant: ${statusData.data.merchantId}</div>
-                                <div>Location: ${statusData.data.locationName || 'Default'}</div>
+                                <div>Merchant: ${statusData.merchantId || 'Configured'}</div>
+                                <div>Location: ${statusData.locationName || 'Default'}</div>
                             </div>
                         </div>
                         <button class="btn" onclick="reconnectSquare()" style="background: var(--accent-blue);">
@@ -3868,14 +4033,32 @@ async function loadPaymentMethods() {
                     </div>
                 </div>
             `;
-        } else {
+        } else if (statusData.configured) {
             statusContainer.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
                     <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
                         Square Payment Processing Not Connected
                     </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Click below to authorize your Square account.</p>
                     <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
                         Connect Square Account
+                    </button>
+                </div>
+            `;
+        } else {
+            // Square not configured on the server
+            statusContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">💳</div>
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
+                        Square Integration Available
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        Square payment processing lets you accept credit cards, debit cards, and digital payments from your customers. 
+                        To connect, open <strong>Setup &amp; Update → Business Setup → Payment Processing</strong> and follow the setup wizard.
+                    </p>
+                    <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                        Open Payment Setup Wizard
                     </button>
                 </div>
             `;
@@ -3903,22 +4086,22 @@ async function refreshPaymentMethods() {
  */
 async function connectSquare() {
     try {
-        // Get Square OAuth URL from backend
-        const response = await fetch('/api/farm/square/authorize', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                farmId: 'FARM-001', // TODO: Get from session/config
-                farmName: 'Light Engine Farm'
-            })
-        });
+        const farmId = currentSession?.farmId || 'LOCAL-FARM';
+        // Check if Square is configured first
+        const proxyStatus = await fetch(`${API_BASE}/api/square-proxy/`);
+        const proxyData = await proxyStatus.json();
         
+        if (!proxyData.configured) {
+            showToast('Square is not yet configured. Use the Payment Setup wizard in Setup & Update to get started.', 'info');
+            return;
+        }
+        
+        // Get Square OAuth URL from proxy
+        const response = await fetch(`${API_BASE}/api/square-proxy/authorize?farm_id=${encodeURIComponent(farmId)}`);
         const data = await response.json();
         
-        if (!data.ok) {
-            showToast('Failed to initialize Square connection', 'error');
+        if (!data.success || !data.authUrl) {
+            showToast(data.error || 'Failed to initialize Square connection', 'error');
             return;
         }
         
@@ -3929,7 +4112,7 @@ async function connectSquare() {
         const top = (screen.height - height) / 2;
         
         const popup = window.open(
-            data.data.authorizationUrl,
+            data.authUrl,
             'square-oauth',
             `width=${width},height=${height},left=${left},top=${top}`
         );
@@ -3939,7 +4122,7 @@ async function connectSquare() {
             if (event.data.type === 'square-connected') {
                 window.removeEventListener('message', handleSquareCallback);
                 showToast('Square account connected successfully!', 'success');
-                loadPaymentMethods(); // Refresh payment methods display
+                loadPaymentMethods();
             }
         });
         
@@ -3957,24 +4140,69 @@ function reconnectSquare() {
 }
 
 /**
+ * Navigate to the Payment Setup wizard in Setup & Update
+ */
+function navigateToPaymentWizard() {
+    if (typeof renderEmbeddedView === 'function') {
+        const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        if (navItem) navItem.classList.add('active');
+        renderEmbeddedView('/LE-dashboard.html?wizard=payment-setup', 'Setup & Update');
+    }
+}
+
+/**
  * Load receipts and invoices
  */
+let _loadedReceipts = [];
+
+function receiptTypeLabel(receipt) {
+    const p = (receipt.provider || '').toLowerCase();
+    if (p === 'square' && !receipt.buyer_id) return 'Subscription';
+    if (receipt.buyer_id || receipt.order_status) return 'Wholesale Fee';
+    if (p === 'stripe') return 'Processing';
+    if (p === 'demo') return 'Wholesale Fee';
+    return 'Processing';
+}
+
+function receiptTypeKey(receipt) {
+    const label = receiptTypeLabel(receipt);
+    if (label === 'Wholesale Fee') return 'wholesale';
+    if (label === 'Subscription') return 'support';
+    return 'processing';
+}
+
+function receiptDescription(receipt) {
+    if (receipt.description) return receipt.description;
+    const type = receiptTypeLabel(receipt);
+    if (type === 'Subscription') return `Light Engine subscription payment`;
+    if (type === 'Wholesale Fee') return `Order ${(receipt.order_id || '').substring(0, 16)}`;
+    return `Payment via ${receipt.provider || 'unknown'}`;
+}
+
 async function loadReceipts() {
     const tbody = document.getElementById('receipts-tbody');
     
     // Fetch real receipt/invoice data from billing API
-    let receipts = [];
+    _loadedReceipts = [];
     try {
         const resp = await fetch(`${API_BASE}/api/billing/receipts`, {
             headers: { 'Authorization': `Bearer ${currentSession.token}` }
         });
         if (resp.ok) {
             const data = await resp.json();
-            receipts = data.receipts || data || [];
+            _loadedReceipts = data.receipts || data || [];
         }
     } catch (e) {
         console.warn('Receipts API not available:', e.message);
     }
+
+    renderReceiptRows(_loadedReceipts);
+}
+
+function renderReceiptRows(receipts) {
+    const tbody = document.getElementById('receipts-tbody');
+    if (!tbody) return;
 
     if (receipts.length === 0) {
         tbody.innerHTML = `
@@ -3988,20 +4216,22 @@ async function loadReceipts() {
         return;
     }
     
-    tbody.innerHTML = receipts.map(receipt => `
+    tbody.innerHTML = receipts.map((receipt, idx) => {
+        const statusColor = receipt.status === 'completed' ? 'var(--accent-green)' : 'var(--accent-blue)';
+        return `
         <tr>
             <td>${new Date(receipt.date).toLocaleDateString()}</td>
-            <td>${receipt.type === 'wholesale' ? 'Wholesale Fee' : receipt.type === 'support' ? 'Support' : 'Processing'}</td>
-            <td>${receipt.description}</td>
-            <td>$${(receipt.amount || 0).toFixed(2)}</td>
-            <td><span style="padding: 4px 8px; background: var(--accent-green); border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
+            <td>${receiptTypeLabel(receipt)}</td>
+            <td>${receiptDescription(receipt)}</td>
+            <td>$${(receipt.amount || 0).toFixed(2)} ${receipt.currency || ''}</td>
+            <td><span style="padding: 4px 8px; background: ${statusColor}; border-radius: 4px; font-size: 12px;">${(receipt.status || 'paid').toUpperCase()}</span></td>
             <td>
-                <button class="btn" onclick="downloadReceipt('${receipt.date}')" style="padding: 6px 12px; font-size: 12px;">
+                <button class="btn" onclick="downloadReceipt(${idx})" style="padding: 6px 12px; font-size: 12px;">
                     Download
                 </button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 /**
@@ -4009,24 +4239,97 @@ async function loadReceipts() {
  */
 function filterReceipts() {
     const filter = document.getElementById('receiptFilter').value;
-    // Would filter the loaded receipts
-    console.log('Filtering receipts by:', filter);
+    if (filter === 'all') {
+        renderReceiptRows(_loadedReceipts);
+    } else {
+        renderReceiptRows(_loadedReceipts.filter(r => receiptTypeKey(r) === filter));
+    }
 }
 
 /**
- * Download single receipt
+ * Generate receipt text content for download
  */
-function downloadReceipt(date) {
-    showToast('Receipt downloaded', 'success');
-    // Would generate and download PDF receipt
+function buildReceiptText(receipt) {
+    const date = new Date(receipt.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const lines = [
+        '═══════════════════════════════════════════',
+        '           GREENREACH CENTRAL',
+        '              RECEIPT',
+        '═══════════════════════════════════════════',
+        '',
+        `  Receipt #:  ${receipt.receipt_id || 'N/A'}`,
+        `  Date:       ${date}`,
+        `  Provider:   ${(receipt.provider || 'N/A').toUpperCase()}`,
+        `  Status:     ${(receipt.status || 'paid').toUpperCase()}`,
+        '',
+        '───────────────────────────────────────────',
+        `  Type:       ${receiptTypeLabel(receipt)}`,
+        `  Description:${receiptDescription(receipt)}`,
+        '',
+        `  Amount:     $${(receipt.amount || 0).toFixed(2)} ${receipt.currency || 'CAD'}`,
+    ];
+    if (receipt.broker_fee) {
+        lines.push(`  Broker Fee: $${receipt.broker_fee.toFixed(2)}`);
+        lines.push(`  Net Amount: $${(receipt.net_to_farms || 0).toFixed(2)}`);
+    }
+    if (receipt.order_id) {
+        lines.push('', `  Order ID:   ${receipt.order_id}`);
+    }
+    lines.push(
+        '',
+        '───────────────────────────────────────────',
+        '  GreenReach Central — greenreachgreens.com',
+        '═══════════════════════════════════════════',
+        ''
+    );
+    return lines.join('\n');
 }
 
 /**
- * Download all receipts
+ * Download single receipt as text file
+ */
+function downloadReceipt(idx) {
+    const receipt = _loadedReceipts[idx];
+    if (!receipt) {
+        showToast('Receipt not found', 'error');
+        return;
+    }
+    const text = buildReceiptText(receipt);
+    const dateStr = new Date(receipt.date).toISOString().split('T')[0];
+    const filename = `receipt-${dateStr}-${(receipt.receipt_id || 'unknown').substring(0, 12)}.txt`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Receipt downloaded to your Downloads folder', 'success');
+}
+
+/**
+ * Download all receipts as a single text file
  */
 function downloadAllReceipts() {
-    showToast('All receipts downloaded', 'success');
-    // Would generate and download all receipts as ZIP
+    if (_loadedReceipts.length === 0) {
+        showToast('No receipts to download', 'info');
+        return;
+    }
+    const allText = _loadedReceipts.map(r => buildReceiptText(r)).join('\n\n');
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `all-receipts-${today}.txt`;
+    const blob = new Blob([allText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`${_loadedReceipts.length} receipt(s) downloaded to your Downloads folder`, 'success');
 }
 
 // ============================================================================
@@ -4069,6 +4372,29 @@ async function loadSettings() {
         } catch (error) {
             console.log('Setup API not available, using fallback data');
         }
+
+        // Load profile data from API (contact, name, plan)
+        let profileData = {};
+        try {
+            const headers = {};
+            if (currentSession?.token) {
+                headers['Authorization'] = `Bearer ${currentSession.token}`;
+            }
+            const profileResponse = await fetch('/api/setup/profile', { headers });
+            if (profileResponse.ok) {
+                const pResult = await profileResponse.json();
+                if (pResult.success) profileData = pResult.profile || {};
+            }
+        } catch (error) {
+            console.log('[Farm Settings] Profile API not available');
+        }
+
+        // Store plan_type for feature gating
+        if (profileData.planType) {
+            localStorage.setItem('plan_type', profileData.planType);
+        } else if (setupData.farm?.planType) {
+            localStorage.setItem('plan_type', setupData.farm.planType);
+        }
         
         // Use fallback data sources (localStorage, session)
         const storedFarmData = JSON.parse(localStorage.getItem('farmData') || '{}');
@@ -4083,21 +4409,60 @@ async function loadSettings() {
         setVal('settings-farm-id', farmId);
         setVal('settings-registration-code', registrationCode);
         setTxt('network-type', networkType);
-        
-        // If we have complete setup data, use it
-        if (setupData.completed) {
-            
-            // Load hardware info
-            if (setupData.hardwareDetected) {
-                setTxt('hardware-lights', setupData.hardwareDetected.lights || 0);
-                setTxt('hardware-fans', setupData.hardwareDetected.fans || 0);
-                setTxt('hardware-sensors', setupData.hardwareDetected.sensors || 0);
-                setTxt('hardware-other', setupData.hardwareDetected.other || 0);
+
+        // Populate editable profile fields
+        const farmName = profileData.name || farmData.name || setupData.farm?.name || authFarmName || '';
+        setVal('settings-farm-name', farmName);
+        setVal('settings-contact-name', profileData.contactName || farmData.contact?.name || '');
+        setVal('settings-contact-email', profileData.email || farmData.contact?.email || '');
+        setVal('settings-contact-phone', profileData.phone || farmData.contact?.phone || '');
+        setVal('settings-website', profileData.website || farmData.contact?.website || '');
+        const city = profileData.address?.city || (typeof profileData.address === 'string' ? profileData.address : '') || profileData.location || '';
+        setVal('settings-city', typeof city === 'object' ? (city.city || '') : city);
+
+        // Plan type badge
+        const planType = profileData.planType || setupData.farm?.planType || localStorage.getItem('plan_type') || 'cloud';
+        const badgeEl = document.getElementById('plan-type-badge');
+        if (badgeEl) {
+            if (planType === 'edge') {
+                badgeEl.textContent = '⚡ Edge';
+                badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);';
+            } else {
+                badgeEl.textContent = '☁️ Cloud';
+                badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
             }
-            
-            // Load certifications
-            if (setupData.certifications) {
-                const certList = document.getElementById('certifications-list');
+        }
+
+        // Apply feature gating after settings load
+        try {
+            if (typeof applyPlanFeatureGating === 'function') {
+                applyPlanFeatureGating(planType);
+            }
+        } catch (fgErr) {
+            console.warn('[Farm Settings] Feature gating error (non-fatal):', fgErr);
+        }
+
+        // Load onboarding checklist
+        try {
+            if (typeof loadOnboardingChecklist === 'function') {
+                loadOnboardingChecklist();
+            }
+        } catch (obErr) {
+            console.warn('[Farm Settings] Onboarding checklist error (non-fatal):', obErr);
+        }
+        
+        // Load hardware info if setup is completed
+        if (setupData.completed && setupData.hardwareDetected) {
+            setTxt('hardware-lights', setupData.hardwareDetected.lights || 0);
+            setTxt('hardware-fans', setupData.hardwareDetected.fans || 0);
+            setTxt('hardware-sensors', setupData.hardwareDetected.sensors || 0);
+            setTxt('hardware-other', setupData.hardwareDetected.other || 0);
+        }
+
+        // Load certifications (always render when data exists, not gated by setup completion)
+        if (setupData.certifications) {
+            const certList = document.getElementById('certifications-list');
+            if (certList) {
                 certList.innerHTML = '';
                 (setupData.certifications.certifications || []).forEach(cert => {
                     const badge = document.createElement('span');
@@ -4106,8 +4471,13 @@ async function loadSettings() {
                     badge.textContent = cert;
                     certList.appendChild(badge);
                 });
-                
-                const practicesList = document.getElementById('practices-list');
+                if (!setupData.certifications.certifications?.length) {
+                    certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
+                }
+            }
+
+            const practicesList = document.getElementById('practices-list');
+            if (practicesList) {
                 practicesList.innerHTML = '';
                 (setupData.certifications.practices || []).forEach(practice => {
                     const badge = document.createElement('span');
@@ -4116,24 +4486,32 @@ async function loadSettings() {
                     badge.textContent = practice;
                     practicesList.appendChild(badge);
                 });
-                
-                // ATTRIBUTES DISPLAY REMOVED - DO NOT RE-ADD
-                // Section removed: Woman-Owned, Veteran-Owned, Minority-Owned, Family Farm, Sustainable
-                // Reason: Not relevant for farm operations. Focus on certifications and practices only.
-                
-                // Show placeholder if no data
-                if (!setupData.certifications.certifications?.length) {
-                    certList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No certifications added</span>';
-                }
                 if (!setupData.certifications.practices?.length) {
                     practicesList.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">No practices selected</span>';
                 }
-                // ATTRIBUTES PLACEHOLDER REMOVED - section permanently deleted
             }
         }
         
-        // Load user preferences from localStorage
-        const settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        // Load user preferences — try server first, fallback to localStorage
+        let settings = {};
+        try {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token') || currentSession?.token;
+            const sHeaders = {};
+            if (token) sHeaders['Authorization'] = 'Bearer ' + token;
+            const sResp = await fetch('/data/farm-settings.json', { headers: sHeaders });
+            if (sResp.ok) {
+                const serverSettings = await sResp.json();
+                if (serverSettings && Object.keys(serverSettings).length > 0) {
+                    settings = serverSettings;
+                    // Keep localStorage in sync
+                    localStorage.setItem('farmSettings', JSON.stringify(settings));
+                }
+            }
+        } catch (_) { /* server load is best-effort */ }
+        // Fallback to localStorage if server returned nothing
+        if (!Object.keys(settings).length) {
+            settings = JSON.parse(localStorage.getItem('farmSettings') || '{}');
+        }
         
         // Display Preferences
         setVal('settings-temp-unit', settings.tempUnit || 'F');
@@ -4178,7 +4556,7 @@ async function loadSettings() {
         setChk('webhook-harvest', settings.webhookHarvest || false);
         
     } catch (error) {
-        console.error('Error loading settings:', error);
+        console.error('Error loading settings:', error?.message || error, error?.stack || '');
         showToast('Error loading settings', 'error');
     }
 }
@@ -4319,6 +4697,11 @@ async function saveSettings() {
                 body: JSON.stringify(settings)
             });
         } catch (_) { /* server save is best-effort */ }
+
+        // Also save farm profile (contact info) so the bottom Save Settings captures everything
+        try {
+            await saveProfileSettings({ silent: true });
+        } catch (_) { /* profile save is best-effort — it has its own error handling */ }
         
         const notify = typeof showNotification === 'function' ? showNotification : typeof showToast === 'function' ? showToast : (msg) => alert(msg);
         notify('Settings saved successfully', 'success');
@@ -4334,19 +4717,21 @@ async function saveSettings() {
  */
 async function openEditCertificationsModal() {
     try {
-        // Load current certifications from farm data
+        // Load current certifications from setup status (farmStore is source of truth)
         let certifications = { certifications: [], practices: [], attributes: [] };
         
         try {
-            const farmResponse = await fetch('/data/farm.json');
-            if (farmResponse.ok) {
-                const farmData = await farmResponse.json();
-                if (farmData.certifications) {
-                    certifications = farmData.certifications;
+            const headers = {};
+            if (currentSession?.token) headers['Authorization'] = `Bearer ${currentSession.token}`;
+            const statusResponse = await fetch('/api/setup/status', { headers });
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                if (statusData.certifications) {
+                    certifications = statusData.certifications;
                 }
             }
         } catch (error) {
-            console.warn('Could not load certifications from /data/farm.json:', error);
+            console.warn('[Settings] Could not load certifications from /api/setup/status:', error);
         }
         
         // Populate checkboxes with current values
@@ -4433,8 +4818,9 @@ async function saveEditCertifications(event) {
             body: JSON.stringify(updatedCertifications)
         });
         
-        if (!response.ok) {
-            throw new Error('Failed to save certifications');
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || 'Failed to save certifications');
         }
         
         // Close modal and reload settings to show updates
@@ -4446,11 +4832,9 @@ async function saveEditCertifications(event) {
         
     } catch (error) {
         console.error('Error saving certifications:', error);
-        showToast('Error saving certifications. Changes saved locally only.', 'warning');
+        showToast('Error saving certifications', 'error');
         
-        // Even if API fails, update the display
         closeEditCertificationsModal();
-        await loadSettings();
     }
 }
 
@@ -4517,6 +4901,54 @@ async function saveOperationDefaults() {
     } catch (error) {
         console.error('Error saving operation defaults:', error);
         showToast('Error saving operation defaults', 'error');
+    }
+}
+
+/**
+ * Save farm profile (contact/identity) to the API
+ */
+async function saveProfileSettings(options = {}) {
+    const silent = options.silent || false;
+    try {
+        const profileData = {
+            name: document.getElementById('settings-farm-name').value.trim(),
+            contactName: document.getElementById('settings-contact-name').value.trim(),
+            email: document.getElementById('settings-contact-email').value.trim(),
+            phone: document.getElementById('settings-contact-phone').value.trim(),
+            website: document.getElementById('settings-website').value.trim(),
+            address: { city: document.getElementById('settings-city').value.trim() }
+        };
+
+        // Basic validation
+        if (profileData.email && !profileData.email.includes('@')) {
+            if (!silent) showToast('Please enter a valid email address', 'error');
+            return;
+        }
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentSession?.token) {
+            headers['Authorization'] = `Bearer ${currentSession.token}`;
+        }
+
+        const response = await fetch('/api/setup/profile', {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify(profileData)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            if (!silent) showToast('Farm profile saved successfully', 'success');
+            // Update localStorage farm_name for nav header
+            if (profileData.name) {
+                localStorage.setItem('farm_name', profileData.name);
+            }
+        } else {
+            if (!silent) showToast(result.error || 'Failed to save profile', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        if (!silent) showToast('Error saving profile', 'error');
     }
 }
 
@@ -4616,20 +5048,10 @@ let setupData = {
  * Check if first-time setup is needed
  */
 async function checkFirstTimeSetup() {
-    return;
     try {
-        // Cloud users use standalone wizard (redirected from login.html)
-        // Only check for embedded wizard on edge devices
-        const planType = (localStorage.getItem('planType') || 'cloud').toLowerCase();
-        
-        if (planType === 'cloud') {
-            console.log('[setup-wizard] Cloud user - skipping embedded wizard check (uses standalone wizard)');
-            return;
-        }
-        
-        const token = localStorage.getItem('token');
-        if (!token) {
-            console.log('[setup-wizard] No token found, skipping setup check');
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token || token === 'local-access') {
+            console.log('[setup-wizard] No real token, skipping setup check');
             return;
         }
         
@@ -4637,7 +5059,7 @@ async function checkFirstTimeSetup() {
         const urlParams = new URLSearchParams(window.location.search);
         const forceWizard = urlParams.get('wizard') === 'true' || urlParams.get('setup') === 'true';
         
-        // Always check API status (don't trust localStorage alone)
+        // Check API status
         const response = await fetch('/api/setup-wizard/status', {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -4647,21 +5069,29 @@ async function checkFirstTimeSetup() {
         const data = await response.json();
         console.log('[setup-wizard] API status:', data);
         
-        // If API says setup NOT complete, clear any stale localStorage and show wizard
-        if (!data.setupCompleted || forceWizard) {
-            // Clear stale localStorage flags
-            localStorage.removeItem('setup_completed');
-            
-            console.log('[setup-wizard] Showing wizard - setupCompleted:', data.setupCompleted, 'forceWizard:', forceWizard);
-            showFirstTimeSetup();
-        } else {
-            // Mark as completed in localStorage to prevent future wizard displays
-            localStorage.setItem('setup_completed', 'true');
-            console.log('[setup-wizard] Setup already completed');
+        // If setup not complete or force wizard, redirect to standalone wizard
+        if (forceWizard) {
+            console.log('[setup-wizard] Force wizard requested, redirecting');
+            window.location.href = '/setup-wizard.html';
+            return;
         }
+        if (!data.setupCompleted) {
+            // Double-check: if localStorage has setup_completed=true, don't redirect
+            // This prevents redirect loops for farms that completed setup but DB flag is stale
+            const localSetupDone = localStorage.getItem('setup_completed') === 'true';
+            if (localSetupDone) {
+                console.log('[setup-wizard] DB says not complete but localStorage says done — skipping redirect');
+                return;
+            }
+            console.log('[setup-wizard] Setup not complete, redirecting to wizard');
+            window.location.href = '/setup-wizard.html';
+            return;
+        }
+        
+        console.log('[setup-wizard] Setup already completed');
     } catch (error) {
         console.error('[setup-wizard] Setup status check failed:', error);
-        // Don't show wizard on error - prevents annoying users
+        // Don't redirect on error — prevents annoying users
     }
 }
 
@@ -5534,6 +5964,10 @@ function addSetupRoom() {
     
     renderSetupRooms();
     showSetupSuccess(`Room "${roomName}" added`);
+
+    // Show Room Mapper tip once a room is added
+    const tip = document.getElementById('setup-room-mapper-tip');
+    if (tip) tip.style.display = 'block';
 }
 
 /**
@@ -6119,11 +6553,15 @@ async function removeUser() {
     }
     
     try {
-        // In production, would call API
-        // await fetch(`/api/users/${userId}`, {
-        //     method: 'DELETE',
-        //     headers: { 'X-Farm-ID': localStorage.getItem('farm_id') }
-        // });
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        await fetch('/api/users/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ email: user.email })
+        });
         
         window.allUsers = window.allUsers.filter(u => u.id !== userId);
         
@@ -6134,6 +6572,51 @@ async function removeUser() {
     } catch (error) {
         console.error('Error removing user:', error);
         showToast('Error removing user', 'error');
+    }
+}
+
+/**
+ * Reset password for a farm user (admin action)
+ */
+async function resetUserPassword() {
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const user = window.allUsers.find(u => u.id === userId);
+    const newPassword = document.getElementById('edit-user-new-password').value.trim();
+
+    if (!newPassword) {
+        showToast('Please enter a new password', 'error');
+        return;
+    }
+    if (newPassword.length < 8) {
+        showToast('Password must be at least 8 characters', 'error');
+        return;
+    }
+
+    if (!confirm(`Reset password for ${user.name} (${user.email})?`)) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch('/api/users/reset-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ email: user.email, newPassword })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Password reset for ${user.email}`, 'success');
+            document.getElementById('edit-user-new-password').value = '';
+        } else {
+            showToast(data.error || 'Failed to reset password', 'error');
+        }
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        showToast('Error resetting password', 'error');
     }
 }
 

@@ -220,7 +220,7 @@ async function initDashboard() {
         currentSession = {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
-            farmName: 'Light Engine Farm',
+            farmName: currentSession?.farmName || localStorage.getItem('farm_name') || 'My Farm',
             email: 'admin@local-farm.com',
             role: 'admin'
         };
@@ -2816,7 +2816,7 @@ async function renderCropValue() {
     Object.entries(data.cropSummary).forEach(([crop, summary]) => {
         const avgDays = summary.totalDays / summary.trays;
         const percentOfTotal = (summary.value / data.totalValue * 100).toFixed(1);
-        const params = cropGrowthParams[crop] || { retailPricePerUnit: 0 };
+        const params = cropGrowthParams[crop] || { retailPricePerLb: 0 };
         
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -2824,7 +2824,7 @@ async function renderCropValue() {
             <td>${summary.trays}</td>
             <td>${summary.plants}</td>
             <td>${avgDays.toFixed(0)} days</td>
-            <td>$${params.retailPricePerUnit.toFixed(2)}/unit</td>
+            <td>$${(params.retailPricePerLb || 0).toFixed(2)}/lb</td>
             <td style="font-weight: 600;">$${summary.value.toFixed(2)}</td>
             <td><span style="color: var(--accent-green);">${percentOfTotal}%</span></td>
         `;
@@ -3618,6 +3618,7 @@ async function loadOperationsData(startDate) {
     try {
         // Fetch from crop/tray data
         const response = await fetch(`${API_BASE}/data/farm-summary.json`);
+        if (!response.ok) { throw new Error(`farm-summary.json ${response.status}`); }
         const data = await response.json();
         
         let plantsSeeded = 0;

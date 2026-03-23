@@ -121,3 +121,4 @@ greenreach-central/.db-password
 ecosystem.config.js
 data/pos-inventory.json
 tmp/
+data/farm-square-tokens.json

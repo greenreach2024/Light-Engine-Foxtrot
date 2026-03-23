@@ -6617,7 +6617,7 @@ async function loadLightSetups() {
 
 async function fetchPlansDocument() {
   try {
-    const resp = await fetch('/plans', { cache: 'no-store' });
+    const resp = await fetchWithFarmAuth('/plans', { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.json();
   } catch (error) {
@@ -6653,7 +6653,7 @@ async function publishPlansDocument(doc) {
     const payload = Array.isArray(doc)
       ? { plans: doc }
       : (doc && typeof doc === 'object' ? doc : { plans: [] });
-    const resp = await fetch('/plans', {
+    const resp = await fetchWithFarmAuth('/plans', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -6706,14 +6706,6 @@ async function publishSchedulesDocument(doc) {
 // Light Engine Charlie - Comprehensive Dashboard Application
 // Global API fetch helper
 async function api(url, opts = {}) {
-  // Inject auth token for same-origin API calls
-  const token = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('token')) || (typeof localStorage !== 'undefined' && localStorage.getItem('token'));
-  if (token && typeof url === 'string' && (url.startsWith('/') || url.startsWith(location.origin))) {
-    opts.headers = opts.headers || {};
-    if (!opts.headers['Authorization'] && !opts.headers['authorization']) {
-      opts.headers['Authorization'] = `Bearer ${token}`;
-    }
-  }
   const resp = await fetch(url, opts);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -21924,44 +21916,6 @@ function initializeSidebarNavigation() {
   });
 
   setActivePanel('overview');
-
-  // Deep-link support: check for ?panel= or ?wizard= query params
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const deepPanel = params.get('panel');
-    const deepWizard = params.get('wizard');
-    if (deepPanel) {
-      // Expand the parent group and activate the panel
-      const link = document.querySelector(`[data-sidebar-link][data-target="${deepPanel}"]`);
-      if (link) {
-        const group = link.closest('.sidebar-group');
-        if (group) {
-          const trigger = group.querySelector('.sidebar-group__trigger');
-          const items = group.querySelector('.sidebar-group__items');
-          group.classList.add('is-expanded');
-          if (trigger) trigger.setAttribute('aria-expanded', 'true');
-          if (items) items.hidden = false;
-        }
-        setActivePanel(deepPanel);
-      }
-    } else if (deepWizard) {
-      const wizardBtn = document.querySelector(`[data-sidebar-link][data-wizard="${deepWizard}"]`);
-      if (wizardBtn) {
-        const group = wizardBtn.closest('.sidebar-group');
-        if (group) {
-          const trigger = group.querySelector('.sidebar-group__trigger');
-          const items = group.querySelector('.sidebar-group__items');
-          group.classList.add('is-expanded');
-          if (trigger) trigger.setAttribute('aria-expanded', 'true');
-          if (items) items.hidden = false;
-        }
-        // Trigger the wizard after a short delay to ensure DOM is ready
-        setTimeout(() => wizardBtn.click(), 200);
-      }
-    }
-  } catch (e) {
-    console.warn('[Dashboard] Deep-link navigation failed', e);
-  }
 }
 
 function ensureFieldMappingLink() {
