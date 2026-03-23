@@ -2046,7 +2046,7 @@ async function runMigrations(client) {
     logger.warn('Migration 032 warning:', err.message);
   }
 
-  // Migration 033 — F.A.Y.E. admin assistant tables
+  // Migration 033a — F.A.Y.E. admin assistant conversation/memory tables
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_assistant_conversations (
@@ -2061,7 +2061,13 @@ async function runMigrations(client) {
       );
       CREATE INDEX IF NOT EXISTS idx_admin_conv_admin ON admin_assistant_conversations(admin_id);
       CREATE INDEX IF NOT EXISTS idx_admin_conv_updated ON admin_assistant_conversations(updated_at);
+    `);
+  } catch (err) {
+    logger.warn('Migration 033a (conversations) warning:', err.message);
+  }
 
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS admin_assistant_memory (
         id SERIAL PRIMARY KEY,
         admin_id INTEGER NOT NULL,
@@ -2072,7 +2078,13 @@ async function runMigrations(client) {
         UNIQUE(admin_id, key)
       );
       CREATE INDEX IF NOT EXISTS idx_admin_memory_admin ON admin_assistant_memory(admin_id);
+    `);
+  } catch (err) {
+    logger.warn('Migration 033a (memory) warning:', err.message);
+  }
 
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS admin_assistant_summaries (
         id SERIAL PRIMARY KEY,
         admin_id INTEGER NOT NULL,
@@ -2081,7 +2093,14 @@ async function runMigrations(client) {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_admin_summaries_admin ON admin_assistant_summaries(admin_id);
+    `);
+  } catch (err) {
+    logger.warn('Migration 033a (summaries) warning:', err.message);
+  }
 
+  // Migration 033b — admin_alerts (isolated so earlier table failures cannot block it)
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS admin_alerts (
         id BIGSERIAL PRIMARY KEY,
         domain VARCHAR(50) NOT NULL,
@@ -2102,7 +2121,7 @@ async function runMigrations(client) {
     `);
     logger.info('F.A.Y.E. admin assistant tables ready (migration 033)');
   } catch (err) {
-    logger.warn('Migration 033 warning:', err.message);
+    logger.warn('Migration 033b (admin_alerts) warning:', err.message);
   }
 
   // Migration 034 — F.A.Y.E. Phase 3-4: Decision log + accounting classification uniqueness
@@ -2145,7 +2164,13 @@ async function runMigrations(client) {
       );
       CREATE INDEX IF NOT EXISTS idx_faye_knowledge_domain ON faye_knowledge(domain, confidence DESC);
       CREATE INDEX IF NOT EXISTS idx_faye_knowledge_active ON faye_knowledge(archived, confidence DESC, updated_at DESC) WHERE archived = FALSE;
+    `);
+  } catch (err) {
+    logger.warn('Migration 035 (faye_knowledge) warning:', err.message);
+  }
 
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS faye_outcomes (
         id BIGSERIAL PRIMARY KEY,
         decision_id BIGINT REFERENCES faye_decision_log(id) ON DELETE SET NULL,
@@ -2156,7 +2181,13 @@ async function runMigrations(client) {
       );
       CREATE INDEX IF NOT EXISTS idx_faye_outcomes_decision ON faye_outcomes(decision_id);
       CREATE INDEX IF NOT EXISTS idx_faye_outcomes_created ON faye_outcomes(created_at DESC);
+    `);
+  } catch (err) {
+    logger.warn('Migration 035 (faye_outcomes) warning:', err.message);
+  }
 
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS faye_patterns (
         id BIGSERIAL PRIMARY KEY,
         pattern_key VARCHAR(200) NOT NULL UNIQUE,
@@ -2173,7 +2204,7 @@ async function runMigrations(client) {
     `);
     logger.info('F.A.Y.E. Phase 5 learning tables ready (migration 035)');
   } catch (err) {
-    logger.warn('Migration 035 warning:', err.message);
+    logger.warn('Migration 035 (faye_patterns) warning:', err.message);
   }
 
   // ─── Migration 036: Traceability, Lots, Harvest Events, Label System ──
