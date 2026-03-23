@@ -192,7 +192,7 @@ import healthRouter from './routes/health.js';
 import ttsRouter from './routes/tts.js';
 import adminHealthRouter from './routes/admin-health.js';
 import adminAuthRouter from './server/routes/admin-auth.js';
-import { adminAuthMiddleware } from './server/middleware/admin-auth.js';
+import { adminAuthMiddleware, requireAdminRole } from './server/middleware/admin-auth.js';
 import licenseRouter from './routes/license.js';
 import wholesaleSyncRouter from './routes/wholesale-sync.js';
 import wholesaleReservationsRouter, { cleanupExpiredReservations } from './routes/wholesale-reservations.js';
@@ -226,6 +226,11 @@ import emailRouter from './server/routes/email-routes.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
 import qualityControlRouter from './routes/quality-control.js';
 import aiVisionRouter from './routes/ai-vision.js';
+
+// F.A.Y.E. and E.V.I.E. AI assistant routes (GreenReach Central)
+import assistantChatRouter from './greenreach-central/routes/assistant-chat.js';
+import adminAssistantRouter from './greenreach-central/routes/admin-assistant.js';
+import adminOpsAgentRouter from './greenreach-central/routes/admin-ops-agent.js';
 import cropWeightReconciliationRouter, { getCropBenchmark, hasCropBenchmark } from './routes/crop-weight-reconciliation.js';
 import traceabilityRouter, { createTraceRecord, linkCustomerToTrace, updateTraceStatus } from './routes/traceability.js';
 import { router as migrationRouter, initDb as initMigrationDb } from './routes/migration.js';
@@ -12914,6 +12919,24 @@ app.use('/api/admin/*', (req, res, next) => {
 app.use('/api/admin/auth', adminAuthRouter);
 
 /**
+ * F.A.Y.E. -- Farm Autonomy & Yield Engine (admin AI assistant)
+ * POST /chat, POST /chat/stream, GET /briefing, GET /state, GET /status, GET/POST /memory
+ */
+app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminAssistantRouter);
+app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter);
+
+/**
+ * E.V.I.E. -- Environmental Vision & Intelligence Engine (farm AI assistant)
+ * POST /chat, POST /chat/stream, GET /state, GET /status, GET /morning-briefing, GET /nudges
+ */
+app.use('/api/assistant', farmAuthMiddleware, (req, res, next) => {
+  if (!req.user && req.farm_id) {
+    req.user = { farmId: req.farm_id, role: req.user_role, email: req.user_email, name: req.user_name };
+  }
+  next();
+}, assistantChatRouter);
+
+/**
  * GreenReach Admin - Federated Health Monitoring Routes
  * - /api/admin/health/fleet: Aggregate health data from all registered farms
  * - /api/admin/health/farms: List all registered farms
@@ -22662,7 +22685,8 @@ if (!isControllerDisabled) {
         '/bus-mappings',
         '/succession',     // P4: Succession planner endpoints
         '/devices/scan',   // P1: Device scanner endpoint
-        '/credential-store' // Integration credentials save/load
+        '/credential-store', // Integration credentials save/load
+        '/assistant'       // E.V.I.E. -- handled by Node.js
       ];
       
       // Strip /api prefix — http-proxy-middleware v2 passes full path including mount point
@@ -30257,6 +30281,15 @@ async function startServer() {
           }
         }
 
+
+        // Initialize GreenReach Central database pool (F.A.Y.E. + E.V.I.E.)
+        try {
+          const { initDatabase: initCentralDb } = await import('./greenreach-central/config/database.js');
+          await initCentralDb();
+          console.log('[Central DB] Database pool initialized for F.A.Y.E. + E.V.I.E.');
+        } catch (centralDbErr) {
+          console.warn('[Central DB] Init failed (assistants may be limited):', centralDbErr.message);
+        }
         // Start ML training worker (Phase 2 Bridge)
         try {
           const { startMLTrainingWorker } = await import('./lib/ml-training-pipeline.js');
