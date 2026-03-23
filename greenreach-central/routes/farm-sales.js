@@ -466,12 +466,12 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
       if (Array.isArray(stored)) inventory = stored;
     }
 
-    const inStock = inventory.filter(i => (i.quantity || i.qty_available || 0) > 0).length;
+    const inStock = inventory.filter(i => (Number(i.quantity_available ?? i.qty_available ?? i.quantity ?? 0)) > 0).length;
     const lowStock = inventory.filter(i => {
-      const q = i.quantity || i.qty_available || 0;
+      const q = Number(i.quantity_available ?? i.qty_available ?? i.quantity ?? 0);
       return q > 0 && q <= (i.low_stock_threshold || 5);
     }).length;
-    const outOfStock = inventory.filter(i => (i.quantity || i.qty_available || 0) <= 0).length;
+    const outOfStock = inventory.filter(i => (Number(i.quantity_available ?? i.qty_available ?? i.quantity ?? 0)) <= 0).length;
 
     res.json({
       success: true,
@@ -1123,7 +1123,7 @@ router.get('/farm-sales/inventory/export', authMiddleware, async (req, res) => {
     }
 
     if (available_only === 'true') {
-      inventory = inventory.filter(i => (i.quantity || i.qty_available || 0) > 0);
+      inventory = inventory.filter(i => (Number(i.quantity_available ?? i.qty_available ?? i.quantity ?? 0)) > 0);
     }
 
     const showVal = include_valuation !== 'false';
@@ -1131,7 +1131,7 @@ router.get('/farm-sales/inventory/export', authMiddleware, async (req, res) => {
     if (showVal) headerCols.push('Unit Price', 'Total Value');
 
     const rows = inventory.map(item => {
-      const qty = item.quantity || item.qty_available || 0;
+      const qty = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
       const price = item.unit_price || item.price || 0;
       const cols = [
         csvEscape(item.sku || item.sku_id || ''),

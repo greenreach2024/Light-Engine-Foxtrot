@@ -168,6 +168,32 @@ async function resolveFarmId(req) {
     } catch (_) { /* fall through */ }
   }
 
+  // Canonicalize non-admin farm IDs so manual writes land on the real farm row
+  // used by wholesale/catalog and other cross-page queries.
+  if (farmId && farmId !== 'ADMIN' && await isDatabaseAvailable()) {
+    try {
+      const exact = await query('SELECT farm_id FROM farms WHERE farm_id = $1 LIMIT 1', [farmId]);
+      if (exact.rows.length > 0) return exact.rows[0].farm_id;
+
+      const userFarmId = req.user?.farmId;
+      if (userFarmId && userFarmId !== 'ADMIN') {
+        const fromUser = await query('SELECT farm_id FROM farms WHERE farm_id = $1 LIMIT 1', [userFarmId]);
+        if (fromUser.rows.length > 0) return fromUser.rows[0].farm_id;
+      }
+
+      const fallback = await query(`
+        SELECT farm_id
+        FROM farms
+        WHERE status = 'active'
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1
+      `);
+      if (fallback.rows.length > 0) return fallback.rows[0].farm_id;
+    } catch (_) {
+      // Preserve previous behavior if farms table lookup fails.
+    }
+  }
+
   return farmId;
 }
 
@@ -200,6 +226,35 @@ async function loadFarmGroups(farmId) {
   return [];
 }
 
+async function loadManualInventoryItems(farmId) {
+  if (!farmId || !(await isDatabaseAvailable())) return [];
+
+  try {
+    const result = await query(
+      `SELECT
+         product_id,
+         sku,
+         sku_name,
+         product_name,
+         quantity_available,
+         manual_quantity_lbs,
+         last_updated,
+         updated_at,
+         created_at
+       FROM farm_inventory
+       WHERE farm_id = $1
+         AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+       ORDER BY updated_at DESC NULLS LAST, last_updated DESC NULLS LAST, created_at DESC NULLS LAST`,
+      [farmId]
+    );
+
+    return result.rows || [];
+  } catch (error) {
+    console.warn('[Inventory] farm_inventory lookup failed:', error.message);
+    return [];
+  }
+}
+
 /**
  * GET /api/inventory/current
  * Returns current inventory summary (cloud)
@@ -215,15 +270,45 @@ router.get('/current', async (req, res) => {
     }
 
     const groups = await loadFarmGroups(farmId);
-    const dataAvailable = groups.length > 0;
+    const manualItems = await loadManualInventoryItems(farmId);
 
-    const totals = groups.reduce((acc, group) => {
-      const trayCount = coerceNumber(group.trays)
-        || coerceNumber(group.trayCount)
-        || 0;
-      const plantCount = coerceNumber(group.plants)
-        || coerceNumber(group.plantCount)
-        || 0;
+    const groupTrays = groups.map((group, index) => {
+      const trayCount = coerceNumber(group.trays) || coerceNumber(group.trayCount) || 0;
+      const plantCount = coerceNumber(group.plants) || coerceNumber(group.plantCount) || 0;
+      const seedDateValue = group?.planConfig?.anchor?.seedDate || group?.seedDate || group?.createdAt || null;
+      const seedDate = seedDateValue ? new Date(seedDateValue) : null;
+
+      return {
+        trayId: group.id || group.groupId || group.group_id || `group-${index + 1}`,
+        crop: group.crop || group.recipe || group.name || 'Mixed crops',
+        trayCount,
+        plantCount,
+        seedingDate: seedDate && !Number.isNaN(seedDate.getTime()) ? seedDate.toISOString() : null,
+        source: 'backup-groups'
+      };
+    });
+
+    const manualTrays = manualItems.map((item, index) => {
+      const qty = coerceNumber(Number(item.quantity_available ?? item.manual_quantity_lbs ?? 0));
+      const updated = item.last_updated || item.updated_at || item.created_at || null;
+      const ts = updated ? new Date(updated) : null;
+
+      return {
+        trayId: item.product_id || item.sku || `manual-${index + 1}`,
+        crop: item.product_name || item.sku_name || item.sku || 'Manual Inventory',
+        trayCount: 1,
+        plantCount: qty,
+        seedingDate: ts && !Number.isNaN(ts.getTime()) ? ts.toISOString() : null,
+        source: 'manual-inventory'
+      };
+    });
+
+    const trays = [...groupTrays, ...manualTrays].filter((tray) => coerceNumber(tray.plantCount) > 0);
+    const dataAvailable = trays.length > 0;
+
+    const totals = trays.reduce((acc, tray) => {
+      const trayCount = coerceNumber(tray.trayCount) || 1;
+      const plantCount = coerceNumber(tray.plantCount) || 0;
 
       acc.trays += trayCount;
       acc.plants += plantCount;
@@ -240,7 +325,7 @@ router.get('/current', async (req, res) => {
           name: pickFarmName(farmId),
           activeTrays: totals.trays,
           totalPlants: totals.plants,
-          trays: []
+          trays
         }
       ] : []
     };
@@ -459,7 +544,7 @@ router.post('/manual', async (req, res) => {
     }
 
     const manualQty = Math.max(0, Number(quantity_lbs) || 0);
-    const legacyQty = Math.round(manualQty);
+    const legacyQty = manualQty;
     const productId = sku || product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     // Resolve pricing from the Crop Pricing page when not explicitly provided

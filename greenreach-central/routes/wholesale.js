@@ -572,6 +572,75 @@ router.post('/delivery/quote', requireBuyerPortalAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/wholesale/inventory
+ * Returns farm_inventory rows formatted as lots for the network aggregator and
+ * the central-admin pricing panel. Public (no buyer auth) so the aggregator can
+ * reach it via farm api_url; farm-scoped when X-Farm-ID is present.
+ */
+router.get('/inventory', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.json({ farm_id: null, farm_name: 'GreenReach Farms', lots: [], inventory_timestamp: new Date().toISOString() });
+    }
+
+    // Resolve farm identity
+    const farmId = req.headers['x-farm-id']
+      || req.query.farmId
+      || (await query("SELECT farm_id FROM farms WHERE status = 'active' ORDER BY updated_at DESC NULLS LAST LIMIT 1").then(r => r.rows[0]?.farm_id).catch(() => null));
+
+    if (!farmId) {
+      return res.json({ farm_id: null, farm_name: 'GreenReach Farms', lots: [], inventory_timestamp: new Date().toISOString() });
+    }
+
+    const result = await query(
+      `SELECT product_id, product_name, sku, sku_name, quantity_available,
+              manual_quantity_lbs, wholesale_price, retail_price, unit,
+              quantity_unit, category, variety, inventory_source, last_updated
+       FROM farm_inventory
+       WHERE farm_id = $1
+         AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+       ORDER BY product_name`,
+      [farmId]
+    );
+
+    const lots = result.rows.map(row => {
+      const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+      return {
+        lot_id: row.product_id,
+        sku_id: row.sku || row.product_id,
+        sku_name: row.product_name || row.sku_name || row.sku,
+        crop_type: row.category || row.product_name,
+        qty_available: qty,
+        pack_size: 1,
+        unit: row.quantity_unit || row.unit || 'lb',
+        price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+        quality_flags: row.inventory_source === 'manual' ? ['manual_entry'] : [],
+        harvest_date_start: row.last_updated || null,
+        harvest_date_end: null,
+        location: null
+      };
+    });
+
+    // Look up farm name
+    let farmName = 'GreenReach Farms';
+    try {
+      const nameResult = await query('SELECT name FROM farms WHERE farm_id = $1 LIMIT 1', [farmId]);
+      if (nameResult.rows.length) farmName = nameResult.rows[0].name;
+    } catch { /* use default */ }
+
+    res.json({
+      farm_id: farmId,
+      farm_name: farmName,
+      lots,
+      inventory_timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Wholesale Inventory] Error:', error.message);
+    res.json({ farm_id: null, farm_name: 'GreenReach Farms', lots: [], inventory_timestamp: new Date().toISOString() });
+  }
+});
+
+/**
  * GET /api/wholesale/catalog
  * Get wholesale catalog with optional filtering by farm certifications
  * 

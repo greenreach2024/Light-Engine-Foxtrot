@@ -2571,7 +2571,98 @@ function getGrowthStage(crop, daysPostSeed) {
  */
 async function loadCropValueData() {
     try {
-        console.log(' Loading crop value data...');
+        console.log('Loading crop value data...');
+
+        const session = (typeof getSession === 'function') ? getSession() : null;
+        const authHeaders = session?.token ? { 'Authorization': `Bearer ${session.token}` } : {};
+
+        // Prefer product inventory because manual edits are written to farm_inventory.
+        try {
+            const productResponse = await fetch(`${API_BASE}/api/farm-sales/inventory`, {
+                headers: authHeaders
+            });
+
+            if (productResponse.ok) {
+                const productData = await productResponse.json();
+                const inventoryItems = Array.isArray(productData?.inventory) ? productData.inventory : [];
+
+                if (inventoryItems.length > 0) {
+                    const trayDetails = [];
+                    let totalValue = 0;
+                    let totalPlants = 0;
+                    const cropSummary = {};
+                    const stageSummary = {
+                        'Manual Inventory': {
+                            trays: 0,
+                            plants: 0,
+                            value: 0,
+                            minDays: 0,
+                            maxDays: 0
+                        }
+                    };
+
+                    for (const item of inventoryItems) {
+                        const crop = item.product_name || item.name || item.sku_name || item.sku || 'Unknown';
+                        const plantCount = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
+                        if (plantCount <= 0) continue;
+
+                        const unitPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0);
+                        const value = plantCount * unitPrice;
+
+                        trayDetails.push({
+                            trayId: item.product_id || item.sku_id || item.sku || crop,
+                            crop,
+                            seedingDate: 'Manual',
+                            daysPostSeed: 0,
+                            plantCount,
+                            value,
+                            growthPercent: 100,
+                            growthStage: 'Manual Inventory'
+                        });
+
+                        totalValue += value;
+                        totalPlants += plantCount;
+
+                        if (!cropSummary[crop]) {
+                            cropSummary[crop] = {
+                                trays: 0,
+                                plants: 0,
+                                value: 0,
+                                totalDays: 0
+                            };
+                        }
+                        cropSummary[crop].trays++;
+                        cropSummary[crop].plants += plantCount;
+                        cropSummary[crop].value += value;
+
+                        stageSummary['Manual Inventory'].trays++;
+                        stageSummary['Manual Inventory'].plants += plantCount;
+                        stageSummary['Manual Inventory'].value += value;
+                    }
+
+                    if (trayDetails.length > 0) {
+                        trayDetails.sort((a, b) => b.value - a.value);
+
+                        cropValueData = {
+                            totalValue,
+                            activeTrays: trayDetails.length,
+                            totalPlants,
+                            cropCount: Object.keys(cropSummary).length,
+                            avgValuePerTray: trayDetails.length > 0 ? totalValue / trayDetails.length : 0,
+                            cropSummary,
+                            stageSummary,
+                            trayDetails,
+                            timestamp: new Date().toISOString()
+                        };
+
+                        console.log(' Crop value data loaded from product inventory:', cropValueData);
+                        return cropValueData;
+                    }
+                }
+            }
+        } catch (productError) {
+            console.warn(' Falling back to tray inventory for crop value:', productError);
+        }
         
         // Fetch current inventory
         const inventoryResponse = await fetch(`${API_BASE}/api/inventory/current`);

@@ -35,45 +35,99 @@ function generateOfferId(crop) {
  * Calculate acceptance rate for an offer
  */
 async function getOfferAcceptanceStats(offerId) {
-  const result = await query(`
-    SELECT
-      COUNT(*) as total_responses,
-      COUNT(*) FILTER (WHERE response = 'accept') as accepted,
-      COUNT(*) FILTER (WHERE response = 'reject') as rejected,
-      COUNT(*) FILTER (WHERE response = 'counter') as countered,
-      AVG(counter_price) FILTER (WHERE response = 'counter') as avg_counter_price,
-      CASE
-        WHEN COUNT(*) = 0 THEN NULL
-        ELSE COUNT(*) FILTER (WHERE response = 'accept')::DECIMAL / COUNT(*)
-      END as acceptance_rate
-    FROM pricing_responses
-    WHERE offer_id = $1
-  `, [offerId]);
-  
-  return result.rows[0];
+  try {
+    const result = await query(`
+      SELECT
+        COUNT(*) as total_responses,
+        COUNT(*) FILTER (WHERE response = 'accept') as accepted,
+        COUNT(*) FILTER (WHERE response = 'reject') as rejected,
+        COUNT(*) FILTER (WHERE response = 'counter') as countered,
+        AVG(counter_price) FILTER (WHERE response = 'counter') as avg_counter_price,
+        CASE
+          WHEN COUNT(*) = 0 THEN NULL
+          ELSE COUNT(*) FILTER (WHERE response = 'accept')::DECIMAL / COUNT(*)
+        END as acceptance_rate
+      FROM pricing_responses
+      WHERE offer_id = $1
+    `, [offerId]);
+    return result.rows[0];
+  } catch (error) {
+    if (error.code === '42P01') return { total_responses: 0, accepted: 0, rejected: 0, countered: 0, avg_counter_price: null, acceptance_rate: null };
+    throw error;
+  }
 }
 
 /**
  * Get maximum farm cost for a crop (for cost-basis protection)
  */
 async function getMaxFarmCost(crop) {
-  const result = await query(`
-    SELECT MAX(cost_per_unit) as max_cost, unit
-    FROM farm_cost_surveys
-    WHERE crop = $1
-      AND (valid_until IS NULL OR valid_until >= CURRENT_DATE)
-    GROUP BY unit
-    ORDER BY max_cost DESC
-    LIMIT 1
-  `, [crop]);
-  
-  if (result.rows.length === 0) {
-    console.warn(`[Pricing Authority] No cost survey data for ${crop} - cannot enforce cost-basis protection`);
-    return null;
+  try {
+    const result = await query(`
+      SELECT MAX(cost_per_unit) as max_cost, unit
+      FROM farm_cost_surveys
+      WHERE crop = $1
+        AND (valid_until IS NULL OR valid_until >= CURRENT_DATE)
+      GROUP BY unit
+      ORDER BY max_cost DESC
+      LIMIT 1
+    `, [crop]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    return result.rows[0];
+  } catch (error) {
+    if (error.code === '42P01') return null;
+    throw error;
   }
-  
-  return result.rows[0];
 }
+
+/**
+ * Ensure pricing tables exist before querying.
+ * Runs CREATE IF NOT EXISTS (idempotent) on first call, then caches.
+ */
+let _pricingTablesReady = false;
+async function ensurePricingTables() {
+  if (_pricingTablesReady) return;
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS farm_cost_surveys (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(50) NOT NULL, crop VARCHAR(100) NOT NULL,
+      cost_per_unit DECIMAL(10,2) NOT NULL, unit VARCHAR(20) DEFAULT 'lb',
+      cost_breakdown JSONB, survey_date DATE DEFAULT CURRENT_DATE, valid_until DATE,
+      notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(farm_id, crop, survey_date))`);
+    await query(`CREATE TABLE IF NOT EXISTS pricing_offers (
+      offer_id VARCHAR(50) PRIMARY KEY, crop VARCHAR(100) NOT NULL,
+      wholesale_price DECIMAL(10,2) NOT NULL, unit VARCHAR(20) DEFAULT 'lb',
+      reasoning TEXT, confidence DECIMAL(3,2), predicted_acceptance DECIMAL(3,2),
+      offer_date TIMESTAMPTZ DEFAULT NOW(), effective_date DATE, expires_at TIMESTAMPTZ,
+      status VARCHAR(20) DEFAULT 'pending', created_by VARCHAR(100), tier VARCHAR(50),
+      metadata JSONB, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`);
+    await query(`CREATE TABLE IF NOT EXISTS pricing_responses (
+      response_id SERIAL PRIMARY KEY, offer_id VARCHAR(50) NOT NULL,
+      farm_id VARCHAR(50) NOT NULL, response VARCHAR(10) NOT NULL,
+      counter_price DECIMAL(10,2), justification TEXT, notes TEXT,
+      responded_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(offer_id, farm_id))`);
+    await query(`CREATE TABLE IF NOT EXISTS pricing_history (
+      history_id SERIAL PRIMARY KEY, crop VARCHAR(100) NOT NULL,
+      wholesale_price DECIMAL(10,2) NOT NULL, unit VARCHAR(20) DEFAULT 'lb',
+      offer_date DATE NOT NULL, total_farms_offered INT DEFAULT 0,
+      farms_accepted INT DEFAULT 0, farms_rejected INT DEFAULT 0, farms_countered INT DEFAULT 0,
+      acceptance_rate DECIMAL(5,4), avg_counter_price DECIMAL(10,2),
+      reasoning TEXT, tier VARCHAR(50), created_at TIMESTAMPTZ DEFAULT NOW())`);
+    _pricingTablesReady = true;
+  } catch (err) {
+    console.warn('[Admin Pricing] Table bootstrap warning:', err.message);
+  }
+}
+
+// Ensure tables exist before any pricing route handler runs
+router.use(async (req, res, next) => {
+  await ensurePricingTables();
+  next();
+});
 
 // ==============================================================================
 // Farm Cost Surveys Endpoints (BLOCKING CONDITION #1)
@@ -116,6 +170,9 @@ router.get('/cost-surveys', async (req, res) => {
       cost_surveys: result.rows
     });
   } catch (error) {
+    if (error.code === '42P01') {
+      return res.json({ success: true, cost_surveys: [] });
+    }
     console.error('[Admin Pricing API] Error fetching cost surveys:', error);
     res.status(500).json({
       success: false,
@@ -340,6 +397,9 @@ router.get('/offers', async (req, res) => {
       offers: offersWithStats
     });
   } catch (error) {
+    if (error.code === '42P01') {
+      return res.json({ success: true, offers: [] });
+    }
     console.error('[Admin Pricing API] Error fetching offers:', error);
     res.status(500).json({
       success: false,

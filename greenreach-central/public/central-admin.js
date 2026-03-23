@@ -10319,11 +10319,11 @@ async function loadPricingManagement() {
         const pendingCounters = allOffers.reduce((sum, o) => sum + (o.response_stats?.countered || 0), 0);
         document.getElementById('pricing-counter-offers').textContent = pendingCounters;
 
-        // Load product catalog - try wholesale inventory
+        // Load product catalog from wholesale catalog
         try {
-            const invRes = await fetch('/api/wholesale/inventory');
-            const invData = invRes.ok ? await invRes.json() : { products: [], lots: [] };
-            const products = invData.products || invData.lots || [];
+            const invRes = await authenticatedFetch(`${API_BASE}/api/wholesale/catalog`);
+            const invData = invRes && invRes.ok ? await invRes.json() : { items: [], data: {} };
+            const products = invData.items || invData.data?.skus || [];
             document.getElementById('pricing-product-count').textContent = products.length;
             renderProductCatalog(products);
         } catch {

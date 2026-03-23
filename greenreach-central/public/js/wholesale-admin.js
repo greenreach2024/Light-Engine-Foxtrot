@@ -135,6 +135,11 @@
     async loadNetwork() {
       try {
         const headers = this.getAuthHeaders();
+        const toArray = (value) => {
+          if (Array.isArray(value)) return value;
+          if (Array.isArray(value?.items)) return value.items;
+          return [];
+        };
         const [farmsRes, snapshotsRes, aggregateRes, eventsRes, recsRes] = await Promise.all([
           fetch('/api/wholesale/network/farms', { headers }),
           fetch('/api/wholesale/network/snapshots', { headers }),
@@ -150,7 +155,7 @@
         const recsJson = await recsRes.json().catch(() => null);
 
         if (farmsRes.ok && farmsJson?.status === 'ok') {
-          this.network.farms = farmsJson.data?.farms || [];
+          this.network.farms = toArray(farmsJson.data?.farms);
           this.network.lastSync = farmsJson.data?.lastSync || null;
         } else {
           this.network.farms = [];
@@ -158,7 +163,7 @@
         }
 
         if (snapshotsRes.ok && snapshotsJson?.status === 'ok') {
-          this.network.snapshots = snapshotsJson.data?.snapshots || [];
+          this.network.snapshots = toArray(snapshotsJson.data?.snapshots);
         } else {
           this.network.snapshots = [];
         }
@@ -170,13 +175,13 @@
         }
 
         if (eventsRes.ok && eventsJson?.status === 'ok') {
-          this.network.events = eventsJson.data?.events || [];
+          this.network.events = toArray(eventsJson.data?.events);
         } else {
           this.network.events = [];
         }
 
         if (recsRes.ok && recsJson?.status === 'ok') {
-          this.network.recommendations = recsJson.data?.recommendations || [];
+          this.network.recommendations = toArray(recsJson.data?.recommendations || recsJson.data);
         } else {
           this.network.recommendations = [];
         }
@@ -204,7 +209,8 @@
 
       if (farmsCountEl) farmsCountEl.textContent = String((this.network.farms || []).length);
 
-      const healthy = (this.network.snapshots || []).filter((s) => Boolean(s.ok)).length;
+      const snapshots = Array.isArray(this.network.snapshots) ? this.network.snapshots : [];
+      const healthy = snapshots.filter((s) => Boolean(s?.ok)).length;
       if (healthyCountEl) healthyCountEl.textContent = String(healthy);
 
       const skuCount = Array.isArray(this.network.aggregate?.items) ? this.network.aggregate.items.length : 0;
@@ -246,7 +252,7 @@
       const tbody = document.getElementById('network-snapshots-table');
       if (!tbody) return;
 
-      const snaps = this.network.snapshots || [];
+      const snaps = Array.isArray(this.network.snapshots) ? this.network.snapshots : [];
       if (!snaps.length) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots yet. Sync runs automatically.</td></tr>';
         return;
@@ -1115,10 +1121,18 @@
 
     async loadPaymentSetup() {
       try {
+        const headers = this.getAuthHeaders();
+
         // Get network farms
-        const farmsResponse = await fetch('/api/wholesale/network/farms');
+        const farmsResponse = await fetch('/api/wholesale/network/farms', { headers });
+        if (!farmsResponse.ok) {
+          if (farmsResponse.status === 401) {
+            this.showToast('Admin session expired. Please sign in again.', 'warning');
+          }
+          throw new Error(`Failed to load farms: ${farmsResponse.status}`);
+        }
         const farmsData = await farmsResponse.json();
-        const farms = farmsData.data?.farms || [];
+        const farms = Array.isArray(farmsData?.data?.farms) ? farmsData.data.farms : [];
         
         // Check Square and Stripe status for each farm
         const statusPromises = farms.map(async (farm) => {
@@ -1127,19 +1141,27 @@
           
           // Check Square
           try {
-            const statusResponse = await fetch(`/api/square-proxy/status/${farm.farm_id}`);
+            const statusResponse = await fetch('/api/farm/square/status', {
+              headers: {
+                ...headers,
+                'X-Farm-ID': farm.farm_id
+              }
+            });
             const statusData = await statusResponse.json();
             squareStatus = {
-              connected: statusData.status === 'ok',
-              merchant_id: statusData.data?.merchant_id || null,
-              location_name: statusData.data?.location_name || null
+              connected: statusData.connected === true || statusData.status === 'connected' || statusData.status === 'ok',
+              merchant_id: statusData.data?.merchant_id || statusData.data?.applicationId || null,
+              location_name: statusData.data?.location_name || statusData.data?.locationId || null
             };
           } catch (error) { /* Square not available */ }
           
           // Check Stripe
           try {
             const stripeResponse = await fetch(`/api/farm/stripe/status`, {
-              headers: { 'X-Farm-ID': farm.farm_id }
+              headers: {
+                ...headers,
+                'X-Farm-ID': farm.farm_id
+              }
             });
             const stripeData = await stripeResponse.json();
             stripeStatus = {
@@ -1162,7 +1184,7 @@
         // Update summary stats (count farms with either provider connected)
         const connectedCount = statuses.filter(s => s.square.connected || s.stripe.connected).length;
         const pendingCount = statuses.filter(s => !s.square.connected && !s.stripe.connected).length;
-        const commissionRate = process.env.WHOLESALE_COMMISSION_RATE || '10%';
+        const commissionRate = '12%';
         
         document.getElementById('square-connected-count').textContent = connectedCount;
         document.getElementById('square-pending-count').textContent = pendingCount;
