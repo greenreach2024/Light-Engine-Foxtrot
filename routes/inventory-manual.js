@@ -168,7 +168,7 @@ router.post('/manual', async (req, res) => {
         " ON CONFLICT (farm_id, product_id) DO UPDATE SET" +
         "  product_name = EXCLUDED.product_name," +
         "  manual_quantity_lbs = EXCLUDED.manual_quantity_lbs," +
-        "  quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs," +
+        "  quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0)," +
         "  inventory_source = CASE" +
         "    WHEN COALESCE(farm_inventory.auto_quantity_lbs, 0) > 0 THEN 'hybrid'" +
         "    ELSE 'manual'" +
@@ -248,7 +248,7 @@ router.delete('/manual/:productId', async (req, res) => {
       await db.query(
         "UPDATE farm_inventory SET" +
         "  manual_quantity_lbs = 0," +
-        "  quantity_available = COALESCE(auto_quantity_lbs, 0)," +
+        "  quantity_available = COALESCE(auto_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0)," +
         "  inventory_source = 'auto'," +
         "  last_updated = NOW()" +
         " WHERE farm_id = $1 AND product_id = $2",

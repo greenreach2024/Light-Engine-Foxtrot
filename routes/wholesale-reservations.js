@@ -16,7 +16,25 @@ const reservations = new Map();
 // Feature flags
 const WHOLESALE_READ_FROM_DB = process.env.WHOLESALE_READ_FROM_DB === 'true';
 
-function getCatalogAvailableQty(skuId) {
+async function getCatalogAvailableQty(skuId, db) {
+  // Query live farm_inventory from PostgreSQL instead of static JSON
+  if (db) {
+    try {
+      const result = await db.query(
+        `SELECT COALESCE(quantity_available, 0) AS qty
+         FROM farm_inventory
+         WHERE product_id = $1
+         LIMIT 1`,
+        [skuId]
+      );
+      if (result.rows.length > 0) {
+        return Number(result.rows[0].qty || 0);
+      }
+    } catch (dbErr) {
+      console.warn('[Reservation] DB inventory lookup failed, falling back to JSON:', dbErr.message);
+    }
+  }
+  // Fallback: read from static JSON if DB unavailable
   try {
     const raw = fs.readFileSync('public/data/wholesale-products.json', 'utf8');
     const parsed = JSON.parse(raw);
@@ -71,7 +89,7 @@ router.post('/reserve', async (req, res) => {
     }
 
     // Real availability check: catalog qty - active reservations
-    const available = getCatalogAvailableQty(sku_id);
+    const available = await getCatalogAvailableQty(sku_id, req.app.locals?.db);
     const currentReserved = WHOLESALE_READ_FROM_DB
       ? await reservationStore.getReservedQty(sku_id)
       : Array.from(reservations.values())
@@ -252,6 +270,24 @@ router.post('/confirm', async (req, res) => {
 
     console.log(`[Reservation] Confirmed: ${reservation_id} for sub-order ${sub_order_id}`);
     console.log(`  Lot: ${reservation.lot_id}, Qty: ${reservation.qty}`);
+
+    // Persist deduction to Central farm_inventory (sold_quantity_lbs)
+    try {
+      const syncService = req.app.locals?.syncService;
+      if (syncService) {
+        const farmId = reservation.farm_id || process.env.FARM_ID;
+        syncService.syncDeduction(farmId, [{
+          product_id: reservation.sku_id || reservation.lot_id,
+          quantity_lbs: reservation.qty,
+          reason: 'wholesale_sale',
+          order_id: sub_order_id
+        }]).catch(err =>
+          console.warn('[Reservation] Deduction sync deferred:', err.message)
+        );
+      }
+    } catch (syncErr) {
+      console.warn('[Reservation] Deduction sync call failed (non-fatal):', syncErr.message);
+    }
 
     res.json({
       ok: true,

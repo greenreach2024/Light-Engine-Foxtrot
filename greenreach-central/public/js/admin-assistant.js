@@ -290,15 +290,33 @@
 
   function addToolBadges(tools) {
     if (!tools || tools.length === 0) return;
-    const container = document.createElement('div');
-    container.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px; align-self: flex-start;';
+    const interAgentTools = ['send_message_to_evie', 'get_evie_messages', 'get_agent_conversation', 'get_evie_conversations', 'get_evie_conversation_summaries', 'get_farm_alerts'];
+    let hasInterAgent = false;
+    const regularTools = [];
     for (const t of tools) {
-      const badge = document.createElement('span');
-      badge.className = 'faye-tool-badge';
-      badge.textContent = (t.success ? '✓ ' : '✗ ') + t.tool.replace(/_/g, ' ');
-      container.appendChild(badge);
+      if (interAgentTools.includes(t.tool)) {
+        hasInterAgent = true;
+      } else {
+        regularTools.push(t);
+      }
     }
-    messagesEl.appendChild(container);
+    if (hasInterAgent) {
+      const sisterDiv = document.createElement('div');
+      sisterDiv.style.cssText = 'align-self:flex-start;padding:2px 8px;font-size:11px;color:var(--faye-accent,#8b5cf6);opacity:0.8;font-style:italic';
+      sisterDiv.textContent = 'Coordinating with little sis E.V.I.E...';
+      messagesEl.appendChild(sisterDiv);
+    }
+    if (regularTools.length > 0) {
+      const container = document.createElement('div');
+      container.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px; align-self: flex-start;';
+      for (const t of regularTools) {
+        const badge = document.createElement('span');
+        badge.className = 'faye-tool-badge';
+        badge.textContent = (t.success ? '+ ' : '- ') + t.tool.replace(/_/g, ' ');
+        container.appendChild(badge);
+      }
+      messagesEl.appendChild(container);
+    }
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 

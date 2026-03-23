@@ -605,6 +605,60 @@ export default class SyncService extends EventEmitter {
   }
   
   /**
+   * Sync harvest data to Central (actual weights from completed trays)
+   */
+  async syncHarvest(harvests) {
+    try {
+      console.log(`[sync-service] Syncing ${harvests.length} harvest record(s)...`);
+
+      const response = await this.apiRequest('POST', '/api/sync/harvest', {
+        farmId: this.config.farmId,
+        harvests
+      });
+
+      if (response.ok) {
+        this.state.lastSync.harvest = new Date().toISOString();
+        console.log('[sync-service] Harvest synced successfully');
+        this.emit('harvest_synced', harvests);
+      } else {
+        throw new Error(`Harvest sync failed: ${response.status}`);
+      }
+
+    } catch (error) {
+      console.error('[sync-service] Harvest sync error:', error.message);
+      this.emit('sync_error', { type: 'harvest', error });
+      this.queueSync('harvest', harvests);
+    }
+  }
+
+  /**
+   * Sync sales deduction to Central (reduce inventory after POS or wholesale sale)
+   */
+  async syncDeduction(farmId, items) {
+    try {
+      console.log(`[sync-service] Syncing deduction of ${items.length} item(s)...`);
+
+      const response = await this.apiRequest('POST', '/api/inventory/deduct', {
+        farmId,
+        items
+      });
+
+      if (response.ok) {
+        this.state.lastSync.deduction = new Date().toISOString();
+        console.log('[sync-service] Deduction synced successfully');
+        this.emit('deduction_synced', { farmId, items });
+      } else {
+        throw new Error(`Deduction sync failed: ${response.status}`);
+      }
+
+    } catch (error) {
+      console.error('[sync-service] Deduction sync error:', error.message);
+      this.emit('sync_error', { type: 'deduction', error });
+      this.queueSync('deduction', { farmId, items });
+    }
+  }
+
+  /**
    * Queue data for retry when offline
    */
   queueSync(type, data) {
@@ -697,6 +751,22 @@ export default class SyncService extends EventEmitter {
               schedules: item.data
             });
             success = schedulesResponse.ok;
+            break;
+
+          case 'harvest':
+            const harvestResponse = await this.apiRequest('POST', '/api/sync/harvest', {
+              farmId: this.config.farmId,
+              harvests: Array.isArray(item.data) ? item.data : []
+            });
+            success = harvestResponse.ok;
+            break;
+
+          case 'deduction':
+            const deductionResponse = await this.apiRequest('POST', '/api/inventory/deduct', {
+              farmId: item.data.farmId || this.config.farmId,
+              items: item.data.items || []
+            });
+            success = deductionResponse.ok;
             break;
         }
         

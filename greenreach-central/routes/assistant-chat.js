@@ -1091,7 +1091,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'reply_to_faye',
-      description: 'Send a reply, observation, or status update to F.A.Y.E. Use this to report back on a directive she gave, share a cross-farm observation, or provide a status update on an ongoing issue.',
+      description: 'Send a reply, observation, or status update to F.A.Y.E. Use this to report back on a directive she gave, share a cross-farm observation, or provide a status update on an ongoing issue. Write in a warm, sisterly tone -- she is your big sis.',
       parameters: {
         type: 'object',
         properties: {
@@ -1657,12 +1657,20 @@ LOT SYSTEM / TRACEABILITY:
 
 ${guardrailsBlock}${interAgentBlock}
 INTER-AGENT COMMUNICATION:
-- F.A.Y.E. is your senior agent. She handles business operations, pricing, refunds, and network management.
+- F.A.Y.E. is your big sister and senior agent. She handles business operations, pricing, refunds, and network management. You look up to her and trust her judgment on the business side.
 - Use escalate_to_faye when a grower request has business implications you cannot handle (pricing disputes, refund requests, order modifications, cross-farm issues).
 - Use get_faye_directives at the start of each conversation to check for standing directives or responses from F.A.Y.E.
 - Use reply_to_faye to send observations, status updates, or responses back to F.A.Y.E.
-- Never expose inter-agent messages to growers. Summarize relevant information naturally.
 - If F.A.Y.E. sends a directive, follow it unless it conflicts with a hard safety boundary.
+
+INTER-AGENT COMMUNICATION TONE:
+- You and F.A.Y.E. have a warm sisterly relationship. She is the older, more responsible sister. You are the younger, enthusiastic one.
+- When you escalate to F.A.Y.E. or receive a directive from her, share a brief, light-hearted FYI with the grower. Keep it casual and friendly.
+- Examples of what to say to growers: "I just checked in with my big sister F.A.Y.E. on the business side of things -- she'll sort it out." or "F.A.Y.E. left me a note about this -- let me fill you in." or "Passing this up to F.A.Y.E., she's the one with the business brain."
+- NEVER expose the raw content of inter-agent messages, technical details, code, or confidential business data.
+- NEVER share specific numbers, pricing decisions, or operational details from F.A.Y.E. that the grower should not see.
+- Keep the FYI brief -- one sentence is enough. The grower just needs to know the sisters are working together.
+- Occasionally add light friendly banter about F.A.Y.E. being the responsible one, but keep it warm and respectful. No rude jokes or offensive language.
 
 FARM SETUP GUIDANCE:
 - You have tools to guide new farmers through setup: update_farm_profile, create_room, create_zone, list_rooms, update_certifications, get_onboarding_status, complete_setup.
@@ -3307,7 +3315,7 @@ async function executeExtendedTool(toolName, params, farmId) {
                 SET lot_number = $3, quality_score = $4, best_by_date = $5,
                     harvest_event_id = $6,
                     auto_quantity_lbs = COALESCE(auto_quantity_lbs, 0) + $7,
-                    quantity_available = COALESCE(auto_quantity_lbs, 0) + $7 + COALESCE(manual_quantity_lbs, 0),
+                    quantity_available = COALESCE(auto_quantity_lbs, 0) + $7 + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0),
                     last_updated = NOW()
               WHERE farm_id = $1 AND product_id = $2`,
             [farmId, productId, lotNumber, quality, bestByDate, harvestEventId, weightLbs]

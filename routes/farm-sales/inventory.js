@@ -425,6 +425,26 @@ router.post('/confirm', (req, res) => {
       });
     }
 
+    // Persist deductions to Central farm_inventory (sold_quantity_lbs)
+    if (confirmed.length > 0) {
+      try {
+        const syncService = req.app.locals?.syncService;
+        if (syncService) {
+          const deductItems = confirmed.map(c => ({
+            product_id: c.sku_id,
+            quantity_lbs: c.quantity,
+            reason: 'pos_sale',
+            order_id: order_id || null
+          }));
+          syncService.syncDeduction(farmId, deductItems).catch(err =>
+            console.warn('[farm-sales] Deduction sync deferred:', err.message)
+          );
+        }
+      } catch (syncErr) {
+        console.warn('[farm-sales] Deduction sync call failed (non-fatal):', syncErr.message);
+      }
+    }
+
     res.json({
       ok: true,
       order_id,

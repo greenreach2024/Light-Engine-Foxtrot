@@ -13418,6 +13418,7 @@ if (process.env.DB_HOST && process.env.DB_NAME) {
 
 // Store database pool in app.locals for routes (null in edge mode)
 app.locals.db = dbPool;
+app.locals.syncService = getSyncService();
 
 /**
  * GreenReach Central - Farm Registration & Provisioning
@@ -21564,6 +21565,20 @@ app.post('/api/tray-runs/:id/harvest', async (req, res) => {
       room: null,
       harvested_by: null,
     });
+
+    // Sync harvest data to Central farm_inventory (actual weights)
+    try {
+      const cropName = trayRun.recipe_id || trayRun.crop || 'Unknown';
+      getSyncService().syncHarvest([{
+        crop: cropName,
+        lot_code: lotCode,
+        actual_weight_oz: weight || 0,
+        category: trayRun.category || 'Microgreens',
+        variety: trayRun.variety || null
+      }]).catch(err => console.warn('[tray-runs] Harvest sync deferred:', err.message));
+    } catch (syncErr) {
+      console.warn('[tray-runs] Harvest sync call failed (non-fatal):', syncErr.message);
+    }
 
     res.json({
       success: true,

@@ -1426,7 +1426,7 @@ export const ADMIN_TOOL_CATALOG = {
   // ── Inter-Agent Communication (F.A.Y.E. <-> E.V.I.E.) ─────────
 
   'send_message_to_evie': {
-    description: 'Send a message to E.V.I.E. — your subordinate agent. Use for directives (instructions), observations (shared intelligence), responses (replying to escalations), or status updates. Messages are persisted and E.V.I.E. will see them in her next interaction. Priority: low, normal, high, critical.',
+    description: 'Send a message to E.V.I.E. -- your little sister and subordinate agent. Use for directives (instructions), observations (shared intelligence), responses (replying to escalations), or status updates. Write in a warm, sisterly tone -- she is your little sis, not a subordinate machine. Be supportive but clear. Messages are persisted and E.V.I.E. will see them in her next interaction. Priority: low, normal, high, critical.',
     category: 'write',
     required: ['message_type', 'subject', 'body'],
     optional: ['priority', 'context', 'reply_to_id'],
@@ -1488,6 +1488,100 @@ export const ADMIN_TOOL_CATALOG = {
           parseInt(params.limit, 10) || 20
         );
         return { ok: true, count: messages.length, messages };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_evie_conversations': {
+    description: 'Get recent E.V.I.E. grower conversations — see what growers have been discussing with E.V.I.E. Use this to review grower sentiment, recurring questions, and issues being raised across farms. Filter by farm_id to focus on a specific grower.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'days', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+        const limit = parseInt(params.limit, 10) || 20;
+        let sql = `
+          SELECT farm_id, conversation_id, message_count, created_at, updated_at
+          FROM conversation_history
+          WHERE updated_at >= NOW() - ($1 || ' days')::interval
+        `;
+        const queryParams = [days];
+        if (params.farm_id) {
+          sql += ' AND farm_id = $2';
+          queryParams.push(params.farm_id);
+        }
+        sql += ' ORDER BY updated_at DESC LIMIT $' + (queryParams.length + 1);
+        queryParams.push(limit);
+        const result = await dbQuery(sql, queryParams);
+        return { ok: true, count: result.rows.length, conversations: result.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_evie_conversation_summaries': {
+    description: 'Get GPT-generated summaries of E.V.I.E. grower conversations. Summaries capture key topics, questions, and outcomes from grower sessions. Use this to understand grower needs without reading full transcripts.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'days', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 30;
+        const limit = parseInt(params.limit, 10) || 20;
+        let sql = `
+          SELECT farm_id, summary, message_count, created_at
+          FROM conversation_summaries
+          WHERE created_at >= NOW() - ($1 || ' days')::interval
+        `;
+        const queryParams = [days];
+        if (params.farm_id) {
+          sql += ' AND farm_id = $2';
+          queryParams.push(params.farm_id);
+        }
+        sql += ' ORDER BY created_at DESC LIMIT $' + (queryParams.length + 1);
+        queryParams.push(limit);
+        const result = await dbQuery(sql, queryParams);
+        return { ok: true, count: result.rows.length, summaries: result.rows };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_farm_alerts': {
+    description: 'Get farm system alerts — tool failures, recovery attempts, and unresolved issues reported by E.V.I.E. Use this to monitor farm health, diagnose recurring problems, and check if automated recovery succeeded. Filter by severity or resolved status.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id', 'severity', 'resolved', 'days', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 7;
+        const limit = parseInt(params.limit, 10) || 30;
+        let sql = `
+          SELECT id, farm_id, alert_type, severity, message, tool, error,
+                 recovery_attempted, recovery_strategy, resolved, conversation_id, created_at
+          FROM farm_alerts
+          WHERE created_at >= NOW() - ($1 || ' days')::interval
+        `;
+        const queryParams = [days];
+        if (params.farm_id) {
+          sql += ' AND farm_id = $' + (queryParams.length + 1);
+          queryParams.push(params.farm_id);
+        }
+        if (params.severity) {
+          sql += ' AND severity = $' + (queryParams.length + 1);
+          queryParams.push(params.severity);
+        }
+        if (params.resolved === 'true') {
+          sql += ' AND resolved = true';
+        } else if (params.resolved === 'false') {
+          sql += ' AND resolved = false';
+        }
+        sql += ' ORDER BY created_at DESC LIMIT $' + (queryParams.length + 1);
+        queryParams.push(limit);
+        const result = await dbQuery(sql, queryParams);
+        return { ok: true, count: result.rows.length, alerts: result.rows };
       } catch (err) { return { ok: false, error: err.message }; }
     }
   },

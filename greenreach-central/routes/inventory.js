@@ -91,7 +91,7 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
       ON CONFLICT (farm_id, product_id) DO UPDATE SET
         auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
         quantity = EXCLUDED.quantity,
-        quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0),
+        quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0) - COALESCE(farm_inventory.sold_quantity_lbs, 0),
         last_updated = NOW()
       WHERE farm_inventory.inventory_source != 'manual'`,
       [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs]
@@ -449,7 +449,7 @@ router.post('/:farmId/sync', async (req, res) => {
           price = EXCLUDED.price,
           available_for_wholesale = EXCLUDED.available_for_wholesale,
           auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
-          quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0),
+          quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0) - COALESCE(farm_inventory.sold_quantity_lbs, 0),
           quantity_unit = EXCLUDED.quantity_unit,
           wholesale_price = CASE WHEN EXCLUDED.wholesale_price > 0 THEN EXCLUDED.wholesale_price ELSE COALESCE(NULLIF(farm_inventory.wholesale_price, 0), EXCLUDED.wholesale_price) END,
           retail_price = CASE WHEN EXCLUDED.retail_price > 0 THEN EXCLUDED.retail_price ELSE COALESCE(NULLIF(farm_inventory.retail_price, 0), EXCLUDED.retail_price) END,
@@ -496,6 +496,61 @@ router.post('/:farmId/sync', async (req, res) => {
 });
 
 /**
+ * POST /api/inventory/deduct
+ * Permanently deduct sold quantities from farm_inventory (E-012/E-013 fix).
+ * Called by POS confirm and wholesale fulfillment via sync-service.
+ * Body: { farmId, items: [{ product_id, quantity_lbs, reason, order_id }] }
+ */
+router.post('/deduct', async (req, res) => {
+  try {
+    const { farmId, items } = req.body;
+
+    if (!farmId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'farmId and items[] required' });
+    }
+
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ success: false, error: 'Database unavailable' });
+    }
+
+    const results = [];
+    for (const item of items) {
+      const { product_id, quantity_lbs, reason, order_id } = item;
+      if (!product_id || !quantity_lbs || quantity_lbs <= 0) continue;
+
+      const result = await query(
+        `UPDATE farm_inventory SET
+          sold_quantity_lbs = COALESCE(sold_quantity_lbs, 0) + $3,
+          quantity_available = COALESCE(auto_quantity_lbs, 0)
+            + COALESCE(manual_quantity_lbs, 0)
+            - (COALESCE(sold_quantity_lbs, 0) + $3),
+          last_updated = NOW()
+        WHERE farm_id = $1 AND product_id = $2
+        RETURNING product_id, quantity_available, sold_quantity_lbs`,
+        [farmId, product_id, quantity_lbs]
+      );
+
+      if (result.rows.length > 0) {
+        results.push({
+          product_id,
+          deducted_lbs: quantity_lbs,
+          reason: reason || 'sale',
+          order_id: order_id || null,
+          new_available: result.rows[0].quantity_available,
+          new_sold: result.rows[0].sold_quantity_lbs
+        });
+      }
+    }
+
+    console.log(`[Inventory] Deducted ${results.length} items for farm ${farmId}`);
+    res.json({ success: true, farmId, deductions: results });
+  } catch (error) {
+    console.error('[Inventory] Deduction error:', error);
+    res.status(500).json({ success: false, error: 'Deduction failed', message: error.message });
+  }
+});
+
+/**
  * GET /api/inventory/:farmId
  * Get current inventory for a farm
  */
@@ -505,7 +560,7 @@ router.get('/:farmId', async (req, res) => {
 
     const result = await query(
       `SELECT *,
-        COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) AS available_lbs
+        COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0) AS available_lbs
        FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name`,
       [farmId]
     );
@@ -570,7 +625,7 @@ router.post('/manual', async (req, res) => {
           sku_id = EXCLUDED.sku_id,
           sku_name = EXCLUDED.sku_name,
           manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
-          quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs,
+          quantity_available = COALESCE(farm_inventory.auto_quantity_lbs, 0) + EXCLUDED.manual_quantity_lbs - COALESCE(farm_inventory.sold_quantity_lbs, 0),
           quantity_unit = EXCLUDED.quantity_unit,
           wholesale_price = EXCLUDED.wholesale_price,
           retail_price = EXCLUDED.retail_price,
@@ -697,7 +752,7 @@ router.put('/manual/:productId', async (req, res) => {
 
     const setClauses = [
       'manual_quantity_lbs = $2',
-      'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2',
+      'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2 - COALESCE(sold_quantity_lbs, 0)',
       `inventory_source = CASE WHEN COALESCE(auto_quantity_lbs, 0) > 0 THEN 'hybrid' ELSE 'manual' END`,
       'last_updated = NOW()'
     ];
@@ -771,7 +826,7 @@ router.delete('/manual/:productId', async (req, res) => {
       await query(
         `UPDATE farm_inventory SET
           manual_quantity_lbs = 0,
-          quantity_available = COALESCE(auto_quantity_lbs, 0),
+          quantity_available = COALESCE(auto_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0),
           inventory_source = 'auto',
           last_updated = NOW()
          WHERE farm_id = $1 AND product_id = $2`,

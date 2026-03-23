@@ -509,6 +509,10 @@ async function runMigrations(client) {
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS manual_quantity_lbs DECIMAL(10,2) DEFAULT 0;
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS inventory_source VARCHAR(10) DEFAULT 'auto';
 
+      -- Migration 025: sold_quantity_lbs for persistent sales deductions (E-014 fix)
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS sold_quantity_lbs DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS lot_code VARCHAR(255);
+
       UPDATE farm_inventory
          SET product_id = COALESCE(product_id, sku)
        WHERE product_id IS NULL;
@@ -2369,6 +2373,19 @@ async function runMigrations(client) {
     logger.info('App errors table ready (migration 038)');
   } catch (err) {
     logger.warn('Migration 038 warning:', err.message);
+  }
+
+  // ─── Migration 039: Fix farm_alerts schema — add alert_type and message columns ───
+  // logSystemAlert() in assistant-chat.js inserts alert_type, severity, message, farm_id
+  // but the original CREATE TABLE (migration 030) only had tool, error, recovery columns.
+  try {
+    await client.query(`
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS alert_type VARCHAR(100);
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS message TEXT;
+    `);
+    logger.info('Farm alerts columns aligned (migration 039)');
+  } catch (err) {
+    logger.warn('Migration 039 warning:', err.message);
   }
 
   logger.info('Database migrations completed');

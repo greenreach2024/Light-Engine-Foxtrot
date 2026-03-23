@@ -314,8 +314,18 @@
       if (data.ok !== false && data.reply) {
         conversationId = data.conversation_id || conversationId;
         if (data.tool_calls && data.tool_calls.length > 0) {
+          var interAgentTools = ['escalate_to_faye', 'reply_to_faye', 'get_faye_directives'];
           data.tool_calls.forEach(function (t) {
-            addChatMsg('system', 'Used tool: ' + (t.name || t.tool || 'unknown'));
+            var toolName = t.name || t.tool || 'unknown';
+            if (interAgentTools.indexOf(toolName) !== -1) {
+              if (toolName === 'escalate_to_faye') {
+                addChatMsg('system', 'Checking in with big sister F.A.Y.E...');
+              } else if (toolName === 'get_faye_directives') {
+                addChatMsg('system', 'Checking for notes from F.A.Y.E...');
+              }
+            } else {
+              addChatMsg('system', 'Used tool: ' + toolName);
+            }
           });
         }
         addChatMsg('assistant', data.reply);

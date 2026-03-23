@@ -397,15 +397,33 @@
 
         // Tool badges
         if (data.tool_calls && data.tool_calls.length > 0) {
-          var toolDiv = document.createElement('div');
-          toolDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-self:flex-start;padding:0 4px';
+          var interAgentTools = ['send_message_to_evie', 'get_evie_messages', 'get_agent_conversation', 'get_evie_conversations', 'get_evie_conversation_summaries', 'get_farm_alerts'];
+          var hasInterAgent = false;
+          var regularTools = [];
           data.tool_calls.forEach(function (t) {
-            var badge = document.createElement('span');
-            badge.className = 'faye-tool-badge' + (t.success ? '' : ' tool-failed');
-            badge.textContent = (t.success ? '+ ' : '- ') + t.tool.replace(/_/g, ' ');
-            toolDiv.appendChild(badge);
+            if (interAgentTools.indexOf(t.tool) !== -1) {
+              hasInterAgent = true;
+            } else {
+              regularTools.push(t);
+            }
           });
-          getActiveConvMessages().appendChild(toolDiv);
+          if (hasInterAgent) {
+            var sisterDiv = document.createElement('div');
+            sisterDiv.style.cssText = 'align-self:flex-start;padding:2px 8px;font-size:11px;color:var(--faye-accent,#8b5cf6);opacity:0.8;font-style:italic';
+            sisterDiv.textContent = 'Coordinating with little sis E.V.I.E...';
+            getActiveConvMessages().appendChild(sisterDiv);
+          }
+          if (regularTools.length > 0) {
+            var toolDiv = document.createElement('div');
+            toolDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-self:flex-start;padding:0 4px';
+            regularTools.forEach(function (t) {
+              var badge = document.createElement('span');
+              badge.className = 'faye-tool-badge' + (t.success ? '' : ' tool-failed');
+              badge.textContent = (t.success ? '+ ' : '- ') + t.tool.replace(/_/g, ' ');
+              toolDiv.appendChild(badge);
+            });
+            getActiveConvMessages().appendChild(toolDiv);
+          }
         }
 
         addConvMessage('assistant', data.reply || data.response || data.message || '');

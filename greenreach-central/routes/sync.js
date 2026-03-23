@@ -284,6 +284,82 @@ async function authenticateFarm(req, res, next) {
  * POST /api/sync/rooms
  * Sync room configurations from edge to cloud
  */
+
+/**
+ * POST /api/sync/harvest
+ * Sync harvest data from edge to cloud -- bridges tray-runs to farm_inventory (E-010 fix)
+ * Called by sync-service after POST /api/tray-runs/:id/harvest on LE.
+ */
+router.post("/harvest", authenticateFarm, async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const { farmId } = req;
+    const { harvests } = req.body;
+
+    if (!Array.isArray(harvests) || harvests.length === 0) {
+      return res.status(400).json({ success: false, error: "harvests must be a non-empty array" });
+    }
+
+    logger.info(`[Sync] Syncing ${harvests.length} harvests for farm ${farmId}`);
+
+    if (!(await isDatabaseAvailable())) {
+      return res.status(503).json({ success: false, error: "Database unavailable" });
+    }
+
+    let upserted = 0;
+    for (const h of harvests) {
+      const crop = h.crop || h.crop_name || "Unknown";
+      const productId = crop.toLowerCase().replace(/\s+/g, "-");
+      const weightLbs = h.actual_weight_oz ? Math.round((h.actual_weight_oz / 16) * 100) / 100 : 0;
+
+      if (weightLbs <= 0) continue;
+
+      await query(
+        `INSERT INTO farm_inventory (
+          farm_id, product_id, product_name, lot_code, auto_quantity_lbs,
+          quantity_available, unit, quantity_unit, inventory_source,
+          category, variety, last_updated
+        ) VALUES ($1,$2,$3,$4,$5,$5,'lb','lb','auto',$6,$7,NOW())
+        ON CONFLICT (farm_id, product_id) DO UPDATE SET
+          auto_quantity_lbs = farm_inventory.auto_quantity_lbs + $5,
+          quantity_available = (farm_inventory.auto_quantity_lbs + $5)
+            + COALESCE(farm_inventory.manual_quantity_lbs, 0)
+            - COALESCE(farm_inventory.sold_quantity_lbs, 0),
+          lot_code = COALESCE($4, farm_inventory.lot_code),
+          product_name = COALESCE(NULLIF($3, 'Unknown'), farm_inventory.product_name),
+          variety = COALESCE($7, farm_inventory.variety),
+          last_updated = NOW()`,
+        [farmId, productId, crop, h.lot_code || null, weightLbs, h.category || null, h.variety || null]
+      );
+      upserted++;
+    }
+
+    logger.info(`[Sync] Upserted ${upserted} harvest records into farm_inventory for farm ${farmId}`);
+
+    res.json({
+      success: true,
+      message: `Synced ${upserted} harvests`,
+      farmId,
+      count: upserted,
+      timestamp: new Date().toISOString()
+    });
+    recordSyncMetric(req, { type: "sync-harvest", success: true, farmId, records: upserted, lagMs: Date.now() - startedAt });
+
+  } catch (error) {
+    logger.error("[Sync] Error syncing harvests:", error);
+    recordSyncMetric(req, { type: "sync-harvest", success: false, lagMs: Date.now() - startedAt, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: "Failed to sync harvests",
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sync/rooms
+ * Sync room configurations from edge to cloud
+ */
 router.post('/rooms', authenticateFarm, async (req, res) => {
   try {
     const { farmId } = req;

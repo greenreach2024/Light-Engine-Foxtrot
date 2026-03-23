@@ -1783,7 +1783,7 @@ export const TOOL_CATALOG = {
         previousState = { ...existing.rows[0] };
         const setClauses = [
           'manual_quantity_lbs = $2',
-          'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2',
+          'quantity_available = COALESCE(auto_quantity_lbs, 0) + $2 - COALESCE(sold_quantity_lbs, 0)',
           `inventory_source = CASE WHEN COALESCE(auto_quantity_lbs, 0) > 0 THEN 'hybrid' ELSE 'manual' END`,
           'last_updated = NOW()'
         ];
@@ -1840,7 +1840,7 @@ export const TOOL_CATALOG = {
         await dbQuery(
           `UPDATE farm_inventory SET
             manual_quantity_lbs = $2,
-            quantity_available = COALESCE(auto_quantity_lbs, 0) + $2,
+            quantity_available = COALESCE(auto_quantity_lbs, 0) + $2 - COALESCE(sold_quantity_lbs, 0),
             inventory_source = $3,
             last_updated = NOW()
            WHERE farm_id = $1 AND product_id = $4`,

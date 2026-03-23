@@ -155,7 +155,7 @@ router.post('/harvest', async (req, res) => {
                 best_by_date = $5,
                 harvest_event_id = $6,
                 auto_quantity_lbs = COALESCE(auto_quantity_lbs, 0) + $7,
-                quantity_available = COALESCE(auto_quantity_lbs, 0) + $7 + COALESCE(manual_quantity_lbs, 0),
+                quantity_available = COALESCE(auto_quantity_lbs, 0) + $7 + COALESCE(manual_quantity_lbs, 0) - COALESCE(sold_quantity_lbs, 0),
                 last_updated = NOW()
           WHERE farm_id = $1 AND product_id = $2`,
         [farmId, productId, lotNumber, quality, bestByDate, harvestEventId, weightLbs]

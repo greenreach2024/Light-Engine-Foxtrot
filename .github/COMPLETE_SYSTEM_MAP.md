@@ -1,7 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Date**: March 23, 2026
+**Last Updated**: March 24, 2026 -- v1.2.0: RESOLVED Errors E-010 through E-015 (inventory pipeline fixes)
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -23,6 +24,7 @@
 12. [Cross-System Dependency Map](#12-cross-system-dependency-map)
 13. [Error Log -- Known Issues for Correction](#13-error-log----known-issues-for-correction)
 14. [Category Quick Reference](#14-category-quick-reference)
+15. [Complete Inventory Workflow](#15-complete-inventory-workflow)
 
 ---
 
@@ -996,18 +998,17 @@ User -> LE-dashboard.html (setup wizard) OR farm-admin pages
 
 ### 6.7 Inventory Management Flow
 
-```
-User -> LE-farm-admin.html (Inventory tab)
-  -> Seeds: POST /api/inventory/seeds { name, variety, qty, unit }
-  -> Packaging: POST /api/inventory/packaging { type, qty }
-  -> Nutrients: POST /api/inventory/nutrients { name, concentration }
-  -> Equipment: POST /api/inventory/equipment { name, status }
-  -> Supplies: POST /api/inventory/supplies { name, qty }
-  
-  -> farm_inventory table (PostgreSQL)
-  -> Auto-sync to wholesale catalog when available_for_wholesale=true
-  -> Reorder alerts when qty < threshold
-```
+See **Section 15** for the complete inventory workflow, covering tray-based inventory, manual entry, the dual-quantity system, POS consumption, wholesale catalog, and all known gaps.
+
+**Summary**: Two inventory sources feed farm_inventory:
+1. **Auto (Tray Harvest)**: Tray setup -> seeding -> growing -> harvest -> lot code + weight -> recalculateAutoInventoryFromGroups() -> farm_inventory.auto_quantity_lbs
+2. **Manual Entry**: POST /api/inventory/manual -> farm_inventory.manual_quantity_lbs
+
+Combined: `quantity_available = auto_quantity_lbs + manual_quantity_lbs`
+
+Exposed to: Wholesale catalog (available_for_wholesale=true), POS checkout, Central admin dashboard.
+
+See Section 15 for critical gaps where sales do NOT deduct from inventory.
 
 ### 6.8 Grant Application Flow
 
@@ -1792,6 +1793,32 @@ When you change a file, here is what else is affected:
 - **Pattern**: `.urbanyeild.ca` -- note "yeild" (possible typo of "yield")
 - **Impact**: If domain is actually "urbanyield.ca", CORS would fail for that domain
 
+### 13.4 RESOLVED -- INVENTORY PIPELINE GAPS (fixed v1.2.0)
+
+#### E-010: RESOLVED -- Harvest Now Creates farm_inventory Records
+- **Status**: RESOLVED
+- **Fix Applied**: (1) New POST /api/sync/harvest endpoint in greenreach-central/routes/sync.js receives harvest data and upserts into farm_inventory with actual weights. (2) New syncHarvest() method added to services/sync-service.js with queue/retry support. (3) server-foxtrot.js harvest endpoint (POST /api/tray-runs/:id/harvest) now calls getSyncService().syncHarvest() after successful harvest, sending crop, lot_code, actual_weight_oz, category, and variety to Central.
+
+#### E-011: RESOLVED -- Recalculation Formula Now Preserves Sales
+- **Status**: RESOLVED (partially -- theoretical vs actual harvest distinction is a future enhancement)
+- **Fix Applied**: All quantity_available formulas in greenreach-central/routes/inventory.js (recalculate, sync, manual POST/PUT/DELETE) now use: quantity_available = auto_quantity_lbs + manual_quantity_lbs - sold_quantity_lbs. The sold_quantity_lbs column (Migration 025) tracks cumulative sales and is never overwritten by recalculation. Auto-inventory still uses theoretical capacity from groups, but harvest data now also flows in via syncHarvest (E-010 fix), and sales deductions persist across recalculations.
+
+#### E-012: RESOLVED -- POS Sales Now Persist to farm_inventory
+- **Status**: RESOLVED
+- **Fix Applied**: (1) New POST /api/inventory/deduct endpoint in greenreach-central/routes/inventory.js increments sold_quantity_lbs and recalculates quantity_available atomically in PostgreSQL. (2) New syncDeduction() method in services/sync-service.js with queue/retry. (3) routes/farm-sales/inventory.js confirm handler now calls syncService.syncDeduction() after successful confirmation, sending product_id, quantity, reason='pos_sale', and order_id to Central.
+
+#### E-013: RESOLVED -- Wholesale Confirmation Now Persists Deductions
+- **Status**: RESOLVED
+- **Fix Applied**: routes/wholesale-reservations.js confirm handler (POST /api/wholesale/confirm) now calls syncService.syncDeduction() when a reservation is confirmed (payment succeeded). Deduction includes sku_id, qty, reason='wholesale_sale', and sub_order_id. This converts the temporary TTL reservation into a permanent sold_quantity_lbs increment in farm_inventory. Deduction happens at payment confirmation, not fulfillment status change, ensuring inventory is reduced as soon as the sale is committed.
+
+#### E-014: RESOLVED -- sold_quantity_lbs Column Prevents Overwrite
+- **Status**: RESOLVED
+- **Fix Applied**: (1) Migration 025 in greenreach-central/config/database.js adds sold_quantity_lbs DECIMAL(10,2) DEFAULT 0 and lot_code VARCHAR(255) columns. (2) ALL quantity_available formulas in inventory.js (recalculate ON CONFLICT, sync ON CONFLICT, manual POST ON CONFLICT, PUT manual, DELETE manual, GET available_lbs) now use: quantity_available = auto_quantity_lbs + manual_quantity_lbs - sold_quantity_lbs. (3) Recalculation only updates auto_quantity_lbs; sold_quantity_lbs is untouched, preserving sales history across sync cycles.
+
+#### E-015: RESOLVED -- Reservation Availability Now Reads from Database
+- **Status**: RESOLVED
+- **Fix Applied**: getCatalogAvailableQty() in routes/wholesale-reservations.js now queries farm_inventory via PostgreSQL (req.app.locals.db) instead of reading wholesale-products.json. Falls back to the static JSON only if DB is unavailable. The static file remains as fallback/test data but is no longer the primary source for reservation availability checks.
+
 ---
 
 ## 14. Category Quick Reference
@@ -1805,7 +1832,7 @@ When you change a file, here is what else is affected:
 | **Device Control** | LE | server-foxtrot.js (SwitchBot, Kasa, Shelly) | device_integrations |
 | **Automation** | LE | automation/, lib/schedule-executor.js | (in-memory + file) |
 | **Dashboard** | Central | views/farm-summary.html | farm_data |
-| **Inventory** | Both | routes/inventory.js (Central), farm-sales/inventory.js (LE) | farm_inventory, products |
+| **Inventory** | Both | routes/inventory.js + inventory-mgmt.js (Central), farm-sales/inventory.js (LE), server-foxtrot.js tray routes | farm_inventory, products, farm_data (inventory_seeds/nutrients/packaging/equipment/supplies), tray-runs.db, tray-formats.db |
 | **Wholesale** | Both | routes/wholesale*.js (LE), routes/wholesale.js (Central) | wholesale_buyers, wholesale_orders, payment_records |
 | **Farm Sales** | LE | routes/farm-sales/*.js | products, farm_inventory |
 | **Delivery** | Central | routes/admin-delivery.js | delivery_*, driver_* |
@@ -1852,7 +1879,416 @@ cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot/greenreach-central
 
 ---
 
+## 15. Complete Inventory Workflow
+
+### 15.1 System Overview -- Two Inventory Domains
+
+The platform has TWO fundamentally different inventory domains that serve different purposes:
+
+| Domain | What It Tracks | Storage | Server | UI |
+|--------|---------------|---------|--------|-----|
+| **Supplies Inventory** | Seeds, packaging, nutrients, equipment, supplies (farm inputs) | farm_data JSONB (per-category keys) | Central | LE-farm-admin.html Inventory tab |
+| **Crop/Product Inventory** | Harvested crops available for sale (farm outputs) | farm_inventory table (PostgreSQL) | Both | farm-inventory.html, wholesale catalog, POS |
+
+These are separate systems. Supplies inventory is consumption tracking (inputs the farm uses). Crop inventory is what the farm produces and sells. This section maps both, with emphasis on how crop inventory flows from tray harvest to point of sale.
+
+### 15.2 Tray-Based Inventory Lifecycle (Crop Outputs)
+
+#### Phase 1: Tray Format Setup
+
+**UI**: tray-setup.html Tab 1
+**Server**: LE (server-foxtrot.js)
+**Storage**: NeDB (trayFormatsDB -> ./data/tray-formats.db)
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| /api/tray-formats | GET | List all formats (8 defaults + custom) |
+| /api/tray-formats | POST | Create custom format |
+| /api/tray-formats/:id | PUT | Update custom format |
+| /api/tray-formats/:id | DELETE | Delete format (blocked if trays using it) |
+
+**TrayFormat Record**:
+```
+trayFormatId, name, plantSiteCount, isWeightBased,
+targetWeightPerSite, weightUnit, systemType (soil/NFT/DWC/aeroponics/zipgrow),
+trayMaterial (plastic/metal/tower), description, isCustom
+```
+
+#### Phase 2: Physical Tray Registration
+
+**UI**: tray-setup.html Tab 2
+**Server**: LE
+**Storage**: NeDB (traysDB -> ./data/trays.db)
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| /api/trays/register | POST | Register physical tray (QR code -> format link) |
+| /api/trays | GET | List all registered trays with status |
+
+**Fields**: tray_id (QR code value), tray_format_id, created_at
+
+#### Phase 3: Seeding (Tray Run)
+
+**UI**: planting-scheduler.html or tray-inventory.html (Activity Hub)
+**Server**: LE
+**Storage**: NeDB (trayRunsDB -> ./data/tray-runs.db, trayPlacementsDB -> ./data/tray-placements.db)
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| /api/trays/:trayId/seed | POST | Create tray run (seeding event) |
+| /api/tray-runs/:id/move | POST | Assign/move tray to group location |
+
+**Seeding Input Fields**: recipe (crop), seedDate, plantCount (optional), seed_source, variety, position, groupId
+
+**Plant Count Auto-Derivation** (priority order):
+1. Explicit plantCount in request -> source: "manual"
+2. trayFormat.plantSiteCount from trayFormatsDB -> source: "tray_format"
+3. Null if neither available
+
+**Target Weight Estimation** (priority order):
+1. Verified crop benchmark (getCropBenchmark) -> source: "benchmark"
+2. trayFormat.targetWeightPerSite -> source: "format"
+3. Null if neither available
+
+**TrayRun Record Created**:
+```
+tray_run_id: "TR-<timestamp>-<random>"
+tray_id, recipe_id, crop, variety,
+seeded_at, planted_site_count, plant_count_source,
+seed_source, target_weight_oz, target_weight_source,
+group_id, status: "GROWING"
+```
+
+**Placement Record Created**:
+```
+tray_run_id, tray_id, location_qr, placed_at,
+removed_at: null, removal_reason: null, group_id
+```
+
+#### Phase 4: Growing
+
+**Automated**: Schedule executor applies light/env targets per group recipe. Applied recipes logged to appliedRecipesDB for ML benchmarking and traceability.
+
+#### Phase 5: Harvest
+
+**UI**: tray-inventory.html (Activity Hub) -- QR scan + weight entry
+**Server**: LE (server-foxtrot.js ~line 21504)
+**Storage**: NeDB (trayRunsDB, harvestOutcomesDB -> ./data/harvest-outcomes.db), trace-records.json
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| /api/tray-runs/:id/harvest | POST | Record harvest, generate lot code |
+
+**Harvest Input Fields**: actualWeight (oz, optional), note, harvestedAt
+
+**Processing Steps**:
+
+1. Look up TrayRun from trayRunsDB
+2. Generate Lot Code: `A1-<CROP 8chars>-<YYMMDD>-<4char random>` (e.g., A1-LETTU-260330-AB7C)
+3. Calculate weight: manual actualWeight OR target_weight_oz x planted_site_count
+4. Update TrayRun: status="HARVESTED", lot_code, actual_weight, harvested_at
+5. Create Experiment Record in harvestOutcomesDB (crop, grow_days, weight_per_plant_oz, zone)
+6. Create Traceability Record in trace-records.json (SFCR-compliant, 2-year retention)
+7. Auto-print thermal label via POST /api/printer/print-harvest
+8. **DOES NOT** create or update farm_inventory (see Error E-010)
+
+**Weigh-In Sampling**: 80% rate for unverified crops, 20% for verified crops
+
+**Harvest Response Fields**: success, trayRunId, lotCode, batchId, actualWeight, harvestedCount, harvestedAt, shouldWeigh, weighInReason, trace_id, experiment_id, label_print, auto_print_result
+
+#### Phase 6: Inventory Availability (THE GAP)
+
+**Current State**: Harvested crop data lives in NeDB tray-runs on LE. The farm_inventory table (PostgreSQL on Central) that POS and wholesale read from is populated via a SEPARATE mechanism: recalculateAutoInventoryFromGroups(), which uses theoretical plant counts from groups.json -- NOT actual harvest data.
+
+```
+WHAT ACTUALLY HAPPENS:
+  Tray Harvest (NeDB: tray-runs.db)
+       |
+       | [NO DIRECT CONNECTION]
+       |
+       v
+  farm_inventory.auto_quantity_lbs
+       ^
+       | recalculateAutoInventoryFromGroups()
+       | triggered by POST /api/sync/groups
+       |
+  groups.json (theoretical plant counts)
+       + crop_benchmarks (statistical averages)
+
+WHAT SHOULD HAPPEN:
+  Tray Harvest (actual weight)
+       |
+       v
+  farm_inventory.auto_quantity_lbs (actual harvested qty)
+       |
+       v
+  Wholesale catalog + POS (real available inventory)
+```
+
+### 15.3 Manual Inventory Entry (Crop Outputs)
+
+**UI**: LE-farm-admin.html or direct API
+**Server**: Central (greenreach-central/routes/inventory.js)
+**Storage**: PostgreSQL farm_inventory table
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| POST /api/inventory/manual | POST | Add manual inventory item |
+
+**Manual Entry Fields**: product_name, quantity_lbs, retail_price, wholesale_price, category, variety, available_for_wholesale
+
+**Database Effect**:
+```sql
+INSERT INTO farm_inventory (farm_id, product_id, product_name, manual_quantity_lbs,
+  quantity_available, inventory_source, retail_price, wholesale_price)
+VALUES (?, ?, ?, manual_qty, auto_qty + manual_qty, 
+  CASE WHEN auto_qty > 0 THEN 'hybrid' ELSE 'manual' END, ?, ?)
+ON CONFLICT (farm_id, product_id) DO UPDATE SET
+  manual_quantity_lbs = EXCLUDED.manual_quantity_lbs,
+  quantity_available = farm_inventory.auto_quantity_lbs + EXCLUDED.manual_quantity_lbs,
+  inventory_source = CASE 
+    WHEN farm_inventory.auto_quantity_lbs > 0 THEN 'hybrid' 
+    ELSE 'manual' 
+  END
+```
+
+**Protection**: Records with inventory_source = 'manual' are NOT overwritten by auto-sync.
+
+### 15.4 Dual-Quantity System
+
+**Three-State Machine**:
+
+| inventory_source | auto_quantity_lbs | manual_quantity_lbs | Sync Behavior |
+|-----------------|-------------------|--------------------|----|
+| auto | Populated (from groups recalc) | 0 | Auto-sync updates freely |
+| manual | 0 | Populated (user-entered) | Auto-sync CANNOT overwrite |
+| hybrid | Populated | Populated | Auto-sync updates auto portion, preserves manual |
+
+**Combined Quantity**: `quantity_available = auto_quantity_lbs + manual_quantity_lbs`
+
+**Sync ON CONFLICT Logic** (greenreach-central/config/database.js):
+```sql
+ON CONFLICT (farm_id, product_id) DO UPDATE SET
+  auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
+  quantity_available = EXCLUDED.auto_quantity_lbs + 
+                       COALESCE(farm_inventory.manual_quantity_lbs, 0),
+  inventory_source = CASE
+    WHEN COALESCE(farm_inventory.manual_quantity_lbs, 0) > 0 THEN 'hybrid'
+    ELSE 'auto'
+  END
+WHERE farm_inventory.inventory_source != 'manual'
+```
+
+### 15.5 Supplies Inventory (Farm Inputs)
+
+**UI**: LE-farm-admin.html Inventory tab
+**Server**: Central (greenreach-central/routes/inventory-mgmt.js)
+**Storage**: farm_data JSONB table (keys: inventory_seeds, inventory_nutrients, inventory_packaging, inventory_equipment, inventory_supplies)
+
+**Categories and Endpoints** (pattern: /api/inventory/{category}/*):
+
+| Category | List | Create | Update | Delete | Restock | Usage | Maintenance |
+|----------|------|--------|--------|--------|---------|-------|-------------|
+| seeds | GET /list | POST | PUT /:id | DELETE /:id | POST /:id/restock | POST /:id/usage | -- |
+| nutrients | GET /list | POST | PUT /:id | DELETE /:id | POST /:id/restock | POST /:id/usage | -- |
+| packaging | GET /list | POST | PUT /:id | DELETE /:id | POST /:id/restock | POST /:id/usage | -- |
+| equipment | GET /list | POST | PUT /:id | DELETE /:id | -- | -- | POST /:id/maintenance |
+| supplies | GET /list | POST | PUT /:id | DELETE /:id | POST /:id/restock | POST /:id/usage | -- |
+
+**Aggregation Endpoints**:
+| API | Method | Purpose |
+|-----|--------|---------|
+| /api/inventory/dashboard | GET | Summary overview (counts, value, alerts) |
+| /api/inventory/reorder-alerts | GET | Items below minStockLevel |
+| /api/inventory/usage/weekly-summary | GET | Weekly consumption across categories |
+
+**Supplies Data Model** (per item):
+```
+id, name, quantity (or qtyOnHand or volume_remaining_ml),
+reorderPoint (or minStockLevel), costPerUnit (or price),
+createdAt, updatedAt
+```
+
+Usage/maintenance events stored in inventory_usage_log (audit trail with quantity change, remaining balance, performer ID, timestamp).
+
+**These supplies do NOT flow into the crop/product inventory system.** Seeds consumed by planting, packaging used in fulfillment, nutrients used in growing -- these are tracked here as input consumption, not as salable output.
+
+### 15.6 Inventory Sync (LE -> Central)
+
+**Mechanism**: sync-service.js sends data to Central every 30 seconds (telemetry) and every 5 minutes (farm data).
+
+| Sync Route | Trigger | Effect on farm_inventory |
+|------------|---------|------------------------|
+| POST /api/sync/telemetry | Every 30s | None (environmental data only) |
+| POST /api/sync/groups | On group changes | Triggers recalculateAutoInventoryFromGroups() |
+| POST /api/sync/inventory | On manual inventory update | Upserts to products + farm_data + inMemoryStore |
+| (none) | On tray harvest | **NO SYNC EXISTS** (Error E-010) |
+
+### 15.7 Wholesale Catalog Pipeline
+
+**How farm_inventory becomes the wholesale catalog**:
+
+```
+farm_inventory table
+  WHERE available_for_wholesale = true
+  AND quantity_available > 0
+       |
+       v
+GET /api/wholesale/catalog  (routes/wholesale-catalog.js)
+  SQL: SELECT fi.*, f.name AS farm_name
+       FROM farm_inventory fi
+       LEFT JOIN farms f ON f.farm_id = fi.farm_id
+       WHERE fi.available_for_wholesale = true
+       AND COALESCE(fi.quantity_available, fi.quantity, 0) > 0
+       |
+       v
+Aggregated SKU Map:
+  sku_id -> { total_available (sum all farms), min_price, max_price,
+              farms: [{ farm_id, qty_available, price }] }
+       |
+       v
+GR-wholesale.html (buyer-facing catalog)
+```
+
+**Reservation System** (routes/wholesale-reservations.js):
+| API | Method | Purpose |
+|-----|--------|---------|
+| POST /api/wholesale/reserve | POST | Create TTL-based inventory hold |
+| POST /api/wholesale/release | POST | Release hold on checkout cancel |
+
+Reservations stored in NeDB with TTL (default 15 minutes). Availability check: `catalog_available - currently_reserved >= requested`. Reservations expire without converting to permanent deductions (Error E-013).
+
+**wholesale-products.json**: Static test file with 6 hardcoded products. NOT dynamically updated. Some routes may read from this instead of the database (Error E-015).
+
+### 15.8 POS Inventory Pipeline
+
+**How POS reads and consumes inventory**:
+
+```
+GET /api/farm-sales/inventory  (routes/farm-sales/inventory.js)
+  Merges: NeDB in-memory store + PostgreSQL farm_inventory
+       |
+       v
+POS checkout form (farm-sales-pos.html)
+       |
+       v
+POST /api/farm-sales/pos/checkout  (routes/farm-sales/pos.js)
+  1. Validates: product.available >= item.quantity
+  2. Calculates: subtotal, tax, delivery fees
+  3. Creates order record
+  4. Deducts from IN-MEMORY store only (farmStores.inventory Map)
+  5. DOES NOT update PostgreSQL farm_inventory (Error E-012)
+```
+
+### 15.9 Central Monitoring
+
+**How Central monitors farm inventory**:
+
+| Endpoint | Purpose | Data Source |
+|----------|---------|------------|
+| GET /api/inventory/current | Active trays + total plants | farm_backups.groups + farm_inventory |
+| GET /api/inventory/:farmId | Farm inventory detail | farm_inventory WHERE qty > 0 |
+| GET /api/inventory/forecast/:days | Harvest forecast (7/14/30 day) | groups seed dates + crop growth days |
+
+**Central Admin Dashboard** (central-admin.js, function loadFarmInventory):
+- Reads farm_inventory WHERE quantity_available > 0 OR manual_quantity_lbs > 0
+- Shows auto_quantity_lbs + manual_quantity_lbs merged as quantity_available
+- Displays by category with last-updated timestamps
+
+**Farm Inventory View** (farm-inventory.html):
+- **Summary Cards**: Active Trays, Ready for Harvest, Total Plants, Recent Harvests
+- **Forecast Grid**: 7-day, 14-day, 30-day, 30+ day projections (trays and plants)
+- **Inventory Tree**: Hierarchical crop view with growth stages, locations, harvest dates
+- **AI Insights popup**: ML-powered harvest optimization suggestions
+
+### 15.10 NeDB Stores (Tray System -- LE Only)
+
+| Store Variable | File Path | Purpose | Key Fields |
+|---------------|-----------|---------|------------|
+| trayFormatsDB | ./data/tray-formats.db | Tray format definitions | trayFormatId, name, plantSiteCount, isWeightBased, targetWeightPerSite, systemType |
+| traysDB | ./data/trays.db | Registered physical trays | tray_id, tray_format_id, qr_code_value |
+| trayRunsDB | ./data/tray-runs.db | Individual seeding cycles | tray_run_id, tray_id, recipe_id, seeded_at, planted_site_count, target_weight_oz, group_id, status (GROWING/HARVESTED), lot_code, actual_weight |
+| trayPlacementsDB | ./data/tray-placements.db | Location history of runs | tray_run_id, location_qr, placed_at, group_id |
+| trayLossEventsDB | ./data/tray-loss-events.db | Loss/mortality during growing | Event timestamps, loss counts |
+| harvestOutcomesDB | ./data/harvest-outcomes.db | Experiment records for ML | crop, grow_days, weight_per_plant_oz, total_weight_oz, zone |
+
+### 15.11 Complete Inventory Data Flow Diagram
+
+```
+=== SUPPLY SIDE (Inventory Creation) ===
+
+Source A: Tray Harvest (Actual Production)
+  tray-setup.html -> POST /api/tray-formats (define format)
+  tray-setup.html -> POST /api/trays/register (register physical tray)
+  planting-scheduler -> POST /api/trays/:id/seed (start growing)
+  [Schedule executor applies recipes for N days]
+  tray-inventory.html -> POST /api/tray-runs/:id/harvest
+    -> tray-runs.db: status=HARVESTED, lot_code, actual_weight
+    -> trace-records.json: SFCR traceability
+    -> harvest-outcomes.db: experiment data
+    -> thermal printer: label with lot code
+    -> farm_inventory: *** NOTHING *** (E-010)
+
+Source B: Theoretical Capacity (Groups Recalculation)
+  groups.json -> POST /api/sync/groups -> Central receives
+    -> recalculateAutoInventoryFromGroups(farmId)
+    -> total_plants x yieldFactor x avgWeight / 16
+    -> farm_inventory.auto_quantity_lbs (THEORETICAL, not actual)
+
+Source C: Manual Entry (Farmer Adds Directly)
+  LE-farm-admin.html or API -> POST /api/inventory/manual
+    -> farm_inventory.manual_quantity_lbs (protected from auto-overwrite)
+
+=== COMBINED INVENTORY ===
+
+farm_inventory table (PostgreSQL, Central):
+  quantity_available = auto_quantity_lbs + manual_quantity_lbs
+  inventory_source = 'auto' | 'manual' | 'hybrid'
+
+=== DEMAND SIDE (Inventory Consumption) ===
+
+Consumer 1: Wholesale Catalog
+  GET /api/wholesale/catalog
+    -> Reads farm_inventory WHERE available_for_wholesale = true
+    -> Shows aggregated SKUs across farms
+    -> Buyer places order -> reservation (TTL 15 min)
+    -> Order fulfilled -> status webhooks
+    -> farm_inventory: *** NOT REDUCED *** (E-013)
+
+Consumer 2: POS (Point of Sale)
+  GET /api/farm-sales/inventory
+    -> Reads NeDB + farm_inventory
+    -> Customer checkout -> POST /api/farm-sales/pos/checkout
+    -> Validates availability -> creates order
+    -> In-memory deduction only (lost on restart)
+    -> farm_inventory: *** NOT REDUCED *** (E-012)
+
+Consumer 3: Central Admin Dashboard
+  GET /api/inventory/current, /api/inventory/:farmId
+    -> Read-only monitoring (no deductions)
+
+Consumer 4: Central Forecast
+  GET /api/inventory/forecast/:days
+    -> Projects from seed dates + crop growth days
+    -> Theoretical only (uses groups, not actual harvests)
+```
+
+### 15.12 Inventory Error Summary
+
+The inventory system has a broken pipeline where production data (actual harvests) never reaches the availability system (farm_inventory), and sales never deduct from availability. The full chain of errors:
+
+| Step | Expected | Actual | Error |
+|------|----------|--------|-------|
+| Tray harvested | Creates farm_inventory record with actual weight | Only updates NeDB tray-runs | E-010 |
+| Auto quantity calculated | Reflects actual harvested amounts | Uses theoretical plant counts from groups | E-011 |
+| POS sale completed | Reduces farm_inventory permanently | In-memory deduction only (lost on restart) | E-012 |
+| Wholesale order fulfilled | Reduces farm_inventory permanently | No deduction at all | E-013 |
+| Groups resync triggers recalc | Preserves sales deductions | Overwrites auto_quantity_lbs from scratch | E-014 |
+| Wholesale catalog reads | From farm_inventory database | May read from static wholesale-products.json | E-015 |
+
+---
+
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.0.0
+**Document Version**: 1.1.0
 **Generated**: March 23, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added
