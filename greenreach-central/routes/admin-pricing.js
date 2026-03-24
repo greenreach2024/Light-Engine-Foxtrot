@@ -951,7 +951,8 @@ router.post('/batch-update', async (req, res) => {
       }
 
       const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
-      const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * 0.70 * 100) / 100 : null);
+      const skuFactor = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.65)));
+      const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * skuFactor * 100) / 100 : null);
 
       if (!retailPerLb || retailPerLb <= 0) {
         errors.push({ crop: u.crop, error: 'Invalid retail price' });
@@ -1040,7 +1041,8 @@ router.post('/batch-update', async (req, res) => {
             // Merge updates into existing farm pricing
             for (const u of updates) {
               const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
-              const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * 0.70 * 100) / 100 : null);
+              const skuFactorPush = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.65)));
+              const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * skuFactorPush * 100) / 100 : null);
               if (!retailPerLb) continue;
 
               const prev = existingMap[u.crop] || {};

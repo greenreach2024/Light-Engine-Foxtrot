@@ -968,6 +968,56 @@ router.get('/catalog', async (req, res, next) => {
         !(it.farms || []).every(f => (f.quality_flags || []).includes('fallback_seeded'))
       );
 
+      // Database fallback: when the network aggregate is empty, build catalog
+      // items directly from farm_inventory so the admin dashboard shows products
+      if (items.length === 0 && isDatabaseAvailable()) {
+        try {
+          const invResult = await query(
+            `SELECT i.product_id, i.product_name, i.sku, i.sku_name,
+                    i.quantity_available, i.manual_quantity_lbs,
+                    i.wholesale_price, i.retail_price, i.unit, i.quantity_unit,
+                    i.category, i.farm_id, f.name AS farm_name
+             FROM farm_inventory i
+             JOIN farms f ON f.farm_id = i.farm_id
+             WHERE f.status IN ('active','online')
+               AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
+             ORDER BY i.product_name`
+          );
+          const skuMap = new Map();
+          for (const row of (invResult.rows || [])) {
+            const skuId = row.sku || row.product_id || row.product_name;
+            const qty = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+            if (!skuMap.has(skuId)) {
+              skuMap.set(skuId, {
+                sku_id: skuId,
+                product_name: row.product_name || row.sku_name || skuId,
+                category: row.category || 'produce',
+                unit: row.quantity_unit || row.unit || 'lb',
+                price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0),
+                wholesale_price: Number(row.wholesale_price ?? 0),
+                retail_price: Number(row.retail_price ?? 0),
+                total_qty_available: 0,
+                qty_available: 0,
+                farms: []
+              });
+            }
+            const entry = skuMap.get(skuId);
+            entry.total_qty_available += qty;
+            entry.qty_available += qty;
+            entry.farms.push({
+              farm_id: row.farm_id,
+              farm_name: row.farm_name,
+              quantity_available: qty,
+              qty_available: qty,
+              price_per_unit: Number(row.wholesale_price ?? row.retail_price ?? 0)
+            });
+          }
+          items = Array.from(skuMap.values());
+        } catch (dbErr) {
+          console.warn('[Wholesale Catalog] DB fallback failed:', dbErr.message);
+        }
+      }
+
       if (farmId) {
         items = items
           .map((it) => ({ ...it, farms: (it.farms || []).filter((f) => f.farm_id === farmId) }))

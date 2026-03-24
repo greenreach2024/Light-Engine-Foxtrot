@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.1.0
-**Date**: March 23, 2026
-**Last Updated**: March 24, 2026 -- v1.2.0: RESOLVED Errors E-010 through E-015 (inventory pipeline fixes)
+**Version**: 1.3.0
+**Date**: March 24, 2026
+**Last Updated**: March 24, 2026 -- v1.3.0: Pricing formula consistency, AI pricing match fix, wholesale catalog DB fallback, inventory field mapping fix
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -971,6 +971,8 @@ Storage:
 ```
 Buyer -> GR-wholesale.html (browse catalog)
   -> GET /api/wholesale/catalog (product listing)
+    -> Primary: buildAggregateCatalog() from network farms
+    -> Fallback: Direct DB query on farm_inventory (if aggregate is empty, v1.3.0)
   -> Add items to cart
   -> POST /api/wholesale/checkout (place order)
     -> Square payment processing (12% commission via app_fee_money)
@@ -1879,6 +1881,39 @@ When you change a file, here is what else is affected:
 - **Status**: RESOLVED
 - **Fix Applied**: getCatalogAvailableQty() in routes/wholesale-reservations.js now queries farm_inventory via PostgreSQL (req.app.locals.db) instead of reading wholesale-products.json. Falls back to the static JSON only if DB is unavailable. The static file remains as fallback/test data but is no longer the primary source for reservation availability checks.
 
+### 13.5 RESOLVED -- PRICING AND ADMIN UI FIXES (v1.3.0)
+
+#### E-016: AI Pricing Cannot Match Product to Pricing Table -- RESOLVED v1.3.0
+- **File**: greenreach-central/public/farm-admin.js (applyRecommendedPrice function)
+- **Problem**: When E.V.I.E. recommended a price for a product, applyRecommendedPrice() searched pricingData for a matching product_name. If no row existed, it showed "could not match product to table" error and did nothing.
+- **Impact**: AI pricing recommendations were unusable for any product not already in the pricing table.
+- **Fix Applied**: When no matching row exists, applyRecommendedPrice() now creates a new pricingData entry with default formula fields (sku_factor=0.65, cost_floor=0.00), then applies the recommendation and triggers syncPricingRow().
+
+#### E-017: Wholesale Dashboard Shows No Products -- RESOLVED v1.3.0
+- **File**: greenreach-central/routes/wholesale.js (GET /api/wholesale/catalog)
+- **Problem**: buildAggregateCatalog() queries network farms for catalog data. For single-farm or new deployments, the aggregate returns empty, resulting in an empty wholesale dashboard even when farm_inventory has products.
+- **Impact**: Wholesale buyers saw an empty catalog despite available inventory.
+- **Fix Applied**: Added DB fallback -- when buildAggregateCatalog() returns empty, the endpoint queries farm_inventory directly (WHERE quantity_available > 0 AND available_for_wholesale = true) and formats rows into catalog shape.
+
+#### E-018: Central Admin Inventory Shows Undefined Values -- RESOLVED v1.3.0
+- **File**: greenreach-central/public/central-admin.js (loadFarmInventory function)
+- **Problem**: loadFarmInventory() assumed the API response shape was data.inventory (array of product-style objects). When the API returned data.trays (tray-style objects with different field names), the function rendered undefined for product_name, quantity, category, and other fields.
+- **Impact**: Active Inventory tab in Central Admin showed rows of "undefined" values.
+- **Fix Applied**: loadFarmInventory() now prefers data.trays over data.inventory and maps both field name conventions (product_name/crop_type, quantity_available/current_count, category/crop_category) with a fallback chain.
+
+#### E-019: Wholesale Price Not Auto-Computing on Retail Change -- RESOLVED v1.3.0
+- **File**: greenreach-central/public/central-admin.js (syncPricingRow), greenreach-central/routes/admin-pricing.js (batch-update)
+- **Problem**: When a retail price was changed in the pricing table, syncPricingRow() sent the update to the server but did not compute a new wholesale price. The batch-update endpoint used a hardcoded sku_factor of 0.70 regardless of the product's configured factor.
+- **Impact**: Wholesale prices became stale when retail prices changed. All products used the same 0.70 factor instead of their per-product sku_factor (0.50-0.75).
+- **Fix Applied**: syncPricingRow() now auto-computes wholesale = retail * 0.65 as a default when syncing. batch-update reads each product's sku_factor (clamped 0.50-0.75) and applies the formula: wholesale = max(cost_floor, retail * sku_factor).
+
+#### Pricing Formula Reference (v1.3.0)
+- **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
+- **floor** = `max(cost_floor, manual_floor)` -- ensures wholesale never drops below production cost
+- **sku_factor** = per-product multiplier, clamped to range 0.50 - 0.75 (default 0.65)
+- **Implemented in**: admin-pricing.js (batch-update, set-wholesale), central-admin.js (syncPricingRow), farm-admin.js (applyRecommendedPrice)
+- **Central admin-pricing.js**: Mounted at /api/admin/pricing in greenreach-central/server.js (v1.3.0)
+
 ---
 
 ## 14. Category Quick Reference
@@ -2252,6 +2287,8 @@ POST /api/farm-sales/pos/checkout  (routes/farm-sales/pos.js)
 
 **Central Admin Dashboard** (central-admin.js, function loadFarmInventory):
 - Reads farm_inventory WHERE quantity_available > 0 OR manual_quantity_lbs > 0
+- Prefers data.trays over data.inventory response shape (v1.3.0)
+- Maps both product-style and tray-style field names with fallback chain (v1.3.0)
 - Shows auto_quantity_lbs + manual_quantity_lbs merged as quantity_available
 - Displays by category with last-updated timestamps
 
@@ -2309,7 +2346,8 @@ farm_inventory table (PostgreSQL, Central):
 
 Consumer 1: Wholesale Catalog
   GET /api/wholesale/catalog
-    -> Reads farm_inventory WHERE available_for_wholesale = true
+    -> Primary: buildAggregateCatalog() from network farms
+    -> Fallback: Direct DB query on farm_inventory if aggregate is empty (v1.3.0)
     -> Shows aggregated SKUs across farms
     -> Buyer places order -> reservation (TTL 15 min)
     -> Order fulfilled -> status webhooks
@@ -2349,6 +2387,6 @@ The inventory system has a broken pipeline where production data (actual harvest
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.1.0
-**Generated**: March 23, 2026
+**Document Version**: 1.3.0
+**Generated**: March 24, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

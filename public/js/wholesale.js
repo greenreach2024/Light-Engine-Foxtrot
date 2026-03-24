@@ -1000,7 +1000,7 @@
         else zone = 'ZONE_C';
       }
 
-      const subtotal = this.cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      const subtotal = this.cart.reduce((sum, item) => sum + item.quantity * Number(item.price_per_unit), 0);
       try {
         const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
           method: 'POST',

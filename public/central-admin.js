@@ -4721,14 +4721,17 @@ async function loadFarmInventory(farmId, trayCount) {
         const data = await response.json();
         
         if (data.success && (data.inventory || data.trays)) {
-            const trays = data.inventory || data.trays;
+            // Prefer synthetic trays over product-oriented inventory rows
+            const trays = (data.trays && data.trays.length > 0) ? data.trays
+                : (data.inventory && data.inventory.length > 0) ? data.inventory
+                : [];
             inventoryData = trays.map(tray => {
                 const dth = tray.days_to_harvest ?? tray.daysToHarvest ?? null;
                 return {
-                    trayId: tray.tray_code || tray.trayId || tray.id,
-                    recipe: tray.recipe_name || tray.recipe || 'Unknown',
+                    trayId: tray.tray_code || tray.trayId || tray.id || tray.productId || tray.product_id || tray.sku || '--',
+                    recipe: tray.recipe_name || tray.recipe || tray.productName || tray.product_name || tray.crop || 'Unknown',
                     location: tray.location || 'Unassigned',
-                    plantCount: tray.plant_count || tray.plantCount || 0,
+                    plantCount: tray.plant_count || tray.plantCount || tray.quantity || 0,
                     age: tray.age_days || tray.daysOld || 0,
                     harvestEst: dth !== null ?
                         (dth <= 0 ? 'Today' : `${Math.max(0, Math.floor(dth))}d`) :
@@ -10530,12 +10533,26 @@ function onScannerCropSelect(sel) {
 
 function syncPricingRow(input, from) {
     const tr = input.closest('tr');
+    let retailPerLb;
     if (from === 'oz') {
         const oz = parseFloat(input.value);
-        if (!isNaN(oz)) tr.querySelector('.sc-rlb').value = (oz * 16).toFixed(2);
+        if (!isNaN(oz)) {
+            retailPerLb = oz * 16;
+            tr.querySelector('.sc-rlb').value = retailPerLb.toFixed(2);
+        }
     } else {
         const lb = parseFloat(input.value);
-        if (!isNaN(lb)) tr.querySelector('.sc-roz').value = (lb / 16).toFixed(2);
+        if (!isNaN(lb)) {
+            retailPerLb = lb;
+            tr.querySelector('.sc-roz').value = (lb / 16).toFixed(2);
+        }
+    }
+    // Auto-compute wholesale using the formula: wholesale = retail * sku_factor
+    if (retailPerLb > 0) {
+        const skuFactor = 0.65;
+        const wholesale = Math.round(retailPerLb * skuFactor * 100) / 100;
+        const wField = tr.querySelector('.sc-wlb');
+        if (wField) wField.value = wholesale.toFixed(2);
     }
 }
 

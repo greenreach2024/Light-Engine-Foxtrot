@@ -86,6 +86,7 @@ import adminAssistantRouter from './routes/admin-assistant.js';
 import adminOpsAgentRouter from './routes/admin-ops-agent.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
+import adminPricingRoutes from './routes/admin-pricing.js';
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
   const gwMod = await import('./routes/grant-wizard.js');
@@ -3410,6 +3411,7 @@ app.use('/api/planting', authMiddleware, plantingRoutes); // Planting scheduler 
 app.use('/api/planning', authMiddleware, planningRoutes); // Production planning (integrates market + crop pricing)
 app.use('/api/market-intelligence', authOrAdminMiddleware, marketIntelligenceRoutes); // North American market data + price alerts
 app.use('/api/crop-pricing', authMiddleware, cropPricingRoutes); // Farm-specific crop pricing
+app.use('/api/admin/pricing', adminAuthMiddleware, adminPricingRoutes); // Wholesale pricing management
 app.use('/api/quality', authMiddleware, qualityReportsRoutes);                 // Quality reports + QA checkpoint proxies
 app.use('/api/sustainability', authMiddleware, sustainabilityRoutes);          // Sustainability & ESG dashboard
 

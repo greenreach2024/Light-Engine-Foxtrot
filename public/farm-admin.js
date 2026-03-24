@@ -1342,7 +1342,9 @@ async function loadCropsFromDatabase() {
                         ws1Discount: c.ws1Discount ?? 20,
                         ws2Discount: c.ws2Discount ?? 25,
                         ws3Discount: c.ws3Discount ?? 35,
-                        isTaxable: c.isTaxable || false
+                        isTaxable: c.isTaxable || false,
+                        floor_price: c.floor_price ?? 0,
+                        sku_factor: c.sku_factor ?? 0.65
                     }));
                     // Cache to localStorage
                     pricingData.forEach(item => {
@@ -1375,7 +1377,7 @@ async function loadCropsFromDatabase() {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
                 const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 20, ws2: 25, ws3: 35 };
-                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false };
+                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.65 };
             });
         }
 
@@ -1394,11 +1396,14 @@ async function loadCropsFromDatabase() {
 function exportPricingCSV() {
     if (!pricingData.length) { alert('No pricing data to export.'); return; }
     const unitLabel = isPerGram ? '/25g' : '/oz';
-    const rows = [['Crop', `Retail (${unitLabel})`, 'WS1 Discount %', `WS1 Price (${unitLabel})`, 'WS2 Discount %', `WS2 Price (${unitLabel})`, 'WS3 Discount %', `WS3 Price (${unitLabel})`, 'Taxable']];
+    const rows = [['Crop', `Retail (${unitLabel})`, 'Floor Price', 'SKU Factor', `Formula WS (${unitLabel})`, 'WS1 Discount %', `WS1 Price (${unitLabel})`, 'WS2 Discount %', `WS2 Price (${unitLabel})`, 'WS3 Discount %', `WS3 Price (${unitLabel})`, 'Taxable']];
     pricingData.forEach(item => {
         const r = isPerGram ? convertPrice(item.retail, true) : item.retail;
         rows.push([
             item.crop, r.toFixed(2),
+            (item.floor_price || 0).toFixed(2),
+            (item.sku_factor || 0.65).toFixed(2),
+            calculateFormulaWholesalePrice(r, item.floor_price, item.sku_factor).toFixed(2),
             item.ws1Discount, calculateWholesalePrice(r, item.ws1Discount).toFixed(2),
             item.ws2Discount, calculateWholesalePrice(r, item.ws2Discount).toFixed(2),
             item.ws3Discount, calculateWholesalePrice(r, item.ws3Discount).toFixed(2),
@@ -1435,6 +1440,18 @@ function calculateWholesalePrice(retail, discountPercent) {
 }
 
 /**
+ * Calculate wholesale price using the two-step formula:
+ * wholesale = max(floor, retailAggregate * skuFactor)
+ * where floor = max(costFloor, manualFloor)
+ */
+function calculateFormulaWholesalePrice(retail, floorPrice, skuFactor) {
+    const factor = Math.min(0.75, Math.max(0.5, Number(skuFactor || 0.65)));
+    const floor = Number(floorPrice || 0);
+    const computed = retail * factor;
+    return Math.max(floor, computed);
+}
+
+/**
  * Toggle between oz and 25g pricing
  */
 function togglePricingUnit() {
@@ -1464,6 +1481,7 @@ function renderPricingTable() {
         const ws1Price = calculateWholesalePrice(displayRetail, item.ws1Discount);
         const ws2Price = calculateWholesalePrice(displayRetail, item.ws2Discount);
         const ws3Price = calculateWholesalePrice(displayRetail, item.ws3Discount);
+        const formulaWS = calculateFormulaWholesalePrice(displayRetail, item.floor_price, item.sku_factor);
         const unitBadge = !isWeightCrop ? ` <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(${getCropUnitLabel(item.crop)})</span>` : '';
         
         return `
@@ -1481,6 +1499,34 @@ function renderPricingTable() {
                         onchange="updatePricing(${index}, 'retail', this.value)"
                     >
                 </td>
+                <td>
+                    <input 
+                        type="number" 
+                        class="pricing-input" 
+                        value="${(item.floor_price || 0).toFixed(2)}" 
+                        step="0.01" 
+                        min="0"
+                        data-index="${index}"
+                        data-field="floor_price"
+                        onchange="updatePricing(${index}, 'floor_price', this.value)"
+                        style="width: 70px;"
+                    >
+                </td>
+                <td>
+                    <input 
+                        type="number" 
+                        class="pricing-input" 
+                        value="${(item.sku_factor || 0.65).toFixed(2)}" 
+                        step="0.01" 
+                        min="0.50" 
+                        max="0.75"
+                        data-index="${index}"
+                        data-field="sku_factor"
+                        onchange="updatePricing(${index}, 'sku_factor', this.value)"
+                        style="width: 60px;"
+                    >
+                </td>
+                <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
                 <td>
                     <input 
                         type="number" 
@@ -1553,6 +1599,9 @@ function updatePricing(index, field, value) {
             // Convert back to oz for storage only for weight-based crops
             const cropUnit = getCropUnit(pricingData[index].crop);
             pricingData[index].retail = (cropUnit === 'weight' && isPerGram) ? convertPrice(numValue, false) : numValue;
+        } else if (field === 'sku_factor') {
+            // Clamp SKU factor to valid range 0.50-0.75
+            pricingData[index].sku_factor = Math.min(0.75, Math.max(0.5, numValue));
         } else {
             pricingData[index][field] = numValue;
         }
@@ -1577,11 +1626,13 @@ async function savePricing() {
                 crop: item.crop,
                 unit: getCropBackendUnit(item.crop),
                 retailPrice: parseFloat(item.retail),
-                wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
+                wholesalePrice: parseFloat(calculateFormulaWholesalePrice(item.retail, item.floor_price, item.sku_factor)),
                 ws1Discount: item.ws1Discount,
                 ws2Discount: item.ws2Discount,
                 ws3Discount: item.ws3Discount,
-                isTaxable: item.isTaxable || false
+                isTaxable: item.isTaxable || false,
+                floor_price: item.floor_price || 0,
+                sku_factor: item.sku_factor || 0.65
             }));
             
             const response = await fetch(`${API_BASE}/api/crop-pricing`, {
@@ -1594,12 +1645,36 @@ async function savePricing() {
             });
             
             if (response.ok) {
-                console.log(' Pricing saved to backend API');
+                console.log('Pricing saved to backend API');
+                // Also push formula-based wholesale prices to admin/pricing
+                try {
+                    for (const item of pricingData) {
+                        const formulaPrice = calculateFormulaWholesalePrice(item.retail, item.floor_price, item.sku_factor);
+                        await fetch(`${API_BASE}/api/admin/pricing/set-wholesale`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(currentSession?.token ? { 'Authorization': `Bearer ${currentSession.token}` } : {})
+                            },
+                            body: JSON.stringify({
+                                crop: item.crop,
+                                floor_price: item.floor_price || 0,
+                                sku_factor: item.sku_factor || 0.65,
+                                use_formula: true,
+                                tier: 'demand-based',
+                                reasoning: 'Updated via LE farm admin pricing table'
+                            })
+                        });
+                    }
+                    console.log('Formula wholesale prices synced to admin/pricing');
+                } catch (syncErr) {
+                    console.warn('Admin pricing sync failed:', syncErr.message);
+                }
             } else {
-                console.warn('  Failed to save to backend API (localStorage only)');
+                console.warn('Failed to save to backend API (localStorage only)');
             }
         } catch (apiError) {
-            console.warn('  Backend API unavailable (localStorage only):', apiError.message);
+            console.warn('Backend API unavailable (localStorage only):', apiError.message);
         }
         
         // Show success message
@@ -2434,6 +2509,9 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
     if (index !== -1) {
         const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
+        // Ensure formula fields have defaults when AI sets retail
+        if (!pricingData[index].sku_factor) pricingData[index].sku_factor = 0.65;
+        if (!pricingData[index].floor_price) pricingData[index].floor_price = 0;
         renderPricingTable();
         
         // Mark button as applied (stay in modal for more crops)
@@ -2476,7 +2554,31 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
 
         showPricingToast(`Updated ${pricingData[index].crop} to $${recommendedPrice.toFixed(2)} — saved`);
     } else {
-        showPricingToast(`⚠ Could not match "${cropName}" to any crop in your pricing table`);
+        // No existing match -- add as a new crop row so the recommendation is not lost
+        const newRow = {
+            crop: cropName,
+            unit: getCropBackendUnit(cropName),
+            retail: recommendedPrice,
+            ws1Discount: 0,
+            ws2Discount: 0,
+            ws3Discount: 0,
+            isTaxable: false,
+            floor_price: 0,
+            sku_factor: 0.65
+        };
+        pricingData.push(newRow);
+        index = pricingData.length - 1;
+        renderPricingTable();
+
+        if (btnEl) {
+            btnEl.textContent = 'Added + Applied';
+            btnEl.disabled = true;
+            btnEl.style.opacity = '0.6';
+            btnEl.style.cursor = 'default';
+        }
+
+        await savePricingQuiet();
+        showPricingToast(`Added "${cropName}" to pricing table at $${recommendedPrice.toFixed(2)} -- saved`);
     }
 }
 
@@ -2490,13 +2592,15 @@ async function savePricingQuiet() {
         });
         const crops = pricingData.map(item => ({
             crop: item.crop,
-            unit: 'lb',
+            unit: getCropBackendUnit(item.crop),
             retailPrice: parseFloat(item.retail),
-            wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
+            wholesalePrice: parseFloat(calculateFormulaWholesalePrice(item.retail, item.floor_price, item.sku_factor)),
             ws1Discount: item.ws1Discount,
             ws2Discount: item.ws2Discount,
             ws3Discount: item.ws3Discount,
-            isTaxable: item.isTaxable || false
+            isTaxable: item.isTaxable || false,
+            floor_price: item.floor_price || 0,
+            sku_factor: item.sku_factor || 0.65
         }));
         await fetch(`${API_BASE}/api/crop-pricing`, {
             method: 'PUT',
