@@ -87,6 +87,29 @@
     return false;
   }
 
+  // Clear all farm-scoped storage keys (prevents cross-farm data leakage)
+  function clearFarmStorage() {
+    const keys = [
+      'farm_id', 'farmId', 'farm_name', 'farmName', 'email',
+      'token', 'auth_token', 'farm_admin_session',
+      'gr.farm', 'farmSettings', 'qualityStandards', 'setup_completed',
+      'ai_pricing_recommendations', 'ai_pricing_last_check', 'ai_pricing_history',
+      'pricing_version', 'usd_to_cad_rate',
+      'impersonation_token', 'impersonation_farm', 'impersonation_expires',
+      'adminFarmId'
+    ];
+    for (const k of keys) {
+      try { localStorage.removeItem(k); } catch (_) {}
+      try { sessionStorage.removeItem(k); } catch (_) {}
+    }
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const n = localStorage.key(i);
+        if (n && n.startsWith('pricing_')) localStorage.removeItem(n);
+      }
+    } catch (_) {}
+  }
+
   // Check if user has valid token
   function hasValidToken() {
     let token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -113,20 +136,16 @@
           const expiryTime = payload.exp * 1000; // Convert to milliseconds
           const now = Date.now();
           if (now >= expiryTime) {
-            // Token expired, remove it
+            // Token expired, clear all farm data
             console.log('[auth-guard] Token expired, clearing...');
-            localStorage.removeItem('token');
-            localStorage.removeItem('auth_token');
-            sessionStorage.removeItem('token');
+            clearFarmStorage();
             return false;
           }
         }
       } catch (e) {
-        // Invalid JWT format, remove it
+        // Invalid JWT format, clear all farm data
         console.log('[auth-guard] Invalid token format, clearing...');
-        localStorage.removeItem('token');
-        localStorage.removeItem('auth_token');
-        sessionStorage.removeItem('token');
+        clearFarmStorage();
         return false;
       }
       return true;
@@ -140,27 +159,19 @@
         const session = JSON.parse(sessionRaw);
         if (session.expiresAt && session.expiresAt < Date.now()) {
           console.log('[auth-guard] Session expired, clearing...');
-          localStorage.removeItem('farm_admin_session');
-          sessionStorage.removeItem('farm_admin_session');
-          sessionStorage.removeItem('token');
-          localStorage.removeItem('token');
+          clearFarmStorage();
           return false;
         }
         return true;
       } catch (e) {
         console.log('[auth-guard] Invalid session format, clearing...');
-        localStorage.removeItem('farm_admin_session');
-        sessionStorage.removeItem('farm_admin_session');
-        sessionStorage.removeItem('token');
-        localStorage.removeItem('token');
+        clearFarmStorage();
         return false;
       }
     }
     
-    // If token format is invalid, remove it
-    localStorage.removeItem('token');
-    localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('token');
+    // If token format is invalid, clear all farm data
+    clearFarmStorage();
     return false;
   }
 

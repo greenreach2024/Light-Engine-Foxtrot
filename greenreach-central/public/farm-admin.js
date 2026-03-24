@@ -11,6 +11,32 @@ const STORAGE_KEY_REMEMBER = 'farm_admin_remember';
 const GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 function grLog(...args) { if (GR_DEBUG) console.debug(...args); }
 
+// Clear all farm-scoped localStorage/sessionStorage on login to prevent cross-farm data leakage
+function clearStaleFarmData() {
+  const farmKeys = [
+    'farm_id', 'farmId', 'farm_name', 'farmName', 'email',
+    'token', 'auth_token',
+    STORAGE_KEY_SESSION,
+    'gr.farm', 'farmSettings', 'qualityStandards', 'setup_completed',
+    'ai_pricing_recommendations', 'ai_pricing_last_check', 'ai_pricing_history',
+    'pricing_version', 'usd_to_cad_rate',
+    'impersonation_token', 'impersonation_farm', 'impersonation_expires',
+    'adminFarmId'
+  ];
+  for (const key of farmKeys) {
+    try { localStorage.removeItem(key); } catch (_) {}
+    try { sessionStorage.removeItem(key); } catch (_) {}
+  }
+  // Clear dynamic pricing_<crop> keys
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('pricing_')) localStorage.removeItem(k);
+    }
+  } catch (_) {}
+  console.log('[auth] Cleared stale farm data before login');
+}
+
 // Session state
 let currentSession = null;
 let farmData = null;
@@ -291,6 +317,9 @@ async function handleLogin(e) {
         const data = await response.json();
         
         if (data.status === 'success' && data.token) {
+            // Clear previous farm data to prevent cross-tenant leakage
+            clearStaleFarmData();
+
             // Save session
             const session = {
                 token: data.token,
