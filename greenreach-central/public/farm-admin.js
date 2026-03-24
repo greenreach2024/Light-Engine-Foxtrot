@@ -1396,7 +1396,7 @@ async function loadCropsFromDatabase() {
 function exportPricingCSV() {
     if (!pricingData.length) { alert('No pricing data to export.'); return; }
     const unitLabel = isPerGram ? '/25g' : '/oz';
-    const rows = [['Crop', `Retail (${unitLabel})`, 'Floor Price', 'SKU Factor', `Formula WS (${unitLabel})`, 'WS1 Discount %', `WS1 Price (${unitLabel})`, 'WS2 Discount %', `WS2 Price (${unitLabel})`, 'WS3 Discount %', `WS3 Price (${unitLabel})`, 'Taxable']];
+    const rows = [['Crop', `Retail (${unitLabel})`, 'Floor Price', 'SKU Factor', `Formula WS (${unitLabel})`, 'Taxable']];
     pricingData.forEach(item => {
         const r = isPerGram ? convertPrice(item.retail, true) : item.retail;
         rows.push([
@@ -1404,9 +1404,6 @@ function exportPricingCSV() {
             (item.floor_price || 0).toFixed(2),
             (item.sku_factor || 0.65).toFixed(2),
             calculateFormulaWholesalePrice(r, item.floor_price, item.sku_factor).toFixed(2),
-            item.ws1Discount, calculateWholesalePrice(r, item.ws1Discount).toFixed(2),
-            item.ws2Discount, calculateWholesalePrice(r, item.ws2Discount).toFixed(2),
-            item.ws3Discount, calculateWholesalePrice(r, item.ws3Discount).toFixed(2),
             item.isTaxable ? 'Yes' : 'No'
         ]);
     });
@@ -1470,17 +1467,11 @@ function renderPricingTable() {
     
     // Update header labels to show weight unit (majority of crops)
     document.getElementById('unit-retail').textContent = `($${weightUnitLabel})`;
-    document.getElementById('unit-ws1').textContent = `($${weightUnitLabel})`;
-    document.getElementById('unit-ws2').textContent = `($${weightUnitLabel})`;
-    document.getElementById('unit-ws3').textContent = `($${weightUnitLabel})`;
     
     tbody.innerHTML = pricingData.map((item, index) => {
         const cropUnit = getCropUnit(item.crop);
         const isWeightCrop = cropUnit === 'weight';
         const displayRetail = (isWeightCrop && isPerGram) ? convertPrice(item.retail, true) : item.retail;
-        const ws1Price = calculateWholesalePrice(displayRetail, item.ws1Discount);
-        const ws2Price = calculateWholesalePrice(displayRetail, item.ws2Discount);
-        const ws3Price = calculateWholesalePrice(displayRetail, item.ws3Discount);
         const formulaWS = calculateFormulaWholesalePrice(displayRetail, item.floor_price, item.sku_factor);
         const unitBadge = !isWeightCrop ? ` <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(${getCropUnitLabel(item.crop)})</span>` : '';
         
@@ -1527,48 +1518,6 @@ function renderPricingTable() {
                     >
                 </td>
                 <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
-                <td>
-                    <input 
-                        type="number" 
-                        class="discount-input" 
-                        value="${item.ws1Discount}" 
-                        step="1" 
-                        min="0" 
-                        max="100"
-                        data-index="${index}"
-                        data-field="ws1Discount"
-                        onchange="updatePricing(${index}, 'ws1Discount', this.value)"
-                    >%
-                </td>
-                <td class="calculated-price">$${ws1Price.toFixed(2)}</td>
-                <td>
-                    <input 
-                        type="number" 
-                        class="discount-input" 
-                        value="${item.ws2Discount}" 
-                        step="1" 
-                        min="0" 
-                        max="100"
-                        data-index="${index}"
-                        data-field="ws2Discount"
-                        onchange="updatePricing(${index}, 'ws2Discount', this.value)"
-                    >%
-                </td>
-                <td class="calculated-price">$${ws2Price.toFixed(2)}</td>
-                <td>
-                    <input 
-                        type="number" 
-                        class="discount-input" 
-                        value="${item.ws3Discount}" 
-                        step="1" 
-                        min="0" 
-                        max="100"
-                        data-index="${index}"
-                        data-field="ws3Discount"
-                        onchange="updatePricing(${index}, 'ws3Discount', this.value)"
-                    >%
-                </td>
-                <td class="calculated-price">$${ws3Price.toFixed(2)}</td>
                 <td style="text-align: center;">
                     <input 
                         type="checkbox" 
