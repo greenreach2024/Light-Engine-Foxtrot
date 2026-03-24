@@ -28,6 +28,8 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import logger from '../utils/logger.js';
+import crypto from 'crypto';
+import { loadFarmApiKeys } from '../middleware/farmApiKeyAuth.js';
 
 // JWT secret for token parsing (same logic as middleware/farm-data.js)
 const _JWT_SECRET = process.env.JWT_SECRET || randomBytes(32).toString('hex');
@@ -300,8 +302,28 @@ function farmIdFromReq(req) {
     } catch (_) { /* token invalid/expired — fall through */ }
   }
 
-  // X-Farm-ID header
-  if (req.headers['x-farm-id']) return req.headers['x-farm-id'];
+  // X-Farm-ID header -- ONLY trust if accompanied by valid API key
+  // (mirrors hardening in middleware/farm-data.js -- commit 7ed5c76)
+  const headerFarmId = req.headers['x-farm-id'];
+  const headerApiKey = req.headers['x-api-key'];
+  if (headerFarmId && headerApiKey) {
+    const envKey = process.env.WHOLESALE_FARM_API_KEY;
+    if (envKey && headerApiKey === envKey) {
+      return headerFarmId;
+    }
+    const keys = loadFarmApiKeys();
+    const farmEntry = keys[headerFarmId];
+    if (farmEntry?.api_key && farmEntry?.status === 'active') {
+      try {
+        const keyBuf = Buffer.from(farmEntry.api_key, 'utf8');
+        const inputBuf = Buffer.from(headerApiKey, 'utf8');
+        if (keyBuf.length === inputBuf.length && crypto.timingSafeEqual(keyBuf, inputBuf)) {
+          return headerFarmId;
+        }
+      } catch { /* length mismatch -- fall through */ }
+    }
+    logger.warn(`[FarmStore] Rejected X-Farm-ID without valid API key`);
+  }
 
   // Query parameter
   if (req.query?.farm_id) return req.query.farm_id;

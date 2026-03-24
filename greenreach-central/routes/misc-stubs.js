@@ -27,6 +27,7 @@
 import { Router } from 'express';
 import { farmStore } from '../lib/farm-data-store.js';
 import { query } from '../config/database.js';
+import { authMiddleware, authOrAdminMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ const router = Router();
 // Legacy stubs removed. Quality endpoints now served by /api/quality/* router.
 
 // ═══════════ Room Mapper (persisted via farmStore) ═══════════
-router.post('/api/room-mapper/save', async (req, res) => {
+router.post('/api/room-mapper/save', authMiddleware, async (req, res) => {
   const { roomId, layout } = req.body;
   console.log(`[Room Mapper] Save request: room=${roomId}, elements=${Array.isArray(layout) ? layout.length : 'N/A'}`);
   try {
@@ -47,7 +48,7 @@ router.post('/api/room-mapper/save', async (req, res) => {
 });
 
 // ═══════════ Harvest ═══════════
-router.get('/api/harvest/predictions', async (req, res) => {
+router.get('/api/harvest/predictions', authMiddleware, async (req, res) => {
   // Read groups to compute basic predictions
   try {
     const fid = farmStore.farmIdFromReq(req);
@@ -76,7 +77,7 @@ router.get('/api/harvest/predictions', async (req, res) => {
   }
 });
 
-router.post('/api/harvest', async (req, res) => {
+router.post('/api/harvest', authMiddleware, async (req, res) => {
   const entry = { id: `H-${Date.now()}`, ...req.body, recordedAt: new Date().toISOString() };
   console.log(`[Harvest] Recorded: crop=${entry.crop}, qty=${entry.quantity}, date=${entry.date || entry.recordedAt}`);
   try {
@@ -91,7 +92,7 @@ router.post('/api/harvest', async (req, res) => {
 });
 
 // ═══════════ Dedicated Crops ═══════════
-router.get('/api/dedicated-crops', async (req, res) => {
+router.get('/api/dedicated-crops', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const data = await farmStore.get(fid, 'dedicated_crops') || [];
@@ -101,7 +102,7 @@ router.get('/api/dedicated-crops', async (req, res) => {
   }
 });
 
-router.post('/api/dedicated-crops', async (req, res) => {
+router.post('/api/dedicated-crops', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     const crops = req.body.crops || req.body;
@@ -116,7 +117,7 @@ router.post('/api/dedicated-crops', async (req, res) => {
 // Returns per-farm Square connection status.
 // Each Light Engine subscriber stores their own Square credentials
 // via OAuth or manual entry in the farm admin settings page.
-router.get('/api/farm/square/status', async (req, res) => {
+router.get('/api/farm/square/status', authMiddleware, async (req, res) => {
   const farmId = req.farmId || req.headers['x-farm-id'] || req.query.farm_id;
 
   // 1. Try per-farm credentials from farmStore (DB-backed, tenant-scoped)
@@ -205,7 +206,7 @@ router.get('/api/health/ai-character', (req, res) => {
 });
 
 // ═══════════ AI Decision Recording (persisted — training signal per Rule 8.1) ═══════════
-router.post('/api/ai/record-decision', async (req, res) => {
+router.post('/api/ai/record-decision', authMiddleware, async (req, res) => {
   const { decision, context, outcome } = req.body;
   const entry = { id: `AI-${Date.now()}`, decision, context, outcome, recordedAt: new Date().toISOString() };
   console.log(`[AI] Decision recorded: ${decision} context=${JSON.stringify(context || {}).slice(0, 100)}`);
@@ -239,7 +240,7 @@ router.get('/crop-pricing', (req, res) => {
   res.redirect(307, '/api/crop-pricing');
 });
 
-router.get('/forwarder/devicedatas', async (req, res) => {
+router.get('/forwarder/devicedatas', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     let targetBase = process.env.FOXTROT_API_URL || '';
@@ -276,7 +277,7 @@ router.get('/forwarder/devicedatas', async (req, res) => {
   }
 });
 
-router.get('/api/devicedatas', async (req, res) => {
+router.get('/api/devicedatas', authMiddleware, async (req, res) => {
   try {
     const fid = farmStore.farmIdFromReq(req);
     let targetBase = process.env.FOXTROT_API_URL || '';
@@ -316,7 +317,7 @@ router.get('/api/devicedatas', async (req, res) => {
 // ═══════════ Admin Extended Operations ═══════════
 
 // POST /api/admin/impersonate/:farmId — Start impersonation session
-router.post('/api/admin/impersonate/:farmId', (req, res) => {
+router.post('/api/admin/impersonate/:farmId', authOrAdminMiddleware, (req, res) => {
   const { farmId } = req.params;
   // In production, this would generate a scoped JWT for the target farm
   res.json({
@@ -330,7 +331,7 @@ router.post('/api/admin/impersonate/:farmId', (req, res) => {
 });
 
 // PUT /api/admin/farms/:farmId/status — Update farm status
-router.put('/api/admin/farms/:farmId/status', async (req, res) => {
+router.put('/api/admin/farms/:farmId/status', authOrAdminMiddleware, async (req, res) => {
   const { farmId } = req.params;
   const { status } = req.body;
   try {
@@ -346,7 +347,7 @@ router.put('/api/admin/farms/:farmId/status', async (req, res) => {
 });
 
 // PUT /api/admin/users/:userId/status — Update user status
-router.put('/api/admin/users/:userId/status', async (req, res) => {
+router.put('/api/admin/users/:userId/status', authOrAdminMiddleware, async (req, res) => {
   const { userId } = req.params;
   const { status } = req.body;
   try {

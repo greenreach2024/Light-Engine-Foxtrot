@@ -2552,7 +2552,7 @@ app.get('/api/health/vitality', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/ai/status', authMiddleware, async (_req, res) => {
+app.get('/api/ai/status', authMiddleware, async (req, res) => {
   try {
     // Count experiment records
     let experimentCount = 0;
@@ -2564,7 +2564,10 @@ app.get('/api/ai/status', authMiddleware, async (_req, res) => {
       const pool = (await import('./config/database.js')).getPool();
       if (pool) {
         try {
-          const expResult = await pool.query('SELECT COUNT(*) as count FROM experiment_records');
+          const aiFarmId = req.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
+          const expResult = aiFarmId
+            ? await pool.query('SELECT COUNT(*) as count FROM experiment_records WHERE farm_id = $1', [aiFarmId])
+            : await pool.query('SELECT COUNT(*) as count FROM experiment_records');
           experimentCount = parseInt(expResult.rows[0]?.count) || 0;
         } catch (_) {}
         try {
@@ -3713,7 +3716,7 @@ app.get('/api/network/coordinated-planting', authMiddleware, async (req, res) =>
 });
 
 // S4.8: Unified Multi-Farm Benchmarking Dashboard API
-app.get('/api/network/benchmarking', async (req, res) => {
+app.get('/api/network/benchmarking', authMiddleware, async (req, res) => {
   try {
     const db = getDatabase();
     if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
@@ -3789,6 +3792,23 @@ app.get('/api/network/benchmarking', async (req, res) => {
     // Sort by composite score
     rankings.sort((a, b) => b.composite_score - a.composite_score);
 
+    // Anonymize farm identifiers -- requesting farm sees own data, others get labels
+    const callerFarmId = req.farmId || req.headers['x-farm-id'];
+    const anonymized = rankings.map((r, idx) => {
+      const isOwnFarm = callerFarmId && r.farm_id === callerFarmId;
+      return {
+        rank: idx + 1,
+        farm_label: isOwnFarm ? r.farm_name : `Farm #${idx + 1}`,
+        is_own_farm: isOwnFarm,
+        crops: r.crops,
+        total_harvests: r.total_harvests,
+        avg_yield: r.avg_yield,
+        avg_loss: r.avg_loss,
+        consistency: r.consistency,
+        composite_score: r.composite_score,
+      };
+    });
+
     // 3. Network-level aggregates
     const networkAvgYield = rankings.length > 0
       ? +(rankings.reduce((s, r) => s + r.avg_yield, 0) / rankings.length).toFixed(2) : 0;
@@ -3805,7 +3825,7 @@ app.get('/api/network/benchmarking', async (req, res) => {
         avg_loss_rate: networkAvgLoss,
         top_crop: yieldResult.rows[0]?.crop || null
       },
-      rankings,
+      rankings: anonymized,
       scoring_weights: {
         yield_efficiency: '40%',
         low_loss_rate: '30%',
@@ -4175,7 +4195,7 @@ app.get('/api/wholesale/pricing-recommendations', async (req, res) => {
  * Aggregated network-wide trends — crop performance, yield, demand over time.
  * Consumed by Foxtrot's /api/network/trends proxy.
  */
-app.get('/api/network/trends', async (req, res) => {
+app.get('/api/network/trends', authMiddleware, async (req, res) => {
   try {
     const period = req.query.period || '30d';
     const days = parseInt(period) || 30;
@@ -4183,11 +4203,17 @@ app.get('/api/network/trends', async (req, res) => {
     const db = getDatabase();
 
     // 1. Yield trends from experiment records
+    const trendsFarmId = req.farmId || req.headers['x-farm-id'];
     let yieldTrends = [];
     try {
-      const { rows: records } = await db.query(
-        'SELECT * FROM experiment_records ORDER BY recorded_at DESC LIMIT 200'
-      );
+      const { rows: records } = trendsFarmId
+        ? await db.query(
+            'SELECT * FROM experiment_records WHERE farm_id = $1 ORDER BY recorded_at DESC LIMIT 200',
+            [trendsFarmId]
+          )
+        : await db.query(
+            'SELECT * FROM experiment_records ORDER BY recorded_at DESC LIMIT 200'
+          );
 
       const cropYields = {};
       for (const r of records) {
@@ -4247,7 +4273,9 @@ app.get('/api/network/trends', async (req, res) => {
     let farmActivity = { active_farms: 0, total_experiments: 0 };
     try {
       const { rows: [{ count: farmCountStr }] } = await db.query("SELECT COUNT(*) FROM farms WHERE status = 'active'");
-      const { rows: [{ count: expCountStr }] } = await db.query('SELECT COUNT(*) FROM experiment_records');
+      const { rows: [{ count: expCountStr }] } = trendsFarmId
+        ? await db.query('SELECT COUNT(*) FROM experiment_records WHERE farm_id = $1', [trendsFarmId])
+        : await db.query('SELECT COUNT(*) FROM experiment_records');
       farmActivity = { active_farms: parseInt(farmCountStr) || 0, total_experiments: parseInt(expCountStr) || 0 };
     } catch (_) {}
 

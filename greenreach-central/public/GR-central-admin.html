@@ -6300,6 +6300,17 @@ API URL: ${apiUrl}
         /**
          * Impersonate farm (for support)
          */
+        // Clean up stale impersonation tokens on page load
+        (function cleanupStaleImpersonation() {
+            const expires = localStorage.getItem('impersonation_expires');
+            if (expires && Date.now() > parseInt(expires, 10)) {
+                localStorage.removeItem('impersonation_token');
+                localStorage.removeItem('impersonation_farm');
+                localStorage.removeItem('impersonation_expires');
+                console.log('[Admin] Cleaned up expired impersonation tokens');
+            }
+        })();
+
         async function impersonateFarm(farmId) {
             if (!confirm(`Impersonate farm ${farmId}?\n\nYou will be logged in as this farm's admin for support purposes.\n\nAll actions will be logged.`)) {
                 return;
@@ -6314,12 +6325,24 @@ API URL: ${apiUrl}
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Store impersonation token
+                    // Store impersonation token with TTL
                     localStorage.setItem('impersonation_token', data.token);
                     localStorage.setItem('impersonation_farm', farmId);
+                    localStorage.setItem('impersonation_expires', String(Date.now() + 3600000));
                     
-                    // Open farm admin in new window
-                    window.open(`/farm-admin.html?impersonate=${farmId}`, '_blank');
+                    // Open farm admin in new window and clean up on close
+                    const impWindow = window.open(`/farm-admin.html?impersonate=${farmId}`, '_blank');
+                    if (impWindow) {
+                      const cleanupTimer = setInterval(() => {
+                        if (impWindow.closed) {
+                          clearInterval(cleanupTimer);
+                          localStorage.removeItem('impersonation_token');
+                          localStorage.removeItem('impersonation_farm');
+                          localStorage.removeItem('impersonation_expires');
+                          console.log('[Admin] Impersonation tokens cleared on window close');
+                        }
+                      }, 2000);
+                    }
                     
                     alert(`Impersonation active for farm: ${farmId}\n\nExpires in: 1 hour`);
                 } else {
