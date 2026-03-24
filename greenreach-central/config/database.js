@@ -2388,6 +2388,60 @@ async function runMigrations(client) {
     logger.warn('Migration 039 warning:', err.message);
   }
 
+  // ─── Migration 040: Tenant RLS policies (phase A: ENABLE, no FORCE) ───
+  try {
+    await client.query(`
+      DO $$
+      DECLARE
+        t text;
+        tenant_tables text[] := ARRAY[
+          'farms',
+          'farm_backups',
+          'farm_data',
+          'farm_heartbeats',
+          'planting_assignments',
+          'experiment_records',
+          'products',
+          'farm_inventory',
+          'farm_users',
+          'farm_delivery_settings',
+          'farm_delivery_windows',
+          'farm_delivery_zones',
+          'delivery_orders',
+          'farm_alerts',
+          'conversation_history',
+          'harvest_events',
+          'lot_records',
+          'producer_accounts',
+          'producer_applications'
+        ];
+      BEGIN
+        FOREACH t IN ARRAY tenant_tables LOOP
+          IF to_regclass(t) IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS gr_tenant_isolation ON %I', t);
+
+            EXECUTE format($POLICY$
+              CREATE POLICY gr_tenant_isolation ON %I
+              USING (
+                current_setting('app.is_admin', true) = 'true'
+                OR farm_id::text = current_setting('app.current_farm_id', true)
+              )
+              WITH CHECK (
+                current_setting('app.is_admin', true) = 'true'
+                OR farm_id::text = current_setting('app.current_farm_id', true)
+              )
+            $POLICY$, t);
+          END IF;
+        END LOOP;
+      END $$;
+    `);
+
+    logger.info('Tenant RLS policies applied (migration 040)');
+  } catch (err) {
+    logger.warn('Migration 040 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
@@ -2459,15 +2513,37 @@ export async function getAccountingReadiness() {
 /**
  * Execute a query with automatic connection management
  */
-export async function query(text, params) {
+export async function query(text, params = [], options = {}) {
   if (!pool) {
     throw new Error('Database not available');
   }
+
+  const { farmId = null, isAdmin = false, skipTenantContext = false } = options;
   const client = await pool.connect();
+
   try {
+    if (!skipTenantContext) {
+      await client.query(
+        "SELECT set_config('app.current_farm_id', $1, false)",
+        [farmId ? String(farmId) : '']
+      );
+      await client.query(
+        "SELECT set_config('app.is_admin', $1, false)",
+        [isAdmin ? 'true' : 'false']
+      );
+    }
+
     const result = await client.query(text, params);
     return result;
   } finally {
+    try {
+      if (!skipTenantContext) {
+        await client.query("RESET app.current_farm_id");
+        await client.query("RESET app.is_admin");
+      }
+    } catch (_) {
+      // Do not mask original query error with reset error
+    }
     client.release();
   }
 }

@@ -2561,21 +2561,22 @@ app.get('/api/ai/status', authMiddleware, async (req, res) => {
     let lastMLRun = null;
 
     if (app.locals.databaseReady) {
-      const pool = (await import('./config/database.js')).getPool();
-      if (pool) {
+      const db = (await import('./config/database.js')).getDatabase();
+      if (db) {
         try {
-          const aiFarmId = req.farmId || req.headers['x-farm-id'] || process.env.FARM_ID;
-          const expResult = aiFarmId
-            ? await pool.query('SELECT COUNT(*) as count FROM experiment_records WHERE farm_id = $1', [aiFarmId])
-            : await pool.query('SELECT COUNT(*) as count FROM experiment_records');
+          const aiFarmId = req.farmId || req.user?.farmId || req.headers['x-farm-id'];
+          if (!aiFarmId) {
+            return res.status(401).json({ error: 'Missing farm context' });
+          }
+          const expResult = await db.query('SELECT COUNT(*) as count FROM experiment_records WHERE farm_id = $1', [aiFarmId]);
           experimentCount = parseInt(expResult.rows[0]?.count) || 0;
         } catch (_) {}
         try {
-          const bmResult = await pool.query('SELECT COUNT(*) as count FROM crop_benchmarks');
+          const bmResult = await db.query('SELECT COUNT(*) as count FROM crop_benchmarks');
           benchmarkCount = parseInt(bmResult.rows[0]?.count) || 0;
         } catch (_) {}
         try {
-          const modResult = await pool.query('SELECT COUNT(*) as count FROM network_recipe_modifiers');
+          const modResult = await db.query('SELECT COUNT(*) as count FROM network_recipe_modifiers');
           modifierCount = parseInt(modResult.rows[0]?.count) || 0;
         } catch (_) {}
       }
@@ -3721,6 +3722,11 @@ app.get('/api/network/benchmarking', authMiddleware, async (req, res) => {
     const db = getDatabase();
     if (!db) return res.status(503).json({ ok: false, error: 'Database unavailable' });
 
+    const isAdminRequest = !!req.admin || req.user?.authMethod === 'admin-jwt' || req.user?.farmId === 'ADMIN';
+    if (!isAdminRequest) {
+      return res.status(403).json({ ok: false, error: 'Admin access required' });
+    }
+
     // 1. Yield rankings
     const yieldResult = await query(`
       SELECT
@@ -3739,7 +3745,7 @@ app.get('/api/network/benchmarking', authMiddleware, async (req, res) => {
       GROUP BY er.farm_id, f.name, er.crop
       HAVING COUNT(*) >= 2
       ORDER BY avg_yield DESC
-    `);
+    `, [], { isAdmin: true });
 
     // 2. Build per-farm composite scores
     const farmScores = {};
@@ -4203,17 +4209,16 @@ app.get('/api/network/trends', authMiddleware, async (req, res) => {
     const db = getDatabase();
 
     // 1. Yield trends from experiment records
-    const trendsFarmId = req.farmId || req.headers['x-farm-id'];
+    const trendsFarmId = req.farmId || req.user?.farmId || req.headers['x-farm-id'];
+    if (!trendsFarmId) {
+      return res.status(401).json({ ok: false, error: 'Missing farm context' });
+    }
     let yieldTrends = [];
     try {
-      const { rows: records } = trendsFarmId
-        ? await db.query(
-            'SELECT * FROM experiment_records WHERE farm_id = $1 ORDER BY recorded_at DESC LIMIT 200',
-            [trendsFarmId]
-          )
-        : await db.query(
-            'SELECT * FROM experiment_records ORDER BY recorded_at DESC LIMIT 200'
-          );
+      const { rows: records } = await db.query(
+        'SELECT * FROM experiment_records WHERE farm_id = $1 ORDER BY recorded_at DESC LIMIT 200',
+        [trendsFarmId]
+      );
 
       const cropYields = {};
       for (const r of records) {
@@ -4273,9 +4278,7 @@ app.get('/api/network/trends', authMiddleware, async (req, res) => {
     let farmActivity = { active_farms: 0, total_experiments: 0 };
     try {
       const { rows: [{ count: farmCountStr }] } = await db.query("SELECT COUNT(*) FROM farms WHERE status = 'active'");
-      const { rows: [{ count: expCountStr }] } = trendsFarmId
-        ? await db.query('SELECT COUNT(*) FROM experiment_records WHERE farm_id = $1', [trendsFarmId])
-        : await db.query('SELECT COUNT(*) FROM experiment_records');
+      const { rows: [{ count: expCountStr }] } = await db.query('SELECT COUNT(*) FROM experiment_records WHERE farm_id = $1', [trendsFarmId]);
       farmActivity = { active_farms: parseInt(farmCountStr) || 0, total_experiments: parseInt(expCountStr) || 0 };
     } catch (_) {}
 
