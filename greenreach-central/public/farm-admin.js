@@ -1238,7 +1238,52 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2025-12-09-v2';
+const PRICING_VERSION = '2026-03-24-v3';
+// Unit-of-measure map for Canadian packaged-goods pricing
+// 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
+const cropUnitMap = {
+    // Strawberries -- sold by the pint
+    'Albion': 'pint',
+    'Chandler': 'pint',
+    'Eversweet': 'pint',
+    'Fort Laramie': 'pint',
+    'Jewel': 'pint',
+    'Mara de Bois': 'pint',
+    'Monterey': 'pint',
+    'Ozark Beauty': 'pint',
+    'Seascape': 'pint',
+    'Sequoia': 'pint',
+    'Tribute': 'pint',
+    'Tristar': 'pint',
+    // Large tomatoes -- sold per unit (each)
+    'Better Boy': 'unit',
+    'Brandywine': 'unit',
+    'Celebrity': 'unit',
+    'Heatmaster F1': 'unit',
+    'San Marzano-': 'unit',
+    'San Marzano': 'unit',
+    // Cherry tomatoes -- sold by weight
+    'Sun Gold': 'weight'
+    // All leafy greens, herbs, and other crops default to 'weight'
+};
+
+function getCropUnit(cropName) {
+    return cropUnitMap[cropName] || 'weight';
+}
+
+function getCropUnitLabel(cropName) {
+    const unit = getCropUnit(cropName);
+    if (unit === 'pint') return '/pint';
+    if (unit === 'unit') return '/each';
+    return isPerGram ? '/25g' : '/oz';
+}
+
+function getCropBackendUnit(cropName) {
+    const unit = getCropUnit(cropName);
+    if (unit === 'pint') return 'pint';
+    if (unit === 'unit') return 'unit';
+    return 'lb';
+}
 
 // Default pricing (per oz) - Based on organic market research Dec 2025
 // Prices calculated from actual retail packages and converted to per-oz rates
@@ -1404,23 +1449,26 @@ function renderPricingTable() {
     const tbody = document.querySelector('#pricing-table tbody');
     if (!tbody) return;
     
-    const unitLabel = isPerGram ? '/25g' : '/oz';
+    const weightUnitLabel = isPerGram ? '/25g' : '/oz';
     
-    // Update header labels
-    document.getElementById('unit-retail').textContent = `($${unitLabel})`;
-    document.getElementById('unit-ws1').textContent = `($${unitLabel})`;
-    document.getElementById('unit-ws2').textContent = `($${unitLabel})`;
-    document.getElementById('unit-ws3').textContent = `($${unitLabel})`;
+    // Update header labels to show weight unit (majority of crops)
+    document.getElementById('unit-retail').textContent = `($${weightUnitLabel})`;
+    document.getElementById('unit-ws1').textContent = `($${weightUnitLabel})`;
+    document.getElementById('unit-ws2').textContent = `($${weightUnitLabel})`;
+    document.getElementById('unit-ws3').textContent = `($${weightUnitLabel})`;
     
     tbody.innerHTML = pricingData.map((item, index) => {
-        const displayRetail = isPerGram ? convertPrice(item.retail, true) : item.retail;
+        const cropUnit = getCropUnit(item.crop);
+        const isWeightCrop = cropUnit === 'weight';
+        const displayRetail = (isWeightCrop && isPerGram) ? convertPrice(item.retail, true) : item.retail;
         const ws1Price = calculateWholesalePrice(displayRetail, item.ws1Discount);
         const ws2Price = calculateWholesalePrice(displayRetail, item.ws2Discount);
         const ws3Price = calculateWholesalePrice(displayRetail, item.ws3Discount);
+        const unitBadge = !isWeightCrop ? ` <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">(${getCropUnitLabel(item.crop)})</span>` : '';
         
         return `
             <tr>
-                <td class="crop-name">${item.crop}</td>
+                <td class="crop-name">${item.crop}${unitBadge}</td>
                 <td>
                     <input 
                         type="number" 
@@ -1502,8 +1550,9 @@ function updatePricing(index, field, value) {
         if (isNaN(numValue)) return;
         
         if (field === 'retail') {
-            // If showing per 25g, convert back to oz for storage
-            pricingData[index].retail = isPerGram ? convertPrice(numValue, false) : numValue;
+            // Convert back to oz for storage only for weight-based crops
+            const cropUnit = getCropUnit(pricingData[index].crop);
+            pricingData[index].retail = (cropUnit === 'weight' && isPerGram) ? convertPrice(numValue, false) : numValue;
         } else {
             pricingData[index][field] = numValue;
         }
@@ -1526,7 +1575,7 @@ async function savePricing() {
         try {
             const crops = pricingData.map(item => ({
                 crop: item.crop,
-                unit: 'lb',
+                unit: getCropBackendUnit(item.crop),
                 retailPrice: parseFloat(item.retail),
                 wholesalePrice: parseFloat(calculateWholesalePrice(item.retail, item.ws1Discount)),
                 ws1Discount: item.ws1Discount,

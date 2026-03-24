@@ -37,7 +37,8 @@
       "market": {
         "resolveAs": "Butterhead Lettuce"
       },
-      "active": true
+      "active": true,
+      "unit": "weight"
     },
     "Buttercrunch Lettuce": {
       "aliases": [
@@ -72,7 +73,8 @@
       "market": {
         "resolveAs": "Butterhead Lettuce"
       },
-      "active": true
+      "active": true,
+      "unit": "weight"
     },
     "Salad Bowl Oakleaf": {
       "aliases": [
@@ -109,7 +111,8 @@
       "market": {
         "resolveAs": "Oak Leaf Lettuce"
       },
-      "active": true
+      "active": true,
+      "unit": "weight"
     },
     "Astro Arugula": {
       "aliases": [
@@ -144,7 +147,8 @@
       "market": {
         "resolveAs": "Arugula"
       },
-      "active": true
+      "active": true,
+      "unit": "weight"
     },
     "Butterhead Lettuce": {
       "aliases": [
@@ -179,7 +183,8 @@
       "market": {
         "resolveAs": "Butterhead Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Romaine Lettuce": {
       "aliases": [
@@ -215,7 +220,8 @@
       "market": {
         "resolveAs": "Romaine Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Red Leaf Lettuce": {
       "aliases": [
@@ -250,7 +256,8 @@
       "market": {
         "resolveAs": "Red Leaf Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Oak Leaf Lettuce": {
       "aliases": [
@@ -285,7 +292,8 @@
       "market": {
         "resolveAs": "Oak Leaf Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Mixed Lettuce": {
       "aliases": [
@@ -321,7 +329,8 @@
       "market": {
         "resolveAs": "Mixed Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Lettuce": {
       "aliases": [
@@ -356,7 +365,8 @@
       "market": {
         "resolveAs": "Lettuce"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Lacinato Kale": {
       "aliases": [
@@ -393,7 +403,8 @@
       "market": {
         "resolveAs": "Lacinato Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Curly Kale": {
       "aliases": [
@@ -428,7 +439,8 @@
       "market": {
         "resolveAs": "Curly Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Dinosaur Kale": {
       "aliases": [
@@ -463,7 +475,8 @@
       "market": {
         "resolveAs": "Dinosaur Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Baby Kale": {
       "aliases": [
@@ -497,7 +510,8 @@
       "market": {
         "resolveAs": "Baby Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Red Russian Kale": {
       "aliases": [
@@ -533,7 +547,8 @@
       "market": {
         "resolveAs": "Red Russian Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Kale": {
       "aliases": [
@@ -567,7 +582,8 @@
       "market": {
         "resolveAs": "Kale"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Mei Qing Pak Choi": {
       "aliases": [
@@ -605,7 +621,8 @@
       "market": {
         "resolveAs": null
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Tatsoi": {
       "aliases": [
@@ -640,7 +657,8 @@
       "market": {
         "resolveAs": null
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Frisée Endive": {
       "aliases": [
@@ -677,7 +695,8 @@
       "market": {
         "resolveAs": "Frisée Endive"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Watercress": {
       "aliases": [
@@ -711,7 +730,8 @@
       "market": {
         "resolveAs": "Watercress"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Baby Arugula": {
       "aliases": [
@@ -745,7 +765,8 @@
       "market": {
         "resolveAs": "Baby Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Cultivated Arugula": {
       "aliases": [
@@ -779,7 +800,8 @@
       "market": {
         "resolveAs": "Cultivated Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Wild Arugula": {
       "aliases": [
@@ -814,7 +836,8 @@
       "market": {
         "resolveAs": "Wild Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Wasabi Arugula": {
       "aliases": [
@@ -848,7 +871,8 @@
       "market": {
         "resolveAs": "Wasabi Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Red Arugula": {
       "aliases": [
@@ -882,7 +906,8 @@
       "market": {
         "resolveAs": "Red Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Arugula": {
       "aliases": [
@@ -917,7 +942,8 @@
       "market": {
         "resolveAs": "Arugula"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Genovese Basil": {
       "aliases": [
@@ -953,7 +979,8 @@
       "market": {
         "resolveAs": "Genovese Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Thai Basil": {
       "aliases": [
@@ -987,7 +1014,8 @@
       "market": {
         "resolveAs": "Thai Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Purple Basil": {
       "aliases": [
@@ -1021,7 +1049,8 @@
       "market": {
         "resolveAs": "Purple Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Lemon Basil": {
       "aliases": [
@@ -1055,7 +1084,8 @@
       "market": {
         "resolveAs": "Lemon Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Holy Basil": {
       "aliases": [
@@ -1090,7 +1120,8 @@
       "market": {
         "resolveAs": "Holy Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     },
     "Basil": {
       "aliases": [
@@ -1124,7 +1155,8 @@
       "market": {
         "resolveAs": "Basil"
       },
-      "active": false
+      "active": false,
+      "unit": "weight"
     }
   }
 }
