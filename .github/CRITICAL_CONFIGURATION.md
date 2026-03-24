@@ -1,7 +1,7 @@
 # Critical Configuration Reference
 
-**Version**: 1.0.0
-**Date**: March 19, 2026
+**Version**: 1.1.0
+**Date**: March 23, 2026
 **Authority**: Canonical reference for all credentials, API keys, environment variables, and configuration files. Agents MUST NOT modify any value listed here without explicit user approval.
 
 ---
@@ -134,6 +134,31 @@ This prevents auth/context drift between login flows and standalone pages.
 Reference implementations:
 - `greenreach-central/public/views/farm-inventory.html`
 - `greenreach-central/public/LE-farm-admin.html`
+
+### Multi-Tenant Storage Cleanup
+
+On login and token expiry, all farm-scoped keys are purged from both localStorage and sessionStorage to prevent cross-farm data leakage.
+
+**Cleanup functions**:
+- `clearStaleFarmData()` in `greenreach-central/public/farm-admin.js` -- runs on login success, before new credentials are written
+- `clearFarmStorage()` in `greenreach-central/public/auth-guard.js` (and root `public/auth-guard.js`) -- runs on all token/session expiry paths
+
+**Cleared keys**: farm_id, farmId, farm_name, farmName, email, token, auth_token, farm_admin_session, gr.farm, farmSettings, qualityStandards, setup_completed, ai_pricing_recommendations, ai_pricing_last_check, ai_pricing_history, pricing_version, usd_to_cad_rate, impersonation_token, impersonation_farm, impersonation_expires, adminFarmId, plus dynamic `pricing_<crop>` keys.
+
+### PostgreSQL Row-Level Security (RLS)
+
+**Status**: Phase A (ENABLE without FORCE) -- deployed March 23, 2026
+**Migration**: 040 in `greenreach-central/config/database.js`
+**Policy name**: `gr_tenant_isolation` on 19 tenant tables
+
+The `query()` function in database.js accepts `options`:
+```js
+await query('SELECT * FROM farm_data WHERE farm_id = $1', [farmId], { farmId });
+await query('SELECT * FROM farms', [], { isAdmin: true });
+await query('SELECT 1', [], { skipTenantContext: true });
+```
+
+Phase A is safe: table owner bypasses RLS policies. Phase B will enable `FORCE` after all call sites migrate.
 
 ---
 

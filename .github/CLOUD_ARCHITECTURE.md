@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 1.0.0
-**Date**: March 19, 2026
+**Version**: 1.1.0
+**Date**: March 23, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -191,7 +191,38 @@ Reference implementations:
 - `greenreach-central/public/views/farm-inventory.html` (`fetchWithFarmAuth`)
 - `greenreach-central/public/LE-farm-admin.html` (`fetchWithFarmAuth`)
 
-### 3. Central-to-LE Proxy Authentication
+### 3. Multi-Tenant Data Isolation (Phase A -- March 2026)
+
+PostgreSQL Row-Level Security (RLS) is enabled on all tenant-scoped tables to prevent cross-farm data access. This is layered on top of application-level `WHERE farm_id = $1` filtering.
+
+**Phase A (current)**: RLS policies are `ENABLE`d but NOT `FORCE`d. The table owner (app pool user) bypasses RLS, meaning the policies are scaffolded but inert for the application connection. This is a safety net, not a primary enforcement mechanism yet.
+
+**RLS Policy**: `gr_tenant_isolation` on each table. Uses `current_setting('app.current_farm_id', true)` for farm scoping and `current_setting('app.is_admin', true)` for admin bypass.
+
+**Tenant context**: The `query()` wrapper in `greenreach-central/config/database.js` accepts an `options` parameter:
+- `{ farmId: 'FARM-...' }` -- sets `app.current_farm_id` via `set_config()` before each query
+- `{ isAdmin: true }` -- sets `app.is_admin` for cross-farm admin queries
+- `{ skipTenantContext: true }` -- bypasses context setting (migrations, schema queries)
+
+Context is reset in a `finally` block after each query, before the client is released back to the pool.
+
+**RLS-protected tables** (19 total):
+farms, farm_backups, farm_data, farm_heartbeats, planting_assignments, experiment_records, products, farm_inventory, farm_users, farm_delivery_settings, farm_delivery_windows, farm_delivery_zones, delivery_orders, farm_alerts, conversation_history, harvest_events, lot_records, producer_accounts, producer_applications
+
+**Migration**: 040 in `greenreach-central/config/database.js` (inline, idempotent)
+
+**Phase B (planned)**: Enable `FORCE ROW LEVEL SECURITY` table-by-table after all query call sites pass tenant context. Migrate remaining raw `db.query()` calls to use the tenant-context `query()` wrapper.
+
+#### Client-Side Tenant Isolation
+
+On login and token expiry, all farm-scoped browser storage keys are cleared to prevent cross-farm data leakage:
+
+- **farm-admin.js**: `clearStaleFarmData()` runs before new credentials are written on successful login
+- **auth-guard.js**: `clearFarmStorage()` runs in all 5 token/session expiry paths
+
+Cleared keys include: farm_id, farmId, farm_name, farmName, token, auth_token, farm_admin_session, gr.farm, farmSettings, qualityStandards, setup_completed, ai_pricing_recommendations, ai_pricing_last_check, ai_pricing_history, pricing_version, usd_to_cad_rate, impersonation_token, impersonation_farm, impersonation_expires, adminFarmId, plus dynamic `pricing_<crop>` keys.
+
+### 4. Central-to-LE Proxy Authentication
 - **Mechanism**: `X-Farm-ID` + `X-API-Key` headers (uses GREENREACH_API_KEY)
 - **URL**: `FARM_EDGE_URL` env var on Central
 - **Used by**: Central's `/env` endpoint when falling back to LE proxy

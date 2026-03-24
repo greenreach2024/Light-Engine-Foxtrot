@@ -1516,6 +1516,66 @@ EnvStore
 3. Subdomain slug from Host header (SaaS cloud mode) -> resolves to farm_id via DB
 4. Env default: FARM_ID env var (single-farm mode)
 
+### 9.7 Row-Level Security (RLS) -- Phase A (March 2026)
+
+PostgreSQL RLS is enabled on 19 tenant-scoped tables via Migration 040 in `greenreach-central/config/database.js`.
+
+**Policy**: `gr_tenant_isolation` per table
+**Mechanism**: `current_setting('app.current_farm_id', true)` matched against `farm_id::text`
+**Admin bypass**: `current_setting('app.is_admin', true) = 'true'`
+**Phase**: ENABLE only (table owner bypasses). Phase B will add FORCE.
+
+| Table | Has farm_id | RLS Enabled | Policy |
+|-------|------------|-------------|--------|
+| farms | Yes | Yes | gr_tenant_isolation |
+| farm_backups | Yes | Yes | gr_tenant_isolation |
+| farm_data | Yes | Yes | gr_tenant_isolation |
+| farm_heartbeats | Yes | Yes | gr_tenant_isolation |
+| planting_assignments | Yes | Yes | gr_tenant_isolation |
+| experiment_records | Yes | Yes | gr_tenant_isolation |
+| products | Yes | Yes | gr_tenant_isolation |
+| farm_inventory | Yes | Yes | gr_tenant_isolation |
+| farm_users | Yes | Yes | gr_tenant_isolation |
+| farm_delivery_settings | Yes | Yes | gr_tenant_isolation |
+| farm_delivery_windows | Yes | Yes | gr_tenant_isolation |
+| farm_delivery_zones | Yes | Yes | gr_tenant_isolation |
+| delivery_orders | Yes | Yes | gr_tenant_isolation |
+| farm_alerts | Yes | Yes | gr_tenant_isolation |
+| conversation_history | Yes | Yes | gr_tenant_isolation |
+| harvest_events | Yes | Yes | gr_tenant_isolation |
+| lot_records | Yes | Yes | gr_tenant_isolation |
+| producer_accounts | Yes | Yes | gr_tenant_isolation |
+| producer_applications | Yes | Yes | gr_tenant_isolation |
+
+**Query wrapper** (`greenreach-central/config/database.js`):
+```js
+// Standard farm-scoped query
+await query(sql, [farmId], { farmId });
+
+// Admin cross-farm query
+await query(sql, params, { isAdmin: true });
+
+// Migration/schema query (no tenant context)
+await query(sql, params, { skipTenantContext: true });
+```
+
+The wrapper calls `set_config('app.current_farm_id', ...)` and `set_config('app.is_admin', ...)` on each acquired client, then resets both in a `finally` block before releasing.
+
+**Fail-closed endpoints** (hardened in Phase A):
+- `/api/ai/status` -- returns 401 if no farm context (was: unscoped fallback)
+- `/api/network/benchmarking` -- returns 403 if not admin (cross-farm data)
+- `/api/network/trends` -- returns 401 if no farm context (was: unscoped fallback)
+
+### 9.8 Client-Side Tenant Isolation (March 2026)
+
+On login and token expiry, all farm-scoped browser storage keys are cleared.
+
+**Functions**:
+- `clearStaleFarmData()` in `farm-admin.js` -- on login success
+- `clearFarmStorage()` in `auth-guard.js` -- on all 5 expiry/invalid paths
+
+**Cleared keys**: farm_id, farmId, farm_name, farmName, email, token, auth_token, farm_admin_session, gr.farm, farmSettings, qualityStandards, setup_completed, ai_pricing_recommendations, ai_pricing_last_check, ai_pricing_history, pricing_version, usd_to_cad_rate, impersonation_token, impersonation_farm, impersonation_expires, adminFarmId, plus dynamic `pricing_<crop>` keys.
+
 ---
 
 ## 10. Data Files and Configuration
@@ -1566,7 +1626,7 @@ EnvStore
 |------|---------|
 | edge-config.json | Farm ID, API key, Central URL, sync settings |
 | edge-config.production.json | Production overrides |
-| database.js | PostgreSQL pool + migration system |
+| database.js | PostgreSQL pool + migration system (migrations 001-040, RLS tenant context wrapper) |
 | automation-templates.json | Seedable automation rules |
 | channel-scale.json | Channel/facility config |
 | demo-license.json | Demo mode flags |
