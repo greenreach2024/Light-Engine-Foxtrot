@@ -2590,16 +2590,23 @@ async function loadCropValueData() {
                     const trayDetails = [];
                     let totalValue = 0;
                     let totalWeightLbs = 0;
+                    let totalPlants = 0;
                     const cropSummary = {};
                     const stageSummary = {};
+                    const LBS_PER_PLANT = 0.125;
 
                     for (const item of inventoryItems) {
                         const crop = item.product_name || item.name || item.sku_name || item.sku || 'Unknown';
                         const weightLbs = Number(item.quantity_available ?? item.qty_available ?? item.quantity ?? 0);
                         if (weightLbs <= 0) continue;
 
-                        const unitPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0);
-                        const value = weightLbs * unitPrice;
+                        const params = cropGrowthParams[crop] || {};
+                        const dbPrice = Number(item.retail_price ?? item.unit_price ?? item.price ?? 0);
+                        const retailPricePerLb = dbPrice > 0 ? dbPrice : (params.retailPricePerLb || 0);
+                        const yieldFactor = params.yieldFactor || 1;
+                        const pricePerOz = retailPricePerLb / 16;
+                        const value = weightLbs * retailPricePerLb * yieldFactor;
+                        const estPlants = Math.round(weightLbs / LBS_PER_PLANT);
 
                         const isManual = item.inventory_source === 'manual';
                         const stageLabel = isManual ? 'Manual Entry' : 'Synced Inventory';
@@ -2610,15 +2617,18 @@ async function loadCropValueData() {
                             seedingDate: isManual ? 'Manual' : (item.created_at ? item.created_at.split('T')[0] : '--'),
                             daysPostSeed: 0,
                             weightLbs,
-                            plantCount: 0,
-                            isWeightBased: true,
+                            plantCount: estPlants,
+                            isWeightBased: false,
                             value,
+                            pricePerOz,
+                            retailPricePerLb,
                             growthPercent: 100,
                             growthStage: stageLabel
                         });
 
                         totalValue += value;
                         totalWeightLbs += weightLbs;
+                        totalPlants += estPlants;
 
                         if (!cropSummary[crop]) {
                             cropSummary[crop] = {
@@ -2630,6 +2640,7 @@ async function loadCropValueData() {
                             };
                         }
                         cropSummary[crop].trays++;
+                        cropSummary[crop].plants += estPlants;
                         cropSummary[crop].weightLbs += weightLbs;
                         cropSummary[crop].value += value;
 
@@ -2637,6 +2648,7 @@ async function loadCropValueData() {
                             stageSummary[stageLabel] = { trays: 0, plants: 0, weightLbs: 0, value: 0, minDays: 0, maxDays: 0 };
                         }
                         stageSummary[stageLabel].trays++;
+                        stageSummary[stageLabel].plants += estPlants;
                         stageSummary[stageLabel].weightLbs += weightLbs;
                         stageSummary[stageLabel].value += value;
                     }
@@ -2647,9 +2659,9 @@ async function loadCropValueData() {
                         cropValueData = {
                             totalValue,
                             activeTrays: trayDetails.length,
-                            totalPlants: 0,
+                            totalPlants,
                             totalWeightLbs,
-                            quantityUnit: 'lbs',
+                            quantityUnit: 'plants',
                             cropCount: Object.keys(cropSummary).length,
                             avgValuePerTray: trayDetails.length > 0 ? totalValue / trayDetails.length : 0,
                             cropSummary,
@@ -2804,7 +2816,7 @@ async function renderCropValue() {
     
     const weightEl = document.getElementById('total-farm-weight');
     if (weightEl) {
-        weightEl.textContent = data.quantityUnit === 'lbs' ? `Based on ${data.activeTrays} inventory items (${data.totalWeightLbs.toFixed(2)} lbs total)` : `Based on ${data.activeTrays} trays at current growth stages`;
+        weightEl.textContent = `Based on ${data.activeTrays} inventory items (~${data.totalPlants} est. plants, ${data.totalWeightLbs.toFixed(2)} lbs)`;
     }
     
     const timestampEl = document.getElementById('value-timestamp');
@@ -2817,7 +2829,7 @@ async function renderCropValue() {
     if (traysEl) traysEl.textContent = data.activeTrays;
     
     const plantsEl = document.getElementById('value-total-plants');
-    if (plantsEl) plantsEl.textContent = formatQuantity(data.totalPlants, data.totalWeightLbs);
+    if (plantsEl) plantsEl.textContent = `${data.totalPlants} est. plants`;
     
     const cropCountEl = document.getElementById('value-crop-count');
     if (cropCountEl) cropCountEl.textContent = data.cropCount;
@@ -2827,7 +2839,7 @@ async function renderCropValue() {
 
     // Update label for avg card when weight-based
     const avgLabelEl = document.querySelector('#value-avg-per-tray')?.closest('.metric-card')?.querySelector('.metric-label');
-    if (avgLabelEl && data.quantityUnit === 'lbs') avgLabelEl.textContent = 'Avg Value/Item';
+    if (avgLabelEl) avgLabelEl.textContent = 'Avg Value/Item';
     
     // Render crop summary table
     const cropTableBody = document.querySelector('#crop-value-table tbody');
@@ -2838,13 +2850,14 @@ async function renderCropValue() {
         const percentOfTotal = (summary.value / data.totalValue * 100).toFixed(1);
         const params = cropGrowthParams[crop] || { retailPricePerLb: 0 };
         
+        const pricePerOz = (params.retailPricePerLb || 0) / 16;
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${crop}</td>
             <td>${summary.trays}</td>
-            <td>${formatQuantity(summary.plants, summary.weightLbs)}</td>
+            <td>${summary.plants} est. plants</td>
             <td>${avgDays.toFixed(0)} days</td>
-            <td>$${(params.retailPricePerLb || 0).toFixed(2)}/lb</td>
+            <td>$${pricePerOz.toFixed(2)}/oz</td>
             <td style="font-weight: 600;">$${summary.value.toFixed(2)}</td>
             <td><span style="color: var(--accent-green);">${percentOfTotal}%</span></td>
         `;
@@ -2870,7 +2883,7 @@ async function renderCropValue() {
             <td>${stage}</td>
             <td>${daysRange} days</td>
             <td>${summary.trays}</td>
-            <td>${formatQuantity(summary.plants, summary.weightLbs)}</td>
+            <td>${summary.plants} est. plants</td>
             <td style="font-weight: 600;">$${summary.value.toFixed(2)}</td>
             <td><span style="color: var(--accent-green);">${percentOfTotal}%</span></td>
         `;
@@ -2890,9 +2903,9 @@ async function renderCropValue() {
             <td>${tray.crop}</td>
             <td>${tray.seedingDate}</td>
             <td>${tray.daysPostSeed}</td>
-            <td>${tray.isWeightBased ? tray.weightLbs.toFixed(2) + ' lbs' : (tray.plantCount + ' plants')}</td>
+            <td>${tray.plantCount} est. plants</td>
             <td><span style="color: ${tray.growthPercent >= 95 ? 'var(--accent-green)' : 'var(--accent-blue)'};">${tray.growthPercent.toFixed(0)}%</span></td>
-            <td>${tray.isWeightBased ? tray.weightLbs.toFixed(2) + ' lbs' : '--'}</td>
+            <td>${tray.weightLbs.toFixed(2)} lbs</td>
             <td style="font-weight: 600;">$${tray.value.toFixed(2)}</td>
         `;
         trayTableBody.appendChild(row);

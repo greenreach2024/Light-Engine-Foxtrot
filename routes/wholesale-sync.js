@@ -330,6 +330,52 @@ router.get('/inventory', async (req, res) => {
     const deductedBySku = getTotalDeductedBySku();
     const lots = buildLotsFromFarmData(groups, farmInfo, today, reservedBySku, deductedBySku);
 
+    // Include manual inventory entries from farm_inventory DB
+    const db = req.app.locals.db;
+    if (db) {
+      try {
+        const dbResult = await db.query(
+          `SELECT product_id, product_name, quantity_available, quantity_unit,
+                  wholesale_price, retail_price, category
+           FROM farm_inventory
+           WHERE farm_id = $1
+             AND available_for_wholesale = true
+             AND COALESCE(quantity_available, 0) > 0`,
+          [farmInfo.farmId]
+        );
+        for (const row of dbResult.rows) {
+          const cropName = row.product_name || 'Unknown';
+          const qtyLbs = Number(row.quantity_available || 0);
+          const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-MANUAL`;
+          const pricePerUnit = Number(row.wholesale_price || row.retail_price || 0);
+          lots.push({
+            lot_id: `LOT-MANUAL-${row.product_id}`,
+            qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-MANUAL-${row.product_id}|${skuId}|${today.toISOString()}`,
+            label_text: `${cropName} (manual entry)`,
+            sku_id: skuId,
+            sku_name: `${cropName}, ${qtyLbs} lb`,
+            qty_available: qtyLbs,
+            qty_reserved: 0,
+            qty_deducted: 0,
+            unit: 'lb',
+            pack_size: 1,
+            price_per_unit: pricePerUnit,
+            harvest_date_start: today.toISOString(),
+            harvest_date_end: today.toISOString(),
+            quality_flags: ['local', 'vertical_farm', 'manual_entry'],
+            location: row.category || 'Manual',
+            crop_type: cropName,
+            days_to_harvest: 0
+          });
+        }
+        if (dbResult.rows.length > 0) {
+          console.log(`[Wholesale Sync] Added ${dbResult.rows.length} manual inventory lots from DB`);
+        }
+      } catch (dbErr) {
+        console.warn('[Wholesale Sync] Could not query farm_inventory:', dbErr.message);
+      }
+    }
+
     const farmInventory = {
       farm_id: farmInfo.farmId,
       farm_name: farmInfo.name,
