@@ -70,6 +70,9 @@
       
       // Load insights after all data is ready
       await this.loadBuyerInsights();
+
+      // Initialize Square payment form (non-blocking)
+      this.initializeSquare();
     },
 
     createDemoProfile() {
@@ -251,6 +254,7 @@
           const result = await response.json();
           const buyer = result.data?.buyer;
           if (buyer) {
+            this.token = token;
             this.currentBuyer = {
               id: buyer.id,
               businessName: buyer.business_name,
@@ -1230,7 +1234,7 @@
       if (!this.currentBuyer) {
         container.innerHTML = `
           <div class="order-empty">
-            <div class="order-empty-icon">🔒</div>
+            <div class="order-empty-icon">Locked</div>
             <p>Please sign in to view your order history.</p>
           </div>
         `;
@@ -1240,7 +1244,7 @@
       if (!this.orders.length) {
         container.innerHTML = `
           <div class="order-empty">
-            <div class="order-empty-icon">📦</div>
+            <div class="order-empty-icon">No Orders</div>
             <p>No orders yet. Start shopping to place your first wholesale order!</p>
           </div>
         `;
@@ -1314,7 +1318,7 @@
                     </div>
                     ${subOrder.tracking_number ? `
                     <div class="order-farm-tracking">
-                      <div class="order-farm-tracking-label">📦 Tracking Number</div>
+                      <div class="order-farm-tracking-label">Tracking Number</div>
                       <div class="order-farm-tracking-number">
                         ${subOrder.tracking_number}
                         ${subOrder.tracking_carrier ? `
@@ -1335,14 +1339,14 @@
 
             <div class="order-actions">
               <button class="order-action-btn" data-action="view-invoice" data-orderid="${order.master_order_id}">
-                📄 Download Invoice
+                 Download Invoice
               </button>
               <button class="order-action-btn" data-action="reorder" data-orderid="${order.master_order_id}">
-                🔄 Reorder
+                Reorder
               </button>
               ${order.status === 'pending' || order.status === 'confirmed' ? `
               <button class="order-action-btn" data-action="contact-farm" data-orderid="${order.master_order_id}">
-                💬 Contact Farms
+                 Contact Farms
               </button>
               ` : ''}
             </div>
@@ -1568,7 +1572,7 @@
         return ''; // Don't show badge for poor scores
       }
       
-      return `<span class="farm-quality-badge ${className}" title="Quality Score: ${score.toFixed(0)}/100">✓ ${badge}</span>`;
+      return `<span class="farm-quality-badge ${className}" title="Quality Score: ${score.toFixed(0)}/100"> ${badge}</span>`;
     },
 
     getFarmResponseTime(farmId) {
@@ -1581,10 +1585,10 @@
       
       if (hours <= 4) {
         className = 'response-fast';
-        icon = '⚡';
+        icon = '';
       } else if (hours <= 12) {
         className = 'response-normal';
-        icon = '✓';
+        icon = '';
       } else {
         return ''; // Don't show slow response times
       }
@@ -1621,7 +1625,7 @@
         foodSafetyCerts.some(fs => c.toLowerCase().includes(fs.toLowerCase()))
       );
 
-      return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">🛡️ Food Safety</span>`;
+      return `<span class="farm-cert-badge food-safety-cert" title="Food Safety Certified: ${cert}">️ Food Safety</span>`;
     },
 
     /**
@@ -1731,7 +1735,7 @@
         const alerts = result.alerts || [];
         
         if (alerts.length === 0) {
-          priceContent.innerHTML = '<div class="loading-state">✓ All monitored prices stable (no significant changes detected)</div>';
+          priceContent.innerHTML = '<div class="loading-state"> All monitored prices stable (no significant changes detected)</div>';
           return;
         }
         

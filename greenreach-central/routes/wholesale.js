@@ -429,6 +429,35 @@ async function buildDynamicPricingContext() {
     // Optional table in some environments.
   }
 
+  // Merge farm-admin crop pricing into context so wholesale catalog reflects
+  // prices set via the AI Pricing Assistant or manual pricing table edits.
+  try {
+    const allFarmPricing = await farmStore.getAll('crop_pricing');
+    for (const { data } of allFarmPricing) {
+      for (const crop of (data?.crops || [])) {
+        const retailPrice = Number(crop.retailPrice || 0);
+        const wholesalePrice = Number(crop.wholesalePrice || 0);
+        if (retailPrice <= 0 && wholesalePrice <= 0) continue;
+
+        const cropKey = normalizeCropKey(crop.crop);
+        const family = inferPricingFamily(crop.crop, crop.unit || '');
+        addValue(context.retailByCrop, cropKey, retailPrice);
+        addValue(context.retailByFamily, family, retailPrice);
+        if (wholesalePrice > 0) {
+          addValue(context.wholesaleByCrop, cropKey, wholesalePrice);
+          addValue(context.wholesaleByFamily, family, wholesalePrice);
+        }
+        const floorPrice = Number(crop.floor_price || 0);
+        if (floorPrice > 0) {
+          context.floorByCrop.set(cropKey, Math.max(context.floorByCrop.get(cropKey) || 0, floorPrice));
+          context.floorByFamily.set(family, Math.max(context.floorByFamily.get(family) || 0, floorPrice));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Wholesale Pricing] FarmStore crop_pricing merge failed:', err.message);
+  }
+
   return context;
 }
 

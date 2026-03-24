@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Initialize login page
  */
 function initLogin() {
-    grLog('🔐 Initializing farm admin login...');
+    grLog(' Initializing farm admin login...');
     
     // Check if user is already logged in — via farm_admin_session OR dashboard token+farm_id
     const session = getSession();
@@ -118,7 +118,7 @@ function initLogin() {
         grLog(' Active session found, redirecting to admin dashboard...');
         const redirectCount = parseInt(sessionStorage.getItem('login_redirect_count') || '0');
         if (redirectCount > 2) {
-            console.warn('⚠️ Detected potential redirect loop, clearing all auth data');
+            console.warn('Detected potential redirect loop, clearing all auth data');
             localStorage.removeItem(STORAGE_KEY_SESSION);
             localStorage.removeItem('token');
             sessionStorage.removeItem(STORAGE_KEY_SESSION);
@@ -130,7 +130,7 @@ function initLogin() {
             return;
         }
     } else if (session && !hasToken) {
-        console.warn('⚠️ Clearing stale session without token');
+        console.warn('Clearing stale session without token');
         localStorage.removeItem(STORAGE_KEY_SESSION);
         sessionStorage.removeItem(STORAGE_KEY_SESSION);
     }
@@ -235,7 +235,7 @@ async function initDashboard() {
     // Create a default session only for local/demo environments
     if (!currentSession) {
         if (!allowLocalBypass) {
-            console.warn('⚠️ No valid session found, redirecting to login');
+            console.warn('No valid session found, redirecting to login');
             // Clear redirect counter and stale data before redirecting
             sessionStorage.removeItem('login_redirect_count');
             localStorage.removeItem(STORAGE_KEY_SESSION);
@@ -490,12 +490,12 @@ async function loadDashboardData() {
             });
             if (inventoryResponse.ok) {
                 inventoryData = await inventoryResponse.json();
-                console.log(`✓ Loaded inventory: ${inventoryData.activeTrays} trays, ${inventoryData.totalPlants} plants`);
+                console.log(` Loaded inventory: ${inventoryData.activeTrays} trays, ${inventoryData.totalPlants} plants`);
             } else {
-                console.warn(`⚠ /api/inventory/current returned ${inventoryResponse.status}`);
+                console.warn(` /api/inventory/current returned ${inventoryResponse.status}`);
             }
         } catch (err) {
-            console.error('✗ Error fetching /api/inventory/current:', err);
+            console.error(' Error fetching /api/inventory/current:', err);
         }
         
         // Update KPI cards with inventory data
@@ -788,7 +788,7 @@ async function loadRecentActivity() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="4" style="text-align: center; padding: 2rem; color: #64748b;">
-                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;"></div>
                         <div>No recent activity</div>
                         <div style="font-size: 0.875rem; margin-top: 0.5rem;">Activity will appear as events occur on your farm</div>
                     </td>
@@ -801,7 +801,7 @@ async function loadRecentActivity() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" style="text-align: center; padding: 2rem; color: #ef4444;">
-                    <div>⚠️ Failed to load activity</div>
+                    <div>Failed to load activity</div>
                     <div style="font-size: 0.875rem; margin-top: 0.5rem;">${error.message}</div>
                 </td>
             </tr>
@@ -1134,16 +1134,16 @@ async function refreshData() {
  * Logout
  */
 function logout() {
-    grLog('🚪 Returning to home...');
-    console.log('🔍 DEBUG - Logout called from:', window.location.href);
-    console.log('🔍 DEBUG - Redirecting to: /LE-dashboard.html');
-    console.log('🔍 DEBUG - Current page version:', window.__PAGE_VERSION__);
+    grLog(' Returning to home...');
+    console.log(' DEBUG - Logout called from:', window.location.href);
+    console.log(' DEBUG - Redirecting to: /LE-dashboard.html');
+    console.log(' DEBUG - Current page version:', window.__PAGE_VERSION__);
     
     // Clear any stored session data
     localStorage.removeItem(STORAGE_KEY_SESSION);
     
     // Redirect to updated dashboard with new UI
-    console.log('🔍 DEBUG - Executing redirect now...');
+    console.log(' DEBUG - Executing redirect now...');
     window.location.href = '/LE-dashboard.html';
 }
 
@@ -2087,11 +2087,11 @@ async function runAIPricingAnalysis() {
                 _observationCount: rec.observationCount || 0,
             };
         }
-        console.log(`✅ Loaded ${liveData.recommendations.length} live pricing recommendations (FX: ${currentExchangeRate})`);
+        console.log(`Loaded ${liveData.recommendations.length} live pricing recommendations (FX: ${currentExchangeRate})`);
     } else {
         // Fallback: use hardcoded marketDataSources + fake FX
         await fetchExchangeRate();
-        console.warn('⚠ Using hardcoded market data (backend unavailable)');
+        console.warn(' Using hardcoded market data (backend unavailable)');
     }
     
     // Generate recommendations using the (now-updated) marketDataSources
@@ -2135,7 +2135,7 @@ async function fetchExchangeRate() {
         }));
     }
     
-    console.log(`💱 Exchange rate updated: 1 USD = ${currentExchangeRate.toFixed(4)} CAD`);
+    console.log(` Exchange rate updated: 1 USD = ${currentExchangeRate.toFixed(4)} CAD`);
 }
 
 function resolveMarketDataForCrop(cropName) {
@@ -2516,7 +2516,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
         
         // Mark button as applied (stay in modal for more crops)
         if (btnEl) {
-            btnEl.textContent = '✅ Applied';
+            btnEl.textContent = 'Applied';
             btnEl.disabled = true;
             btnEl.style.opacity = '0.6';
             btnEl.style.cursor = 'default';
@@ -3241,7 +3241,7 @@ function initializeAdminTooltipTracking() {
  * Refresh wholesale orders from the API
  */
 async function refreshWholesaleOrders() {
-    console.log('🔄 Refreshing wholesale orders...');
+    console.log('Refreshing wholesale orders...');
     const container = document.getElementById('wholesale-orders-container');
     
     if (!container) return;
@@ -3265,7 +3265,7 @@ async function refreshWholesaleOrders() {
         if (orders.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                    <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
                     <h3 style="margin-bottom: 0.5rem;">No Wholesale Orders Yet</h3>
                     <p>Orders from GreenReach Central will appear here</p>
                 </div>
@@ -3300,7 +3300,7 @@ async function refreshWholesaleOrders() {
         console.error('Failed to load wholesale orders:', error);
         container.innerHTML = `
             <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
-                <p>❌ Failed to load orders: ${error.message}</p>
+                <p>Failed to load orders: ${error.message}</p>
                 <button class="btn-primary" onclick="refreshWholesaleOrders()" style="margin-top: 1rem;">Retry</button>
             </div>
         `;
@@ -3312,10 +3312,10 @@ async function refreshWholesaleOrders() {
  */
 function renderOrderCard(order) {
     const statusConfig = {
-        'pending': { label: 'Pending', color: '#f59e0b', icon: '⏳' },
-        'packed': { label: 'Packed', color: '#8b5cf6', icon: '📦' },
-        'shipped': { label: 'Shipped', color: '#3b82f6', icon: '🚚' },
-        'delivered': { label: 'Delivered', color: '#10b981', icon: '✅' }
+        'pending': { label: 'Pending', color: '#f59e0b', icon: '' },
+        'packed': { label: 'Packed', color: '#8b5cf6', icon: '' },
+        'shipped': { label: 'Shipped', color: '#3b82f6', icon: '' },
+        'delivered': { label: 'Delivered', color: '#10b981', icon: '' }
     };
     
     const config = statusConfig[order.status] || statusConfig['pending'];
@@ -3379,7 +3379,7 @@ function renderOrderCard(order) {
                         cursor: pointer;
                         font-weight: 600;
                     ">
-                        📦 Mark as Packed
+                         Mark as Packed
                     </button>
                 ` : ''}
                 ${order.status === 'packed' ? `
@@ -3392,7 +3392,7 @@ function renderOrderCard(order) {
                         cursor: pointer;
                         font-weight: 600;
                     ">
-                        🚚 Mark as Shipped
+                         Mark as Shipped
                     </button>
                     <button class="btn-secondary" onclick="addTrackingNumber('${order.order_id}')" style="
                         background: rgba(107, 114, 128, 0.2);
@@ -3402,7 +3402,7 @@ function renderOrderCard(order) {
                         border-radius: 6px;
                         cursor: pointer;
                     ">
-                        🔗 Add Tracking #
+                         Add Tracking #
                     </button>
                 ` : ''}
                 ${order.tracking_number ? `
@@ -3414,7 +3414,7 @@ function renderOrderCard(order) {
                         border-radius: 6px;
                         font-weight: 600;
                     ">
-                        📍 Tracking: ${order.tracking_number}
+                         Tracking: ${order.tracking_number}
                     </div>
                 ` : ''}
                 <button class="btn-secondary" onclick="printPackingSlip('${order.order_id}')" style="
@@ -3425,7 +3425,7 @@ function renderOrderCard(order) {
                     border-radius: 6px;
                     cursor: pointer;
                 ">
-                    🖨️ Print Packing Slip
+                    ️ Print Packing Slip
                 </button>
             </div>
         </div>
@@ -3436,7 +3436,7 @@ function renderOrderCard(order) {
  * Update order status
  */
 async function updateOrderStatus(orderId, newStatus) {
-    console.log(`📝 Updating order ${orderId} to status: ${newStatus}`);
+    console.log(` Updating order ${orderId} to status: ${newStatus}`);
     
     try {
         // Load current statuses
@@ -3502,7 +3502,7 @@ async function addTrackingNumber(orderId) {
  * Print packing slip for order
  */
 function printPackingSlip(orderId) {
-    console.log(`🖨️ Printing packing slip for order ${orderId}`);
+    console.log(`️ Printing packing slip for order ${orderId}`);
     
     // Find order data
     const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
@@ -3588,9 +3588,9 @@ async function notifyCentralOfStatusChange(orderId, newStatus) {
         });
         
         if (response.ok) {
-            console.log(`✓ Notified Central of status change: ${orderId} → ${newStatus}`);
+            console.log(` Notified Central of status change: ${orderId} → ${newStatus}`);
         } else {
-            console.warn(`⚠ Central notification failed (${response.status}), status saved locally`);
+            console.warn(` Central notification failed (${response.status}), status saved locally`);
         }
     } catch (error) {
         console.warn('[Status Callback] Failed to notify Central:', error.message);
@@ -3714,9 +3714,9 @@ async function notifyCentralOfTrackingNumber(orderId, trackingNumber) {
         });
         
         if (response.ok) {
-            console.log(`✓ Notified Central of tracking number: ${orderId} → ${trackingNumber}`);
+            console.log(` Notified Central of tracking number: ${orderId} → ${trackingNumber}`);
         } else {
-            console.warn(`⚠ Central tracking notification failed (${response.status}), saved locally`);
+            console.warn(` Central tracking notification failed (${response.status}), saved locally`);
         }
     } catch (error) {
         console.warn('[Tracking Callback] Failed to notify Central:', error.message);
@@ -4308,7 +4308,7 @@ async function loadPaymentMethods() {
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-size: 18px; font-weight: bold; color: var(--accent-green); margin-bottom: 8px;">
-                                ✓ Square Connected
+                                 Square Connected
                             </div>
                             <div style="color: var(--text-secondary);">
                                 <div>Merchant: ${statusData.merchantId || 'Configured'}</div>
@@ -4337,7 +4337,7 @@ async function loadPaymentMethods() {
             // Square not configured on the server
             statusContainer.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
-                    <div style="font-size: 48px; margin-bottom: 15px;">💳</div>
+                    <div style="font-size: 48px; margin-bottom: 15px;"></div>
                     <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
                         Square Integration Available
                     </div>
@@ -4496,7 +4496,7 @@ function renderReceiptRows(receipts) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🧾</div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;"></div>
                     <div>No receipts or invoices yet</div>
                     <div style="font-size: 0.85rem; margin-top: 0.5rem;">Receipts will appear once billing transactions occur</div>
                 </td>
@@ -4713,10 +4713,10 @@ async function loadSettings() {
         const badgeEl = document.getElementById('plan-type-badge');
         if (badgeEl) {
             if (planType === 'edge') {
-                badgeEl.textContent = '⚡ Edge';
+                badgeEl.textContent = ' Edge';
                 badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);';
             } else {
-                badgeEl.textContent = '☁️ Cloud';
+                badgeEl.textContent = '️ Cloud';
                 badgeEl.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
             }
         }
@@ -6435,13 +6435,13 @@ async function useCurrentLocation() {
     const btn = document.getElementById('setup-use-location');
     
     if (!navigator.geolocation) {
-        statusEl.textContent = '❌ Geolocation not supported by your browser';
+        statusEl.textContent = 'Geolocation not supported by your browser';
         statusEl.style.color = 'var(--error-red)';
         return;
     }
     
     btn.disabled = true;
-    btn.textContent = '⏳ Getting location...';
+    btn.textContent = ' Getting location...';
     statusEl.textContent = 'Requesting GPS coordinates (required for weather data)...';
     statusEl.style.color = 'var(--text-muted)';
     
@@ -6456,7 +6456,7 @@ async function useCurrentLocation() {
             document.getElementById('setup-latitude').value = lat;
             document.getElementById('setup-longitude').value = lon;
             
-            statusEl.textContent = '✔ Location captured! Fetching address...';
+            statusEl.textContent = ' Location captured! Fetching address...';
             
             try {
                 // Reverse geocode to get address
@@ -6491,20 +6491,20 @@ async function useCurrentLocation() {
                         document.getElementById('setup-postal').value = addr.postcode;
                     }
                     
-                    statusEl.textContent = '✔ Location and address captured! (Weather data enabled)';
+                    statusEl.textContent = ' Location and address captured! (Weather data enabled)';
                     statusEl.style.color = 'var(--accent-green)';
                 } else {
-                    statusEl.textContent = '⚠ GPS captured, but could not determine address. Please enter manually.';
+                    statusEl.textContent = ' GPS captured, but could not determine address. Please enter manually.';
                     statusEl.style.color = 'var(--text-secondary)';
                 }
             } catch (error) {
                 console.error('[Setup] Geocoding error:', error);
-                statusEl.textContent = '⚠ GPS captured, geocoding failed. Please enter address manually.';
+                statusEl.textContent = ' GPS captured, geocoding failed. Please enter address manually.';
                 statusEl.style.color = 'var(--text-secondary)';
             }
             
             btn.disabled = false;
-            btn.textContent = '📍 Use Current Location';
+            btn.textContent = ' Use Current Location';
         },
         (error) => {
             console.error('[Setup] Geolocation error:', error);
@@ -6512,22 +6512,22 @@ async function useCurrentLocation() {
             let errorMsg = 'Location access failed';
             switch(error.code) {
                 case error.PERMISSION_DENIED:
-                    errorMsg = '❌ Location access denied. Please enable location permissions for weather data.';
+                    errorMsg = 'Location access denied. Please enable location permissions for weather data.';
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    errorMsg = '❌ Location unavailable. Please check your device settings.';
+                    errorMsg = 'Location unavailable. Please check your device settings.';
                     break;
                 case error.TIMEOUT:
-                    errorMsg = '❌ Location request timed out. Please try again.';
+                    errorMsg = 'Location request timed out. Please try again.';
                     break;
                 default:
-                    errorMsg = '❌ Unknown error accessing location. Please enter address manually.';
+                    errorMsg = 'Unknown error accessing location. Please enter address manually.';
             }
             
             statusEl.textContent = errorMsg;
             statusEl.style.color = 'var(--error-red)';
             btn.disabled = false;
-            btn.textContent = '📍 Use Current Location';
+            btn.textContent = ' Use Current Location';
         },
         {
             enableHighAccuracy: true,
@@ -6970,7 +6970,7 @@ async function loadAccessLog() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔒</div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">Locked</div>
                     <div>No access activity recorded yet</div>
                     <div style="font-size: 0.85rem; margin-top: 0.5rem;">Activity will appear as users log in and perform actions</div>
                 </td>

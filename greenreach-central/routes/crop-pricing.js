@@ -81,6 +81,9 @@ router.get('/', async (req, res) => {
         ws1Discount: existing?.ws1Discount || 15,
         ws2Discount: existing?.ws2Discount || 25,
         ws3Discount: existing?.ws3Discount || 35,
+        floor_price: existing?.floor_price ?? 0,
+        sku_factor: existing?.sku_factor ?? 0.65,
+        isTaxable: existing?.isTaxable || false,
         isGrowing: growingCrops.has(cropName),
         hasPricing: !!existing
       };
