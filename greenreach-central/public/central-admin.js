@@ -10323,7 +10323,7 @@ async function loadPricingManagement() {
         try {
             const invRes = await authenticatedFetch(`${API_BASE}/api/wholesale/catalog`);
             const invData = invRes && invRes.ok ? await invRes.json() : { items: [], data: {} };
-            const products = invData.items || invData.data?.skus || [];
+            const products = invData.data?.skus || invData.items || [];
             document.getElementById('pricing-product-count').textContent = products.length;
             renderProductCatalog(products);
         } catch {
@@ -10382,8 +10382,12 @@ function renderProductCatalog(products) {
         const category = p.category || p.type || '—';
         const type = p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
         const unit = p.unit || 'lb';
-        const price = p.wholesale_price || p.price_per_unit || p.price || '—';
-        const priceStr = typeof price === 'number' ? '$' + price.toFixed(2) : price;
+        const finalPrice = p.final_wholesale_price || p.wholesale_price || p.price_per_unit || p.price || null;
+        const basePrice = p.base_wholesale_price || null;
+        const discountRate = p.buyer_discount_rate || 0;
+        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '—';
+        const baseStr = typeof basePrice === 'number' ? '$' + basePrice.toFixed(2) : '';
+        const discountStr = discountRate > 0 ? (discountRate * 100).toFixed(1) + '% off' : '';
         const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
         const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
         return `<tr>
@@ -10392,7 +10396,7 @@ function renderProductCatalog(products) {
             <td>${category}</td>
             <td>${type}</td>
             <td>${unit}</td>
-            <td>${priceStr}</td>
+            <td>${priceStr}${baseStr ? '<div style="font-size:11px;color:var(--text-secondary);">base: ' + baseStr + '</div>' : ''}${discountStr ? '<div style="font-size:11px;color:var(--accent-green);">' + discountStr + '</div>' : ''}</td>
             <td style="color: ${statusColor};">${status}</td>
             <td>
                 <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
@@ -10421,7 +10425,8 @@ function renderCostSurveys(surveys) {
 async function submitWholesalePrice(event) {
     event.preventDefault();
     const crop = document.getElementById('price-crop').value;
-    const wholesale_price = parseFloat(document.getElementById('price-amount').value);
+    const floor_price = parseFloat(document.getElementById('price-amount').value) || 0;
+    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.65;
     const tier = document.getElementById('price-tier').value;
     const reasoning = document.getElementById('price-reasoning').value;
     
@@ -10429,7 +10434,7 @@ async function submitWholesalePrice(event) {
         const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/set-wholesale`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ crop, wholesale_price, tier, reasoning })
+            body: JSON.stringify({ crop, floor_price, sku_factor, tier, reasoning, use_formula: true })
         });
         if (!res) return;
         const data = await res.json();

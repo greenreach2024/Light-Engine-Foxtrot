@@ -18,6 +18,8 @@
     currentBuyer: null,
     authTab: 'sign-in',
     productRequests: [],
+    deliveryQuote: null,
+    selectedFulfillment: 'delivery',
 
     normalizeBuyer(buyer) {
       if (!buyer) return null;
@@ -124,6 +126,31 @@
       document.getElementById('single-farm-id')?.addEventListener('change', () => {
         this.loadCatalog();
         if (this.currentView === 'checkout') this.previewAllocation();
+      });
+
+      // Fulfillment method radio toggle (pickup vs delivery)
+      document.querySelectorAll('input[name="fulfillment"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          this.selectedFulfillment = e.target.value;
+          const deliveryFields = document.getElementById('delivery-fields');
+          const pickupInfo = document.getElementById('pickup-info');
+          if (e.target.value === 'pickup') {
+            if (deliveryFields) deliveryFields.classList.add('hidden');
+            if (pickupInfo) pickupInfo.classList.remove('hidden');
+            this.deliveryQuote = null;
+            const feeEl = document.getElementById('delivery-fee-display');
+            if (feeEl) feeEl.textContent = '—';
+          } else {
+            if (deliveryFields) deliveryFields.classList.remove('hidden');
+            if (pickupInfo) pickupInfo.classList.add('hidden');
+            this.refreshDeliveryQuote();
+          }
+        });
+      });
+
+      // Refresh quote when postal code changes
+      document.getElementById('delivery-postal')?.addEventListener('change', () => {
+        if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
       });
 
       document.getElementById('sort-by')?.addEventListener('change', () => {
@@ -352,13 +379,6 @@
 
         const json = await response.json();
 
-        if (response.status === 409) {
-          this.showToast('This email is already registered. Try signing in instead.', 'error');
-          this.switchAuthTab('sign-in');
-          document.getElementById('sign-in-email').value = email;
-          return;
-        }
-
         if (!response.ok || json?.status !== 'ok') {
           this.showToast(json?.message || 'Registration failed', 'error');
           return;
@@ -452,7 +472,10 @@
         section.classList.toggle('active', section.id === `${view}-view`);
       });
 
-      if (view === 'checkout') this.previewAllocation();
+      if (view === 'checkout') {
+        this.previewAllocation();
+        if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
+      }
       if (view === 'orders') this.loadOrders();
       if (view === 'account') this.loadAccountSettings();
     },
@@ -574,8 +597,7 @@
             params.append('nearLng', String(buyerLoc.longitude));
           }
 
-          const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
-          const data = await response.json().catch(() => null);
+          const { response, json: data } = await this.apiFetch(`/api/wholesale/catalog?${params.toString()}`);
           const payload = data?.data || {};
 
           // Support both envelopes:
@@ -730,9 +752,6 @@
     },
 
     renderCatalog() {
-      const banner = document.getElementById('not-live-banner');
-      if (banner) banner.style.display = this.catalog.length === 0 ? 'block' : 'none';
-
       const sortBy = document.getElementById('sort-by')?.value || 'name';
       const sorted = [...this.catalog].sort((a, b) => {
         switch (sortBy) {
@@ -771,6 +790,16 @@
                 <span class="sku-meta-label">Price:</span>
                 <span>$${Number(sku.price_per_unit).toFixed(2)}/${sku.unit}</span>
               </div>
+              ${Number(sku.base_wholesale_price || 0) > 0 ? `
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Base:</span>
+                <span>$${Number(sku.base_wholesale_price).toFixed(2)}</span>
+              </div>` : ''}
+              ${Number(sku.buyer_discount_rate || 0) > 0 ? `
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Discount:</span>
+                <span>${(Number(sku.buyer_discount_rate) * 100).toFixed(1)}%</span>
+              </div>` : ''}
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Available:</span>
                 <span>${sku.total_qty_available} ${sku.unit}${sku.total_qty_available !== 1 ? 's' : ''}</span>
@@ -799,22 +828,14 @@
         )
         .join('');
       
-      // If no products but we have farms, show farm info
-      if (this.catalog.length === 0 && this.farms && this.farms.length > 0) {
+      // If no products, show availability messaging
+      if (this.catalog.length === 0) {
         grid.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
-            <h3 style="color: var(--primary); margin-bottom: 1rem;">No Products Available Yet</h3>
+            <h3 style="color: var(--primary); margin-bottom: 1rem;">Not Yet Available in Your Area</h3>
             <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-              We have ${this.farms.length} farm${this.farms.length !== 1 ? 's' : ''} registered, but they haven't added inventory yet.
+              The GreenReach Wholesale and Delivery is not live in your area. Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!
             </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center;">
-              ${this.farms.map(f => `
-                <div style="background: var(--bg); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                  <strong style="color: var(--primary);">${f.farm_name}</strong>
-                  <span style="color: var(--text-secondary); font-size: 0.875rem; margin-left: 0.5rem;">(${f.status})</span>
-                </div>
-              `).join('')}
-            </div>
           </div>
         `;
       }
@@ -963,6 +984,55 @@
       };
     },
 
+    async refreshDeliveryQuote() {
+      const postalCode = document.getElementById('delivery-postal')?.value?.trim() || '';
+      const statusEl = document.getElementById('delivery-quote-status');
+      const zoneResultEl = document.getElementById('zone-result');
+      const feeDisplayEl = document.getElementById('delivery-fee-display');
+      if (statusEl) statusEl.textContent = 'Fetching delivery quote…';
+
+      // Determine zone from postal code prefix
+      let zone = 'ZONE_A';
+      if (postalCode.length >= 3) {
+        const fsa = postalCode.substring(0, 3).toUpperCase();
+        if (['K7L','K7K','K7M','K7N','K7P'].includes(fsa)) zone = 'ZONE_A';
+        else if (fsa.startsWith('K')) zone = 'ZONE_B';
+        else zone = 'ZONE_C';
+      }
+
+      const subtotal = this.cart.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/delivery/quote', {
+          method: 'POST',
+          body: JSON.stringify({ zone, subtotal })
+        });
+        const quote = json?.data || json;
+        if (response.ok && quote?.ok) {
+          this.deliveryQuote = quote;
+          if (feeDisplayEl) feeDisplayEl.textContent = `$${Number(quote.fee).toFixed(2)}`;
+          if (zoneResultEl) {
+            zoneResultEl.className = 'zone-result zone-success';
+            zoneResultEl.textContent = `${quote.zone_name || zone} — $${Number(quote.fee).toFixed(2)} delivery fee`;
+            if (quote.minimum_order && subtotal < quote.minimum_order) {
+              zoneResultEl.textContent += ` (min order $${quote.minimum_order})`;
+              zoneResultEl.className = 'zone-result zone-error';
+            }
+          }
+          if (statusEl) statusEl.textContent = '';
+        } else {
+          this.deliveryQuote = null;
+          if (feeDisplayEl) feeDisplayEl.textContent = '—';
+          if (statusEl) statusEl.textContent = json?.message || 'Unable to get delivery quote';
+          if (zoneResultEl) { zoneResultEl.className = 'zone-result hidden'; }
+        }
+      } catch (err) {
+        console.error('[Wholesale] Delivery quote error:', err);
+        this.deliveryQuote = null;
+        if (feeDisplayEl) feeDisplayEl.textContent = '—';
+        if (statusEl) statusEl.textContent = 'Could not fetch delivery quote';
+      }
+    },
+
     async previewAllocation() {
       if (this.cart.length === 0) {
         document.getElementById('allocation-preview').innerHTML = '<p>Your cart is empty</p>';
@@ -1040,9 +1110,14 @@
             <span>Broker fee (GreenReach):</span>
             <span>$${Number(allocation.broker_fee_total || 0).toFixed(2)}</span>
           </div>
+          ${this.selectedFulfillment === 'delivery' && this.deliveryQuote ? `
+          <div class="cart-summary-row">
+            <span>Delivery fee:</span>
+            <span>$${Number(this.deliveryQuote.fee || 0).toFixed(2)}</span>
+          </div>` : ''}
           <div class="cart-summary-row total">
             <span>Total:</span>
-            <span>$${Number(allocation.grand_total).toFixed(2)}</span>
+            <span>$${Number((allocation.grand_total || 0) + (this.selectedFulfillment === 'delivery' && this.deliveryQuote ? Number(this.deliveryQuote.fee || 0) : 0)).toFixed(2)}</span>
           </div>
         </div>
       `;
@@ -1069,6 +1144,13 @@
       this.showLoading('Processing your order...');
 
       try {
+        // Tokenize the card via Square SDK (skipped if Square not loaded)
+        let paymentSource = { type: 'manual' };
+        if (this.squarePayments && this.squareCard) {
+          const token = await this.createPaymentToken();
+          paymentSource = { source_id: token };
+        }
+
         const sourcing = this.getSourcingSelection();
         const { response, json } = await this.apiFetch('/api/wholesale/checkout/execute', {
           method: 'POST',
@@ -1084,6 +1166,7 @@
               city: document.getElementById('delivery-city').value,
               province: document.getElementById('delivery-province')?.value || 'ON',
               postalCode: document.getElementById('delivery-postal').value,
+              zip: document.getElementById('delivery-postal').value,
               country: 'Canada',
               instructions: document.getElementById('delivery-instructions').value
             },
@@ -1091,8 +1174,10 @@
             cart: this.cart.map((item) => ({ sku_id: item.sku_id, quantity: item.quantity })),
             allocation_strategy: 'cheapest',
             payment_provider: 'square',
-            payment_source: { type: 'demo', nonce: `demo-${Date.now()}` },
+            payment_source: paymentSource,
             po_number: document.getElementById('po-number')?.value?.trim() || '',
+            fulfillment_method: this.selectedFulfillment,
+            delivery_fee: this.selectedFulfillment === 'delivery' && this.deliveryQuote ? Number(this.deliveryQuote.fee || 0) : 0,
             sourcing
           })
         });
@@ -1639,12 +1724,7 @@
         const response = await fetch('/api/market-intelligence/price-alerts?threshold=7');
         const result = await response.json();
         
-        if (!response.ok) {
-          priceContent.innerHTML = '<div class="loading-state">Market data temporarily unavailable.</div>';
-          return;
-        }
-
-        if (!result.ok) {
+        if (!response.ok || !result.ok) {
           throw new Error('Failed to load market data');
         }
         
@@ -1899,9 +1979,16 @@
         return;
       }
       try {
-        // Sandbox credentials – in production these should come from the server
-        const appId = 'sandbox-sq0idb-ByoyD4t2Zy96QhAUZd9_SA';
-        const locationId = 'TC4Z3ZEBKRXRH';
+        // Fetch Square credentials from server
+        const cfgRes = await fetch('/api/wholesale/payment/config');
+        const cfgJson = await cfgRes.json();
+        const appId = cfgJson?.data?.appId;
+        const locationId = cfgJson?.data?.locationId;
+
+        if (!appId || !locationId) {
+          console.warn('Square credentials not configured on server');
+          return;
+        }
 
         this.squarePayments = window.Square.payments(appId, locationId);
         this.squareCard = await this.squarePayments.card();
@@ -1933,120 +2020,6 @@
 
       const msgs = (result.errors || []).map(e => e.message).join('; ');
       throw new Error(msgs || 'Card tokenization failed');
-    },
-
-    /**
-     * Place wholesale order with payment authorization
-     */
-    async placeOrder() {
-      const placeOrderBtn = document.getElementById('place-order-btn');
-      const placeOrderText = document.getElementById('place-order-text');
-      const placeOrderSpinner = document.getElementById('place-order-spinner');
-      
-      if (!placeOrderBtn) return;
-      
-      try {
-        // Disable button
-        placeOrderBtn.disabled = true;
-        placeOrderText.style.display = 'none';
-        placeOrderSpinner.style.display = 'inline';
-        
-        // Validate cart
-        if (this.cart.length === 0) {
-          throw new Error('Your cart is empty');
-        }
-        
-        // Validate form
-        const form = document.getElementById('checkout-form');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          throw new Error('Please fill in all required fields');
-        }
-        
-        // Tokenize card via Square
-        const paymentToken = await this.createPaymentToken();
-
-        // Prepare order data
-        const orderData = {
-          buyer_id: this.currentBuyer?.id || 'demo-buyer-001',
-          buyer_name: document.getElementById('buyer-name')?.value || this.currentBuyer?.businessName,
-          buyer_email: document.getElementById('buyer-email')?.value || this.currentBuyer?.email,
-          buyer_phone: this.currentBuyer?.phone || '',
-          delivery_address: document.getElementById('delivery-address')?.value,
-          delivery_city: document.getElementById('delivery-city')?.value,
-          delivery_province: document.getElementById('delivery-province')?.value,
-          delivery_postal_code: document.getElementById('delivery-postal')?.value,
-          delivery_instructions: document.getElementById('delivery-instructions')?.value || null,
-          delivery_time_slot: document.getElementById('delivery-time-slot')?.value || 'flexible',
-          fulfillment_cadence: document.getElementById('fulfillment-cadence')?.value || 'one_time',
-          cart_items: this.cart.map(item => ({
-            sku_id: item.sku_id,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit: item.unit,
-            price_per_unit: item.price_per_unit,
-            farm_id: item.farm_id
-          })),
-          payment_token: paymentToken,
-          payment_provider: 'square'
-        };
-        
-        // Submit order to backend
-        const response = await fetch('/api/wholesale/orders/create', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {})
-          },
-          body: JSON.stringify(orderData)
-        });
-        
-        const result = await response.json();
-        
-        if (!response.ok || !result.ok) {
-          throw new Error(result.message || 'Failed to place order');
-        }
-        
-        // Success!
-        this.showToast('Order placed successfully!', 'success');
-        
-        // Clear cart
-        this.cart = [];
-        this.renderCart();
-        
-        // Show success message and order details
-        const successMessage = `
-          <div style="text-align: center; padding: 2rem;">
-            <div style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;">✓</div>
-            <h2>Order Placed Successfully!</h2>
-            <p style="margin: 1rem 0;">Order #${result.order_id}</p>
-            <p style="margin: 1rem 0; color: var(--text-secondary);">
-              Your payment has been authorized but <strong>not charged yet</strong>.
-              <br/>Farms have 24 hours to confirm their portions.
-              <br/>You'll receive an email when farms respond.
-            </p>
-            <p style="margin: 1.5rem 0;">
-              <strong>Total Authorized:</strong> $${result.total_amount.toFixed(2)}
-            </p>
-            <button class="btn btn-primary" onclick="app.navigateTo('orders')">View My Orders</button>
-          </div>
-        `;
-        
-        document.querySelector('.checkout-container').innerHTML = successMessage;
-        
-      } catch (error) {
-        console.error('Order placement error:', error);
-        this.showToast(error.message || 'Failed to place order', 'error');
-        const cardErrors = document.getElementById('card-errors');
-        if (cardErrors) {
-          cardErrors.textContent = error.message;
-        }
-      } finally {
-        // Re-enable button
-        placeOrderBtn.disabled = false;
-        placeOrderText.style.display = 'inline';
-        placeOrderSpinner.style.display = 'none';
-      }
     },
 
     // === PRODUCT REQUESTS ===

@@ -597,8 +597,7 @@
             params.append('nearLng', String(buyerLoc.longitude));
           }
 
-          const response = await fetch(`/api/wholesale/catalog?${params.toString()}`);
-          const data = await response.json().catch(() => null);
+          const { response, json: data } = await this.apiFetch(`/api/wholesale/catalog?${params.toString()}`);
           const payload = data?.data || {};
 
           // Support both envelopes:
@@ -791,6 +790,16 @@
                 <span class="sku-meta-label">Price:</span>
                 <span>$${Number(sku.price_per_unit).toFixed(2)}/${sku.unit}</span>
               </div>
+              ${Number(sku.base_wholesale_price || 0) > 0 ? `
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Base:</span>
+                <span>$${Number(sku.base_wholesale_price).toFixed(2)}</span>
+              </div>` : ''}
+              ${Number(sku.buyer_discount_rate || 0) > 0 ? `
+              <div class="sku-meta-row">
+                <span class="sku-meta-label">Discount:</span>
+                <span>${(Number(sku.buyer_discount_rate) * 100).toFixed(1)}%</span>
+              </div>` : ''}
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Available:</span>
                 <span>${sku.total_qty_available} ${sku.unit}${sku.total_qty_available !== 1 ? 's' : ''}</span>

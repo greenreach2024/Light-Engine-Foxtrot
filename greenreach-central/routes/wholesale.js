@@ -196,6 +196,293 @@ function shouldUseNetworkAllocation(req) {
   return catalogMode === 'network' || req.app?.locals?.databaseReady === false;
 }
 
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function normalizeCropKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function percentile(sortedValues, p) {
+  if (!Array.isArray(sortedValues) || sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return sortedValues[0];
+
+  const idx = (sortedValues.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedValues[lo];
+
+  const weight = idx - lo;
+  return sortedValues[lo] * (1 - weight) + sortedValues[hi] * weight;
+}
+
+function removePriceAnomalies(values) {
+  const clean = (Array.isArray(values) ? values : [])
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v > 0);
+
+  if (clean.length < 4) {
+    return { kept: clean, removedCount: 0 };
+  }
+
+  const sorted = [...clean].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = Math.max(0, q3 - q1);
+  if (iqr === 0) {
+    return { kept: sorted, removedCount: 0 };
+  }
+
+  const lower = q1 - (1.5 * iqr);
+  const upper = q3 + (1.5 * iqr);
+  const kept = sorted.filter((v) => v >= lower && v <= upper);
+  if (kept.length < 3) {
+    return { kept: sorted, removedCount: 0 };
+  }
+
+  return {
+    kept,
+    removedCount: Math.max(0, sorted.length - kept.length)
+  };
+}
+
+function inferPricingFamily(name, category) {
+  const text = `${String(name || '')} ${String(category || '')}`.toLowerCase();
+
+  if (/berry|strawberry|raspberry|blackberry|blueberry/.test(text)) {
+    return 'berries';
+  }
+
+  if (/tomato/.test(text)) {
+    if (/cherry tomato|grape tomato/.test(text)) return 'cherry_tomatoes';
+    return 'large_tomatoes';
+  }
+
+  if (/leafy|lettuce|kale|arugula|spinach|chard|greens|microgreen/.test(text)) {
+    return 'weight_crops';
+  }
+
+  if (/herb|basil|cilantro|parsley|mint|dill|oregano|thyme|rosemary/.test(text)) {
+    return 'weight_crops';
+  }
+
+  return 'other';
+}
+
+function inferPriceUnit(name, category, fallbackUnit) {
+  const family = inferPricingFamily(name, category);
+  if (family === 'berries') return 'pint';
+  if (family === 'large_tomatoes') return 'unit';
+
+  if (family === 'cherry_tomatoes' || family === 'weight_crops') {
+    const normalizedFallback = String(fallbackUnit || '').toLowerCase();
+    if (['oz', 'lb', 'g', 'kg'].includes(normalizedFallback)) {
+      return normalizedFallback;
+    }
+    return 'oz';
+  }
+
+  return String(fallbackUnit || 'unit').toLowerCase();
+}
+
+function mean(values) {
+  if (!Array.isArray(values) || values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
+}
+
+function getDefaultSkuFactor() {
+  const envValue = Number(process.env.WHOLESALE_DEFAULT_SKU_FACTOR || 0.65);
+  if (!Number.isFinite(envValue)) return 0.65;
+  return Math.min(0.75, Math.max(0.5, envValue));
+}
+
+function getBuyerDiscountRateFromRollingAverage(rollingAverage) {
+  const avg = Number(rollingAverage || 0);
+  if (avg >= 5000) return 0.08;
+  if (avg >= 3000) return 0.06;
+  if (avg >= 1500) return 0.04;
+  if (avg >= 750) return 0.02;
+  return 0;
+}
+
+async function resolveOptionalBuyerFromRequest(req) {
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) return null;
+
+  const secret = getWholesaleJwtSecret();
+  if (!secret) return null;
+
+  try {
+    const payload = jwt.verify(token, secret);
+    const buyerId = String(payload?.sub || '').trim();
+    if (!buyerId) return null;
+
+    let buyer = getBuyerById(buyerId);
+    if (!buyer) {
+      await loadBuyersFromDb();
+      buyer = getBuyerById(buyerId);
+    }
+    return buyer || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getBuyerRollingDiscountProfile(buyerId) {
+  if (!buyerId) {
+    return { rate: 0, rollingAverage: 0, orderCount: 0, windowDays: 90 };
+  }
+
+  try {
+    const orders = await listOrdersForBuyer(buyerId, { includeArchived: true });
+    const now = Date.now();
+    const windowDays = 90;
+    const windowStart = now - (windowDays * 24 * 60 * 60 * 1000);
+
+    const eligible = (Array.isArray(orders) ? orders : []).filter((order) => {
+      const createdTs = new Date(order?.created_at || order?.createdAt || 0).getTime();
+      if (!Number.isFinite(createdTs) || createdTs < windowStart) return false;
+
+      const status = String(order?.status || '').toLowerCase();
+      if (['cancelled', 'failed', 'refunded'].includes(status)) return false;
+
+      return Number(order?.grand_total || 0) > 0;
+    });
+
+    const rollingAverage = mean(eligible.map((order) => Number(order.grand_total || 0)));
+    return {
+      rate: getBuyerDiscountRateFromRollingAverage(rollingAverage),
+      rollingAverage: roundMoney(rollingAverage),
+      orderCount: eligible.length,
+      windowDays
+    };
+  } catch {
+    return { rate: 0, rollingAverage: 0, orderCount: 0, windowDays: 90 };
+  }
+}
+
+async function buildDynamicPricingContext() {
+  const context = {
+    retailByCrop: new Map(),
+    retailByFamily: new Map(),
+    wholesaleByCrop: new Map(),
+    wholesaleByFamily: new Map(),
+    floorByCrop: new Map(),
+    floorByFamily: new Map()
+  };
+
+  if (!isDatabaseAvailable()) return context;
+
+  const addValue = (map, key, value) => {
+    if (!key) return;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(n);
+  };
+
+  try {
+    const retailResult = await query(
+      `SELECT i.product_name, i.category, i.retail_price, i.wholesale_price
+         FROM farm_inventory i
+         JOIN farms f ON f.farm_id = i.farm_id
+        WHERE f.status = 'active'
+          AND COALESCE(i.quantity_available, i.manual_quantity_lbs, 0) > 0
+          AND (COALESCE(i.retail_price, 0) > 0 OR COALESCE(i.wholesale_price, 0) > 0)`
+    );
+
+    for (const row of retailResult.rows || []) {
+      const cropKey = normalizeCropKey(row.product_name);
+      const family = inferPricingFamily(row.product_name, row.category);
+      addValue(context.retailByCrop, cropKey, row.retail_price);
+      addValue(context.retailByFamily, family, row.retail_price);
+      addValue(context.wholesaleByCrop, cropKey, row.wholesale_price);
+      addValue(context.wholesaleByFamily, family, row.wholesale_price);
+    }
+  } catch (error) {
+    console.warn('[Wholesale Pricing] Retail context load failed:', error.message);
+  }
+
+  try {
+    const floorResult = await query(
+      `SELECT crop, unit, MAX(cost_per_unit) AS max_cost
+         FROM farm_cost_surveys
+        WHERE valid_until IS NULL OR valid_until >= CURRENT_DATE
+        GROUP BY crop, unit`
+    );
+
+    for (const row of floorResult.rows || []) {
+      const floor = Number(row.max_cost || 0) * 1.2;
+      if (!(floor > 0)) continue;
+
+      const cropKey = normalizeCropKey(row.crop);
+      const family = inferPricingFamily(row.crop, row.unit);
+      context.floorByCrop.set(cropKey, Math.max(context.floorByCrop.get(cropKey) || 0, floor));
+      context.floorByFamily.set(family, Math.max(context.floorByFamily.get(family) || 0, floor));
+    }
+  } catch {
+    // Optional table in some environments.
+  }
+
+  return context;
+}
+
+function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile) {
+  const list = Array.isArray(skus) ? skus : [];
+  const skuFactor = getDefaultSkuFactor();
+  const discountRate = Number(discountProfile?.rate || 0);
+
+  for (const sku of list) {
+    const name = sku?.product_name || sku?.name || '';
+    const category = sku?.category || '';
+    const cropKey = normalizeCropKey(name);
+    const family = inferPricingFamily(name, category);
+
+    const rawRetail = pricingContext.retailByCrop.get(cropKey) || pricingContext.retailByFamily.get(family) || [];
+    const retailStats = removePriceAnomalies(rawRetail);
+    const retailAggregate = mean(retailStats.kept);
+
+    const rawWholesale = pricingContext.wholesaleByCrop.get(cropKey) || pricingContext.wholesaleByFamily.get(family) || [];
+    const wholesaleStats = removePriceAnomalies(rawWholesale);
+    const wholesaleFloor = wholesaleStats.kept.length
+      ? percentile([...wholesaleStats.kept].sort((a, b) => a - b), 0.2)
+      : 0;
+
+    const costFloor = pricingContext.floorByCrop.get(cropKey) || pricingContext.floorByFamily.get(family) || 0;
+    const floor = Math.max(Number(costFloor || 0), Number(wholesaleFloor || 0));
+
+    const baseWholesale = retailAggregate > 0
+      ? Math.max(floor, retailAggregate * skuFactor)
+      : Math.max(floor, Number(sku?.price_per_unit || 0));
+
+    const finalWholesale = Math.max(floor, baseWholesale * (1 - discountRate));
+    const priceUnit = inferPriceUnit(name, category, sku?.unit);
+
+    sku.base_wholesale_price = roundMoney(baseWholesale);
+    sku.final_wholesale_price = roundMoney(finalWholesale);
+    sku.floor_price = roundMoney(floor);
+    sku.retail_aggregate_price = roundMoney(retailAggregate);
+    sku.sku_factor = skuFactor;
+    sku.buyer_discount_rate = discountRate;
+    sku.retail_sample_size = rawRetail.length;
+    sku.retail_outliers_removed = retailStats.removedCount;
+    sku.price_per_unit = roundMoney(finalWholesale);
+    sku.unit = priceUnit;
+
+    for (const farm of (sku.farms || [])) {
+      farm.price_per_unit = sku.price_per_unit;
+      farm.unit = priceUnit;
+    }
+  }
+
+  return list;
+}
+
 const DELIVERY_WINDOWS = ['morning', 'afternoon', 'evening'];
 const DELIVERY_ZONE_RULES = {
   ZONE_A: { id: 'zone_a', fee: 8, min_order: 25 },
@@ -656,6 +943,10 @@ router.get('/inventory', async (req, res) => {
  */
 router.get('/catalog', async (req, res, next) => {
   try {
+    const buyer = await resolveOptionalBuyerFromRequest(req);
+    const discountProfile = await getBuyerRollingDiscountProfile(buyer?.id);
+    const pricingContext = await buildDynamicPricingContext();
+
     // Use network aggregation when env flag is set or DB is not ready.
     // Set WHOLESALE_CATALOG_MODE=network in production to use farm-network catalog;
     // omit or set to 'db' to use the database catalog path.
@@ -693,6 +984,8 @@ router.get('/catalog', async (req, res, next) => {
         });
       }
 
+      items = applyFormulaPricingToCatalogSkus(items, pricingContext, discountProfile);
+
       return res.json({
         status: 'ok',
         data: {
@@ -708,7 +1001,10 @@ router.get('/catalog', async (req, res, next) => {
         },
         meta: {
           mode: 'limited',
-          lastSync: req.app?.locals?.wholesaleNetworkLastSync || null
+          lastSync: req.app?.locals?.wholesaleNetworkLastSync || null,
+          buyer_discount_rate: discountProfile.rate,
+          buyer_rolling_average: discountProfile.rollingAverage,
+          pricing_formula: 'max(floor, max(floor, retail * sku_factor) * (1 - discount_rate))'
         }
       });
     }
@@ -931,7 +1227,23 @@ router.get('/catalog', async (req, res, next) => {
       existing.organic = existing.organic || Boolean(row.source_data?.organic);
     }
 
-    const skus = Array.from(skusById.values());
+    const skus = applyFormulaPricingToCatalogSkus(Array.from(skusById.values()), pricingContext, discountProfile);
+
+    const skuById = new Map(skus.map((sku) => [String(sku.sku_id), sku]));
+    const pricedItems = items.map((item) => {
+      const skuId = String(item.productId || item.name || item.id || '');
+      const pricedSku = skuById.get(skuId);
+      if (!pricedSku) return item;
+      return {
+        ...item,
+        wholesalePrice: Number(pricedSku.final_wholesale_price || item.wholesalePrice || 0),
+        baseWholesalePrice: Number(pricedSku.base_wholesale_price || 0),
+        floorPrice: Number(pricedSku.floor_price || 0),
+        retailAggregatePrice: Number(pricedSku.retail_aggregate_price || 0),
+        buyerDiscountRate: Number(pricedSku.buyer_discount_rate || 0),
+        unit: pricedSku.unit || item.unit
+      };
+    });
 
     res.json({
       status: 'ok',
@@ -939,7 +1251,7 @@ router.get('/catalog', async (req, res, next) => {
         skus
       },
       // Keep legacy fields for any existing callers
-      items,
+      items: pricedItems,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -954,6 +1266,16 @@ router.get('/catalog', async (req, res, next) => {
         organic,
         minQuantity,
         farmId
+      },
+      pricing: {
+        buyerDiscountRate: discountProfile.rate,
+        rollingAveragePurchase: discountProfile.rollingAverage,
+        rollingWindowDays: discountProfile.windowDays,
+        formula: {
+          step1: 'base = max(floor, retail * sku_factor)',
+          step2: 'final = max(floor, base * (1 - discount_rate))',
+          skuFactorDefault: getDefaultSkuFactor()
+        }
       }
     });
 

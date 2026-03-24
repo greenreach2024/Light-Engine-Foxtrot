@@ -31,6 +31,83 @@ function generateOfferId(crop) {
   return `OFFER-${date}-${cropCode}-${random}`;
 }
 
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function normalizeCropKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function inferPriceUnit(crop, fallback = 'oz') {
+  const text = String(crop || '').toLowerCase();
+  if (/berry|strawberry|raspberry|blackberry|blueberry/.test(text)) return 'pint';
+  if (/tomato/.test(text) && !/cherry tomato|grape tomato/.test(text)) return 'unit';
+  if (/cherry tomato|grape tomato|leafy|lettuce|kale|arugula|spinach|greens|herb|basil|cilantro|parsley|mint/.test(text)) {
+    return 'oz';
+  }
+  return fallback;
+}
+
+function percentile(sortedValues, p) {
+  if (!Array.isArray(sortedValues) || sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const idx = (sortedValues.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedValues[lo];
+  const w = idx - lo;
+  return sortedValues[lo] * (1 - w) + sortedValues[hi] * w;
+}
+
+function removeAnomalies(values) {
+  const clean = (Array.isArray(values) ? values : [])
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  if (clean.length < 4) return { kept: clean, removedCount: 0 };
+
+  const sorted = [...clean].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = Math.max(0, q3 - q1);
+  if (iqr === 0) return { kept: sorted, removedCount: 0 };
+
+  const lower = q1 - (1.5 * iqr);
+  const upper = q3 + (1.5 * iqr);
+  const kept = sorted.filter((v) => v >= lower && v <= upper);
+  if (kept.length < 3) return { kept: sorted, removedCount: 0 };
+  return { kept, removedCount: Math.max(0, sorted.length - kept.length) };
+}
+
+async function getRetailAggregateForCrop(crop) {
+  const normalized = normalizeCropKey(crop);
+  if (!normalized) return { average: 0, sampleCount: 0, removedCount: 0 };
+
+  const result = await query(
+    `SELECT retail_price
+       FROM farm_inventory
+      WHERE COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+        AND COALESCE(retail_price, 0) > 0
+        AND product_name ILIKE $1`,
+    [`%${crop}%`]
+  );
+
+  const values = result.rows.map((row) => Number(row.retail_price || 0));
+  const filtered = removeAnomalies(values);
+  const avg = filtered.kept.length
+    ? (filtered.kept.reduce((sum, v) => sum + v, 0) / filtered.kept.length)
+    : 0;
+
+  return {
+    average: roundMoney(avg),
+    sampleCount: values.length,
+    removedCount: filtered.removedCount
+  };
+}
+
 /**
  * Calculate acceptance rate for an offer
  */
@@ -273,7 +350,10 @@ router.post('/set-wholesale', async (req, res) => {
     const {
       crop,
       wholesale_price,
-      unit = 'lb',
+      unit,
+      floor_price,
+      sku_factor,
+      use_formula = true,
       reasoning,
       confidence,
       predicted_acceptance,
@@ -282,22 +362,55 @@ router.post('/set-wholesale', async (req, res) => {
       tier = 'demand-based'
     } = req.body;
     
-    if (!crop || !wholesale_price) {
+    if (!crop) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: crop, wholesale_price'
+        error: 'Missing required field: crop'
       });
     }
+
+    const inferredUnit = String(unit || inferPriceUnit(crop, 'oz')).toLowerCase();
+    const skuFactor = Math.min(0.75, Math.max(0.5, Number(sku_factor || 0.65)));
     
     // BLOCKING CONDITION #1: Cost-basis protection
     const costData = await getMaxFarmCost(crop);
+    const costFloor = costData ? (Number(costData.max_cost || 0) * 1.20) : 0;
+    const manualFloor = Number(floor_price || 0);
+    const floor = Math.max(costFloor, manualFloor);
+
+    let computedWholesale = Number(wholesale_price || 0);
+    let retailAggregate = 0;
+    let retailSampleCount = 0;
+    let outliersRemoved = 0;
+
+    if (use_formula) {
+      const retailStats = await getRetailAggregateForCrop(crop);
+      retailAggregate = Number(retailStats.average || 0);
+      retailSampleCount = Number(retailStats.sampleCount || 0);
+      outliersRemoved = Number(retailStats.removedCount || 0);
+
+      if (retailAggregate > 0) {
+        computedWholesale = Math.max(floor, retailAggregate * skuFactor);
+      }
+    }
+
+    if (!(computedWholesale > 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unable to compute wholesale price',
+        message: 'Provide a valid wholesale price or ensure farm retail pricing exists for this crop.'
+      });
+    }
+
+    computedWholesale = roundMoney(computedWholesale);
+
     if (costData) {
-      const minPrice = costData.max_cost * 1.20; // Cost + 20% margin
-      if (wholesale_price < minPrice) {
+      const minPrice = costFloor;
+      if (computedWholesale < minPrice) {
         return res.status(400).json({
           success: false,
           error: 'Price below cost basis',
-          message: `Wholesale price $${wholesale_price} is below minimum $${minPrice.toFixed(2)} (highest farm cost $${costData.max_cost} + 20% margin)`,
+          message: `Wholesale price $${computedWholesale} is below minimum $${minPrice.toFixed(2)} (highest farm cost $${costData.max_cost} + 20% margin)`,
           min_price: minPrice,
           max_farm_cost: costData.max_cost
         });
@@ -316,13 +429,31 @@ router.post('/set-wholesale', async (req, res) => {
       INSERT INTO pricing_offers (
         offer_id, crop, wholesale_price, unit, reasoning, confidence,
         predicted_acceptance, effective_date, expires_at, status,
-        created_by, tier
+        created_by, tier, metadata
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10, $11, $12::jsonb)
       RETURNING *
     `, [
-      offer_id, crop, wholesale_price, unit, reasoning, confidence,
-      predicted_acceptance, effective_date, expires_at, created_by, tier
+      offer_id,
+      crop,
+      computedWholesale,
+      inferredUnit,
+      reasoning,
+      confidence,
+      predicted_acceptance,
+      effective_date,
+      expires_at,
+      created_by,
+      tier,
+      JSON.stringify({
+        pricingModel: 'retail_aggregate_formula',
+        formula: 'max(floor, retail * sku_factor)',
+        floor,
+        skuFactor,
+        retailAggregate,
+        retailSampleCount,
+        outliersRemoved
+      })
     ]);
     
     // Get list of farms that grow this crop (to send offers to)
@@ -339,6 +470,15 @@ router.post('/set-wholesale', async (req, res) => {
       success: true,
       offer: result.rows[0],
       farms_notified: farms_count,
+      pricing_summary: {
+        unit: inferredUnit,
+        floor: roundMoney(floor),
+        skuFactor,
+        retailAggregate,
+        computedWholesale,
+        retailSampleCount,
+        outliersRemoved
+      },
       message: `Price offer sent to ${farms_count} farms growing ${crop}`
     });
   } catch (error) {

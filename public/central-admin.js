@@ -3,6 +3,177 @@
  * Enterprise-grade farm management and monitoring system
  */
 
+// =============================================================================
+// DEBUG TRACKING SYSTEM
+// Tracks all user navigation, clicks, API calls, and errors
+// =============================================================================
+
+const DEBUG_TRACKING = {
+    enabled: false, // Disabled to reduce API load
+    sessionId: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+    events: [],
+    sendToServerInterval: null,
+    
+    log(event) {
+        if (!this.enabled) return;
+        
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            timestamp,
+            sessionId: this.sessionId,
+            ...event
+        };
+        
+        this.events.push(logEntry);
+        
+        // Console log with prominent styling
+        console.log('%c[DEBUG TRACK] ' + event.type, 
+            'background: #FF4500; color: white; font-weight: bold; padding: 2px 5px; border-radius: 3px',
+            logEntry
+        );
+        
+        // Keep only last 100 events in memory
+        if (this.events.length > 100) {
+            this.events = this.events.slice(-100);
+        }
+        
+        // Start server sync if not already running
+        if (!this.sendToServerInterval) {
+            this.startServerSync();
+        }
+    },
+    
+    // Send events to server for terminal monitoring
+    async sendToServer(events) {
+        if (!events || events.length === 0) return;
+        
+        try {
+            await fetch(`${API_BASE}/api/debug/track`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: this.sessionId,
+                    events
+                })
+            });
+        } catch (error) {
+            // Silent fail - don't break the app if server logging fails
+            console.debug('Failed to send debug events to server:', error.message);
+        }
+    },
+    
+    // Start periodic sync to server (every 5 seconds)
+    startServerSync() {
+        if (this.sendToServerInterval) return;
+        
+        let lastSentIndex = 0;
+        
+        this.sendToServerInterval = setInterval(() => {
+            if (this.events.length > lastSentIndex) {
+                const newEvents = this.events.slice(lastSentIndex);
+                this.sendToServer(newEvents);
+                lastSentIndex = this.events.length;
+            }
+        }, 5000); // Send every 5 seconds
+    },
+    
+    stopServerSync() {
+        if (this.sendToServerInterval) {
+            clearInterval(this.sendToServerInterval);
+            this.sendToServerInterval = null;
+        }
+    },
+    
+    trackPageView(viewName, context = {}) {
+        this.log({
+            type: 'PAGE_VIEW',
+            view: viewName,
+            url: window.location.href,
+            context
+        });
+    },
+    
+    trackClick(elementId, elementType, context = {}) {
+        this.log({
+            type: 'CLICK',
+            elementId,
+            elementType,
+            context
+        });
+    },
+    
+    trackAPICall(method, url, status, responseTime, error = null) {
+        this.log({
+            type: 'API_CALL',
+            method,
+            url,
+            status,
+            responseTime: responseTime + 'ms',
+            error
+        });
+    },
+    
+    trackError(errorType, message, context = {}) {
+        this.log({
+            type: 'ERROR',
+            errorType,
+            message,
+            context,
+            stack: new Error().stack
+        });
+    },
+    
+    trackNavigation(from, to) {
+        this.log({
+            type: 'NAVIGATION',
+            from,
+            to
+        });
+    },
+    
+    getRecentEvents(count = 20) {
+        return this.events.slice(-count);
+    },
+    
+    exportSession() {
+        return {
+            sessionId: this.sessionId,
+            eventCount: this.events.length,
+            events: this.events
+        };
+    }
+};
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    DEBUG_TRACKING.trackError('GLOBAL_ERROR', event.message, {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno
+    });
+});
+
+// Unhandled promise rejection handler
+window.addEventListener('unhandledrejection', (event) => {
+    DEBUG_TRACKING.trackError('UNHANDLED_REJECTION', event.reason?.message || event.reason, {
+        promise: event.promise
+    });
+});
+
+// Track initial page load
+DEBUG_TRACKING.log({
+    type: 'SESSION_START',
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`
+});
+
+// =============================================================================
+// END DEBUG TRACKING SYSTEM
+// =============================================================================
+
 // API_BASE is declared globally in GR-central-admin.html
 // No need to redeclare it here to avoid duplicate variable error
 
@@ -198,8 +369,18 @@ window.handleChangePassword = handleChangePassword;
 
 // Make authenticated API request
 async function authenticatedFetch(url, options = {}) {
+    const startTime = Date.now();
     const token = checkAuth();
-    if (!token) return null;
+    if (!token) {
+        DEBUG_TRACKING.trackError('AUTH_ERROR', 'No token found for authenticated request', { url });
+        return null;
+    }
+    
+    DEBUG_TRACKING.log({
+        type: 'API_REQUEST_START',
+        method: options.method || 'GET',
+        url
+    });
     
     const headers = {
         ...options.headers,
@@ -208,9 +389,33 @@ async function authenticatedFetch(url, options = {}) {
     
     try {
         const response = await fetch(url, { ...options, headers });
+        const responseTime = Date.now() - startTime;
         
-        // Handle 401 Unauthorized - session expired
+        DEBUG_TRACKING.trackAPICall(
+            options.method || 'GET',
+            url,
+            response.status,
+            responseTime,
+            response.ok ? null : `HTTP ${response.status}`
+        );
+        
+        // Handle 401 Unauthorized - session expired.
+        // Only force logout for admin API endpoints (/api/admin/).
+        // Non-admin endpoints (sync, ai-insights, market-intelligence, etc.)
+        // may legitimately return 401 for admin JWT and should not kill the session.
         if (response.status === 401) {
+            const isAdminEndpoint = typeof url === 'string' && url.includes('/api/admin/');
+            if (!isAdminEndpoint) {
+                DEBUG_TRACKING.trackError('NON_ADMIN_AUTH_MISMATCH', `401 from non-admin endpoint (non-fatal)`, {
+                    url,
+                    status: response.status
+                });
+                return response;
+            }
+            DEBUG_TRACKING.trackError('AUTH_ERROR', 'Token expired or invalid (401)', { 
+                url, 
+                status: response.status 
+            });
             console.warn('Authentication failed, redirecting to login');
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_email');
@@ -222,6 +427,14 @@ async function authenticatedFetch(url, options = {}) {
         
         return response;
     } catch (error) {
+        const responseTime = Date.now() - startTime;
+        DEBUG_TRACKING.trackAPICall(
+            options.method || 'GET',
+            url,
+            'ERROR',
+            responseTime,
+            error.message
+        );
         console.error('Authenticated fetch error:', error);
         throw error;
     }
@@ -311,6 +524,173 @@ function closeInfoCard() {
 }
 
 window.closeInfoCard = closeInfoCard;
+
+/**
+ * Show a reusable detail modal (overlay + card) with key/value rows.
+ * Uses the same visual pattern as the info-card system.
+ *
+ * @param {string} title - Modal title
+ * @param {Array<{label: string, value: any}>} fields - Key/value pairs to display
+ */
+function showDetailModal(title, fields) {
+    // Remove any existing detail modal
+    const prev = document.getElementById('detailModal');
+    const prevOv = document.getElementById('detailModalOverlay');
+    if (prev) prev.remove();
+    if (prevOv) prevOv.remove();
+
+    const rows = fields.map(f =>
+        `<tr><td style="padding:6px 12px 6px 0;font-weight:600;white-space:nowrap;color:#a0aec0;">${f.label}</td>` +
+        `<td style="padding:6px 0;color:#e2e8f0;">${f.value ?? '-'}</td></tr>`
+    ).join('');
+
+    const html = `
+        <div id="detailModalOverlay" onclick="closeDetailModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;"></div>
+        <div id="detailModal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a202c;border:1px solid #2d3748;border-radius:12px;padding:24px 28px;z-index:9999;min-width:340px;max-width:520px;box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;color:#63b3ed;font-size:1.1rem;">${title}</h3>
+                <button onclick="closeDetailModal()" style="background:none;border:none;color:#a0aec0;font-size:1.3rem;cursor:pointer;padding:0 4px;">&times;</button>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">${rows}</table>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeDetailModal() {
+    const m = document.getElementById('detailModal');
+    const o = document.getElementById('detailModalOverlay');
+    if (m) m.remove();
+    if (o) o.remove();
+}
+
+window.showDetailModal = showDetailModal;
+window.closeDetailModal = closeDetailModal;
+
+function showConfirmModal(options = {}) {
+    const {
+        title = 'Confirm Action',
+        message = 'Are you sure you want to continue?',
+        submessage = '',
+        confirmText = 'Confirm',
+        tone = 'danger'
+    } = options;
+
+    const modal = document.getElementById('confirm-action-modal');
+    const titleEl = document.getElementById('confirm-action-title');
+    const messageEl = document.getElementById('confirm-action-message');
+    const submessageEl = document.getElementById('confirm-action-submessage');
+    const confirmBtn = document.getElementById('confirm-action-confirm-btn');
+
+    if (!modal || !titleEl || !messageEl || !submessageEl || !confirmBtn) {
+        return Promise.resolve(window.confirm(message));
+    }
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+
+    if (submessage) {
+        submessageEl.textContent = submessage;
+        submessageEl.style.display = 'block';
+    } else {
+        submessageEl.textContent = '';
+        submessageEl.style.display = 'none';
+    }
+
+    confirmBtn.classList.remove('btn-danger', 'btn-primary');
+    confirmBtn.classList.add(tone === 'primary' ? 'btn-primary' : 'btn-danger');
+
+    modal.style.display = 'flex';
+
+    return new Promise((resolve) => {
+        confirmModalResolver = resolve;
+    });
+}
+
+function closeConfirmActionModal() {
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    if (confirmModalResolver) {
+        const resolve = confirmModalResolver;
+        confirmModalResolver = null;
+        resolve(false);
+    }
+}
+
+function confirmActionModalApproved() {
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+
+    if (confirmModalResolver) {
+        const resolve = confirmModalResolver;
+        confirmModalResolver = null;
+        resolve(true);
+    }
+}
+
+window.showConfirmModal = showConfirmModal;
+window.closeConfirmActionModal = closeConfirmActionModal;
+window.confirmActionModalApproved = confirmActionModalApproved;
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const modal = document.getElementById('confirm-action-modal');
+    if (modal && modal.style.display === 'flex') {
+        closeConfirmActionModal();
+    }
+});
+
+/**
+ * Data Normalization Functions
+ * 
+ * These functions handle field variations in zone and group data to ensure
+ * consistent access across different data formats.
+ * 
+ * NOTE: This is duplicated from lib/data-adapters.js due to HTML <script> tag
+ * limitations (cannot import ES6 modules without bundler).
+ * 
+ * TODO: When build system is implemented, import from lib/data-adapters.js instead
+ * 
+ * Pattern from: farm-summary.html (existing precedent)
+ * See: DATA_FORMAT_STANDARDS.md
+ * 
+ * @see lib/data-adapters.js - Canonical implementation
+ */
+
+/**
+ * Normalize zone data to handle field variations
+ * @param {Object} zone - Raw zone object
+ * @returns {Object|null} Normalized zone object with consistent field names
+ */
+function normalizeZone(zone) {
+    if (!zone) return null;
+    return {
+        id: zone.id || zone.zone_id || zone.zoneId || 'unknown',
+        name: zone.name || zone.zone_name || zone.id || 'Unnamed Zone',
+        ...zone
+    };
+}
+
+/**
+ * Normalize group data to handle field variations
+ * @param {Object} group - Raw group object
+ * @returns {Object|null} Normalized group object with consistent field names
+ */
+function normalizeGroup(group) {
+    if (!group) return null;
+    return {
+        id: group.id,
+        name: group.name,
+        zone: group.zone || group.zone_id || group.zoneId || group.location,
+        ...group
+    };
+}
 
 // Info Card Content for Each Page
 const INFO_CARDS = {
@@ -402,50 +782,6 @@ const INFO_CARDS = {
             }
         ]
     },
-    'wholesale-buyers': {
-        title: 'Wholesale Buyer Management',
-        subtitle: 'Manage restaurants, retailers, and distributors purchasing from the network',
-        sections: [
-            {
-                title: 'What This Page Shows',
-                content: '<ul><li>Complete directory of all registered wholesale buyers</li><li>Buyer profiles: business type, order history, subscription status</li><li>Active orders, delivery schedules, and fulfillment tracking</li><li>Payment status, credit limits, and billing information</li></ul>'
-            },
-            {
-                title: 'Why We Monitor This',
-                content: 'Buyer management is critical to the GreenReach wholesale marketplace success. Staff use this to support buyer onboarding, troubleshoot order issues, manage account relationships, and ensure smooth marketplace operations. Understanding buyer behavior helps optimize the Light Engine network to meet market demand.'
-            },
-            {
-                title: 'What To Look For',
-                content: '<ul><li>New buyer registrations needing onboarding assistance</li><li>Payment issues or expired payment methods</li><li>Large orders requiring special fulfillment coordination</li><li>Inactive buyers who may need re-engagement</li></ul>'
-            },
-            {
-                title: 'Common Actions',
-                content: 'Assist new buyers with first orders and platform training. Resolve payment and billing issues. Coordinate with farms for special order fulfillment. Track buyer satisfaction and marketplace engagement metrics.'
-            }
-        ]
-    },
-    'wholesale-buyer': {
-        title: 'Buyer Portal View',
-        subtitle: 'Experience the marketplace from the buyer perspective',
-        sections: [
-            {
-                title: 'What This Page Shows',
-                content: '<ul><li>The buyer-facing GreenReach Wholesale marketplace interface</li><li>Product catalog, pricing, and availability from network farms</li><li>Shopping cart, checkout flow, and order management</li><li>Delivery scheduling and order tracking</li></ul>'
-            },
-            {
-                title: 'Why We Monitor This',
-                content: 'Viewing the buyer portal helps GreenReach staff understand the customer experience, troubleshoot reported issues, and provide effective support. Staff can walk buyers through the ordering process, verify pricing and product availability, and ensure the marketplace operates smoothly. This view connects to real-time Light Engine inventory data across all farms.'
-            },
-            {
-                title: 'What To Look For',
-                content: '<ul><li>UI/UX issues that may confuse buyers or block orders</li><li>Pricing or inventory discrepancies from farm data</li><li>Checkout flow problems or payment errors</li><li>Delivery date or fulfillment coordination issues</li></ul>'
-            },
-            {
-                title: 'Common Actions',
-                content: 'Test ordering workflows to verify functionality. Assist buyers who report problems by replicating their experience. Coordinate with engineering to fix bugs or improve usability. Verify that Light Engine inventory syncs correctly to marketplace.'
-            }
-        ]
-    },
     'analytics': {
         title: 'AI Insights & Predictive Analytics',
         subtitle: 'Machine learning and artificial intelligence powering the Light Engine network',
@@ -465,6 +801,78 @@ const INFO_CARDS = {
             {
                 title: 'Common Actions',
                 content: 'Share AI-generated insights with farms to help them optimize operations. Investigate high-confidence failure predictions and coordinate preventive maintenance. Document AI accuracy to demonstrate Light Engine value. Use pattern recognition to identify best practices and share across network.'
+            }
+        ]
+    },
+    'ai-rules': {
+        title: 'AI Rules & Safety Policy',
+        subtitle: 'Guardrails that keep recommendations safe, practical, and adaptive',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Authoritative policy rules for AI recommendations</li><li>Priority, status, and review requirements for each rule</li><li>Operational guardrails for high-humidity and limited-control rooms</li><li>Recommendation format requirements for consistent outputs</li></ul>'
+            },
+            {
+                title: 'Why This Matters',
+                content: 'This rulebook ensures AI recommendations remain safe and useful in non-ideal rooms. It prevents unsafe automation, enforces sensor sanity checks, and documents tradeoffs so staff can trust and audit AI guidance.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Review rules after incidents, add new guardrails when edge cases are discovered, and flag high-risk actions for human approval. Keep the rulebook current as equipment capabilities change.'
+            }
+        ]
+    },
+    'ai-reference': {
+        title: 'AI Reference Sites',
+        subtitle: 'Curated policy, regulatory, and safety references',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Links to AI governance references and policy sources</li><li>Regulatory guidance for compliance and audit trails</li><li>Safety and risk management frameworks</li></ul>'
+            },
+            {
+                title: 'Why This Matters',
+                content: 'A shared reference library keeps GreenReach aligned with evolving AI regulations and best practices. It supports consistent policy updates and faster audits.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Add new regulations as they emerge and remove outdated sources. Use this list when updating AI rules and staff training.'
+            }
+        ]
+    },
+    'grant-summary': {
+        title: 'Grant Summary',
+        subtitle: 'Portfolio-level analytics for the grant wizard program',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Total grant users and new users per month</li><li>Total grants supported and new grants this month</li><li>Average wizard completion and completion counts</li><li>Wizard pages ranked by time spent and view frequency</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'These metrics help prioritize improvements in the grant wizard, identify drop-off points, and prove program impact to partners and funders.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Refine steps with high drop-off, optimize guidance where time spent is highest, and report monthly adoption trends.'
+            }
+        ]
+    },
+    'grant-users': {
+        title: 'Grant Users',
+        subtitle: 'Manage profiles and support grant applicants',
+        sections: [
+            {
+                title: 'What This Page Shows',
+                content: '<ul><li>Grant user profiles and business details</li><li>Last login and last active wizard tab</li><li>Email updates and account actions</li></ul>'
+            },
+            {
+                title: 'Why We Monitor This',
+                content: 'Grant applicants often need support. This view helps staff resolve login issues, update contact info, and track where users are in the process.'
+            },
+            {
+                title: 'Common Actions',
+                content: 'Update email addresses, check last active tab for support calls, and soft-delete users upon request.'
             }
         ]
     },
@@ -675,6 +1083,7 @@ let roomsData = [];
 let devicesData = [];
 let inventoryData = [];
 let recipesData = [];
+let confirmModalResolver = null;
 
 // Navigation context state
 let navigationContext = {
@@ -712,8 +1121,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userInfoEl = document.getElementById('admin-user-info');
     if (userInfoEl && (adminName || adminEmail)) {
         userInfoEl.innerHTML = `
-            <div style="font-weight: 500; color: #e5e7eb;">${adminName || 'Admin'}</div>
-            <div style="font-size: 0.75rem; color: #9ca3af;">${adminEmail || ''}</div>
+            <div class="admin-user-name">${adminName || 'Admin'}</div>
+            <div class="admin-user-email">${adminEmail || ''}</div>
         `;
         console.log(`Logged in as: ${adminName || adminEmail}`);
     }
@@ -880,16 +1289,53 @@ function renderContextualSidebar() {
                     title: 'Wholesale',
                     items: [
                         { label: 'Admin Dashboard', view: 'wholesale-admin' },
-                        { label: 'Buyers', view: 'wholesale-buyers' },
-                        { label: 'Buyer Portal', view: 'wholesale-buyer' }
+                        { label: 'Pricing & Products', view: 'pricing-management' },
+                        { label: 'Delivery Services', view: 'delivery-management' }
+                    ]
+                },
+                {
+                    title: 'Procurement',
+                    items: [
+                        { label: 'Catalog Management', view: 'procurement-catalog' },
+                        { label: 'Supplier Management', view: 'procurement-suppliers' },
+                        { label: 'Revenue', view: 'procurement-revenue' }
                     ]
                 },
                 {
                     title: 'Analytics',
                     items: [
                         { label: 'AI Insights', view: 'analytics' },
+                        { label: 'Market Intelligence', view: 'market-intelligence' },
                         { label: 'Energy', view: 'energy' },
                         { label: 'Harvest Forecast', view: 'harvest' }
+                    ]
+                },
+                {
+                    title: 'Grant Intelligence',
+                    items: [
+                        { label: 'Grant Summary', view: 'grant-summary' },
+                        { label: 'Grant Users', view: 'grant-users' }
+                    ]
+                },
+                {
+                    title: 'Finance',
+                    items: [
+                        { label: 'Network Accounting', view: 'accounting' }
+                    ]
+                },
+                {
+                    title: 'Marketing',
+                    items: [
+                        { label: 'Marketing AI', view: 'marketing-ai' }
+                    ]
+                },
+                {
+                    title: 'AI Governance',
+                    items: [
+                        { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
+                        { label: 'AI Rules', view: 'ai-rules' },
+                        { label: 'AI Reference Sites', view: 'ai-reference' },
+                        { label: 'AI Agent Monitor', view: 'ai-monitoring' }
                     ]
                 },
                 {
@@ -1167,7 +1613,8 @@ async function loadDashboardData() {
         await Promise.all([
             loadKPIs(),
             loadFarms(),
-            checkAlerts()
+            checkAlerts(),
+            loadDeliveryReadiness()
         ]);
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -1213,6 +1660,39 @@ async function loadKPIs() {
         document.getElementById('kpi-plants').textContent = kpis.plants.toLocaleString();
         document.getElementById('kpi-plants-change').textContent = '';
         
+        // Add data freshness indicator
+        if (data.dataFreshness) {
+            const staleMins = data.dataFreshness.staleFarms;
+            if (staleMins !== null && staleMins !== undefined) {
+                let freshnessText = '';
+                let freshnessColor = '';
+                
+                if (staleMins < 10) {
+                    freshnessText = 'Fresh';
+                    freshnessColor = 'var(--accent-green)';
+                } else if (staleMins < 60) {
+                    const minsAgo = Math.floor(staleMins);
+                    freshnessText = `${minsAgo}m ago`;
+                    freshnessColor = 'var(--accent-yellow)';
+                } else if (staleMins < 1440) {  // < 24 hours
+                    const hoursAgo = Math.floor(staleMins / 60);
+                    freshnessText = `${hoursAgo}h ago`;
+                    freshnessColor = 'var(--accent-red)';
+                } else {
+                    const daysAgo = Math.floor(staleMins / 1440);
+                    freshnessText = `${daysAgo}d ago`;
+                    freshnessColor = 'var(--accent-red)';
+                }
+                
+                // Update the mode indicator to show freshness
+                const farmsChangeEl = document.getElementById('kpi-farms-change');
+                if (farmsChangeEl) {
+                    farmsChangeEl.innerHTML = `<span style="color: ${freshnessColor}">● ${freshnessText}</span>`;
+                    farmsChangeEl.title = `Last sync: ${new Date(data.dataFreshness.newestSync).toLocaleString()}`;
+                }
+            }
+        }
+        
         // Hide energy and alerts cards for now (no data source yet)
         const energyCard = document.getElementById('kpi-energy')?.closest('.kpi-card');
         const alertsCard = document.getElementById('kpi-alerts')?.closest('.kpi-card');
@@ -1220,6 +1700,58 @@ async function loadKPIs() {
         if (alertsCard) alertsCard.style.display = 'none';
     } catch (error) {
         console.error('Error loading KPIs:', error);
+    }
+}
+
+/**
+ * Load delivery readiness data for the overview dashboard card
+ */
+async function loadDeliveryReadiness() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/readiness`);
+        if (!response.ok) {
+            console.warn('[Delivery Readiness] API returned', response.status);
+            return;
+        }
+        const data = await response.json();
+        if (!data.success) return;
+
+        const { farms, summary } = data;
+
+        // Update summary counts
+        const readyEl = document.getElementById('dr-ready-count');
+        const enabledEl = document.getElementById('dr-enabled-count');
+        const totalEl = document.getElementById('dr-total-count');
+        if (readyEl) readyEl.textContent = summary.ready || 0;
+        if (enabledEl) enabledEl.textContent = summary.enabled || 0;
+        if (totalEl) totalEl.textContent = summary.total || 0;
+
+        // Render farm rows
+        const tbody = document.getElementById('dr-farm-rows');
+        if (!tbody) return;
+
+        if (farms.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No farms have configured delivery yet</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = farms.map(f => {
+            const statusBadge = f.ready
+                ? '<span style="background: rgba(16,185,129,0.15); color: var(--accent-green); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Ready</span>'
+                : f.enabled
+                    ? '<span style="background: rgba(245,158,11,0.15); color: var(--accent-yellow); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Partial</span>'
+                    : '<span style="background: rgba(107,114,128,0.15); color: var(--text-muted); padding: 2px 8px; border-radius: 4px; font-size: 11px;">Off</span>';
+            return `<tr>
+                <td style="font-weight: 500;">${f.farm_id}</td>
+                <td>${statusBadge}</td>
+                <td>${f.active_windows}</td>
+                <td>${f.active_zones}</td>
+                <td>$${f.base_fee.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+    } catch (error) {
+        console.warn('[Delivery Readiness] Error loading:', error);
+        // Non-critical — leave card in loading state, don't block dashboard
     }
 }
 
@@ -1354,11 +1886,6 @@ function renderFarmsTable(farms) {
     }
     
     tbody.innerHTML = farms.map(farm => {
-        // Format last login/update from database
-        const lastUpdate = farm.last_login || farm.updated_at
-            ? new Date(farm.last_login || farm.updated_at).toLocaleString()
-            : 'Never';
-        
         // Use database fields: farm_id, name, email, status, tier, user_count
         const email = farm.email || '';
         const farmId = farm.farm_id || farm.farmId || 'unknown';
@@ -1375,10 +1902,11 @@ function renderFarmsTable(farms) {
             <td><span class="badge badge-${getStatusBadgeClass(status)}">${status}</span></td>
             <td><span class="badge badge-${tier === 'enterprise' ? 'success' : 'info'}">${tier}</span></td>
             <td>${farm.user_count || 0}</td>
-            <td>${lastUpdate}</td>
             <td>
                 <button class="btn" onclick="drillToFarm('${farmId}')">View</button>
-                ${email ? `<button class="btn" style="background: var(--accent-red); margin-left: 5px;" onclick="deleteFarm('${email}', '${farm.name}')">Delete</button>` : ''}
+            </td>
+            <td>
+                <button class="btn btn-danger" onclick="deleteFarm('${farmId}', '${farm.name}')">Delete</button>
             </td>
         </tr>
         `;
@@ -1386,26 +1914,37 @@ function renderFarmsTable(farms) {
 }
 
 /**
- * Delete all farms and users for an email address
+ * Delete a farm by farm ID (requires admin password)
  */
-async function deleteFarm(email, farmName) {
-    if (!confirm(`⚠️ Delete ALL farms and users for ${email}?\n\nFarm: ${farmName}\n\nThis action cannot be undone!`)) {
+async function deleteFarm(farmId, farmName) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Farm',
+        message: `Delete farm ${farmId}?`,
+        submessage: `Farm: ${farmName}\n\nThis action cannot be undone.`,
+        confirmText: 'Delete Farm'
+    });
+    if (!confirmed) {
         return;
     }
-    
-    if (!confirm(`Are you absolutely sure? Type the email to confirm deletion:\n\n${email}`)) {
+
+    const password = prompt('Enter your GreenReach admin password to confirm deletion:');
+    if (!password) {
         return;
     }
     
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(email)}`, {
-            method: 'DELETE'
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${encodeURIComponent(farmId)}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password })
         });
         
         const data = await response.json();
         
         if (response.ok && data.status === 'success') {
-            alert(`✅ Successfully deleted:\n\n${data.deleted.farms} farm(s)\n${data.deleted.users} user(s)\n\nFarm IDs: ${data.farmIds.join(', ')}`);
+            alert(`✅ Successfully deleted:\n\n${data.deleted.farms} farm(s)\n\nFarm IDs: ${data.farmIds.join(', ')}`);
             // Reload farms list
             await loadFarms();
         } else {
@@ -1478,34 +2017,90 @@ async function checkAlerts() {
  */
 async function viewFarmDetail(farmId) {
     currentFarmId = farmId;
+    DEBUG_TRACKING.trackClick('viewFarmDetail', 'function', { farmId });
+    console.log('[FarmDetail] ===== VIEWING FARM =====');
+    console.log('[FarmDetail] Farm ID:', farmId);
+    
+    // Set navigation context to farm level and update sidebar
+    navigationContext = { 
+        level: 'farm', 
+        farmId, 
+        roomId: null, 
+        zoneId: null, 
+        groupId: null, 
+        deviceId: null 
+    };
+    renderContextualSidebar();
+    updateBreadcrumb();
     
     try {
         // Fetch detailed farm data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        const url = `${API_BASE}/api/admin/farms/${farmId}`;
+        console.log('[FarmDetail] Fetching:', url);
+        const response = await authenticatedFetch(url);
+        console.log('[FarmDetail] Response status:', response.status, response.ok);
         if (!response.ok) {
-            console.error('Failed to load farm details:', response.status);
+            console.error('[FarmDetail] ERROR: Failed to load farm details:', response.status);
+            const errorText = await response.text();
+            console.error('[FarmDetail] ERROR Response:', errorText);
+            DEBUG_TRACKING.trackError('FARM_DETAIL_LOAD_FAILED', `Failed to load farm ${farmId}`, {
+                status: response.status,
+                errorText
+            });
             alert('Unable to load farm details. Please try again.');
             return;
         }
         
-        const farm = await response.json();
-        if (!farm || farm.error) {
-            console.error('Farm not found:', farmId, farm);
+        const payload = await response.json();
+        console.log('[FarmDetail] Raw payload received:', JSON.stringify(payload, null, 2));
+        const farm = payload?.farm || payload;
+        if (!farm || payload?.error || payload?.success === false) {
+            console.error('[FarmDetail] ERROR: Farm not found or invalid payload:', farmId, payload);
             alert('Farm not found or unavailable.');
             return;
         }
+        console.log('[FarmDetail] Parsed farm object:', farm);
+        console.log('[FarmDetail] Farm properties:', {
+            name: farm.name,
+            farmId: farm.farmId,
+            status: farm.status,
+            rooms: farm.rooms,
+            zones: farm.zones,
+            environmental: farm.environmental
+        });
     
         // Update breadcrumb and header
-        document.getElementById('farm-detail-name').textContent = farm.name || farmId;
-        document.getElementById('farm-detail-title').textContent = farm.name || farmId;
-        document.getElementById('farm-detail-id').textContent = farmId;
+        console.log('[FarmDetail] Updating header elements...');
+        const nameEl = document.getElementById('farm-detail-name');
+        const titleEl = document.getElementById('farm-detail-title');
+        const idEl = document.getElementById('farm-detail-id');
+        
+        if (nameEl) nameEl.textContent = farm.name || farmId;
+        if (titleEl) titleEl.textContent = farm.name || farmId;
+        if (idEl) idEl.textContent = farmId;
+        
+        console.log('[FarmDetail] Header updated:', {
+            name: farm.name || farmId,
+            id: farmId
+        });
         
         // Hide overview, show detail
-        document.getElementById('overview-view').style.display = 'none';
-        document.getElementById('farm-detail-view').style.display = 'block';
+        console.log('[FarmDetail] Switching views...');
+        const overviewView = document.getElementById('overview-view');
+        const detailView = document.getElementById('farm-detail-view');
+        
+        if (overviewView) overviewView.style.display = 'none';
+        if (detailView) {
+            detailView.style.display = 'block';
+            console.log('[FarmDetail] Detail view is now visible');
+        } else {
+            console.error('[FarmDetail] ERROR: farm-detail-view element not found!');
+        }
         
         // Load farm details with the fetched farm data
+        console.log('[FarmDetail] Starting loadFarmDetails...');
         await loadFarmDetails(farmId, farm);
+        console.log('[FarmDetail] loadFarmDetails complete');
     } catch (error) {
         console.error('Error loading farm detail:', error);
         alert('Error loading farm details. Please check the console.');
@@ -1548,24 +2143,66 @@ async function resolveFarmDevices(farmId, farm) {
     try {
         let response;
         try {
-            response = await fetch(`${API_BASE}/api/sync/${farmId}/devices`);
-            if (!response.ok) throw new Error('No public devices endpoint');
-        } catch (err) {
             response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+            if (!response || !response.ok) throw new Error('No admin devices endpoint');
+        } catch (err) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
         }
         if (!response || !response.ok) return [];
         const data = await response.json();
-        return Array.isArray(data.devices) ? data.devices : [];
+        const normalized = normalizeDeviceList(data);
+        if (normalized.length > 0) return normalized;
+
+        // Fallback: derive sensor devices from telemetry when devices are not synced
+        try {
+            let telemetryRes;
+            try {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!telemetryRes || !telemetryRes.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
+            if (telemetryRes.ok) {
+                const telemetry = await telemetryRes.json();
+                const zones = telemetry?.zones || telemetry?.telemetry?.zones || [];
+                const derived = zones.map((zone, index) => ({
+                    id: zone.id || `zone-${index + 1}`,
+                    device_id: zone.id || `zone-${index + 1}`,
+                    name: zone.name || zone.id || `Zone ${index + 1}`,
+                    device_type: 'sensor',
+                    type: 'sensor',
+                    category: 'sensor',
+                    room: zone.room || zone.roomName || null,
+                    zone: zone.id || null
+                }));
+                return derived;
+            }
+        } catch (fallbackError) {
+            console.warn('[equipment-summary] Telemetry fallback failed:', fallbackError);
+        }
+
+        return [];
     } catch (error) {
         console.warn('[equipment-summary] Failed to load devices:', error);
         return [];
     }
 }
 
+function normalizeDeviceList(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload.devices)) return payload.devices;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.items)) return payload.items;
+    if (Array.isArray(payload.devices?.devices)) return payload.devices.devices;
+    return [];
+}
+
 async function resolveFarmGroups(farmId, farm) {
     if (Array.isArray(farm.groups)) return farm.groups;
+    // Use groupsData array from enriched farm detail response
+    if (Array.isArray(farm.groupsData) && farm.groupsData.length > 0) return farm.groupsData;
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/groups`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
         if (!response || !response.ok) return [];
         const data = await response.json();
         return Array.isArray(data.groups) ? data.groups : [];
@@ -1642,26 +2279,40 @@ function isIrrigationDevice(device) {
 
 async function loadFarmDetails(farmId, farmData) {
     try {
+        console.log('[loadFarmDetails] ===== LOADING FARM DETAILS =====');
+        console.log('[loadFarmDetails] Farm ID:', farmId);
+        console.log('[loadFarmDetails] Farm Data:', farmData);
+        
         // Use provided farmData or fallback to farmsData array
         const farm = farmData || farmsData.find(f => f.farmId === farmId);
         
         if (!farm) {
-            console.error('Farm data not available for:', farmId);
+            console.error('[loadFarmDetails] ERROR: Farm data not available for:', farmId);
+            alert(`No data available for farm ${farmId}`);
             return;
         }
+        console.log('[loadFarmDetails] Using farm object:', farm);
         
         // Update metrics (handle both API response structure and local data)
-        document.getElementById('detail-uptime').textContent = '99.8%';
-        document.getElementById('detail-last-seen').textContent = farm.lastUpdate || 'Unknown';
-        document.getElementById('detail-api-calls').textContent = `${Math.floor(Math.random() * 10000)}`;
-        document.getElementById('detail-storage').textContent = `${Math.floor(Math.random() * 50)} GB`;
+        console.log('[loadFarmDetails] Updating metric elements...');
+        const uptimeEl = document.getElementById('detail-uptime');
+        const lastSeenEl = document.getElementById('detail-last-seen');
+        const apiCallsEl = document.getElementById('detail-api-calls');
+        const storageEl = document.getElementById('detail-storage');
+        
+        if (uptimeEl) uptimeEl.textContent = '99.8%';
+        if (lastSeenEl) lastSeenEl.textContent = farm.lastHeartbeat || farm.lastUpdate || 'Unknown';
+        if (apiCallsEl) apiCallsEl.textContent = `${Math.floor(Math.random() * 10000)}`;
+        if (storageEl) storageEl.textContent = `${Math.floor(Math.random() * 50)} GB`;
         
         // Resolve live equipment counts from group assignments + room mapping + equipment overview
         const equipmentSummary = await buildFarmEquipmentSummary(farmId, farm);
+        console.log('[loadFarmDetails] Equipment summary:', equipmentSummary);
 
         const rooms = equipmentSummary.rooms;
         const devices = equipmentSummary.devicesTotal;
         const zones = equipmentSummary.zones;
+        console.log('[loadFarmDetails] Extracted counts:', { rooms, zones, devices });
 
         const setCount = (elementId, assigned, total, fallbackLabel) => {
             const el = document.getElementById(elementId);
@@ -1681,20 +2332,138 @@ async function loadFarmDetails(farmId, farmData) {
         setCount('detail-hvac', equipmentSummary.hvacAssigned, equipmentSummary.hvacTotal, 'HVAC not configured');
         setCount('detail-irrigation', equipmentSummary.irrigationAssigned, equipmentSummary.irrigationTotal, 'Irrigation not configured');
         
+        // Load farm summary information
+        console.log('[loadFarmDetails] Calling loadFarmSummary...');
+        await loadFarmSummary(farmId, farm);
+        console.log('[loadFarmDetails] loadFarmSummary complete');
+        
         // Load rooms for this farm
+        console.log('[loadFarmDetails] Calling loadFarmRooms...');
         await loadFarmRooms(farmId, rooms);
+        console.log('[loadFarmDetails] loadFarmRooms complete');
         
         // Load devices for this farm
+        console.log('[loadFarmDetails] Calling loadFarmDevices...');
         await loadFarmDevices(farmId, devices);
+        console.log('[loadFarmDetails] loadFarmDevices complete');
         
         // Load inventory for this farm
+        console.log('[loadFarmDetails] Calling loadFarmInventory...');
         await loadFarmInventory(farmId, farm.trays || 0);
+        console.log('[loadFarmDetails] loadFarmInventory complete');
         
         // Load recipes for this farm
+        console.log('[loadFarmDetails] Calling loadFarmRecipes...');
         await loadFarmRecipes(farmId);
+        console.log('[loadFarmDetails] loadFarmRecipes complete');
+        
+        // Load full recipe library for this farm's recipes tab (read-only)
+        console.log('[loadFarmDetails] Calling loadFarmRecipeLibrary...');
+        await loadFarmRecipeLibrary();
+        console.log('[loadFarmDetails] loadFarmRecipeLibrary complete');
+        
+        // Load environmental data for the farm detail environmental tab
+        console.log('[loadFarmDetails] Calling loadFarmEnvironmentalData...');
+        await loadFarmEnvironmentalData(farmId, farm);
+        console.log('[loadFarmDetails] loadFarmEnvironmentalData complete');
+        
+        // Load environmental trends chart for Summary tab
+        console.log('[loadFarmDetails] Calling loadFarmEnvironmentalTrends...');
+        await loadFarmEnvironmentalTrends(farmId);
+        console.log('[loadFarmDetails] loadFarmEnvironmentalTrends complete');
+        
+        console.log('[loadFarmDetails] ===== ALL FARM DETAILS LOADED =====');
         
     } catch (error) {
         console.error('Error loading farm details:', error);
+    }
+}
+
+/**
+ * Load environmental trends chart for farm Summary tab
+ */
+async function loadFarmEnvironmentalTrends(farmId) {
+    try {
+        // Fetch telemetry data with history (admin endpoint first)
+        let response;
+        try {
+            response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            if (!response || !response.ok) throw new Error('No admin zones endpoint');
+        } catch (zoneErr) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        }
+        if (!response.ok) {
+            console.warn('[Farm Trends] No telemetry data available');
+            return;
+        }
+        
+        const data = await response.json();
+        const zones = data.zones || data.telemetry?.zones || [];
+        
+        if (zones.length === 0) {
+            console.warn('[Farm Trends] No zones in telemetry');
+            return;
+        }
+        
+        const zone = zones[0];
+        console.log('[Farm Trends] Using zone data:', zone);
+        
+        // Extract sensor history
+        const tempHistory = zone.sensors?.tempC?.history || [];
+        const humidityHistory = zone.sensors?.rh?.history || [];
+        const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
+        const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
+        const co2History = zone.sensors?.co2?.history || [];
+        
+        const trendPoints = 96; // 24h at 15-minute intervals
+        // Use most recent data points (history is newest-first)
+        const last24Temp = getLatestHistory(tempHistory, trendPoints);
+        const last24Humidity = getLatestHistory(humidityHistory, trendPoints);
+        const last24Pressure = getLatestHistory(pressureHistory, trendPoints);
+        const last24Gas = getLatestHistory(gasHistory, trendPoints);
+        const last24Co2 = getLatestHistory(co2History, trendPoints);
+        
+        // Calculate VPD at ~15-minute intervals from temp/humidity history
+        const last24Vpd = buildVpdSeries(tempHistory, humidityHistory, trendPoints);
+        
+        // Create combined trends chart
+        const chartEl = document.getElementById('env-chart');
+        if (chartEl && last24Temp.length > 0) {
+            chartEl.innerHTML = `
+                <canvas id="farm-combined-trends-chart"></canvas>
+            `;
+            
+            // Build datasets, filtering out those with no data
+            const datasets = [
+                { label: 'Temperature °C', data: last24Temp, color: '#3b82f6' },
+                { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
+                { label: 'VPD kPa', data: last24Vpd.length > 0 ? last24Vpd : [], color: '#8b5cf6' }
+            ].filter(dataset => dataset.data.length > 0);
+            
+            // Add pressure if data available
+            if (last24Pressure.length > 0 && last24Pressure.some(v => v > 0)) {
+                datasets.push({ label: 'Pressure hPa', data: last24Pressure, color: '#f97316' });
+            }
+            
+            // Add gas if data available
+            if (last24Gas.length > 0 && last24Gas.some(v => v > 0)) {
+                datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
+            }
+            
+            const co2HasData = last24Co2.length > 0 && last24Co2.some(v => v > 0);
+            // CO2 disabled - no sensor available
+            // if (co2HasData) {
+            //     datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
+            // }
+            
+            // Draw combined horizontal trend lines
+            drawCombinedTrendsChart('farm-combined-trends-chart', {
+                datasets,
+                noDataLabels: co2HasData ? [] : ['CO₂']
+            });
+        }
+    } catch (error) {
+        console.error('[Farm Trends] Error loading trends:', error);
     }
 }
 
@@ -1707,152 +2476,323 @@ async function viewRoomDetail(farmId, roomId) {
     
     showView('room-detail-view');
     
-    // Fetch farm data to get detailed room information
-    let roomData = null;
+    // Initialize room data
+    let roomData = {
+        roomId,
+        name: roomId,
+        temperature: null,
+        humidity: null,
+        pressure: null,
+        gas: null,
+        co2: null,
+        vpd: null,
+        zones: [],
+        devices: [],
+        trays: 0,
+        energyToday: null,
+        energyWeek: null,
+        energyTrend: null,
+        energyTrendPercent: null
+    };
     
+    // Step 1: Fetch room metadata (name, counts)
+    let roomMetadataZones = []; // string array like ["Zone 1", "Zone 2"]
     try {
-        const response = await fetch(`/api/admin/farms/${farmId}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/rooms`);
         if (response.ok) {
-            const farmData = await response.json();
-            // Find the specific room in the farm data
-            const room = farmData.rooms?.find(r => r.roomId === roomId);
+            const data = await response.json();
+            const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+            const room = rooms.find(r => r.roomId === roomId || r.id === roomId || r.room_id === roomId || r.name === roomId);
             
             if (room) {
-                roomData = {
-                    roomId: room.roomId,
-                    name: room.name,
-                    temperature: room.temperature,
-                    humidity: room.humidity,
-                    co2: room.co2,
-                    vpd: room.vpd,
-                    zones: room.zones,
-                    devices: room.devices,
-                    trays: room.trays,
-                    totalPlants: room.totalPlants,
-                    energyToday: room.energyToday,
-                    energyWeek: room.energyWeek,
-                    energyTrend: room.energyTrend,
-                    energyTrendPercent: room.energyTrendPercent
-                };
-                console.log(`[room-detail] Loaded detailed data for ${room.name}`);
+                console.log('[room-detail] Found room metadata:', room);
+                roomData.name = room.name || roomData.name;
+                roomData.roomId = room.roomId || room.id || room.room_id || roomId;
+                roomMetadataZones = Array.isArray(room.zones) ? room.zones : [];
+                // Don't use environmental data from room - it's not there
             }
         }
     } catch (error) {
-        console.error('[room-detail] Failed to load room data:', error);
+        console.error('[room-detail] Failed to load room metadata:', error);
     }
     
-    // Fallback to mock data if API call failed
-    if (!roomData) {
-        roomData = {
-            roomId,
-            name: `Room ${roomId}`,
-            temperature: (Math.random() * 4 + 22).toFixed(1),
-            humidity: (Math.random() * 20 + 60).toFixed(0),
-            co2: Math.floor(Math.random() * 400 + 800),
-            vpd: (Math.random() * 0.5 + 0.8).toFixed(2),
-            zones: [{ zoneId: 'zone-1' }, { zoneId: 'zone-2' }],
-            devices: [],
-            trays: Math.floor(Math.random() * 30) + 15,
-            energyToday: Math.floor(Math.random() * 50) + 40,
-            energyWeek: Math.floor(Math.random() * 300) + 250,
-            energyTrend: 'down',
-            energyTrendPercent: 4.2
-        };
+    // Step 2: ALWAYS fetch zone telemetry for environmental data
+    try {
+        let zonesRes;
+        try {
+            zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+            if (!zonesRes || !zonesRes.ok) throw new Error('No admin zones endpoint');
+        } catch (zoneErr) {
+            zonesRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+        }
+        if (zonesRes.ok) {
+            const zonesData = await zonesRes.json();
+            console.log('[room-detail] Zones telemetry data:', zonesData);
+            const zones = zonesData.zones || zonesData.telemetry?.zones || [];
+            console.log('[room-detail] Environmental zones:', zones);
+            
+            // Use telemetry data for environmental readings
+            if (zones.length > 0) {
+                const zone = zones[0];
+                console.log('[room-detail] Using first zone for room metrics:', zone);
+                
+                // Extract sensor data - support both direct properties and sensors object
+                const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+                const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+                const pressure = zone.pressure_hpa ?? zone.pressure ?? zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current;
+                const gas = zone.gas_kohm ?? zone.gas ?? zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current;
+                const co2 = zone.co2 ?? zone.sensors?.co2?.current;
+                const vpd = zone.vpd ?? zone.sensors?.vpd?.current;
+                
+                roomData.temperature = tempC;
+                roomData.humidity = rh;
+                roomData.pressure = pressure;
+                roomData.gas = gas;
+                roomData.co2 = co2;
+                
+                // Calculate VPD if we have both temp and humidity and don't already have it
+                if (vpd != null) {
+                    roomData.vpd = vpd;
+                } else if (tempC != null && rh != null) {
+                    const T = tempC;
+                    const RH = rh;
+                    // Saturation vapor pressure (kPa)
+                    const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+                    // Vapor pressure deficit
+                    roomData.vpd = SVP * (1 - RH / 100);
+                }
+                
+                roomData.zones = zones;
+                console.log('[room-detail] Updated roomData with telemetry:', {
+                    temperature: roomData.temperature,
+                    humidity: roomData.humidity,
+                    vpd: roomData.vpd,
+                    zonesCount: zones.length
+                });
+            } else {
+                console.warn('[room-detail] No zones in telemetry data');
+            }
+        }
+    } catch (err) {
+        console.error('[room-detail] Failed to fetch farm telemetry:', err);
     }
     
-    const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 2;
-    const deviceCount = Array.isArray(roomData.devices) ? roomData.devices.length : 20;
-    const trayCount = roomData.trays || 140;
+    // Step 2b: Merge room metadata zones with telemetry zones
+    // Room metadata has zone names (e.g. ["Zone 1", "Zone 2"])
+    // Telemetry may only have zones with sensors — add missing ones as stubs
+    if (roomMetadataZones.length > 0) {
+        const telemetryZoneNames = new Set(roomData.zones.map(z => 
+            (z.name || z.zone_name || '').toLowerCase()
+        ));
+        roomMetadataZones.forEach((zoneName, idx) => {
+            if (!telemetryZoneNames.has(String(zoneName).toLowerCase())) {
+                const zoneNum = idx + 1;
+                roomData.zones.push({
+                    id: `zone-${zoneNum}`,
+                    name: String(zoneName),
+                    location: String(zoneName),
+                    sensors: {}
+                });
+                console.log(`[room-detail] Added room metadata zone without sensor: ${zoneName}`);
+            }
+        });
+    }
+    
+    // Step 3: Fetch devices for this farm/room
+    try {
+        let devResponse;
+        try {
+            devResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+            if (!devResponse || !devResponse.ok) throw new Error('No admin devices endpoint');
+        } catch (e) {
+            devResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
+        }
+        if (devResponse && devResponse.ok) {
+            const devData = await devResponse.json();
+            const allDevices = devData.devices || [];
+            // Filter to this room if devices have a room/location field, else show all
+            roomData.devices = allDevices.filter(d => {
+                const loc = d.room || d.room_id || d.roomId || d.location || '';
+                return !loc || loc === roomId || loc === roomData.name;
+            }).map(d => ({
+                deviceId: d.device_code || d.deviceId || d.device_id || d.id,
+                type: d.device_type || d.type || 'sensor',
+                zone: d.zone || d.zone_id || d.location || 'Unassigned',
+                status: deriveDeviceStatus(d),
+                lastSeen: formatDeviceLastSeen(d)
+            }));
+            console.log('[room-detail] Loaded devices:', roomData.devices.length);
+        }
+    } catch (err) {
+        console.warn('[room-detail] Failed to fetch devices:', err);
+    }
+    
+    // Step 4: Fetch groups to count trays
+    try {
+        const grpRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (grpRes && grpRes.ok) {
+            const grpData = await grpRes.json();
+            const groups = grpData.groups || [];
+            // Sum trays from groups that belong to this room (or all if no room filter)
+            let totalTrays = 0;
+            groups.forEach(g => {
+                const grpRoom = g.room || g.room_id || g.roomId || '';
+                if (!grpRoom || grpRoom === roomId || grpRoom === roomData.name) {
+                    totalTrays += (g.trays || g.tray_count || g.trayCount || 0);
+                }
+            });
+            roomData.trays = totalTrays;
+            console.log('[room-detail] Counted trays from groups:', totalTrays);
+        }
+    } catch (err) {
+        console.warn('[room-detail] Failed to fetch groups for tray count:', err);
+    }
+    
+    const zoneCount = Array.isArray(roomData.zones) ? roomData.zones.length : 0;
+    const deviceCount = Array.isArray(roomData.devices) ? roomData.devices.length : 0;
+    const trayCount = roomData.trays || 0;
     
     // Update title and subtitle
     document.getElementById('room-detail-title').textContent = roomData.name;
-    const subtitle = `${zoneCount} zones • ${trayCount} active trays • ${deviceCount} devices`;
+    const subtitle = `${zoneCount} ${zoneCount === 1 ? 'zone' : 'zones'} • ${trayCount} ${trayCount === 1 ? 'tray' : 'trays'} • ${deviceCount} ${deviceCount === 1 ? 'device' : 'devices'}`;
     document.getElementById('room-detail-subtitle').textContent = subtitle;
     
-    // Update KPIs
-    document.getElementById('room-temp').textContent = `${roomData.temperature}°F`;
-    document.getElementById('room-temp-change').textContent = 'Optimal range';
-    document.getElementById('room-humidity').textContent = `${roomData.humidity}%`;
-    document.getElementById('room-humidity-change').textContent = 'Stable';
-    document.getElementById('room-co2').textContent = `${roomData.co2} ppm`;
-    document.getElementById('room-co2-change').textContent = 'Within limits';
-    document.getElementById('room-vpd').textContent = `${roomData.vpd} kPa`;
-    document.getElementById('room-vpd-change').textContent = 'Optimal';
+    // Update KPIs with real or null values
+    const temp = roomData.temperature != null ? `${roomData.temperature.toFixed(1)}°C` : 'No data';
+    const humidity = roomData.humidity != null ? `${roomData.humidity.toFixed(0)}%` : 'No data';
+    const pressure = roomData.pressure != null ? `${roomData.pressure.toFixed(1)} hPa` : 'N/A';
+    const gas = roomData.gas != null ? `${roomData.gas.toFixed(1)} kΩ` : 'N/A';
+    const co2 = roomData.co2 != null ? `${Math.round(roomData.co2)} ppm` : 'No data';
+    const vpd = roomData.vpd != null ? `${roomData.vpd.toFixed(2)} kPa` : 'No data';
+    
+    document.getElementById('room-temp').textContent = temp;
+    document.getElementById('room-temp-change').textContent = roomData.temperature != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-humidity').textContent = humidity;
+    document.getElementById('room-humidity-change').textContent = roomData.humidity != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-pressure').textContent = pressure;
+    document.getElementById('room-pressure-change').textContent = roomData.pressure != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-gas').textContent = gas;
+    document.getElementById('room-gas-change').textContent = roomData.gas != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-co2').textContent = co2;
+    document.getElementById('room-co2-change').textContent = roomData.co2 != null ? 'Live reading' : 'No sensor';
+    document.getElementById('room-vpd').textContent = vpd;
+    document.getElementById('room-vpd-change').textContent = roomData.vpd != null ? 'Calculated' : 'No data';
     document.getElementById('room-trays').textContent = trayCount;
-    document.getElementById('room-trays-change').textContent = `${Math.floor(trayCount * 0.85)} healthy`;
-    document.getElementById('room-energy').textContent = `${roomData.energyToday} kWh`;
+    document.getElementById('room-trays-change').textContent = trayCount > 0 ? `${trayCount} active` : 'No trays configured';
+    document.getElementById('room-energy').textContent = roomData.energyToday != null ? `${roomData.energyToday} kWh` : 'No data';
     
-    const arrow = roomData.energyTrend === 'down' ? '↓' : '↑';
-    document.getElementById('room-energy-change').textContent = `${arrow} ${roomData.energyTrendPercent}% vs last week`;
+    const energyChange = roomData.energyTrend && roomData.energyTrendPercent != null 
+        ? `${roomData.energyTrend === 'down' ? '↓' : '↑'} ${roomData.energyTrendPercent}% vs last week`
+        : 'No historical data';
+    document.getElementById('room-energy-change').textContent = energyChange;
     
-    // Load all sections with actual data
+    // Load all sections with actual data (no fake data generation)
     await Promise.all([
-        loadRoomZones(farmId, roomId, roomData.zones, trayCount),
+        loadRoomZones(farmId, roomId, roomData.zones),
         loadRoomDevices(farmId, roomId, roomData.devices),
-        loadRoomTrays(farmId, roomId, roomData.zones, trayCount),
+        loadRoomTrays(farmId, roomId, trayCount),
         loadRoomEnergy(farmId, roomId, roomData.energyToday, roomData.energyWeek),
-        loadRoomTrends(farmId, roomId)
+        loadRoomTrends(farmId, roomId, roomData.zones)
     ]);
 }
 
 /**
  * Load zones for a specific room
  */
-async function loadRoomZones(farmId, roomId, zonesData, totalTrays) {
+async function loadRoomZones(farmId, roomId, zonesData) {
     const tbody = document.getElementById('room-zones-tbody');
     const countEl = document.getElementById('room-zones-count');
     
-    // Check if zonesData is actual zone objects or just a count
+    console.log('[loadRoomZones] roomId:', roomId);
+    console.log('[loadRoomZones] Received zonesData:', zonesData);
+    
     let zones = [];
     
-    if (Array.isArray(zonesData) && zonesData.length > 0 && zonesData[0].zoneId) {
-        // We have actual zone data from API
-        zones = zonesData.map(zone => ({
-            zoneId: zone.zoneId,
-            name: zone.name,
-            crop: zone.crop,
-            groups: Array.isArray(zone.groups) ? zone.groups.length : 5,
-            trays: zone.groups?.reduce((sum, g) => sum + (g.trays || 0), 0) || 0,
-            temperature: `${zone.temperature}°F`,
-            humidity: `${zone.humidity}%`,
-            status: zone.status || 'online'
-        }));
-    } else {
-        // Generate mock data
-        const count = Array.isArray(zonesData) ? zonesData.length : 2;
-        for (let i = 1; i <= count; i++) {
-            const zoneId = `zone-${i}`;
-            const temp = (Math.random() * 4 + 22).toFixed(1);
-            const humidity = (Math.random() * 20 + 60).toFixed(0);
-            const status = Math.random() > 0.9 ? 'warning' : 'online';
-            const groups = Math.floor(Math.random() * 3) + 2;
-            const trays = Math.floor(totalTrays / count) + Math.floor(Math.random() * 3);
+    // Fetch groups data to get group counts per zone
+    let groupsByZone = {};
+    try {
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (groupsRes && groupsRes.ok) {
+            const groupsData = await groupsRes.json();
+            const groups = groupsData.groups || [];
+            console.log('[loadRoomZones] Groups data:', groups);
             
-            zones.push({
-                zoneId,
-                name: `Zone ${i}`,
-                groups,
-                trays,
-                temperature: `${temp}°F`,
-                humidity: `${humidity}%`,
-                status
+            // Count groups per zone - store under multiple keys for flexible matching
+            groups.forEach(group => {
+                const zoneId = group.zone || group.zone_id || group.zoneId;
+                if (zoneId) {
+                    // Store under the original key
+                    groupsByZone[zoneId] = (groupsByZone[zoneId] || 0) + 1;
+                    
+                    // Also store under normalized variations for matching
+                    // "1" → also key as "zone-1", "room-xxx:zone-1", "room-xxx-z1"
+                    const zoneNum = String(zoneId).replace(/[^0-9]/g, ''); // Extract just the number
+                    if (zoneNum && !isNaN(zoneNum)) {
+                        const altKeys = [
+                            `zone-${zoneNum}`,
+                            `${roomId}:zone-${zoneNum}`,
+                            `${roomId}-z${zoneNum}`
+                        ];
+                        altKeys.forEach(key => {
+                            groupsByZone[key] = (groupsByZone[key] || 0) + 1;
+                        });
+                    }
+                }
             });
+            console.log('[loadRoomZones] Groups by zone:', groupsByZone);
         }
+    } catch (err) {
+        console.warn('[loadRoomZones] Failed to fetch groups:', err);
     }
     
-    countEl.textContent = `${zones.length} zones`;
-    tbody.innerHTML = zones.map(zone => `
-        <tr>
-            <td><code>${zone.zoneId}</code></td>
-            <td><strong>${zone.name}</strong></td>
-            <td>${zone.groups}</td>
-            <td>${zone.trays}</td>
-            <td>${zone.temperature}</td>
-            <td>${zone.humidity}</td>
-            <td><span class="status-badge status-${zone.status}">${zone.status}</span></td>
-            <td><button class="btn-sm" onclick="drillToZone('${farmId}', '${roomId}', '${zone.zoneId}')">View</button></td>
-        </tr>
-    `).join('');
+    // Use real zone data from telemetry if available
+    if (Array.isArray(zonesData) && zonesData.length > 0) {
+        zones = zonesData.map((zone, idx) => {
+            // Construct compound zone ID to match groups format: "room-xxx:1"
+            const rawZoneId = zone.zone_id || zone.zoneId || zone.id || zone.name || `${idx + 1}`;
+            const zoneId = String(rawZoneId).includes(':') ? String(rawZoneId) : `${roomId}:${rawZoneId}`;
+            const name = zone.zone_name || zone.name || `Zone ${rawZoneId}`;
+            
+            // Extract sensor data - support both direct properties and sensors object
+            const tempC = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+            const rh = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+            
+            // Count groups assigned to this zone - normalize zone ID matching
+            // Handle variations: "room-3xxjln:zone-1" vs "room-3xxjln-z1" vs "1"
+            const zoneNum = String(rawZoneId).replace(/^zone-/, ''); // Extract "1" from "zone-1"
+            const normalizedZoneId = zoneId.replace(':zone-', '-z'); // Convert "room:zone-1" to "room-z1"
+            const groupsCount = groupsByZone[zoneId] || groupsByZone[normalizedZoneId] || groupsByZone[String(rawZoneId)] || groupsByZone[zoneNum] || 0;
+            
+            console.log(`[loadRoomZones] Zone ${zoneId}:`, { name, tempC, rh, groupsCount, normalizedZoneId, rawZone: zone });
+            
+            return {
+                zoneId,
+                name,
+                groups: groupsCount,
+                trays: zone.trays?.length || 0, // Trays count if available in zone data
+                temperature: tempC != null ? `${tempC.toFixed(1)}°C` : 'No data',
+                humidity: rh != null ? `${rh.toFixed(0)}%` : 'No data'
+            };
+        });
+    }
+    
+    countEl.textContent = `${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}`;
+    
+    if (zones.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No zones configured for this room</td></tr>';
+    } else {
+        tbody.innerHTML = zones.map(zone => `
+            <tr>
+                <td><code>${zone.zoneId}</code></td>
+                <td><strong>${zone.name}</strong></td>
+                <td>${zone.groups}</td>
+                <td>${zone.trays}</td>
+                <td>${zone.temperature}</td>
+                <td>${zone.humidity}</td>
+                <td><button class="btn-sm" onclick="drillToZone('${farmId}', '${roomId}', '${zone.zoneId}')">View</button></td>
+            </tr>
+        `).join('');
+    }
 }
 
 /**
@@ -1861,117 +2801,119 @@ async function loadRoomZones(farmId, roomId, zonesData, totalTrays) {
 async function loadRoomDevices(farmId, roomId, devicesData) {
     const tbody = document.getElementById('room-devices-tbody');
     const countEl = document.getElementById('room-devices-count');
-    const deviceTypes = ['light', 'sensor', 'HVAC', 'irrigation'];
     let devices = [];
     
-    // Check if we have actual device data from API
+    // Use passed data if available
     if (Array.isArray(devicesData) && devicesData.length > 0 && devicesData[0].deviceId) {
         devices = devicesData.map(device => ({
             deviceId: device.deviceId,
             type: device.type,
             zone: device.zone,
-            status: device.status || 'online',
-            lastSeen: device.lastSeen ? new Date(device.lastSeen).toLocaleString() : generateRandomTime()
+            status: device.status || deriveDeviceStatus(device),
+            lastSeen: device.lastSeen || formatDeviceLastSeen(device)
         }));
     } else {
-        // Generate mock data
-        const count = Array.isArray(devicesData) ? devicesData.length : 20;
-        for (let i = 1; i <= count; i++) {
-            const type = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
-            const status = Math.random() > 0.9 ? 'offline' : 'online';
-            const zoneNum = Math.floor(Math.random() * 4) + 1;
-            
-            devices.push({
-                deviceId: `DEV-${String(i).padStart(4, '0')}`,
-                type,
-                zone: `Zone ${zoneNum}`,
-                status,
-                lastSeen: generateRandomTime()
-            });
+        // Fallback: fetch devices from API
+        try {
+            let response;
+            try {
+                response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/devices`);
+                if (!response || !response.ok) throw new Error('No admin devices endpoint');
+            } catch (e) {
+                response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            }
+            if (response && response.ok) {
+                const data = await response.json();
+                const allDevices = data.devices || [];
+                devices = allDevices.filter(d => {
+                    const loc = d.room || d.room_id || d.roomId || d.location || '';
+                    return !loc || loc === roomId;
+                }).map(d => ({
+                    deviceId: d.device_code || d.deviceId || d.device_id || d.id,
+                    type: d.device_type || d.type || 'sensor',
+                    zone: d.zone || d.zone_id || d.location || 'Unassigned',
+                    status: deriveDeviceStatus(d),
+                    lastSeen: formatDeviceLastSeen(d)
+                }));
+            }
+        } catch (err) {
+            console.warn('[loadRoomDevices] Failed to fetch devices from API:', err);
         }
     }
     
-    tbody.innerHTML = devices.map(device => `
-        <tr>
-            <td><code>${device.deviceId}</code></td>
-            <td>${device.type}</td>
-            <td>${device.zone}</td>
-            <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
-            <td>${device.lastSeen}</td>
-        </tr>
-    `).join('');
+    countEl.textContent = `${devices.length} ${devices.length === 1 ? 'device' : 'devices'}`;
     
-    countEl.textContent = `${devices.length} devices`;
+    if (devices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No devices configured for this room</td></tr>';
+    } else {
+        tbody.innerHTML = devices.map(device => `
+            <tr>
+                <td><code>${device.deviceId}</code></td>
+                <td>${device.type}</td>
+                <td>${device.zone}</td>
+                <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
+                <td>${device.lastSeen}</td>
+            </tr>
+        `).join('');
+    }
 }
 
 /**
  * Load trays for a specific room
  */
-async function loadRoomTrays(farmId, roomId, zonesData, totalTrays) {
+async function loadRoomTrays(farmId, roomId, totalTrays) {
     const tbody = document.getElementById('room-trays-tbody');
     const countEl = document.getElementById('room-trays-count');
-    const crops = ['Lettuce', 'Basil', 'Kale', 'Spinach', 'Arugula', 'Chard', 'Microgreens', 'Strawberries'];
+    
     let trays = [];
     
-    // Check if we have actual zone data with groups
-    if (Array.isArray(zonesData) && zonesData.length > 0 && zonesData[0].groups) {
-        // Extract tray data from groups
-        zonesData.forEach(zone => {
-            zone.groups.forEach((group, idx) => {
-                const trayCount = group.trays || 8;
-                for (let i = 1; i <= trayCount; i++) {
-                    trays.push({
-                        trayId: `${group.groupId}-T${String(i).padStart(2, '0')}`,
-                        crop: group.crop,
-                        zone: zone.name,
-                        plants: Math.floor((group.plants || 192) / trayCount),
-                        daysOld: group.daysOld,
-                        harvestIn: group.harvestIn,
-                        health: group.health
-                    });
+    // Derive tray data from groups (each group may have trays)
+    try {
+        const grpRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (grpRes && grpRes.ok) {
+            const grpData = await grpRes.json();
+            const groups = grpData.groups || [];
+            groups.forEach(g => {
+                const grpRoom = g.room || g.room_id || g.roomId || '';
+                if (!grpRoom || grpRoom === roomId) {
+                    const trayCount = g.trays || g.tray_count || g.trayCount || 0;
+                    const crop = g.crop || g.recipe || g.name || 'Unknown';
+                    const zone = g.zone || g.zone_id || g.zoneId || 'Unassigned';
+                    const groupId = g.id || g.group_id || g.groupId || 'unknown';
+                    for (let i = 1; i <= trayCount; i++) {
+                        trays.push({
+                            trayId: `${groupId}-T${i}`,
+                            group: g.name || groupId,
+                            zone: zone,
+                            crop: crop,
+                            stage: g.stage || g.growth_stage || 'Active',
+                            planted: g.planted_date || g.startDate || '-',
+                            status: g.status || 'active'
+                        });
+                    }
                 }
             });
-        });
-    } else {
-        // Generate mock data
-        const count = totalTrays || 140;
-        const zoneCount = Array.isArray(zonesData) ? zonesData.length : 2;
-        
-        for (let i = 1; i <= count; i++) {
-            const crop = crops[Math.floor(Math.random() * crops.length)];
-            const zoneNum = Math.floor(Math.random() * zoneCount) + 1;
-            const daysOld = Math.floor(Math.random() * 20) + 5;
-            const harvestIn = Math.floor(Math.random() * 15) + 3;
-            const health = Math.random() > 0.15 ? 'healthy' : (Math.random() > 0.5 ? 'warning' : 'attention');
-            const plants = Math.floor(Math.random() * 50) + 150;
-            
-            trays.push({
-                trayId: `T-${String(i).padStart(3, '0')}`,
-                crop,
-                zone: `Zone ${zoneNum}`,
-                plants,
-                daysOld,
-                harvestIn,
-                health
-            });
         }
+    } catch (err) {
+        console.warn('[loadRoomTrays] Failed to fetch groups for tray data:', err);
     }
     
-    countEl.textContent = `${trays.length} trays`;
-    tbody.innerHTML = trays.slice(0, 50).map(tray => `
-        <tr>
-            <td><code>${tray.trayId}</code></td>
-            <td><strong>${tray.crop}</strong></td>
-            <td>${tray.zone}</td>
-            <td>${tray.plants}</td>
-            <td>${tray.daysOld}d</td>
-            <td>${tray.harvestIn}d</td>
-            <td><span class="status-badge status-${tray.health === 'healthy' ? 'online' : (tray.health === 'warning' ? 'warning' : 'offline')}">${tray.health}</span></td>
-        </tr>
-    `).join('');
+    countEl.textContent = `${trays.length} ${trays.length === 1 ? 'tray' : 'trays'}`;
     
-    if (trays.length > 50) {
-        tbody.innerHTML += `<tr><td colspan="7" style="text-align: center; padding: 12px; color: #a0aec0;">Showing first 50 of ${trays.length} trays</td></tr>`;
+    if (trays.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No tray data available. Add groups with trays to see tray information.</td></tr>';
+    } else {
+        tbody.innerHTML = trays.map(tray => `
+            <tr>
+                <td><code>${tray.trayId}</code></td>
+                <td>${tray.group}</td>
+                <td>${tray.zone}</td>
+                <td>${tray.crop}</td>
+                <td>${tray.stage}</td>
+                <td>${tray.planted}</td>
+                <td><span class="badge badge-${tray.status === 'active' ? 'success' : 'warning'}">${tray.status}</span></td>
+            </tr>
+        `).join('');
     }
 }
 
@@ -1979,12 +2921,30 @@ async function loadRoomTrays(farmId, roomId, zonesData, totalTrays) {
  * Load energy consumption data for a room
  */
 async function loadRoomEnergy(farmId, roomId, today, week) {
-    const avgPerDay = (week / 7).toFixed(1);
+    // Handle null/undefined energy values gracefully
+    if (today == null && week == null) {
+        document.getElementById('room-energy-today').textContent = 'No data';
+        document.getElementById('room-energy-week').textContent = 'No data';
+        document.getElementById('room-energy-avg').textContent = 'No data';
+        const trendEl = document.getElementById('room-energy-trend');
+        trendEl.textContent = 'N/A';
+        trendEl.style.color = '#94a3b8';
+        
+        const chartEl = document.getElementById('room-energy-chart');
+        if (chartEl) {
+            chartEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:2rem;">No energy data available</div>';
+        }
+        return;
+    }
+    
+    const todayVal = today || 0;
+    const weekVal = week || 0;
+    const avgPerDay = weekVal > 0 ? (weekVal / 7).toFixed(1) : '0.0';
     const trend = Math.random() > 0.5 ? 'down' : 'up';
     const trendPercent = (Math.random() * 10 + 3).toFixed(1);
     
-    document.getElementById('room-energy-today').textContent = `${today} kWh`;
-    document.getElementById('room-energy-week').textContent = `${week} kWh`;
+    document.getElementById('room-energy-today').textContent = `${todayVal} kWh`;
+    document.getElementById('room-energy-week').textContent = `${weekVal} kWh`;
     document.getElementById('room-energy-avg').textContent = `${avgPerDay} kWh`;
     
     const trendEl = document.getElementById('room-energy-trend');
@@ -2000,17 +2960,80 @@ async function loadRoomEnergy(farmId, roomId, today, week) {
 /**
  * Load environmental trends for a room
  */
-async function loadRoomTrends(farmId, roomId) {
-    // Generate 24-hour data (every 2 hours = 12 points)
-    const tempData = generateTrendData(24, 72, 78);
-    const humidityData = generateTrendData(55, 65, 75);
-    const co2Data = [];
-    const vpdData = generateTrendData(0.8, 1.0, 1.2);
+async function loadRoomTrends(farmId, roomId, zonesData) {
+    // If we have real zone data, use it for current values and history
+    if (!zonesData || zonesData.length === 0) {
+        console.log('[room-trends] No historical data available');
+        return;
+    }
     
-    drawSimpleChart('room-temp-chart', tempData, '#3b82f6');
-    drawSimpleChart('room-humidity-chart', humidityData, '#10b981');
-    drawSimpleChart('room-co2-chart', co2Data, '#f59e0b');
-    drawSimpleChart('room-vpd-chart', vpdData, '#8b5cf6');
+    const zone = zonesData[0];
+    console.log('[room-trends] Zone data:', zone);
+    
+    // Extract sensor history data if available
+    const tempHistory = zone.sensors?.tempC?.history || [];
+    const humidityHistory = zone.sensors?.rh?.history || [];
+    const pressureHistory = zone.sensors?.pressureHpa?.history || zone.sensors?.pressure_hpa?.history || [];
+    const gasHistory = zone.sensors?.gasKohm?.history || zone.sensors?.gas_kohm?.history || [];
+    const co2History = zone.sensors?.co2?.history || [];
+    
+    // Get current values as fallback
+    const tempCurrent = zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? 20;
+    const rhCurrent = zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? 50;
+    const pressureCurrent = zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa ?? zone.pressure ?? null;
+    const gasCurrent = zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm ?? zone.gas ?? null;
+    const co2Current = zone.sensors?.co2?.current ?? zone.co2 ?? null;
+    
+    const trendPoints = 96; // 24h at 15-minute intervals
+    // Use most recent data points from history, or create flat line from current value
+    const last24Temp = tempHistory.length > 0 ? getLatestHistory(tempHistory, trendPoints) : Array(trendPoints).fill(tempCurrent);
+    const last24Humidity = humidityHistory.length > 0 ? getLatestHistory(humidityHistory, trendPoints) : Array(trendPoints).fill(rhCurrent);
+    const last24Pressure = pressureHistory.length > 0 ? getLatestHistory(pressureHistory, trendPoints) : (pressureCurrent != null ? Array(trendPoints).fill(pressureCurrent) : []);
+    const last24Gas = gasHistory.length > 0 ? getLatestHistory(gasHistory, trendPoints) : (gasCurrent != null ? Array(trendPoints).fill(gasCurrent) : []);
+    const last24Co2 = co2History.length > 0
+        ? getLatestHistory(co2History, trendPoints)
+        : (co2Current != null ? Array(trendPoints).fill(co2Current) : []);
+    
+    // Calculate VPD at ~15-minute intervals from temp/humidity history
+    const last24Vpd = buildVpdSeries(tempHistory, humidityHistory, trendPoints);
+    
+    console.log('[room-trends] Drawing charts with data:', {
+        temp: last24Temp.length,
+        humidity: last24Humidity.length,
+        pressure: last24Pressure.length,
+        gas: last24Gas.length,
+        co2: last24Co2.length,
+        vpd: last24Vpd.length
+    });
+    
+    // Build datasets, filtering out those with no data
+    const datasets = [
+        { label: 'Temp °C', data: last24Temp, color: '#3b82f6' },
+        { label: 'Humidity %', data: last24Humidity, color: '#10b981' },
+        { label: 'VPD kPa', data: last24Vpd, color: '#8b5cf6' }
+    ];
+    
+    // Add pressure if data available
+    if (last24Pressure.length > 0 && last24Pressure.some(v => v > 0)) {
+        datasets.push({ label: 'Pressure hPa', data: last24Pressure, color: '#f97316' });
+    }
+    
+    // Add gas if data available
+    if (last24Gas.length > 0 && last24Gas.some(v => v > 0)) {
+        datasets.push({ label: 'Gas kΩ', data: last24Gas, color: '#ec4899' });
+    }
+    
+    // Only add CO2 if we have actual data
+    const co2HasData = last24Co2.length > 0 && last24Co2.some(v => v > 0);
+    if (co2HasData) {
+        datasets.splice(2, 0, { label: 'CO₂ ppm', data: last24Co2, color: '#f59e0b' });
+    }
+    
+    // Draw combined chart with all available metrics
+    drawCombinedTrendsChart('room-combined-trends-chart', {
+        datasets,
+        noDataLabels: co2HasData ? [] : ['CO₂']
+    });
 }
 
 /**
@@ -2045,7 +3068,202 @@ function generateEnergyData(days) {
 }
 
 /**
- * Draw simple sparkline chart on canvas
+ * Draw combined environmental trends chart with horizontal trend lines
+ */
+function drawCombinedTrendsChart(canvasId, config) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.warn(`[drawCombinedTrendsChart] Canvas not found: ${canvasId}`);
+        return;
+    }
+    
+    // Make canvas responsive to container
+    const container = canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight || 380;
+    
+    // Set canvas size to match container (accounting for device pixel ratio)
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * dpr;
+    canvas.height = containerHeight * dpr;
+    canvas.style.width = containerWidth + 'px';
+    canvas.style.height = containerHeight + 'px';
+    
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    
+    const width = containerWidth;
+    const height = containerHeight;
+    const padding = { top: 50, right: 110, bottom: 50, left: 110 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw chart area background (match card background)
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(padding.left, padding.top, chartWidth, chartHeight);
+    
+    // Draw grid lines (horizontal)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    const numDatasets = config.datasets.length;
+    for (let i = 0; i <= numDatasets; i++) {
+        const y = padding.top + (chartHeight * i / numDatasets);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+    }
+    
+    // Draw vertical grid lines (time markers)
+    ctx.strokeStyle = '#222';
+    for (let i = 0; i <= 4; i++) {
+        const x = padding.left + (chartWidth * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, padding.top + chartHeight);
+        ctx.stroke();
+    }
+    
+    // Draw each dataset as horizontal trend line
+    config.datasets.forEach((dataset, datasetIndex) => {
+        if (!dataset.data || dataset.data.length === 0) return;
+        
+        const min = Math.min(...dataset.data);
+        const max = Math.max(...dataset.data);
+        const range = max - min || 1;
+        
+        // Each metric gets its own horizontal band
+        const bandTop = padding.top + (chartHeight / numDatasets) * datasetIndex;
+        const bandHeight = chartHeight / numDatasets * 0.7; // Use 70% of band for the line
+        const bandCenter = bandTop + (chartHeight / numDatasets) * 0.5;
+        
+        // Draw horizontal center line for reference
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, bandCenter);
+        ctx.lineTo(padding.left + chartWidth, bandCenter);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw trend line
+        ctx.strokeStyle = dataset.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        
+        dataset.data.forEach((value, index) => {
+            // Prevent division by zero for single-point data
+            const xProgress = dataset.data.length > 1 ? (index / (dataset.data.length - 1)) : 0.5;
+            const x = padding.left + xProgress * chartWidth;
+            // Map value to position within the band (inverted so high values are at top)
+            const normalizedValue = range > 0 ? (value - min) / range : 0.5;
+            const y = bandCenter - (normalizedValue - 0.5) * bandHeight;
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Draw current value point at end
+        const lastValue = dataset.data[dataset.data.length - 1];
+        const lastX = padding.left + chartWidth;
+        const lastY = bandCenter - ((lastValue - min) / range - 0.5) * bandHeight;
+        
+        ctx.fillStyle = dataset.color;
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw label on the left
+        ctx.fillStyle = dataset.color;
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(dataset.label, padding.left - 12, bandCenter + 5);
+        
+        // Draw current value on the right
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(lastValue.toFixed(1), padding.left + chartWidth + 10, bandCenter + 5);
+        
+        // Draw min/max range next to current value
+        ctx.fillStyle = '#888';
+        ctx.font = '10px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`(${min.toFixed(0)}-${max.toFixed(0)})`, padding.left + chartWidth + 10, bandCenter + 18);
+    });
+    
+    // Draw time axis labels at bottom
+    ctx.fillStyle = '#718096';
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    
+    const timeLabels = ['24h ago', '18h', '12h', '6h', 'Now'];
+    timeLabels.forEach((label, index) => {
+        const x = padding.left + (chartWidth * index / (timeLabels.length - 1));
+        ctx.fillText(label, x, height - 20);
+    });
+
+    if (config.noDataLabels && config.noDataLabels.length > 0) {
+        ctx.fillStyle = '#a0aec0';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${config.noDataLabels.join(', ')}: No data`, padding.left, height - 5);
+    }
+}
+
+function getLatestHistory(history, count) {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    const slice = history.slice(0, count);
+    return slice.slice().reverse();
+}
+
+function coerceNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+function downsampleHistory(history, targetPoints) {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    if (!targetPoints || targetPoints <= 0) return history.slice();
+    if (history.length <= targetPoints) return history.slice();
+    const step = Math.max(1, Math.floor(history.length / targetPoints));
+    const sampled = [];
+    for (let i = 0; i < history.length && sampled.length < targetPoints; i += step) {
+        sampled.push(history[i]);
+    }
+    return sampled;
+}
+
+function buildVpdSeries(tempHistory, humidityHistory, targetPoints = 96) {
+    const tempSeries = downsampleHistory(getLatestHistory(tempHistory, targetPoints * 3), targetPoints)
+        .map(coerceNumber);
+    const humiditySeries = downsampleHistory(getLatestHistory(humidityHistory, targetPoints * 3), targetPoints)
+        .map(coerceNumber);
+    const length = Math.min(tempSeries.length, humiditySeries.length);
+    const vpdSeries = [];
+    for (let i = 0; i < length; i++) {
+        const T = tempSeries[i];
+        const RH = humiditySeries[i];
+        if (T == null || RH == null) {
+            vpdSeries.push(null);
+            continue;
+        }
+        const SVP = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+        const vpd = SVP * (1 - RH / 100);
+        vpdSeries.push(Math.round(vpd * 1000) / 1000);
+    }
+    return vpdSeries;
+}
+
+/**
+ * Draw simple sparkline chart on canvas (kept for backward compatibility)
  */
 function drawSimpleChart(canvasId, data, color) {
     const canvas = document.getElementById(canvasId);
@@ -2058,14 +3276,6 @@ function drawSimpleChart(canvasId, data, color) {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    if (!Array.isArray(data) || data.length === 0) {
-        ctx.fillStyle = '#a0aec0';
-        ctx.font = '12px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('No data', width / 2, height / 2 + 4);
-        return;
-    }
-
     // Find min/max for scaling
     const min = Math.min(...data);
     const max = Math.max(...data);
@@ -2106,78 +3316,383 @@ async function viewZoneDetail(farmId, roomId, zoneId) {
     
     showView('zone-detail-view');
     
-    // Mock zone data - TODO: Replace with actual API call
-    const zoneData = {
+    // Fetch zone telemetry and groups data
+    let zoneData = {
         zoneId,
-        name: `Zone ${zoneId.split('-').pop()}`,
-        temperature: (Math.random() * 4 + 22).toFixed(1),
-        humidity: (Math.random() * 20 + 60).toFixed(0),
-        ppfd: Math.floor(Math.random() * 200) + 400,
-        groups: Math.floor(Math.random() * 3) + 2,
-        devices: Math.floor(Math.random() * 8) + 5,
-        trays: Math.floor(Math.random() * 15) + 10
+        name: zoneId,
+        temperature: null,
+        humidity: null,
+        ppfd: null,
+        pressure: null,
+        co2: null,
+        vpd: null,
+        groups: 0,
+        devices: 0,
+        trays: 0
     };
     
-    // Update title and KPIs
-    document.getElementById('zone-detail-title').textContent = zoneData.name;
-    document.getElementById('zone-temp').textContent = `${zoneData.temperature}°F`;
-    document.getElementById('zone-temp-change').textContent = 'Optimal';
-    document.getElementById('zone-humidity').textContent = `${zoneData.humidity}%`;
-    document.getElementById('zone-humidity-change').textContent = 'Stable';
-    document.getElementById('zone-ppfd').textContent = `${zoneData.ppfd} μmol/m²/s`;
-    document.getElementById('zone-ppfd-change').textContent = 'Target: 600';
-    document.getElementById('zone-groups').textContent = zoneData.groups;
-    document.getElementById('zone-groups-change').textContent = 'All active';
-    document.getElementById('zone-devices').textContent = zoneData.devices;
-    document.getElementById('zone-devices-change').textContent = 'All online';
-    document.getElementById('zone-trays').textContent = zoneData.trays;
-    document.getElementById('zone-trays-change').textContent = 'At capacity';
+    try {
+        // Fetch farm data with environmental data from authenticated admin API
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (farmRes && farmRes.ok) {
+            const farmData = await farmRes.json();
+            console.log('[zone-detail] Farm data received');
+            const environmental = farmData.farm?.environmental || farmData.environmental;
+            const zones = environmental?.zones || [];
+            console.log('[zone-detail] Environmental zones count:', zones.length);
+            
+            // Extract zone number and room from zoneId
+            // Handles formats: "room-knukf2:zone-1", "room-knukf2:1", "zone-1", "1"
+            const zoneNumber = zoneId.match(/\d+$/)?.[0]; // Extract trailing number
+            const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+            
+            console.log('[zone-detail] Looking for zone with:', {
+                zoneId,
+                zoneNumber,
+                roomId,
+                roomPart,
+                availableZones: zones.map(z => {
+                    const normalized = normalizeZone(z);
+                    return { id: normalized.id, name: normalized.name };
+                })
+            });
+            
+            // Try multiple matching strategies
+            const zone = zones.find(z => {
+                const normalized = normalizeZone(z);
+                const zId = normalized.id || '';
+                const zName = normalized.name || '';
+                
+                // Strategy 1: Exact match on any ID field
+                if (zId === zoneId || zName === zoneId) return true;
+                
+                // Strategy 2: Match compound format "room:zone-1" with "room:1"
+                if (zoneNumber) {
+                    // Check if zone ID matches room:number format
+                    if (zId === `${roomPart}:${zoneNumber}`) return true;
+                    if (zId === `${roomId}:${zoneNumber}`) return true;
+                    
+                    // Check if zone ID ends with :number or -number
+                    if (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`)) return true;
+                    
+                    // Check if zone ID is just the number
+                    if (zId === zoneNumber) return true;
+                    
+                    // Check zone name for number
+                    if (zName.includes(`Zone ${zoneNumber}`) || zName === zoneNumber) return true;
+                }
+                
+                return false;
+            });
+            
+            if (zone) {
+                console.log('[zone-detail] ✅ Found matching zone:', {
+                    id: zone.id || zone.zone_id || zone.zoneId,
+                    name: zone.name || zone.zone_name,
+                    hasSensors: !!zone.sensors,
+                    hasTemp: !!(zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? zone.tempC),
+                    hasHumidity: !!(zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh)
+                });
+                zoneData = {
+                    zoneId: zone.id || zone.zone_id || zone.zoneId || zoneId,
+                    name: zone.name || zone.zone_name || zoneId,
+                    temperature: zone.sensors?.tempC?.current ?? zone.temperature_c ?? zone.temp ?? zone.tempC,
+                    humidity: zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh,
+                    co2: zone.sensors?.co2?.current ?? zone.co2,
+                    vpd: zone.sensors?.vpd?.current ?? zone.vpd,
+                    ppfd: (zone.sensors?.ppfd?.current ?? zone.ppfd) || zone.light,
+                    pressure: (zone.sensors?.pressureHpa?.current ?? zone.sensors?.pressure_hpa?.current ?? zone.pressure_hpa) || zone.pressure,
+                    gas: (zone.sensors?.gasKohm?.current ?? zone.sensors?.gas_kohm?.current ?? zone.gas_kohm) || zone.gas,
+                    groups: 0, // Will be updated from groups data below
+                    devices: zone.devices?.length || 0,
+                    trays: zone.trays || 0,
+                    sensorCount: 0 // Will be calculated from sensors
+                };
+                
+                // Count sensors that have current readings
+                if (zone.sensors) {
+                    const sensorKeys = Object.keys(zone.sensors);
+                    zoneData.sensorCount = sensorKeys.filter(key => {
+                        const sensor = zone.sensors[key];
+                        return sensor && sensor.current != null;
+                    }).length;
+                }
+            } else {
+                console.error('[zone-detail] ❌ Zone not found!', {
+                    requestedZoneId: zoneId,
+                    requestedRoomId: roomId,
+                    zoneNumber,
+                    availableZones: zones.map(z => {
+                        const normalized = normalizeZone(z);
+                        return { id: normalized.id, name: normalized.name };
+                    }),
+                    totalZones: zones.length
+                });
+                // Show error message on page
+                const errorMsg = zones.length === 0 
+                    ? `No telemetry data available for farm ${farmId}. Edge device may not be syncing.`
+                    : `Zone "${zoneId}" not found. Available zones: ${zones.map(z => z.id || z.name).join(', ')}`;
+                console.warn('[zone-detail]', errorMsg);
+            }
+        }
+        
+        // Fetch groups data from farm_data table via admin API
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (groupsRes && groupsRes.ok) {
+            const groupsData = await groupsRes.json();
+            const groups = groupsData.groups || [];
+            console.log('[zone-detail] Groups data received:', groups.length, 'total groups');
+            
+            // Count groups assigned to this zone
+            // Zone format variations: "room-knukf2:1", "room-knukf2:zone-1", "zone-1", "1"
+            const zoneNumber = zoneId.match(/\d+$/)?.[0];
+            const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+            
+            const zoneGroups = groups.filter(g => {
+                const normalized = normalizeGroup(g);
+                const groupZone = normalized.zone;
+                if (!groupZone) return false;
+                
+                // Strategy 1: Exact match
+                if (groupZone === zoneId) return true;
+                
+                // Strategy 2: Match by zone number
+                if (zoneNumber) {
+                    // Match compound formats
+                    if (groupZone === `${roomPart}:${zoneNumber}`) return true;
+                    if (groupZone === `${roomId}:${zoneNumber}`) return true;
+                    if (groupZone === `${roomPart}:zone-${zoneNumber}`) return true;
+                    if (groupZone === `${roomId}:zone-${zoneNumber}`) return true;
+                    
+                    // Match endings
+                    if (groupZone.endsWith(`:${zoneNumber}`) || groupZone.endsWith(`-${zoneNumber}`)) return true;
+                    
+                    // Match plain number or zone-N format
+                    if (groupZone === `zone-${zoneNumber}` || groupZone === zoneNumber) return true;
+                }
+                
+                return false;
+            });
+            
+            zoneData.groups = zoneGroups.length;
+            console.log('[zone-detail] Found', zoneData.groups, 'groups for zone:', {
+                zoneId,
+                roomId,
+                zoneNumber,
+                matchingGroups: zoneGroups.map(g => {
+                    const normalized = normalizeGroup(g);
+                    return { 
+                        id: normalized.id, 
+                        name: normalized.name,
+                        zone: normalized.zone
+                    };
+                })
+            });
+        }
+    } catch (error) {
+        console.error('[zone-detail] Failed to fetch zone data:', error);
+        // Show error notification on page
+        const title = document.getElementById('zone-detail-title');
+        if (title) {
+            title.innerHTML = `
+                <span style="color: var(--accent-red);">⚠️ Error Loading Zone Data</span>
+                <div style="font-size: 14px; font-weight: normal; color: var(--text-secondary); margin-top: 8px;">
+                    ${error.message || 'Failed to load zone information. Check console for details.'}
+                </div>
+            `;
+        }
+    }
     
-    // Load groups for this zone
-    await loadZoneGroups(farmId, roomId, zoneId, zoneData.groups);
+    // Update title and KPIs with real data or empty states
+    document.getElementById('zone-detail-title').textContent = zoneData.name;
+    
+    // Temperature
+    if (zoneData.temperature != null) {
+        document.getElementById('zone-temp').textContent = `${zoneData.temperature.toFixed(1)}°C`;
+        document.getElementById('zone-temp-change').textContent = 'Live sensor reading';
+    } else {
+        document.getElementById('zone-temp').textContent = 'No data';
+        document.getElementById('zone-temp-change').textContent = 'Sensor not configured';
+    }
+    
+    // Humidity
+    if (zoneData.humidity != null) {
+        document.getElementById('zone-humidity').textContent = `${zoneData.humidity.toFixed(0)}%`;
+        document.getElementById('zone-humidity-change').textContent = 'Live sensor reading';
+    } else {
+        document.getElementById('zone-humidity').textContent = 'No data';
+        document.getElementById('zone-humidity-change').textContent = 'Sensor not configured';
+    }
+    
+    // Groups count
+    document.getElementById('zone-groups').textContent = zoneData.groups.toString();
+    document.getElementById('zone-groups-change').textContent = zoneData.groups > 0 ? 
+        `${zoneData.groups} ${zoneData.groups === 1 ? 'group' : 'groups'} assigned` : 
+        'No groups assigned';
+    
+    // Devices and trays
+    document.getElementById('zone-devices').textContent = zoneData.devices.toString();
+    document.getElementById('zone-devices-change').textContent = zoneData.devices > 0 ? 
+        `${zoneData.devices} ${zoneData.devices === 1 ? 'device' : 'devices'}` : 
+        'Managed locally on edge device';
+    document.getElementById('zone-trays').textContent = zoneData.trays.toString();
+    document.getElementById('zone-trays-change').textContent = zoneData.trays > 0 ?
+        `${zoneData.trays} ${zoneData.trays === 1 ? 'tray' : 'trays'}` :
+        'Managed at room level';
+    
+    // Load groups and calculate PPFD from recipes
+    await loadZoneGroupsAndPPFD(farmId, roomId, zoneId, zoneData.groups);
     
     // Load sensors for this zone
     await loadZoneSensors(farmId, roomId, zoneId);
 }
 
 /**
- * Load groups for a specific zone
+ * Load groups for a specific zone and calculate PPFD from recipes
  */
-async function loadZoneGroups(farmId, roomId, zoneId, count) {
+async function loadZoneGroupsAndPPFD(farmId, roomId, zoneId, count) {
     const tbody = document.getElementById('zone-groups-tbody');
-    const cropTypes = ['Lettuce', 'Basil', 'Arugula', 'Kale', 'Spinach'];
-    const groups = [];
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading groups...</td></tr>';
     
-    for (let i = 1; i <= count; i++) {
-        const groupId = `group-${i}`;
-        const cropType = cropTypes[Math.floor(Math.random() * cropTypes.length)];
-        const devices = Math.floor(Math.random() * 4) + 2;
-        const trays = Math.floor(Math.random() * 8) + 4;
-        const status = Math.random() > 0.95 ? 'warning' : 'active';
+    try {
+        // Fetch groups from admin API
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (!groupsRes || !groupsRes.ok) throw new Error(`HTTP ${groupsRes?.status || 'error'}`);
         
-        groups.push({
-            groupId,
-            name: `${cropType} Batch ${i}`,
-            devices,
-            trays,
-            recipe: `${cropType} Standard`,
-            status
+        const groupsData = await groupsRes.json();
+        const allGroups = groupsData.groups || [];
+        console.log('[loadZoneGroupsAndPPFD] All groups:', allGroups.length);
+        
+        // Filter groups for this zone with improved matching
+        // Zone ID formats: "room-knukf2:zone-1" (compound), "room-knukf2:1", "zone-1" (legacy), or just "1" (number)
+        const zoneNumber = zoneId.match(/\d+$/)?.[0];
+        const roomPart = zoneId.includes(':') ? zoneId.split(':')[0] : roomId;
+        
+        const zoneGroups = allGroups.filter(g => {
+            const normalized = normalizeGroup(g);
+            const groupZone = normalized.zone;
+            if (!groupZone) return false;
+            
+            // Strategy 1: Exact match
+            if (groupZone === zoneId) return true;
+            
+            // Strategy 2: Match by zone number
+            if (zoneNumber) {
+                // Match compound formats
+                if (groupZone === `${roomPart}:${zoneNumber}`) return true;
+                if (groupZone === `${roomId}:${zoneNumber}`) return true;
+                if (groupZone === `${roomPart}:zone-${zoneNumber}`) return true;
+                if (groupZone === `${roomId}:zone-${zoneNumber}`) return true;
+                
+                // Match endings
+                if (groupZone.endsWith(`:${zoneNumber}`) || groupZone.endsWith(`-${zoneNumber}`)) return true;
+                
+                // Match plain number or zone-N format
+                if (groupZone === `zone-${zoneNumber}` || groupZone === zoneNumber) return true;
+            }
+            
+            return false;
         });
+        
+        console.log('[loadZoneGroupsAndPPFD] Filtered to zone:', zoneGroups.length, 'groups for', zoneId, {
+            matchingGroups: zoneGroups.map(g => {
+                const normalized = normalizeGroup(g);
+                return { id: normalized.id, name: normalized.name, zone: normalized.zone };
+            })
+        });
+        
+        // Fetch lighting recipes to calculate PPFD
+        let recipesData = null;
+        try {
+            const recipesRes = await fetch(`${API_BASE}/data/lighting-recipes.json`);
+            if (recipesRes.ok) {
+                recipesData = await recipesRes.json();
+            }
+        } catch (err) {
+            console.warn('[loadZoneGroupsAndPPFD] Failed to load recipes:', err);
+        }
+        
+        // Calculate PPFD for each group based on seed date and recipe
+        let totalPPFD = 0;
+        let ppfdCount = 0;
+        
+        zoneGroups.forEach(group => {
+            if (!recipesData || !group.plan || !group.planConfig?.anchor?.seedDate) return;
+            
+            // Find recipe for this group's plan
+            const planName = group.plan || group.planId || group.recipe;
+            const recipes = recipesData.crops?.[planName];
+            if (!recipes || !Array.isArray(recipes)) return;
+            
+            // Calculate days since seed date
+            try {
+                const seedDate = new Date(group.planConfig.anchor.seedDate);
+                const now = new Date();
+                seedDate.setHours(0, 0, 0, 0);
+                now.setHours(0, 0, 0, 0);
+                const daysSinceSeed = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24)) + 1;
+                
+                // Find the closest day in the recipe
+                let closestDay = recipes[0];
+                recipes.forEach(recipeDay => {
+                    if (Math.abs(recipeDay.day - daysSinceSeed) < Math.abs(closestDay.day - daysSinceSeed)) {
+                        closestDay = recipeDay;
+                    }
+                });
+                
+                if (closestDay && closestDay.ppfd) {
+                    group._calculatedPPFD = Math.round(closestDay.ppfd);
+                    totalPPFD += group._calculatedPPFD;
+                    ppfdCount++;
+                    console.log(`[loadZoneGroupsAndPPFD] Group ${group.id}: Day ${daysSinceSeed}, PPFD = ${group._calculatedPPFD}`);
+                }
+            } catch (err) {
+                console.warn(`[loadZoneGroupsAndPPFD] Failed to calculate PPFD for group ${group.id}:`, err);
+            }
+        });
+        
+        // Update zone PPFD KPI with average from groups
+        if (ppfdCount > 0) {
+            const avgPPFD = Math.round(totalPPFD / ppfdCount);
+            // Update the PPFD display (assuming there's a zone-ppfd element in the HTML)
+            const ppfdEl = document.getElementById('zone-ppfd');
+            if (ppfdEl) {
+                ppfdEl.textContent = `${avgPPFD} μmol/m²/s`;
+            }
+            const ppfdChangeEl = document.getElementById('zone-ppfd-change');
+            if (ppfdChangeEl) {
+                ppfdChangeEl.textContent = `Average from ${ppfdCount} ${ppfdCount === 1 ? 'group' : 'groups'}`;
+            }
+            
+            console.log(`[loadZoneGroupsAndPPFD] Zone ${zoneId} average PPFD: ${avgPPFD} from ${ppfdCount} groups`);
+        }
+        
+        if (zoneGroups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">No groups assigned to this zone</td></tr>';
+            return;
+        }
+        
+        // Render groups table with calculated PPFD
+        tbody.innerHTML = zoneGroups.map(group => {
+            const ppfdDisplay = group._calculatedPPFD ? `${group._calculatedPPFD} μmol/m²/s` : (group.ppfd || 'N/A');
+            const recipeName = group.recipe || group.plan || 'No recipe';
+            return `
+            <tr onclick="viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">
+                <td>${escapeHtml(group.id || group.group_id || 'N/A')}</td>
+                <td>${escapeHtml(group.name || 'Unnamed')}</td>
+                <td>${group.lights?.length || group.light_count || 0}</td>
+                <td>${group.trays || group.tray_count || 0}</td>
+                <td title="Current PPFD: ${ppfdDisplay}">${escapeHtml(recipeName)}</td>
+                <td><span class="status-badge status-${group.status || 'active'}">${group.status || 'active'}</span></td>
+                <td><button class="btn-secondary btn-sm" onclick="event.stopPropagation(); viewGroupDetail('${farmId}', '${roomId}', '${zoneId}', '${escapeHtml(group.id || group.group_id || '')}')">View</button></td>
+            </tr>
+        `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('[loadZoneGroupsAndPPFD] Failed to load groups:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty error">Failed to load groups - ' + escapeHtml(error.message) + '</td></tr>';
     }
-    
-    tbody.innerHTML = groups.map(group => `
-        <tr>
-            <td><code>${group.groupId}</code></td>
-            <td><strong>${group.name}</strong></td>
-            <td>${group.devices}</td>
-            <td>${group.trays}</td>
-            <td>${group.recipe}</td>
-            <td><span class="badge badge-${getStatusBadgeClass(group.status)}">${group.status}</span></td>
-            <td>
-                <button class="btn" onclick="drillToGroup('${farmId}', '${roomId}', '${zoneId}', '${group.groupId}')">View</button>
-            </td>
-        </tr>
-    `).join('');
 }
 
 /**
@@ -2185,162 +3700,783 @@ async function loadZoneGroups(farmId, roomId, zoneId, count) {
  */
 async function loadZoneSensors(farmId, roomId, zoneId) {
     const tbody = document.getElementById('zone-sensors-tbody');
-    const sensorTypes = ['Temperature', 'Humidity', 'CO2', 'Light', 'Soil Moisture'];
-    const sensors = [];
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading sensors...</td></tr>';
     
-    for (const type of sensorTypes) {
-        const sensorId = `${type.toLowerCase().replace(' ', '-')}-sensor-${zoneId}`;
-        let reading = '';
+    try {
+        // Fetch farm environmental data to get zone sensors
+        const farmRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}`);
+        if (!farmRes || !farmRes.ok) throw new Error(`HTTP ${farmRes?.status || 'error'}`);
         
-        switch(type) {
-            case 'Temperature':
-                reading = `${(Math.random() * 4 + 22).toFixed(1)}°F`;
-                break;
-            case 'Humidity':
-                reading = `${(Math.random() * 20 + 60).toFixed(0)}%`;
-                break;
-            case 'CO2':
-                reading = `${Math.floor(Math.random() * 400 + 800)} ppm`;
-                break;
-            case 'Light':
-                reading = `${Math.floor(Math.random() * 200) + 400} PPFD`;
-                break;
-            case 'Soil Moisture':
-                reading = `${(Math.random() * 20 + 40).toFixed(0)}%`;
-                break;
+        const farmData = await farmRes.json();
+        const environmental = farmData.farm?.environmental || farmData.environmental;
+        const zones = environmental?.zones || [];
+        
+        // Find the specific zone
+        const zoneNumber = zoneId.match(/\d+$/)?.[0];
+        const zone = zones.find(z => {
+            const zId = z.id || z.zone_id || z.zoneId || '';
+            const zName = z.name || z.zone_name || '';
+            return zId === zoneId || 
+                   zName === zoneId ||
+                   (zoneNumber && (zId.endsWith(`:${zoneNumber}`) || zId.endsWith(`-${zoneNumber}`) || zName.includes(`Zone ${zoneNumber}`)));
+        });
+        
+        if (!zone || !zone.sensors) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No sensors configured for this zone</td></tr>';
+            return;
         }
         
-        sensors.push({
-            sensorId,
-            type,
-            reading,
-            status: Math.random() > 0.95 ? 'offline' : 'online',
-            lastUpdate: generateRandomTime()
-        });
+        // Build sensor rows — one row per physical device per metric
+        // This shows each individual sensor instead of a single aggregated row
+        const sensors = [];
+        const sensorMap = zone.sensors;
+        const sensorDevices = zone.sensorDevices || [];
+
+        // Derive device type label from sensorDevices or zone source
+        function getDeviceTypeLabel(deviceId) {
+            const sd = sensorDevices.find(d => d.id === deviceId);
+            if (sd) {
+                const t = (sd.type || '').toLowerCase();
+                if (t.includes('woio') || t.includes('switchbot')) return 'SwitchBot';
+                if (t.includes('hub')) return 'Hub';
+                if (t) return t;
+            }
+            const src = (zone.meta?.source || '').toLowerCase();
+            if (src.includes('switchbot') || src === 'live-sync') return 'SwitchBot';
+            return 'Sensor';
+        }
+
+        // Format a timestamp into a relative or absolute label
+        function formatLastSeen(isoStr) {
+            if (!isoStr) return 'Active';
+            const ms = Date.now() - new Date(isoStr).getTime();
+            if (ms < 0 || isNaN(ms)) return 'Active';
+            if (ms < 60000) return 'Just now';
+            if (ms < 3600000) return `${Math.floor(ms/60000)}m ago`;
+            if (ms < 86400000) return `${Math.floor(ms/3600000)}h ago`;
+            return `${Math.floor(ms/86400000)}d ago`;
+        }
+
+        // Metric definitions: key, display name, unit, formatter
+        const metricDefs = [
+            { key: 'tempC', label: 'Temperature', unit: '°C', fmt: v => v.toFixed(1) },
+            { key: 'rh',    label: 'Humidity',    unit: '%',  fmt: v => v.toFixed(0) },
+            { key: 'co2',   label: 'CO2',         unit: ' ppm', fmt: v => v.toFixed(0) },
+            { key: 'ppfd',  label: 'PPFD',        unit: ' μmol/m²/s', fmt: v => v.toFixed(0) },
+            { key: 'pressure', label: 'Pressure', unit: ' hPa', fmt: v => v.toFixed(1) },
+        ];
+
+        // Iterate each metric and emit one row per source device
+        for (const { key, label, unit, fmt } of metricDefs) {
+            const bucket = sensorMap[key];
+            if (!bucket) continue;
+            const sources = bucket.sources || {};
+            const sourceEntries = Object.entries(sources);
+            if (sourceEntries.length > 0) {
+                // Per-device rows
+                for (const [srcId, src] of sourceEntries) {
+                    if (src.current == null || !Number.isFinite(src.current)) continue;
+                    const devName = src.name || sensorDevices.find(d => d.id === srcId)?.name || srcId;
+                    const typeLabel = getDeviceTypeLabel(srcId);
+                    sensors.push({
+                        type: label,
+                        device: `${devName} (${typeLabel})`,
+                        value: `${fmt(src.current)}${unit}`,
+                        status: 'active',
+                        lastSeen: formatLastSeen(src.updatedAt)
+                    });
+                }
+            } else if (bucket.current != null && Number.isFinite(bucket.current)) {
+                // No per-source breakdown — fall back to zone aggregate
+                sensors.push({
+                    type: label,
+                    device: sensorDevices.length ? sensorDevices.map(d => d.name || d.id).join(', ') : 'Sensor',
+                    value: `${fmt(bucket.current)}${unit}`,
+                    status: 'active',
+                    lastSeen: formatLastSeen(zone.meta?.lastSampleAt || zone.meta?.lastSync)
+                });
+            }
+        }
+
+        // VPD — always a calculated metric, show as a single row
+        if (sensorMap.vpd && sensorMap.vpd.current != null) {
+            sensors.push({
+                type: 'VPD',
+                device: 'Calculated',
+                value: `${sensorMap.vpd.current.toFixed(2)} kPa`,
+                status: 'active',
+                lastSeen: 'Real-time'
+            });
+        }
+        
+        if (sensors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No active sensor readings</td></tr>';
+            return;
+        }
+        
+        // Render sensors table
+        tbody.innerHTML = sensors.map(sensor => `
+            <tr>
+                <td>${escapeHtml(sensor.device)}</td>
+                <td>${escapeHtml(sensor.type)}</td>
+                <td><strong>${escapeHtml(sensor.value)}</strong></td>
+                <td><span class="status-badge status-${sensor.status}">${sensor.status}</span></td>
+                <td>${escapeHtml(sensor.lastSeen)}</td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('[loadZoneSensors] Failed to load sensors:', error);
+        tbody.innerHTML = '<tr><td colspan="5" class="empty error">Failed to load sensors - ' + escapeHtml(error.message) + '</td></tr>';
     }
-    
-    tbody.innerHTML = sensors.map(sensor => `
-        <tr>
-            <td><code>${sensor.sensorId}</code></td>
-            <td>${sensor.type}</td>
-            <td>${sensor.reading}</td>
-            <td><span class="badge badge-${sensor.status === 'online' ? 'success' : 'danger'}">${sensor.status}</span></td>
-            <td>${sensor.lastUpdate}</td>
-        </tr>
-    `).join('');
 }
 
 /**
  * View Group Detail (Drill-down to specific group)
  */
 async function viewGroupDetail(farmId, roomId, zoneId, groupId) {
-    console.log(`Loading group detail: ${groupId} in zone ${zoneId}, room ${roomId}, farm ${farmId}`);
+    console.log(`[group-detail] Loading group detail: ${groupId} in zone ${zoneId}, room ${roomId}, farm ${farmId}`);
     currentFarmId = farmId;
     
     showView('group-detail-view');
     
-    // Mock group data - TODO: Replace with actual API call
-    const groupData = {
-        groupId,
-        name: groupId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        devices: Math.floor(Math.random() * 4) + 2,
-        trays: Math.floor(Math.random() * 8) + 4,
-        intensity: Math.floor(Math.random() * 30) + 70,
-        ppfd: Math.floor(Math.random() * 200) + 400,
-        recipe: 'Lettuce Standard',
-        schedule: 'Day 12 / Photoperiod 18:6'
-    };
-    
-    // Update title and KPIs
-    document.getElementById('group-detail-title').textContent = groupData.name;
-    document.getElementById('group-devices').textContent = groupData.devices;
-    document.getElementById('group-devices-change').textContent = 'All online';
-    document.getElementById('group-trays').textContent = groupData.trays;
-    document.getElementById('group-trays-change').textContent = 'At capacity';
-    document.getElementById('group-intensity').textContent = `${groupData.intensity}%`;
-    document.getElementById('group-intensity-change').textContent = 'Scheduled';
-    document.getElementById('group-ppfd').textContent = `${groupData.ppfd} μmol/m²/s`;
-    document.getElementById('group-ppfd-change').textContent = 'Target: 600';
-    document.getElementById('group-recipe').textContent = groupData.recipe;
-    document.getElementById('group-recipe-change').textContent = 'On schedule';
-    document.getElementById('group-schedule').textContent = groupData.schedule;
-    document.getElementById('group-schedule-change').textContent = 'Active';
-    
-    // Load devices for this group
-    await loadGroupDevices(farmId, roomId, zoneId, groupId, groupData.devices);
-    
-    // Load trays for this group
-    await loadGroupTrays(farmId, roomId, zoneId, groupId, groupData.trays);
+    try {
+        // Fetch groups data from admin API
+        const groupsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/groups`);
+        if (!groupsRes || !groupsRes.ok) {
+            throw new Error(`Failed to fetch groups data: ${groupsRes?.status || 'network error'}`);
+        }
+        
+        const groupsData = await groupsRes.json();
+        const groups = groupsData.groups || [];
+        console.log('[group-detail] Groups data received:', groups.length, 'total groups');
+        
+        // Find matching group with enhanced ID matching
+        const group = groups.find(g => {
+            const normalized = normalizeGroup(g);
+            // Match on normalized ID or any ID variation
+            return normalized.id === groupId || 
+                   g.id === groupId || 
+                   g.group_id === groupId || 
+                   g.groupId === groupId;
+        });
+        
+        if (!group) {
+            console.error('[group-detail] ❌ Group not found:', groupId);
+            console.error('[group-detail] Available groups:', groups.map(g => g.id || g.group_id));
+            
+            // Show error state in UI
+            document.getElementById('group-detail-title').textContent = `Group Not Found: ${groupId}`;
+            document.getElementById('group-devices').textContent = '0';
+            document.getElementById('group-devices-change').textContent = 'Group not found in sync data';
+            document.getElementById('group-trays').textContent = '0';
+            document.getElementById('group-trays-change').textContent = 'Group not found in sync data';
+            document.getElementById('group-days-since-seed').textContent = 'No data';
+            document.getElementById('group-days-since-seed-change').textContent = 'Group not found';
+            document.getElementById('group-target-ppfd').textContent = 'No data';
+            document.getElementById('group-target-ppfd-change').textContent = 'Group not found';
+            document.getElementById('group-recipe').textContent = 'Not found';
+            document.getElementById('group-recipe-change').textContent = 'Group not found';
+            document.getElementById('group-schedule').textContent = 'Not found';
+            document.getElementById('group-schedule-change').textContent = 'Group not found';
+            
+            const devicesBody = document.getElementById('group-devices-tbody');
+            devicesBody.innerHTML = '<tr><td colspan="6" class="empty error">Group not found in database</td></tr>';
+            const traysBody = document.getElementById('group-trays-tbody');
+            traysBody.innerHTML = '<tr><td colspan="5" class="empty error">Group not found in database</td></tr>';
+            return;
+        }
+        
+        console.log('[group-detail] ✅ Found matching group:', {
+            id: group.id,
+            name: group.name,
+            crop: group.crop,
+            lights: group.lights?.length || 0,
+            trays: group.trays,
+            hasSeedDate: !!group.planConfig?.anchor?.seedDate
+        });
+        
+        // Extract canonical fields (DATA_FORMAT_STANDARDS.md compliant)
+        const cropName = group.crop || 'Not configured';  // Use canonical 'crop' field
+        const devices = group.lights?.length || 0;         // Count light devices assigned
+        const trays = group.trays || 0;                    // Canonical 'trays' field (number)
+        const groupName = group.name || group.id;
+        const photoperiod = group.planConfig?.schedule?.photoperiodHours;
+        
+        // Calculate days since seed date
+        let daysSinceSeed = null;
+        if (group.planConfig?.anchor?.seedDate) {
+            try {
+                const seedDate = new Date(group.planConfig.anchor.seedDate);
+                const now = new Date();
+                seedDate.setHours(0, 0, 0, 0);
+                now.setHours(0, 0, 0, 0);
+                daysSinceSeed = Math.floor((now - seedDate) / (1000 * 60 * 60 * 24)) + 1;
+                console.log('[group-detail] Calculated days since seed:', daysSinceSeed);
+            } catch (err) {
+                console.warn('[group-detail] Failed to calculate days since seed:', err);
+            }
+        }
+        
+        // Update title and KPIs with real data
+        document.getElementById('group-detail-title').textContent = `${groupName} - ${cropName}`;
+        
+        // Devices KPI
+        document.getElementById('group-devices').textContent = devices.toString();
+        document.getElementById('group-devices-change').textContent = 
+            devices > 0 ? `${devices} light ${devices === 1 ? 'device' : 'devices'} assigned` : 'No devices assigned';
+        
+        // Trays KPI
+        document.getElementById('group-trays').textContent = trays.toString();
+        document.getElementById('group-trays-change').textContent = 
+            trays > 0 ? `${trays} ${trays === 1 ? 'tray' : 'trays'} in group` : 'No trays assigned';
+        
+        // Days Since Seed KPI
+        document.getElementById('group-days-since-seed').textContent = 
+            daysSinceSeed !== null ? daysSinceSeed.toString() : 'No data';
+        document.getElementById('group-days-since-seed-change').textContent = 
+            daysSinceSeed !== null ? `Seeded ${daysSinceSeed} days ago` : 'Seed date not configured';
+        
+        // Recipe KPI
+        document.getElementById('group-recipe').textContent = cropName;
+        document.getElementById('group-recipe-change').textContent = 
+            group.planConfig ? 'Active grow plan' : 'No active plan';
+        
+        // Schedule Status KPI
+        const scheduleStatus = photoperiod ? `${photoperiod}h photoperiod` : 'Not configured';
+        document.getElementById('group-schedule').textContent = scheduleStatus;
+        document.getElementById('group-schedule-change').textContent = 
+            photoperiod ? 'From grow plan' : 'Schedule not configured';
+        
+        // Target PPFD KPI - will be calculated from recipe if available
+        document.getElementById('group-target-ppfd').textContent = 'Calculating...';
+        document.getElementById('group-target-ppfd-change').textContent = 'From recipe schedule';
+        
+        // Calculate current PPFD from recipe DLI and actual photoperiod
+        // Formula: PPFD (μmol/m²/s) = DLI (mol/m²/d) × 1,000,000 / (photoperiod_hours × 3600)
+        if (daysSinceSeed !== null && group.crop) {
+            try {
+                const recipesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
+                if (recipesRes && recipesRes.ok) {
+                    const recipesData = await recipesRes.json();
+                    const recipes = recipesData.crops?.[group.crop];
+                    if (recipes && Array.isArray(recipes)) {
+                        // Find closest recipe day
+                        let closestDay = recipes[0];
+                        recipes.forEach(recipeDay => {
+                            if (Math.abs(recipeDay.day - daysSinceSeed) < Math.abs(closestDay.day - daysSinceSeed)) {
+                                closestDay = recipeDay;
+                            }
+                        });
+                        
+                        if (closestDay && closestDay.dli) {
+                            // Get actual photoperiod from group config (not assumed value)
+                            const photoperiodHours = group.planConfig?.schedule?.photoperiodHours 
+                                                  || group.photoperiodHours 
+                                                  || 16;  // Fallback to 16h default
+                            
+                            // Calculate PPFD from target DLI and actual photoperiod
+                            // This ensures PPFD reflects actual "lights on" schedule, not pre-calculated recipe value
+                            const targetPPFD = Math.round((closestDay.dli * 1_000_000) / (photoperiodHours * 3600));
+                            
+                            document.getElementById('group-target-ppfd').textContent = `${targetPPFD} μmol/m²/s`;
+                            document.getElementById('group-target-ppfd-change').textContent = 
+                                `Day ${closestDay.day}: ${closestDay.dli} DLI ÷ ${photoperiodHours}h`;
+                            
+                            console.log('[group-detail] Calculated PPFD from DLI:', {
+                                crop: group.crop,
+                                daysSinceSeed,
+                                recipeDay: closestDay.day,
+                                targetDLI: closestDay.dli,
+                                photoperiodHours,
+                                calculatedPPFD: targetPPFD,
+                                recipePPFD: closestDay.ppfd  // For comparison (may differ if recipe assumes different photoperiod)
+                            });
+                        } else {
+                            console.warn('[group-detail] No DLI data in recipe for', group.crop, 'day', closestDay?.day);
+                            document.getElementById('group-target-ppfd').textContent = 'No DLI data';
+                            document.getElementById('group-target-ppfd-change').textContent = 'Recipe missing DLI target';
+                        }
+                    } else {
+                        console.warn('[group-detail] No recipe found for crop:', group.crop);
+                        document.getElementById('group-target-ppfd').textContent = 'No recipe';
+                        document.getElementById('group-target-ppfd-change').textContent = 'Recipe not loaded';
+                    }
+                }
+            } catch (err) {
+                console.warn('[group-detail] Failed to calculate PPFD:', err);
+                document.getElementById('group-target-ppfd').textContent = 'Error';
+                document.getElementById('group-target-ppfd-change').textContent = err.message;
+            }
+        } else {
+            document.getElementById('group-target-ppfd').textContent = 'No data';
+            document.getElementById('group-target-ppfd-change').textContent = 'Missing seed date or crop';
+        }
+        
+        // Load devices for this group
+        await loadGroupDevices(farmId, roomId, zoneId, groupId, group);
+        
+        // Load trays for this group
+        await loadGroupTrays(farmId, roomId, zoneId, groupId, group);
+        
+    } catch (error) {
+        console.error('[group-detail] ❌ Failed to load group detail:', error);
+        
+        // Show error state in UI
+        document.getElementById('group-detail-title').textContent = `Error Loading Group: ${groupId}`;
+        document.getElementById('group-devices').textContent = '0';
+        document.getElementById('group-devices-change').textContent = 'Failed to load data';
+        document.getElementById('group-trays').textContent = '0';
+        document.getElementById('group-trays-change').textContent = 'Failed to load data';
+        document.getElementById('group-days-since-seed').textContent = 'Error';
+        document.getElementById('group-days-since-seed-change').textContent = error.message;
+        document.getElementById('group-target-ppfd').textContent = 'Error';
+        document.getElementById('group-target-ppfd-change').textContent = 'Failed to load';
+        document.getElementById('group-recipe').textContent = 'Error';
+        document.getElementById('group-recipe-change').textContent = error.message;
+        document.getElementById('group-schedule').textContent = 'Error';
+        document.getElementById('group-schedule-change').textContent = 'Failed to load';
+        
+        const devicesBody = document.getElementById('group-devices-tbody');
+        devicesBody.innerHTML = `<tr><td colspan="6" class="empty error">Error: ${escapeHtml(error.message)}</td></tr>`;
+        const traysBody = document.getElementById('group-trays-tbody');
+        traysBody.innerHTML = `<tr><td colspan="5" class="empty error">Error: ${escapeHtml(error.message)}</td></tr>`;
+    }
 }
 
 /**
  * Load devices for a specific group
  */
-async function loadGroupDevices(farmId, roomId, zoneId, groupId, count) {
+async function loadGroupDevices(farmId, roomId, zoneId, groupId, group) {
     const tbody = document.getElementById('group-devices-tbody');
-    const devices = [];
     
-    for (let i = 1; i <= count; i++) {
-        const deviceId = `light-${groupId}-${i}`;
-        const status = Math.random() > 0.95 ? 'offline' : 'online';
-        const state = status === 'online' ? `${Math.floor(Math.random() * 30) + 70}%` : 'Off';
-        
-        devices.push({
-            deviceId,
-            type: 'LED Grow Light',
-            status,
-            state,
-            lastSeen: generateRandomTime()
-        });
+    if (!group || !group.lights || group.lights.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No devices assigned to this group. Device assignments are managed on the edge device.</td></tr>';
+        return;
     }
     
-    tbody.innerHTML = devices.map(device => `
-        <tr>
-            <td><code>${device.deviceId}</code></td>
-            <td>${device.type}</td>
-            <td><span class="badge badge-${device.status === 'online' ? 'success' : 'danger'}">${device.status}</span></td>
-            <td>${device.state}</td>
-            <td>${device.lastSeen}</td>
-            <td>
-                <button class="btn" style="font-size: 0.85rem; padding: 4px 12px;">Control</button>
-            </td>
-        </tr>
-    `).join('');
+    console.log('[group-detail] Rendering devices:', group.lights.length);
+    
+    // Display assigned light devices
+    tbody.innerHTML = group.lights.map((light, index) => {
+        const deviceId = light.deviceId || light.device_id || light.id || `device-${index + 1}`;
+        const status = light.status || 'unknown';
+        const currentState = light.on ? 'ON' : light.on === false ? 'OFF' : 'Unknown';
+        const lastSeen = light.lastSeen || light.last_seen || 'Never';
+        
+        return `
+            <tr>
+                <td>${escapeHtml(deviceId)}</td>
+                <td>Light</td>
+                <td><span class="badge badge-${status === 'online' ? 'success' : 'neutral'}">${status}</span></td>
+                <td>${currentState}</td>
+                <td>${lastSeen !== 'Never' ? new Date(lastSeen).toLocaleString() : 'Never'}</td>
+                <td><button class="btn-secondary btn-sm" onclick="viewDeviceDetail('${escapeHtml(deviceId)}')">View</button></td>
+            </tr>
+        `;
+    }).join('');
 }
 
 /**
  * Load trays for a specific group
  */
-async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
+async function loadGroupTrays(farmId, roomId, zoneId, groupId, group) {
     const tbody = document.getElementById('group-trays-tbody');
-    const cropTypes = ['Lettuce', 'Basil', 'Arugula', 'Kale'];
-    const trays = [];
     
-    for (let i = 1; i <= count; i++) {
-        const trayId = `tray-${groupId}-${String(i).padStart(3, '0')}`;
-        const cropType = cropTypes[Math.floor(Math.random() * cropTypes.length)];
-        const plantCount = Math.floor(Math.random() * 20) + 40;
-        const daysToHarvest = Math.floor(Math.random() * 15) + 5;
-        const health = Math.random() > 0.9 ? 'Fair' : 'Good';
-        
-        trays.push({
-            trayId,
-            cropType,
-            plantCount,
-            daysToHarvest,
-            health
-        });
+    if (!group || !group.trays || group.trays === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No trays assigned to this group. Tray assignments are managed on the edge device.</td></tr>';
+        return;
     }
     
-    tbody.innerHTML = trays.map(tray => `
+    console.log('[group-detail] Group has', group.trays, 'trays (count only, detailed tray data managed on edge)');
+    
+    // Show tray count info (detailed tray data is managed on edge device)
+    tbody.innerHTML = `
         <tr>
-            <td><code>${tray.trayId}</code></td>
-            <td>${tray.cropType}</td>
-            <td>${tray.plantCount}</td>
-            <td>${tray.daysToHarvest} days</td>
-            <td><span class="badge badge-${tray.health === 'Good' ? 'success' : 'warning'}">${tray.health}</span></td>
+            <td colspan="5" class="empty">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 2rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">${group.trays}</div>
+                    <div style="color: var(--text-secondary);">Total ${group.trays === 1 ? 'Tray' : 'Trays'} in Group</div>
+                    <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">Detailed tray data is managed on the edge device</div>
+                </div>
+            </td>
         </tr>
-    `).join('');
+    `;
+}
+
+/**
+ * Load farm summary information
+ */
+async function loadFarmSummary(farmId, farm) {
+    try {
+        console.log('[FarmSummary] Loading summary for farm:', farmId);
+        console.log('[FarmSummary] Farm object received:', farm);
+        
+        // Fetch farm config to get contact info and notes (requires auth)
+        const configResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/config`);
+        let config = {};
+        let settings = {};
+        
+        if (configResponse && configResponse.ok) {
+            const configData = await configResponse.json();
+            config = configData.config || {};
+            settings = config.settings || {};
+            console.log('[FarmSummary] Config loaded:', config);
+        } else {
+            console.warn('[FarmSummary] Config request failed (likely not logged in), using farm object data only');
+        }
+        
+        // Extract metadata from farm object (this comes from database farms.metadata)
+        let metadata = farm.metadata || {};
+        if (typeof metadata === 'string') {
+            try {
+                metadata = JSON.parse(metadata);
+            } catch (parseError) {
+                console.warn('[FarmSummary] Failed to parse farm metadata string:', parseError);
+                metadata = {};
+            }
+        }
+
+        // Merge config metadata as fallback if farm metadata is incomplete
+        let configMetadata = config?.metadata || {};
+        if (typeof configMetadata === 'string') {
+            try {
+                configMetadata = JSON.parse(configMetadata);
+            } catch (parseError) {
+                console.warn('[FarmSummary] Failed to parse config metadata string:', parseError);
+                configMetadata = {};
+            }
+        }
+
+        const mergedMetadata = { ...configMetadata, ...metadata };
+        const contact = { ...(configMetadata.contact || {}), ...(metadata.contact || {}) };
+        const location = { ...(configMetadata.location || {}), ...(metadata.location || {}) };
+        
+        // Determine deployment type based on API URL pattern
+        let deploymentType = 'Unknown';
+        let apiUrl = farm.apiUrl || config.api_url || metadata.url || farm.url;
+        
+        if (apiUrl) {
+            // Check if it's a local/edge deployment
+            if (apiUrl.includes('localhost') || 
+                apiUrl.includes('127.0.0.1') || 
+                apiUrl.match(/192\.168\.\d+\.\d+/) || 
+                apiUrl.match(/10\.\d+\.\d+\.\d+/) || 
+                apiUrl.match(/172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+/)) {
+                deploymentType = 'Edge (Local Network)';
+            } else if (apiUrl.includes('elasticbeanstalk.com') || 
+                       apiUrl.includes('amazonaws.com') || 
+                       apiUrl.includes('azure') || 
+                       apiUrl.includes('greenreach')) {
+                deploymentType = 'Cloud';
+            }
+        }
+        
+        // Update Farm Summary card fields
+        const ownerEl = document.getElementById('detail-owner');
+        const contactEl = document.getElementById('detail-contact');
+        const phoneEl = document.getElementById('detail-phone');
+        const emailEl = document.getElementById('detail-email');
+        const websiteEl = document.getElementById('detail-website');
+        const addressEl = document.getElementById('detail-address');
+        const deploymentTypeEl = document.getElementById('detail-deployment-type');
+        const notesEl = document.getElementById('detail-notes');
+        
+        // Pull from metadata.contact first (from edge farm.json), then farm level
+        if (ownerEl) ownerEl.textContent = contact.owner || mergedMetadata.owner || farm.owner || configMetadata.owner || '--';
+        if (contactEl) contactEl.textContent = contact.name || contact.contactName || mergedMetadata.contactName || configMetadata.contactName || farm.contactName || '--';
+        if (phoneEl) phoneEl.textContent = contact.phone || mergedMetadata.phone || configMetadata.phone || farm.phone || '--';
+        if (emailEl) emailEl.textContent = contact.email || mergedMetadata.email || farm.email || config.email || '--';
+        
+        // Website field (from farm.json url or metadata)
+        if (websiteEl) {
+            const website = mergedMetadata.website || contact.website || mergedMetadata.url || farm.url || apiUrl;
+            if (website && website !== '--') {
+                websiteEl.innerHTML = `<a href="${website}" target="_blank" style="color: var(--accent-blue); text-decoration: none;">${website}</a>`;
+            } else {
+                websiteEl.textContent = '--';
+            }
+        }
+        
+        // Format address from location object or contact
+        let addressText = '--';
+        if (location.street || location.city || location.state || location.zip) {
+            const parts = [];
+            if (location.street) parts.push(location.street);
+            if (location.city) parts.push(location.city);
+            if (location.state) parts.push(location.state);
+            if (location.zip) parts.push(location.zip);
+            addressText = parts.join(', ');
+        } else if (contact.address) {
+            addressText = contact.address;
+        }
+        if (addressEl) addressEl.textContent = addressText;
+        
+        if (deploymentTypeEl) deploymentTypeEl.textContent = deploymentType;
+        
+        // Load notes from settings
+        if (notesEl) {
+            notesEl.value = settings.notes || '';
+            // Store farmId in a data attribute for saving
+            notesEl.dataset.farmId = farmId;
+        }
+        
+        console.log('[FarmSummary] Summary loaded successfully');
+        
+    } catch (error) {
+        console.error('[FarmSummary] Error loading farm summary:', error);
+    }
+}
+
+/**
+ * Enable edit mode for farm info
+ */
+function enableFarmInfoEdit() {
+    console.log('[FarmInfo] Enabling edit mode');
+    
+    // Hide display values, show input fields
+    const fields = ['owner', 'contact', 'phone', 'email', 'website', 'address'];
+    fields.forEach(field => {
+        const displayEl = document.getElementById(`detail-${field}`);
+        const inputEl = document.getElementById(`detail-${field}-input`);
+        
+        if (displayEl && inputEl) {
+            // Copy current value to input
+            let value = displayEl.textContent.trim();
+            // Handle website links
+            if (field === 'website' && displayEl.querySelector('a')) {
+                value = displayEl.querySelector('a').href;
+            }
+            inputEl.value = value === '--' ? '' : value;
+            
+            // Toggle visibility
+            displayEl.style.display = 'none';
+            inputEl.style.display = 'block';
+        }
+    });
+    
+    // Toggle buttons
+    document.getElementById('edit-farm-info-btn').style.display = 'none';
+    document.getElementById('save-farm-info-btn').style.display = 'inline-block';
+    document.getElementById('cancel-farm-info-btn').style.display = 'inline-block';
+}
+
+/**
+ * Cancel edit mode and revert changes
+ */
+function cancelFarmInfoEdit() {
+    console.log('[FarmInfo] Cancelling edit mode');
+    
+    // Hide input fields, show display values
+    const fields = ['owner', 'contact', 'phone', 'email', 'website', 'address'];
+    fields.forEach(field => {
+        const displayEl = document.getElementById(`detail-${field}`);
+        const inputEl = document.getElementById(`detail-${field}-input`);
+        
+        if (displayEl && inputEl) {
+            displayEl.style.display = 'block';
+            inputEl.style.display = 'none';
+        }
+    });
+    
+    // Toggle buttons
+    document.getElementById('edit-farm-info-btn').style.display = 'inline-block';
+    document.getElementById('save-farm-info-btn').style.display = 'none';
+    document.getElementById('cancel-farm-info-btn').style.display = 'none';
+}
+
+/**
+ * Save farm info and sync to edge device
+ */
+async function saveFarmInfo() {
+    const farmId = currentFarmId;
+    if (!farmId) {
+        alert('No farm selected');
+        return;
+    }
+    
+    console.log('[FarmInfo] Saving farm info for:', farmId);
+    
+    // Collect values from input fields
+    const farmInfo = {
+        owner: document.getElementById('detail-owner-input').value.trim(),
+        contactName: document.getElementById('detail-contact-input').value.trim(),
+        phone: document.getElementById('detail-phone-input').value.trim(),
+        email: document.getElementById('detail-email-input').value.trim(),
+        website: document.getElementById('detail-website-input').value.trim(),
+        address: document.getElementById('detail-address-input').value.trim()
+    };
+    
+    console.log('[FarmInfo] Collected data:', farmInfo);
+    
+    try {
+        // Save to GreenReach Central
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/metadata`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contact: farmInfo })
+        });
+        
+        // Handle null response (authentication failed)
+        if (!response) {
+            throw new Error('Authentication failed. Please log in again.');
+        }
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+            throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[FarmInfo] Save response:', result);
+        
+        // Update display values (database was updated successfully)
+        document.getElementById('detail-owner').textContent = farmInfo.owner || '--';
+        document.getElementById('detail-contact').textContent = farmInfo.contactName || '--';
+        document.getElementById('detail-phone').textContent = farmInfo.phone || '--';
+        document.getElementById('detail-email').textContent = farmInfo.email || '--';
+        
+        // Handle website display
+        const websiteEl = document.getElementById('detail-website');
+        if (farmInfo.website) {
+            websiteEl.innerHTML = `<a href="${farmInfo.website}" target="_blank" style="color: var(--accent-blue); text-decoration: none;">${farmInfo.website}</a>`;
+        } else {
+            websiteEl.textContent = '--';
+        }
+        
+        document.getElementById('detail-address').textContent = farmInfo.address || '--';
+        
+        // Exit edit mode
+        cancelFarmInfoEdit();
+        
+        // Show status-specific notification based on sync result
+        const syncStatus = result.syncStatus || 'not_attempted';
+        const statusMessages = {
+            'synced': {
+                type: 'success',
+                text: '✓ Changes saved and synced to farm device'
+            },
+            'sync_error': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. Could not reach farm device - will sync on next heartbeat'
+            },
+            'sync_failed': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. Farm device returned error - check device status'
+            },
+            'no_api_url': {
+                type: 'warning',
+                text: '⚠ Changes saved to Central. No device URL configured - manual sync required'
+            },
+            'not_attempted': {
+                type: 'info',
+                text: 'ℹ Changes saved to Central. Sync not attempted'
+            }
+        };
+        
+        const statusInfo = statusMessages[syncStatus] || statusMessages['not_attempted'];
+        showNotification(statusInfo.text, statusInfo.type);
+        
+    } catch (error) {
+        console.error('[FarmInfo] Error saving:', error);
+        alert(`Failed to save farm info: ${error.message}`);
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Simple notification system with status-specific styling
+    const colors = {
+        'success': '#10b981',
+        'error': '#ef4444',
+        'warning': '#f59e0b',
+        'info': '#3b82f6'
+    };
+    
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        background: ${colors[type] || colors['info']};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 400px;
+        line-height: 1.5;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Show warnings longer (5s vs 3s)
+    const duration = type === 'warning' ? 5000 : 3000;
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+}
+
+/**
+ * Toggle farm notes section visibility
+ */
+function toggleFarmNotes() {
+    const notesSection = document.getElementById('farm-notes-section');
+    const toggle = document.querySelector('.notes-toggle');
+    
+    if (notesSection && toggle) {
+        notesSection.classList.toggle('active');
+        toggle.classList.toggle('active');
+    }
+}
+
+/**
+ * Save farm notes
+ */
+async function saveFarmNotes() {
+    try {
+        const notesEl = document.getElementById('detail-notes');
+        if (!notesEl) {
+            alert('Notes field not found');
+            return;
+        }
+        
+        const farmId = notesEl.dataset.farmId;
+        const notes = notesEl.value;
+        
+        if (!farmId) {
+            alert('Farm ID not found. Please reload the page.');
+            return;
+        }
+        
+        console.log('[SaveNotes] Saving notes for farm:', farmId);
+        
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/notes`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save notes');
+        }
+        
+        const result = await response.json();
+        console.log('[SaveNotes] Notes saved successfully:', result);
+        
+        // Show success message
+        alert('Farm notes saved successfully!');
+        
+    } catch (error) {
+        console.error('[SaveNotes] Error saving notes:', error);
+        alert(`Failed to save notes: ${error.message}`);
+    }
 }
 
 /**
@@ -2348,49 +4484,96 @@ async function loadGroupTrays(farmId, roomId, zoneId, groupId, count) {
  */
 async function loadFarmRooms(farmId, count) {
     roomsData = [];
-    
+
     try {
-        // Fetch real rooms data
-        const roomsRes = await fetch('/data/rooms.json');
-        const roomsJson = await roomsRes.json();
-        const roomsList = roomsJson.rooms || [];
-        
-        // Fetch live environment data
-        let envData = { zones: [] };
+        const adminUrl = `${API_BASE}/api/admin/farms/${farmId}/rooms`;
+        const syncUrl = `${API_BASE}/api/sync/${farmId}/rooms`;
+        console.log('[FarmRooms] Fetching (admin first):', adminUrl);
+        let response;
         try {
-            const envRes = await fetch('/env');
-            envData = await envRes.json();
-        } catch(e) { /* optional */ }
-        
-        // Fetch groups for device counts
-        let groupsList = [];
+            response = await authenticatedFetch(adminUrl);
+            if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : 'no-response'}`);
+        } catch (adminErr) {
+            console.warn('[FarmRooms] Admin rooms failed, trying sync fallback:', adminErr.message || adminErr);
+            response = await authenticatedFetch(syncUrl);
+        }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[FarmRooms] Response:', data);
+        const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+
+        // Fetch telemetry data to get environmental readings
+        let telemetryZones = [];
         try {
-            const groupsRes = await fetch('/data/groups.json');
-            const groupsJson = await groupsRes.json();
-            groupsList = groupsJson.groups || [];
-        } catch(e) { /* optional */ }
-        
-        roomsList.forEach(room => {
-            const zones = envData.zones || [];
-            const zone = zones[0] || {};
-            const sensors = zone.sensors || {};
-            const roomGroups = groupsList.filter(g => g.room === room.name || g.roomId === room.id);
-            const deviceCount = roomGroups.reduce((sum, g) => sum + (g.deviceCount || g.lights?.length || 0), 0);
+            let telemetryRes;
+            try {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!telemetryRes || !telemetryRes.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                telemetryRes = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
+            if (telemetryRes.ok) {
+                const zonesData = await telemetryRes.json();
+                telemetryZones = zonesData.zones || zonesData.telemetry?.zones || [];
+                console.log('[FarmRooms] Telemetry zones:', telemetryZones.length);
+            }
+        } catch (err) {
+            console.warn('[FarmRooms] Failed to fetch telemetry:', err);
+        }
+
+        roomsData = rooms.map(room => {
+            const name = room.name || room.room_name || room.roomId || room.id || 'Room';
+            const roomId = room.roomId || room.room_id || room.id || name;
+            const zones = room.zones?.length || room.zone_count || room.zoneCount || 0;
+            const devices = room.devices?.length || room.device_count || room.deviceCount || 0;
             
-            roomsData.push({
-                name: room.name,
-                status: zone.status || 'online',
-                zones: room.zones?.length || 1,
-                devices: deviceCount,
-                temp: sensors.tempC?.current != null ? sensors.tempC.current.toFixed(1) : '--',
-                humidity: sensors.rh?.current != null ? sensors.rh.current.toFixed(0) : '--',
-                co2: sensors.co2?.current != null ? sensors.co2.current.toFixed(0) : '--'
-            });
+            // Try to get environmental data from room, or use telemetry average
+            let temp = room.temperature ?? room.temp ?? room.tempC;
+            let humidity = room.humidity ?? room.rh;
+            let co2 = room.co2;
+            
+            // If room doesn't have data, use first zone from telemetry
+            if ((temp === undefined || temp === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                temp = zone.temperature_c ?? zone.temp ?? zone.tempC ?? zone.sensors?.tempC?.current;
+                if (temp != null) temp = temp.toFixed(1);
+            }
+            
+            if ((humidity === undefined || humidity === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                humidity = zone.humidity ?? zone.rh ?? zone.sensors?.rh?.current;
+                if (humidity != null) humidity = humidity.toFixed(0);
+            }
+            
+            if ((co2 === undefined || co2 === null) && telemetryZones.length > 0) {
+                const zone = telemetryZones[0];
+                co2 = zone.co2 ?? zone.sensors?.co2?.current;
+            }
+            
+            // Format display values
+            temp = temp != null ? temp : '-';
+            humidity = humidity != null ? humidity : '-';
+            co2 = co2 != null ? co2 : '-';
+
+            return {
+                roomId,
+                name,
+                status: room.status || 'online',
+                zones,
+                devices,
+                temp,
+                humidity,
+                co2
+            };
         });
-    } catch(e) {
-        console.error('[loadFarmRooms] Failed:', e);
+    } catch (error) {
+        console.error('[Rooms] Failed to load farm rooms:', error);
+        roomsData = [];
     }
-    
+
     renderRoomsTable();
 }
 
@@ -2398,7 +4581,24 @@ async function loadFarmRooms(farmId, count) {
  * Render rooms table
  */
 function renderRoomsTable() {
-    const tbody = document.getElementById('rooms-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderRoomsTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#rooms-tbody');
+    if (!tbody) {
+        console.error('[renderRoomsTable] rooms-tbody not found in farm-detail-view');
+        return;
+    }
+    
+    console.log('[renderRoomsTable] Rendering', roomsData.length, 'rooms');
+    
+    if (roomsData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">No rooms found for this farm</td></tr>';
+        return;
+    }
     
     tbody.innerHTML = roomsData.map(room => `
         <tr>
@@ -2410,10 +4610,11 @@ function renderRoomsTable() {
             <td>${room.humidity}</td>
             <td>${room.co2}</td>
             <td>
-                <button class="btn" onclick="viewRoomDetail('${room.name}')">View</button>
+                <button class="btn" onclick="viewRoomDetail('${currentFarmId}', '${room.roomId || room.name}')">View</button>
             </td>
         </tr>
     `).join('');
+    console.log('[renderRoomsTable] Table updated successfully');
 }
 
 /**
@@ -2421,17 +4622,25 @@ function renderRoomsTable() {
  */
 async function loadFarmDevices(farmId, count) {
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+        // Try admin endpoint first; sync endpoint requires farm API-key auth.
+        let response;
+        try {
+            response = await authenticatedFetch(`/api/admin/farms/${farmId}/devices`);
+            if (!response || !response.ok) throw new Error('No admin devices endpoint');
+        } catch (e) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/devices`);
+            if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : 'no-response'}`);
+        }
         const data = await response.json();
         
         if (data.success && data.devices) {
             devicesData = data.devices.map(device => ({
-                deviceId: device.device_code,
-                name: device.device_name || 'Unnamed Device',
-                type: device.device_type,
+                deviceId: device.device_code || device.deviceId || device.device_id || device.id,
+                name: device.device_name || device.deviceName || device.name || 'Unnamed Device',
+                type: device.device_type || device.type || 'unknown',
                 location: device.location || 'Unknown',
-                status: device.status || 'offline',
-                lastSeen: device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never',
+                status: deriveDeviceStatus(device),
+                lastSeen: formatDeviceLastSeen(device),
                 firmware: device.firmware_version || 'Unknown'
             }));
         } else {
@@ -2449,14 +4658,28 @@ async function loadFarmDevices(farmId, count) {
  * Render devices table
  */
 function renderDevicesTable(devices) {
-    const tbody = document.getElementById('devices-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderDevicesTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#devices-tbody');
+    if (!tbody) {
+        console.error('[renderDevicesTable] devices-tbody not found in farm-detail-view');
+        return;
+    }
     
-    if (devices.length === 0) {
+    // Use passed devices or fall back to global devicesData
+    const deviceList = devices || devicesData;
+    console.log('[renderDevicesTable] Rendering', deviceList.length, 'devices');
+    
+    if (deviceList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No devices found for this farm. Add devices to monitor equipment.</td></tr>';
         return;
     }
     
-    tbody.innerHTML = devices.map(device => `
+    tbody.innerHTML = deviceList.map(device => `
         <tr>
             <td><code>${device.deviceId}</code></td>
             <td>${device.name}</td>
@@ -2470,6 +4693,7 @@ function renderDevicesTable(devices) {
             </td>
         </tr>
     `).join('');
+    console.log('[renderDevicesTable] Table updated successfully');
 }
 
 /**
@@ -2487,11 +4711,17 @@ function filterDevices() {
  */
 async function loadFarmInventory(farmId, trayCount) {
     try {
-        const response = await authenticatedFetch(`/api/admin/farms/${farmId}/inventory`);
+        let response;
+        try {
+            response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/inventory`);
+            if (!response || !response.ok) throw new Error('No admin inventory endpoint');
+        } catch (adminErr) {
+            response = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/inventory`);
+        }
         const data = await response.json();
         
-        if (data.success && (data.trays || data.inventory)) {
-            const trays = data.trays || data.inventory || [];
+        if (data.success && (data.inventory || data.trays)) {
+            const trays = data.inventory || data.trays;
             inventoryData = trays.map(tray => {
                 const dth = tray.days_to_harvest ?? tray.daysToHarvest ?? null;
                 return {
@@ -2521,7 +4751,19 @@ async function loadFarmInventory(farmId, trayCount) {
  * Render inventory table
  */
 function renderInventoryTable() {
-    const tbody = document.getElementById('inventory-tbody');
+    // Target the tbody inside farm-detail-view specifically
+    const detailView = document.getElementById('farm-detail-view');
+    if (!detailView) {
+        console.error('[renderInventoryTable] farm-detail-view not found');
+        return;
+    }
+    const tbody = detailView.querySelector('#inventory-tbody');
+    if (!tbody) {
+        console.error('[renderInventoryTable] inventory-tbody not found in farm-detail-view');
+        return;
+    }
+    
+    console.log('[renderInventoryTable] Rendering', inventoryData.length, 'inventory items');
     
     if (inventoryData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #a0aec0;">No trays found for this farm. Add trays to see inventory.</td></tr>';
@@ -2551,8 +4793,8 @@ async function loadFarmRecipes(farmId) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/recipes`);
         
-        if (!response.ok) {
-            console.error('Failed to load recipes:', response.status);
+        if (!response || !response.ok) {
+            console.error('Failed to load recipes:', response?.status || 'error');
             recipesData = [];
             renderRecipesTable();
             return;
@@ -2560,17 +4802,24 @@ async function loadFarmRecipes(farmId) {
         
         const data = await response.json();
         recipesData = (data.recipes || []).map(recipe => ({
-            recipe_id: recipe.recipe_id,
+            recipe_id: recipe.recipe_id || recipe.id,
+            id: recipe.id || recipe.recipe_id,
             name: recipe.name,
-            cropType: recipe.crop_type,
-            activeTrays: recipe.active_trays || 0,
-            cycleDuration: `${recipe.cycle_duration_days} days`,
-            avgHarvestTime: `${recipe.cycle_duration_days} days`,
-            variance: '0d',
-            successRate: '100%',
+            cropType: recipe.crop_type || recipe.category,
+            category: recipe.category || recipe.crop_type || 'Uncategorized',
+            activeTrays: recipe.active_trays || recipe.trays_running || 0,
+            activeGroups: recipe.groups_running || 0,
+            totalDays: recipe.total_days,
+            scheduleLength: recipe.schedule_length,
+            avgTempC: recipe.avg_temp_c,
+            currentDayMin: recipe.current_day_min,
+            currentDayMax: recipe.current_day_max,
+            daysRemainingMin: recipe.days_remaining_min,
+            daysRemainingMax: recipe.days_remaining_max,
+            seedDateMin: recipe.seed_date_min,
+            seedDateMax: recipe.seed_date_max,
             description: recipe.description,
-            lightSchedule: recipe.light_schedule,
-            harvestCriteria: recipe.harvest_criteria
+            data: recipe.data
         }));
         
         renderRecipesTable();
@@ -2584,71 +4833,355 @@ async function loadFarmRecipes(farmId) {
 /**
  * Render recipes table
  */
-function renderRecipesTable() {
-    const tbody = document.getElementById('recipes-tbody');
+function renderRecipesTable(recipes) {
+    const tbody = document.getElementById('overview-recipes-tbody');
     
-    if (recipesData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No recipes found for this farm. Create a recipe to get started.</td></tr>';
+    if (!tbody) {
+        console.error('[renderRecipesTable] Table body element not found');
         return;
     }
     
-    tbody.innerHTML = recipesData.map(recipe => `
-        <tr>
-            <td><strong>${recipe.name}</strong></td>
-            <td>${recipe.cropType}</td>
-            <td>${recipe.activeTrays}</td>
-            <td>${recipe.cycleDuration}</td>
-            <td>${recipe.avgHarvestTime}</td>
-            <td>${recipe.variance}</td>
-            <td><span class="badge badge-success">${recipe.successRate}</span></td>
-            <td>
-                <button class="btn" onclick="editRecipe(${recipe.recipe_id})">Edit</button>
-                <button class="btn" onclick="viewRecipeDetails(${recipe.recipe_id})">View</button>
-            </td>
-        </tr>
-    `).join('');
-}
+    // Use passed recipes or fall back to global recipesData
+    const recipesList = recipes || recipesData;
+    
+    if (recipesList.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 40px;">
+                    <div style="color: var(--text-secondary); margin-bottom: 8px;">
+                        <strong>No Active Recipes</strong>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        No groups are currently running recipes on this farm. Recipes are assigned to groups on the edge device.
+                    </div>
+                    <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-secondary);">
+                        Note: Recipe assignments are synced from Light Engine Foxtrot when groups are configured with active recipes.
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = recipesList.map(recipe => {
+        const schedule = recipe.data?.schedule || [];
+        let avgTemp = recipe.avgTempC != null ? `${recipe.avgTempC.toFixed(1)}°C` : 'N/A';
+        if (avgTemp === 'N/A' && schedule.length > 0) {
+            const temps = schedule
+                .map(day => {
+                    const temp = day.temperature || day.tempC || day.afternoon_temp || day['Afternoon Temp (C)'];
+                    return typeof temp === 'string' ? parseFloat(temp) : temp;
+                })
+                .filter(t => !isNaN(t) && t > 0);
+            if (temps.length > 0) {
+                const sum = temps.reduce((a, b) => a + b, 0);
+                avgTemp = `${(sum / temps.length).toFixed(1)}°C`;
+            }
+        }
 
-/**
- * Edit recipe
- */
-function editRecipe(recipeId) {
-    const recipe = recipesData.find(r => r.recipe_id === recipeId);
-    if (!recipe) {
-        alert('Recipe not found');
-        return;
-    }
-    
-    alert(`Edit Recipe: ${recipe.name}\n\nRecipe editing UI will be implemented in the next phase.`);
+        const totalDays = recipe.totalDays ?? recipe.total_days ?? 0;
+        const stages = recipe.scheduleLength ?? recipe.schedule_length ?? schedule.length ?? 0;
+        const dayRange = recipe.currentDayMin != null
+            ? `Day ${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
+            : 'Day —';
+        const remainingRange = recipe.daysRemainingMin != null
+            ? `Harvest ${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}d`
+            : 'Harvest —';
+        const groupsTrays = `Groups: ${recipe.activeGroups || 0} · Trays: ${recipe.activeTrays || 0}`;
+
+        return `
+            <tr>
+                <td>
+                    <strong>${recipe.name || 'Unknown'}</strong>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${groupsTrays} · ${dayRange} · ${remainingRange}</div>
+                </td>
+                <td>
+                    <span class="badge" style="background: ${getCategoryColor(recipe.category)}; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">
+                        ${recipe.category || 'Uncategorized'}
+                    </span>
+                </td>
+                <td>${totalDays} days</td>
+                <td>${stages} entries</td>
+                <td style="font-size: 0.85rem;">${avgTemp}</td>
+                <td>
+                    <button onclick="viewRecipeDetails('${recipe.recipe_id || recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 /**
  * View recipe details
  */
 function viewRecipeDetails(recipeId) {
-    const recipe = recipesData.find(r => r.recipe_id === recipeId);
+    const recipe = recipesData.find(r => r.recipe_id === recipeId || r.id === recipeId);
     if (!recipe) {
         alert('Recipe not found');
         return;
     }
-    
+
+    const dayRange = recipe.currentDayMin != null
+        ? `${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
+        : '—';
+    const remainingRange = recipe.daysRemainingMin != null
+        ? `${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}`
+        : '—';
+    const seedRange = recipe.seedDateMin
+        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` → ${recipe.seedDateMax}` : ''}`
+        : '—';
+
     const details = `
 Recipe: ${recipe.name}
-Crop Type: ${recipe.cropType}
-Cycle Duration: ${recipe.cycleDuration}
-Active Trays: ${recipe.activeTrays}
+Category: ${recipe.category || recipe.cropType || 'Unknown'}
+Cycle Duration: ${recipe.totalDays ?? recipe.total_days ?? '—'} days
+Stages: ${recipe.scheduleLength ?? recipe.schedule_length ?? '—'}
+Active Groups: ${recipe.activeGroups || 0}
+Active Trays: ${recipe.activeTrays || 0}
+Seed Date Range: ${seedRange}
+Current Day: ${dayRange}
+Days to Harvest: ${remainingRange}
 Description: ${recipe.description || 'No description'}
-Light Schedule: ${recipe.lightSchedule ? JSON.stringify(recipe.lightSchedule) : 'Not configured'}
-Harvest Criteria: ${recipe.harvestCriteria || 'Not specified'}
     `.trim();
     
     alert(details);
+}
+
+// ── Farm-level Recipe Library (read-only) + Recipe Requests ──
+
+/** Cache of full recipe library loaded for farm recipes tab */
+let _farmRecipeLibrary = [];
+
+/**
+ * Load the full GreenReach recipe library into the farm recipes tab
+ * Called after loadFarmRecipes() finishes populating the active recipes table.
+ */
+async function loadFarmRecipeLibrary() {
+    const tbody = document.getElementById('farm-recipe-library-tbody');
+    if (!tbody) return;
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes?limit=200`);
+        if (!response || !response.ok) throw new Error('Failed to load recipe library');
+        const data = await response.json();
+        _farmRecipeLibrary = data.recipes || [];
+
+        // Build set of recipe names currently active on this farm
+        const activeNames = new Set(
+            (recipesData || []).map(r => (r.name || '').toLowerCase().trim())
+        );
+
+        renderFarmRecipeLibrary(_farmRecipeLibrary, activeNames);
+        // Also load any previous recipe requests
+        await loadRecipeRequests();
+    } catch (err) {
+        console.error('[FarmRecipeLibrary]', err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--accent-red);">Error loading recipe library: ${err.message}</td></tr>`;
+    }
+}
+
+function renderFarmRecipeLibrary(recipes, activeNames) {
+    const tbody = document.getElementById('farm-recipe-library-tbody');
+    const countEl = document.getElementById('farm-recipe-library-count');
+    if (!tbody) return;
+
+    // Apply category and search filters
+    const categoryFilter = document.getElementById('farm-recipe-category-filter')?.value || '';
+    const searchFilter = (document.getElementById('farm-recipe-library-search')?.value || '').toLowerCase();
+
+    let filtered = recipes;
+    if (categoryFilter) filtered = filtered.filter(r => r.category === categoryFilter);
+    if (searchFilter) filtered = filtered.filter(r =>
+        (r.name || '').toLowerCase().includes(searchFilter) ||
+        (r.category || '').toLowerCase().includes(searchFilter) ||
+        (r.description || '').toLowerCase().includes(searchFilter)
+    );
+
+    if (countEl) countEl.textContent = `${filtered.length} of ${recipes.length} recipes`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-secondary);">No recipes match your search</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(recipe => {
+        const isActive = activeNames && activeNames.has((recipe.name || '').toLowerCase().trim());
+        const schedule = normalizeRecipeSchedule(recipe);
+        const stages = recipe.schedule_length || schedule.length || 0;
+
+        let avgTemp = 'N/A';
+        if (schedule.length > 0) {
+            const temps = schedule
+                .map(d => { const t = d.temperature || d.tempC || d.afternoon_temp; return typeof t === 'string' ? parseFloat(t) : t; })
+                .filter(t => !isNaN(t) && t > 0);
+            if (temps.length) avgTemp = `${(temps.reduce((a,b) => a+b, 0) / temps.length).toFixed(1)}°C`;
+        }
+
+        const statusBadge = isActive
+            ? '<span style="background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;font-weight:500;">In Use</span>'
+            : '<span style="background:var(--bg-secondary);color:var(--text-secondary);padding:3px 8px;border-radius:4px;font-size:0.8rem;">Available</span>';
+
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight:500;">${recipe.name}</div>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;">${recipe.description}</div>` : ''}
+                </td>
+                <td><span style="background:${getCategoryColor(recipe.category)};color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;">${recipe.category || 'Other'}</span></td>
+                <td>${stages}</td>
+                <td>${countStages(schedule)}</td>
+                <td>${avgTemp}</td>
+                <td>${statusBadge}</td>
+                <td><button onclick="showRecipeLibraryDetail('${(recipe.id || recipe.name || '').replace(/'/g, "\\'")}')" class="btn" style="padding:4px 10px;font-size:0.8rem;">View Schedule</button></td>
+            </tr>`;
+    }).join('');
+}
+
+/** Count unique growth stages in a recipe schedule */
+function countStages(schedule) {
+    if (!schedule || !schedule.length) return '—';
+    const stages = new Set(schedule.map(d => d.stage || d.growth_stage || 'Unknown'));
+    return stages.size;
+}
+
+function filterFarmRecipeLibrary() {
+    const activeNames = new Set(
+        (recipesData || []).map(r => (r.name || '').toLowerCase().trim())
+    );
+    renderFarmRecipeLibrary(_farmRecipeLibrary, activeNames);
+}
+
+/**
+ * Show recipe schedule detail in a read-only modal/alert
+ */
+async function showRecipeLibraryDetail(recipeId) {
+    try {
+        const response = await authenticatedFetch(`/api/admin/recipes/${encodeURIComponent(recipeId)}`);
+        if (!response || !response.ok) throw new Error('Failed to load recipe');
+        const data = await response.json();
+        const recipe = data.recipe || {};
+        const schedule = normalizeRecipeSchedule(recipe);
+
+        let info = `Recipe: ${recipe.name}\nCategory: ${recipe.category || 'Unknown'}\nTotal Days: ${schedule.length}\nDescription: ${recipe.description || 'N/A'}\n\n`;
+        if (schedule.length > 0) {
+            info += 'Day | Stage | Temp(°C) | PPFD | DLI | VPD\n';
+            info += '─'.repeat(50) + '\n';
+            const step = Math.max(1, Math.floor(schedule.length / 15));
+            for (let i = 0; i < schedule.length; i += step) {
+                const d = schedule[i];
+                const day = d.day || i+1;
+                const stage = (d.stage || '').substring(0, 12);
+                const temp = (d.temperature || d.tempC || '—');
+                const ppfd = (d.ppfd || d.ppfd_target || '—');
+                const dli = (d.dli || d.dli_target || '—');
+                const vpd = (d.vpd || d.vpd_target || '—');
+                info += `${String(day).padStart(3)} | ${stage.padEnd(12)} | ${String(temp).padStart(6)} | ${String(ppfd).padStart(5)} | ${String(dli).padStart(4)} | ${vpd}\n`;
+            }
+            if (step > 1) info += `\n(Showing every ${step} days — ${schedule.length} days total)`;
+        }
+        alert(info);
+    } catch (err) {
+        alert('Error loading recipe: ' + err.message);
+    }
+}
+
+/**
+ * Submit a recipe request from the farm grower
+ */
+async function submitRecipeRequest() {
+    const crop = document.getElementById('recipe-request-crop')?.value?.trim();
+    const category = document.getElementById('recipe-request-category')?.value || 'Other';
+    const notes = document.getElementById('recipe-request-notes')?.value?.trim() || '';
+    const statusEl = document.getElementById('recipe-request-status');
+
+    if (!crop) {
+        if (statusEl) statusEl.textContent = 'Please enter a crop/variety name.';
+        return;
+    }
+
+    try {
+        if (statusEl) statusEl.textContent = 'Submitting...';
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipe-requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                farmId: currentFarmId,
+                crop,
+                category,
+                notes
+            })
+        });
+        if (!response || !response.ok) {
+            const errData = await response?.json().catch(() => ({}));
+            throw new Error(errData.error || 'Request failed');
+        }
+        const result = await response.json();
+        if (statusEl) {
+            statusEl.style.color = '#10b981';
+            statusEl.textContent = '✓ Request submitted! GreenReach Central will review it.';
+        }
+        // Clear form
+        document.getElementById('recipe-request-crop').value = '';
+        document.getElementById('recipe-request-notes').value = '';
+        // Refresh requests list
+        await loadRecipeRequests();
+    } catch (err) {
+        console.error('[RecipeRequest]', err);
+        if (statusEl) {
+            statusEl.style.color = 'var(--accent-red)';
+            statusEl.textContent = 'Error: ' + err.message;
+        }
+    }
+}
+
+/**
+ * Load previous recipe requests for this farm
+ */
+async function loadRecipeRequests() {
+    const listContainer = document.getElementById('recipe-requests-list');
+    const listBody = document.getElementById('recipe-requests-tbody');
+    if (!listContainer || !listBody || !currentFarmId) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/recipe-requests?farmId=${currentFarmId}`);
+        if (!response || !response.ok) return;
+        const data = await response.json();
+        const requests = data.requests || [];
+
+        if (requests.length === 0) {
+            listContainer.style.display = 'none';
+            return;
+        }
+
+        listContainer.style.display = 'block';
+        listBody.innerHTML = requests.map(req => {
+            const statusColor = req.status === 'approved' ? '#10b981' : req.status === 'declined' ? '#ef4444' : '#f59e0b';
+            const statusLabel = req.status || 'pending';
+            const date = req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '';
+            return `
+                <div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+                    <span style="font-weight:500;min-width:140px;">${req.crop}</span>
+                    <span style="background:${getCategoryColor(req.category)};color:#fff;padding:2px 6px;border-radius:4px;font-size:0.8rem;">${req.category}</span>
+                    <span style="color:${statusColor};font-weight:500;font-size:0.85rem;text-transform:capitalize;">${statusLabel}</span>
+                    <span style="color:var(--text-secondary);font-size:0.8rem;">${date}</span>
+                    ${req.notes ? `<span style="color:var(--text-secondary);font-size:0.8rem;flex:1;">— ${req.notes}</span>` : ''}
+                </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[RecipeRequests]', err);
+    }
 }
 
 /**
  * Helper function to show a specific view and hide all others
  */
 function showView(viewId) {
+    const previousView = document.querySelector('.view[style*="display: block"]')?.id || 'unknown';
+    
+    DEBUG_TRACKING.trackPageView(viewId, {
+        previousView,
+        timestamp: new Date().toISOString()
+    });
+    
     // Hide all views
     document.querySelectorAll('.view').forEach(v => {
         v.style.display = 'none';
@@ -2658,13 +5191,22 @@ function showView(viewId) {
     const targetView = document.getElementById(viewId);
     if (targetView) {
         targetView.style.display = 'block';
-        
-        // Load data for specific views
-        if (viewId === 'recipes-view' && typeof loadRecipes === 'function') {
-            loadRecipes();
-        }
+        DEBUG_TRACKING.log({
+            type: 'VIEW_SHOWN',
+            viewId,
+            success: true
+        });
     } else {
-        console.error(`View not found: ${viewId}`);
+        DEBUG_TRACKING.trackError('VIEW_NOT_FOUND', `View element not found: ${viewId}`, {
+            requestedView: viewId,
+            availableViews: Array.from(document.querySelectorAll('.view')).map(v => v.id)
+        });
+    }
+    
+    // Load data for specific views
+    if (viewId === 'recipes-view' && typeof loadRecipes === 'function') {
+        DEBUG_TRACKING.log({ type: 'LOADING_VIEW_DATA', view: 'recipes' });
+        loadRecipes();
     }
 }
 
@@ -2723,62 +5265,61 @@ async function navigate(view, element) {
             }
             break;
             
-        // Farm-specific views
+        // Farm-specific views - switch tabs within farm-detail-view
         case 'farm-overview':
-            document.getElementById('overview-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmSpecificDashboard(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to overview tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('overview');
             break;
             
         case 'farm-rooms':
-            document.getElementById('rooms-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmRoomsView(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to rooms tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('rooms');
             break;
             
         case 'farm-devices':
-            document.getElementById('devices-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmDevicesView(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to devices tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('devices');
             break;
             
         case 'farm-inventory':
-            document.getElementById('inventory-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmInventoryView(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to inventory tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('inventory');
             break;
             
         case 'farm-recipes':
-            document.getElementById('recipes-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmRecipesView(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to recipes tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('recipes');
             break;
             
         case 'farm-environmental':
-            document.getElementById('environmental-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmEnvironmentalView(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to environmental tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('environmental');
             break;
             
         case 'farm-energy':
-            document.getElementById('energy-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmEnergyDashboard(navigationContext.farmId);
-            }
+            // Ensure farm-detail-view is visible, then switch to energy tab
+            document.getElementById('farm-detail-view').style.display = 'block';
+            switchDetailTab('energy');
             break;
             
-        case 'farm-alerts':
-            document.getElementById('alerts-view').style.display = 'block';
-            if (navigationContext.farmId) {
-                await loadFarmAlertsView(navigationContext.farmId);
+        case 'farm-alerts': {
+            // Ensure farm-detail-view is visible, then switch to alerts tab if available
+            document.getElementById('farm-detail-view').style.display = 'block';
+            const detailAlerts = document.getElementById('detail-alerts');
+            if (detailAlerts) {
+                switchDetailTab('alerts');
+            } else {
+                document.getElementById('alerts-view').style.display = 'block';
+                await loadAlertsView({ farmId: currentFarmId });
             }
             break;
+        }
             
         case 'farms':
             document.getElementById('overview-view').style.display = 'block';
@@ -2798,6 +5339,38 @@ async function navigate(view, element) {
             await loadAnalytics();
             if (INFO_CARDS['analytics']) {
                 showInfoCard(createInfoCard(INFO_CARDS['analytics'].title, INFO_CARDS['analytics'].subtitle, INFO_CARDS['analytics'].sections));
+            }
+            break;
+
+        case 'ai-rules':
+            document.getElementById('ai-rules-view').style.display = 'block';
+            await loadAiRules();
+            if (INFO_CARDS['ai-rules']) {
+                showInfoCard(createInfoCard(INFO_CARDS['ai-rules'].title, INFO_CARDS['ai-rules'].subtitle, INFO_CARDS['ai-rules'].sections));
+            }
+            break;
+
+        case 'ai-reference':
+            document.getElementById('ai-reference-view').style.display = 'block';
+            await loadAiReferenceSites();
+            if (INFO_CARDS['ai-reference']) {
+                showInfoCard(createInfoCard(INFO_CARDS['ai-reference'].title, INFO_CARDS['ai-reference'].subtitle, INFO_CARDS['ai-reference'].sections));
+            }
+            break;
+
+        case 'grant-summary':
+            document.getElementById('grant-summary-view').style.display = 'block';
+            await loadGrantSummary();
+            if (INFO_CARDS['grant-summary']) {
+                showInfoCard(createInfoCard(INFO_CARDS['grant-summary'].title, INFO_CARDS['grant-summary'].subtitle, INFO_CARDS['grant-summary'].sections));
+            }
+            break;
+
+        case 'grant-users':
+            document.getElementById('grant-users-view').style.display = 'block';
+            await loadGrantUsers();
+            if (INFO_CARDS['grant-users']) {
+                showInfoCard(createInfoCard(INFO_CARDS['grant-users'].title, INFO_CARDS['grant-users'].subtitle, INFO_CARDS['grant-users'].sections));
             }
             break;
             
@@ -2906,6 +5479,49 @@ async function navigate(view, element) {
         case 'support':
             document.getElementById('overview-view').style.display = 'block';
             break;
+
+        case 'procurement-catalog':
+            document.getElementById('procurement-catalog-view').style.display = 'block';
+            await loadProcurementCatalog();
+            break;
+        case 'procurement-suppliers':
+            document.getElementById('procurement-suppliers-view').style.display = 'block';
+            await loadProcurementSuppliers();
+            break;
+        case 'procurement-revenue':
+            document.getElementById('procurement-revenue-view').style.display = 'block';
+            await loadProcurementRevenue();
+            break;
+
+        case 'pricing-management':
+            document.getElementById('pricing-management-view').style.display = 'block';
+            await loadPricingManagement();
+            break;
+
+        case 'delivery-management':
+            document.getElementById('delivery-management-view').style.display = 'block';
+            await loadDeliveryManagement();
+            break;
+
+        case 'ai-monitoring':
+            document.getElementById('ai-monitoring-view').style.display = 'block';
+            await loadAiMonitoring();
+            break;
+
+        case 'marketing-ai':
+            document.getElementById('marketing-ai-view').style.display = 'block';
+            await loadMarketingDashboard();
+            break;
+
+        case 'market-intelligence':
+            document.getElementById('market-intelligence-view').style.display = 'block';
+            await loadMarketIntelligenceView();
+            break;
+
+        case 'accounting':
+            document.getElementById('accounting-view').style.display = 'block';
+            await loadCentralAccounting();
+            break;
             
         default:
             console.log(`Navigate to: ${view} (not implemented)`);
@@ -2932,7 +5548,12 @@ function switchDetailTab(tab, element) {
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
-    document.getElementById(`detail-${tab}`).classList.add('active');
+    const target = document.getElementById(`detail-${tab}`);
+    if (!target) {
+        console.warn(`[switchDetailTab] Tab not found: detail-${tab}`);
+        return;
+    }
+    target.classList.add('active');
 }
 
 /**
@@ -2947,16 +5568,54 @@ function exportReport() {
 }
 
 /**
- * Export farm data
+ * Export farm data — generates and downloads a CSV of all farm KPIs
  */
 function exportFarmData() {
     if (!currentFarmId) return;
     
     console.log(`Exporting data for ${currentFarmId}...`);
     
-    // In production, fetch all farm data and export
     const farm = farmsData.find(f => f.farmId === currentFarmId);
-    alert(`Export data for ${farm.name}\n\nIn production, this would generate a comprehensive report including:\n- Environmental history\n- Energy consumption\n- Harvest data\n- Device logs\n- Anomaly reports`);
+    if (!farm) {
+        console.warn('[Export] No farm data found for', currentFarmId);
+        return;
+    }
+
+    // Build CSV with all available data sections
+    const lines = [];
+    lines.push('Section,Field,Value');
+
+    // Farm overview
+    lines.push(`Farm,Name,"${farm.name || ''}"`);
+    lines.push(`Farm,ID,${farm.farmId || ''}`);
+    lines.push(`Farm,Status,${farm.status || ''}`);
+    lines.push(`Farm,Rooms,${farm.rooms ?? ''}`);
+    lines.push(`Farm,Zones,${farm.zones ?? ''}`);
+    lines.push(`Farm,Devices,${farm.devices ?? ''}`);
+    lines.push(`Farm,Trays,${farm.trays ?? ''}`);
+    lines.push(`Farm,Energy (kWh),${farm.energy ?? ''}`);
+    lines.push(`Farm,Alerts,${farm.alerts ?? ''}`);
+    lines.push(`Farm,Last Update,${farm.lastUpdate || ''}`);
+
+    // Rooms
+    roomsData.forEach(r => {
+        lines.push(`Room,"${r.name}",Status: ${r.status} | Zones: ${r.zones} | Devices: ${r.devices} | Temp: ${r.temp} | RH: ${r.humidity} | CO2: ${r.co2}`);
+    });
+
+    // Devices
+    devicesData.forEach(d => {
+        lines.push(`Device,"${d.name} (${d.deviceId})",Type: ${d.type} | Status: ${d.status} | Location: ${d.location} | Firmware: ${d.firmware}`);
+    });
+
+    // Inventory / Trays
+    inventoryData.forEach(t => {
+        lines.push(`Tray,"${t.trayId}",Recipe: ${t.recipe} | Location: ${t.location} | Age: ${t.age}d | Harvest: ${t.harvestEst} | Status: ${t.status}`);
+    });
+
+    const csv = lines.join('\n');
+    const ts = new Date().toISOString().slice(0, 10);
+    downloadCSV(csv, `${farm.name || currentFarmId}-export-${ts}.csv`);
+    console.log(`[Export] Downloaded ${lines.length} rows for ${farm.name}`);
 }
 
 /**
@@ -2998,6 +5657,58 @@ function getStatusBadgeClass(status) {
 }
 
 /**
+ * Utility: Parse the most relevant device timestamp for online/offline inference.
+ */
+function getDeviceSeenAt(device) {
+    const ts = device?.last_seen
+        || device?.lastSeen
+        || device?.updatedAt
+        || device?.telemetry?.lastUpdate
+        || device?.telemetry?.timestamp
+        || device?.deviceData?.status?.lastUpdate
+        || null;
+    const ms = ts ? Date.parse(ts) : NaN;
+    return Number.isFinite(ms) ? new Date(ms) : null;
+}
+
+/**
+ * Utility: Infer device status from explicit fields, telemetry.online, and recency.
+ * Field mapping doc defines online when lastSeen < 5 minutes.
+ */
+function deriveDeviceStatus(device) {
+    const explicitStatus = String(device?.status || '').toLowerCase();
+    if (explicitStatus === 'online' || explicitStatus === 'offline' || explicitStatus === 'warning' || explicitStatus === 'critical') {
+        return explicitStatus;
+    }
+
+    const telemetryOnline = device?.telemetry?.online;
+    if (typeof telemetryOnline === 'boolean') {
+        return telemetryOnline ? 'online' : 'offline';
+    }
+
+    const embeddedOnline = device?.deviceData?.online;
+    if (typeof embeddedOnline === 'boolean') {
+        return embeddedOnline ? 'online' : 'offline';
+    }
+
+    const seenAt = getDeviceSeenAt(device);
+    if (seenAt) {
+        const ageMs = Date.now() - seenAt.getTime();
+        return ageMs <= (5 * 60 * 1000) ? 'online' : 'offline';
+    }
+
+    return 'offline';
+}
+
+/**
+ * Utility: Format device last-seen timestamp for table display.
+ */
+function formatDeviceLastSeen(device) {
+    const seenAt = getDeviceSeenAt(device);
+    return seenAt ? seenAt.toLocaleString() : 'Never';
+}
+
+/**
  * Utility: Generate random time
  */
 function generateRandomTime() {
@@ -3018,27 +5729,74 @@ async function refreshData() {
 }
 
 /**
- * View room detail
+ * View room detail (legacy entry point — delegates to real drill-down)
  */
-function viewRoomDetail(roomName) {
-    console.log(`View room: ${roomName}`);
-    alert(`Room Detail: ${roomName}\n\nIn production, this would drill down to:\n- Zone-level environmental data\n- Device status per zone\n- Active trays in this room\n- Energy consumption\n- Historical trends`);
+function viewRoomDetailStub(roomName) {
+    console.log(`[viewRoomDetailStub] Delegating to viewRoomDetail for: ${roomName}`);
+    const room = roomsData.find(r => r.name === roomName || r.roomId === roomName);
+    if (room && currentFarmId) {
+        viewRoomDetail(currentFarmId, room.roomId || room.name);
+    } else {
+        // Fallback: show available room data in a detail panel
+        const r = room || { name: roomName, status: '-', zones: '-', devices: '-', temp: '-', humidity: '-', co2: '-' };
+        showDetailModal('Room Detail', [
+            { label: 'Room', value: r.name },
+            { label: 'Status', value: r.status },
+            { label: 'Zones', value: r.zones },
+            { label: 'Devices', value: r.devices },
+            { label: 'Temperature', value: r.temp !== '-' ? `${r.temp} °C` : 'No data' },
+            { label: 'Humidity', value: r.humidity !== '-' ? `${r.humidity}%` : 'No data' },
+            { label: 'CO₂', value: r.co2 !== '-' ? `${r.co2} ppm` : 'No data' }
+        ]);
+    }
 }
 
 /**
- * View device detail
+ * View device detail — shows available device metadata in a modal
  */
 function viewDeviceDetail(deviceId) {
-    console.log(`View device: ${deviceId}`);
-    alert(`Device Detail: ${deviceId}\n\nIn production, this would show:\n- Real-time status\n- Configuration\n- Firmware version\n- Performance metrics\n- Error logs\n- Control interface`);
+    console.log(`[viewDeviceDetail] ${deviceId}`);
+    const device = devicesData.find(d => d.deviceId === deviceId);
+    if (!device) {
+        showDetailModal('Device Detail', [
+            { label: 'Device ID', value: deviceId },
+            { label: 'Status', value: 'Device data not loaded. Navigate to the farm detail view to see full device information.' }
+        ]);
+        return;
+    }
+    showDetailModal('Device Detail', [
+        { label: 'Device ID', value: device.deviceId },
+        { label: 'Name', value: device.name },
+        { label: 'Type', value: device.type },
+        { label: 'Location', value: device.location },
+        { label: 'Status', value: device.status },
+        { label: 'Last Seen', value: device.lastSeen },
+        { label: 'Firmware', value: device.firmware }
+    ]);
 }
 
 /**
- * View tray detail
+ * View tray detail — shows available tray/inventory data in a modal
  */
 function viewTrayDetail(trayId) {
-    console.log(`View tray: ${trayId}`);
-    alert(`Tray Detail: ${trayId}\n\nIn production, this would show:\n- Recipe details\n- Growth timeline\n- Environmental exposure\n- Plant health metrics\n- Expected vs actual harvest\n- Photos/imaging data`);
+    console.log(`[viewTrayDetail] ${trayId}`);
+    const tray = inventoryData.find(t => t.trayId === trayId);
+    if (!tray) {
+        showDetailModal('Tray Detail', [
+            { label: 'Tray ID', value: trayId },
+            { label: 'Status', value: 'Tray data not loaded. Navigate to the farm detail view to see full inventory.' }
+        ]);
+        return;
+    }
+    showDetailModal('Tray Detail', [
+        { label: 'Tray ID', value: tray.trayId },
+        { label: 'Recipe', value: tray.recipe },
+        { label: 'Location', value: tray.location },
+        { label: 'Plant Count', value: tray.plantCount },
+        { label: 'Age', value: `${tray.age} days` },
+        { label: 'Harvest Estimate', value: tray.harvestEst },
+        { label: 'Status', value: tray.status }
+    ]);
 }
 
 /**
@@ -3052,17 +5810,533 @@ function analyzeRecipe(recipeName) {
 /**
  * Show farm configuration
  */
-function showFarmConfig() {
-    console.log('Show farm configuration');
-    alert('Farm Configuration\n\nWould display:\n- Network settings\n- API keys\n- Device registration\n- Integration settings\n- Notification preferences');
+async function showFarmConfig() {
+    if (!currentFarmId) {
+        alert('No farm selected. Please select a farm from the overview first.');
+        return;
+    }
+    
+    console.log('[Farm Config] Loading configuration for:', currentFarmId);
+    
+    try {
+        // Fetch farm configuration
+        const url = `${API_BASE}/api/admin/farms/${currentFarmId}/config`;
+        console.log('[Farm Config] Fetching from:', url);
+        
+        const response = await authenticatedFetch(url);
+        console.log('[Farm Config] Response status:', response?.status);
+        
+        if (!response || !response.ok) {
+            const errorText = await response?.text();
+            console.error('[Farm Config] API error:', errorText);
+            throw new Error(`Failed to load farm configuration (${response?.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('[Farm Config] Received data:', data);
+        
+        if (!data.config) {
+            throw new Error('No configuration data in response');
+        }
+        
+        const config = data.config;
+        
+        // Create modal
+        const modalHTML = `
+            <div id="farm-config-modal" class="modal-overlay" onclick="if(event.target === this) closeFarmConfigModal()">
+                <div class="modal-container" style="max-width: 900px; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2>Farm Configuration</h2>
+                        <button class="modal-close" onclick="closeFarmConfigModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="config-section">
+                            <h3>📡 Network Settings</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Local IP:</label>
+                                    <span>${config.network.localIP || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Public IP:</label>
+                                    <span>${config.network.publicIP || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Hostname:</label>
+                                    <span>${config.network.hostname || 'Not configured'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>API URL:</label>
+                                    <input type="text" id="config-api-url" value="${config.apiUrl || ''}" 
+                                           placeholder="https://farm.example.com" style="width: 100%; padding: 6px;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔑 API Keys</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Active Keys:</label>
+                                    <span>${config.apiKeys.count} ${config.apiKeys.hasActive ? '✓ Active' : '⚠ No active keys'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Actions:</label>
+                                    <button class="btn-small" onclick="alert('API key management coming soon')">Manage Keys</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>📱 Device Registration</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Registered Devices:</label>
+                                    <span>${config.devices.count} devices</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Device Types:</label>
+                                    <span>${config.devices.types.length > 0 ? config.devices.types.join(', ') : 'None registered'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔌 Integration Settings</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Square Payments:</label>
+                                    <span>${config.integrations.square ? '✓ Connected' : '✗ Not connected'}</span>
+                                </div>
+                                <div class="config-item">
+                                    <label>Wholesale API:</label>
+                                    <span>${config.integrations.wholesale ? '✓ Enabled' : '✗ Disabled'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section">
+                            <h3>🔔 Notification Preferences</h3>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>Email Notifications:</label>
+                                    <input type="checkbox" id="config-notify-email" 
+                                           ${config.notifications.email ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>SMS Notifications:</label>
+                                    <input type="checkbox" id="config-notify-sms" 
+                                           ${config.notifications.sms ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Slack Notifications:</label>
+                                    <input type="checkbox" id="config-notify-slack" 
+                                           ${config.notifications.slack ? 'checked' : ''}>
+                                </div>
+                            </div>
+                            
+                            <h4 style="margin-top: 15px; font-size: 14px;">Alert Types:</h4>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <label>System Alerts:</label>
+                                    <input type="checkbox" id="config-alert-system" 
+                                           ${config.notifications.alerts.system ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Environmental Alerts:</label>
+                                    <input type="checkbox" id="config-alert-environmental" 
+                                           ${config.notifications.alerts.environmental ? 'checked' : ''}>
+                                </div>
+                                <div class="config-item">
+                                    <label>Inventory Alerts:</label>
+                                    <input type="checkbox" id="config-alert-inventory" 
+                                           ${config.notifications.alerts.inventory ? 'checked' : ''}>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-section" style="background: #f8f9fa; padding: 12px; border-radius: 6px; font-size: 13px;">
+                            <strong>Farm ID:</strong> ${config.farmId}<br>
+                            <strong>Contact Email:</strong> ${config.contactEmail || 'Not set'}<br>
+                            <strong>Created:</strong> ${new Date(config.createdAt).toLocaleDateString()}<br>
+                            <strong>Last Updated:</strong> ${new Date(config.updatedAt).toLocaleString()}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeFarmConfigModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveFarmConfig()">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                .config-section {
+                    margin-bottom: 25px;
+                    padding-bottom: 20px;
+                    border-bottom: 1px solid var(--border-color);
+                }
+                .config-section:last-child {
+                    border-bottom: none;
+                }
+                .config-section h3 {
+                    font-size: 16px;
+                    margin-bottom: 15px;
+                    color: var(--text-primary);
+                }
+                .config-section h4 {
+                    font-size: 14px;
+                    margin-bottom: 10px;
+                    color: var(--text-secondary);
+                }
+                .config-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 15px;
+                }
+                .config-item {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+                .config-item label {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: var(--text-secondary);
+                }
+                .config-item span {
+                    font-size: 14px;
+                    color: var(--text-primary);
+                }
+                .config-item input[type="checkbox"] {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+            </style>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+    } catch (error) {
+        console.error('[Farm Config] Error loading configuration:', error);
+        alert('Failed to load farm configuration. Please try again.');
+    }
+}
+
+function closeFarmConfigModal() {
+    const modal = document.getElementById('farm-config-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function saveFarmConfig() {
+    if (!currentFarmId) return;
+    
+    try {
+        // Gather form data
+        const apiUrl = document.getElementById('config-api-url').value.trim();
+        const notifications = {
+            email: document.getElementById('config-notify-email').checked,
+            sms: document.getElementById('config-notify-sms').checked,
+            slack: document.getElementById('config-notify-slack').checked,
+            alerts: {
+                system: document.getElementById('config-alert-system').checked,
+                environmental: document.getElementById('config-alert-environmental').checked,
+                inventory: document.getElementById('config-alert-inventory').checked
+            }
+        };
+        
+        // Send update request
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/config`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ apiUrl, notifications })
+        });
+        
+        if (!response || !response.ok) {
+            throw new Error('Failed to save configuration');
+        }
+        
+        showToast('Configuration saved successfully', 'success');
+        closeFarmConfigModal();
+        
+        // Reload farm details to reflect changes
+        await loadFarmDetail(currentFarmId);
+        
+    } catch (error) {
+        console.error('[Farm Config] Error saving configuration:', error);
+        showToast('Failed to save configuration', 'error');
+    }
 }
 
 /**
  * Show farm logs
  */
-function showFarmLogs() {
-    console.log('Show farm logs');
-    alert('Farm System Logs\n\nWould display:\n- API calls\n- Device connections\n- Errors and warnings\n- User activity\n- System events');
+async function showFarmLogs() {
+    if (!currentFarmId) {
+        alert('No farm selected');
+        return;
+    }
+    
+    console.log('[Farm Logs] Loading logs for:', currentFarmId);
+    
+    try {
+        // Fetch farm logs
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms/${currentFarmId}/logs?limit=200`);
+        if (!response || !response.ok) {
+            throw new Error('Failed to load farm logs');
+        }
+        
+        const data = await response.json();
+        const logs = data.logs || [];
+        
+        // Create modal
+        const modalHTML = `
+            <div id="farm-logs-modal" class="modal-overlay" onclick="if(event.target === this) closeFarmLogsModal()">
+                <div class="modal-container" style="max-width: 1200px; max-height: 90vh;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2>Farm System Logs</h2>
+                        <button class="modal-close" onclick="closeFarmLogsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Filter Tabs -->
+                        <div class="logs-filters" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="log-filter-btn active" onclick="filterLogs('all')" data-filter="all">
+                                All Logs (${logs.length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('api_call')" data-filter="api_call">
+                                📡 API Calls (${logs.filter(l => l.type === 'api_call').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('device_connection')" data-filter="device_connection">
+                                🔌 Device Connections (${logs.filter(l => l.type === 'device_connection').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('warning')" data-filter="warning">
+                                ⚠️ Errors & Warnings (${logs.filter(l => l.level === 'warning' || l.level === 'error').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('user_activity')" data-filter="user_activity">
+                                👤 User Activity (${logs.filter(l => l.type === 'user_activity').length})
+                            </button>
+                            <button class="log-filter-btn" onclick="filterLogs('system_event')" data-filter="system_event">
+                                ⚙️ System Events (${logs.filter(l => l.type === 'system_event').length})
+                            </button>
+                        </div>
+                        
+                        <!-- Logs Table -->
+                        <div style="overflow-x: auto;">
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"></th>
+                                        <th style="width: 160px;">Timestamp</th>
+                                        <th style="width: 120px;">Type</th>
+                                        <th>Message</th>
+                                        <th style="width: 100px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logs-tbody">
+                                    ${generateLogsRows(logs)}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        ${logs.length === 0 ? '<p style="text-align: center; color: var(--text-muted); padding: 40px;">No logs available</p>' : ''}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="exportLogs()">Export Logs</button>
+                        <button class="btn btn-primary" onclick="closeFarmLogsModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                .log-filter-btn {
+                    padding: 8px 16px;
+                    border: 1px solid var(--border-color);
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    transition: all 0.2s;
+                }
+                .log-filter-btn:hover {
+                    background: var(--bg-secondary);
+                }
+                .log-filter-btn.active {
+                    background: var(--primary);
+                    color: white;
+                    border-color: var(--primary);
+                }
+                .logs-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }
+                .logs-table thead {
+                    background: var(--bg-secondary);
+                    position: sticky;
+                    top: 0;
+                }
+                .logs-table th {
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    border-bottom: 2px solid var(--border-color);
+                }
+                .logs-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid var(--border-color);
+                    vertical-align: top;
+                }
+                .logs-table tr:hover {
+                    background: var(--bg-hover);
+                }
+                .log-level-icon {
+                    font-size: 16px;
+                }
+                .log-type-badge {
+                    display: inline-block;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    background: var(--bg-secondary);
+                }
+                .log-metadata {
+                    font-size: 11px;
+                    color: var(--text-muted);
+                    margin-top: 4px;
+                }
+            </style>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Store logs data for filtering
+        window.farmLogsData = logs;
+        
+    } catch (error) {
+        console.error('[Farm Logs] Error loading logs:', error);
+        alert('Failed to load farm logs. Please try again.');
+    }
+}
+
+function generateLogsRows(logs) {
+    if (!logs || logs.length === 0) return '';
+    
+    return logs.map(log => {
+        const icon = getLevelIcon(log.level);
+        const typeColor = getTypeColor(log.type);
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        const metadata = log.metadata ? `<div class="log-metadata">${JSON.stringify(log.metadata).substring(0, 100)}${JSON.stringify(log.metadata).length > 100 ? '...' : ''}</div>` : '';
+        
+        return `
+            <tr data-type="${log.type}" data-level="${log.level}">
+                <td class="log-level-icon">${icon}</td>
+                <td>${timestamp}</td>
+                <td><span class="log-type-badge" style="background: ${typeColor};">${log.type.replace('_', ' ')}</span></td>
+                <td>
+                    <strong>${log.message}</strong>
+                    ${metadata}
+                    ${log.ipAddress ? `<div class="log-metadata">IP: ${log.ipAddress}</div>` : ''}
+                    ${log.userId ? `<div class="log-metadata">User: ${log.userId}</div>` : ''}
+                </td>
+                <td><code style="font-size: 11px;">${log.action}</code></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function getLevelIcon(level) {
+    switch (level) {
+        case 'error': return '🔴';
+        case 'warning': return '⚠️';
+        case 'info': return '✅';
+        default: return '📝';
+    }
+}
+
+function getTypeColor(type) {
+    const colors = {
+        'api_call': '#e0f2fe',
+        'device_connection': '#dbeafe',
+        'user_activity': '#fef3c7',
+        'system_event': '#f3e8ff',
+        'warning': '#fee2e2',
+        'error': '#fecaca'
+    };
+    return colors[type] || '#f3f4f6';
+}
+
+function filterLogs(filterType) {
+    // Update active button
+    document.querySelectorAll('.log-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Filter logs
+    const tbody = document.getElementById('logs-tbody');
+    const logs = window.farmLogsData || [];
+    
+    let filteredLogs = logs;
+    if (filterType !== 'all') {
+        if (filterType === 'warning') {
+            filteredLogs = logs.filter(log => log.level === 'warning' || log.level === 'error');
+        } else {
+            filteredLogs = logs.filter(log => log.type === filterType);
+        }
+    }
+    
+    tbody.innerHTML = generateLogsRows(filteredLogs);
+}
+
+function closeFarmLogsModal() {
+    const modal = document.getElementById('farm-logs-modal');
+    if (modal) {
+        modal.remove();
+    }
+    delete window.farmLogsData;
+}
+
+function exportLogs() {
+    const logs = window.farmLogsData || [];
+    if (logs.length === 0) {
+        alert('No logs to export');
+        return;
+    }
+    
+    // Convert to CSV
+    const headers = ['Timestamp', 'Type', 'Level', 'Action', 'Message', 'IP Address', 'User ID'];
+    const rows = logs.map(log => [
+        new Date(log.timestamp).toISOString(),
+        log.type,
+        log.level,
+        log.action,
+        log.message.replace(/"/g, '""'),
+        log.ipAddress || '',
+        log.userId || ''
+    ]);
+    
+    const csv = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `farm-${currentFarmId}-logs-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Logs exported successfully', 'success');
 }
 
 /**
@@ -3103,6 +6377,418 @@ function showToast(message, type = 'info') {
 }
 
 // ============================================================================
+// ============================================================================
+// PROCUREMENT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Load Procurement Catalog view
+ */
+async function loadProcurementCatalog() {
+    console.log('[Procurement] Loading catalog...');
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog`);
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        // Update KPIs
+        document.getElementById('catalog-total-products').textContent = data.total || 0;
+        document.getElementById('catalog-in-stock').textContent = data.inStock || 0;
+        document.getElementById('catalog-out-of-stock').textContent = data.outOfStock || 0;
+        document.getElementById('catalog-categories').textContent = (data.categories || []).length;
+
+        // Populate category filter
+        const filter = document.getElementById('catalog-category-filter');
+        const currentVal = filter.value;
+        filter.innerHTML = '<option value="">All Categories</option>';
+        (data.categories || []).forEach(c => {
+            filter.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+        filter.value = currentVal;
+
+        // Filter products
+        let products = data.products || [];
+        const searchTerm = (document.getElementById('catalog-search')?.value || '').toLowerCase();
+        const catFilter = filter.value;
+        if (catFilter) products = products.filter(p => p.category === catFilter);
+        if (searchTerm) products = products.filter(p =>
+            (p.name || '').toLowerCase().includes(searchTerm) ||
+            (p.sku || '').toLowerCase().includes(searchTerm)
+        );
+
+        // Render table
+        const tbody = document.getElementById('catalog-products-tbody');
+        if (products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No products found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = products.map(p => `
+            <tr>
+                <td><code style="font-size: 0.85em;">${p.sku || '--'}</code></td>
+                <td>${p.name || '--'}</td>
+                <td>${p.category || '--'}</td>
+                <td>${p.supplierName || p.supplierId || '--'}</td>
+                <td>$${(p.unitPrice || 0).toFixed(2)}</td>
+                <td>${p.unit || '--'}</td>
+                <td><span class="status-badge ${p.inStock ? 'status-active' : 'status-inactive'}">${p.inStock ? 'In Stock' : 'Out of Stock'}</span></td>
+                <td>
+                    <button class="btn-sm" onclick="editCatalogProduct('${p.sku}')">Edit</button>
+                    <button class="btn-sm btn-danger" onclick="deleteCatalogProduct('${p.sku}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error('[Procurement] Catalog load error:', err);
+        showToast('Failed to load catalog', 'error');
+    }
+}
+
+/**
+ * Load Procurement Suppliers view
+ */
+async function loadProcurementSuppliers() {
+    console.log('[Procurement] Loading suppliers...');
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`);
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        const suppliers = data.suppliers || [];
+        const active = suppliers.filter(s => s.status === 'active').length;
+        const totalProducts = suppliers.reduce((sum, s) => sum + (s.productCount || 0), 0);
+        const avgCommission = suppliers.length > 0
+            ? suppliers.reduce((sum, s) => sum + (s.commissionRate || 0), 0) / suppliers.length
+            : 0;
+
+        document.getElementById('suppliers-total').textContent = suppliers.length;
+        document.getElementById('suppliers-active').textContent = active;
+        document.getElementById('suppliers-product-count').textContent = totalProducts;
+        document.getElementById('suppliers-avg-commission').textContent = (avgCommission * 100).toFixed(1) + '%';
+
+        const tbody = document.getElementById('suppliers-list-tbody');
+        if (suppliers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">No suppliers found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = suppliers.map(s => `
+            <tr>
+                <td><code style="font-size: 0.85em;">${s.id || '--'}</code></td>
+                <td>${s.name || '--'}</td>
+                <td>${s.contactEmail || s.contact || '--'}</td>
+                <td>${s.productCount || 0}</td>
+                <td>${((s.commissionRate || 0) * 100).toFixed(1)}%</td>
+                <td><span class="status-badge ${s.status === 'active' ? 'status-active' : 'status-inactive'}">${s.status || 'unknown'}</span></td>
+                <td>
+                    <button class="btn-sm" onclick="editSupplier('${s.id}')">Edit</button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error('[Procurement] Suppliers load error:', err);
+        showToast('Failed to load suppliers', 'error');
+    }
+}
+
+/**
+ * Load Procurement Revenue view
+ */
+async function loadProcurementRevenue() {
+    console.log('[Procurement] Loading revenue...');
+    try {
+        const fromDate = document.getElementById('revenue-from')?.value || '';
+        const toDate = document.getElementById('revenue-to')?.value || '';
+        let url = `${API_BASE}/api/procurement/revenue`;
+        const params = [];
+        if (fromDate) params.push(`from=${fromDate}`);
+        if (toDate) params.push(`to=${toDate}`);
+        if (params.length) url += '?' + params.join('&');
+
+        const resp = await authenticatedFetch(url);
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+
+        const summary = data.summary || {};
+        document.getElementById('revenue-total').textContent = '$' + (summary.totalRevenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('revenue-commission').textContent = '$' + (summary.totalCommission || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('revenue-orders').textContent = summary.totalOrders || 0;
+        document.getElementById('revenue-avg-order').textContent = '$' + (summary.avgOrderValue || 0).toFixed(2);
+
+        // Revenue by supplier
+        const suppTbody = document.getElementById('revenue-by-supplier-tbody');
+        const bySupplier = data.bySupplier || [];
+        if (bySupplier.length === 0) {
+            suppTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No revenue data</td></tr>';
+        } else {
+            suppTbody.innerHTML = bySupplier.map(s => `
+                <tr>
+                    <td>${s.name || s.supplierId}</td>
+                    <td>${s.orderCount}</td>
+                    <td>$${s.revenue.toFixed(2)}</td>
+                    <td>$${s.commission.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Revenue by month
+        const monthTbody = document.getElementById('revenue-by-month-tbody');
+        const byMonth = data.byMonth || [];
+        if (byMonth.length === 0) {
+            monthTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No monthly data</td></tr>';
+        } else {
+            monthTbody.innerHTML = byMonth.map(m => `
+                <tr>
+                    <td>${m.month}</td>
+                    <td>${m.orderCount}</td>
+                    <td>$${m.revenue.toFixed(2)}</td>
+                    <td>$${m.commission.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+    } catch (err) {
+        console.error('[Procurement] Revenue load error:', err);
+        showToast('Failed to load revenue data', 'error');
+    }
+}
+
+/**
+ * Open modal to add a new product to the catalog
+ */
+function openAddProductModal() {
+    const html = `
+        <div style="display: grid; gap: 12px;">
+            <input type="text" id="new-product-sku" placeholder="SKU (e.g. PROC-NUT-FLORA-GROW)" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-product-name" placeholder="Product Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <select id="new-product-category" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <option value="">Select Category</option>
+                <option value="Seeds & Growing Media">Seeds & Growing Media</option>
+                <option value="Nutrients & Supplements">Nutrients & Supplements</option>
+                <option value="Packaging & Labels">Packaging & Labels</option>
+                <option value="Equipment & Parts">Equipment & Parts</option>
+                <option value="Lab & Testing">Lab & Testing</option>
+            </select>
+            <input type="number" id="new-product-price" placeholder="Unit Price" step="0.01" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-product-unit" placeholder="Unit (e.g. gallon, case, bag)" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveCatalogProduct()">Save Product</button>
+            </div>
+        </div>
+    `;
+    openModal('Add Product to Catalog', html);
+}
+
+/**
+ * Save a new catalog product
+ */
+async function saveCatalogProduct() {
+    const product = {
+        sku: document.getElementById('new-product-sku').value.trim(),
+        name: document.getElementById('new-product-name').value.trim(),
+        category: document.getElementById('new-product-category').value,
+        unitPrice: parseFloat(document.getElementById('new-product-price').value) || 0,
+        unit: document.getElementById('new-product-unit').value.trim(),
+        inStock: true
+    };
+    if (!product.sku || !product.name) {
+        showToast('SKU and Name are required', 'warning');
+        return;
+    }
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog/product`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product })
+        });
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast(`Product ${data.action}: ${product.name}`, 'success');
+        await loadProcurementCatalog();
+    } catch (err) {
+        showToast('Failed to save product: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Edit an existing catalog product
+ */
+async function editCatalogProduct(sku) {
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog`);
+        if (!resp) return;
+        const data = await resp.json();
+        const product = (data.products || []).find(p => p.sku === sku);
+        if (!product) { showToast('Product not found', 'error'); return; }
+
+        const html = `
+            <div style="display: grid; gap: 12px;">
+                <input type="text" id="new-product-sku" value="${product.sku}" disabled style="padding: 10px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
+                <input type="text" id="new-product-name" value="${product.name || ''}" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <select id="new-product-category" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="">Select Category</option>
+                    <option value="Seeds & Growing Media" ${product.category === 'Seeds & Growing Media' ? 'selected' : ''}>Seeds & Growing Media</option>
+                    <option value="Nutrients & Supplements" ${product.category === 'Nutrients & Supplements' ? 'selected' : ''}>Nutrients & Supplements</option>
+                    <option value="Packaging & Labels" ${product.category === 'Packaging & Labels' ? 'selected' : ''}>Packaging & Labels</option>
+                    <option value="Equipment & Parts" ${product.category === 'Equipment & Parts' ? 'selected' : ''}>Equipment & Parts</option>
+                    <option value="Lab & Testing" ${product.category === 'Lab & Testing' ? 'selected' : ''}>Lab & Testing</option>
+                </select>
+                <input type="number" id="new-product-price" value="${product.unitPrice || ''}" step="0.01" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="text" id="new-product-unit" value="${product.unit || ''}" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <label style="display: flex; align-items: center; gap: 8px; color: var(--text-primary);">
+                    <input type="checkbox" id="new-product-instock" ${product.inStock ? 'checked' : ''}> In Stock
+                </label>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                    <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveCatalogProduct()">Update Product</button>
+                </div>
+            </div>
+        `;
+        openModal('Edit Product', html);
+    } catch (err) {
+        showToast('Failed to load product', 'error');
+    }
+}
+
+/**
+ * Delete a catalog product
+ */
+async function deleteCatalogProduct(sku) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Product',
+        message: `Delete product ${sku}?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Product'
+    });
+    if (!confirmed) return;
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/catalog/product/${sku}`, { method: 'DELETE' });
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        showToast(`Product ${sku} deleted`, 'success');
+        await loadProcurementCatalog();
+    } catch (err) {
+        showToast('Failed to delete product: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Open modal to add a new supplier
+ */
+function openAddSupplierModal() {
+    const html = `
+        <div style="display: grid; gap: 12px;">
+            <input type="text" id="new-supplier-name" placeholder="Supplier Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="email" id="new-supplier-email" placeholder="Contact Email" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="text" id="new-supplier-phone" placeholder="Phone" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <input type="number" id="new-supplier-commission" placeholder="Commission Rate (e.g. 0.12)" step="0.01" min="0" max="1" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveNewSupplier()">Add Supplier</button>
+            </div>
+        </div>
+    `;
+    openModal('Add Supplier', html);
+}
+
+/**
+ * Save a new supplier
+ */
+async function saveNewSupplier() {
+    const supplier = {
+        name: document.getElementById('new-supplier-name').value.trim(),
+        contactEmail: document.getElementById('new-supplier-email').value.trim(),
+        phone: document.getElementById('new-supplier-phone').value.trim(),
+        commissionRate: parseFloat(document.getElementById('new-supplier-commission').value) || 0
+    };
+    if (!supplier.name) { showToast('Supplier name is required', 'warning'); return; }
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(supplier)
+        });
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast(`Supplier added: ${supplier.name}`, 'success');
+        await loadProcurementSuppliers();
+    } catch (err) {
+        showToast('Failed to add supplier: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Edit an existing supplier
+ */
+async function editSupplier(supplierId) {
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers`);
+        if (!resp) return;
+        const data = await resp.json();
+        const supplier = (data.suppliers || []).find(s => s.id === supplierId);
+        if (!supplier) { showToast('Supplier not found', 'error'); return; }
+
+        const html = `
+            <div style="display: grid; gap: 12px;">
+                <input type="text" value="${supplier.id}" disabled style="padding: 10px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
+                <input type="text" id="edit-supplier-name" value="${supplier.name || ''}" placeholder="Supplier Name" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="email" id="edit-supplier-email" value="${supplier.contactEmail || ''}" placeholder="Contact Email" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="text" id="edit-supplier-phone" value="${supplier.phone || ''}" placeholder="Phone" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <input type="number" id="edit-supplier-commission" value="${supplier.commissionRate || ''}" placeholder="Commission Rate" step="0.01" min="0" max="1" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                <select id="edit-supplier-status" style="padding: 10px; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="active" ${supplier.status === 'active' ? 'selected' : ''}>Active</option>
+                    <option value="inactive" ${supplier.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                    <option value="pending" ${supplier.status === 'pending' ? 'selected' : ''}>Pending</option>
+                </select>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                    <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="updateSupplier('${supplierId}')">Update</button>
+                </div>
+            </div>
+        `;
+        openModal('Edit Supplier', html);
+    } catch (err) {
+        showToast('Failed to load supplier', 'error');
+    }
+}
+
+/**
+ * Update an existing supplier
+ */
+async function updateSupplier(supplierId) {
+    const updates = {
+        name: document.getElementById('edit-supplier-name').value.trim(),
+        contactEmail: document.getElementById('edit-supplier-email').value.trim(),
+        phone: document.getElementById('edit-supplier-phone').value.trim(),
+        commissionRate: parseFloat(document.getElementById('edit-supplier-commission').value) || 0,
+        status: document.getElementById('edit-supplier-status').value
+    };
+    try {
+        const resp = await authenticatedFetch(`${API_BASE}/api/procurement/suppliers/${supplierId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+        if (!resp) return;
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error);
+        closeModal();
+        showToast('Supplier updated', 'success');
+        await loadProcurementSuppliers();
+    } catch (err) {
+        showToast('Failed to update supplier: ' + err.message, 'error');
+    }
+}
+
 // VIEW DATA LOADING FUNCTIONS
 // ============================================================================
 
@@ -3113,7 +6799,13 @@ async function loadAnalytics() {
     console.log('[Analytics] Loading farm analytics data...');
     
     // Load farm metrics data - this will also populate model performance from API
-    await loadFarmMetrics(currentAnalyticsFarmId, 7);
+    const farmId = resolveAnalyticsFarmId();
+    if (!farmId) {
+        showToast('No farms available for analytics', 'warning');
+        return;
+    }
+    currentAnalyticsFarmId = farmId;
+    await loadFarmMetrics(farmId, 7);
 }
 
 /**
@@ -3121,84 +6813,50 @@ async function loadAnalytics() {
  */
 async function loadRoomsView() {
     console.log('[Rooms] Loading rooms data...');
-    const tbody = document.getElementById('rooms-tbody');
+    const roomsView = document.getElementById('rooms-view');
+    const tbody = roomsView ? roomsView.querySelector('#rooms-tbody') : document.getElementById('rooms-tbody');
+    if (!tbody) {
+        console.error('[Rooms] rooms-tbody not found in rooms-view');
+        return;
+    }
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading room data...</td></tr>';
     
     try {
-        // Fetch real rooms data
-        const roomsRes = await fetch('/data/rooms.json');
-        const roomsJson = await roomsRes.json();
-        const roomsList = roomsJson.rooms || [];
+        const roomsRes = await authenticatedFetch(`${API_BASE}/api/admin/rooms`);
+        if (!roomsRes || !roomsRes.ok) throw new Error('Failed to load rooms');
+        const roomsData = await roomsRes.json();
         
-        // Fetch live environment data for sensor readings
-        let envData = { zones: [] };
-        try {
-            const envRes = await fetch('/env');
-            envData = await envRes.json();
-        } catch(e) { /* env data optional */ }
+        const rooms = (roomsData.rooms || []).map(room => ({
+            roomId: room.roomId || room.room_id || room.id || room.name,
+            name: room.name || room.room_name || room.roomId || room.id || 'Room',
+            farmId: room.farmId || room.farm_id || 'Unknown Farm',
+            farmName: room.farmName || room.farm_id || room.farmId || 'Unknown Farm',
+            temperature: room.temperature ?? room.temp ?? room.tempC ?? '-',
+            humidity: room.humidity ?? room.rh ?? '-',
+            co2: room.co2 ?? '-',
+            vpd: room.vpd ?? '-',
+            zones: room.zones?.length || room.zone_count || room.zoneCount || 0,
+            devices: room.devices?.length || room.device_count || room.deviceCount || 0,
+            status: room.status || 'online'
+        }));
         
-        // Fetch groups for device/tray counts
-        let groupsList = [];
-        try {
-            const groupsRes = await fetch('/data/groups.json');
-            const groupsJson = await groupsRes.json();
-            groupsList = groupsJson.groups || [];
-        } catch(e) { /* groups optional */ }
-        
-        // Get farm name
-        let farmName = 'This Farm';
-        try {
-            const farmRes = await fetch('/data/farm.json');
-            const farmJson = await farmRes.json();
-            farmName = farmJson.name || farmJson.farmName || 'This Farm';
-        } catch(e) { /* farm optional */ }
-        
-        if (roomsList.length === 0) {
+        if (rooms.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No rooms found</td></tr>';
             return;
         }
-        
-        const rooms = roomsList.map(room => {
-            // Find matching env zone data for live sensor readings
-            const zones = envData.zones || [];
-            const zone = zones[0] || {};
-            const sensors = zone.sensors || {};
-            
-            // Count groups and devices for this room
-            const roomGroups = groupsList.filter(g => g.room === room.name || g.roomId === room.id);
-            const deviceCount = roomGroups.reduce((sum, g) => sum + (g.deviceCount || g.lights?.length || 0), 0);
-            const zoneCount = room.zones?.length || 1;
-            
-            const tempC = sensors.tempC?.current;
-            const rh = sensors.rh?.current;
-            const co2 = sensors.co2?.current;
-            const vpd = sensors.vpd?.current;
-            
-            return {
-                name: room.name,
-                farmName: farmName,
-                temperature: tempC != null ? (tempC * 9/5 + 32).toFixed(1) : '--',
-                humidity: rh != null ? rh.toFixed(0) : '--',
-                co2: co2 != null ? co2.toFixed(0) : '--',
-                vpd: vpd != null ? vpd.toFixed(2) : '--',
-                zones: zoneCount,
-                devices: deviceCount,
-                status: zone.status || 'optimal'
-            };
-        });
         
         const html = rooms.map(room => `
             <tr>
                 <td>${room.name}</td>
                 <td>${room.farmName}</td>
-                <td>${room.temperature}${room.temperature !== '--' ? '\u00B0F' : ''}</td>
-                <td>${room.humidity}${room.humidity !== '--' ? '%' : ''}</td>
-                <td>${room.co2}${room.co2 !== '--' ? ' ppm' : ''}</td>
-                <td>${room.vpd}${room.vpd !== '--' ? ' kPa' : ''}</td>
+                <td>${room.temperature}${room.temperature === '-' ? '' : '°F'}</td>
+                <td>${room.humidity}${room.humidity === '-' ? '' : '%'}</td>
+                <td>${room.co2}${room.co2 === '-' ? '' : ' ppm'}</td>
+                <td>${room.vpd}${room.vpd === '-' ? '' : ' kPa'}</td>
                 <td>${room.zones}</td>
                 <td>${room.devices}</td>
                 <td><span class="status-badge status-${room.status}">${room.status}</span></td>
-                <td><button class="btn-small" onclick="viewRoomDetail('${room.name}')">View</button></td>
+                <td><button class="btn-small" onclick="viewRoomDetail('${room.farmId}', '${room.roomId || room.name}')">View</button></td>
             </tr>
         `).join('');
         
@@ -3218,74 +6876,37 @@ async function loadZonesView() {
     tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading zone data...</td></tr>';
     
     try {
-        // Fetch real room-map data for zone definitions
-        const roomMapRes = await fetch('/data/room-map.json');
-        const roomMap = await roomMapRes.json();
-        const mapZones = roomMap.zones || [];
-        const roomName = roomMap.name || 'Your Grow Room';
+        const zonesRes = await authenticatedFetch(`${API_BASE}/api/admin/zones`);
+        if (!zonesRes || !zonesRes.ok) throw new Error('Failed to load zones');
+        const zonesData = await zonesRes.json();
         
-        // Get farm name
-        let farmName = 'This Farm';
-        try {
-            const farmRes = await fetch('/data/farm.json');
-            const farmJson = await farmRes.json();
-            farmName = farmJson.name || farmJson.farmName || 'This Farm';
-        } catch(e) { /* optional */ }
+        const zones = (zonesData.zones || []).map(zone => ({
+            name: zone.name || zone.id || 'Zone',
+            farmName: zone.farmName || zone.farm_id || zone.farmId || 'Unknown Farm',
+            roomName: zone.roomName || zone.room || zone.roomId || 'Unknown Room',
+            temperature: zone.sensors?.tempC?.current ?? zone.temperature ?? zone.tempC ?? '-',
+            humidity: zone.sensors?.rh?.current ?? zone.humidity ?? zone.rh ?? '-',
+            co2: zone.sensors?.co2?.current ?? zone.co2 ?? '-',
+            ppfd: zone.sensors?.ppfd?.current ?? zone.ppfd ?? '-',
+            vpd: zone.sensors?.vpd?.current ?? zone.vpd ?? '-',
+            groups: zone.groups ?? zone.group_count ?? 0
+        }));
         
-        // Fetch live environment data
-        let envData = { zones: [] };
-        try {
-            const envRes = await fetch('/env');
-            envData = await envRes.json();
-        } catch(e) { /* optional */ }
-        
-        // Fetch groups for zone counts
-        let groupsList = [];
-        try {
-            const groupsRes = await fetch('/data/groups.json');
-            const groupsJson = await groupsRes.json();
-            groupsList = groupsJson.groups || [];
-        } catch(e) { /* optional */ }
-        
-        if (mapZones.length === 0) {
+        if (zones.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="empty">No zones found</td></tr>';
             return;
         }
         
-        const zones = mapZones.map(z => {
-            const envZone = (envData.zones || []).find(ez => String(ez.id) === String(z.zone) || ez.name === z.name) || {};
-            const sensors = envZone.sensors || {};
-            const zoneGroups = groupsList.filter(g => String(g.zone) === String(z.zone));
-            
-            const tempC = sensors.tempC?.current;
-            const rh = sensors.rh?.current;
-            const co2 = sensors.co2?.current;
-            const ppfd = sensors.ppfd?.current;
-            const vpd = sensors.vpd?.current;
-            
-            return {
-                name: z.name || `Zone ${z.zone}`,
-                farmName: farmName,
-                roomName: roomName,
-                temperature: tempC != null ? (tempC * 9/5 + 32).toFixed(1) : '--',
-                humidity: rh != null ? rh.toFixed(0) : '--',
-                co2: co2 != null ? co2.toFixed(0) : '--',
-                ppfd: ppfd != null ? ppfd.toFixed(0) : '--',
-                vpd: vpd != null ? vpd.toFixed(2) : '--',
-                groups: zoneGroups.length
-            };
-        });
-        
-        const html = zones.map(zone => `
+        const html = zones.slice(0, 100).map(zone => `
             <tr>
                 <td>${zone.name}</td>
                 <td>${zone.farmName}</td>
                 <td>${zone.roomName}</td>
-                <td>${zone.temperature}${zone.temperature !== '--' ? '\u00B0F' : ''}</td>
-                <td>${zone.humidity}${zone.humidity !== '--' ? '%' : ''}</td>
-                <td>${zone.co2}${zone.co2 !== '--' ? ' ppm' : ''}</td>
-                <td>${zone.ppfd}${zone.ppfd !== '--' ? ' \u03BCmol/m\u00B2/s' : ''}</td>
-                <td>${zone.vpd}${zone.vpd !== '--' ? ' kPa' : ''}</td>
+                <td>${zone.temperature}${zone.temperature === '-' ? '' : '°F'}</td>
+                <td>${zone.humidity}${zone.humidity === '-' ? '' : '%'}</td>
+                <td>${zone.co2}${zone.co2 === '-' ? '' : ' ppm'}</td>
+                <td>${zone.ppfd}${zone.ppfd === '-' ? '' : ' μmol/m²/s'}</td>
+                <td>${zone.vpd}${zone.vpd === '-' ? '' : ' kPa'}</td>
                 <td>${zone.groups}</td>
                 <td><button class="btn-small">Configure</button></td>
             </tr>
@@ -3307,70 +6928,50 @@ async function loadAllDevicesView() {
     tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading device inventory...</td></tr>';
     
     try {
-        // Fetch real IoT devices and groups data
+        // Fetch devices from all farms
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        if (!response || !response.ok) throw new Error('Failed to load farms');
+        
+        const farmsData = await response.json();
+        const farms = farmsData.farms || [];
+        
         let allDevices = [];
-        let farmName = 'This Farm';
         
-        try {
-            const farmRes = await fetch('/data/farm.json');
-            const farmJson = await farmRes.json();
-            farmName = farmJson.name || farmJson.farmName || 'This Farm';
-        } catch(e) { /* optional */ }
-        
-        // Fetch IoT devices
-        try {
-            const devicesRes = await fetch('/data/iot-devices.json');
-            const devicesJson = await devicesRes.json();
-            const devices = Array.isArray(devicesJson) ? devicesJson : [];
-            allDevices = devices.map(d => ({
-                deviceId: d.id || d.deviceId || 'Unknown',
-                name: d.name || d.deviceName || 'Unnamed Device',
-                type: d.type || d.category || 'unknown',
-                farmName: farmName,
-                location: `${d.room || d.location || 'Unknown'} / Zone ${d.zone || '1'}`,
-                status: d.status || 'online',
-                firmware: d.firmware || d.firmwareVersion || '--',
-                lastSeen: d.lastSeen || new Date().toISOString()
-            }));
-        } catch(e) { /* iot-devices optional */ }
-        
-        // Also include lights from groups
-        try {
-            const groupsRes = await fetch('/data/groups.json');
-            const groupsJson = await groupsRes.json();
-            const groups = groupsJson.groups || [];
-            groups.forEach(g => {
-                (g.lights || []).forEach(light => {
-                    allDevices.push({
-                        deviceId: light.id || light.deviceId,
-                        name: light.name || light.deviceName || `Light ${light.id}`,
-                        type: 'light',
-                        farmName: farmName,
-                        location: `${g.room || 'Unknown'} / Zone ${g.zone || '1'}`,
-                        status: 'online',
-                        firmware: light.protocol || '--',
-                        lastSeen: g.lastModified || new Date().toISOString()
+        // Fetch devices for each farm
+        for (const farm of farms) {
+            try {
+                const devicesRes = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farm.farm_id || farm.farmId}/devices`);
+                if (devicesRes && devicesRes.ok) {
+                    const deviceData = await devicesRes.json();
+                    const devices = deviceData.devices || [];
+                    
+                    // Add farm name to each device
+                    devices.forEach(device => {
+                        device.farmName = farm.name;
+                        allDevices.push(device);
                     });
-                });
-            });
-        } catch(e) { /* groups optional */ }
+                }
+            } catch (err) {
+                console.warn(`Failed to fetch devices for farm ${farm.farm_id}:`, err);
+            }
+        }
         
         if (allDevices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty">No devices found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="empty">No devices configured. Devices must be registered in the database.</td></tr>';
             return;
         }
         
         const html = allDevices.slice(0, 100).map(device => `
             <tr>
-                <td>${device.deviceId}</td>
-                <td>${device.name}</td>
-                <td>${device.type}</td>
-                <td>${device.farmName}</td>
-                <td>${device.location}</td>
-                <td><span class="status-badge status-${device.status}">${device.status}</span></td>
-                <td>${device.firmware}</td>
-                <td>${new Date(device.lastSeen).toLocaleString()}</td>
-                <td><button class="btn-small" onclick="viewDeviceDetail('${device.deviceId}')">Details</button></td>
+                <td><code>${device.device_code || device.device_id}</code></td>
+                <td>${device.device_name || 'Unnamed Device'}</td>
+                <td>${device.device_type || 'Unknown'}</td>
+                <td>${device.farmName || 'Unknown Farm'}</td>
+                <td>${device.location || 'Not assigned'}</td>
+                <td><span class="status-badge status-${device.status}">${device.status || 'unknown'}</span></td>
+                <td>${device.firmware_version || 'N/A'}</td>
+                <td>${device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never'}</td>
+                <td><button class="btn-small" onclick="viewDeviceDetail('${device.device_code || device.device_id}')">Details</button></td>
             </tr>
         `).join('');
         
@@ -3455,42 +7056,157 @@ async function loadHarvestView() {
 async function loadEnvironmentalView() {
     console.log('[Environmental] Loading environmental data...');
     
-    document.getElementById('env-avg-temp').textContent = '72.4';
-    document.getElementById('env-avg-humidity').textContent = '62';
-    document.getElementById('env-avg-co2').textContent = '875';
-    document.getElementById('env-avg-vpd').textContent = '0.85';
-    
-    const conditionsHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Optimal Zones</div>
-            <div class="metric-value">18 / 24 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Warning Zones</div>
-            <div class="metric-value" style="color: var(--accent-yellow);">4 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Critical Zones</div>
-            <div class="metric-value" style="color: var(--accent-red);">2 zones</div>
-        </div>
-    `;
-    document.getElementById('env-current-all').innerHTML = conditionsHtml;
-    
-    const vpdHtml = `
-        <div class="metric-row">
-            <div class="metric-label">Zones in Target Range</div>
-            <div class="metric-value">21 / 24 zones</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Avg VPD Deviation</div>
-            <div class="metric-value">±0.12 kPa</div>
-        </div>
-        <div class="metric-row">
-            <div class="metric-label">Optimization Opportunity</div>
-            <div class="metric-value">3 zones need adjustment</div>
-        </div>
-    `;
-    document.getElementById('env-vpd-insights').innerHTML = vpdHtml;
+    try {
+        // Fetch environmental data from all farms or specific farm if context exists
+        const farmId = currentFarmId || navigationContext?.farmId;
+        const url = farmId 
+            ? `${API_BASE}/api/admin/farms/${farmId}/zones`
+            : `${API_BASE}/api/admin/zones`;
+        
+        console.log('[Environmental] Fetching from:', url);
+        const response = await authenticatedFetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('[Environmental] Response:', data);
+        
+        const zones = data.zones || data.telemetry?.zones || [];
+        
+        // Calculate averages from real data
+        let totalTemp = 0, totalHumidity = 0, totalCO2 = 0, totalVPD = 0, totalPressure = 0, totalGas = 0;
+        let tempCount = 0, humidityCount = 0, co2Count = 0, vpdCount = 0, pressureCount = 0, gasCount = 0;
+        let optimalZones = 0, warningZones = 0, criticalZones = 0;
+        let zonesInVPDTarget = 0;
+        
+        zones.forEach(zone => {
+            // Temperature (convert C to F if needed)
+            const temp = zone.temperature_c || zone.temperature || zone.tempC || zone.sensors?.tempC?.current;
+            if (temp != null) {
+                totalTemp += (temp * 9/5) + 32; // Convert C to F
+                tempCount++;
+            }
+            
+            // Humidity
+            const humidity = zone.humidity || zone.rh || zone.sensors?.rh?.current;
+            if (humidity != null) {
+                totalHumidity += humidity;
+                humidityCount++;
+            }
+            
+            // Pressure
+            const pressure = zone.pressure_hpa || zone.pressure || zone.pressureHpa || zone.sensors?.pressureHpa?.current || zone.sensors?.pressure_hpa?.current;
+            if (pressure != null) {
+                totalPressure += pressure;
+                pressureCount++;
+            }
+            
+            // Gas
+            const gas = zone.gas_kohm || zone.gas || zone.gasKohm || zone.sensors?.gasKohm?.current || zone.sensors?.gas_kohm?.current;
+            if (gas != null) {
+                totalGas += gas;
+                gasCount++;
+            }
+            
+            // CO2
+            const co2 = zone.co2 || zone.sensors?.co2?.current;
+            if (co2 != null) {
+                totalCO2 += co2;
+                co2Count++;
+            }
+            
+            // VPD
+            const vpd = zone.vpd || zone.sensors?.vpd?.current;
+            if (vpd != null) {
+                totalVPD += vpd;
+                vpdCount++;
+                // VPD target range: 0.8-1.2 kPa
+                if (vpd >= 0.8 && vpd <= 1.2) zonesInVPDTarget++;
+            }
+            
+            // Status classification
+            const status = zone.status || 'unknown';
+            if (status === 'optimal' || status === 'online') optimalZones++;
+            else if (status === 'warning') warningZones++;
+            else if (status === 'critical') criticalZones++;
+        });
+        
+        // Display averages
+        document.getElementById('env-avg-temp').textContent = tempCount > 0 
+            ? (totalTemp / tempCount).toFixed(1) + ' °F'
+            : '-- °F';
+        document.getElementById('env-avg-humidity').textContent = humidityCount > 0
+            ? (totalHumidity / humidityCount).toFixed(1) + ' %'
+            : '-- %';
+        document.getElementById('env-avg-pressure').textContent = pressureCount > 0
+            ? (totalPressure / pressureCount).toFixed(1) + ' hPa'
+            : 'N/A';
+        document.getElementById('env-avg-gas').textContent = gasCount > 0
+            ? (totalGas / gasCount).toFixed(1) + ' kΩ'
+            : 'N/A';
+        document.getElementById('env-avg-co2').textContent = co2Count > 0
+            ? Math.round(totalCO2 / co2Count) + ' ppm'
+            : '-- ppm';
+        document.getElementById('env-avg-vpd').textContent = vpdCount > 0
+            ? (totalVPD / vpdCount).toFixed(2) + ' kPa'
+            : '-- kPa';
+        
+        // Current conditions
+        const totalZones = zones.length;
+        const conditionsHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Total Zones</div>
+                <div class="metric-value">${totalZones} zones</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Optimal Zones</div>
+                <div class="metric-value" style="color: var(--accent-green);">${optimalZones} zones</div>
+            </div>
+            ${warningZones > 0 ? `
+            <div class="metric-row">
+                <div class="metric-label">Warning Zones</div>
+                <div class="metric-value" style="color: var(--accent-yellow);">${warningZones} zones</div>
+            </div>` : ''}
+            ${criticalZones > 0 ? `
+            <div class="metric-row">
+                <div class="metric-label">Critical Zones</div>
+                <div class="metric-value" style="color: var(--accent-red);">${criticalZones} zones</div>
+            </div>` : ''}
+        `;
+        document.getElementById('env-current-all').innerHTML = conditionsHtml || '<div class="metric-row"><div class="metric-label">No zone data available</div></div>';
+        
+        // VPD insights
+        const avgVPDDeviation = vpdCount > 0 ? Math.abs((totalVPD / vpdCount) - 1.0).toFixed(2) : 0;
+        const vpdHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Zones in Target Range</div>
+                <div class="metric-value">${zonesInVPDTarget} / ${totalZones} zones</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Avg VPD Deviation from 1.0</div>
+                <div class="metric-value">±${avgVPDDeviation} kPa</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Optimization Opportunity</div>
+                <div class="metric-value">${totalZones - zonesInVPDTarget} zones need adjustment</div>
+            </div>
+        `;
+        document.getElementById('env-vpd-insights').innerHTML = vpdHtml;
+        
+        console.log('[Environmental] Data loaded successfully');
+    } catch (error) {
+        console.error('[Environmental] Error loading data:', error);
+        document.getElementById('env-avg-temp').textContent = 'Error';
+        document.getElementById('env-avg-humidity').textContent = 'Error';
+        document.getElementById('env-avg-pressure').textContent = 'N/A';
+        document.getElementById('env-avg-gas').textContent = 'N/A';
+        document.getElementById('env-avg-co2').textContent = 'Error';
+        document.getElementById('env-avg-vpd').textContent = 'Error';
+        document.getElementById('env-current-all').innerHTML = '<div class="metric-row"><div class="metric-label" style="color: var(--accent-red);">Failed to load environmental data</div></div>';
+        document.getElementById('env-vpd-insights').innerHTML = '<div class="metric-row"><div class="metric-label" style="color: var(--accent-red);">Failed to load VPD data</div></div>';
+    }
 }
 
 /**
@@ -3502,18 +7218,35 @@ async function loadEnergyDashboard() {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/energy/dashboard`);
         if (!response.ok) {
-            throw new Error('Failed to load energy data');
+            throw new Error(`Failed to load energy data (${response.status})`);
         }
         
-        const data = await response.json();
-        
-        document.getElementById('energy-total-24h').textContent = data.total24h.toLocaleString();
-        document.getElementById('energy-cost-kwh').textContent = data.costPerKwh.toFixed(2);
-        document.getElementById('energy-efficiency').textContent = `${data.efficiency}%`;
-        document.getElementById('energy-savings').textContent = data.savingsKwh.toLocaleString();
-        
-        const consumersHtml = data.topConsumers && data.topConsumers.length > 0
-            ? data.topConsumers.map(c => `
+        const apiData = await response.json();
+        const energyData = apiData?.data || apiData || {};
+
+        const total24h = Number(energyData.total24h ?? energyData.summary?.totalConsumption ?? 0);
+        const totalCost = Number(energyData.summary?.cost ?? 0);
+        const costPerKwh = Number(energyData.costPerKwh ?? (total24h > 0 ? totalCost / total24h : 0));
+        const efficiency = Number(energyData.efficiency ?? 0);
+        const savingsKwh = Number(energyData.savingsKwh ?? 0);
+
+        document.getElementById('energy-total-24h').textContent = Number.isFinite(total24h) ? total24h.toLocaleString() : '0';
+        document.getElementById('energy-cost-kwh').textContent = Number.isFinite(costPerKwh) ? costPerKwh.toFixed(2) : '0.00';
+        document.getElementById('energy-efficiency').textContent = Number.isFinite(efficiency) ? `${efficiency}%` : '0%';
+        document.getElementById('energy-savings').textContent = Number.isFinite(savingsKwh) ? savingsKwh.toLocaleString() : '0';
+
+        const topConsumers = Array.isArray(energyData.topConsumers)
+            ? energyData.topConsumers
+            : (Array.isArray(energyData.byFarm)
+                ? energyData.byFarm.slice(0, 5).map(farm => ({
+                    name: farm.farmName || farm.farmId || 'Farm',
+                    type: 'Farm',
+                    consumption: Number(farm.consumption || 0)
+                }))
+                : []);
+
+        const consumersHtml = topConsumers.length > 0
+            ? topConsumers.map(c => `
                 <div class="metric-row">
                     <div class="metric-label">${c.name} - ${c.type}</div>
                     <div class="metric-value">${c.consumption} kWh</div>
@@ -3537,7 +7270,7 @@ async function loadAnomaliesView() {
     
     try {
         // Fetch live anomaly data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/schedule-executor/ml-anomalies`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/anomalies`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -3551,6 +7284,7 @@ async function loadAnomaliesView() {
         }
         
         const anomalies = data.anomalies || [];
+        const mlEnabled = data.mlEnabled;
         
         // Update KPIs based on actual data
         const totalAnomalies = anomalies.length;
@@ -3561,40 +7295,46 @@ async function loadAnomaliesView() {
         document.getElementById('anomalies-total').textContent = totalAnomalies;
         document.getElementById('anomalies-critical').textContent = criticalCount;
         document.getElementById('anomalies-ack').textContent = acknowledged;
-        document.getElementById('anomalies-rate').textContent = data.mlEnabled ? '98.5%' : 'N/A';
+        document.getElementById('anomalies-rate').textContent = mlEnabled ? '98.5%' : 'N/A';
         
         if (anomalies.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">No anomalies detected</td></tr>';
+            const message = mlEnabled 
+                ? 'No anomalies detected - all systems operating normally'
+                : 'ML anomaly detection not available. Check that ML jobs are running on edge devices.';
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">${message}</td></tr>`;
             return;
         }
         
         // Transform data to match dashboard format
         const html = anomalies.map((anomaly, idx) => {
-            const timestamp = anomaly.timestamp ? new Date(anomaly.timestamp).toLocaleString() : new Date().toLocaleString();
-            const farm = 'Farm Alpha'; // TODO: Get actual farm name from context
-            const type = 'environmental'; // Most ML anomalies are environmental
-            const severity = anomaly.severity || 'warning';
-            const description = anomaly.reason || 'Anomaly detected';
-            const confidence = 85; // Default confidence if not provided
+            const timestamp = anomaly.timestamp || anomaly.created_at || anomaly.lastUpdated;
+            const timestampLabel = timestamp ? new Date(timestamp).toLocaleString() : '—';
+            const farm = anomaly.farmName || anomaly.farmId || 'Unknown Farm';
+            const type = (anomaly.type || anomaly.category || 'environmental').toString().toLowerCase();
+            const severity = (anomaly.severity || 'warning').toString().toLowerCase();
+            const description = anomaly.reason || anomaly.description || 'Anomaly detected';
+            const confidence = Number.isFinite(anomaly.confidence)
+                ? Math.round(anomaly.confidence * (anomaly.confidence <= 1 ? 100 : 1))
+                : '—';
             const status = anomaly.status || 'new';
             
             // Build context for tracing
             const context = {
-                farmId: 'GR-00001', // TODO: Get from actual farm data
-                roomId: 'room-a',
-                zoneId: anomaly.zone || null,
-                groupId: null,
-                deviceId: null
+                farmId: anomaly.farmId || null,
+                roomId: anomaly.roomId || anomaly.room || null,
+                zoneId: anomaly.zone || anomaly.zoneId || null,
+                groupId: anomaly.groupId || null,
+                deviceId: anomaly.deviceId || null
             };
             
             return `
                 <tr>
-                    <td>${timestamp}</td>
+                    <td>${timestampLabel}</td>
                     <td>${farm}</td>
                     <td>${type}</td>
                     <td><span class="status-badge status-${severity}">${severity}</span></td>
                     <td>${description}</td>
-                    <td>${confidence}%</td>
+                    <td>${confidence === '—' ? '—' : `${confidence}%`}</td>
                     <td>${status}</td>
                     <td>
                         <button class="btn-small" onclick="traceAnomaly('anom-${idx}', ${JSON.stringify(context).replace(/"/g, '&quot;')})">Trace</button>
@@ -3605,10 +7345,6 @@ async function loadAnomaliesView() {
         }).join('');
         
         tbody.innerHTML = html;
-        
-        if (data.demo) {
-            showToast('Demo mode: Displaying synthetic anomaly data', 'info');
-        }
         
     } catch (error) {
         console.error('[Anomalies] Error loading data:', error);
@@ -3632,13 +7368,23 @@ async function loadAnomaliesView() {
  * - Anomalies: ML pattern detection, investigative (unusual behavior patterns)
  * - Alerts are reactive (known problems), Anomalies are proactive (emerging issues)
  */
-async function loadAlertsView() {
-    console.log('[Alerts] Loading alerts...');
+async function loadAlertsView(options = {}) {
+    const { farmId = null, severity = null, status = null } = options;
+    console.log('[Alerts] Loading alerts...', { farmId, severity, status });
     const tbody = document.getElementById('alerts-tbody');
+    if (!tbody) {
+        console.warn('[Alerts] Table body not found');
+        return;
+    }
     
     try {
         // Fetch live alert data from API
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts`);
+        const params = new URLSearchParams();
+        if (farmId) params.append('farm_id', farmId);
+        if (severity) params.append('severity', severity);
+        if (status) params.append('status', status);
+        const query = params.toString();
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts${query ? `?${query}` : ''}`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -3695,10 +7441,6 @@ async function loadAlertsView() {
         
         tbody.innerHTML = html;
         
-        if (data.demo) {
-            showToast('Demo mode: Displaying sample alerts', 'info');
-        }
-        
     } catch (error) {
         console.error('[Alerts] Error loading data:', error);
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--accent-red);">Error loading alerts: ' + error.message + '</td></tr>';
@@ -3711,6 +7453,13 @@ async function loadAlertsView() {
         
         showToast('Failed to load alert data', 'error');
     }
+}
+
+function filterAlerts() {
+    const severity = document.getElementById('filter-alert-severity')?.value || null;
+    const status = document.getElementById('filter-alert-status')?.value || null;
+    const farmId = currentFarmId || null;
+    loadAlertsView({ farmId, severity, status });
 }
 
 /**
@@ -3774,7 +7523,7 @@ function filterDevicesByType() {
     console.log('[Devices] Filter triggered');
 }
 
-function filterRecipes() {
+function filterRecipesStub() {
     console.log('[Recipes] Filter triggered');
 }
 
@@ -3782,9 +7531,7 @@ function filterAnomalies() {
     console.log('[Anomalies] Filter triggered');
 }
 
-function filterAlerts() {
-    console.log('[Alerts] Filter triggered');
-}
+// filterAlerts() defined above at the alerts view section
 
 /**
  * ===================================
@@ -3792,49 +7539,129 @@ function filterAlerts() {
  * ===================================
  */
 
-let currentAnalyticsFarmId = 'greenreach-greens';
+let currentAnalyticsFarmId = null;
 let analyticsData = {
     metrics: [],
     summary: {}
 };
 
+function normalizeFarmIdValue(farmLike) {
+    if (!farmLike) return null;
+    if (typeof farmLike === 'string') {
+        const id = farmLike.trim();
+        return id || null;
+    }
+    const id = farmLike.farmId || farmLike.farm_id || null;
+    if (!id) return null;
+    return String(id).trim() || null;
+}
+
+function normalizeAnalyticsMetrics(metrics) {
+    if (!Array.isArray(metrics)) return [];
+    return metrics.map((m) => ({
+        date: m.date || m.recorded_at || m.timestamp || new Date().toISOString(),
+        production_kg: Number(m.production_kg ?? m.plant_count ?? 0),
+        revenue: Number(m.revenue ?? 0),
+        costs: Number(m.costs ?? m.energy_24h ?? 0),
+        efficiency_score: Number(m.efficiency_score ?? 0),
+        trays_seeded: Number(m.trays_seeded ?? m.tray_count ?? 0),
+        trays_harvested: Number(m.trays_harvested ?? 0),
+        orders_fulfilled: Number(m.orders_fulfilled ?? 0)
+    }));
+}
+
+function renderAnalyticsEmptyState(message = 'No metrics data available.') {
+    analyticsData = {
+        metrics: [],
+        summary: {
+            totalProduction: 0,
+            totalRevenue: 0,
+            daysReported: 0,
+            avgYield: 0,
+            topCrop: null
+        }
+    };
+    renderAnalyticsSummary(analyticsData.summary);
+    renderAnalyticsMetricsTable([]);
+    console.warn('[Analytics]', message);
+}
+
+function resolveAnalyticsFarmId() {
+    if (currentAnalyticsFarmId) return currentAnalyticsFarmId;
+    if (currentFarmId) return currentFarmId;
+    const fallbackFarm = farmsData.find(f => normalizeFarmIdValue(f)) || farmsData[0];
+    return normalizeFarmIdValue(fallbackFarm);
+}
+
 /**
  * Load analytics for a specific farm
  */
 async function loadAnalyticsForFarm(farmId) {
-    currentAnalyticsFarmId = farmId;
-    await loadFarmMetrics(farmId);
+    const resolvedFarmId = normalizeFarmIdValue(farmId);
+    currentAnalyticsFarmId = resolvedFarmId;
+    await loadFarmMetrics(resolvedFarmId);
 }
 
 /**
  * Refresh analytics data
  */
 async function refreshAnalytics() {
-    await loadFarmMetrics(currentAnalyticsFarmId);
+    const farmId = currentAnalyticsFarmId || resolveAnalyticsFarmId();
+    if (!farmId) {
+        console.warn('[Analytics] No farm available for analytics');
+        return;
+    }
+    currentAnalyticsFarmId = farmId;
+    await loadFarmMetrics(farmId);
 }
 
 /**
  * Load farm metrics from API
  */
-async function loadFarmMetrics(farmId, days = 7) {
+async function loadFarmMetrics(farmId, days = 7, isFallback = false) {
+    const resolvedFarmId = normalizeFarmIdValue(farmId);
+    if (!resolvedFarmId) {
+        console.warn('[Analytics] No farmId provided — skipping metrics load');
+        renderAnalyticsEmptyState('No farm selected for analytics.');
+        return;
+    }
+
+    currentAnalyticsFarmId = resolvedFarmId;
+
     try {
-        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${farmId}/metrics?days=${days}`);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/analytics/farms/${resolvedFarmId}/metrics?days=${days}`);
         
         if (!response.ok) {
             console.error('Failed to load farm metrics:', response.status);
-            showToast('Failed to load analytics data', 'error');
+            if ((response.status === 404 || response.status === 400) && !isFallback) {
+                const fallbackFarm = farmsData.find(f => {
+                    const fid = normalizeFarmIdValue(f);
+                    return fid && fid !== resolvedFarmId;
+                });
+                if (fallbackFarm) {
+                    const fallbackId = normalizeFarmIdValue(fallbackFarm);
+                    currentAnalyticsFarmId = fallbackId;
+                    await loadFarmMetrics(fallbackId, days, true);
+                    return;
+                }
+            }
+            renderAnalyticsEmptyState(`Analytics endpoint returned HTTP ${response.status}.`);
             return;
         }
         
         const data = await response.json();
-        analyticsData = data;
+        analyticsData = {
+            ...data,
+            summary: data?.summary || {},
+            metrics: normalizeAnalyticsMetrics(data?.metrics)
+        };
         
-        renderAnalyticsSummary(data.summary);
-        renderAnalyticsMetricsTable(data.metrics);
+        renderAnalyticsSummary(analyticsData.summary);
+        renderAnalyticsMetricsTable(analyticsData.metrics);
         
     } catch (error) {
         console.error('Error loading farm metrics:', error);
-        showToast('Error loading analytics data', 'error');
+        renderAnalyticsEmptyState(error.message || 'Error loading analytics data.');
     }
 }
 
@@ -3843,13 +7670,21 @@ async function loadFarmMetrics(farmId, days = 7) {
  */
 function renderAnalyticsSummary(summary) {
     if (!summary) return;
+
+    const productionEl = document.getElementById('analytics-production');
+    const productionAvgEl = document.getElementById('analytics-production-avg');
+    const revenueEl = document.getElementById('analytics-revenue');
+    if (!productionEl || !productionAvgEl || !revenueEl) {
+        console.warn('[Analytics] Summary elements not found in DOM');
+        return;
+    }
     
     // Production
-    document.getElementById('analytics-production').textContent = `${(summary.totalProduction || 0).toFixed(1)} kg`;
-    document.getElementById('analytics-production-avg').textContent = `${((summary.totalProduction || 0) / (summary.daysReported || 1)).toFixed(1)} kg/day avg`;
+    productionEl.textContent = `${(summary.totalProduction || 0).toFixed(1)} kg`;
+    productionAvgEl.textContent = `${((summary.totalProduction || 0) / (summary.daysReported || 1)).toFixed(1)} kg/day avg`;
     
     // Revenue
-    document.getElementById('analytics-revenue').textContent = `$${(summary.totalRevenue || 0).toFixed(2)}`;
+    revenueEl.textContent = `$${(summary.totalRevenue || 0).toFixed(2)}`;
     
     // Model performance (from API response)
     const perfData = summary.modelPerformance || analyticsData.modelPerformance;
@@ -3991,10 +7826,11 @@ async function loadFarmRoomsView(farmId) {
             header.textContent = 'Farm Rooms';
         }
         
-        // Render rooms table
-        const tableBody = document.querySelector('#rooms-table');
+        // Render rooms table - scope to rooms-view to avoid duplicate IDs
+        const roomsView = document.getElementById('rooms-view');
+        const tableBody = roomsView ? roomsView.querySelector('#rooms-tbody') : document.querySelector('#rooms-tbody');
         if (!tableBody) {
-            console.error('Rooms table not found');
+            console.error('Rooms table body not found (#rooms-tbody in #rooms-view)');
             return;
         }
         
@@ -4045,9 +7881,9 @@ async function loadFarmDevicesView(farmId) {
         }
         
         // Render devices table
-        const tableBody = document.querySelector('#devices-table');
+        const tableBody = document.querySelector('#devices-tbody');
         if (!tableBody) {
-            console.error('Devices table not found');
+            console.error('Devices table body not found (#devices-tbody)');
             return;
         }
         
@@ -4119,6 +7955,254 @@ async function loadFarmRecipesView(farmId) {
 }
 
 /**
+ * Load environmental data for farm detail tab
+ * Populates env-current and env-insights elements using GPT-4 AI
+ */
+async function loadFarmEnvironmentalData(farmId, farmData) {
+    console.log('[loadFarmEnvironmentalData] Loading for farm:', farmId);
+    
+    try {
+        // Fetch zone telemetry data from API
+        let zones = [];
+        try {
+            let zonesResponse;
+            try {
+                zonesResponse = await authenticatedFetch(`${API_BASE}/api/admin/farms/${farmId}/zones`);
+                if (!zonesResponse || !zonesResponse.ok) throw new Error('No admin zones endpoint');
+            } catch (zoneErr) {
+                zonesResponse = await authenticatedFetch(`${API_BASE}/api/sync/${farmId}/telemetry`);
+            }
+            if (zonesResponse.ok) {
+                const zonesData = await zonesResponse.json();
+                zones = zonesData.zones || zonesData.telemetry?.zones || [];
+                console.log('[loadFarmEnvironmentalData] Fetched zones from API:', zones.length);
+            } else {
+                console.warn('[loadFarmEnvironmentalData] Zones API returned:', zonesResponse.status);
+            }
+        } catch (apiError) {
+            console.error('[loadFarmEnvironmentalData] Failed to fetch zones:', apiError);
+        }
+        
+        console.log('[loadFarmEnvironmentalData] Found zones:', zones.length);
+        
+        if (zones.length === 0) {
+            // No environmental data
+            document.getElementById('env-current').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">No Environmental Data</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">No zones reporting</div>
+                </div>
+            `;
+            document.getElementById('env-insights').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">No AI Insights Available</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">Insufficient data</div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Calculate averages from real zone data
+        let totalTemp = 0, totalHumidity = 0, totalPressure = 0;
+        let tempCount = 0, humidityCount = 0, pressureCount = 0;
+        
+        zones.forEach(zone => {
+            // Support multiple data formats: direct properties, or sensors object
+            const temp = zone.temperature_c || zone.sensors?.tempC?.current;
+            const humidity = zone.humidity || zone.rh || zone.sensors?.rh?.current;
+            const pressure = zone.pressure_hpa || zone.sensors?.pressure?.current;
+            
+            if (temp != null) {
+                totalTemp += temp;
+                tempCount++;
+            }
+            if (humidity != null) {
+                totalHumidity += humidity;
+                humidityCount++;
+            }
+            if (pressure != null) {
+                totalPressure += pressure;
+                pressureCount++;
+            }
+        });
+        
+        const avgTempNum = tempCount > 0 ? (totalTemp / tempCount) : null;
+        const avgHumidityNum = humidityCount > 0 ? (totalHumidity / humidityCount) : null;
+        const avgPressureNum = pressureCount > 0 ? (totalPressure / pressureCount) : null;
+        
+        // Format for display
+        const avgTemp = avgTempNum != null ? avgTempNum.toFixed(1) : null;
+        const avgHumidity = avgHumidityNum != null ? avgHumidityNum.toFixed(1) : null;
+        const avgPressure = avgPressureNum != null ? avgPressureNum.toFixed(1) : null;
+        
+        // Calculate VPD from temp and humidity using numeric values
+        let avgVPD = null;
+        if (avgTempNum != null && avgHumidityNum != null) {
+            // VPD = SVP * (1 - RH/100), where SVP = 0.6108 * exp(17.27*T/(T+237.3))
+            const svp = 0.6108 * Math.exp((17.27 * avgTempNum) / (avgTempNum + 237.3));
+            avgVPD = (svp * (1 - avgHumidityNum / 100)).toFixed(2);
+        }
+        
+        // Populate Current Conditions
+        const conditionsHtml = `
+            <div class="metric-row">
+                <div class="metric-label">Temperature</div>
+                <div class="metric-value">${avgTemp != null ? avgTemp + '°C' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Humidity</div>
+                <div class="metric-value">${avgHumidity != null ? avgHumidity + '%' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Pressure</div>
+                <div class="metric-value">${avgPressure != null ? avgPressure + ' hPa' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">VPD (calculated)</div>
+                <div class="metric-value">${avgVPD != null ? avgVPD + ' kPa' : 'No data'}</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Active Zones</div>
+                <div class="metric-value">${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}</div>
+            </div>
+        `;
+        document.getElementById('env-current').innerHTML = conditionsHtml;
+        
+        // Show loading state for AI insights
+        document.getElementById('env-insights').innerHTML = `
+            <div class="metric-row">
+                <div class="metric-label">🤖 Analyzing with GPT-4...</div>
+                <div class="metric-value" style="color: var(--text-secondary);">Generating insights</div>
+            </div>
+        `;
+        
+        // Call GPT-4 AI Insights API
+        try {
+            console.log('[loadFarmEnvironmentalData] Calling GPT-4 AI Insights API for farm:', farmId);
+            const response = await authenticatedFetch(`${API_BASE}/api/ai-insights/${farmId}`);
+            
+            if (!response.ok) {
+                throw new Error(`AI Insights API returned ${response.status}`);
+            }
+            
+            const aiData = await response.json();
+            console.log('[loadFarmEnvironmentalData] GPT-4 response:', aiData);
+            
+            // Display AI-generated insights
+            let insightsHtml = '';
+            
+            // Overall status
+            if (aiData.insights.overall_status) {
+                insightsHtml += `
+                    <div class="metric-row" style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+                        <div class="metric-label">Status</div>
+                        <div class="metric-value">${escapeHtml(aiData.insights.overall_status)}</div>
+                    </div>
+                `;
+            }
+            
+            // Temperature assessment
+            if (aiData.insights.parameters.temperature.assessment) {
+                const tempIcon = Math.abs(aiData.insights.parameters.temperature.deviation_percent) < 10 ? '✅' : '🌡️';
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">${tempIcon} Temperature</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.temperature.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // Humidity assessment
+            if (aiData.insights.parameters.humidity.assessment) {
+                const humidityIcon = Math.abs(aiData.insights.parameters.humidity.deviation_percent) < 10 ? '✅' : '💧';
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">${humidityIcon} Humidity</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.humidity.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // VPD assessment
+            if (aiData.insights.parameters.vpd.assessment) {
+                insightsHtml += `
+                    <div class="metric-row">
+                        <div class="metric-label">📊 VPD</div>
+                        <div class="metric-value" style="font-size: 0.9em;">${escapeHtml(aiData.insights.parameters.vpd.assessment)}</div>
+                    </div>
+                `;
+            }
+            
+            // Priority actions
+            if (aiData.insights.priority_actions && aiData.insights.priority_actions.length > 0) {
+                insightsHtml += `
+                    <div class="metric-row" style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;">
+                        <div class="metric-label" style="font-weight: bold;">🎯 Priority Actions</div>
+                    </div>
+                `;
+                aiData.insights.priority_actions.forEach((action, index) => {
+                    insightsHtml += `
+                        <div class="metric-row" style="padding-left: 20px;">
+                            <div class="metric-value" style="font-size: 0.9em;">
+                                ${index + 1}. ${escapeHtml(action)}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Add timestamp and GPT-4 badge
+            insightsHtml += `
+                <div class="metric-row" style="border-top: 1px solid var(--border); padding-top: 8px; margin-top: 12px;">
+                    <div class="metric-value" style="font-size: 0.8em; color: var(--text-secondary);">
+                        🤖 Powered by GPT-4 | ${new Date(aiData.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('env-insights').innerHTML = insightsHtml;
+            
+        } catch (aiError) {
+            console.error('[loadFarmEnvironmentalData] GPT-4 API error:', aiError);
+            
+            // Fallback to basic insights if AI fails
+            document.getElementById('env-insights').innerHTML = `
+                <div class="metric-row">
+                    <div class="metric-label">⚠️ AI Insights Unavailable</div>
+                    <div class="metric-value" style="color: var(--text-secondary);">${escapeHtml(aiError.message)}</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-value" style="font-size: 0.9em;">
+                        Environmental data is being monitored. AI analysis will be available when the service is configured.
+                    </div>
+                </div>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('[loadFarmEnvironmentalData] Error:', error);
+        document.getElementById('env-current').innerHTML = `
+            <div class="metric-row">
+                <div class="metric-label">Error</div>
+                <div class="metric-value" style="color: var(--danger);">${escapeHtml(error.message)}</div>
+            </div>
+        `;
+    }
+}
+
+// Helper function to escape HTML
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+/**
  * Load environmental view filtered for a specific farm
  */
 async function loadFarmEnvironmentalView(farmId) {
@@ -4176,13 +8260,18 @@ async function loadFarmAlertsView(farmId) {
  */
 function renderAnalyticsMetricsTable(metrics) {
     const tbody = document.getElementById('analytics-metrics-tbody');
+    if (!tbody) {
+        console.warn('[Analytics] Metrics table body not found in DOM');
+        return;
+    }
+    const rows = Array.isArray(metrics) ? metrics : [];
     
-    if (metrics.length === 0) {
+    if (rows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No metrics data available.</td></tr>';
         return;
     }
     
-    tbody.innerHTML = metrics.map(m => {
+    tbody.innerHTML = rows.map(m => {
         const date = new Date(m.date);
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const profit = parseFloat(m.revenue) - parseFloat(m.costs);
@@ -4211,6 +8300,88 @@ function renderAnalyticsMetricsTable(metrics) {
 // recipesData already declared as global variable at top of file
 let currentRecipeId = null;
 let recipeSpectrumChart = null;
+let recipeSortState = { key: 'name', direction: 'asc' };
+
+const recipeFieldMap = new Map([
+    ['day', 'day'],
+    ['stage', 'stage'],
+    ['dli target mol m2 d', 'dli_target'],
+    ['dli target mol m d', 'dli_target'],
+    ['dli target', 'dli_target'],
+    ['dli target mol m2 day', 'dli_target'],
+    ['dli target mol m 2 day', 'dli_target'],
+    ['dli target mol m2 day ', 'dli_target'],
+    ['dli target mol m 2 d', 'dli_target'],
+    ['temp target c', 'temperature'],
+    ['temperature c', 'temperature'],
+    ['temperature (c)', 'temperature'],
+    ['temp c', 'temperature'],
+    ['afternoon temp c', 'afternoon_temp'],
+    ['temperature', 'temperature'],
+    ['blue', 'blue'],
+    ['green', 'green'],
+    ['red', 'red'],
+    ['far red', 'far_red'],
+    ['farred', 'far_red'],
+    ['ppfd target umol m2 s', 'ppfd'],
+    ['ppfd target mol m s', 'ppfd'],
+    ['ppfd target umol m 2 s', 'ppfd'],
+    ['ppfd target umol m2 s ', 'ppfd'],
+    ['ppfd target umol m 2 s ', 'ppfd'],
+    ['ppfd target (umol m2 s)', 'ppfd'],
+    ['ppfd target (umol m 2 s)', 'ppfd'],
+    ['ppfd target', 'ppfd'],
+    ['vpd target kpa', 'vpd_target'],
+    ['vpd target', 'vpd_target'],
+    ['max humidity', 'max_humidity'],
+    ['ec target ds m', 'ec'],
+    ['ec target', 'ec'],
+    ['ph target', 'ph'],
+    ['ph', 'ph']
+]);
+
+function isRecipeResponseOk(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.ok === 'boolean') return data.ok;
+    if (typeof data.success === 'boolean') return data.success;
+    return false;
+}
+
+function normalizeHeaderKey(key) {
+    return String(key)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function normalizeRecipeSchedule(recipe) {
+    if (Array.isArray(recipe?.data?.schedule)) {
+        return recipe.data.schedule.map(row => {
+            const normalized = {};
+            Object.entries(row).forEach(([key, value]) => {
+                if (key in normalized) return;
+                const normalizedKey = normalizeHeaderKey(key);
+                const mappedKey = recipeFieldMap.get(normalizedKey) || key;
+                normalized[mappedKey] = value;
+            });
+            return normalized;
+        });
+    }
+    if (Array.isArray(recipe?.phases)) {
+        return recipe.phases.map(phase => {
+            const normalized = {};
+            Object.entries(phase).forEach(([key, value]) => {
+                const normalizedKey = normalizeHeaderKey(key);
+                const mappedKey = recipeFieldMap.get(normalizedKey);
+                if (mappedKey) {
+                    normalized[mappedKey] = value;
+                }
+            });
+            return normalized;
+        });
+    }
+    return [];
+}
 
 /**
  * Load and display recipes
@@ -4239,13 +8410,15 @@ async function loadRecipes() {
         const data = await response.json();
         console.log('[Recipes] Data received:', data);
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipes');
         }
         
         recipesData = data.recipes || [];
         console.log('[Recipes] Loaded', recipesData.length, 'recipes');
-        renderRecipesTable(recipesData);
+        const sorted = getSortedRecipes(recipesData);
+        renderRecipesTableDetailed(sorted);
+        updateRecipeSortIndicators();
         updateRecipeStats(recipesData);
         
     } catch (error) {
@@ -4264,7 +8437,7 @@ async function loadRecipes() {
 /**
  * Render recipes table
  */
-function renderRecipesTable(recipes) {
+function renderRecipesTableDetailed(recipes) {
     const tbody = document.getElementById('recipes-tbody');
     
     if (recipes.length === 0) {
@@ -4281,8 +8454,9 @@ function renderRecipesTable(recipes) {
         
         // Get average temperature from schedule
         let avgTemp = 'N/A';
-        if (recipe.data && recipe.data.schedule && recipe.data.schedule.length > 0) {
-            const temps = recipe.data.schedule
+        const normalizedSchedule = normalizeRecipeSchedule(recipe);
+        if (normalizedSchedule.length > 0) {
+            const temps = normalizedSchedule
                 .map(day => {
                     const temp = day.temperature || day.tempC || day.afternoon_temp;
                     return typeof temp === 'string' ? parseFloat(temp) : temp;
@@ -4311,9 +8485,9 @@ function renderRecipesTable(recipes) {
                 <td style="font-size: 0.85rem;">${avgTemp}</td>
                 <td>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="viewRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
-                        <button onclick="editRecipe(${recipe.id})" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
-                        <button onclick="deleteRecipe(${recipe.id}, '${recipe.name}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem; background: var(--accent-red);">Delete</button>
+                        <button onclick="viewRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">View</button>
+                        <button onclick="editRecipe('${recipe.id}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem;">Edit</button>
+                        <button onclick="deleteRecipe('${recipe.id}', '${recipe.name}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.85rem; background: var(--accent-red);">Delete</button>
                     </div>
                 </td>
             </tr>
@@ -4321,6 +8495,46 @@ function renderRecipesTable(recipes) {
     }).join('');
     
     document.getElementById('recipes-count').textContent = `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''}`;
+}
+
+function setRecipeSort(key) {
+    if (recipeSortState.key === key) {
+        recipeSortState.direction = recipeSortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        recipeSortState.key = key;
+        recipeSortState.direction = 'asc';
+    }
+    const sorted = getSortedRecipes(recipesData || []);
+    renderRecipesTableDetailed(sorted);
+    updateRecipeSortIndicators();
+}
+
+function getSortedRecipes(recipes) {
+    if (!Array.isArray(recipes)) return [];
+    const sorted = [...recipes];
+    const dir = recipeSortState.direction === 'desc' ? -1 : 1;
+
+    sorted.sort((a, b) => {
+        const nameA = String(a?.name || '').toLowerCase();
+        const nameB = String(b?.name || '').toLowerCase();
+        const catA = String(a?.category || '').toLowerCase();
+        const catB = String(b?.category || '').toLowerCase();
+
+        if (recipeSortState.key === 'category') {
+            if (catA !== catB) return catA.localeCompare(catB) * dir;
+            return nameA.localeCompare(nameB) * dir;
+        }
+        return nameA.localeCompare(nameB) * dir;
+    });
+
+    return sorted;
+}
+
+function updateRecipeSortIndicators() {
+    const nameIndicator = document.getElementById('recipe-sort-name');
+    const categoryIndicator = document.getElementById('recipe-sort-category');
+    if (nameIndicator) nameIndicator.textContent = recipeSortState.key === 'name' ? (recipeSortState.direction === 'asc' ? '▲' : '▼') : '';
+    if (categoryIndicator) categoryIndicator.textContent = recipeSortState.key === 'category' ? (recipeSortState.direction === 'asc' ? '▲' : '▼') : '';
 }
 
 /**
@@ -4450,37 +8664,46 @@ async function viewRecipe(recipeId) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipe');
         }
         
-        const recipe = data.recipe;
-        const schedule = recipe.data?.schedule || [];
+        const recipe = data.recipe || {};
+        const schedule = normalizeRecipeSchedule(recipe);
         
         // Store recipe data for export
         currentRecipeData = recipe;
         
         // Update modal header
-        document.getElementById('recipe-view-title').textContent = recipe.name;
-        document.getElementById('recipe-view-category').textContent = recipe.category;
-        document.getElementById('recipe-view-days').textContent = recipe.total_days || schedule.length;
+        document.getElementById('recipe-view-title').textContent = recipe.name || 'Recipe';
+        document.getElementById('recipe-view-category').textContent = recipe.category || 'Vegetables';
+        document.getElementById('recipe-view-days').textContent = recipe.total_days || recipe.totalDays || schedule.length;
         
+        const formatNumber = (value, decimals) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num.toFixed(decimals) : '';
+        };
+        const formatInteger = (value) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? Math.round(num) : '';
+        };
+
         // Render schedule table
         const tbody = document.getElementById('recipe-view-schedule');
         tbody.innerHTML = schedule.map(day => `
             <tr>
                 <td>${day.day.toFixed(1) || ''}</td>
                 <td>${day.stage || ''}</td>
-                <td>${day.dli_target ? day.dli_target.toFixed(2) : ''}</td>
-                <td>${day.temperature || day.tempC || day.afternoon_temp || ''}</td>
-                <td>${day.vpd_target ? day.vpd_target.toFixed(2) : ''}</td>
+                <td>${formatNumber(day.dli_target, 2)}</td>
+                <td>${formatNumber(day.temperature || day.tempC || day.afternoon_temp, 1)}</td>
+                <td>${formatNumber(day.vpd_target, 2)}</td>
                 <td>${day.max_humidity || ''}</td>
                 <td>${day.blue || 0}</td>
                 <td>${day.green || 0}</td>
                 <td>${day.red || 0}</td>
                 <td>${day.far_red || 0}</td>
-                <td>${day.ppfd ? Math.round(day.ppfd) : 0}</td>
-                <td>${day.ec ? day.ec.toFixed(2) : ''}</td>
+                <td>${formatInteger(day.ppfd)}</td>
+                <td>${formatNumber(day.ec, 2)}</td>
                 <td>${day.ph || ''}</td>
             </tr>
         `).join('');
@@ -4601,23 +8824,23 @@ async function editRecipe(recipeId) {
         const response = await authenticatedFetch(`/api/admin/recipes/${recipeId}`);
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to load recipe');
         }
         
-        const recipe = data.recipe;
+        const recipe = data.recipe || {};
         currentRecipeId = recipeId;
         
         // Store recipe data for export
         currentRecipeData = recipe;
         
         document.getElementById('recipe-modal-title').textContent = 'Edit Recipe';
-        document.getElementById('recipe-name').value = recipe.name;
-        document.getElementById('recipe-category').value = recipe.category;
+        document.getElementById('recipe-name').value = recipe.name || '';
+        document.getElementById('recipe-category').value = recipe.category || 'Vegetables';
         document.getElementById('recipe-description').value = recipe.description || '';
         
         // Render schedule
-        const schedule = recipe.data?.schedule || [];
+        const schedule = normalizeRecipeSchedule(recipe);
         scheduleData = JSON.parse(JSON.stringify(schedule)); // Deep copy
         renderScheduleEditor(scheduleData);
         
@@ -4796,7 +9019,7 @@ async function saveRecipe(event) {
         
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to save recipe');
         }
         
@@ -4814,7 +9037,13 @@ async function saveRecipe(event) {
  * Delete recipe
  */
 async function deleteRecipe(recipeId, recipeName) {
-    if (!confirm(`Are you sure you want to delete the recipe "${recipeName}"? This action cannot be undone.`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Recipe',
+        message: `Delete recipe "${recipeName}"?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Recipe'
+    });
+    if (!confirmed) {
         return;
     }
     
@@ -4825,7 +9054,7 @@ async function deleteRecipe(recipeId, recipeName) {
         
         const data = await response.json();
         
-        if (!data.ok) {
+        if (!isRecipeResponseOk(data)) {
             throw new Error(data.error || 'Failed to delete recipe');
         }
         
@@ -5182,7 +9411,14 @@ async function saveUser(event) {
  * Reset user password (Light Engine farm users)
  */
 async function resetUserPassword(userId, userEmail) {
-    if (!confirm(`Reset password for ${userEmail}?\n\nA new temporary password will be generated.`)) {
+    const confirmed = await showConfirmModal({
+        title: 'Reset Password',
+        message: `Reset password for ${userEmail}?`,
+        submessage: 'A new temporary password will be generated.',
+        confirmText: 'Reset Password',
+        tone: 'primary'
+    });
+    if (!confirmed) {
         return;
     }
     
@@ -5255,6 +9491,626 @@ async function confirmDeleteUser() {
     }
 }
 
+// ============================================================================
+// AI RULES MANAGEMENT
+// ============================================================================
+let aiRules = [];
+let activeAiRuleId = null;
+
+function setAiRulesStatus(message, isError = false) {
+    const statusEl = document.getElementById('ai-rules-status');
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.style.color = isError ? 'var(--accent-red)' : 'var(--text-muted)';
+}
+
+function getAiRulesSearchTerm() {
+    const input = document.getElementById('ai-rules-search');
+    return input ? input.value.trim().toLowerCase() : '';
+}
+
+function filterAiRules() {
+    renderAiRulesList();
+}
+
+function renderAiRulesList() {
+    const tbody = document.getElementById('ai-rules-tbody');
+    const count = document.getElementById('ai-rules-count');
+    if (!tbody) return;
+
+    const filter = getAiRulesSearchTerm();
+    const filtered = aiRules.filter(rule => {
+        const haystack = `${rule.title} ${rule.category} ${rule.content}`.toLowerCase();
+        return !filter || haystack.includes(filter);
+    });
+
+    if (count) {
+        count.textContent = `${aiRules.length}`;
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">No rules found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(rule => {
+        const status = `${rule.enabled ? 'Enabled' : 'Disabled'}${rule.requiresReview ? ' • Review' : ''}`;
+        const activeClass = rule.id === activeAiRuleId ? 'active' : '';
+        
+        // Priority colors
+        const priorityColors = {
+            'critical': '#ef4444',
+            'high': '#f59e0b',
+            'medium': '#3b82f6',
+            'low': '#6b7280'
+        };
+        const priorityColor = priorityColors[rule.priority] || '#6b7280';
+        const priorityBadge = `<span style="display: inline-block; padding: 3px 10px; border-radius: 12px; background: ${priorityColor}20; color: ${priorityColor}; font-weight: 600; font-size: 12px; text-transform: uppercase;">${escapeHtml(rule.priority)}</span>`;
+        
+        // Status colors
+        const statusColor = rule.enabled ? '#10b981' : '#6b7280';
+        const reviewBadge = rule.requiresReview ? `<span style="display: inline-block; margin-left: 8px; padding: 3px 10px; border-radius: 12px; background: #f59e0b20; color: #f59e0b; font-weight: 600; font-size: 11px;">REVIEW</span>` : '';
+        const statusBadge = `<span style="color: ${statusColor}; font-weight: 500;">${rule.enabled ? '✓ Enabled' : 'Disabled'}</span>${reviewBadge}`;
+        
+        return `
+            <tr class="ai-rules-row ${activeClass}" onclick="selectAiRule('${escapeHtml(rule.id)}')">
+                <td><strong>${escapeHtml(rule.title)}</strong></td>
+                <td>${escapeHtml(rule.category)}</td>
+                <td>${priorityBadge}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function setAiRuleForm(rule) {
+    document.getElementById('ai-rule-title').value = rule?.title || '';
+    document.getElementById('ai-rule-category').value = rule?.category || '';
+    document.getElementById('ai-rule-priority').value = rule?.priority || 'medium';
+    document.getElementById('ai-rule-content').value = rule?.content || '';
+    document.getElementById('ai-rule-enabled').checked = rule?.enabled !== false;
+    document.getElementById('ai-rule-review').checked = Boolean(rule?.requiresReview);
+
+    const meta = document.getElementById('ai-rule-meta');
+    if (meta) {
+        if (rule?.updatedAt) {
+            meta.textContent = `Last updated ${new Date(rule.updatedAt).toLocaleString()}`;
+        } else {
+            meta.textContent = activeAiRuleId ? 'Editing rule' : 'New rule';
+        }
+    }
+}
+
+function selectAiRule(ruleId) {
+    const rule = aiRules.find(r => r.id === ruleId);
+    if (!rule) return;
+    activeAiRuleId = ruleId;
+    setAiRuleForm(rule);
+    renderAiRulesList();
+    setAiRulesStatus('');
+}
+
+function openNewAiRule() {
+    activeAiRuleId = null;
+    setAiRuleForm({ priority: 'medium', enabled: true, requiresReview: false });
+    renderAiRulesList();
+    setAiRulesStatus('Creating a new rule. Fill in details and save.');
+}
+
+function generateAiRuleId(title) {
+    const slug = String(title || 'rule')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
+    return `ai-rule-${slug}-${Date.now().toString(36)}`;
+}
+
+function getAiRuleFormValues() {
+    return {
+        id: activeAiRuleId,
+        title: document.getElementById('ai-rule-title').value.trim(),
+        category: document.getElementById('ai-rule-category').value.trim() || 'General',
+        priority: document.getElementById('ai-rule-priority').value,
+        content: document.getElementById('ai-rule-content').value.trim(),
+        enabled: document.getElementById('ai-rule-enabled').checked,
+        requiresReview: document.getElementById('ai-rule-review').checked
+    };
+}
+
+async function saveAiRule() {
+    const formValues = getAiRuleFormValues();
+    if (!formValues.title || !formValues.content) {
+        setAiRulesStatus('Title and rule details are required.', true);
+        return;
+    }
+
+    const now = new Date().toISOString();
+    let updatedRules = [...aiRules];
+    const existingIndex = updatedRules.findIndex(rule => rule.id === formValues.id);
+
+    if (existingIndex >= 0) {
+        const existing = updatedRules[existingIndex];
+        updatedRules[existingIndex] = {
+            ...existing,
+            ...formValues,
+            createdAt: existing.createdAt || now,
+            updatedAt: now
+        };
+    } else {
+        const newRule = {
+            ...formValues,
+            id: formValues.id || generateAiRuleId(formValues.title),
+            createdAt: now,
+            updatedAt: now
+        };
+        updatedRules = [newRule, ...updatedRules];
+        activeAiRuleId = newRule.id;
+    }
+
+    setAiRulesStatus('Saving...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: updatedRules })
+        });
+
+        if (!response) return;
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save rules');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : updatedRules;
+        renderAiRulesList();
+        if (activeAiRuleId) {
+            selectAiRule(activeAiRuleId);
+        }
+        setAiRulesStatus('Rule saved successfully.');
+    } catch (error) {
+        console.error('Error saving AI rules:', error);
+        setAiRulesStatus(`Failed to save rules: ${error.message}`, true);
+    }
+}
+
+async function deleteAiRule() {
+    if (!activeAiRuleId) {
+        setAiRulesStatus('Select a rule to delete.', true);
+        return;
+    }
+
+    const targetRule = aiRules.find(rule => rule.id === activeAiRuleId);
+    if (!targetRule) return;
+
+    const confirmed = await showConfirmModal({
+        title: 'Delete AI Rule',
+        message: `Delete rule "${targetRule.title}"?`,
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Rule'
+    });
+    if (!confirmed) {
+        return;
+    }
+
+    const updatedRules = aiRules.filter(rule => rule.id !== activeAiRuleId);
+    setAiRulesStatus('Deleting...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: updatedRules })
+        });
+
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to delete rule');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : updatedRules;
+        activeAiRuleId = aiRules[0]?.id || null;
+        if (activeAiRuleId) {
+            selectAiRule(activeAiRuleId);
+        } else {
+            openNewAiRule();
+        }
+        renderAiRulesList();
+        setAiRulesStatus('Rule deleted.');
+    } catch (error) {
+        console.error('Error deleting AI rule:', error);
+        setAiRulesStatus(`Failed to delete rule: ${error.message}`, true);
+    }
+}
+
+async function loadAiRules() {
+    setAiRulesStatus('Loading...');
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load AI rules');
+        }
+
+        aiRules = Array.isArray(data.rules) ? data.rules : [];
+        renderAiRulesList();
+
+        if (aiRules.length && !activeAiRuleId) {
+            selectAiRule(aiRules[0].id);
+        } else if (!aiRules.length) {
+            openNewAiRule();
+        }
+
+        setAiRulesStatus('');
+    } catch (error) {
+        console.error('Error loading AI rules:', error);
+        setAiRulesStatus(`Failed to load AI rules: ${error.message}`, true);
+    }
+}
+
+function refreshAiRules() {
+    loadAiRules();
+}
+
+/**
+ * ============================================
+ * GRANT INTELLIGENCE FUNCTIONS
+ * ============================================
+ */
+
+let grantUsers = [];
+let pendingGrantDeleteId = null;
+
+const WIZARD_PAGE_LABELS = {
+    organization: 'Organization',
+    project: 'Project',
+    budget: 'Budget',
+    narrative: 'Need & Impact',
+    documents: 'Documents',
+    review: 'Review & Export'
+};
+
+function formatWizardPageLabel(pageId) {
+    return WIZARD_PAGE_LABELS[pageId] || pageId || '—';
+}
+
+function formatDateShort(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
+
+function formatDuration(ms) {
+    const total = Number(ms) || 0;
+    if (total <= 0) return '—';
+    const seconds = Math.floor(total / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    const remSeconds = seconds % 60;
+    if (hours > 0) return `${hours}h ${remMinutes}m`;
+    if (minutes > 0) return `${minutes}m ${remSeconds}s`;
+    return `${remSeconds}s`;
+}
+
+async function loadGrantUsers() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load grant users');
+
+        grantUsers = data.users || [];
+        renderGrantUsers(grantUsers);
+    } catch (error) {
+        console.error('Error loading grant users:', error);
+        const tbody = document.getElementById('grant-users-tbody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" class="loading">Failed to load users: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+function renderGrantUsers(users) {
+    const tbody = document.getElementById('grant-users-tbody');
+    if (!tbody) return;
+
+    if (!users.length) {
+        tbody.innerHTML = `<tr><td colspan="9" class="loading">No grant users found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = users.map(user => {
+        const name = user.contact_name || '—';
+        const emailId = `grant-email-${user.id}`;
+        return `
+            <tr>
+                <td>${user.id}</td>
+                <td>${name}</td>
+                <td>
+                    <input id="${emailId}" class="btn" value="${user.email || ''}" style="text-align:left; min-width: 220px;">
+                </td>
+                <td>${user.business_name || '—'}</td>
+                <td>${user.province || '—'}</td>
+                <td>${formatDateShort(user.last_login_at)}</td>
+                <td>${formatWizardPageLabel(user.last_active_tab)}</td>
+                <td>${formatDateShort(user.created_at)}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-primary" onclick="updateGrantUserEmail(${user.id})" style="padding: 6px 10px;">Save</button>
+                    <button class="btn" onclick="openGrantUserDeleteModal(${user.id}, '${(name || '').replace(/'/g, "&#39;")}', '${(user.email || '').replace(/'/g, "&#39;")}')" style="padding: 6px 10px; background:#ef4444; border-color:#ef4444; color:white;">Delete</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterGrantUsers() {
+    const term = (document.getElementById('grant-user-search')?.value || '').toLowerCase();
+    const filtered = grantUsers.filter(user => {
+        return (user.contact_name || '').toLowerCase().includes(term) ||
+               (user.email || '').toLowerCase().includes(term) ||
+               (user.business_name || '').toLowerCase().includes(term) ||
+               (user.province || '').toLowerCase().includes(term);
+    });
+    renderGrantUsers(filtered);
+}
+
+async function updateGrantUserEmail(userId) {
+    const input = document.getElementById(`grant-email-${userId}`);
+    if (!input) return;
+    const email = input.value.trim();
+    if (!email || !email.includes('@')) {
+        showToast('Enter a valid email address.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Update failed');
+        showToast('Grant user email updated.', 'success');
+    } catch (error) {
+        console.error('Grant user update error:', error);
+        showToast('Failed to update grant user.', 'error');
+    }
+}
+
+function openGrantUserDeleteModal(userId, name, email) {
+    pendingGrantDeleteId = userId;
+    const modal = document.getElementById('grantUserDeleteModal');
+    const text = document.getElementById('grantUserDeleteText');
+    if (text) {
+        text.textContent = `Delete grant user ${name || ''} (${email || ''})? This is reversible only by database restore.`;
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeGrantUserDeleteModal() {
+    const modal = document.getElementById('grantUserDeleteModal');
+    if (modal) modal.style.display = 'none';
+    pendingGrantDeleteId = null;
+}
+
+async function confirmDeleteGrantUser() {
+    if (!pendingGrantDeleteId) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/users/${pendingGrantDeleteId}`, {
+            method: 'DELETE'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+        closeGrantUserDeleteModal();
+        await loadGrantUsers();
+        showToast('Grant user deleted.', 'success');
+    } catch (error) {
+        console.error('Grant user delete error:', error);
+        showToast('Failed to delete grant user.', 'error');
+    }
+}
+
+async function loadGrantSummary() {
+    try {
+        const summaryRes = await authenticatedFetch(`${API_BASE}/api/admin/grants/summary`);
+        const analyticsRes = await authenticatedFetch(`${API_BASE}/api/admin/grants/wizard-analytics`);
+        if (!summaryRes || !analyticsRes) return;
+
+        const summaryData = await summaryRes.json();
+        const analyticsData = await analyticsRes.json();
+        if (!summaryData.success) throw new Error(summaryData.error || 'Summary failed');
+
+        const summary = summaryData.data || {};
+        document.getElementById('grant-kpi-users').textContent = summary.totalUsers || 0;
+        document.getElementById('grant-kpi-users-month').textContent = `${(summary.newUsersMonthly || []).slice(-1)[0]?.count || 0} new this month`;
+        document.getElementById('grant-kpi-total-grants').textContent = summary.totalGrants || 0;
+        document.getElementById('grant-kpi-new-grants').textContent = `${summary.newGrantsThisMonth || 0} new this month`;
+        document.getElementById('grant-kpi-avg-complete').textContent = `${Math.round(summary.avgWizardCompletePercent || 0)}%`;
+        document.getElementById('grant-kpi-completed-users').textContent = `${summary.completedUsers || 0} users completed`;
+
+        const monthlyTbody = document.getElementById('grant-users-month-tbody');
+        if (monthlyTbody) {
+            const rows = (summary.newUsersMonthly || []).map(r => {
+                const monthLabel = r.month ? new Date(r.month).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : '—';
+                return `<tr><td>${monthLabel}</td><td>${r.count || 0}</td></tr>`;
+            });
+            monthlyTbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="2" class="loading">No data</td></tr>';
+        }
+
+        const byTime = analyticsData?.data?.byTime || [];
+        const byViews = analyticsData?.data?.byViews || [];
+
+        const timeTbody = document.getElementById('grant-pages-time-tbody');
+        if (timeTbody) {
+            timeTbody.innerHTML = byTime.length ? byTime.map(row => `
+                <tr>
+                    <td>${formatWizardPageLabel(row.page_id)}</td>
+                    <td>${formatDuration(row.total_duration_ms)}</td>
+                    <td>${formatDuration(row.avg_duration_ms)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="3" class="loading">No data</td></tr>';
+        }
+
+        const viewsTbody = document.getElementById('grant-pages-views-tbody');
+        if (viewsTbody) {
+            viewsTbody.innerHTML = byViews.length ? byViews.map(row => `
+                <tr>
+                    <td>${formatWizardPageLabel(row.page_id)}</td>
+                    <td>${row.views || 0}</td>
+                    <td>${formatDuration(row.total_duration_ms)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="3" class="loading">No data</td></tr>';
+        }
+
+        await loadGrantProgramAlerts();
+    } catch (error) {
+        console.error('Grant summary load error:', error);
+        showToast('Failed to load grant summary.', 'error');
+    }
+}
+
+async function loadGrantProgramAlerts() {
+    const tbody = document.getElementById('grant-program-alerts-tbody');
+    if (!tbody) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/program-alerts?limit=50`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load grant program alerts');
+
+        const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+        tbody.innerHTML = alerts.length ? alerts.map((alert) => {
+            const programLabel = alert.program_code || alert.program_name || `Program #${alert.program_id || 'unknown'}`;
+            const created = formatDateShort(alert.created_at);
+            return `
+                <tr>
+                    <td>
+                        <div style="font-weight:600;">${programLabel}</div>
+                        <div style="font-size:12px; color: var(--text-secondary);">${alert.program_name || '—'}</div>
+                    </td>
+                    <td>${alert.change_type || 'unknown'}</td>
+                    <td>${created}</td>
+                    <td>
+                        <button class="btn btn-primary" style="padding: 6px 10px;" onclick="ackGrantProgramAlert(${alert.id})">Acknowledge</button>
+                    </td>
+                </tr>
+            `;
+        }).join('') : '<tr><td colspan="4" class="loading">No unacknowledged alerts.</td></tr>';
+    } catch (error) {
+        console.error('Grant alerts load error:', error);
+        tbody.innerHTML = `<tr><td colspan="4" class="loading">Failed to load alerts: ${error.message}</td></tr>`;
+    }
+}
+
+async function ackGrantProgramAlert(alertId) {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/grants/program-alerts/${alertId}/acknowledge`, {
+            method: 'POST'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
+
+        showToast('Grant program alert acknowledged.', 'success');
+        await loadGrantProgramAlerts();
+    } catch (error) {
+        console.error('Grant alert acknowledge error:', error);
+        showToast('Failed to acknowledge alert.', 'error');
+    }
+}
+
+/**
+ * ============================================
+ * AI REFERENCE SITE FUNCTIONS
+ * ============================================
+ */
+
+async function loadAiReferenceSites() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites`);
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load reference sites');
+
+        const tbody = document.getElementById('ai-reference-tbody');
+        if (!tbody) return;
+        const sites = data.sites || [];
+
+        tbody.innerHTML = sites.length ? sites.map(site => `
+            <tr>
+                <td>${site.title}</td>
+                <td>${site.category || '—'}</td>
+                <td><a href="${site.url}" target="_blank" rel="noopener" style="color: var(--accent-blue);">${site.url}</a></td>
+                <td>
+                    <button class="btn" onclick="deleteAiReferenceSite(${site.id})" style="padding: 6px 10px; background:#ef4444; border-color:#ef4444; color:white;">Delete</button>
+                </td>
+            </tr>
+        `).join('') : '<tr><td colspan="4" class="loading">No reference sites yet.</td></tr>';
+    } catch (error) {
+        console.error('AI reference load error:', error);
+        showToast('Failed to load AI reference sites.', 'error');
+    }
+}
+
+async function addAiReferenceSite() {
+    const title = document.getElementById('ai-ref-title')?.value.trim();
+    const url = document.getElementById('ai-ref-url')?.value.trim();
+    const category = document.getElementById('ai-ref-category')?.value.trim();
+
+    if (!title || !url) {
+        showToast('Title and URL are required.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, url, category })
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to add reference site');
+
+        document.getElementById('ai-ref-title').value = '';
+        document.getElementById('ai-ref-url').value = '';
+        document.getElementById('ai-ref-category').value = '';
+        await loadAiReferenceSites();
+        showToast('Reference site added.', 'success');
+    } catch (error) {
+        console.error('AI reference add error:', error);
+        showToast('Failed to add reference site.', 'error');
+    }
+}
+
+async function deleteAiReferenceSite(siteId) {
+    const confirmed = await showConfirmModal({
+        title: 'Delete Reference Site',
+        message: 'Delete this reference site?',
+        submessage: 'This action cannot be undone.',
+        confirmText: 'Delete Site'
+    });
+    if (!confirmed) return;
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/ai-reference-sites/${siteId}`, {
+            method: 'DELETE'
+        });
+        if (!response) return;
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to delete reference site');
+        await loadAiReferenceSites();
+        showToast('Reference site deleted.', 'success');
+    } catch (error) {
+        console.error('AI reference delete error:', error);
+        showToast('Failed to delete reference site.', 'error');
+    }
+}
+
 
 // Initialize on load
 console.log('Central Admin loaded');
@@ -5321,6 +10177,13 @@ window.deleteUser = deleteUser;
 window.closeDeleteUserModal = closeDeleteUserModal;
 window.confirmDeleteUser = confirmDeleteUser;
 window.filterUsers = filterUsers;
+window.loadAiRules = loadAiRules;
+window.refreshAiRules = refreshAiRules;
+window.filterAiRules = filterAiRules;
+window.selectAiRule = selectAiRule;
+window.openNewAiRule = openNewAiRule;
+window.saveAiRule = saveAiRule;
+window.deleteAiRule = deleteAiRule;
 
 console.log('✅ [Global Functions] User management functions exposed to window:', {
     openAddUserModal: typeof window.openAddUserModal,
@@ -5359,3 +10222,2087 @@ console.log('✅ [Global Functions] User management functions exposed to window:
     console.log('🔐 [initAuth] Email:', localStorage.getItem('admin_email'));
 })();
 
+// ============================================================================
+// GLOBAL CLICK TRACKING - Track all user interactions
+// ============================================================================
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    const tagName = target.tagName;
+    const id = target.id;
+    const className = target.className;
+    const text = target.textContent?.substring(0, 50);
+    
+    // Track clicks on buttons, links, and interactive elements
+    if (tagName === 'BUTTON' || tagName === 'A' || target.onclick) {
+        DEBUG_TRACKING.trackClick(id || 'unnamed', tagName, {
+            className,
+            text,
+            href: target.href,
+            onclick: target.onclick ? 'has-handler' : null
+        });
+    }
+    
+    // Track navigation menu clicks
+    if (target.closest('.nav-item') || target.closest('.nav-link')) {
+        const navItem = target.closest('.nav-item') || target.closest('.nav-link');
+        DEBUG_TRACKING.trackClick('nav-item', 'navigation', {
+            text: navItem.textContent?.trim(),
+            id: navItem.id
+        });
+    }
+    
+    // Track farm card clicks
+    if (target.closest('.farm-card')) {
+        const farmCard = target.closest('.farm-card');
+        DEBUG_TRACKING.trackClick('farm-card', 'card', {
+            farmId: farmCard.dataset?.farmId || farmCard.getAttribute('onclick')
+        });
+    }
+}, true); // Use capture phase to catch all clicks
+
+// Add helper to console for viewing debug events
+window.DEBUG = {
+    getEvents: (count = 20) => DEBUG_TRACKING.getRecentEvents(count),
+    exportSession: () => DEBUG_TRACKING.exportSession(),
+    clearEvents: () => DEBUG_TRACKING.events = [],
+    showLastError: () => {
+        const errors = DEBUG_TRACKING.events.filter(e => e.type === 'ERROR');
+        return errors[errors.length - 1];
+    },
+    showLastAPICall: () => {
+        const apiCalls = DEBUG_TRACKING.events.filter(e => e.type === 'API_CALL');
+        return apiCalls[apiCalls.length - 1];
+    },
+    showPageViews: () => {
+        return DEBUG_TRACKING.events.filter(e => e.type === 'PAGE_VIEW');
+    }
+};
+
+console.log('%c📊 DEBUG TRACKING ENABLED', 
+    'background: #4CAF50; color: white; font-weight: bold; padding: 5px 10px; font-size: 14px;');
+console.log('%cUse window.DEBUG to access tracking data:', 'color: #4CAF50; font-weight: bold;');
+
+// ==============================================================================
+// Wholesale Pricing Management
+// ==============================================================================
+
+async function loadPricingManagement() {
+    try {
+        // Load active offers
+        const offersRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers?status=active`);
+        const offersData = offersRes && offersRes.ok ? await offersRes.json() : { offers: [] };
+        const offers = offersData.offers || [];
+
+        // Load all offers for stats
+        const allOffersRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers`);
+        const allOffersData = allOffersRes && allOffersRes.ok ? await allOffersRes.json() : { offers: [] };
+        const allOffers = allOffersData.offers || [];
+
+        // Load cost surveys
+        const costRes = await authenticatedFetch(`${API_BASE}/api/admin/pricing/cost-surveys`);
+        const costData = costRes && costRes.ok ? await costRes.json() : { cost_surveys: [] };
+        const surveys = costData.cost_surveys || [];
+
+        // Load product catalog from network inventory
+        const catalogRes = await authenticatedFetch(`${API_BASE}/api/admin/wholesale/dashboard`);
+        const catalogData = catalogRes && catalogRes.ok ? await catalogRes.json() : {};
+
+        // Update KPIs
+        document.getElementById('pricing-active-offers').textContent = offers.length;
+
+        const avgAcceptance = allOffers.length > 0
+            ? allOffers.reduce((sum, o) => sum + (o.response_stats?.acceptance_rate || 0), 0) / allOffers.length
+            : 0;
+        document.getElementById('pricing-acceptance-rate').textContent = 
+            allOffers.length > 0 ? Math.round(avgAcceptance * 100) + '%' : 'N/A';
+
+        const pendingCounters = allOffers.reduce((sum, o) => sum + (o.response_stats?.countered || 0), 0);
+        document.getElementById('pricing-counter-offers').textContent = pendingCounters;
+
+        // Load product catalog from wholesale catalog
+        try {
+            const invRes = await authenticatedFetch(`${API_BASE}/api/wholesale/catalog`);
+            const invData = invRes && invRes.ok ? await invRes.json() : { items: [], data: {} };
+            const products = invData.data?.skus || invData.items || [];
+            document.getElementById('pricing-product-count').textContent = products.length;
+            renderProductCatalog(products);
+        } catch {
+            document.getElementById('pricing-product-count').textContent = '0';
+            renderProductCatalog([]);
+        }
+
+        // Render offers table
+        renderPricingOffers(offers);
+
+        // Render cost surveys
+        renderCostSurveys(surveys);
+
+    } catch (error) {
+        console.error('[Pricing Management] Load error:', error);
+    }
+}
+
+function renderPricingOffers(offers) {
+    const tbody = document.getElementById('pricing-offers-tbody');
+    if (!offers || offers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No active price offers. Use the form above to create one.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = offers.map(offer => {
+        const rate = offer.response_stats?.acceptance_rate;
+        const rateStr = rate != null ? Math.round(rate * 100) + '%' : '—';
+        const rateColor = rate == null ? '' : rate >= 0.6 ? 'color: var(--accent-green)' : rate >= 0.4 ? 'color: #f59e0b' : 'color: #ef4444';
+        const total = offer.response_stats?.total_responses || 0;
+        const date = offer.offer_date ? new Date(offer.offer_date).toLocaleDateString() : '—';
+        return `<tr>
+            <td style="font-family: monospace; font-size: 12px;">${offer.offer_id || '—'}</td>
+            <td><strong>${offer.crop || '—'}</strong></td>
+            <td>$${parseFloat(offer.wholesale_price || 0).toFixed(2)}/${offer.unit || 'lb'}</td>
+            <td><span style="padding: 2px 8px; border-radius: 4px; background: var(--bg-secondary); font-size: 12px;">${offer.tier || '—'}</span></td>
+            <td style="${rateColor}; font-weight: 600;">${rateStr}</td>
+            <td>${total}</td>
+            <td><span style="padding: 2px 8px; border-radius: 4px; background: ${offer.status === 'active' ? 'rgba(34,197,94,0.15)' : 'var(--bg-secondary)'}; color: ${offer.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)'}; font-size: 12px;">${offer.status || '—'}</span></td>
+            <td>${date}</td>
+            <td>
+                <button class="btn" onclick="cancelPriceOffer('${offer.offer_id}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444;">Cancel</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderProductCatalog(products) {
+    const tbody = document.getElementById('product-catalog-tbody');
+    if (!products || products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No products in catalog. Products are populated from farm inventories across the network.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = products.map(p => {
+        const sku = p.sku_id || p.sku || p.product_id || '—';
+        const name = p.product_name || p.name || p.crop || '—';
+        const category = p.category || p.type || '—';
+        const type = p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const unit = p.unit || 'lb';
+        const finalPrice = p.final_wholesale_price || p.wholesale_price || p.price_per_unit || p.price || null;
+        const basePrice = p.base_wholesale_price || null;
+        const discountRate = p.buyer_discount_rate || 0;
+        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '—';
+        const baseStr = typeof basePrice === 'number' ? '$' + basePrice.toFixed(2) : '';
+        const discountStr = discountRate > 0 ? (discountRate * 100).toFixed(1) + '% off' : '';
+        const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
+        const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
+        return `<tr>
+            <td style="font-family: monospace; font-size: 12px;">${sku}</td>
+            <td><strong>${name}</strong></td>
+            <td>${category}</td>
+            <td>${type}</td>
+            <td>${unit}</td>
+            <td>${priceStr}${baseStr ? '<div style="font-size:11px;color:var(--text-secondary);">base: ' + baseStr + '</div>' : ''}${discountStr ? '<div style="font-size:11px;color:var(--accent-green);">' + discountStr + '</div>' : ''}</td>
+            <td style="color: ${statusColor};">${status}</td>
+            <td>
+                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderCostSurveys(surveys) {
+    const tbody = document.getElementById('cost-surveys-tbody');
+    if (!surveys || surveys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No cost surveys submitted by farms yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = surveys.map(s => `<tr>
+        <td>${s.farm_id || '—'}</td>
+        <td><strong>${s.crop || '—'}</strong></td>
+        <td>$${parseFloat(s.cost_per_unit || 0).toFixed(2)}</td>
+        <td>${s.unit || 'lb'}</td>
+        <td>${s.survey_date ? new Date(s.survey_date).toLocaleDateString() : '—'}</td>
+        <td>${s.valid_until ? new Date(s.valid_until).toLocaleDateString() : 'Ongoing'}</td>
+        <td style="font-size: 12px; color: var(--text-secondary);">${s.notes || '—'}</td>
+    </tr>`).join('');
+}
+
+async function submitWholesalePrice(event) {
+    event.preventDefault();
+    const crop = document.getElementById('price-crop').value;
+    const floor_price = parseFloat(document.getElementById('price-amount').value) || 0;
+    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.65;
+    const tier = document.getElementById('price-tier').value;
+    const reasoning = document.getElementById('price-reasoning').value;
+    
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/set-wholesale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crop, floor_price, sku_factor, tier, reasoning, use_formula: true })
+        });
+        if (!res) return;
+        const data = await res.json();
+        
+        if (data.success) {
+            alert(`Price offer sent! ${data.message || ''}`);
+            document.getElementById('set-price-form').reset();
+            await loadPricingManagement();
+        } else {
+            alert(`Error: ${data.error || data.message || 'Failed to set price'}`);
+        }
+    } catch (error) {
+        console.error('[Pricing] Submit error:', error);
+        alert('Failed to submit price offer');
+    }
+}
+
+// ── AI Pricing Assistant — Multi-Crop Scanner ──────────────────
+let pricingScannerCrops = []; // cached from /current-prices
+
+async function loadCurrentPricesIntoScanner() {
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/current-prices`);
+        const data = res && res.ok ? await res.json() : { prices: [] };
+        pricingScannerCrops = data.prices || [];
+        // Add every crop as a row, pre-filled with current prices
+        const tbody = document.getElementById('pricing-scanner-tbody');
+        tbody.innerHTML = '';
+        pricingScannerCrops.forEach(c => {
+            addPricingRow({
+                crop: c.crop,
+                retailPerOz: c.retailPerOz,
+                retailPerLb: c.retailPerLb,
+                wholesalePerLb: c.wholesalePerLb,
+                tier: c.tier || 'demand-based'
+            });
+        });
+        updateScannerRowCount();
+    } catch (err) {
+        console.error('[PricingScanner] Load error:', err);
+        alert('Failed to load current prices');
+    }
+}
+
+function addPricingRow(prefill = {}) {
+    const tbody = document.getElementById('pricing-scanner-tbody');
+    const idx = tbody.children.length;
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-scanner-idx', idx);
+
+    // Build a datalist for autocomplete — allows both recipe crops and manual entry
+    const listId = `crop-list-${idx}`;
+    const cropOptionTags = pricingScannerCrops.length
+        ? pricingScannerCrops.map(c => `<option value="${c.crop}">`).join('')
+        : '';
+
+    tr.innerHTML = `
+        <td>
+            <input class="sc-crop" type="text" list="${listId}" value="${prefill.crop || ''}" placeholder="Type or select crop" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;" onchange="onScannerCropSelect(this)">
+            <datalist id="${listId}">${cropOptionTags}</datalist>
+        </td>
+        <td><input class="sc-roz" type="number" step="0.01" min="0" value="${prefill.retailPerOz || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'oz')"></td>
+        <td><input class="sc-rlb" type="number" step="0.01" min="0" value="${prefill.retailPerLb || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;" oninput="syncPricingRow(this,'lb')"></td>
+        <td><input class="sc-wlb" type="number" step="0.01" min="0" value="${prefill.wholesalePerLb || ''}" placeholder="0.00" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;text-align:right;"></td>
+        <td>
+            <select class="sc-tier" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;">
+                <option value="cost-plus" ${prefill.tier === 'cost-plus' ? 'selected' : ''}>Cost-Plus</option>
+                <option value="demand-based" ${(!prefill.tier || prefill.tier === 'demand-based') ? 'selected' : ''}>Demand</option>
+                <option value="premium" ${prefill.tier === 'premium' ? 'selected' : ''}>Premium</option>
+                <option value="promotional" ${prefill.tier === 'promotional' ? 'selected' : ''}>Promo</option>
+            </select>
+        </td>
+        <td><input class="sc-reason" type="text" value="" placeholder="reason" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;"></td>
+        <td class="sc-status" style="text-align:center;">—</td>
+        <td style="text-align:center;">
+            <button onclick="this.closest('tr').remove(); updateScannerRowCount();" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;" title="Remove row">&times;</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    updateScannerRowCount();
+}
+
+function onScannerCropSelect(sel) {
+    const crop = sel.value;
+    const tr = sel.closest('tr');
+    const match = pricingScannerCrops.find(c => c.crop === crop);
+    if (match) {
+        tr.querySelector('.sc-roz').value = match.retailPerOz || '';
+        tr.querySelector('.sc-rlb').value = match.retailPerLb || '';
+        tr.querySelector('.sc-wlb').value = match.wholesalePerLb || '';
+    }
+}
+
+function syncPricingRow(input, from) {
+    const tr = input.closest('tr');
+    if (from === 'oz') {
+        const oz = parseFloat(input.value);
+        if (!isNaN(oz)) tr.querySelector('.sc-rlb').value = (oz * 16).toFixed(2);
+    } else {
+        const lb = parseFloat(input.value);
+        if (!isNaN(lb)) tr.querySelector('.sc-roz').value = (lb / 16).toFixed(2);
+    }
+}
+
+function updateScannerRowCount() {
+    const n = document.getElementById('pricing-scanner-tbody').children.length;
+    const el = document.getElementById('scanner-row-count');
+    if (el) el.textContent = `${n} crop${n !== 1 ? 's' : ''}`;
+}
+
+function clearPricingScanner() {
+    document.getElementById('pricing-scanner-tbody').innerHTML = '';
+    document.getElementById('batch-update-result').style.display = 'none';
+    updateScannerRowCount();
+}
+
+async function applyBatchPriceUpdate() {
+    const rows = document.querySelectorAll('#pricing-scanner-tbody tr');
+    if (!rows.length) { alert('Add at least one crop row.'); return; }
+
+    const updates = [];
+    rows.forEach(tr => {
+        const cropEl = tr.querySelector('.sc-crop');
+        const crop = cropEl ? (cropEl.value || cropEl.textContent || '').trim() : '';
+        const retailPerOz = parseFloat(tr.querySelector('.sc-roz')?.value) || 0;
+        const retailPerLb = parseFloat(tr.querySelector('.sc-rlb')?.value) || 0;
+        const wholesalePerLb = parseFloat(tr.querySelector('.sc-wlb')?.value) || 0;
+        const tier = tr.querySelector('.sc-tier')?.value || 'demand-based';
+        const reasoning = tr.querySelector('.sc-reason')?.value || '';
+
+        if (crop && (retailPerOz > 0 || retailPerLb > 0)) {
+            updates.push({ crop, retailPerOz, retailPerLb, wholesalePerLb, tier, reasoning });
+        }
+    });
+
+    if (!updates.length) { alert('No valid price entries found. Fill in at least one crop with a price.'); return; }
+
+    const pushToFarms = document.getElementById('push-to-farms-checkbox')?.checked ?? true;
+
+    const btn = document.getElementById('apply-batch-btn');
+    btn.disabled = true;
+    btn.textContent = 'Applying…';
+
+    // Mark all rows as pending
+    rows.forEach(tr => {
+        const st = tr.querySelector('.sc-status');
+        if (st) { st.textContent = '⏳'; st.style.color = 'var(--text-secondary)'; }
+    });
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates, pushToFarms, reasoning: 'AI Pricing Assistant batch scan' })
+        });
+        if (!res) return;
+        const data = await res.json();
+
+        // Mark row statuses
+        rows.forEach(tr => {
+            const cropEl = tr.querySelector('.sc-crop');
+            const crop = cropEl ? (cropEl.value || cropEl.textContent || '').trim() : '';
+            const st = tr.querySelector('.sc-status');
+            if (!st) return;
+            const result = (data.results || []).find(r => r.crop === crop);
+            if (result && result.status === 'updated') {
+                st.textContent = '✅'; st.style.color = 'var(--accent-green)';
+            } else if (result && result.status === 'error') {
+                st.textContent = '❌'; st.style.color = '#ef4444'; st.title = result.error || '';
+            } else {
+                st.textContent = '—'; st.style.color = 'var(--text-secondary)';
+            }
+        });
+
+        // Show summary
+        const resultDiv = document.getElementById('batch-update-result');
+        if (data.success) {
+            const n = (data.results || []).filter(r => r.status === 'updated').length;
+            const farms = data.farmsPushed || 0;
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = 'rgba(34,197,94,0.1)';
+            resultDiv.style.border = '1px solid rgba(34,197,94,0.3)';
+            resultDiv.style.color = 'var(--accent-green)';
+            resultDiv.innerHTML = `<strong>${n} crop${n !== 1 ? 's' : ''} updated.</strong> Persisted to pricing files.${farms ? ` Pushed to ${farms} farm${farms !== 1 ? 's' : ''} (POS &amp; online store).` : ''}`;
+        } else {
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = 'rgba(239,68,68,0.1)';
+            resultDiv.style.border = '1px solid rgba(239,68,68,0.3)';
+            resultDiv.style.color = '#ef4444';
+            resultDiv.innerHTML = `<strong>Error:</strong> ${data.error || 'Batch update failed'}`;
+        }
+
+        // Refresh pricing management view
+        await loadPricingManagement();
+    } catch (err) {
+        console.error('[PricingScanner] Batch update error:', err);
+        alert('Failed to apply batch price update');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Apply All Price Changes';
+    }
+}
+
+async function cancelPriceOffer(offerId) {
+    const confirmed = await showConfirmModal({
+        title: 'Cancel Price Offer',
+        message: `Cancel price offer ${offerId}?`,
+        submessage: 'The offer will no longer be available to farms.',
+        confirmText: 'Cancel Offer'
+    });
+    if (!confirmed) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/offers/${offerId}/cancel`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'Admin cancelled' })
+        });
+        if (!res) return;
+        const data = await res.json();
+        if (data.success) {
+            await loadPricingManagement();
+        } else {
+            alert(`Error: ${data.error || 'Failed to cancel offer'}`);
+        }
+    } catch (error) {
+        console.error('[Pricing] Cancel error:', error);
+    }
+}
+
+function showAddProductModal() {
+    const sku = prompt('Enter SKU (e.g. MIX-SALAD-001):');
+    if (!sku) return;
+    const name = prompt('Product name (e.g. Spring Salad Mix):');
+    if (!name) return;
+    const price = prompt('Wholesale price per unit ($):');
+    if (!price) return;
+    const category = prompt('Category (Leafy Greens, Herbs, Microgreens, Mix, Bundle):') || 'Mix';
+    
+    // In a production system this would POST to a product catalog API
+    alert(`Product "${name}" (${sku}) would be added at $${price}.\n\nNote: Product catalog is currently populated from farm network inventories. Custom product/mix creation API coming soon.`);
+}
+
+function editProduct(sku) {
+    alert(`Edit product ${sku}\n\nProduct editing will be available when the custom product catalog API is implemented.`);
+}
+
+// ==============================================================================
+// Delivery Management
+// ==============================================================================
+
+async function loadDeliveryManagement() {
+    try {
+        const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+        if (!farmId) {
+            renderDeliveryZones([]);
+            renderDrivers([]);
+            return;
+        }
+
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/delivery/config?farm_id=${encodeURIComponent(farmId)}`);
+        const data = res.ok ? await res.json() : null;
+        
+        if (data && data.success) {
+            const config = data.config || {};
+            const zones = config.zones || [];
+            const drivers = config.drivers || [];
+            const stats = config.stats || {};
+            
+            // Update KPIs
+            document.getElementById('delivery-zone-count').textContent = zones.length;
+            document.getElementById('delivery-driver-count').textContent = drivers.filter(d => d.status === 'active').length;
+            document.getElementById('delivery-count-30d').textContent = stats.deliveries_30d || 0;
+            document.getElementById('delivery-revenue-30d').textContent = '$' + (stats.revenue_30d || 0).toFixed(2);
+            
+            // Update settings form
+            document.getElementById('delivery-base-fee').value = config.base_fee || 0;
+            document.getElementById('delivery-min-order').value = config.min_order || 25;
+            document.getElementById('delivery-enabled').value = config.enabled !== false ? 'true' : 'false';
+            
+            // Render tables
+            renderDeliveryZones(zones);
+            renderDrivers(drivers);
+            renderFeeDistribution(config.recent_fees || []);
+            
+            // Fee summary
+            document.getElementById('fees-collected').textContent = '$' + (stats.fees_collected || 0).toFixed(2);
+            document.getElementById('driver-payouts').textContent = '$' + (stats.driver_payouts || 0).toFixed(2);
+            document.getElementById('platform-delivery-revenue').textContent = '$' + (stats.platform_revenue || 0).toFixed(2);
+        } else {
+            // Load defaults from delivery quote endpoint
+            renderDeliveryZones([
+                { id: 'ZONE_A', name: 'Zone A — Local', description: '0-10 km from farm', fee: 0, min_order: 25, windows: ['morning', 'afternoon', 'evening'], status: 'active' },
+                { id: 'ZONE_B', name: 'Zone B — Regional', description: '10-25 km from farm', fee: 5, min_order: 35, windows: ['morning', 'afternoon'], status: 'active' },
+                { id: 'ZONE_C', name: 'Zone C — Extended', description: '25-50 km from farm', fee: 10, min_order: 50, windows: ['morning'], status: 'active' }
+            ]);
+            renderDrivers([]);
+            renderFeeDistribution([]);
+            
+            document.getElementById('delivery-zone-count').textContent = '3';
+            document.getElementById('delivery-driver-count').textContent = '0';
+            document.getElementById('delivery-count-30d').textContent = '0';
+            document.getElementById('delivery-revenue-30d').textContent = '$0.00';
+        }
+    } catch (error) {
+        console.error('[Delivery Management] Load error:', error);
+        // Show defaults
+        renderDeliveryZones([
+            { id: 'ZONE_A', name: 'Zone A — Local', description: '0-10 km from farm', fee: 0, min_order: 25, windows: ['morning', 'afternoon', 'evening'], status: 'active' },
+            { id: 'ZONE_B', name: 'Zone B — Regional', description: '10-25 km from farm', fee: 5, min_order: 35, windows: ['morning', 'afternoon'], status: 'active' },
+            { id: 'ZONE_C', name: 'Zone C — Extended', description: '25-50 km from farm', fee: 10, min_order: 50, windows: ['morning'], status: 'active' }
+        ]);
+        renderDrivers([]);
+        renderFeeDistribution([]);
+        
+        document.getElementById('delivery-zone-count').textContent = '3';
+        document.getElementById('delivery-driver-count').textContent = '0';
+        document.getElementById('delivery-count-30d').textContent = '0';
+        document.getElementById('delivery-revenue-30d').textContent = '$0.00';
+    }
+}
+
+// Cache zone data for inline editing
+let _deliveryZonesCache = [];
+
+function renderDeliveryZones(zones) {
+    _deliveryZonesCache = zones || [];
+    const tbody = document.getElementById('delivery-zones-tbody');
+    if (!zones || zones.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No delivery zones configured.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = zones.map(z => renderZoneRowDisplay(z)).join('');
+}
+
+function renderZoneRowDisplay(z) {
+    const windows = Array.isArray(z.windows) ? z.windows.join(', ') : z.windows || 'All';
+    const statusColor = z.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+    return `<tr data-zone-id="${escapeHtml(String(z.id || ''))}">
+        <td><strong>${escapeHtml(z.name || z.id)}</strong></td>
+        <td>${escapeHtml(z.description || '—')}</td>
+        <td>$${parseFloat(z.fee || 0).toFixed(2)}</td>
+        <td>$${parseFloat(z.min_order || 0).toFixed(2)}</td>
+        <td style="font-size: 12px;">${escapeHtml(windows)}</td>
+        <td style="color: ${statusColor};">${z.status || 'active'}</td>
+        <td>
+            <button class="btn" onclick="editDeliveryZone('${escapeHtml(String(z.id))}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+        </td>
+    </tr>`;
+}
+
+function renderDrivers(drivers) {
+    const tbody = document.getElementById('drivers-tbody');
+    if (!drivers || drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No drivers registered. Click "+ Add Driver" to hire a driver.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = drivers.map(d => {
+        const zonesStr = Array.isArray(d.zones) ? d.zones.join(', ') : d.zones || '—';
+        const statusColor = d.status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+        return `<tr data-driver-id="${escapeHtml(String(d.id || ''))}">
+            <td><strong>${d.name || '—'}</strong></td>
+            <td>${d.phone || '—'}</td>
+            <td>${d.vehicle || '—'}</td>
+            <td style="font-size: 12px;">${zonesStr}</td>
+            <td>${d.deliveries_30d || 0}</td>
+            <td>${d.rating ? d.rating.toFixed(1) + '/5' : '—'}</td>
+            <td style="color: ${statusColor};">${d.status || '—'}</td>
+            <td>
+                <button class="btn" onclick="editDriver('${d.id}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+                <button class="btn" onclick="toggleDriverStatus('${d.id}')" style="padding: 4px 10px; font-size: 12px; margin-left: 4px;">${d.status === 'active' ? 'Deactivate' : 'Activate'}</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderFeeDistribution(fees) {
+    const tbody = document.getElementById('fee-distribution-tbody');
+    if (!fees || fees.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No delivery fee data yet. Fees will appear after orders with delivery are processed.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = fees.map(f => `<tr>
+        <td>${f.date ? new Date(f.date).toLocaleDateString() : '—'}</td>
+        <td style="font-family: monospace; font-size: 12px;">${f.order_id || '—'}</td>
+        <td>${f.zone || '—'}</td>
+        <td>${f.driver_name || '—'}</td>
+        <td>$${parseFloat(f.fee_charged || 0).toFixed(2)}</td>
+        <td>$${parseFloat(f.driver_share || 0).toFixed(2)}</td>
+        <td>$${parseFloat(f.platform_share || 0).toFixed(2)}</td>
+        <td style="color: ${f.status === 'paid' ? 'var(--accent-green)' : 'var(--text-secondary)'};">${f.status || '—'}</td>
+    </tr>`).join('');
+}
+
+async function saveDeliverySettings(event) {
+    event.preventDefault();
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to update delivery settings.');
+        return;
+    }
+
+    const config = {
+        farm_id: farmId,
+        base_fee: parseFloat(document.getElementById('delivery-base-fee').value),
+        min_order: parseFloat(document.getElementById('delivery-min-order').value),
+        enabled: document.getElementById('delivery-enabled').value === 'true'
+    };
+    
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/delivery/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        if (!res) {
+            alert('Session expired. Please log in again.');
+            return;
+        }
+        const data = await res.json();
+        if (data.success) {
+            alert('Delivery settings saved!');
+            await loadDeliveryManagement();
+        } else {
+            alert(`Error: ${data.error || 'Failed to save settings'}`);
+        }
+    } catch (error) {
+        console.error('[Delivery] Save error:', error);
+        alert('Failed to save delivery settings. Check console for details.');
+    }
+}
+
+function showAddZoneModal() {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to create a zone.');
+        return;
+    }
+
+    const id = prompt('Zone ID (e.g. ZONE_D):');
+    if (!id) return;
+    const name = prompt('Zone name (e.g. Zone D — Remote):');
+    if (!name) return;
+    const fee = prompt('Delivery fee ($):');
+    if (!fee) return;
+    const minOrder = prompt('Minimum order amount ($):') || '25';
+    const description = prompt('Description (optional):') || '';
+    const postalPrefix = prompt('Postal prefix (optional, e.g. K7):') || '';
+    
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    id: id.trim(),
+                    name: name.trim(),
+                    description: description.trim(),
+                    fee: parseFloat(fee),
+                    min_order: parseFloat(minOrder),
+                    postal_prefix: postalPrefix.trim() || null
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Zone ${id.trim()} created successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Add zone failed:', error);
+            alert(`Failed to create zone: ${error.message}`);
+        }
+    })();
+}
+
+function showAddDriverModal() {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to add a driver.');
+        return;
+    }
+
+    const name = prompt('Driver name:');
+    if (!name) return;
+    const phone = prompt('Phone number:');
+    if (!phone) return;
+    const vehicle = prompt('Vehicle description (e.g. Sprinter Van):');
+    const email = prompt('Email (optional):') || '';
+    const zones = prompt('Assigned zones (comma-separated, e.g. ZONE_A, ZONE_B):') || 'ZONE_A';
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    email: email.trim(),
+                    vehicle: (vehicle || '').trim(),
+                    zones: zones.split(',').map(z => z.trim()).filter(Boolean)
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Driver ${name.trim()} added successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Add driver failed:', error);
+            alert(`Failed to add driver: ${error.message}`);
+        }
+    })();
+}
+
+function editDeliveryZone(zoneId) {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to edit a zone.');
+        return;
+    }
+
+    // Find zone data from cache
+    const zone = _deliveryZonesCache.find(z => z.id === zoneId);
+    if (!zone) {
+        alert('Zone data not found. Please refresh.');
+        return;
+    }
+
+    const row = document.querySelector(`#delivery-zones-tbody tr[data-zone-id="${CSS.escape(zoneId)}"]`);
+    if (!row) return;
+
+    const windowsArr = Array.isArray(zone.windows) ? zone.windows : (zone.windows || 'morning,afternoon').split(',').map(w => w.trim());
+    const inputStyle = 'width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;';
+
+    row.innerHTML = `
+        <td><input type="text" id="ez-name-${zoneId}" value="${escapeHtml(zone.name || zone.id)}" style="${inputStyle}font-weight:600;"></td>
+        <td><input type="text" id="ez-desc-${zoneId}" value="${escapeHtml(zone.description || '')}" placeholder="Description" style="${inputStyle}"></td>
+        <td><input type="number" id="ez-fee-${zoneId}" value="${parseFloat(zone.fee || 0).toFixed(2)}" step="0.50" min="0" style="${inputStyle}width:80px;"></td>
+        <td><input type="number" id="ez-min-${zoneId}" value="${parseFloat(zone.min_order || 0).toFixed(2)}" step="1" min="0" style="${inputStyle}width:80px;"></td>
+        <td>
+            <div style="display:flex;flex-direction:column;gap:3px;font-size:11px;">
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-morning-${zoneId}" ${windowsArr.includes('morning') ? 'checked' : ''} style="margin-right:3px;">Morning</label>
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-afternoon-${zoneId}" ${windowsArr.includes('afternoon') ? 'checked' : ''} style="margin-right:3px;">Afternoon</label>
+                <label style="color:var(--text-secondary);cursor:pointer;"><input type="checkbox" id="ez-win-evening-${zoneId}" ${windowsArr.includes('evening') ? 'checked' : ''} style="margin-right:3px;">Evening</label>
+            </div>
+        </td>
+        <td>
+            <select id="ez-status-${zoneId}" style="${inputStyle}width:90px;">
+                <option value="active" ${zone.status === 'active' ? 'selected' : ''}>Active</option>
+                <option value="inactive" ${zone.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                <option value="paused" ${zone.status === 'paused' ? 'selected' : ''}>Paused</option>
+            </select>
+        </td>
+        <td style="white-space:nowrap;">
+            <button class="btn" onclick="saveDeliveryZoneInline('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;background:var(--accent-green);color:white;">Save</button>
+            <button class="btn" onclick="cancelDeliveryZoneEdit('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;margin-left:4px;">Cancel</button>
+            <button class="btn" onclick="deleteDeliveryZone('${escapeHtml(zoneId)}')" style="padding:4px 10px;font-size:12px;margin-left:4px;background:var(--accent-red);color:white;">Delete</button>
+        </td>
+    `;
+    // Focus the name field
+    document.getElementById(`ez-name-${zoneId}`)?.focus();
+}
+
+async function saveDeliveryZoneInline(zoneId) {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) return;
+
+    const name = document.getElementById(`ez-name-${zoneId}`)?.value?.trim();
+    const description = document.getElementById(`ez-desc-${zoneId}`)?.value?.trim();
+    const fee = parseFloat(document.getElementById(`ez-fee-${zoneId}`)?.value || 0);
+    const min_order = parseFloat(document.getElementById(`ez-min-${zoneId}`)?.value || 0);
+    const status = document.getElementById(`ez-status-${zoneId}`)?.value || 'active';
+
+    const windows = [];
+    if (document.getElementById(`ez-win-morning-${zoneId}`)?.checked) windows.push('morning');
+    if (document.getElementById(`ez-win-afternoon-${zoneId}`)?.checked) windows.push('afternoon');
+    if (document.getElementById(`ez-win-evening-${zoneId}`)?.checked) windows.push('evening');
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId, name, description, fee, min_order, status, windows })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP ${response.status}`);
+        }
+        showToast(`Zone ${name || zoneId} updated`, 'success');
+        await loadDeliveryManagement();
+    } catch (error) {
+        console.error('[Delivery] Inline save failed:', error);
+        showToast(`Failed to save zone: ${error.message}`, 'error');
+    }
+}
+
+function cancelDeliveryZoneEdit(zoneId) {
+    const zone = _deliveryZonesCache.find(z => z.id === zoneId);
+    if (!zone) { loadDeliveryManagement(); return; }
+    const row = document.querySelector(`#delivery-zones-tbody tr[data-zone-id="${CSS.escape(zoneId)}"]`);
+    if (row) row.outerHTML = renderZoneRowDisplay(zone);
+}
+
+async function deleteDeliveryZone(zoneId) {
+    if (!confirm(`Are you sure you want to delete zone "${zoneId}"? This cannot be undone.`)) return;
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) return;
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/zones/${encodeURIComponent(zoneId)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP ${response.status}`);
+        }
+        showToast(`Zone ${zoneId} deleted`, 'success');
+        await loadDeliveryManagement();
+    } catch (error) {
+        console.error('[Delivery] Delete zone failed:', error);
+        showToast(`Failed to delete zone: ${error.message}`, 'error');
+    }
+}
+
+function editDriver(driverId) {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to edit a driver.');
+        return;
+    }
+
+    const row = document.querySelector(`#drivers-tbody tr[data-driver-id="${CSS.escape(driverId)}"]`);
+    const nameDefault = row?.children?.[0]?.innerText || '';
+    const phoneDefault = row?.children?.[1]?.innerText || '';
+    const vehicleDefault = row?.children?.[2]?.innerText === '—' ? '' : (row?.children?.[2]?.innerText || '');
+    const zonesDefault = row?.children?.[3]?.innerText === '—' ? '' : (row?.children?.[3]?.innerText || '');
+
+    const name = prompt('Driver name:', nameDefault);
+    if (name == null) return;
+    const phone = prompt('Phone number:', phoneDefault);
+    if (phone == null) return;
+    const vehicle = prompt('Vehicle:', vehicleDefault);
+    if (vehicle == null) return;
+    const zones = prompt('Assigned zones (comma-separated):', zonesDefault);
+    if (zones == null) return;
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers/${encodeURIComponent(driverId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    name: name.trim(),
+                    phone: phone.trim(),
+                    vehicle: vehicle.trim(),
+                    zones: zones.split(',').map(z => z.trim()).filter(Boolean)
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            alert(`Driver ${driverId} updated successfully.`);
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Edit driver failed:', error);
+            alert(`Failed to update driver: ${error.message}`);
+        }
+    })();
+}
+
+function toggleDriverStatus(driverId) {
+    const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+    if (!farmId) {
+        alert('Select a farm first to update driver status.');
+        return;
+    }
+
+    const row = document.querySelector(`#drivers-tbody tr[data-driver-id="${CSS.escape(driverId)}"]`);
+    const statusCell = row?.children?.[6]?.innerText?.trim()?.toLowerCase();
+    const nextStatus = statusCell === 'active' ? 'inactive' : 'active';
+
+    (async () => {
+        try {
+            const response = await authenticatedFetch(`${API_BASE}/api/admin/delivery/drivers/${encodeURIComponent(driverId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    farm_id: farmId,
+                    status: nextStatus
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+            await loadDeliveryManagement();
+        } catch (error) {
+            console.error('[Delivery] Toggle driver status failed:', error);
+            alert(`Failed to update driver status: ${error.message}`);
+        }
+    })();
+}
+
+// ==============================================================================
+// AI Agent Monitoring
+// ==============================================================================
+
+async function loadAiMonitoring() {
+    try {
+        // Load AI agent status
+        // AI agent status defaults (farm-sales endpoint not accessible from admin context)
+        const statusData = {};
+        
+        // Load AI monitoring data
+        const monitorRes = await authenticatedFetch(`${API_BASE}/api/admin/ai/monitoring`);
+        const monitorData = monitorRes.ok ? await monitorRes.json() : null;
+        
+        // Load AI rules count
+        const rulesRes = await authenticatedFetch(`${API_BASE}/api/admin/ai-rules`);
+        const rulesData = rulesRes.ok ? await rulesRes.json() : { rules: [] };
+        
+        if (monitorData && monitorData.success) {
+            const m = monitorData;
+            const aiConfigured = !!m.openai_configured;
+            const disabledReason = m.disabled_reason || 'OPENAI_API_KEY missing';
+            
+            // Update KPIs
+            document.getElementById('ai-pusher-status').textContent = m.pusher_status || 'Unknown';
+            document.getElementById('ai-pusher-status').style.color = 
+                m.pusher_status === 'active' ? 'var(--accent-green)' : 'var(--text-secondary)';
+            document.getElementById('ai-recs-24h').textContent = m.recommendations_24h || 0;
+            document.getElementById('ai-chat-sessions').textContent = m.chat_sessions_total || 0;
+            document.getElementById('ai-api-cost').textContent = m.api_cost_30d ? '$' + m.api_cost_30d.toFixed(2) : '$0.00';
+            document.getElementById('ai-farms-covered').textContent = m.farms_covered || 0;
+            document.getElementById('ai-active-rules').textContent = (rulesData.rules || []).length;
+            
+            // Config details
+            document.getElementById('ai-model-name').textContent = m.model || 'GPT-4';
+            document.getElementById('ai-push-interval').textContent = m.push_interval || '30 minutes';
+            document.getElementById('ai-key-status').textContent = aiConfigured ? 'Configured' : `Not Set (${disabledReason})`;
+            document.getElementById('ai-key-status').style.color = aiConfigured ? 'var(--accent-green)' : '#ef4444';
+            document.getElementById('ai-last-run').textContent = m.last_run ? new Date(m.last_run).toLocaleString() : (aiConfigured ? 'Never' : 'Disabled by config');
+            document.getElementById('ai-next-run').textContent = m.next_run ? new Date(m.next_run).toLocaleString() : '—';
+            
+            // Push stats
+            document.getElementById('ai-total-pushes').textContent = m.total_pushes || 0;
+            document.getElementById('ai-success-pushes').textContent = m.success_pushes || 0;
+            document.getElementById('ai-failed-pushes').textContent = m.failed_pushes || 0;
+            document.getElementById('ai-avg-recs').textContent = m.avg_recs_per_farm ? m.avg_recs_per_farm.toFixed(1) : '—';
+            
+            // Activity log
+            renderAiActivity(m.activity || [], {
+                openai_configured: aiConfigured,
+                disabled_reason: disabledReason,
+                message: m.message || null
+            });
+        } else {
+            // Populate with status from agent endpoint
+            const hasKey = !!statusData.enabled;
+            const disabledReason = statusData.disabled_reason || 'OPENAI_API_KEY missing';
+            document.getElementById('ai-pusher-status').textContent = hasKey ? 'Active' : 'Inactive';
+            document.getElementById('ai-pusher-status').style.color = hasKey ? 'var(--accent-green)' : 'var(--text-secondary)';
+            document.getElementById('ai-recs-24h').textContent = '0';
+            document.getElementById('ai-chat-sessions').textContent = '0';
+            document.getElementById('ai-api-cost').textContent = '$0.00';
+            document.getElementById('ai-farms-covered').textContent = '0';
+            document.getElementById('ai-active-rules').textContent = (rulesData.rules || []).length;
+            
+            document.getElementById('ai-model-name').textContent = statusData.model || 'GPT-4';
+            document.getElementById('ai-push-interval').textContent = '30 minutes';
+            document.getElementById('ai-key-status').textContent = hasKey ? 'Configured' : `Not Set (${disabledReason})`;
+            document.getElementById('ai-key-status').style.color = hasKey ? 'var(--accent-green)' : '#ef4444';
+            document.getElementById('ai-last-run').textContent = hasKey ? 'Service starting...' : 'Disabled by config';
+            document.getElementById('ai-next-run').textContent = '—';
+            
+            document.getElementById('ai-total-pushes').textContent = '0';
+            document.getElementById('ai-success-pushes').textContent = '0';
+            document.getElementById('ai-failed-pushes').textContent = '0';
+            document.getElementById('ai-avg-recs').textContent = '—';
+            
+            renderAiActivity([], {
+                openai_configured: hasKey,
+                disabled_reason: disabledReason
+            });
+        }
+    } catch (error) {
+        console.error('[AI Monitoring] Load error:', error);
+        document.getElementById('ai-pusher-status').textContent = 'Error';
+        document.getElementById('ai-pusher-status').style.color = '#ef4444';
+    }
+}
+
+function renderAiActivity(activities, context = {}) {
+    const tbody = document.getElementById('ai-activity-tbody');
+    if (!activities || activities.length === 0) {
+        if (context && context.openai_configured === false) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                AI recommendations are currently disabled (${context.disabled_reason || 'OPENAI_API_KEY missing'}). 
+                You can continue using manual dashboard workflows while AI is offline.
+            </td></tr>`;
+            return;
+        }
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            No AI activity recorded yet. Activity will appear once the AI Recommendations Pusher runs its first cycle 
+            (every 30 minutes when OPENAI_API_KEY is configured).
+        </td></tr>`;
+        return;
+    }
+    tbody.innerHTML = activities.map(a => {
+        const typeColor = a.type === 'recommendation' ? 'var(--accent-green)' : a.type === 'chat' ? 'var(--accent-blue)' : '#ef4444';
+        const statusColor = a.status === 'success' ? 'var(--accent-green)' : a.status === 'error' ? '#ef4444' : 'var(--text-secondary)';
+        return `<tr>
+            <td style="font-size: 12px;">${a.timestamp ? new Date(a.timestamp).toLocaleString() : '—'}</td>
+            <td style="color: ${typeColor}; font-weight: 600;">${a.type || '—'}</td>
+            <td>${a.farm_id || a.farm || '—'}</td>
+            <td style="font-size: 12px;">${a.details || a.message || '—'}</td>
+            <td style="color: ${statusColor};">${a.status || '—'}</td>
+            <td>${a.tokens_used || '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function filterAiActivity(filter) {
+    // Simple client-side filter
+    const rows = document.querySelectorAll('#ai-activity-tbody tr');
+    rows.forEach(row => {
+        if (filter === 'all') {
+            row.style.display = '';
+        } else {
+            const typeCell = row.querySelector('td:nth-child(2)');
+            const statusCell = row.querySelector('td:nth-child(5)');
+            const type = typeCell?.textContent?.toLowerCase() || '';
+            const status = statusCell?.textContent?.toLowerCase() || '';
+            
+            if (filter === 'errors') {
+                row.style.display = status === 'error' ? '' : 'none';
+            } else {
+                row.style.display = type.includes(filter.replace('s', '')) ? '' : 'none';
+            }
+        }
+    });
+}
+
+// ==================== MARKETING AI ====================
+
+/**
+ * Marketing AI Dashboard - state
+ */
+let mktCurrentTab = 'generate';
+let mktQueueFilter = 'all';
+
+/**
+ * Load Marketing AI Dashboard - KPIs + default tab
+ */
+async function loadMarketingDashboard() {
+    console.log('[Marketing AI] Loading dashboard');
+    try {
+        const [metricsRes, settingsRes] = await Promise.all([
+            authenticatedFetch(`${API_BASE}/api/admin/marketing/metrics`),
+            authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`)
+        ]);
+        const metrics = metricsRes?.ok ? await metricsRes.json() : {};
+        const settings = settingsRes?.ok ? await settingsRes.json() : {};
+
+        // KPI cards
+        document.getElementById('mkt-kpi-drafts').textContent = metrics.summary?.total_drafts || 0;
+        document.getElementById('mkt-kpi-approved').textContent = metrics.summary?.total_approved || 0;
+        document.getElementById('mkt-kpi-published').textContent = metrics.summary?.total_published || 0;
+        document.getElementById('mkt-kpi-scheduled').textContent = metrics.summary?.total_scheduled || 0;
+        document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.summary?.total_cost || 0).toFixed(2);
+        document.getElementById('mkt-kpi-provider').textContent =
+            settings.ai?.anthropic?.configured ? 'Claude' : (settings.ai?.openai?.configured ? 'OpenAI' : 'None');
+    } catch (err) {
+        console.error('[Marketing AI] Dashboard load error:', err);
+    }
+
+    // Load current tab (or default to 'generate' on first load)
+    const activeTab = mktCurrentTab || 'generate';
+    switchMarketingTab(activeTab);
+}
+
+/**
+ * Switch between marketing tabs
+ */
+function switchMarketingTab(tabName, el) {
+    mktCurrentTab = tabName;
+
+    // Update tab button active states
+    document.querySelectorAll('#marketing-ai-view .mkt-tab').forEach(btn => btn.classList.remove('active'));
+    if (el) {
+        el.classList.add('active');
+    } else {
+        document.querySelectorAll('#marketing-ai-view .mkt-tab').forEach(btn => {
+            if (btn.textContent.toLowerCase().includes(tabName.replace('-', ' ').split(' ')[0])) btn.classList.add('active');
+        });
+    }
+
+    // Show/hide tab content
+    document.querySelectorAll('#marketing-ai-view .mkt-tab-content').forEach(c => c.style.display = 'none');
+    const target = document.getElementById(`mkt-tab-${tabName}`);
+    if (target) target.style.display = 'block';
+
+    // Load tab data
+    switch (tabName) {
+        case 'queue': loadMarketingQueue(); break;
+        case 'published': loadMarketingPublished(); break;
+        case 'rules': loadMarketingRules(); loadMarketingSkills(); break;
+        case 'settings': loadMarketingSettings(); break;
+    }
+}
+
+/**
+ * Generate a single-platform marketing post
+ */
+async function generateMarketingPost() {
+    const platform = document.getElementById('mkt-platform').value;
+    const sourceType = document.getElementById('mkt-source-type').value;
+    const instructions = document.getElementById('mkt-custom-instructions').value;
+    const preview = document.getElementById('mkt-preview-area');
+    const btn = document.querySelector('#mkt-tab-generate .btn-primary');
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+    preview.style.display = 'block';
+    const previewContent = document.getElementById('mkt-preview-content') || preview;
+    previewContent.innerHTML = '<div class="loading">Generating content with AI...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform, sourceType, customInstructions: instructions })
+        });
+        const data = res?.ok ? await res.json() : null;
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        if (data && data.posts && data.posts.length > 0) {
+            const post = data.posts[0];
+            previewContent.innerHTML = renderMarketingPostPreview(post);
+            loadMarketingDashboard();
+        } else {
+            const errMsg = data?.error || 'Failed to generate content';
+            previewContent.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Generate error:', err);
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        previewContent.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed. Check console for details.</div>';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate Draft'; }
+    }
+}
+
+/**
+ * Generate posts for all platforms
+ */
+async function generateMarketingPostAllPlatforms() {
+    const sourceType = document.getElementById('mkt-source-type').value;
+    const instructions = document.getElementById('mkt-custom-instructions').value;
+    const preview = document.getElementById('mkt-preview-area');
+    const btn = document.querySelectorAll('#mkt-tab-generate .btn-secondary');
+
+    btn.forEach(b => { b.disabled = true; b.textContent = 'Generating...'; });
+    preview.style.display = 'block';
+    const previewContent = document.getElementById('mkt-preview-content') || preview;
+    previewContent.innerHTML = '<div class="loading">Generating content for all platforms...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                platforms: ['twitter', 'linkedin', 'instagram', 'facebook'],
+                sourceType,
+                customInstructions: instructions
+            })
+        });
+        const data = res?.ok ? await res.json() : null;
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        if (data && data.posts && data.posts.length > 0) {
+            previewContent.innerHTML = data.posts.map(p => renderMarketingPostPreview(p)).join('');
+            loadMarketingDashboard();
+        } else {
+            const errMsg = data?.error || 'Failed to generate content';
+            previewContent.innerHTML = `<div class="loading" style="color:#ef4444;">${errMsg}</div>`;
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Multi-generate error:', err);
+        const previewContent = document.getElementById('mkt-preview-content') || preview;
+        previewContent.innerHTML = '<div class="loading" style="color:#ef4444;">Generation failed.</div>';
+    } finally {
+        btn.forEach(b => { b.disabled = false; b.textContent = 'Generate All Platforms'; });
+    }
+}
+
+/**
+ * Render a preview card for a generated post
+ */
+function renderMarketingPostPreview(post) {
+    const statusBadge = post.status === 'approved'
+        ? '<span class="badge badge-success">Auto-Approved</span>'
+        : '<span class="badge badge-warning">Draft</span>';
+    const violations = post.complianceViolations || post.compliance_issues || [];
+    const complianceHtml = violations.length > 0
+        ? `<div style="color:#ef4444;margin-top:8px;font-size:12px;">⚠ Compliance: ${violations.join(', ')}</div>`
+        : '<div style="color:var(--accent-green);margin-top:8px;font-size:12px;">✓ Compliance clear</div>';
+
+    return `<div class="stat-card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <strong style="text-transform:capitalize;">${post.platform}</strong>
+            ${statusBadge}
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px;line-height:1.5;background:var(--bg-primary);padding:12px;border-radius:6px;border:1px solid var(--border-color);">${post.content}</div>
+        ${complianceHtml}
+        <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
+            ${post.content?.length || 0} chars | Model: ${post.model_used || post.model || 'unknown'} | Cost: $${Number(post.generation_cost_usd || post.cost || 0).toFixed(4)}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;">
+            ${post.status === 'draft' ? `<button class="btn btn-sm btn-primary" onclick="marketingPostAction('${post.id}', 'approve')">Approve</button>
+            <button class="btn btn-sm btn-secondary" onclick="marketingPostAction('${post.id}', 'reject')">Reject</button>` : ''}
+            ${post.status === 'approved' ? `<button class="btn btn-sm btn-primary" onclick="marketingPublishPost('${post.id}')">Publish Now</button>
+            <button class="btn btn-sm btn-secondary" onclick="marketingSchedulePost('${post.id}')">Schedule</button>` : ''}
+            <button class="btn btn-sm" onclick="marketingDeletePost('${post.id}')">Delete</button>
+        </div>
+    </div>`;
+}
+
+/**
+ * Load the marketing queue
+ */
+async function loadMarketingQueue() {
+    const container = document.getElementById('mkt-queue-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading queue...</div>';
+
+    try {
+        const params = new URLSearchParams({ limit: '50' });
+        if (mktQueueFilter !== 'all') params.set('status', mktQueueFilter);
+
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?${params}`);
+        const data = res?.ok ? await res.json() : { posts: [] };
+        const posts = data.posts || [];
+
+        if (posts.length === 0) {
+            container.innerHTML = '<div class="loading">No posts in queue</div>';
+            return;
+        }
+
+        container.innerHTML = posts.map(post => {
+            const statusColors = { draft: 'warning', approved: 'success', rejected: 'danger', scheduled: 'info', published: 'success', failed: 'danger' };
+            const badge = `<span class="badge badge-${statusColors[post.status] || 'neutral'}">${post.status}</span>`;
+            const date = new Date(post.created_at).toLocaleDateString();
+            const scheduledInfo = post.scheduled_for ? `<br><small>Scheduled: ${new Date(post.scheduled_for).toLocaleString()}</small>` : '';
+
+            return `<div class="stat-card" style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <strong style="text-transform:capitalize;">${post.platform}</strong>
+                    <div>${badge} <small style="color:var(--text-secondary);">${date}</small></div>
+                </div>
+                <div style="font-size:13px;line-height:1.4;max-height:80px;overflow:hidden;">${post.content}</div>
+                ${scheduledInfo}
+                <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                    ${post.status === 'draft' ? `
+                        <button class="btn btn-sm btn-primary" onclick="marketingPostAction('${post.id}', 'approve')">Approve</button>
+                        <button class="btn btn-sm btn-secondary" onclick="marketingPostAction('${post.id}', 'reject')">Reject</button>` : ''}
+                    ${post.status === 'approved' ? `
+                        <button class="btn btn-sm btn-primary" onclick="marketingPublishPost('${post.id}')">Publish</button>
+                        <button class="btn btn-sm btn-secondary" onclick="marketingSchedulePost('${post.id}')">Schedule</button>` : ''}
+                    ${['draft', 'rejected'].includes(post.status) ? `
+                        <button class="btn btn-sm" onclick="marketingDeletePost('${post.id}')">Delete</button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Update status filter counts
+        if (data.counts) {
+            document.querySelectorAll('#mkt-tab-queue .mkt-status-filter').forEach(btn => {
+                const text = btn.textContent.toLowerCase().trim();
+                if (text === 'all') btn.textContent = `All (${Object.values(data.counts).reduce((a, b) => a + b, 0)})`;
+            });
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Queue load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load queue</div>';
+    }
+}
+
+/**
+ * Filter marketing queue by status
+ */
+function filterMarketingQueue(status, el) {
+    mktQueueFilter = status;
+    document.querySelectorAll('#mkt-tab-queue .mkt-status-filter').forEach(btn => btn.classList.remove('active'));
+    if (el) el.classList.add('active');
+    loadMarketingQueue();
+}
+
+/**
+ * Load published marketing posts
+ */
+async function loadMarketingPublished() {
+    const container = document.getElementById('mkt-published-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading published posts...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue?status=published&limit=50`);
+        const data = res?.ok ? await res.json() : { posts: [] };
+        const posts = data.posts || [];
+
+        if (posts.length === 0) {
+            container.innerHTML = '<div class="loading">No published posts yet</div>';
+            return;
+        }
+
+        container.innerHTML = posts.map(post => {
+            const publishDate = post.published_at ? new Date(post.published_at).toLocaleString() : 'Unknown';
+            return `<div class="stat-card" style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <strong style="text-transform:capitalize;">${post.platform}</strong>
+                    <small style="color:var(--text-secondary);">Published ${publishDate}</small>
+                </div>
+                <div style="font-size:13px;line-height:1.4;">${post.content}</div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">
+                    ${post.platform_post_id ? `ID: ${post.platform_post_id}` : ''} | Model: ${post.model_used || 'unknown'} | Cost: $${Number(post.generation_cost_usd || 0).toFixed(4)}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Published load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load published posts</div>';
+    }
+}
+
+/**
+ * Perform action on a marketing post (approve/reject)
+ */
+async function marketingPostAction(postId, action) {
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, action })
+        });
+        if (!res) { alert('Authentication error - please log in again'); return; }
+        const data = await res.json().catch(() => null);
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || `Failed to ${action} post (HTTP ${res.status})`);
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] ${action} error:`, err);
+        alert(`Failed to ${action} post: ${err.message}`);
+    }
+}
+
+/**
+ * Publish a marketing post to its platform
+ */
+async function marketingPublishPost(postId) {
+    if (!confirm('Publish this post now?')) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/publish`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            if (data.stubbed) {
+                alert('Post published in STUB mode (no real API keys configured). Post marked as published.');
+            }
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to publish post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Publish error:', err);
+        alert('Failed to publish post');
+    }
+}
+
+/**
+ * Schedule a marketing post
+ */
+async function marketingSchedulePost(postId) {
+    const scheduledFor = prompt('Schedule for (YYYY-MM-DD HH:MM):');
+    if (!scheduledFor) return;
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, action: 'schedule', scheduled_for: scheduledFor })
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to schedule post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Schedule error:', err);
+    }
+}
+
+/**
+ * Delete a marketing post
+ */
+async function marketingDeletePost(postId) {
+    if (!confirm('Delete this post?')) return;
+    try {
+        // Use URL param — DELETE body is stripped by some proxies/ALBs
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/queue/${postId}`, {
+            method: 'DELETE'
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            loadMarketingDashboard();
+        } else {
+            alert(data?.error || 'Failed to delete post');
+        }
+    } catch (err) {
+        console.error('[Marketing AI] Delete error:', err);
+        alert('Failed to delete post');
+    }
+}
+
+/**
+ * Load marketing rules
+ */
+async function loadMarketingRules() {
+    const container = document.getElementById('mkt-rules-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading rules...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/rules`);
+        const data = res?.ok ? await res.json() : { rules: [] };
+        const rules = data.rules || [];
+
+        if (rules.length === 0) {
+            container.innerHTML = '<div class="loading">No rules configured. Run migration 018.</div>';
+            return;
+        }
+
+        container.innerHTML = rules.map(rule => {
+            const enabledClass = rule.enabled ? 'badge-success' : 'badge-neutral';
+            const enabledText = rule.enabled ? 'Enabled' : 'Disabled';
+            const description = rule.conditions?.description || '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);">
+                <div>
+                    <strong>${rule.rule_name.replace(/_/g, ' ')}</strong>
+                    <div style="font-size:12px;color:var(--text-secondary);">${description}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="badge ${enabledClass}">${enabledText}</span>
+                    <button class="btn btn-sm" onclick="toggleMarketingRule('${rule.rule_name}', ${!rule.enabled})">${rule.enabled ? 'Disable' : 'Enable'}</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Rules load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load rules</div>';
+    }
+}
+
+/**
+ * Toggle a marketing rule
+ */
+async function toggleMarketingRule(ruleName, enabled) {
+    try {
+        await authenticatedFetch(`${API_BASE}/api/admin/marketing/rules`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ruleId: ruleName, enabled })
+        });
+        loadMarketingRules();
+    } catch (err) {
+        console.error('[Marketing AI] Toggle rule error:', err);
+    }
+}
+
+/**
+ * Load marketing skills
+ */
+async function loadMarketingSkills() {
+    const container = document.getElementById('mkt-skills-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading skills...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/skills`);
+        const data = res?.ok ? await res.json() : { skills: [] };
+        const skills = data.skills || [];
+
+        if (skills.length === 0) {
+            container.innerHTML = '<div class="loading">No skills configured</div>';
+            return;
+        }
+
+        const riskColors = { 0: '#22c55e', 1: '#3b82f6', 2: '#f59e0b', 3: '#ef4444' };
+        const riskLabels = { 0: 'Observe', 1: 'Suggest', 2: 'Assist', 3: 'Guard' };
+
+        container.innerHTML = skills.map(skill => {
+            const enabledClass = skill.enabled ? 'badge-success' : 'badge-neutral';
+            const riskColor = riskColors[skill.risk_tier] || '#888';
+            const riskLabel = riskLabels[skill.risk_tier] || 'Unknown';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);">
+                <div>
+                    <strong>${skill.skill_name.replace(/-/g, ' ')}</strong>
+                    <div style="font-size:12px;color:var(--text-secondary);">${skill.description || ''}</div>
+                    <div style="font-size:11px;margin-top:2px;">
+                        <span style="color:${riskColor};">●</span> Tier ${skill.risk_tier} (${riskLabel})
+                        ${skill.requires_approval ? ' | <span style="color:#f59e0b;">Requires Approval</span>' : ''}
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="badge ${enabledClass}">${skill.enabled ? 'On' : 'Off'}</span>
+                    <button class="btn btn-sm" onclick="toggleMarketingSkill('${skill.skill_name}', ${!skill.enabled})">${skill.enabled ? 'Disable' : 'Enable'}</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Marketing AI] Skills load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load skills</div>';
+    }
+}
+
+/**
+ * Toggle a marketing skill
+ */
+async function toggleMarketingSkill(skillName, enabled) {
+    try {
+        await authenticatedFetch(`${API_BASE}/api/admin/marketing/skills`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skillName, enabled })
+        });
+        loadMarketingSkills();
+    } catch (err) {
+        console.error('[Marketing AI] Toggle skill error:', err);
+    }
+}
+
+/**
+ * Load marketing settings (platform connections)
+ */
+async function loadMarketingSettings() {
+    const container = document.getElementById('mkt-settings-platforms');
+    if (!container) return;
+    container.innerHTML = '<div class="loading">Loading settings...</div>';
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`);
+        const data = res?.ok ? await res.json() : {};
+
+        const platforms = data.platforms || {};
+        const ai = data.ai || {};
+
+        let html = '<div style="margin-bottom:16px;">';
+        html += '<h4 style="margin-bottom:8px;">AI Provider</h4>';
+        html += `<div style="display:flex;gap:12px;">
+            <div class="stat-card" style="flex:1;text-align:center;">
+                <div style="font-size:12px;color:var(--text-secondary);">Claude (Anthropic)</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.anthropic?.configured ? 'var(--accent-green)' : '#ef4444'};">${ai.anthropic?.configured ? 'Configured' : 'Not Set'}</div>
+            </div>
+            <div class="stat-card" style="flex:1;text-align:center;">
+                <div style="font-size:12px;color:var(--text-secondary);">OpenAI (Fallback)</div>
+                <div style="font-size:18px;font-weight:600;color:${ai.openai?.configured ? 'var(--accent-green)' : '#ef4444'};">${ai.openai?.configured ? 'Configured' : 'Not Set'}</div>
+            </div>
+        </div></div>`;
+
+        html += '<h4 style="margin-bottom:8px;">Social Platforms</h4>';
+        const platformNames = ['twitter', 'linkedin', 'instagram', 'facebook'];
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        platformNames.forEach(name => {
+            const status = platforms[name];
+            const connected = status?.connected;
+            const icon = connected ? '✓' : '✗';
+            const color = connected ? 'var(--accent-green)' : '#ef4444';
+            const mode = status?.mode || 'stub';
+            html += `<div class="stat-card" style="text-align:center;">
+                <div style="font-size:14px;font-weight:600;text-transform:capitalize;">${name}</div>
+                <div style="font-size:20px;color:${color};margin:4px 0;">${icon}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">${connected ? `Connected (${mode})` : 'Not Connected'}</div>
+            </div>`;
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+
+        // Update credential section status badges
+        platformNames.forEach(name => {
+            const badge = document.getElementById(`mkt-cred-status-${name}`);
+            if (badge) {
+                const connected = platforms[name]?.connected;
+                badge.textContent = connected ? 'Connected' : 'Not Connected';
+                badge.style.background = connected ? 'rgba(72,187,120,0.15)' : 'rgba(239,68,68,0.15)';
+                badge.style.color = connected ? 'var(--accent-green)' : '#ef4444';
+            }
+        });
+    } catch (err) {
+        console.error('[Marketing AI] Settings load error:', err);
+        container.innerHTML = '<div class="loading" style="color:#ef4444;">Failed to load settings</div>';
+    }
+}
+
+/** Toggle credential section visibility */
+function toggleMktCredentialSection(platform) {
+    const section = document.getElementById(`mkt-cred-section-${platform}`);
+    if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+/** Save credentials for a platform */
+async function saveMktCredentials(platform) {
+    const keyMap = {
+        facebook:  ['facebook_page_id', 'facebook_page_access_token'],
+        instagram: ['instagram_business_account', 'instagram_access_token'],
+        linkedin:  ['linkedin_person_urn', 'linkedin_access_token'],
+        twitter:   ['twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_secret'],
+    };
+
+    const keys = keyMap[platform];
+    if (!keys) return;
+
+    const settings = {};
+    let hasEmpty = false;
+    for (const key of keys) {
+        const input = document.getElementById(`mkt-cred-${key}`);
+        const val = input?.value?.trim();
+        if (!val) { hasEmpty = true; }
+        settings[key] = val || '';
+    }
+
+    if (hasEmpty) {
+        showToast(`Please fill in all ${platform} credential fields`, 'warning');
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings }),
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully`, 'success');
+            // Clear input fields for security
+            keys.forEach(key => {
+                const input = document.getElementById(`mkt-cred-${key}`);
+                if (input) input.value = '';
+            });
+            // Refresh status display
+            await loadMarketingSettings();
+        } else {
+            showToast(`Failed to save ${platform} credentials`, 'error');
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Save ${platform} credentials error:`, err);
+        showToast(`Error saving ${platform} credentials: ${err.message}`, 'error');
+    }
+}
+
+/** Clear/disconnect credentials for a platform */
+async function clearMktCredentials(platform) {
+    if (!confirm(`Disconnect ${platform}? This will remove all stored credentials.`)) return;
+
+    const keyMap = {
+        facebook:  ['facebook_page_id', 'facebook_page_access_token'],
+        instagram: ['instagram_business_account', 'instagram_access_token'],
+        linkedin:  ['linkedin_person_urn', 'linkedin_access_token'],
+        twitter:   ['twitter_api_key', 'twitter_api_secret', 'twitter_access_token', 'twitter_access_secret'],
+    };
+
+    const keys = keyMap[platform];
+    if (!keys) return;
+
+    // Send null values to delete
+    const settings = {};
+    keys.forEach(key => { settings[key] = null; });
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings }),
+        });
+        const data = res?.ok ? await res.json() : null;
+        if (data?.success) {
+            showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} disconnected`, 'success');
+            await loadMarketingSettings();
+        } else {
+            showToast(`Failed to disconnect ${platform}`, 'error');
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Clear ${platform} credentials error:`, err);
+        showToast(`Error disconnecting ${platform}: ${err.message}`, 'error');
+    }
+}
+
+/** Test connection for a platform (calls saved credentials) */
+async function testMktConnection(platform) {
+    const badge = document.getElementById(`mkt-cred-status-${platform}`);
+    if (badge) {
+        badge.textContent = 'Testing...';
+        badge.style.background = 'rgba(234,179,8,0.15)';
+        badge.style.color = '#eab308';
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/marketing/settings/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform }),
+        });
+        const data = res?.ok ? await res.json() : null;
+
+        if (data?.connected) {
+            const details = data.details || {};
+            const info = details.pageName || details.username || details.name || details.id || '';
+            showToast(`${platform} connection verified${info ? ': ' + info : ''}`, 'success');
+            if (badge) {
+                badge.textContent = 'Verified ✓';
+                badge.style.background = 'rgba(72,187,120,0.15)';
+                badge.style.color = 'var(--accent-green)';
+            }
+        } else {
+            const errMsg = data?.details?.error || data?.error || 'Connection failed';
+            showToast(`${platform} test failed: ${errMsg}`, 'error');
+            if (badge) {
+                badge.textContent = 'Test Failed';
+                badge.style.background = 'rgba(239,68,68,0.15)';
+                badge.style.color = '#ef4444';
+            }
+        }
+    } catch (err) {
+        console.error(`[Marketing AI] Test ${platform} connection error:`, err);
+        showToast(`Error testing ${platform}: ${err.message}`, 'error');
+        if (badge) {
+            badge.textContent = 'Error';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#ef4444';
+        }
+    }
+}
+
+// ==================== CENTRAL ACCOUNTING ====================
+
+/**
+ * Load Market Intelligence view
+ * Read-only analytics from market-intelligence endpoints
+ */
+async function loadMarketIntelligenceView() {
+    const threshold = document.getElementById('market-alert-threshold')?.value || '7';
+    console.log('[Market Intelligence] Loading with threshold:', threshold);
+
+    try {
+        const [alertsRes, overviewRes] = await Promise.all([
+            authenticatedFetch(`${API_BASE}/api/market-intelligence/price-alerts?threshold=${encodeURIComponent(threshold)}`),
+            authenticatedFetch(`${API_BASE}/api/market-intelligence/market-overview`)
+        ]);
+
+        const alertsData = alertsRes?.ok ? await alertsRes.json() : { ok: false, alerts: [] };
+        const overviewData = overviewRes?.ok ? await overviewRes.json() : { ok: false, products: [], summary: {} };
+
+        const alerts = Array.isArray(alertsData.alerts) ? alertsData.alerts : [];
+        const products = Array.isArray(overviewData.products) ? overviewData.products : [];
+        const summary = overviewData.summary || {};
+
+        document.getElementById('market-products-monitored').textContent = summary.totalProducts || products.length || 0;
+        document.getElementById('market-alert-count').textContent = alertsData.alertsGenerated ?? alerts.length;
+        document.getElementById('market-increasing-count').textContent = summary.increasing || 0;
+        document.getElementById('market-decreasing-count').textContent = summary.decreasing || 0;
+        document.getElementById('market-stable-count').textContent = summary.stable || 0;
+
+        const updatedAt = alertsData.timestamp || overviewData.timestamp;
+        document.getElementById('market-last-updated').textContent =
+            updatedAt ? new Date(updatedAt).toLocaleString() : '—';
+
+        const alertsTbody = document.getElementById('market-alerts-tbody');
+        if (alerts.length === 0) {
+            alertsTbody.innerHTML = '<tr><td colspan="6" class="loading">No active market alerts at this threshold</td></tr>';
+        } else {
+            alertsTbody.innerHTML = alerts.map(alert => {
+                const type = (alert.type || '').toLowerCase();
+                const badgeClass = type === 'increase' ? 'warning' : (type === 'decrease' ? 'success' : 'neutral');
+                const confidence = (alert.confidence || 'medium').toString();
+                const confidenceClass = confidence === 'high' ? 'success' : (confidence === 'medium' ? 'warning' : 'neutral');
+                return `<tr>
+                    <td><strong>${alert.product || 'Unknown'}</strong></td>
+                    <td><span class="badge badge-${badgeClass}">${alert.change || '0%'}</span></td>
+                    <td>$${Number(alert.currentPrice || 0).toFixed(2)}</td>
+                    <td>$${Number(alert.previousPrice || 0).toFixed(2)}</td>
+                    <td>${Array.isArray(alert.retailers) ? alert.retailers.length : 0}</td>
+                    <td><span class="badge badge-${confidenceClass}">${confidence}</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        const overviewTbody = document.getElementById('market-overview-tbody');
+        if (products.length === 0) {
+            overviewTbody.innerHTML = '<tr><td colspan="6" class="loading">No market overview data available</td></tr>';
+        } else {
+            overviewTbody.innerHTML = products.map(item => {
+                const trend = (item.trend || 'stable').toString().toLowerCase();
+                const trendClass = trend === 'increasing' ? 'warning' : (trend === 'decreasing' ? 'success' : 'neutral');
+                return `<tr>
+                    <td><strong>${item.product || 'Unknown'}</strong></td>
+                    <td>$${Number(item.currentPrice || 0).toFixed(2)}</td>
+                    <td><span class="badge badge-${trendClass}">${trend}</span></td>
+                    <td>${Number(item.trendPercent || 0).toFixed(1)}%</td>
+                    <td>${Array.isArray(item.retailers) ? item.retailers.length : 0}</td>
+                    <td>${Number(item.articlesCount || 0)}</td>
+                </tr>`;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('[Market Intelligence] Load error:', error);
+        const alertsTbody = document.getElementById('market-alerts-tbody');
+        const overviewTbody = document.getElementById('market-overview-tbody');
+        if (alertsTbody) alertsTbody.innerHTML = '<tr><td colspan="6" class="loading">Failed to load market alerts</td></tr>';
+        if (overviewTbody) overviewTbody.innerHTML = '<tr><td colspan="6" class="loading">Failed to load market overview</td></tr>';
+    }
+}
+
+/**
+ * Load Central Accounting Dashboard
+ * Aggregates revenue and expenses from all network farms
+ */
+async function loadCentralAccounting() {
+    const period = document.getElementById('central-accounting-period')?.value || 'month';
+    console.log('[Central Accounting] Loading for period:', period);
+
+    try {
+        // Calculate date range
+        const now = new Date();
+        let startDate = new Date();
+        switch (period) {
+            case 'today': startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
+            case 'week':  startDate = new Date(Date.now() - 7 * 86400000); break;
+            case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'quarter': startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1); break;
+            case 'year':  startDate = new Date(now.getFullYear(), 0, 1); break;
+        }
+
+        const fromDateStr = startDate.toISOString().split('T')[0];
+        const toDateStr = now.toISOString().split('T')[0];
+        const procurementFromEl = document.getElementById('central-procurement-from');
+        const procurementToEl = document.getElementById('central-procurement-to');
+        if (procurementFromEl && !procurementFromEl.value) procurementFromEl.value = fromDateStr;
+        if (procurementToEl && !procurementToEl.value) procurementToEl.value = toDateStr;
+        const procurementFrom = procurementFromEl?.value || fromDateStr;
+        const procurementTo = procurementToEl?.value || toDateStr;
+
+        // Fetch network-wide revenue summary
+        const revenueRes = await authenticatedFetch(
+            `${API_BASE}/api/reports/revenue-summary?period=all`
+        );
+        const revenueData = revenueRes?.ok ? await revenueRes.json() : null;
+
+        // Fetch accounting transactions for expenses
+        const txnRes = await authenticatedFetch(
+            `${API_BASE}/api/accounting/transactions?from=${fromDateStr}&limit=500`
+        );
+        const txnData = txnRes?.ok ? await txnRes.json() : null;
+
+        // Fetch procurement revenue summary and breakdown
+        let procurementData = null;
+        try {
+            const procurementRes = await authenticatedFetch(
+                `${API_BASE}/api/procurement/revenue?from=${procurementFrom}&to=${procurementTo}`
+            );
+            procurementData = procurementRes?.ok ? await procurementRes.json() : null;
+            if (procurementData?.ok === false || procurementData?.success === false) {
+                procurementData = null;
+            }
+        } catch (procurementError) {
+            console.warn('[Central Accounting] Procurement revenue unavailable:', procurementError);
+        }
+
+        // Fetch admin farms list
+        const farmsRes = await authenticatedFetch(`${API_BASE}/api/admin/farms`);
+        const farmsData = farmsRes?.ok ? await farmsRes.json() : { farms: [] };
+        const farms = farmsData.farms || farmsData || [];
+
+        // Revenue numbers
+        const totalRevenue = revenueData?.data?.totalRevenue || 0;
+        const orderCount = revenueData?.data?.orderCount || 0;
+        const avgOrderValue = revenueData?.data?.avgOrderValue || 0;
+        const outstanding = revenueData?.data?.outstanding || 0;
+
+        // Expense numbers from accounting transactions
+        let totalExpenses = 0;
+        const expenseCategories = {};
+        if (txnData?.ok && Array.isArray(txnData.transactions)) {
+            for (const txn of txnData.transactions) {
+                totalExpenses += Number(txn.total_amount || 0);
+                const cat = txn.source_key || 'uncategorized';
+                expenseCategories[cat] = (expenseCategories[cat] || 0) + Number(txn.total_amount || 0);
+            }
+        }
+
+        // Update KPIs
+        document.getElementById('central-total-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        document.getElementById('central-wholesale-revenue').textContent = `$${totalRevenue.toFixed(2)}`;
+        document.getElementById('central-order-count').textContent = orderCount;
+        document.getElementById('central-avg-order').textContent = `$${avgOrderValue.toFixed(2)}`;
+        document.getElementById('central-total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
+
+        const margin = totalRevenue > 0
+            ? ((totalRevenue - totalExpenses) / totalRevenue * 100).toFixed(1)
+            : '0.0';
+        document.getElementById('central-net-margin').textContent = `${margin}%`;
+
+        // Revenue by Farm table
+        const farmTbody = document.getElementById('central-revenue-by-farm-tbody');
+        if (Array.isArray(farms) && farms.length > 0) {
+            farmTbody.innerHTML = farms.map(farm => {
+                const name = farm.name || farm.farm_name || farm.farmId || farm.farm_id || 'Unknown';
+                const status = farm.status || farm.sync_status || 'active';
+                return `<tr>
+                    <td><strong>${name}</strong></td>
+                    <td><span class="badge badge-${status === 'active' || status === 'ONLINE' ? 'success' : 'neutral'}">${status}</span></td>
+                    <td>${farm.rooms || farm.room_count || '—'}</td>
+                    <td>${farm.capacity || '—'}</td>
+                    <td style="font-size: 12px; color: var(--text-secondary);">${farm.farmId || farm.farm_id || '—'}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            farmTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">No farm data available</td></tr>';
+        }
+
+        // Expense categories table
+        const expensesTbody = document.getElementById('central-expenses-tbody');
+        const catEntries = Object.entries(expenseCategories);
+        if (catEntries.length > 0) {
+            expensesTbody.innerHTML = catEntries.map(([cat, amount]) => {
+                const pct = totalExpenses > 0 ? ((amount / totalExpenses) * 100).toFixed(1) : '0.0';
+                return `<tr>
+                    <td>${cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+                    <td>$${amount.toFixed(2)}</td>
+                    <td>${pct}%</td>
+                </tr>`;
+            }).join('');
+        } else {
+            expensesTbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: var(--text-secondary);">No expense data for this period</td></tr>';
+        }
+
+        // Outstanding balance
+        document.getElementById('central-outstanding').textContent = `$${outstanding.toFixed(2)}`;
+
+        // Procurement summary
+        const procurementSummary = procurementData?.summary || procurementData?.data?.summary || {};
+        const procurementTotalRevenue = Number(procurementSummary.totalRevenue || 0);
+        const procurementTotalCommission = Number(procurementSummary.totalCommission || 0);
+        const procurementTotalOrders = Number(procurementSummary.totalOrders || 0);
+        const procurementAvgOrder = Number(procurementSummary.avgOrderValue || 0);
+
+        const procurementTotalEl = document.getElementById('central-procurement-total');
+        const procurementCommissionEl = document.getElementById('central-procurement-commission');
+        const procurementOrdersEl = document.getElementById('central-procurement-orders');
+        const procurementAvgEl = document.getElementById('central-procurement-avg-order');
+
+        if (procurementTotalEl) procurementTotalEl.textContent = `$${procurementTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (procurementCommissionEl) procurementCommissionEl.textContent = `$${procurementTotalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (procurementOrdersEl) procurementOrdersEl.textContent = procurementTotalOrders.toLocaleString();
+        if (procurementAvgEl) procurementAvgEl.textContent = `$${procurementAvgOrder.toFixed(2)}`;
+
+        // Procurement by supplier table
+        const supplierTbody = document.getElementById('central-procurement-by-supplier-tbody');
+        const bySupplier = procurementData?.bySupplier || procurementData?.data?.bySupplier || [];
+        if (supplierTbody) {
+            if (Array.isArray(bySupplier) && bySupplier.length > 0) {
+                supplierTbody.innerHTML = bySupplier.map(supplier => `
+                    <tr>
+                        <td>${supplier.name || supplier.supplierId || 'Unknown'}</td>
+                        <td>${Number(supplier.orderCount || 0).toLocaleString()}</td>
+                        <td>$${Number(supplier.revenue || 0).toFixed(2)}</td>
+                        <td>$${Number(supplier.commission || 0).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                supplierTbody.innerHTML = '<tr><td colspan="4" class="loading">No procurement supplier revenue in selected range</td></tr>';
+            }
+        }
+
+        // Procurement by month table
+        const monthTbody = document.getElementById('central-procurement-by-month-tbody');
+        const byMonth = procurementData?.byMonth || procurementData?.data?.byMonth || [];
+        if (monthTbody) {
+            if (Array.isArray(byMonth) && byMonth.length > 0) {
+                monthTbody.innerHTML = byMonth.map(month => `
+                    <tr>
+                        <td>${month.month || '—'}</td>
+                        <td>${Number(month.orderCount || 0).toLocaleString()}</td>
+                        <td>$${Number(month.revenue || 0).toFixed(2)}</td>
+                        <td>$${Number(month.commission || 0).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                monthTbody.innerHTML = '<tr><td colspan="4" class="loading">No procurement monthly revenue in selected range</td></tr>';
+            }
+        }
+
+    } catch (error) {
+        console.error('[Central Accounting] Load error:', error);
+        document.getElementById('central-total-revenue').textContent = 'Error';
+    }
+}
+
+/**
+ * Export fleet financial report as CSV
+ */
+function exportFleetReport() {
+    const period = document.getElementById('central-accounting-period')?.value || 'month';
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    let csv = 'GreenReach Network Financial Report\n';
+    csv += `Period,${period}\n`;
+    csv += `Generated,${new Date().toLocaleString()}\n\n`;
+    csv += `Metric,Value\n`;
+    csv += `Total Revenue,${document.getElementById('central-total-revenue').textContent}\n`;
+    csv += `Total Expenses,${document.getElementById('central-total-expenses').textContent}\n`;
+    csv += `Net Margin,${document.getElementById('central-net-margin').textContent}\n`;
+    csv += `Order Count,${document.getElementById('central-order-count').textContent}\n`;
+    csv += `Avg Order Value,${document.getElementById('central-avg-order').textContent}\n`;
+    csv += `Outstanding,${document.getElementById('central-outstanding').textContent}\n`;
+
+    // Farm breakdown
+    csv += '\nFarm,Status,Rooms,Capacity,Farm ID\n';
+    const farmRows = document.querySelectorAll('#central-revenue-by-farm-tbody tr');
+    farmRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 5) {
+            csv += Array.from(cells).map(c => c.textContent.trim()).join(',') + '\n';
+        }
+    });
+
+    // Expense breakdown
+    csv += '\nExpense Category,Amount,% of Total\n';
+    const expRows = document.querySelectorAll('#central-expenses-tbody tr');
+    expRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+            csv += Array.from(cells).map(c => c.textContent.trim()).join(',') + '\n';
+        }
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `greenreach-network-report-${timestamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+console.log('  window.DEBUG.getEvents(20) - Get last 20 events');
+console.log('  window.DEBUG.showPageViews() - Show all page views');
+console.log('  window.DEBUG.showLastError() - Show last error');
+console.log('  window.DEBUG.showLastAPICall() - Show last API call');
+console.log('  window.DEBUG.exportSession() - Export full session');
