@@ -5499,6 +5499,7 @@ async function navigate(view, element) {
         case 'pricing-management':
             document.getElementById('pricing-management-view').style.display = 'block';
             await loadPricingManagement();
+            await loadCurrentPricesIntoScanner();
             break;
 
         case 'delivery-management':
@@ -10373,7 +10374,10 @@ function renderPricingOffers(offers) {
     }).join('');
 }
 
+let _catalogProductsCache = [];
+
 function renderProductCatalog(products) {
+    _catalogProductsCache = products || [];
     const tbody = document.getElementById('product-catalog-tbody');
     if (!products || products.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No products in catalog. Products are populated from farm inventories across the network.</td></tr>';
@@ -10682,20 +10686,255 @@ async function cancelPriceOffer(offerId) {
 }
 
 function showAddProductModal() {
-    const sku = prompt('Enter SKU (e.g. MIX-SALAD-001):');
-    if (!sku) return;
-    const name = prompt('Product name (e.g. Spring Salad Mix):');
-    if (!name) return;
-    const price = prompt('Wholesale price per unit ($):');
-    if (!price) return;
-    const category = prompt('Category (Leafy Greens, Herbs, Microgreens, Mix, Bundle):') || 'Mix';
-    
-    // In a production system this would POST to a product catalog API
-    alert(`Product "${name}" (${sku}) would be added at $${price}.\n\nNote: Product catalog is currently populated from farm network inventories. Custom product/mix creation API coming soon.`);
+    let modal = document.getElementById('product-add-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'product-add-modal';
+        modal.className = 'modal';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2>Add New Product</h2>
+                <button class="modal-close" onclick="closeAddProductModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; gap: 12px;">
+                    <label style="color: var(--text-secondary); font-size: 13px;">Crop Name
+                        <input type="text" id="add-product-name" placeholder="e.g. Spring Salad Mix"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Oz ($)
+                        <input type="number" id="add-retail-oz" step="0.01" min="0"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
+                            oninput="syncAddPrices('oz')">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Lb ($)
+                        <input type="number" id="add-retail-lb" step="0.01" min="0"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
+                            oninput="syncAddPrices('lb')">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price per Lb ($)
+                        <input type="number" id="add-wholesale-lb" step="0.01" min="0"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Category
+                        <select id="add-product-category"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                            <option value="Leafy Greens">Leafy Greens</option>
+                            <option value="Herbs">Herbs</option>
+                            <option value="Microgreens">Microgreens</option>
+                            <option value="Mix" selected>Mix</option>
+                            <option value="Bundle">Bundle</option>
+                        </select>
+                    </label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button class="btn" onclick="closeAddProductModal()" style="padding: 8px 16px;">Cancel</button>
+                    <button class="btn" onclick="saveNewProduct()"
+                        style="padding: 8px 16px; background: var(--accent-green); color: white;">Add Product</button>
+                </div>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
+}
+
+function syncAddPrices(source) {
+    const ozInput = document.getElementById('add-retail-oz');
+    const lbInput = document.getElementById('add-retail-lb');
+    const wsInput = document.getElementById('add-wholesale-lb');
+    if (source === 'oz' && ozInput.value) {
+        const ozVal = parseFloat(ozInput.value);
+        lbInput.value = (ozVal * 16).toFixed(2);
+        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
+    } else if (source === 'lb' && lbInput.value) {
+        const lbVal = parseFloat(lbInput.value);
+        ozInput.value = (lbVal / 16).toFixed(2);
+        wsInput.value = (lbVal * 0.65).toFixed(2);
+    }
+}
+
+function closeAddProductModal() {
+    const modal = document.getElementById('product-add-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveNewProduct() {
+    const name = document.getElementById('add-product-name').value.trim();
+    const retailOz = parseFloat(document.getElementById('add-retail-oz').value);
+    const retailLb = parseFloat(document.getElementById('add-retail-lb').value);
+    const wholesaleLb = parseFloat(document.getElementById('add-wholesale-lb').value);
+
+    if (!name) {
+        alert('Crop name is required.');
+        return;
+    }
+    if (!retailLb || retailLb <= 0) {
+        alert('Retail price per lb is required and must be greater than zero.');
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                updates: [{
+                    crop: name,
+                    retailPerOz: retailOz || retailLb / 16,
+                    retailPerLb: retailLb,
+                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
+                    tier: 'manual',
+                    reasoning: 'New product added from catalog'
+                }],
+                pushToFarms: true,
+                reasoning: 'New product: ' + name
+            })
+        });
+
+        const data = res.ok ? await res.json() : null;
+        if (data && data.success) {
+            closeAddProductModal();
+            await loadPricingManagement();
+            await loadCurrentPricesIntoScanner();
+        } else {
+            alert('Failed to add product: ' + (data?.error || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error('[Add Product] Save error:', err);
+        alert('Failed to add product. Check console for details.');
+    }
 }
 
 function editProduct(sku) {
-    alert(`Edit product ${sku}\n\nProduct editing will be available when the custom product catalog API is implemented.`);
+    const product = _catalogProductsCache.find(p =>
+        (p.sku_id || p.sku || p.product_id) === sku
+    );
+    const name = product ? (product.product_name || product.name || product.crop || sku) : sku;
+    const unit = product ? (product.unit || 'lb') : 'lb';
+    const currentPrice = product
+        ? (product.final_wholesale_price || product.wholesale_price || product.price_per_unit || product.price || '')
+        : '';
+
+    // Look up scanner row with matching crop name for current retail prices
+    let currentRetailOz = '';
+    let currentRetailLb = '';
+    let currentWholesaleLb = currentPrice ? Number(currentPrice).toFixed(2) : '';
+    const scannerRows = document.querySelectorAll('#pricing-scanner-tbody tr');
+    scannerRows.forEach(row => {
+        const cropInput = row.querySelector('input[name="crop"]');
+        if (cropInput && cropInput.value.toLowerCase() === name.toLowerCase()) {
+            const retailOzInput = row.querySelector('input[name="retailPerOz"]');
+            const retailLbInput = row.querySelector('input[name="retailPerLb"]');
+            const wholesaleLbInput = row.querySelector('input[name="wholesalePerLb"]');
+            if (retailOzInput) currentRetailOz = retailOzInput.value;
+            if (retailLbInput) currentRetailLb = retailLbInput.value;
+            if (wholesaleLbInput) currentWholesaleLb = wholesaleLbInput.value;
+        }
+    });
+
+    let modal = document.getElementById('product-edit-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'product-edit-modal';
+        modal.className = 'modal';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2>Edit Product: ${name}</h2>
+                <button class="modal-close" onclick="closeProductEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">SKU: <code>${sku}</code></p>
+                <div style="display: grid; gap: 12px;">
+                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Oz ($)
+                        <input type="number" id="edit-retail-oz" step="0.01" min="0" value="${currentRetailOz}"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
+                            oninput="syncEditPrices('oz')">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Lb ($)
+                        <input type="number" id="edit-retail-lb" step="0.01" min="0" value="${currentRetailLb}"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
+                            oninput="syncEditPrices('lb')">
+                    </label>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price per Lb ($)
+                        <input type="number" id="edit-wholesale-lb" step="0.01" min="0" value="${currentWholesaleLb}"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                    </label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button class="btn" onclick="closeProductEditModal()" style="padding: 8px 16px;">Cancel</button>
+                    <button class="btn" onclick="saveProductEdit('${sku}', '${name}')"
+                        style="padding: 8px 16px; background: var(--accent-green); color: white;">Save</button>
+                </div>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
+}
+
+function syncEditPrices(source) {
+    const ozInput = document.getElementById('edit-retail-oz');
+    const lbInput = document.getElementById('edit-retail-lb');
+    const wsInput = document.getElementById('edit-wholesale-lb');
+    if (source === 'oz' && ozInput.value) {
+        const ozVal = parseFloat(ozInput.value);
+        lbInput.value = (ozVal * 16).toFixed(2);
+        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
+    } else if (source === 'lb' && lbInput.value) {
+        const lbVal = parseFloat(lbInput.value);
+        ozInput.value = (lbVal / 16).toFixed(2);
+        wsInput.value = (lbVal * 0.65).toFixed(2);
+    }
+}
+
+function closeProductEditModal() {
+    const modal = document.getElementById('product-edit-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveProductEdit(sku, cropName) {
+    const retailOz = parseFloat(document.getElementById('edit-retail-oz').value);
+    const retailLb = parseFloat(document.getElementById('edit-retail-lb').value);
+    const wholesaleLb = parseFloat(document.getElementById('edit-wholesale-lb').value);
+
+    if (!retailLb || retailLb <= 0) {
+        alert('Retail price per lb is required and must be greater than zero.');
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                updates: [{
+                    crop: cropName,
+                    retailPerOz: retailOz || retailLb / 16,
+                    retailPerLb: retailLb,
+                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
+                    tier: 'manual',
+                    reasoning: 'Manual edit from product catalog'
+                }],
+                pushToFarms: true,
+                reasoning: 'Product catalog edit: ' + cropName
+            })
+        });
+
+        const data = res.ok ? await res.json() : null;
+        if (data && data.success) {
+            closeProductEditModal();
+            await loadPricingManagement();
+            await loadCurrentPricesIntoScanner();
+        } else {
+            alert('Failed to save: ' + (data?.error || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error('[Product Edit] Save error:', err);
+        alert('Failed to save product price. Check console for details.');
+    }
 }
 
 // ==============================================================================

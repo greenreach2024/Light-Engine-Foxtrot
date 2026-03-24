@@ -490,5 +490,28 @@ export async function listMarketEvents(filters) {
 }
 
 export async function listNetworkSnapshots(filters) {
-  return [];
+  const snapshots = [];
+
+  for (const farm of inventoryCache.farms) {
+    const totalAvailable = (farm.lots || []).reduce((sum, lot) => sum + (lot.qty_available || 0), 0);
+    snapshots.push({
+      ok: true,
+      status: 200,
+      total_available: totalAvailable,
+      fetched_at: farm.timestamp || inventoryCache.lastRefresh,
+      farm: { farm_name: farm.farm_name, farm_id: farm.farm_id }
+    });
+  }
+
+  for (const err of inventoryCache.errors) {
+    snapshots.push({
+      ok: false,
+      status: err.error || err.type || 'error',
+      total_available: 0,
+      fetched_at: inventoryCache.lastRefresh,
+      farm: { farm_name: err.farm_name, farm_id: err.farm_id }
+    });
+  }
+
+  return snapshots;
 }
