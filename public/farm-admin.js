@@ -1289,36 +1289,36 @@ function getCropBackendUnit(cropName) {
 // Prices calculated from actual retail packages and converted to per-oz rates
 const defaultPricing = {
     // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // $5.99/6oz living head
-    'Romaine Lettuce': { retail: 0.41, ws1: 15, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
-    'Red Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Oak Leaf Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Mixed Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },       // Standard lettuce pricing
-    'Lettuce': { retail: 0.61, ws1: 15, ws2: 25, ws3: 35 },             // Generic lettuce
+    'Butterhead Lettuce': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },  // $5.99/6oz living head
+    'Romaine Lettuce': { retail: 0.41, ws1: 20, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
+    'Red Leaf Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Oak Leaf Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },    // Standard lettuce pricing
+    'Mixed Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },       // Standard lettuce pricing
+    'Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },             // Generic lettuce
     
     // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
-    'Thai Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Purple Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },        // Same as Genovese
-    'Lemon Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },         // Same as Genovese
-    'Holy Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Basil': { retail: 7.18, ws1: 12, ws2: 20, ws3: 30 },               // Generic basil
+    'Genovese Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
+    'Thai Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Purple Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },        // Same as Genovese
+    'Lemon Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },         // Same as Genovese
+    'Holy Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },               // Generic basil
     
     // Arugula varieties - Specialty green pricing
-    'Baby Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
-    'Cultivated Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },  // Standard arugula
-    'Wild Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },        // Standard arugula
-    'Wasabi Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },      // Standard arugula
-    'Red Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },         // Standard arugula
-    'Arugula': { retail: 1.35, ws1: 15, ws2: 25, ws3: 35 },             // Generic arugula
+    'Baby Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
+    'Cultivated Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },  // Standard arugula
+    'Wild Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // Standard arugula
+    'Wasabi Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },      // Standard arugula
+    'Red Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },         // Standard arugula
+    'Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },             // Generic arugula
     
     // Kale varieties - Standard pricing
-    'Curly Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Lacinato Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Dinosaur kale
-    'Dinosaur Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },       // Same as Lacinato
-    'Baby Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },           // Tender baby leaves
-    'Red Russian Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 },    // Standard kale
-    'Kale': { retail: 0.76, ws1: 15, ws2: 25, ws3: 35 }                 // Generic kale
+    'Curly Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
+    'Lacinato Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },       // Dinosaur kale
+    'Dinosaur Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },       // Same as Lacinato
+    'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
+    'Red Russian Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },    // Standard kale
+    'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 }                 // Generic kale
 };
 
 /**
@@ -1339,7 +1339,7 @@ async function loadCropsFromDatabase() {
                     pricingData = pricingResult.pricing.crops.map(c => ({
                         crop: c.crop,
                         retail: c.retailPrice || 0,
-                        ws1Discount: c.ws1Discount ?? 15,
+                        ws1Discount: c.ws1Discount ?? 20,
                         ws2Discount: c.ws2Discount ?? 25,
                         ws3Discount: c.ws3Discount ?? 35,
                         isTaxable: c.isTaxable || false
@@ -1374,7 +1374,7 @@ async function loadCropsFromDatabase() {
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
-                const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 15, ws2: 25, ws3: 35 };
+                const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 20, ws2: 25, ws3: 35 };
                 return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false };
             });
         }
@@ -1633,6 +1633,7 @@ const AI_PRICING_KEY = 'ai_pricing_recommendations';
 const AI_LAST_CHECK_KEY = 'ai_pricing_last_check';
 const AI_HISTORY_KEY = 'ai_pricing_history';
 const USD_TO_CAD_RATE_KEY = 'usd_to_cad_rate';
+const AI_PREMIUM_MARKUP_RATE = 0.05;
 
 // Current USD to CAD exchange rate (updated during analysis)
 let currentExchangeRate = 1.35; // Default rate
@@ -1872,6 +1873,40 @@ const marketDataSources = {
     }
 };
 
+// Fallback categories for crops introduced after initial market dataset buildout.
+// These are aggregated snapshots across major North American grocers.
+const marketCategoryFallbacks = {
+    strawberryPint: {
+        retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
+        avgPriceUSD: 6.49,
+        priceRange: [4.99, 7.99],
+        trend: 'stable',
+        country: 'North America',
+        comparisonUnit: 'pint',
+        articles: []
+    },
+    largeTomatoUnit: {
+        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro', 'Sobeys'],
+        avgPriceUSD: 2.19,
+        priceRange: [1.49, 3.49],
+        trend: 'stable',
+        country: 'North America',
+        comparisonUnit: 'unit',
+        articles: []
+    },
+    cherryTomatoWeight: {
+        retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro', 'Farm Boy'],
+        avgPriceUSD: 5.49,
+        avgWeightOz: 10,
+        priceRange: [4.49, 6.99],
+        trend: 'stable',
+        country: 'North America',
+        comparisonUnit: 'weight',
+        articles: []
+    }
+};
+
+
 /**
  * Open AI Pricing Assistant modal
  */
@@ -1919,7 +1954,8 @@ async function runAIPricingAnalysis() {
         'Retrieving Bank of Canada USD/CAD exchange rate...',
         'Analysing price trends across retailers...',
         'Matching crops to your pricing table...',
-        'Generating competitive pricing recommendations...'
+        'Normalizing prices by unit: oz, 25g, pint, and each...',
+        'Generating premium retail recommendations (+5% over market average)...'
     ];
     
     // Show progress steps while fetching in parallel
@@ -2054,12 +2090,87 @@ function resolveMarketDataForCrop(cropName) {
         }
     }
 
+    // Unit-aware fallbacks for newer crop categories.
+    if (normalized.includes('sun gold') || normalized.includes('cherry tomato')) {
+        return marketCategoryFallbacks.cherryTomatoWeight;
+    }
+
+    const cropUnit = getCropUnit(cropName);
+    if (cropUnit === 'pint') return marketCategoryFallbacks.strawberryPint;
+    if (cropUnit === 'unit') return marketCategoryFallbacks.largeTomatoUnit;
+
     const fuzzyKey = Object.keys(marketDataSources).find((key) => {
         const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
         return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
     });
 
     return fuzzyKey ? marketDataSources[fuzzyKey] : null;
+}
+
+function normalizeMarketPriceForCrop(cropName, marketData) {
+    const cropUnit = getCropUnit(cropName);
+    const comparisonUnit = marketData.comparisonUnit || (cropUnit === 'pint' ? 'pint' : cropUnit === 'unit' ? 'unit' : 'weight');
+    const isWeight = comparisonUnit === 'weight';
+
+    const averageSourcePriceUSD = Number(marketData.avgPriceUSD || 0);
+    const convertToCad = marketData.country !== 'Canada' && marketData._dataSource !== 'database';
+    const exchangeMultiplier = convertToCad ? currentExchangeRate : 1;
+
+    if (!isWeight) {
+        const isLiveDb = marketData._dataSource === 'database';
+        const marketAverageCAD = isLiveDb
+            ? Number(marketData.avgPriceCAD || 0)
+            : averageSourcePriceUSD * exchangeMultiplier;
+
+        const sourceAverageUSD = isLiveDb
+            ? marketAverageCAD / (currentExchangeRate || 1)
+            : averageSourcePriceUSD;
+
+        const priceRangeCAD = isLiveDb
+            ? (marketData.priceRange || [marketAverageCAD, marketAverageCAD]).map(price => Number(price || 0))
+            : (marketData.priceRange || [averageSourcePriceUSD, averageSourcePriceUSD]).map(price => price * exchangeMultiplier);
+
+        return {
+            comparisonUnit,
+            comparisonUnitLabel: comparisonUnit === 'pint' ? '/pint' : '/each',
+            marketAverageCAD,
+            sourceAverageUSD,
+            priceRangeCAD,
+            pricePerOzCAD: null,
+            pricePer25gCAD: null,
+            pricePerOzUSD: null
+        };
+    }
+
+    const avgWeightOz = Number(marketData.avgWeightOz || 0);
+    if (!avgWeightOz) {
+        return null;
+    }
+
+    const pricePerOzCAD = marketData.country === 'Canada' || marketData._dataSource === 'database'
+        ? Number(marketData.avgPriceCAD || 0) / avgWeightOz
+        : (averageSourcePriceUSD / avgWeightOz) * exchangeMultiplier;
+
+    const pricePerOzUSD = marketData._dataSource === 'database'
+        ? pricePerOzCAD / (currentExchangeRate || 1)
+        : averageSourcePriceUSD / avgWeightOz;
+
+    const pricePer25gCAD = pricePerOzCAD * OZ_TO_25G;
+
+    const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
+        ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * exchangeMultiplier)
+        : (marketData.priceRange || [0, 0]).map(p => p / avgWeightOz);
+
+    return {
+        comparisonUnit,
+        comparisonUnitLabel: '/oz',
+        marketAverageCAD: pricePerOzCAD,
+        sourceAverageUSD: pricePerOzUSD,
+        priceRangeCAD,
+        pricePerOzCAD,
+        pricePer25gCAD,
+        pricePerOzUSD
+    };
 }
 
 /**
@@ -2078,18 +2189,15 @@ function generateRecommendations() {
     const seenMarketKeys = new Set();
     const analysisCrops = [];
 
-    // First pass: add pricingData crop names (primary — these are the farm's real names)
     for (const item of (pricingData || [])) {
         const md = resolveMarketDataForCrop(item.crop);
         if (md) {
-            // Track which market source key this resolved to, to avoid duplicates
             const mdKey = Object.keys(marketDataSources).find(k => marketDataSources[k] === md);
             if (mdKey) seenMarketKeys.add(mdKey);
         }
         analysisCrops.push(item.crop);
     }
 
-    // Second pass: add marketDataSources keys that weren't already covered
     for (const key of Object.keys(marketDataSources)) {
         if (!seenMarketKeys.has(key)) {
             analysisCrops.push(key);
@@ -2102,83 +2210,38 @@ function generateRecommendations() {
 
         const pricingItem = pricingMap.get(cropName);
         const defaultItem = defaultPricing[cropName] || null;
-        
-        // Calculate price per oz from market data
-        // Live DB data has avgWeightOz=1 (already per-unit), hardcoded has actual weight
-        const avgWeight = marketData.avgWeightOz || 1;
-        const pricePerOzCAD = marketData.country === 'Canada' || marketData._dataSource === 'database'
-            ? (marketData.avgPriceCAD || 0) / avgWeight
-            : ((marketData.avgPriceUSD || 0) / avgWeight) * currentExchangeRate;
-        const pricePerOzUSD = pricePerOzCAD / currentExchangeRate;
-        
-        // Calculate price per 25g (1 oz = 28.35g, so 25g = 0.8818 oz)
-        const pricePer25gCAD = pricePerOzCAD * 0.8818;
-        
-        const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? pricePerOzCAD);
-        const marketAvg = pricePerOzCAD;
-        const difference = marketAvg > 0 ? ((currentPrice - marketAvg) / marketAvg * 100).toFixed(1) : '0.0';
-        
-        let recommendation = marketAvg;
-        let reasoning = '';
-        let priceChangeType = 'stable';
+        const normalizedMarket = normalizeMarketPriceForCrop(cropName, marketData);
+        if (!normalizedMarket) return;
 
-        // Use AI reasoning if available from backend
-        const aiReasoning = marketData._aiReasoning;
-        const aiOutlook = marketData._aiOutlook;
-        const aiAction = marketData._aiAction;
-        const aiForecast = marketData._aiForecastPrice;
+        const marketAvg = normalizedMarket.marketAverageCAD;
+        const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? marketAvg);
+        const difference = marketAvg > 0 ? ((currentPrice - marketAvg) / marketAvg * 100) : 0;
 
-        if (aiOutlook && aiReasoning) {
-            // AI-powered recommendation
-            if (aiForecast && aiForecast > 0) {
-                recommendation = aiForecast;
-            } else if (aiOutlook === 'bullish') {
-                recommendation = marketAvg * 1.05;
-            } else if (aiOutlook === 'bearish') {
-                recommendation = marketAvg * 0.95;
-            }
+        // Policy: all retail recommendations include a 5% premium over NA market average.
+        const recommendation = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+        const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : 0;
+        const priceChangeType = recommendedDelta > 0 ? 'up' : recommendedDelta < 0 ? 'down' : 'stable';
 
-            priceChangeType = aiOutlook === 'bullish' ? 'up' : aiOutlook === 'bearish' ? 'down' : 'stable';
-            reasoning = `🤖 AI Analysis: ${aiReasoning}`;
-            if (aiAction) reasoning += ` Action: ${aiAction.replace(/_/g, ' ')}.`;
-        } else if (marketData.trend === 'increasing') {
-            recommendation = marketAvg * 1.05;
-            reasoning = `Market analysis shows ${cropName} prices are trending upward. `;
-            priceChangeType = 'up';
-            if (marketData.articles && marketData.articles.length > 0) {
-                reasoning += `Recent reports indicate supply constraints and increased demand. `;
-            }
-            reasoning += `Recommended to adjust pricing to capitalize on market conditions.`;
-        } else if (marketData.trend === 'decreasing') {
-            recommendation = marketAvg * 0.95;
-            reasoning = `Market prices for ${cropName} are declining due to increased supply. Consider competitive pricing to maintain market share.`;
-            priceChangeType = 'down';
-        } else {
-            recommendation = marketAvg;
-            reasoning = `Current ${cropName} market is stable. Your pricing is ${Math.abs(difference)}% ${difference > 0 ? 'above' : 'below'} market average. `;
-            if (Math.abs(parseFloat(difference)) > 10) {
-                reasoning += parseFloat(difference) > 0 ? 
-                    'Consider reducing price to match market expectations.' : 
-                    'You have room to increase margins without losing competitiveness.';
-            } else {
-                reasoning += 'Your pricing is competitive.';
-            }
+        let reasoning = `Aggregated North America market pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
+        reasoning += `Applying the premium product policy adds ${(AI_PREMIUM_MARKUP_RATE * 100).toFixed(0)}%, yielding a recommended retail of $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
+        reasoning += `Your current price is ${Math.abs(difference).toFixed(1)}% ${difference >= 0 ? 'above' : 'below'} market average.`;
+
+        // Preserve AI context from backend, but enforce premium pricing policy.
+        if (marketData._aiReasoning) {
+            reasoning = `AI context: ${marketData._aiReasoning} ` + reasoning;
         }
-        
-        // Calculate range in CAD
-        const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
-            ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeight) * currentExchangeRate)
-            : (marketData.priceRange || [0, 0]).map(p => p / avgWeight);
-        
+
         recommendations.push({
             crop: cropName,
             currentPrice: currentPrice,
             recommendedPrice: recommendation,
             marketAverage: marketAvg,
-            pricePerOzCAD: pricePerOzCAD,
-            pricePer25gCAD: pricePer25gCAD,
-            pricePerOzUSD: pricePerOzUSD,
-            priceRange: priceRangeCAD,
+            comparisonUnit: normalizedMarket.comparisonUnit,
+            comparisonUnitLabel: normalizedMarket.comparisonUnitLabel,
+            pricePerOzCAD: normalizedMarket.pricePerOzCAD,
+            pricePer25gCAD: normalizedMarket.pricePer25gCAD,
+            sourcePriceUSD: normalizedMarket.sourceAverageUSD,
+            priceRange: normalizedMarket.priceRangeCAD,
             exchangeRate: currentExchangeRate,
             sourceCountry: marketData.country || 'Canada',
             trend: marketData.trend,
@@ -2187,14 +2250,14 @@ function generateRecommendations() {
             articles: marketData.articles || [],
             retailers: marketData.retailers || [],
             hasPricingRow: Boolean(pricingItem),
-            aiOutlook: aiOutlook || null,
+            aiOutlook: marketData._aiOutlook || null,
             aiConfidence: marketData._aiConfidence || null,
             dataSource: marketData._dataSource || 'static',
             observationCount: marketData._observationCount || 0,
             timestamp: Date.now()
         });
     });
-    
+
     return recommendations;
 }
 
@@ -2215,69 +2278,78 @@ function displayRecommendations(recommendations) {
         recommendationsDiv.style.display = 'block';
         return;
     }
-    
+
     contentDiv.innerHTML = recommendations.map(rec => {
         const priceChange = rec.currentPrice > 0
             ? ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1)
             : '0.0';
         const hasSignificantChange = Math.abs(priceChange) > 5;
-        
-        // Data source badge
+
         const isLive = rec.dataSource === 'database';
         const sourceBadge = isLive
             ? `<span style="padding: 2px 6px; background: rgba(34,197,94,0.2); color: #4ade80; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">LIVE DATA</span>`
             : `<span style="padding: 2px 6px; background: rgba(156,163,175,0.2); color: #9ca3af; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">STATIC</span>`;
 
-        // AI confidence badge
         const aiBadge = rec.aiOutlook
             ? `<span style="padding: 2px 6px; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px;">AI ${(rec.aiConfidence || 'medium').toUpperCase()}</span>`
             : '';
 
-        // FX info
         const conversionInfo = !isLive && rec.sourceCountry !== 'Canada'
             ? `<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
-                💱 Prices converted from USD at rate: 1 USD = ${rec.exchangeRate.toFixed(4)} CAD
-            </div>` : '';
-        
+                   Prices converted from USD at rate: 1 USD = ${rec.exchangeRate.toFixed(4)} CAD
+               </div>` : '';
+
+        const isWeightComparison = rec.comparisonUnit === 'weight';
+        const unitLabel = rec.comparisonUnitLabel || '/oz';
+
         return `
             <div class="recommendation-card ${hasSignificantChange ? 'updated' : ''}">
                 <div class="recommendation-header">
                     <div class="crop-title">${rec.crop}${sourceBadge}${aiBadge}</div>
-                    ${hasSignificantChange ? 
-                        `<span style="padding: 4px 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-radius: 4px; font-size: 12px; font-weight: 600;">UPDATE RECOMMENDED</span>` 
+                    ${hasSignificantChange ?
+                        `<span style="padding: 4px 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-radius: 4px; font-size: 12px; font-weight: 600;">UPDATE RECOMMENDED</span>`
                         : ''}
                 </div>
-                
+
                 ${conversionInfo}
-                
+
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border-radius: 6px;">
                     <div>
                         <div class="price-label">Market Price (CAD)</div>
-                        <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
-                            $${rec.pricePerOzCAD.toFixed(2)}/oz
-                        </div>
-                        <div style="font-size: 13px; color: var(--text-secondary);">
-                            $${rec.pricePer25gCAD.toFixed(2)}/25g
-                        </div>
+                        ${isWeightComparison ? `
+                            <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
+                                $${rec.pricePerOzCAD.toFixed(2)}/oz
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                $${rec.pricePer25gCAD.toFixed(2)}/25g
+                            </div>
+                        ` : `
+                            <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
+                                $${rec.marketAverage.toFixed(2)}${unitLabel}
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                North America aggregate
+                            </div>
+                        `}
                     </div>
                     <div>
                         <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : 'Source (USD)'}</div>
                         <div style="font-size: 16px; font-weight: 600; color: var(--text-muted);">
                             ${rec.dataSource === 'database'
                                 ? `${rec.observationCount || '—'} obs`
-                                : `$${rec.pricePerOzUSD.toFixed(2)}/oz`}
+                                : `$${rec.sourcePriceUSD.toFixed(2)}${unitLabel}`}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             ${rec.dataSource === 'database' ? `${(rec.retailers || []).length} retailers` : rec.sourceCountry}
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="price-comparison">
                     <div class="price-box">
                         <div class="price-label">Your Current Price</div>
                         <div class="price-value">$${rec.currentPrice.toFixed(2)}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">per oz (CAD)</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${unitLabel} (CAD)</div>
                     </div>
                     <div class="price-box" style="background: rgba(59, 130, 246, 0.1);">
                         <div class="price-label">Recommended Price</div>
@@ -2291,25 +2363,25 @@ function displayRecommendations(recommendations) {
                         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">
                             $${rec.priceRange[0].toFixed(2)} - $${rec.priceRange[1].toFixed(2)}
                         </div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">per oz</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${unitLabel}</div>
                     </div>
                 </div>
-                
+
                 <div class="market-insight">
                     <strong>Market Insight:</strong> ${rec.reasoning}
                 </div>
-                
+
                 <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
                     <strong>Retailers surveyed:</strong> ${(rec.retailers || []).length > 0 ? rec.retailers.join(', ') : 'N/A'}
                 </div>
-                
+
                 ${(rec.articles || []).length > 0 ? `
                     <div>
                         <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Related News:</div>
                         <div class="news-links">
                             ${rec.articles.map(article => `
                                 <a href="${article.url}" target="_blank" class="news-link">
-                                    <span>📰</span>
+                                    <span>[News]</span>
                                     <span>${article.title}</span>
                                     <span style="color: var(--text-muted);">(${article.date})</span>
                                 </a>
@@ -2317,7 +2389,7 @@ function displayRecommendations(recommendations) {
                         </div>
                     </div>
                 ` : ''}
-                
+
                 ${hasSignificantChange ? `
                     <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
                         <button class="apply-recommendation-btn" onclick="applyRecommendedPrice('${rec.crop}', ${rec.recommendedPrice}, this)">
@@ -2328,7 +2400,7 @@ function displayRecommendations(recommendations) {
             </div>
         `;
     }).join('');
-    
+
     recommendationsDiv.style.display = 'block';
 }
 
@@ -4656,7 +4728,7 @@ async function loadSettings() {
         setVal('session-timeout', settings.sessionTimeout || 30);
         
         // Farm Operations Defaults
-        setVal('default-ws1-discount', settings.defaultWS1Discount || 15);
+        setVal('default-ws1-discount', settings.defaultWS1Discount || 20);
         setVal('default-ws2-discount', settings.defaultWS2Discount || 25);
         setVal('default-ws3-discount', settings.defaultWS3Discount || 35);
         setVal('low-stock-threshold', settings.lowStockThreshold || 10);

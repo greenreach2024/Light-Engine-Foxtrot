@@ -82,7 +82,7 @@ router.get('/', (req, res) => {
         unit: existing?.unit || 'lb',
         retailPrice: existing?.retailPrice || 0,
         wholesalePrice: existing?.wholesalePrice || 0,
-        ws1Discount: existing?.ws1Discount || 15,
+        ws1Discount: existing?.ws1Discount ?? 20,
         ws2Discount: existing?.ws2Discount || 25,
         ws3Discount: existing?.ws3Discount || 35,
         isGrowing: growingCrops.has(cropName),
