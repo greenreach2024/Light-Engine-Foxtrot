@@ -2294,7 +2294,7 @@ function generateRecommendations() {
 
         // Policy: all retail recommendations include a 5% premium over NA market average.
         const recommendation = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
-        const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : 0;
+        const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : (recommendation > 0 ? 100 : 0);
         const priceChangeType = recommendedDelta > 0 ? 'up' : recommendedDelta < 0 ? 'down' : 'stable';
 
         let reasoning = `Aggregated North America market pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
@@ -2357,8 +2357,8 @@ function displayRecommendations(recommendations) {
     contentDiv.innerHTML = recommendations.map(rec => {
         const priceChange = rec.currentPrice > 0
             ? ((rec.recommendedPrice - rec.currentPrice) / rec.currentPrice * 100).toFixed(1)
-            : '0.0';
-        const hasSignificantChange = Math.abs(priceChange) > 5;
+            : (rec.recommendedPrice > 0 ? '100.0' : '0.0');
+        const hasSignificantChange = Math.abs(parseFloat(priceChange)) > 5;
 
         const isLive = rec.dataSource === 'database';
         const sourceBadge = isLive
