@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>GreenReach Wholesale | Order Fresh Produce</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="icon" href="./favicon.ico" sizes="32x32">
   <style>
     :root {
       --primary: #2d5016;
@@ -1863,12 +1862,12 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/farm-assistant.css?v=20260318c">
 </head>
 <body>
   <!-- Delivery Service Banner -->
   <script src="/js/components/service-intro-banner.js"></script>
-  <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/wholesale-about.html#delivery' });</script>
+  <script>ServiceIntroBanner.injectDeliveryBanner({ ctaUrl: '/delivery.html' });</script>
 
   <header>
     <div>
@@ -1941,10 +1940,6 @@
 
     <!-- Catalog View -->
     <div id="catalog-view" class="view active">
-      <div id="not-live-banner" class="not-live-banner" style="display:none; background:#edf7ff; border:1px solid #90cdf4; border-radius:8px; padding:1.25rem 1.5rem; margin-bottom:1.5rem; color:#2b6cb0; line-height:1.6;">
-        <strong>GreenReach Wholesale &amp; Delivery is not live in your area yet.</strong><br>
-        Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!
-      </div>
       <div class="catalog-header">
         <h2>Available Products</h2>
         <div class="catalog-filters">
@@ -2420,10 +2415,7 @@
       <div class="welcome-description" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg); border-radius: 6px; border-left: 4px solid var(--accent);">
         <h3 style="color: var(--primary); margin-bottom: 0.75rem;">Welcome to GreenReach Wholesale!</h3>
         <p style="font-size: 0.95rem; line-height: 1.6; color: var(--text);">
-          This portal provides a view of the unique, local produce available to you. To support you, we have included a <strong>Live Environmental Impact Score</strong> that compares local produce to imports. An <strong>AI Price Evaluation Tool</strong> that searches North America, looking for changes in pricing of popular produce and the impacts that caused the price change. And a <strong>Demand Tool</strong> that shows trends of locally grown produce. Tools to help you stay on top of your game!
-        </p>
-        <p style="font-size: 0.95rem; line-height: 1.6; color: var(--text); margin-top: 0.75rem;">
-          Don't see the produce you are looking for locally? Click the <strong>Request Product</strong> button. Hydroponic farms can grow almost anything. If they know, they grow!
+          The GreenReach Wholesale and Delivery is not live in your area. Access to the portal is free and we encourage you to create a profile. As more geographies go live, you will be notified. Thank you for supporting your local growers!
         </p>
       </div>
       <h2>Business Access</h2>
@@ -2513,6 +2505,6 @@
   <!-- Square Web Payments SDK -->
   <script src="https://web.squarecdn.com/v1/square.js"></script>
   
-  <script src="/js/wholesale.js" defer></script>
+  <script src="/js/wholesale.js?v=2026-03-24-auth-fix" defer></script>
 </body>
 </html>
