@@ -370,7 +370,7 @@ router.post('/set-wholesale', async (req, res) => {
     }
 
     const inferredUnit = String(unit || inferPriceUnit(crop, 'oz')).toLowerCase();
-    const skuFactor = Math.min(0.75, Math.max(0.5, Number(sku_factor || 0.65)));
+    const skuFactor = Math.min(0.75, Math.max(0.5, Number(sku_factor || 0.75)));
     
     // BLOCKING CONDITION #1: Cost-basis protection
     const costData = await getMaxFarmCost(crop);
@@ -951,7 +951,7 @@ router.post('/batch-update', async (req, res) => {
       }
 
       const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
-      const skuFactor = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.65)));
+      const skuFactor = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.75)));
       const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * skuFactor * 100) / 100 : null);
 
       if (!retailPerLb || retailPerLb <= 0) {
@@ -1041,7 +1041,7 @@ router.post('/batch-update', async (req, res) => {
             // Merge updates into existing farm pricing
             for (const u of updates) {
               const retailPerLb = u.retailPerLb || (u.retailPerOz ? u.retailPerOz * 16 : null);
-              const skuFactorPush = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.65)));
+              const skuFactorPush = Math.min(0.75, Math.max(0.50, Number(u.sku_factor || 0.75)));
               const wholesalePerLb = u.wholesalePerLb || (retailPerLb ? Math.round(retailPerLb * skuFactorPush * 100) / 100 : null);
               if (!retailPerLb) continue;
 
@@ -1188,7 +1188,7 @@ router.get('/current-prices', (req, res) => {
 
 
     // Auto-compute wholesale from retail for crops missing wholesale pricing
-    const defaultSkuFactor = 0.65;
+    const defaultSkuFactor = 0.75;
     for (const entry of Object.values(merged)) {
       if (entry.retailPerLb > 0 && !entry.wholesalePerLb) {
         entry.wholesalePerLb = Math.round(entry.retailPerLb * defaultSkuFactor * 100) / 100;

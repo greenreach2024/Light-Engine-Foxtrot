@@ -1905,14 +1905,25 @@ When you change a file, here is what else is affected:
 - **File**: greenreach-central/public/central-admin.js (syncPricingRow), greenreach-central/routes/admin-pricing.js (batch-update)
 - **Problem**: When a retail price was changed in the pricing table, syncPricingRow() sent the update to the server but did not compute a new wholesale price. The batch-update endpoint used a hardcoded sku_factor of 0.70 regardless of the product's configured factor.
 - **Impact**: Wholesale prices became stale when retail prices changed. All products used the same 0.70 factor instead of their per-product sku_factor (0.50-0.75).
-- **Fix Applied**: syncPricingRow() now auto-computes wholesale = retail * 0.65 as a default when syncing. batch-update reads each product's sku_factor (clamped 0.50-0.75) and applies the formula: wholesale = max(cost_floor, retail * sku_factor).
+- **Fix Applied**: syncPricingRow() now auto-computes wholesale = retail * 0.75 as a default when syncing. batch-update reads each product's sku_factor (clamped 0.50-0.75) and applies the formula: wholesale = max(cost_floor, retail * sku_factor).
 
 #### Pricing Formula Reference (v1.3.0)
 - **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
 - **floor** = `max(cost_floor, manual_floor)` -- ensures wholesale never drops below production cost
-- **sku_factor** = per-product multiplier, clamped to range 0.50 - 0.75 (default 0.65)
+- **sku_factor** = per-product multiplier, clamped to range 0.50 - 0.75 (default 0.75)
 - **Implemented in**: admin-pricing.js (batch-update, set-wholesale), central-admin.js (syncPricingRow), farm-admin.js (applyRecommendedPrice)
 - **Central admin-pricing.js**: Mounted at /api/admin/pricing in greenreach-central/server.js (v1.3.0)
+
+#### Buyer Volume Discount Ladder (v1.4.0)
+- Applied AFTER base wholesale price. Based on 30-day trailing spend.
+- $0 - $249 cumulative: 0% discount (tier-1)
+- $250 - $499: 4% discount (tier-2)
+- $500 - $999: 6% discount (tier-3)
+- $1,000 - $1,999: 8% discount (tier-4)
+- $2,000+: 10% discount (tier-5)
+- Example: Basil retails at $3.04/oz, SKU factor 0.65 -> base wholesale $1.98/oz. Buyer qualifies for 4% -> final $1.98 x 0.96 = $1.90/oz.
+- **Single source of truth**: lib/wholesale/buyer-discount-service.js (DISCOUNT_TIERS array)
+- **Wired into**: checkout.js (preview + execute), catalog.js (authenticated response), order-allocator.js (line item pricing)
 
 ---
 

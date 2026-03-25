@@ -1344,7 +1344,7 @@ async function loadCropsFromDatabase() {
                         ws3Discount: c.ws3Discount ?? 35,
                         isTaxable: c.isTaxable || false,
                         floor_price: c.floor_price ?? 0,
-                        sku_factor: c.sku_factor ?? 0.65
+                        sku_factor: c.sku_factor ?? 0.75
                     }));
                     // Cache to localStorage
                     pricingData.forEach(item => {
@@ -1377,7 +1377,7 @@ async function loadCropsFromDatabase() {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
                 const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 20, ws2: 25, ws3: 35 };
-                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.65 };
+                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
             });
         }
 
@@ -1402,7 +1402,7 @@ function exportPricingCSV() {
         rows.push([
             item.crop, r.toFixed(2),
             (item.floor_price || 0).toFixed(2),
-            (item.sku_factor || 0.65).toFixed(2),
+            (item.sku_factor || 0.75).toFixed(2),
             calculateFormulaWholesalePrice(r, item.floor_price, item.sku_factor).toFixed(2),
             item.isTaxable ? 'Yes' : 'No'
         ]);
@@ -1442,7 +1442,7 @@ function calculateWholesalePrice(retail, discountPercent) {
  * where floor = max(costFloor, manualFloor)
  */
 function calculateFormulaWholesalePrice(retail, floorPrice, skuFactor) {
-    const factor = Math.min(0.75, Math.max(0.5, Number(skuFactor || 0.65)));
+    const factor = Math.min(0.75, Math.max(0.5, Number(skuFactor || 0.75)));
     const floor = Number(floorPrice || 0);
     const computed = retail * factor;
     return Math.max(floor, computed);
@@ -1507,7 +1507,7 @@ function renderPricingTable() {
                     <input 
                         type="number" 
                         class="pricing-input" 
-                        value="${(item.sku_factor || 0.65).toFixed(2)}" 
+                        value="${(item.sku_factor || 0.75).toFixed(2)}" 
                         step="0.01" 
                         min="0.50" 
                         max="0.75"
@@ -1581,7 +1581,7 @@ async function savePricing() {
                 ws3Discount: item.ws3Discount,
                 isTaxable: item.isTaxable || false,
                 floor_price: item.floor_price || 0,
-                sku_factor: item.sku_factor || 0.65
+                sku_factor: item.sku_factor || 0.75
             }));
             
             const response = await fetch(`${API_BASE}/api/crop-pricing`, {
@@ -1608,7 +1608,7 @@ async function savePricing() {
                             body: JSON.stringify({
                                 crop: item.crop,
                                 floor_price: item.floor_price || 0,
-                                sku_factor: item.sku_factor || 0.65,
+                                sku_factor: item.sku_factor || 0.75,
                                 use_formula: true,
                                 tier: 'demand-based',
                                 reasoning: 'Updated via LE farm admin pricing table'
@@ -2841,7 +2841,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
         const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
         // Ensure formula fields have defaults when AI sets retail
-        if (!pricingData[index].sku_factor) pricingData[index].sku_factor = 0.65;
+        if (!pricingData[index].sku_factor) pricingData[index].sku_factor = 0.75;
         if (!pricingData[index].floor_price) pricingData[index].floor_price = 0;
         renderPricingTable();
         
@@ -2905,7 +2905,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             ws3Discount: 0,
             isTaxable: false,
             floor_price: 0,
-            sku_factor: 0.65
+            sku_factor: 0.75
         };
         pricingData.push(newRow);
         index = pricingData.length - 1;
@@ -2941,7 +2941,7 @@ async function savePricingQuiet() {
             ws3Discount: item.ws3Discount,
             isTaxable: item.isTaxable || false,
             floor_price: item.floor_price || 0,
-            sku_factor: item.sku_factor || 0.65
+            sku_factor: item.sku_factor || 0.75
         }));
         await fetch(`${API_BASE}/api/crop-pricing`, {
             method: 'PUT',

@@ -129,7 +129,7 @@ router.post('/preview', async (req, res) => {
 
     // Resolve buyer discount from purchase history (optional auth on preview)
     const previewBuyerId = getBuyerIdFromRequest(req);
-    const buyerDiscount = previewBuyerId ? await getBuyerDiscount(previewBuyerId) : { rate: 0, tier: 'none', total_spend: 0 };
+    const buyerDiscount = previewBuyerId ? await getBuyerDiscount(previewBuyerId) : { rate: 0, tier: 'tier-1', trailing_spend: 0 };
 
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
@@ -236,7 +236,7 @@ router.post('/execute', async (req, res) => {
 
     // Compute buyer volume discount from purchase history
     const buyerDiscount = await getBuyerDiscount(resolvedBuyerId);
-    console.log(`[Checkout] Buyer discount: ${(buyerDiscount.rate * 100).toFixed(1)}% (tier: ${buyerDiscount.tier}, spend: $${buyerDiscount.total_spend.toFixed(2)})`);
+    console.log(`[Checkout] Buyer discount: ${(buyerDiscount.rate * 100).toFixed(1)}% (tier: ${buyerDiscount.tier}, 30-day spend: $${buyerDiscount.trailing_spend.toFixed(2)})`);
 
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,

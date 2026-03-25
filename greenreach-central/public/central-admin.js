@@ -10433,7 +10433,7 @@ async function submitWholesalePrice(event) {
     event.preventDefault();
     const crop = document.getElementById('price-crop').value;
     const floor_price = parseFloat(document.getElementById('price-amount').value) || 0;
-    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.65;
+    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.75;
     const tier = document.getElementById('price-tier').value;
     const reasoning = document.getElementById('price-reasoning').value;
     
@@ -10553,7 +10553,7 @@ function syncPricingRow(input, from) {
     }
     // Auto-compute wholesale using the formula: wholesale = retail * sku_factor
     if (retailPerLb > 0) {
-        const skuFactor = 0.65;
+        const skuFactor = 0.75;
         const wholesale = Math.round(retailPerLb * skuFactor * 100) / 100;
         const wField = tr.querySelector('.sc-wlb');
         if (wField) wField.value = wholesale.toFixed(2);
@@ -10784,7 +10784,7 @@ async function saveNewProduct() {
                     crop: name,
                     retailPerOz: retailOz || retailLb / 16,
                     retailPerLb: retailLb,
-                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
+                    wholesalePerLb: wholesaleLb || retailLb * 0.75,
                     tier: 'manual',
                     reasoning: 'New product added from catalog'
                 }],
@@ -10914,7 +10914,7 @@ async function saveProductEdit(sku, cropName) {
                     crop: cropName,
                     retailPerOz: retailOz || retailLb / 16,
                     retailPerLb: retailLb,
-                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
+                    wholesalePerLb: wholesaleLb || retailLb * 0.75,
                     tier: 'manual',
                     reasoning: 'Manual edit from product catalog'
                 }],
