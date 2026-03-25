@@ -1260,7 +1260,7 @@ const cropUnitMap = {
     'Brandywine': 'unit',
     'Celebrity': 'unit',
     'Heatmaster F1': 'unit',
-    'San Marzano-': 'unit',
+    'San Marzano': 'unit',
     'San Marzano': 'unit',
     // Cherry tomatoes -- sold by weight
     'Sun Gold': 'weight'
@@ -1659,11 +1659,175 @@ const AI_HISTORY_KEY = 'ai_pricing_history';
 const USD_TO_CAD_RATE_KEY = 'usd_to_cad_rate';
 const AI_PREMIUM_MARKUP_RATE = 0.05;
 
+// Specialty crop delta learning storage key
+const AI_SPECIALTY_DELTA_KEY = 'ai_specialty_deltas';
+
+// Crop classification: maps every variety to its common retail name and whether
+// it is a specialty variety. Common varieties appear in standard retail packages
+// (e.g. "Baby Arugula" in a bag labeled "Arugula"). Specialty varieties are not
+// sold standalone and are typically found unlabeled inside premium mixed green
+// blends. The 5% markup accounts for comparing against non-organic retail.
+//
+// commonName: the retail parent category used for market data lookup
+// isSpecialty: true = not sold as a standalone retail package; flag for grower review
+const cropClassification = {
+    // Arugula family
+    'Baby Arugula':       { commonName: 'Arugula', isSpecialty: false },
+    'Cultivated Arugula': { commonName: 'Arugula', isSpecialty: false },
+    'Astro Arugula':      { commonName: 'Arugula', isSpecialty: false },
+    'Arugula':            { commonName: 'Arugula', isSpecialty: false },
+    'Wild Arugula':       { commonName: 'Arugula', isSpecialty: true },
+    'Red Arugula':        { commonName: 'Arugula', isSpecialty: true },
+    'Wasabi Arugula':     { commonName: 'Arugula', isSpecialty: true },
+
+    // Basil family
+    'Genovese Basil':     { commonName: 'Basil', isSpecialty: false },
+    'Sweet Basil':        { commonName: 'Basil', isSpecialty: false },
+    'Basil':              { commonName: 'Basil', isSpecialty: false },
+    'Thai Basil':         { commonName: 'Basil', isSpecialty: true },
+    'Holy Basil':         { commonName: 'Basil', isSpecialty: true },
+    'Lemon Basil':        { commonName: 'Basil', isSpecialty: true },
+    'Purple Basil':       { commonName: 'Basil', isSpecialty: true },
+
+    // Lettuce family
+    'Butterhead Lettuce':   { commonName: 'Lettuce', isSpecialty: false },
+    'Buttercrunch Lettuce': { commonName: 'Lettuce', isSpecialty: false },
+    'Bibb Butterhead':      { commonName: 'Lettuce', isSpecialty: false },
+    'Romaine Lettuce':      { commonName: 'Romaine', isSpecialty: false },
+    'Parris Island Cos Romaine': { commonName: 'Romaine', isSpecialty: false },
+    'Red Leaf Lettuce':     { commonName: 'Lettuce', isSpecialty: false },
+    'Lettuce':              { commonName: 'Lettuce', isSpecialty: false },
+    'Mixed Lettuce':        { commonName: 'Mixed Greens', isSpecialty: false },
+    'Oak Leaf Lettuce':     { commonName: 'Mixed Greens', isSpecialty: true },
+    'Salad Bowl Oakleaf':   { commonName: 'Mixed Greens', isSpecialty: true },
+    'Escarole Batavian':    { commonName: 'Mixed Greens', isSpecialty: true },
+
+    // Kale family
+    'Curly Kale':         { commonName: 'Kale', isSpecialty: false },
+    'Baby Kale':          { commonName: 'Kale', isSpecialty: false },
+    'Kale':               { commonName: 'Kale', isSpecialty: false },
+    'Lacinato Kale':      { commonName: 'Kale', isSpecialty: true },
+    'Dinosaur Kale':      { commonName: 'Kale', isSpecialty: true },
+    'Red Russian Kale':   { commonName: 'Kale', isSpecialty: true },
+
+    // Herbs
+    'Italian Parsley':    { commonName: 'Parsley', isSpecialty: false },
+    'Parsley':            { commonName: 'Parsley', isSpecialty: false },
+    'Santo Cilantro':     { commonName: 'Cilantro', isSpecialty: false },
+    'Cilantro':           { commonName: 'Cilantro', isSpecialty: false },
+    'Dill Bouquet':       { commonName: 'Dill', isSpecialty: false },
+    'Dill':               { commonName: 'Dill', isSpecialty: false },
+    'Common Thyme':       { commonName: 'Thyme', isSpecialty: false },
+    'Thyme':              { commonName: 'Thyme', isSpecialty: false },
+    'French Tarragon':    { commonName: 'Tarragon', isSpecialty: true },
+    'Greek Oregano':      { commonName: 'Oregano', isSpecialty: false },
+    'Oregano':            { commonName: 'Oregano', isSpecialty: false },
+    'Rosemary':           { commonName: 'Rosemary', isSpecialty: false },
+    'Sage':               { commonName: 'Sage', isSpecialty: false },
+    'Marjoram':           { commonName: 'Marjoram', isSpecialty: true },
+    'Chervil':            { commonName: 'Chervil', isSpecialty: true },
+    'Lemon Balm':         { commonName: 'Lemon Balm', isSpecialty: true },
+    'Lovage':             { commonName: 'Lovage', isSpecialty: true },
+    'Kentucky Colonel Spearmint': { commonName: 'Mint', isSpecialty: true },
+    'Sorrel':             { commonName: 'Sorrel', isSpecialty: true },
+
+    // Asian greens
+    'Mei Qing Pak Choi':    { commonName: 'Bok Choy', isSpecialty: false },
+    'Pak Choi':             { commonName: 'Bok Choy', isSpecialty: false },
+    'Bok Choy':             { commonName: 'Bok Choy', isSpecialty: false },
+    'Tatsoi':               { commonName: 'Mixed Greens', isSpecialty: true },
+    'Mizuna Mustard Greens':{ commonName: 'Mixed Greens', isSpecialty: true },
+    'Komatsuna Mustard Spinach': { commonName: 'Mixed Greens', isSpecialty: true },
+
+    // Specialty greens
+    'Watercress':         { commonName: 'Watercress', isSpecialty: false },
+    'Fris\u00e9e Endive':  { commonName: 'Mixed Greens', isSpecialty: true },
+    'Bloomsdale Spinach': { commonName: 'Spinach', isSpecialty: false },
+    'Spinach':            { commonName: 'Spinach', isSpecialty: false },
+    'Fordhook Giant Swiss Chard': { commonName: 'Swiss Chard', isSpecialty: false },
+    'Swiss Chard':        { commonName: 'Swiss Chard', isSpecialty: false },
+
+    // Strawberries
+    'Albion':             { commonName: 'Strawberry', isSpecialty: false },
+    'Chandler':           { commonName: 'Strawberry', isSpecialty: false },
+    'Eversweet':          { commonName: 'Strawberry', isSpecialty: false },
+    'Fort Laramie':       { commonName: 'Strawberry', isSpecialty: false },
+    'Jewel':              { commonName: 'Strawberry', isSpecialty: false },
+    'Mara de Bois':       { commonName: 'Strawberry', isSpecialty: true },
+    'Monterey':           { commonName: 'Strawberry', isSpecialty: false },
+    'Ozark Beauty':       { commonName: 'Strawberry', isSpecialty: false },
+    'Seascape':           { commonName: 'Strawberry', isSpecialty: false },
+    'Sequoia':            { commonName: 'Strawberry', isSpecialty: false },
+    'Tristar':            { commonName: 'Strawberry', isSpecialty: false },
+
+    // Tomatoes
+    'Sun Gold':           { commonName: 'Cherry Tomato', isSpecialty: false },
+    'Better Boy':         { commonName: 'Tomato', isSpecialty: false },
+    'Brandywine':         { commonName: 'Tomato', isSpecialty: true },
+    'Celebrity':          { commonName: 'Tomato', isSpecialty: false },
+    'Heatmaster F1':      { commonName: 'Tomato', isSpecialty: false },
+    'San Marzano':       { commonName: 'Tomato', isSpecialty: true },
+    'Tribute':            { commonName: 'Tomato', isSpecialty: false }
+};
+
+// Resolve classification for any crop name, with fuzzy fallback
+function classifyCrop(cropName) {
+    if (!cropName) return { commonName: cropName, isSpecialty: true };
+    // Exact match
+    const exact = cropClassification[cropName];
+    if (exact) return exact;
+    // Fuzzy: check if any classification key appears as substring
+    const norm = String(cropName).toLowerCase().trim();
+    for (const [key, val] of Object.entries(cropClassification)) {
+        const kn = key.toLowerCase();
+        if (norm.includes(kn) || kn.includes(norm)) return val;
+    }
+    // Unknown variety: treat as specialty, use crop name itself as common name
+    // Try to extract a common name from the variety name
+    const words = cropName.split(/\s+/);
+    if (words.length > 1) {
+        const lastWord = words[words.length - 1];
+        const candidate = cropClassification[lastWord];
+        if (candidate) return { commonName: candidate.commonName, isSpecialty: true };
+    }
+    return { commonName: cropName, isSpecialty: true };
+}
+
+// Get stored specialty delta for a crop (learned from grower adjustments)
+function getSpecialtyDelta(cropName) {
+    try {
+        const deltas = JSON.parse(localStorage.getItem(AI_SPECIALTY_DELTA_KEY) || '{}');
+        const entry = deltas[cropName];
+        if (!entry || !entry.samples || entry.samples < 2) return null;
+        return { avgDeltaPercent: entry.avgDeltaPercent, samples: entry.samples };
+    } catch { return null; }
+}
+
+// Record a specialty delta when grower adjusts a specialty crop price
+function recordSpecialtyDelta(cropName, commonRecommendation, growerPrice) {
+    if (!cropName || !commonRecommendation || commonRecommendation <= 0) return;
+    const deltaPercent = ((growerPrice - commonRecommendation) / commonRecommendation) * 100;
+    try {
+        const deltas = JSON.parse(localStorage.getItem(AI_SPECIALTY_DELTA_KEY) || '{}');
+        const existing = deltas[cropName] || { avgDeltaPercent: 0, samples: 0 };
+        const newSamples = existing.samples + 1;
+        // Running average
+        const newAvg = ((existing.avgDeltaPercent * existing.samples) + deltaPercent) / newSamples;
+        deltas[cropName] = {
+            avgDeltaPercent: Math.round(newAvg * 100) / 100,
+            samples: newSamples,
+            lastUpdated: new Date().toISOString()
+        };
+        localStorage.setItem(AI_SPECIALTY_DELTA_KEY, JSON.stringify(deltas));
+    } catch { /* localStorage full or unavailable */ }
+}
+
 // Current USD to CAD exchange rate (updated during analysis)
 let currentExchangeRate = 1.35; // Default rate
 
-// Market data based on organic produce pricing research (Dec 2025)
-// Pricing sourced from Whole Foods, Sprouts, Trader Joe's, and farmers markets
+// Market data based on packaged retail (non-organic) greens pricing research (Dec 2025)
+// Pricing sourced from Whole Foods, Sprouts, Trader Joes, and major grocers
+// The 5% premium markup accounts for organic premium over these non-organic comparables
 const marketDataSources = {
     // Lettuce varieties
     'Butterhead Lettuce': {
@@ -1895,6 +2059,153 @@ const marketDataSources = {
         country: 'USA',
         articles: []
     }
+
+    // Premium mixed greens (used as fallback for specialty greens not sold standalone)
+    'Mixed Greens': {
+        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 6.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Romaine (packaged hearts / chopped)
+    'Romaine': {
+        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro', 'Sobeys'],
+        avgPriceUSD: 3.99,
+        avgWeightOz: 10,
+        priceRange: [2.99, 4.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Spinach (packaged baby spinach)
+    'Spinach': {
+        retailers: ['Whole Foods', 'Trader Joes', 'Kroger', 'Loblaws', 'Metro'],
+        avgPriceUSD: 4.49,
+        avgWeightOz: 5,
+        priceRange: [3.49, 5.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Swiss Chard (bunch)
+    'Swiss Chard': {
+        retailers: ['Whole Foods', 'Sprouts', 'Farm Boy', 'Farmers Markets'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 12,
+        priceRange: [2.49, 4.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Bok Choy (packaged)
+    'Bok Choy': {
+        retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
+        avgPriceUSD: 2.99,
+        avgWeightOz: 12,
+        priceRange: [1.99, 3.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Common packaged herbs
+    'Parsley': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 2.49,
+        avgWeightOz: 0.75,
+        priceRange: [1.99, 2.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Cilantro': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 1.99,
+        avgWeightOz: 0.75,
+        priceRange: [1.49, 2.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Dill': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 2.49,
+        avgWeightOz: 0.75,
+        priceRange: [1.99, 2.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Thyme': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 0.5,
+        priceRange: [2.49, 3.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Tarragon': {
+        retailers: ['Whole Foods', 'Specialty Stores'],
+        avgPriceUSD: 3.99,
+        avgWeightOz: 0.5,
+        priceRange: [2.99, 4.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Oregano': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 2.99,
+        avgWeightOz: 0.5,
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Mint': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 2.99,
+        avgWeightOz: 0.75,
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Strawberry': {
+        retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro'],
+        avgPriceUSD: 5.99,
+        priceRange: [4.49, 7.99],
+        trend: 'stable',
+        country: 'North America',
+        comparisonUnit: 'pint',
+        articles: []
+    },
+    'Cherry Tomato': {
+        retailers: ['Whole Foods', 'Sprouts', 'Trader Joes', 'Loblaws', 'Metro'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 10,
+        priceRange: [3.99, 5.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+    'Tomato': {
+        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro'],
+        avgPriceUSD: 2.49,
+        priceRange: [1.49, 3.49],
+        trend: 'stable',
+        country: 'North America',
+        comparisonUnit: 'unit',
+        articles: []
+    }
 };
 
 // Fallback categories for crops introduced after initial market dataset buildout.
@@ -2090,22 +2401,51 @@ async function fetchExchangeRate() {
 function resolveMarketDataForCrop(cropName) {
     if (!cropName) return null;
 
+    // Tier 1: Exact match by full variety name
     const exact = marketDataSources[cropName];
     if (exact) return exact;
 
+    // Tier 2: Use crop classification to find common name
+    const classification = classifyCrop(cropName);
+    const commonName = classification.commonName;
+
+    // Try exact match on common name
+    if (commonName && marketDataSources[commonName]) {
+        return marketDataSources[commonName];
+    }
+
+    // Tier 3: Fuzzy alias fallback
     const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
     const aliasChecks = [
-        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
-        { test: ['romaine'], key: 'Romaine Lettuce' },
-        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
-        { test: ['oakleaf', 'oak leaf', 'salad bowl'], key: 'Oak Leaf Lettuce' },
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Lettuce' },
+        { test: ['romaine', 'cos'], key: 'Romaine' },
+        { test: ['red leaf'], key: 'Lettuce' },
+        { test: ['oakleaf', 'oak leaf', 'salad bowl', 'escarole', 'batavian'], key: 'Mixed Greens' },
         { test: ['lettuce', 'salad'], key: 'Lettuce' },
         { test: ['arugula', 'rocket'], key: 'Arugula' },
-        { test: ['basil', 'genovese', 'thai basil', 'purple basil', 'lemon basil', 'holy basil'], key: 'Basil' },
+        { test: ['basil', 'genovese'], key: 'Basil' },
         { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
-        { test: ['frisee', 'frisée', 'endive'], key: 'Frisée Endive' },
-        { test: ['watercress'], key: 'Watercress' }
+        { test: ['frisee', 'fris\u00e9e', 'endive'], key: 'Mixed Greens' },
+        { test: ['watercress'], key: 'Watercress' },
+        { test: ['spinach', 'bloomsdale'], key: 'Spinach' },
+        { test: ['chard'], key: 'Swiss Chard' },
+        { test: ['pak choi', 'bok choy'], key: 'Bok Choy' },
+        { test: ['tatsoi', 'mizuna', 'komatsuna', 'mustard'], key: 'Mixed Greens' },
+        { test: ['parsley'], key: 'Parsley' },
+        { test: ['cilantro'], key: 'Cilantro' },
+        { test: ['dill'], key: 'Dill' },
+        { test: ['thyme'], key: 'Thyme' },
+        { test: ['tarragon'], key: 'Tarragon' },
+        { test: ['oregano'], key: 'Oregano' },
+        { test: ['rosemary'], key: 'Rosemary' },
+        { test: ['sage'], key: 'Sage' },
+        { test: ['mint', 'spearmint', 'peppermint'], key: 'Mint' },
+        { test: ['sorrel'], key: 'Mixed Greens' },
+        { test: ['lemon balm'], key: 'Mint' },
+        { test: ['lovage'], key: 'Parsley' },
+        { test: ['chervil'], key: 'Parsley' },
+        { test: ['marjoram'], key: 'Oregano' }
     ];
 
     for (const alias of aliasChecks) {
@@ -2114,15 +2454,16 @@ function resolveMarketDataForCrop(cropName) {
         }
     }
 
-    // Unit-aware fallbacks for newer crop categories.
+    // Unit-aware fallbacks for newer crop categories
     if (normalized.includes('sun gold') || normalized.includes('cherry tomato')) {
-        return marketCategoryFallbacks.cherryTomatoWeight;
+        return marketDataSources['Cherry Tomato'] || marketCategoryFallbacks.cherryTomatoWeight;
     }
 
     const cropUnit = getCropUnit(cropName);
-    if (cropUnit === 'pint') return marketCategoryFallbacks.strawberryPint;
-    if (cropUnit === 'unit') return marketCategoryFallbacks.largeTomatoUnit;
+    if (cropUnit === 'pint') return marketDataSources['Strawberry'] || marketCategoryFallbacks.strawberryPint;
+    if (cropUnit === 'unit') return marketDataSources['Tomato'] || marketCategoryFallbacks.largeTomatoUnit;
 
+    // Final fuzzy match against marketDataSources keys
     const fuzzyKey = Object.keys(marketDataSources).find((key) => {
         const keyNormalized = key.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
         return normalized.includes(keyNormalized) || keyNormalized.includes(normalized);
@@ -2207,9 +2548,7 @@ function generateRecommendations() {
         (pricingData || []).map(item => [item.crop, item])
     );
 
-    // Analyze full recipe universe: market-supported recipes + current pricing recipes
-    // Deduplicate: if a marketDataSources key and a pricingData name resolve to the
-    // same market source, keep only the pricingData name (the farm's actual crop name).
+    // Deduplicate: farm crops take priority over generic market keys
     const seenMarketKeys = new Set();
     const analysisCrops = [];
 
@@ -2241,16 +2580,46 @@ function generateRecommendations() {
         const currentPrice = Number(pricingItem?.retail ?? defaultItem?.retail ?? marketAvg);
         const difference = marketAvg > 0 ? ((currentPrice - marketAvg) / marketAvg * 100) : 0;
 
-        // Policy: all retail recommendations include a 5% premium over NA market average.
-        const recommendation = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+        // Classify crop: common vs specialty
+        const classification = classifyCrop(cropName);
+        const isSpecialty = classification.isSpecialty;
+        const commonName = classification.commonName;
+
+        // Check for learned specialty delta
+        let learnedDelta = null;
+        let recommendation;
+        if (isSpecialty) {
+            learnedDelta = getSpecialtyDelta(cropName);
+        }
+
+        if (isSpecialty && learnedDelta) {
+            // Apply learned delta on top of the common-name recommendation
+            const baseRec = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+            recommendation = baseRec * (1 + learnedDelta.avgDeltaPercent / 100);
+        } else {
+            // Standard: 5% premium over non-organic market average
+            recommendation = marketAvg * (1 + AI_PREMIUM_MARKUP_RATE);
+        }
+
         const recommendedDelta = currentPrice > 0 ? ((recommendation - currentPrice) / currentPrice * 100) : (recommendation > 0 ? 100 : 0);
         const priceChangeType = recommendedDelta > 0 ? 'up' : recommendedDelta < 0 ? 'down' : 'stable';
 
-        let reasoning = `Aggregated North America market pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
-        reasoning += `Applying the premium product policy adds ${(AI_PREMIUM_MARKUP_RATE * 100).toFixed(0)}%, yielding a recommended retail of $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
+        // Build reasoning
+        let reasoning = '';
+        if (isSpecialty && learnedDelta) {
+            reasoning += `${cropName} is a specialty variety (based on ${commonName} pricing). `;
+            reasoning += `Your pricing history shows a ${learnedDelta.avgDeltaPercent > 0 ? '+' : ''}${learnedDelta.avgDeltaPercent.toFixed(1)}% adjustment from common pricing (${learnedDelta.samples} data points). `;
+            reasoning += `Base ${commonName} market avg: $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
+        } else if (isSpecialty) {
+            reasoning += `${cropName} is a specialty variety not commonly sold as a standalone packaged product. `;
+            reasoning += `Recommendation is based on ${commonName} packaged retail pricing ($${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} CAD). `;
+            reasoning += `Review and adjust -- as you update, the system learns your specialty premium. `;
+        } else {
+            reasoning += `Aggregated North America packaged retail pricing suggests ${cropName} averages $${marketAvg.toFixed(2)}${normalizedMarket.comparisonUnitLabel} (CAD). `;
+        }
+        reasoning += `Applying the ${(AI_PREMIUM_MARKUP_RATE * 100).toFixed(0)}% organic premium yields $${recommendation.toFixed(2)}${normalizedMarket.comparisonUnitLabel}. `;
         reasoning += `Your current price is ${Math.abs(difference).toFixed(1)}% ${difference >= 0 ? 'above' : 'below'} market average.`;
 
-        // Preserve AI context from backend, but enforce premium pricing policy.
         if (marketData._aiReasoning) {
             reasoning = `AI context: ${marketData._aiReasoning} ` + reasoning;
         }
@@ -2278,6 +2647,9 @@ function generateRecommendations() {
             aiConfidence: marketData._aiConfidence || null,
             dataSource: marketData._dataSource || 'static',
             observationCount: marketData._observationCount || 0,
+            isSpecialty: isSpecialty,
+            commonName: commonName,
+            learnedDelta: learnedDelta,
             timestamp: Date.now()
         });
     });
@@ -2285,9 +2657,6 @@ function generateRecommendations() {
     return recommendations;
 }
 
-/**
- * Display recommendations
- */
 function displayRecommendations(recommendations) {
     const contentDiv = document.getElementById('ai-recommendations-content');
     const recommendationsDiv = document.getElementById('ai-recommendations');
@@ -2329,7 +2698,9 @@ function displayRecommendations(recommendations) {
         return `
             <div class="recommendation-card ${hasSignificantChange ? 'updated' : ''}">
                 <div class="recommendation-header">
-                    <div class="crop-title">${rec.crop}${sourceBadge}${aiBadge}</div>
+                    <div class="crop-title">${rec.crop}${sourceBadge}${aiBadge}${rec.isSpecialty
+                        ? '<span style="padding: 2px 6px; background: rgba(245,158,11,0.2); color: #f59e0b; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px;" title="Specialty variety -- recommendation based on ' + rec.commonName + ' pricing. Review recommended.">SPECIALTY</span>'
+                        : ''}</div>
                     ${hasSignificantChange ?
                         `<span style="padding: 4px 8px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-radius: 4px; font-size: 12px; font-weight: 600;">UPDATE RECOMMENDED</span>`
                         : ''}
@@ -2394,6 +2765,17 @@ function displayRecommendations(recommendations) {
                 <div class="market-insight">
                     <strong>Market Insight:</strong> ${rec.reasoning}
                 </div>
+
+                ${rec.isSpecialty && !rec.learnedDelta ? `
+                <div style="padding: 8px 12px; margin-bottom: 8px; background: rgba(245,158,11,0.08); border-left: 3px solid #f59e0b; border-radius: 0 4px 4px 0; font-size: 12px; color: var(--text-secondary);">
+                    <strong>Specialty variety:</strong> ${rec.crop} is not commonly sold as a standalone packaged product. This recommendation uses <strong>${rec.commonName}</strong> retail pricing as a baseline. Please review and adjust -- your adjustments will train the system automatically.
+                </div>
+                ` : ''}
+                ${rec.isSpecialty && rec.learnedDelta ? `
+                <div style="padding: 8px 12px; margin-bottom: 8px; background: rgba(34,197,94,0.08); border-left: 3px solid #22c55e; border-radius: 0 4px 4px 0; font-size: 12px; color: var(--text-secondary);">
+                    <strong>Learned adjustment:</strong> Based on your ${rec.learnedDelta.samples} previous pricing decisions, a ${rec.learnedDelta.avgDeltaPercent > 0 ? '+' : ''}${rec.learnedDelta.avgDeltaPercent.toFixed(1)}% specialty adjustment has been applied over ${rec.commonName} base pricing.
+                </div>
+                ` : ''}
 
                 <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
                     <strong>Retailers surveyed:</strong> ${(rec.retailers || []).length > 0 ? rec.retailers.join(', ') : 'N/A'}
@@ -2500,6 +2882,16 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
         } catch (e) {
             console.warn('Decision recording failed:', e.message);
         }
+
+        // Record specialty delta if this is a specialty crop being manually priced
+        try {
+            const cached = JSON.parse(localStorage.getItem(AI_PRICING_KEY) || '[]');
+            const recEntry = cached.find(r => r.crop === pricingData[index].crop);
+            if (recEntry && recEntry.isSpecialty && recEntry.marketAverage > 0) {
+                const baseRec = recEntry.marketAverage * (1 + AI_PREMIUM_MARKUP_RATE);
+                recordSpecialtyDelta(pricingData[index].crop, baseRec, recommendedPrice);
+            }
+        } catch (e) { /* delta recording is best-effort */ }
 
         showPricingToast(`Updated ${pricingData[index].crop} to $${recommendedPrice.toFixed(2)} — saved`);
     } else {
