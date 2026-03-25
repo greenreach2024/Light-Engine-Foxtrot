@@ -255,15 +255,7 @@
           const buyer = result.data?.buyer;
           if (buyer) {
             this.token = token;
-            this.currentBuyer = {
-              id: buyer.id,
-              businessName: buyer.business_name,
-              contactName: buyer.contact_name,
-              email: buyer.email,
-              buyerType: buyer.buyer_type,
-              phone: buyer.phone,
-              location: buyer.location || {}
-            };
+            this.currentBuyer = this.normalizeBuyer(buyer);
             this.updateBuyerProfile();
             this.populateCheckoutForm();
           }
