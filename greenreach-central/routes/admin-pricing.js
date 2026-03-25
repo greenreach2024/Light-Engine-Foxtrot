@@ -1186,6 +1186,16 @@ router.get('/current-prices', (req, res) => {
       merged[c.crop] = existing;
     }
 
+
+    // Auto-compute wholesale from retail for crops missing wholesale pricing
+    const defaultSkuFactor = 0.65;
+    for (const entry of Object.values(merged)) {
+      if (entry.retailPerLb > 0 && !entry.wholesalePerLb) {
+        entry.wholesalePerLb = Math.round(entry.retailPerLb * defaultSkuFactor * 100) / 100;
+        entry.wholesaleSource = 'computed';
+      }
+    }
+
     const prices = Object.values(merged).sort((a, b) => {
       // Active crops first, then alphabetical
       if (a.active !== b.active) return a.active ? -1 : 1;
