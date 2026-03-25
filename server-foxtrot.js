@@ -13399,13 +13399,24 @@ import pg from 'pg';
 
 // Initialize PostgreSQL pool for purchase flow (only if DB credentials provided)
 let dbPool = null;
-if (process.env.DB_HOST && process.env.DB_NAME) {
+const dbHost = process.env.DB_HOST || process.env.RDS_HOSTNAME;
+const dbName = process.env.DB_NAME || process.env.RDS_DB_NAME;
+if (process.env.DATABASE_URL) {
   dbPool = new pg.Pool({
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT) || 5432,
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+  console.log('[DB] PostgreSQL pool initialized via DATABASE_URL');
+} else if (dbHost && dbName) {
+  dbPool = new pg.Pool({
+    host: dbHost,
+    port: parseInt(process.env.DB_PORT || process.env.RDS_PORT) || 5432,
+    database: dbName,
+    user: process.env.DB_USER || process.env.RDS_USERNAME,
+    password: process.env.DB_PASSWORD || process.env.RDS_PASSWORD,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     max: 20,
     idleTimeoutMillis: 30000,
