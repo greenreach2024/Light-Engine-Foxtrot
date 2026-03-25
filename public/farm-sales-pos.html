@@ -461,7 +461,7 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <link rel="stylesheet" href="/styles/farm-assistant.css?v=20260318c">
 </head>
 <body>
   <!-- Login Screen -->
@@ -765,7 +765,6 @@
     let farmId = null;
     let farmName = null;
     let userRole = null;
-    let isDemoModeSession = false;
     let cart = [];
     let inventory = [];
     let currentAssignSku = null;
@@ -773,54 +772,6 @@
     // Square Payment State
     let squarePayments = null;
     let squareCard = null;
-
-    async function resolveConfiguredFarmContext() {
-      const response = await fetch('/api/config/app');
-      const config = await response.json();
-      const configuredFarmId = config.farmId || config.farm_id;
-      if (!configuredFarmId) {
-        throw new Error('Missing farm configuration (farmId)');
-      }
-      return {
-        farmId: configuredFarmId,
-        farmName: config.farmName || config.farm_name || configuredFarmId
-      };
-    }
-
-    async function issueFarmTokenForRole(targetFarmId, targetRole = 'manager') {
-      if (!targetFarmId) {
-        throw new Error('Cannot issue token without farm_id');
-      }
-
-      if (isDemoModeSession) {
-        try {
-          const demoResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(targetFarmId)}`);
-          const demoData = await demoResponse.json();
-          if (demoData.ok && demoData.tokens && demoData.tokens[targetFarmId]?.[targetRole]) {
-            return demoData.tokens[targetFarmId][targetRole];
-          }
-        } catch (error) {
-          console.warn('[auth] Demo token issuance failed, falling back to login:', error.message);
-        }
-      }
-
-      const loginResponse = await fetch('/api/farm-auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          farm_id: targetFarmId,
-          email: `${targetRole}@pos.local`,
-          password: 'pos-terminal'
-        })
-      });
-
-      const loginData = await loginResponse.json();
-      if (!loginResponse.ok || !loginData.ok || !loginData.token) {
-        throw new Error(loginData.message || loginData.error || 'Unable to issue auth token');
-      }
-
-      return loginData.token;
-    }
     
     // API helper
     async function api(endpoint, options = {}) {
@@ -896,18 +847,33 @@
           console.log('[Login] Using farm from navigation context:', farmId);
         } else {
           // Fallback: Get current farm from Light Engine API
-          const configuredFarm = await resolveConfiguredFarmContext();
-          farmId = configuredFarm.farmId;
-          farmName = configuredFarm.farmName;
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
+          farmName = config.farmName || config.farm_name || 'Light Engine Farm';
         }
         
         userRole = selectedRole;
         
-        token = await issueFarmTokenForRole(farmId, selectedRole);
+        // Try to get demo tokens (works in dev/demo mode)
+        try {
+          const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(farmId)}`);
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens[selectedRole] || tokensData.tokens.pos;
+          }
+        } catch (tokenError) {
+          console.log('[Login] Demo tokens not available (production mode), proceeding without token');
+          // In production, we can proceed without token for display-only mode
+          token = null;
+        }
         
         // Save to localStorage
         if (token) {
           localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
         }
         localStorage.setItem('farm_id', farmId);
         localStorage.setItem('farm_name', farmName);
@@ -961,10 +927,15 @@
       if (!token || isTokenExpired(token)) {
         console.log('[auth] Token expired, refreshing...');
         try {
-          token = await issueFarmTokenForRole(farmId, userRole || 'manager');
-          localStorage.setItem('farm_token', token);
-          console.log('[auth] Token refreshed successfully');
-          return true;
+          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensData = await tokensResponse.json();
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens[userRole] || tokensData.tokens.pos;
+            localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
+            console.log('[auth] Token refreshed successfully');
+            return true;
+          }
         } catch (error) {
           console.error('[auth] Failed to refresh token:', error);
           return false;
@@ -977,7 +948,6 @@
     window.addEventListener('DOMContentLoaded', async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const isDemoMode = urlParams.get('demo') === '1' || urlParams.get('demo') === 'true';
-      isDemoModeSession = isDemoMode;
       
       // Priority 1: URL parameters (from navigation)
       const urlFarmSlug = urlParams.get('farm');
@@ -1020,19 +990,26 @@
       if (targetFarmId && targetFarmId !== savedFarmId) {
         console.log('[POS] New farm context detected, authenticating for:', targetFarmId);
         try {
-          token = await issueFarmTokenForRole(targetFarmId, 'manager');
-          farmId = targetFarmId;
-          farmName = targetFarmName || targetFarmId;
-          userRole = 'manager';
-
-          localStorage.setItem('farm_token', token);
-          localStorage.setItem('farm_id', farmId);
-          localStorage.setItem('farm_name', farmName);
-          localStorage.setItem('user_role', userRole);
-
-          console.log('[POS] Auto-authenticated for farm:', farmName);
-          showApp();
-          return;
+          // Get token for the target farm with query param for dynamic token generation
+          const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(targetFarmId)}`);
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens['manager'] || tokensData.tokens.admin || tokensData.tokens.pos;
+            farmId = targetFarmId;
+            farmName = targetFarmName || targetFarmId;
+            userRole = 'manager';
+            
+            localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
+            localStorage.setItem('farm_id', farmId);
+            localStorage.setItem('farm_name', farmName);
+            localStorage.setItem('user_role', userRole);
+            
+            console.log('[POS] Auto-authenticated for farm:', farmName);
+            showApp();
+            return;
+          }
         } catch (error) {
           console.warn('[POS] Auto-auth failed for target farm:', error.message);
           // Fall through to existing logic
@@ -1061,8 +1038,17 @@
           // Check if token expired and refresh
           if (isTokenExpired(token)) {
             console.log('[auth] Saved token expired, refreshing...');
-            token = await issueFarmTokenForRole(farmId, userRole || 'manager');
-            localStorage.setItem('farm_token', token);
+            const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+            const tokensData = await tokensResponse.json();
+            if (tokensData.success && tokensData.tokens) {
+              token = tokensData.tokens[userRole] || tokensData.tokens.pos;
+              localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
+            } else {
+              // Can't refresh, require re-login
+              localStorage.clear();
+              return;
+            }
           }
           
           showApp();
@@ -1074,20 +1060,28 @@
         // Auto-login for demo mode
         console.log('[Demo] Auto-logging in farm sales terminal');
         try {
-          const configuredFarm = await resolveConfiguredFarmContext();
-          farmId = configuredFarm.farmId;
-          farmName = configuredFarm.farmName;
+          const response = await fetch('/api/config/app');
+          const config = await response.json();
+          
+          farmId = config.farmId || config.farm_id || 'FARM-LOCAL';
+          farmName = config.farmName || config.farm_name || 'Light Engine Farm';
           userRole = 'manager';
-
-          token = await issueFarmTokenForRole(farmId, 'manager');
-
-          localStorage.setItem('farm_token', token);
-          localStorage.setItem('farm_id', farmId);
-          localStorage.setItem('farm_name', farmName);
-          localStorage.setItem('user_role', userRole);
-
-          console.log('[Demo] Auto-logged in as:', userRole);
-          showApp();
+          
+          const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
+          const tokensData = await tokensResponse.json();
+          
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens['manager'] || tokensData.tokens.admin || tokensData.tokens.pos;
+            
+            localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
+            localStorage.setItem('farm_id', farmId);
+            localStorage.setItem('farm_name', farmName);
+            localStorage.setItem('user_role', userRole);
+            
+            console.log('[Demo] Auto-logged in as:', userRole);
+            showApp();
+          }
         } catch (error) {
           console.error('[Demo] Auto-login failed:', error);
         }
@@ -1135,7 +1129,20 @@
           });
           console.log('[POS] Loaded', data.farms.length, 'farms for selector');
         } else {
-          farmSelect.innerHTML = '<option value="">-- No farms available --</option>';
+          // Fallback to demo tokens as farm list
+          const demoResponse = await fetch('/api/farm-auth/demo-tokens');
+          const demoData = await demoResponse.json();
+          
+          if (demoData.ok && demoData.tokens) {
+            Object.entries(demoData.tokens).forEach(([id, info]) => {
+              const option = document.createElement('option');
+              option.value = id;
+              option.textContent = info.farm_name || id;
+              option.dataset.slug = info.slug || '';
+              farmSelect.appendChild(option);
+            });
+            console.log('[POS] Loaded', Object.keys(demoData.tokens).length, 'farms from demo tokens');
+          }
         }
       } catch (error) {
         console.warn('[POS] Failed to load farms for selector:', error.message);
@@ -1567,6 +1574,6 @@
       }
     }
   </script>
-  <script src="/js/farm-assistant.js?v=20260318e"></script>
+  <script src="/js/farm-assistant.js?v=20260319b"></script>
 </body>
 </html>

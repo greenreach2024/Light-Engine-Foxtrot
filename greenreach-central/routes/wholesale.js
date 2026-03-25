@@ -2406,8 +2406,9 @@ router.delete('/network/farms/:farmId', adminAuthMiddleware, async (req, res, ne
   }
 });
 
-router.get('/network/snapshots', (req, res) => {
-  return res.json({ status: 'ok', data: { snapshots: listNetworkSnapshots() } });
+router.get('/network/snapshots', async (req, res) => {
+  const snapshots = await listNetworkSnapshots();
+  return res.json({ status: 'ok', data: { snapshots } });
 });
 
 router.get('/network/aggregate', async (req, res) => {

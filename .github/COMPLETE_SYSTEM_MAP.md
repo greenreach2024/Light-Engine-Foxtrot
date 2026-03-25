@@ -2085,7 +2085,7 @@ removed_at: null, removal_reason: null, group_id
 5. Create Experiment Record in harvestOutcomesDB (crop, grow_days, weight_per_plant_oz, zone)
 6. Create Traceability Record in trace-records.json (SFCR-compliant, 2-year retention)
 7. Auto-print thermal label via POST /api/printer/print-harvest
-8. **DOES NOT** create or update farm_inventory (see Error E-010)
+8. Creates/updates farm_inventory via syncHarvest (E-010 RESOLVED v1.2.0)
 
 **Weigh-In Sampling**: 80% rate for unverified crops, 20% for verified crops
 
@@ -2217,7 +2217,7 @@ Usage/maintenance events stored in inventory_usage_log (audit trail with quantit
 | POST /api/sync/telemetry | Every 30s | None (environmental data only) |
 | POST /api/sync/groups | On group changes | Triggers recalculateAutoInventoryFromGroups() |
 | POST /api/sync/inventory | On manual inventory update | Upserts to products + farm_data + inMemoryStore |
-| (none) | On tray harvest | **NO SYNC EXISTS** (Error E-010) |
+| POST /api/sync/harvest | On tray harvest | Creates farm_inventory record via syncHarvest (E-010 RESOLVED) |
 
 ### 15.7 Wholesale Catalog Pipeline
 
@@ -2251,9 +2251,9 @@ GR-wholesale.html (buyer-facing catalog)
 | POST /api/wholesale/reserve | POST | Create TTL-based inventory hold |
 | POST /api/wholesale/release | POST | Release hold on checkout cancel |
 
-Reservations stored in NeDB with TTL (default 15 minutes). Availability check: `catalog_available - currently_reserved >= requested`. Reservations expire without converting to permanent deductions (Error E-013).
+Reservations stored in NeDB with TTL (default 15 minutes). Availability check: `catalog_available - currently_reserved >= requested`. Order fulfillment now permanently deducts from farm_inventory (E-013 RESOLVED v1.2.0).
 
-**wholesale-products.json**: Static test file with 6 hardcoded products. NOT dynamically updated. Some routes may read from this instead of the database (Error E-015).
+**wholesale-products.json**: Legacy static file (no longer used). Wholesale catalog now reads from farm_inventory database via buildAggregateCatalog() (E-015 RESOLVED v1.2.0).
 
 ### 15.8 POS Inventory Pipeline
 
@@ -2272,7 +2272,7 @@ POST /api/farm-sales/pos/checkout  (routes/farm-sales/pos.js)
   2. Calculates: subtotal, tax, delivery fees
   3. Creates order record
   4. Deducts from IN-MEMORY store only (farmStores.inventory Map)
-  5. DOES NOT update PostgreSQL farm_inventory (Error E-012)
+  5. Updates farm_inventory: sold_quantity_lbs += item.quantity (E-012 RESOLVED v1.2.0)
 ```
 
 ### 15.9 Central Monitoring
@@ -2324,7 +2324,7 @@ Source A: Tray Harvest (Actual Production)
     -> trace-records.json: SFCR traceability
     -> harvest-outcomes.db: experiment data
     -> thermal printer: label with lot code
-    -> farm_inventory: *** NOTHING *** (E-010)
+    -> farm_inventory: syncHarvest creates/updates record (E-010 RESOLVED)
 
 Source B: Theoretical Capacity (Groups Recalculation)
   groups.json -> POST /api/sync/groups -> Central receives
@@ -2351,7 +2351,7 @@ Consumer 1: Wholesale Catalog
     -> Shows aggregated SKUs across farms
     -> Buyer places order -> reservation (TTL 15 min)
     -> Order fulfilled -> status webhooks
-    -> farm_inventory: *** NOT REDUCED *** (E-013)
+    -> farm_inventory: sold_quantity_lbs deducted on fulfillment (E-013 RESOLVED)
 
 Consumer 2: POS (Point of Sale)
   GET /api/farm-sales/inventory
@@ -2359,7 +2359,7 @@ Consumer 2: POS (Point of Sale)
     -> Customer checkout -> POST /api/farm-sales/pos/checkout
     -> Validates availability -> creates order
     -> In-memory deduction only (lost on restart)
-    -> farm_inventory: *** NOT REDUCED *** (E-012)
+    -> farm_inventory: sold_quantity_lbs deducted on checkout (E-012 RESOLVED)
 
 Consumer 3: Central Admin Dashboard
   GET /api/inventory/current, /api/inventory/:farmId
@@ -2373,20 +2373,20 @@ Consumer 4: Central Forecast
 
 ### 15.12 Inventory Error Summary
 
-The inventory system has a broken pipeline where production data (actual harvests) never reaches the availability system (farm_inventory), and sales never deduct from availability. The full chain of errors:
+The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. The fixes ensure harvests flow to farm_inventory, sales deduct via sold_quantity_lbs, and the wholesale catalog reads from the database. Summary of resolved errors:
 
 | Step | Expected | Actual | Error |
 |------|----------|--------|-------|
-| Tray harvested | Creates farm_inventory record with actual weight | Only updates NeDB tray-runs | E-010 |
-| Auto quantity calculated | Reflects actual harvested amounts | Uses theoretical plant counts from groups | E-011 |
-| POS sale completed | Reduces farm_inventory permanently | In-memory deduction only (lost on restart) | E-012 |
-| Wholesale order fulfilled | Reduces farm_inventory permanently | No deduction at all | E-013 |
-| Groups resync triggers recalc | Preserves sales deductions | Overwrites auto_quantity_lbs from scratch | E-014 |
-| Wholesale catalog reads | From farm_inventory database | May read from static wholesale-products.json | E-015 |
+| Tray harvested | Creates farm_inventory record with actual weight | RESOLVED: syncHarvest creates farm_inventory record | E-010 |
+| Auto quantity calculated | Reflects actual harvested amounts | RESOLVED: formula preserves sold_quantity_lbs across recalculations | E-011 |
+| POS sale completed | Reduces farm_inventory permanently | RESOLVED: sold_quantity_lbs updated in PostgreSQL | E-012 |
+| Wholesale order fulfilled | Reduces farm_inventory permanently | RESOLVED: sold_quantity_lbs deducted on confirmation | E-013 |
+| Groups resync triggers recalc | Preserves sales deductions | RESOLVED: recalculation preserves sold_quantity_lbs | E-014 |
+| Wholesale catalog reads | From farm_inventory database | RESOLVED: reads from farm_inventory via buildAggregateCatalog | E-015 |
 
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.3.0
+**Document Version**: 1.4.0
 **Generated**: March 24, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

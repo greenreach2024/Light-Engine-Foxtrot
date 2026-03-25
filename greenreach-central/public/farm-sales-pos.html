@@ -861,8 +861,8 @@
           const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(farmId)}`);
           const tokensData = await tokensResponse.json();
           
-          if (tokensData.ok && tokensData.tokens && tokensData.tokens[farmId]) {
-            token = tokensData.tokens[farmId][selectedRole];
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens[selectedRole] || tokensData.tokens.pos;
           }
         } catch (tokenError) {
           console.log('[Login] Demo tokens not available (production mode), proceeding without token');
@@ -873,6 +873,7 @@
         // Save to localStorage
         if (token) {
           localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
         }
         localStorage.setItem('farm_id', farmId);
         localStorage.setItem('farm_name', farmName);
@@ -928,9 +929,10 @@
         try {
           const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
           const tokensData = await tokensResponse.json();
-          if (tokensData.ok && tokensData.tokens[farmId]) {
-            token = tokensData.tokens[farmId][userRole];
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens[userRole] || tokensData.tokens.pos;
             localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
             console.log('[auth] Token refreshed successfully');
             return true;
           }
@@ -992,13 +994,14 @@
           const tokensResponse = await fetch(`/api/farm-auth/demo-tokens?farm_id=${encodeURIComponent(targetFarmId)}`);
           const tokensData = await tokensResponse.json();
           
-          if (tokensData.ok && tokensData.tokens && tokensData.tokens[targetFarmId]) {
-            token = tokensData.tokens[targetFarmId]['manager'];
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens['manager'] || tokensData.tokens.admin || tokensData.tokens.pos;
             farmId = targetFarmId;
             farmName = targetFarmName || targetFarmId;
             userRole = 'manager';
             
             localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
             localStorage.setItem('farm_id', farmId);
             localStorage.setItem('farm_name', farmName);
             localStorage.setItem('user_role', userRole);
@@ -1037,9 +1040,10 @@
             console.log('[auth] Saved token expired, refreshing...');
             const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
             const tokensData = await tokensResponse.json();
-            if (tokensData.ok && tokensData.tokens[farmId]) {
-              token = tokensData.tokens[farmId][userRole];
+            if (tokensData.success && tokensData.tokens) {
+              token = tokensData.tokens[userRole] || tokensData.tokens.pos;
               localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
             } else {
               // Can't refresh, require re-login
               localStorage.clear();
@@ -1066,10 +1070,11 @@
           const tokensResponse = await fetch('/api/farm-auth/demo-tokens');
           const tokensData = await tokensResponse.json();
           
-          if (tokensData.ok && tokensData.tokens[farmId]) {
-            token = tokensData.tokens[farmId]['manager'] || tokensData.tokens[farmId]['staff'];
+          if (tokensData.success && tokensData.tokens) {
+            token = tokensData.tokens['manager'] || tokensData.tokens.admin || tokensData.tokens.pos;
             
             localStorage.setItem('farm_token', token);
+            localStorage.setItem('token', token);
             localStorage.setItem('farm_id', farmId);
             localStorage.setItem('farm_name', farmName);
             localStorage.setItem('user_role', userRole);

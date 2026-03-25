@@ -490,6 +490,15 @@ router.get('/farm-sales/subscriptions/plans', authMiddleware, (req, res) => {
   });
 });
 
+// ─── Donations & Programs ──────────────────────────────────
+router.get('/farm-sales/donations/programs', authMiddleware, (req, res) => {
+  res.json({
+    ok: true,
+    programs: [],
+    stats: { total_programs: 0, total_budget: 0, total_spent: 0, by_type: {} },
+  });
+});
+
 // ─── QuickBooks Integration ────────────────────────────────
 
 /**
