@@ -291,7 +291,7 @@ router.post('/create', async (req, res) => {
     // Get Square configuration (TODO: retrieve from database)
     const squareConfig = {
       squareAccessToken: process.env.SQUARE_ACCESS_TOKEN,
-      environment: process.env.SQUARE_ENVIRONMENT || 'sandbox',
+      environment: process.env.SQUARE_ENVIRONMENT || 'production',
       brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID
     };
     
@@ -475,12 +475,12 @@ router.post('/create', async (req, res) => {
           const provider = req.body.payment_provider || 'square';
           const providerConfig = provider === 'stripe'
             ? { stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'demo-stripe-key' }
-            : { squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo-token', environment: 'sandbox' };
+            : { squareAccessToken: process.env.SQUARE_ACCESS_TOKEN, environment: process.env.SQUARE_ENVIRONMENT || 'production' };
           const paymentProvider = PaymentProviderFactory.create(provider, providerConfig);
           if (typeof paymentProvider.refundPayment === 'function') {
             await paymentProvider.refundPayment({
               providerPaymentId: order.payment_id,
-              amountMoney: { amount: Math.round(order.total_amount * 100), currency: 'USD' },
+              amountMoney: { amount: Math.round(order.total_amount * 100), currency: process.env.PAYMENT_CURRENCY || 'CAD' },
               reason: 'Reservation rollback - partial farm failure',
               idempotencyKey: crypto.randomUUID()
             });
@@ -567,7 +567,7 @@ router.post('/farm-verify', async (req, res) => {
       farm_id,
       sub_order_id,
       action,
-      response_time,
+      response_time: response_time_ms,
       reason
     };
     
@@ -745,12 +745,12 @@ router.post('/buyer-review', async (req, res) => {
             const providerName = order.payment_provider || 'square';
             const providerConfig = providerName === 'stripe'
               ? { stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'demo-stripe-key' }
-              : { squareAccessToken: process.env.SQUARE_ACCESS_TOKEN || 'demo-token', environment: 'sandbox' };
+              : { squareAccessToken: process.env.SQUARE_ACCESS_TOKEN, environment: process.env.SQUARE_ENVIRONMENT || 'production' };
             const pp = PaymentProviderFactory.create(providerName, providerConfig);
             if (typeof pp.refundPayment === 'function') {
               await pp.refundPayment({
                 providerPaymentId: sub.payment_id,
-                amountMoney: { amount: Math.round(sub.total * 100), currency: 'USD' },
+                amountMoney: { amount: Math.round(sub.total * 100), currency: process.env.PAYMENT_CURRENCY || 'CAD' },
                 reason: reason || 'Buyer rejected modifications',
                 idempotencyKey: crypto.randomUUID()
               });

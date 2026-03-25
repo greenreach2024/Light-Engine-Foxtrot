@@ -3,6 +3,7 @@
 
   const STORAGE_TOKEN = 'greenreach_wholesale_token';
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
+  const STORAGE_CART = 'greenreach_wholesale_cart';
 
   const app = {
     catalog: [],
@@ -46,6 +47,9 @@
     },
 
     async init() {
+      // Restore cart from localStorage
+      this.loadCart();
+
       const params = new URLSearchParams(window.location.search);
       // Prefer live/network mode by default; demo mode is opt-in.
       if (params.get('demo') === '1') this.demoMode = true;
@@ -844,6 +848,22 @@
       console.log(`[Wholesale] ${this.farms.length} active farms:`, this.farms.map(f => f.farm_name).join(', '));
     },
 
+    saveCart() {
+      try {
+        localStorage.setItem(STORAGE_CART, JSON.stringify(this.cart));
+      } catch (e) { /* localStorage full or unavailable */ }
+    },
+
+    loadCart() {
+      try {
+        const saved = localStorage.getItem(STORAGE_CART);
+        if (saved) {
+          this.cart = JSON.parse(saved);
+          this.renderCart();
+        }
+      } catch (e) { /* corrupt data, start fresh */ }
+    },
+
     addToCart(skuId) {
       const sku = this.catalog.find((s) => s.sku_id === skuId);
       if (!sku) return;
@@ -867,6 +887,7 @@
       }
 
       this.renderCart();
+      this.saveCart();
       this.showToast(`Added ${sku.product_name} to cart`, 'success');
       if (qtyInput) qtyInput.value = '1';
       
@@ -893,6 +914,7 @@
     removeFromCart(skuId) {
       this.cart = this.cart.filter((item) => item.sku_id !== skuId);
       this.renderCart();
+      this.saveCart();
       this.showToast('Removed from cart', 'info');
     },
 
@@ -908,6 +930,7 @@
         this.showToast('Maximum quantity reached', 'info');
       } else {
         this.renderCart();
+        this.saveCart();
       }
     },
 

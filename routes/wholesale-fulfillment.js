@@ -16,11 +16,26 @@
  */
 
 import express from 'express';
+import { getFulfillmentRecord, saveFulfillmentRecord, listFulfillmentRecords, getInvoiceRecord, saveInvoiceRecord } from '../lib/wholesale/fulfillment-store.js';
 
 const router = express.Router();
 
-// In-memory storage for fulfillment status (TODO: migrate to database)
-const fulfillmentRecords = new Map(); // sub_order_id -> { status, history, current_location, tracking_info }
+// Simple farm auth: require x-farm-api-key header in production
+function requireFarmAuth(req, res, next) {
+  if (process.env.NODE_ENV === 'development') return next();
+  const farmKey = req.headers['x-farm-api-key'];
+  const expectedKey = process.env.FARM_API_KEY;
+  if (!expectedKey) {
+    console.warn('[fulfillment] FARM_API_KEY not configured -- farm auth bypassed');
+    return next();
+  }
+  if (farmKey !== expectedKey) {
+    return res.status(401).json({ status: 'error', message: 'Invalid or missing farm API key' });
+  }
+  next();
+}
+
+// Fulfillment records persisted via NeDB (lib/wholesale/fulfillment-store.js)
 
 // Valid status transitions
 const VALID_TRANSITIONS = {
@@ -66,7 +81,7 @@ const GREENREACH_WEBHOOK_URL = process.env.GREENREACH_WEBHOOK_URL || 'http://loc
  *   }
  * }
  */
-router.post('/status', async (req, res) => {
+router.post('/status', requireFarmAuth, async (req, res) => {
   try {
     const {
       sub_order_id,
@@ -98,7 +113,7 @@ router.post('/status', async (req, res) => {
     }
     
     // Get existing record or create new one
-    let record = fulfillmentRecords.get(sub_order_id);
+    let record = await getFulfillmentRecord(sub_order_id);
     const oldStatus = record?.status || 'pending';
     
     if (!record) {
@@ -148,7 +163,7 @@ router.post('/status', async (req, res) => {
       carrier
     });
     
-    fulfillmentRecords.set(sub_order_id, record);
+    await saveFulfillmentRecord({ sub_order_id, ...record });
     
     // Send webhook to GreenReach
     let webhookSent = false;
@@ -227,11 +242,11 @@ router.post('/status', async (req, res) => {
  *   }
  * }
  */
-router.get('/status/:sub_order_id', (req, res) => {
+router.get('/status/:sub_order_id', async (req, res) => {
   try {
     const { sub_order_id } = req.params;
     
-    const record = fulfillmentRecords.get(sub_order_id);
+    const record = await getFulfillmentRecord(sub_order_id);
     if (!record) {
       return res.status(404).json({
         status: 'error',
@@ -275,11 +290,11 @@ router.get('/status/:sub_order_id', (req, res) => {
  *   }
  * }
  */
-router.get('/orders', (req, res) => {
+router.get('/orders', async (req, res) => {
   try {
     const { farm_id, status, from_date, to_date } = req.query;
     
-    let records = Array.from(fulfillmentRecords.values());
+    let records = await listFulfillmentRecords();
     
     // Apply filters
     if (farm_id) {
@@ -364,7 +379,7 @@ router.get('/orders', (req, res) => {
  *   }
  * }
  */
-router.post('/invoice-required', async (req, res) => {
+router.post('/invoice-required', requireFarmAuth, async (req, res) => {
   try {
     const {
       sub_order_id,
@@ -411,11 +426,7 @@ router.post('/invoice-required', async (req, res) => {
       status: 'issued'
     };
     
-    // In-memory storage (TODO: database)
-    if (!global.invoiceRecords) {
-      global.invoiceRecords = new Map();
-    }
-    global.invoiceRecords.set(invoiceId, invoiceRecord);
+    await saveInvoiceRecord({ invoice_id: invoiceId, ...invoiceRecord });
     
     res.json({
       status: 'ok',
@@ -442,18 +453,11 @@ router.post('/invoice-required', async (req, res) => {
  * 
  * Get invoice details (in production, would return PDF)
  */
-router.get('/invoice/:invoice_id', (req, res) => {
+router.get('/invoice/:invoice_id', async (req, res) => {
   try {
     const { invoice_id } = req.params;
     
-    if (!global.invoiceRecords) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Invoice not found'
-      });
-    }
-    
-    const invoice = global.invoiceRecords.get(invoice_id);
+    const invoice = await getInvoiceRecord(invoice_id);
     if (!invoice) {
       return res.status(404).json({
         status: 'error',

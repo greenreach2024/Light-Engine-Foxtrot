@@ -180,7 +180,11 @@ router.post('/', async (req, res) => {
  */
 function verifyFarmSignature(payload, signature, timestamp) {
   // Skip verification in development / when no signature provided
-  if (process.env.NODE_ENV === 'development' || (!signature && !process.env.WEBHOOK_SECRET)) {
+  if (process.env.NODE_ENV === 'development') {
+    return true;
+  }
+  if (!process.env.WEBHOOK_SECRET) {
+    console.warn('[SECURITY] WEBHOOK_SECRET not configured -- webhook signature verification disabled');
     return true;
   }
 
@@ -320,6 +324,28 @@ async function notifyBuyer(subOrder, newStatus, notes) {
       tracking_number: subOrder.tracking_number,
       sent_at: new Date().toISOString()
     });
+
+    // Send email if SMTP is configured and buyer has an email address
+    if (process.env.SMTP_USER && buyerId && buyerId.includes('@')) {
+      try {
+        const { default: nodemailer } = await import('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: false,
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        });
+        await transporter.sendMail({
+          from: process.env.NOTIFICATIONS_FROM_EMAIL || 'orders@greenreach.ca',
+          to: buyerId,
+          subject: `GreenReach Order Update -- ${newStatus}`,
+          text: `${message}${notes ? '\n\nNotes: ' + notes : ''}${subOrder.tracking_number ? '\nTracking: ' + subOrder.tracking_number : ''}`
+        });
+        console.log(`[Fulfillment] Email sent to ${buyerId}`);
+      } catch (emailErr) {
+        console.warn('[Fulfillment] Email notification failed:', emailErr.message);
+      }
+    }
     
   } catch (error) {
     console.error('[Fulfillment] Buyer notification error:', error);

@@ -27,6 +27,7 @@ import {
   getSubstitutionApproval,
   updateSubstitutionApproval
 } from '../../lib/wholesale/sla-store.js';
+import { getSubOrder } from '../../lib/wholesale/order-store.js';
 
 const router = express.Router();
 
@@ -261,10 +262,15 @@ router.post('/violations', async (req, res) => {
       });
     }
     
-    // Calculate penalty
+    // Calculate penalty from actual order data
     let penaltyAmount = 0;
-    // In production, fetch order amount from database
-    const orderAmount = 100.00; // Placeholder
+    let orderAmount = 0;
+    try {
+      const subOrder = await getSubOrder(sub_order_id);
+      orderAmount = subOrder?.total || subOrder?.amount || 0;
+    } catch (err) {
+      console.warn('[SLA] Could not fetch sub-order amount:', err.message);
+    }
     
     if (rule.penalty_type === 'percentage') {
       penaltyAmount = orderAmount * (rule.penalty_amount / 100);

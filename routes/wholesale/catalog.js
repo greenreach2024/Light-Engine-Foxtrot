@@ -14,7 +14,7 @@ function resolveBuyerFromHeader(req) {
   const authHeader = req.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
   if (!token) return null;
-  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'dev-greenreach-wholesale-secret');
   try {
     const payload = jwt.verify(token, secret);
     return payload?.buyerId || payload?.sub || null;

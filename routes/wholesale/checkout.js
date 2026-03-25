@@ -459,6 +459,24 @@ router.post('/execute', async (req, res) => {
       });
     }
 
+    // Step 6b: Persist to PostgreSQL wholesale_orders for discount ladder queries
+    try {
+      await query(
+        `INSERT INTO wholesale_orders (master_order_id, buyer_id, status, total_amount, order_data, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (master_order_id) DO UPDATE SET status = $3, total_amount = $4, order_data = $5`,
+        [
+          masterOrderId,
+          resolvedBuyerId,
+          'completed',
+          allocation.master_order.total,
+          JSON.stringify({ cart, allocation: { sub_orders: allocation.sub_orders.map(s => ({ farm_id: s.farm_id, farm_name: s.farm_name, line_items: s.line_items, subtotal: s.subtotal, total: s.total })) }, payments: paymentResults.map(p => ({ payment_id: p.payment_id, farm_id: p.farm_id, amount: p.amount })), totals: allocation.master_order })
+        ]
+      );
+    } catch (pgErr) {
+      console.warn('[Checkout] wholesale_orders INSERT deferred:', pgErr.message);
+    }
+
     console.log('[Checkout] Checkout complete!');
     console.log(`  Master Order: ${masterOrderId}`);
     console.log(`  Total: $${allocation.master_order.total}`);

@@ -236,6 +236,7 @@ import setupRouter from './routes/setup.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
 import orderStore from './lib/wholesale/order-store.js';
+import deadlineMonitor from './services/deadline-monitor.js';
 import { assembleInvoice, renderInvoiceHTML } from './lib/wholesale/invoice-generator.js';
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
@@ -7763,7 +7764,7 @@ app.get('/api/wholesale/orders/history', asyncHandler(async (req, res) => {
 }));
 
 // Fulfill order
-app.post('/api/wholesale/orders/:orderId/fulfill', asyncHandler(async (req, res) => {
+app.post('/api/wholesale/orders/:orderId/fulfill', adminAuthMiddleware, asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { trackingNumber, carrier, shippingLabel } = req.body;
   
@@ -7786,7 +7787,7 @@ app.post('/api/wholesale/orders/:orderId/fulfill', asyncHandler(async (req, res)
 }));
 
 // Cancel order
-app.post('/api/wholesale/orders/:orderId/cancel', asyncHandler(async (req, res) => {
+app.post('/api/wholesale/orders/:orderId/cancel', adminAuthMiddleware, asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { reason } = req.body;
   
@@ -7805,7 +7806,7 @@ app.post('/api/wholesale/orders/:orderId/cancel', asyncHandler(async (req, res) 
 }));
 
 // Get order details
-app.get('/api/wholesale/orders/:orderId', asyncHandler(async (req, res) => {
+app.get('/api/wholesale/orders/:orderId', adminAuthMiddleware, asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   
   try {
@@ -7825,7 +7826,7 @@ app.get('/api/wholesale/orders/:orderId', asyncHandler(async (req, res) => {
 }));
 
 // Get reserved inventory
-app.get('/api/wholesale/inventory/reserved', asyncHandler(async (req, res) => {
+app.get('/api/wholesale/inventory/reserved', adminAuthMiddleware, asyncHandler(async (req, res) => {
   try {
     const wholesale = await getWholesaleIntegration();
     
@@ -7853,7 +7854,7 @@ app.get('/api/wholesale/inventory/reserved', asyncHandler(async (req, res) => {
 }));
 
 // Enable wholesale integration
-app.post('/api/wholesale/enable', asyncHandler(async (req, res) => {
+app.post('/api/wholesale/enable', adminAuthMiddleware, asyncHandler(async (req, res) => {
   try {
     const wholesale = await getWholesaleIntegration();
     wholesale.enable();
@@ -7869,7 +7870,7 @@ app.post('/api/wholesale/enable', asyncHandler(async (req, res) => {
 }));
 
 // Disable wholesale integration
-app.post('/api/wholesale/disable', asyncHandler(async (req, res) => {
+app.post('/api/wholesale/disable', adminAuthMiddleware, asyncHandler(async (req, res) => {
   try {
     const wholesale = await getWholesaleIntegration();
     wholesale.disable();
@@ -27142,6 +27143,14 @@ async function cleanupExpiredWholesaleReservations() {
 
 // Run reservation cleanup every 5 minutes (TTL is 15 min, so cleanup must be frequent)
 setInterval(cleanupExpiredWholesaleReservations, 5 * 60 * 1000);
+
+// Start deadline monitor for wholesale farm verification deadlines
+try {
+  deadlineMonitor.start();
+  console.log('[Server] Deadline monitor started (checks every 5 min, reminders every 1 hr)');
+} catch (dmErr) {
+  console.warn('[Server] Deadline monitor failed to start:', dmErr.message);
+}
 
 // Load states on startup
 loadWizardStates();
