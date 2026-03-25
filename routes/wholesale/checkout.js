@@ -16,6 +16,8 @@ import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is reg
 import jwt from 'jsonwebtoken';
 import auditLogger from '../../lib/wholesale/audit-logger.js';
 import orderStore from '../../lib/wholesale/order-store.js';
+import { query } from '../../lib/database.js';
+import { getBuyerDiscount } from '../../lib/wholesale/buyer-discount-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,16 +126,23 @@ router.post('/preview', async (req, res) => {
     // Allocate order
     const taxConfig = loadFarmTaxConfig();
     const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+
+    // Resolve buyer discount from purchase history (optional auth on preview)
+    const previewBuyerId = getBuyerIdFromRequest(req);
+    const buyerDiscount = previewBuyerId ? await getBuyerDiscount(previewBuyerId) : { rate: 0, tier: 'none', total_spend: 0 };
+
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,
       tax_rate: taxConfig.rate,
-      tax_label: taxConfig.label
+      tax_label: taxConfig.label,
+      buyer_discount_rate: buyerDiscount.rate
     });
 
     res.json({
       ok: allocation.ok,
       preview: allocation,
+      buyer_discount: buyerDiscount,
       next_steps: allocation.ok 
         ? 'Proceed to payment by calling POST /api/wholesale/checkout/execute'
         : 'Review unallocated items and adjust cart'
@@ -224,11 +233,17 @@ router.post('/execute', async (req, res) => {
     console.log('[Checkout] Step 2: Allocating order...');
     const taxConfig = loadFarmTaxConfig();
     const commissionRate = Number(process.env.WHOLESALE_COMMISSION_RATE || 0.12);
+
+    // Compute buyer volume discount from purchase history
+    const buyerDiscount = await getBuyerDiscount(resolvedBuyerId);
+    console.log(`[Checkout] Buyer discount: ${(buyerDiscount.rate * 100).toFixed(1)}% (tier: ${buyerDiscount.tier}, spend: $${buyerDiscount.total_spend.toFixed(2)})`);
+
     const allocation = await allocateOrder(cart, catalog, {
       allocation_strategy,
       broker_fee_percent: commissionRate * 100,
       tax_rate: taxConfig.rate,
-      tax_label: taxConfig.label
+      tax_label: taxConfig.label,
+      buyer_discount_rate: buyerDiscount.rate
     });
 
     if (!allocation.ok) {
@@ -341,6 +356,26 @@ router.post('/execute', async (req, res) => {
 
         console.log(`  Payment successful: ${subOrderId} - $${subOrder.total}`);
 
+        // Persist to payment_records table for reporting/exports
+        try {
+          await query(
+            `INSERT INTO payment_records (payment_id, order_id, amount, currency, provider, status, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (payment_id) DO NOTHING`,
+            [
+              paymentResult.paymentId,
+              subOrderId,
+              subOrder.total,
+              process.env.PAYMENT_CURRENCY || 'CAD',
+              farmPaymentProvider,
+              paymentResult.status || 'completed',
+              JSON.stringify({ masterOrderId, buyerId: resolvedBuyerId, farmId: subOrder.farm_id, brokerFee: subOrder.broker_fee_amount })
+            ]
+          );
+        } catch (dbErr) {
+          console.warn('[Checkout] payment_records INSERT deferred:', dbErr.message);
+        }
+
       } catch (paymentError) {
         console.error(`  Payment failed for ${subOrder.farm_name}:`, paymentError.message);
 
@@ -350,7 +385,25 @@ router.post('/execute', async (req, res) => {
         // Release all reservations
         await releaseReservations(reservations);
 
-        // TODO: Refund successful payments
+        // Refund already-succeeded payments for other farms
+        for (const successfulPayment of paymentResults.filter(p => p.success)) {
+          try {
+            const refundProviderConfig = (req.body.payment_provider === 'stripe')
+              ? { stripeSecretKey: process.env.STRIPE_SECRET_KEY }
+              : { squareAccessToken: process.env.SQUARE_ACCESS_TOKEN, environment: process.env.SQUARE_ENVIRONMENT || 'production' };
+            const refundProvider = PaymentProviderFactory.create(
+              req.body.payment_provider || 'square', refundProviderConfig
+            );
+            await refundProvider.refundPayment({
+              paymentId: successfulPayment.payment_id,
+              amountMoney: { amount: Math.round(successfulPayment.amount * 100), currency: process.env.PAYMENT_CURRENCY || 'CAD' },
+              reason: 'Rollback: multi-farm checkout partial failure'
+            });
+            console.log(`  Refunded payment ${successfulPayment.payment_id} for ${successfulPayment.farm_name}`);
+          } catch (refundErr) {
+            console.error(`  CRITICAL: Failed to refund ${successfulPayment.payment_id}:`, refundErr.message);
+          }
+        }
 
         return res.status(402).json({
           ok: false,

@@ -5,8 +5,21 @@
  */
 
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { query } from '../../lib/database.js';
+import { getBuyerDiscount } from '../../lib/wholesale/buyer-discount-service.js';
 const router = express.Router();
+
+function resolveBuyerFromHeader(req) {
+  const authHeader = req.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : '';
+  if (!token) return null;
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  try {
+    const payload = jwt.verify(token, secret);
+    return payload?.buyerId || payload?.sub || null;
+  } catch { return null; }
+}
 
 // Helper function to get active farms from database
 async function getActiveFarms() {
@@ -142,6 +155,22 @@ router.get('/', async (req, res) => {
       console.warn('[Wholesale Catalog] farm_inventory query failed:', invErr.message);
     }
     
+    // Resolve buyer discount if authenticated (optional -- catalog is public)
+    const buyerId = resolveBuyerFromHeader(req);
+    const buyerDiscount = buyerId ? await getBuyerDiscount(buyerId) : null;
+
+    // Apply discount to catalog prices if buyer is authenticated
+    if (buyerDiscount && buyerDiscount.rate > 0) {
+      for (const item of catalogItems) {
+        item.buyer_discount_rate = buyerDiscount.rate;
+        for (const farm of item.farms) {
+          farm.discounted_price = Math.round(farm.price_per_unit * (1 - buyerDiscount.rate) * 100) / 100;
+        }
+        item.min_discounted_price = Math.min(...item.farms.map(f => f.discounted_price || f.price_per_unit));
+        item.max_discounted_price = Math.max(...item.farms.map(f => f.discounted_price || f.price_per_unit));
+      }
+    }
+    
     console.log(`[Wholesale Catalog] Returning ${catalogItems.length} SKUs from ${REGISTERED_FARMS.length} farms`);
 
     res.json({
@@ -149,6 +178,7 @@ router.get('/', async (req, res) => {
       catalog_timestamp: new Date().toISOString(),
       total_skus: catalogItems.length,
       total_farms: REGISTERED_FARMS.length,
+      buyer_discount: buyerDiscount,
       farms: REGISTERED_FARMS.map(f => ({
         farm_id: f.farmId,
         farm_name: f.name,

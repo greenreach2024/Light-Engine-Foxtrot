@@ -27038,8 +27038,8 @@ async function cleanupExpiredWholesaleReservations() {
   }
 }
 
-// Run reservation cleanup hourly
-setInterval(cleanupExpiredWholesaleReservations, 60 * 60 * 1000);
+// Run reservation cleanup every 5 minutes (TTL is 15 min, so cleanup must be frequent)
+setInterval(cleanupExpiredWholesaleReservations, 5 * 60 * 1000);
 
 // Load states on startup
 loadWizardStates();

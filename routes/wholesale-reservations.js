@@ -88,12 +88,13 @@ router.post('/reserve', async (req, res) => {
       });
     }
 
-    // Real availability check: catalog qty - active reservations
+    // Real availability check: catalog qty - active (non-expired) reservations
     const available = await getCatalogAvailableQty(sku_id, req.app.locals?.db);
+    const now = new Date();
     const currentReserved = WHOLESALE_READ_FROM_DB
       ? await reservationStore.getReservedQty(sku_id)
       : Array.from(reservations.values())
-          .filter((r) => r.status === 'active' && r.sku_id === sku_id)
+          .filter((r) => r.status === 'active' && r.sku_id === sku_id && new Date(r.expires_at) > now)
           .reduce((sum, r) => sum + Number(r.qty || 0), 0);
 
     if (qty > (available - currentReserved)) {
