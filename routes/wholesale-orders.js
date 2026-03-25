@@ -12,6 +12,8 @@ import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
 import farmSelectionOptimizer from '../services/farm-selection-optimizer.js';
 import orderStore from '../lib/wholesale/order-store.js';
+import auditLogger from '../lib/wholesale/audit-logger.js';
+import { query } from '../lib/database.js';
 
 const router = express.Router();
 
@@ -500,6 +502,51 @@ router.post('/create', async (req, res) => {
     
     console.log(`[Wholesale Orders] ✅ Successfully reserved inventory at all ${sub_orders.length} farms`);
     
+    // Persist order to NeDB
+    try {
+      await orderStore.saveOrder(order);
+      for (const subOrder of sub_orders) {
+        await orderStore.saveSubOrder(subOrder);
+      }
+      console.log(`[Wholesale Orders] Persisted order #${order.id} to NeDB`);
+    } catch (persistErr) {
+      console.error('[Wholesale Orders] NeDB persist error (non-fatal):', persistErr.message);
+    }
+
+    // Persist order to PostgreSQL
+    try {
+      await query(
+        `INSERT INTO wholesale_orders (master_order_id, buyer_id, buyer_email, status, total_amount, order_data)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (master_order_id) DO NOTHING`,
+        [
+          String(order.id),
+          buyer_id,
+          buyer_email,
+          order.status,
+          total_amount,
+          JSON.stringify(order)
+        ]
+      );
+      console.log(`[Wholesale Orders] Persisted order #${order.id} to PostgreSQL`);
+    } catch (pgErr) {
+      console.error('[Wholesale Orders] PG INSERT error (non-fatal):', pgErr.message);
+    }
+
+    // Audit log: order creation
+    try {
+      await auditLogger.logOrderCreate(String(order.id), {
+        buyer_id,
+        buyer_email,
+        total_amount,
+        platform_fee,
+        sub_orders: sub_orders.length,
+        payment_id: paymentResult.paymentId
+      }, buyer_id);
+    } catch (auditErr) {
+      console.warn('[Wholesale Orders] Audit log error (non-fatal):', auditErr.message);
+    }
+
     // Send notifications to farms and buyer
     console.log(`[Wholesale Orders] Created order #${order.id} with ${sub_orders.length} sub-orders`);
     

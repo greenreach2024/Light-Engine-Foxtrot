@@ -15,6 +15,7 @@ import '../../lib/payment-providers/square.js'; // Ensure Square provider is reg
 import '../../lib/payment-providers/stripe.js'; // Ensure Stripe provider is registered
 import jwt from 'jsonwebtoken';
 import auditLogger from '../../lib/wholesale/audit-logger.js';
+import notificationService from '../../services/wholesale-notification-service.js';
 import orderStore from '../../lib/wholesale/order-store.js';
 import { query } from '../../lib/database.js';
 import { getBuyerDiscount } from '../../lib/wholesale/buyer-discount-service.js';
@@ -441,6 +442,18 @@ router.post('/execute', async (req, res) => {
 
     orders.set(masterOrderId, masterOrder);
     await orderStore.saveOrder(masterOrder);
+
+    // Audit log: order creation
+    try {
+      await auditLogger.logOrderCreate(masterOrderId, {
+        buyer_id: resolvedBuyerId,
+        total: allocation.master_order.total,
+        sub_orders: allocation.sub_orders.length,
+        payment_count: paymentResults.length
+      }, resolvedBuyerId);
+    } catch (auditErr) {
+      console.warn('[Checkout] Audit log error (non-fatal):', auditErr.message);
+    }
     for (const subOrder of allocation.sub_orders) {
       const subOrderId = `SO-${masterOrderId}-${subOrder.farm_id}`;
       await orderStore.saveSubOrder({
@@ -481,6 +494,44 @@ router.post('/execute', async (req, res) => {
     console.log(`  Master Order: ${masterOrderId}`);
     console.log(`  Total: $${allocation.master_order.total}`);
     console.log(`  Processing time: ${masterOrder.processing_time_ms}ms`);
+
+    // Send notifications (non-blocking, failures logged but do not fail checkout)
+    try {
+      const buyerAccount = req.body.buyer_account || {};
+      const deliveryAddr = req.body.delivery_address || {};
+      const notifOrder = {
+        id: masterOrderId,
+        buyer_id: resolvedBuyerId,
+        buyer_email: buyerAccount.email || '',
+        buyer_name: buyerAccount.name || '',
+        total_amount: allocation.master_order.total || 0,
+        payment_id: paymentResults[0]?.payment_id || '',
+        delivery_address: deliveryAddr.street || '',
+        delivery_city: deliveryAddr.city || '',
+        delivery_province: deliveryAddr.province || 'ON',
+        delivery_postal_code: deliveryAddr.postalCode || '',
+        fulfillment_cadence: req.body.recurrence || 'one-time',
+        delivery_instructions: deliveryAddr.instructions || '',
+        verification_deadline: new Date(Date.now() + 24 * 3600000).toISOString()
+      };
+      if (notifOrder.buyer_email) {
+        await notificationService.notifyBuyerOrderPlaced(notifOrder);
+      }
+      for (const subOrder of allocation.sub_orders) {
+        const farmContact = {
+          farm_id: subOrder.farm_id,
+          farm_name: subOrder.farm_name || `Farm ${subOrder.farm_id}`,
+          email: subOrder.farm_email || `farm-${subOrder.farm_id}@greenreachgreens.com`
+        };
+        await notificationService.notifyFarmNewOrder(farmContact, notifOrder, {
+          sub_total: subOrder.total || subOrder.subtotal || 0,
+          items: subOrder.line_items || []
+        });
+      }
+      console.log('[Checkout] Notifications sent');
+    } catch (notifErr) {
+      console.warn('[Checkout] Notification error (non-fatal):', notifErr.message);
+    }
 
     res.json({
       ok: true,

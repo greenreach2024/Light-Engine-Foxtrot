@@ -596,6 +596,7 @@ async function runMigrations(client) {
       buyer_id VARCHAR(128) NOT NULL,
       buyer_email VARCHAR(255),
       status VARCHAR(50) DEFAULT 'confirmed',
+      total_amount NUMERIC(12,2) DEFAULT 0,
       order_data JSONB NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -606,6 +607,11 @@ async function runMigrations(client) {
     CREATE INDEX IF NOT EXISTS idx_wholesale_orders_created ON wholesale_orders(created_at);
   `);
   } catch (err) { logger.warn('wholesale_orders create warning:', err.message); }
+
+  // Migration: add total_amount column if missing (for existing production tables)
+  try {
+    await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(12,2) DEFAULT 0;`);
+  } catch (err) { logger.warn('wholesale_orders migration warning:', err.message); }
 
   // Create payment_records table for persistent payment storage
   try {
