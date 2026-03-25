@@ -1361,22 +1361,25 @@
     async downloadInvoice(orderId) {
       try {
         this.showLoading('Generating invoice...');
-        
-        const { response, json } = await this.apiFetch(`/api/wholesale/orders/${orderId}/invoice`);
-        
-        if (response.ok && json?.status === 'ok') {
-          // Create downloadable file from invoice data
-          const invoiceData = json.data;
-          const blob = new Blob([JSON.stringify(invoiceData, null, 2)], { type: 'application/json' });
+
+        const headers = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+        // Fetch HTML invoice from server
+        const response = await fetch(`/api/wholesale/orders/${orderId}/invoice`, { headers });
+
+        if (response.ok) {
+          const html = await response.text();
+          const blob = new Blob([html], { type: 'text/html' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `invoice-${orderId.substring(0, 8)}.json`;
+          a.download = `invoice-${orderId.substring(0, 12)}.html`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          
+
           this.hideLoading();
           this.showToast('Invoice downloaded', 'success');
         } else {

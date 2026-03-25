@@ -235,6 +235,8 @@ import edgeRouter from './routes/edge.js';
 import setupRouter from './routes/setup.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import auditLogger, { auditMiddleware, createAuditRoutes } from './lib/wholesale/audit-logger.js';
+import orderStore from './lib/wholesale/order-store.js';
+import { assembleInvoice, renderInvoiceHTML } from './lib/wholesale/invoice-generator.js';
 import { checkAndControlEnvironment } from './controller/checkAndControlEnvironment.js';
 import { coreAllocator } from './controller/coreAllocator.js';
 import outdoorSensorValidator from './lib/outdoor-sensor-validator.js';
@@ -13021,11 +13023,20 @@ function requireBuyerAuth(req, res, next) {
 // GET /api/wholesale/orders - List buyer's orders
 app.get('/api/wholesale/orders', requireBuyerAuth, asyncHandler(async (req, res) => {
   const buyerId = req.wholesaleBuyer.id;
-  
-  // Query orders from database (or in-memory for now)
-  // For now, return empty array - will be populated from checkout executions
+
+  const rawOrders = await orderStore.listBuyerOrders(buyerId, 100);
   const orders = [];
-  
+  for (const order of rawOrders) {
+    const masterOrderId = order.master_order_id || order.id;
+    const subOrders = masterOrderId ? await orderStore.listSubOrders(masterOrderId) : [];
+    orders.push({
+      ...order,
+      master_order_id: masterOrderId,
+      farm_sub_orders: subOrders,
+      totals: order.totals || null
+    });
+  }
+
   res.json({
     status: 'ok',
     data: { orders }
@@ -13033,16 +13044,107 @@ app.get('/api/wholesale/orders', requireBuyerAuth, asyncHandler(async (req, res)
 }));
 
 // GET /api/wholesale/orders/:orderId/invoice - Get invoice for specific order
+// Returns HTML invoice with per-farm produce breakdown, unit pricing,
+// environmental score (local vs California), and farm practices (pesticide, herbicide, GMO)
 app.get('/api/wholesale/orders/:orderId/invoice', requireBuyerAuth, asyncHandler(async (req, res) => {
   const buyerId = req.wholesaleBuyer.id;
   const orderId = req.params.orderId;
-  
-  // Query order from database
-  // For now, return 404
-  res.status(404).json({ 
-    status: 'error', 
-    message: 'Order not found' 
+  const format = req.query.format || 'html'; // html (default) or json
+
+  // 1. Fetch master order from NeDB
+  const order = await orderStore.getOrder(orderId);
+  if (!order || String(order.buyer_id) !== String(buyerId)) {
+    return res.status(404).json({ status: 'error', message: 'Order not found' });
+  }
+
+  const masterOrderId = order.master_order_id || order.id || orderId;
+  const subOrders = await orderStore.listSubOrders(masterOrderId);
+
+  // 2. Collect farm IDs from sub-orders (or allocation)
+  const subs = subOrders.length > 0 ? subOrders : (order.allocation?.sub_orders || []);
+  const farmIds = [...new Set(subs.map(s => s.farm_id).filter(Boolean))];
+
+  // 3. Query PostgreSQL for farm profiles (practices, certifications, location)
+  const farmProfiles = {};
+  const pool = req.app.locals?.db;
+  if (pool && farmIds.length > 0) {
+    try {
+      const placeholders = farmIds.map((_, i) => `$${i + 1}`).join(', ');
+      const farmResult = await pool.query(
+        `SELECT farm_id, name, city, state, certifications, practices, attributes
+         FROM farms WHERE farm_id IN (${placeholders})`,
+        farmIds
+      );
+      for (const row of farmResult.rows) {
+        farmProfiles[row.farm_id] = {
+          name: row.name,
+          city: row.city || '',
+          state: row.state || '',
+          certifications: row.certifications || [],
+          practices: row.practices || [],
+          attributes: row.attributes || [],
+          location: {}
+        };
+      }
+      // Try to get coordinates from farm_data table
+      const fdResult = await pool.query(
+        `SELECT farm_id, data FROM farm_data
+         WHERE farm_id IN (${placeholders}) AND data_type = 'profile'`,
+        farmIds
+      );
+      for (const row of fdResult.rows) {
+        const data = row.data || {};
+        if (farmProfiles[row.farm_id] && data.location) {
+          farmProfiles[row.farm_id].location = {
+            lat: data.location.lat || data.location.latitude,
+            lng: data.location.lng || data.location.longitude
+          };
+        }
+      }
+    } catch (dbErr) {
+      console.warn('[Invoice] Farm profile query warning:', dbErr.message);
+    }
+  }
+
+  // 4. Query buyer profile for location + business info
+  let buyerProfile = null;
+  if (pool) {
+    try {
+      const buyerResult = await pool.query(
+        `SELECT id, business_name, contact_name, email, location FROM wholesale_buyers WHERE id = $1`,
+        [buyerId]
+      );
+      if (buyerResult.rows.length > 0) {
+        const row = buyerResult.rows[0];
+        buyerProfile = {
+          business_name: row.business_name,
+          contact_name: row.contact_name,
+          email: row.email,
+          location: row.location || {}
+        };
+      }
+    } catch (dbErr) {
+      console.warn('[Invoice] Buyer profile query warning:', dbErr.message);
+    }
+  }
+
+  // 5. Assemble enriched invoice
+  const invoiceData = assembleInvoice({
+    order,
+    subOrders,
+    farmProfiles,
+    buyerProfile
   });
+
+  // 6. Return HTML or JSON
+  if (format === 'json') {
+    return res.json({ status: 'ok', data: invoiceData });
+  }
+
+  const html = renderInvoiceHTML(invoiceData);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="invoice-${masterOrderId.substring(0, 12)}.html"`);
+  res.send(html);
 }));
 
 // GET /api/wholesale/inventory/check-overselling - Validate inventory availability
