@@ -2404,13 +2404,8 @@
     // === TODO #8: VOICE MODE FOR SCANNING ===
     
     function speakMessage(message) {
-      if (!voiceEnabled || !window.speechSynthesis) return;
-      
-      const utterance = new SpeechSynthesisUtterance(message);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      window.speechSynthesis.speak(utterance);
+      // Browser speech disabled -- server TTS is the only voice source
+      console.log('[Voice]', message);
     }
     
     function toggleVoiceMode() {
@@ -3935,19 +3930,12 @@
     }
 
     function speakResponse(text) {
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.9;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        speechSynthesis.speak(utterance);
-
-        utterance.onend = () => {
-          setTimeout(() => {
-            document.getElementById('voiceStatus').textContent = 'Tap microphone to speak';
-          }, 1000);
-        };
-      }
+      // Browser speech disabled -- server TTS is the only voice source
+      console.log('[Voice]', text);
+      setTimeout(() => {
+        const el = document.getElementById('voiceStatus');
+        if (el) el.textContent = 'Tap microphone to speak';
+      }, 1000);
     }
 
     // Initialize

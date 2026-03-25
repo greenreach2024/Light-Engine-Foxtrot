@@ -353,6 +353,9 @@ class FarmAssistant {
             </div>
           </div>
           <div style="display:flex;gap:0.25rem;align-items:center">
+            <button class="mute-btn" id="muteBtn" title="${this.voiceEnabled ? 'Mute voice' : 'Unmute voice'}" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px 6px;opacity:0.7;" onclick="if(window.farmAssistant)window.farmAssistant.toggleMute()">
+              <span id="muteIcon">${this.voiceEnabled ? '🔊' : '🔇'}</span>
+            </button>
             <button class="settings-btn" id="settingsBtn" title="Settings">
               <span>⚙</span>
             </button>
@@ -749,31 +752,32 @@ class FarmAssistant {
     }
   }
 
-  // Browser Web Speech API fallback.
+  // Browser speech fallback disabled -- OpenAI voice is the only TTS source.
+  // If the server TTS fails, we stay silent rather than using the robotic browser voice.
   _speakBrowser(text) {
-    if (!window.speechSynthesis) { this.isSpeaking = false; return; }
-    window.speechSynthesis.cancel();
+    console.log('[TTS] Server TTS unavailable -- staying silent (browser speech disabled)');
+    this.isSpeaking = false;
+  }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    const voices = this.voices && this.voices.length > 0 ? this.voices : window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      const preferred = voices.find(v =>
-        v.name.includes('Samantha') ||
-        v.name.includes('Google US English') ||
-        v.name.includes('Microsoft Aria') ||
-        (v.lang.startsWith('en') && v.name.toLowerCase().includes('natural'))
-      ) || voices.find(v => v.lang.startsWith('en'));
-      if (preferred) utterance.voice = preferred;
+  toggleMute() {
+    this.voiceEnabled = !this.voiceEnabled;
+    localStorage.setItem('evie_tts_enabled', JSON.stringify(this.voiceEnabled));
+    // Update mute button icon
+    const muteIcon = document.getElementById('muteIcon');
+    if (muteIcon) muteIcon.textContent = this.voiceEnabled ? '\u{1F50A}' : '\u{1F507}';
+    const muteBtn = document.getElementById('muteBtn');
+    if (muteBtn) muteBtn.title = this.voiceEnabled ? 'Mute voice' : 'Unmute voice';
+    // Sync the settings panel checkbox if visible
+    const ttsToggle = document.getElementById('evieTtsToggle');
+    if (ttsToggle) ttsToggle.checked = this.voiceEnabled;
+    // If muting, stop any current speech
+    if (!this.voiceEnabled) {
+      if (this._ttsSource) { try { this._ttsSource.stop(); } catch(_) {} this._ttsSource = null; }
+      if (this._ttsAudio) { this._ttsAudio.pause(); this._ttsAudio = null; }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      this.isSpeaking = false;
     }
-
-    utterance.onend = () => { this.isSpeaking = false; };
-    utterance.onerror = () => { this.isSpeaking = false; };
-    window.speechSynthesis.speak(utterance);
-    console.log('[TTS] Playing via browser speech synthesis');
+    console.log('[Farm Assistant] Voice ' + (this.voiceEnabled ? 'enabled' : 'muted'));
   }
 
   toggleVoiceRecognition() {

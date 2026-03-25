@@ -2012,10 +2012,41 @@
         <div class="wizard-panel" data-panel="2" style="display: none;">
           <div id="hasAccountPanel" style="display: none;">
             <h3>Connect Your Square Account</h3>
-            <p class="wizard-description">Click the button below to securely connect your Square account to your farm store. You'll be redirected to Square to authorize the connection.</p>
+            <p class="wizard-description">Enter your farm name below and click "Connect to Square." A secure popup window will open where you authorize the connection.</p>
+            
+            <div class="wizard-steps-list">
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">1</div>
+                <div class="wizard-step-content">
+                  <strong>Enter Your Farm Name</strong>
+                  <p>Type your farm name below -- it will appear on customer receipts.</p>
+                </div>
+              </div>
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">2</div>
+                <div class="wizard-step-content">
+                  <strong>Click "Connect to Square"</strong>
+                  <p>A popup window will open to Square's secure login page.</p>
+                </div>
+              </div>
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">3</div>
+                <div class="wizard-step-content">
+                  <strong>Sign In and Authorize</strong>
+                  <p>Log into your Square account in the popup, review the permissions, and click "Allow" to authorize.</p>
+                </div>
+              </div>
+              <div class="wizard-step-item">
+                <div class="wizard-step-number-small">4</div>
+                <div class="wizard-step-content">
+                  <strong>Return Automatically</strong>
+                  <p>The popup will close on its own and this wizard will advance to the next step.</p>
+                </div>
+              </div>
+            </div>
             
             <div class="wizard-info-box">
-              <h4>What permissions are requested?</h4>
+              <h4>Permissions requested</h4>
               <ul>
                 <li><strong>Process Payments:</strong> Accept payments from your customers</li>
                 <li><strong>Read Business Profile:</strong> Display your business name and location</li>
@@ -2029,9 +2060,14 @@
               <small>This will appear on customer receipts</small>
             </div>
             
+            <div id="squareWaitingIndicator" style="display:none;text-align:center;padding:1rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin-bottom:1rem;">
+              <p style="margin:0;font-weight:600;color:#92400e;">Waiting for Square authorization...</p>
+              <p style="margin:0.5rem 0 0;color:#78350f;font-size:0.9rem;">Complete the sign-in and authorization in the popup window. This page will update automatically.</p>
+            </div>
+            
             <div class="wizard-actions">
               <button class="wizard-btn-secondary" onclick="paymentWizardPrev()">Back</button>
-              <button class="wizard-btn-primary" onclick="connectSquareAccount()">
+              <button id="connectSquareBtn" class="wizard-btn-primary" onclick="connectSquareAccount()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
@@ -2717,7 +2753,11 @@
           return;
         }
 
-        // Open Square OAuth in a popup
+        // Show waiting indicator and open Square OAuth in a popup
+        var waitEl = document.getElementById("squareWaitingIndicator");
+        if (waitEl) waitEl.style.display = "block";
+        var connectBtn = document.getElementById("connectSquareBtn");
+        if (connectBtn) { connectBtn.disabled = true; connectBtn.textContent = "Waiting..."; }
         const w = 600, h = 700;
         const left = (screen.width - w) / 2;
         const top = (screen.height - h) / 2;
@@ -2731,6 +2771,7 @@
         window.addEventListener('message', function handleSquare(event) {
           if (event.data && event.data.type === 'square-connected') {
             window.removeEventListener('message', handleSquare);
+            var wI = document.getElementById("squareWaitingIndicator"); if (wI) wI.style.display = "none";
             paymentWizardData.squareConnected = true;
             paymentWizardData.merchantId = event.data.merchantId || farmId;
             paymentWizardData.locationId = event.data.locationId || '';
@@ -2804,7 +2845,7 @@
       }, 2000);
     }
     
-    function activatePayments() {
+    async function activatePayments() {
       const checklist = ['checkSquareConnected', 'checkBankingSetup', 'checkTestPassed', 'checkPricing', 'checkTOS'];
       const allChecked = checklist.every(id => document.getElementById(id).checked);
       

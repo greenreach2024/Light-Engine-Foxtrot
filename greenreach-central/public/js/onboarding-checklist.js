@@ -16,6 +16,15 @@ async function loadOnboardingChecklist() {
     return;
   }
 
+  // Check if user snoozed the checklist
+  const snoozedUntil = localStorage.getItem('onboarding_checklist_snoozed_until');
+  if (snoozedUntil && Date.now() < parseInt(snoozedUntil, 10)) {
+    container.style.display = 'none';
+    return;
+  }
+  // Clear expired snooze
+  if (snoozedUntil) localStorage.removeItem('onboarding_checklist_snoozed_until');
+
   try {
     const headers = {};
     const token = window.currentSession?.token || localStorage.getItem('auth_token');
@@ -100,6 +109,8 @@ function renderChecklist(tasks, completedCount, totalCount, pct, planType) {
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
+          <button onclick="event.stopPropagation(); snoozeOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Remind me next week</button>
+          <button onclick="event.stopPropagation(); pauseOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Pause</button>
           <button onclick="event.stopPropagation(); dismissOnboardingChecklist();" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 4px 8px;">Dismiss</button>
           <span id="onboarding-chevron" style="color: var(--text-muted); font-size: 14px;">${chevron}</span>
         </div>
@@ -122,6 +133,26 @@ function toggleOnboardingChecklist() {
 
 function dismissOnboardingChecklist() {
   localStorage.setItem('onboarding_checklist_dismissed', 'true');
+  const container = document.getElementById('onboarding-checklist-container');
+  if (container) container.style.display = 'none';
+  const banner = document.getElementById('dashboard-onboarding-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function snoozeOnboardingChecklist() {
+  // Snooze for 7 days
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  localStorage.setItem('onboarding_checklist_snoozed_until', String(Date.now() + oneWeek));
+  const container = document.getElementById('onboarding-checklist-container');
+  if (container) container.style.display = 'none';
+  const banner = document.getElementById('dashboard-onboarding-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function pauseOnboardingChecklist() {
+  // Pause for 24 hours
+  const oneDay = 24 * 60 * 60 * 1000;
+  localStorage.setItem('onboarding_checklist_snoozed_until', String(Date.now() + oneDay));
   const container = document.getElementById('onboarding-checklist-container');
   if (container) container.style.display = 'none';
   const banner = document.getElementById('dashboard-onboarding-banner');
