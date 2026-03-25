@@ -870,12 +870,96 @@
         // Guard: only call extractCropDisplayName when plan is truthy to avoid 'Unknown' for empty farms
         const uniqueCrops = new Set(groupsData.map(g => g.crop || (g.plan ? extractCropDisplayName(g.plan) : '')).filter(Boolean));
 
+        // When forecast API returns empty (all groups are draft/unplanted),
+        // build synthetic tray data from groups.json so the UI still shows
+        // the farm infrastructure layout (rooms, zones, towers).
+        const hasForecastTrays = (forecastData.next7Days?.trays?.length || 0) +
+          (forecastData.next14Days?.trays?.length || 0) +
+          (forecastData.next30Days?.trays?.length || 0) +
+          (forecastData.beyond30Days?.trays?.length || 0);
+
+        let enrichedForecast = forecastData;
+        let enrichedCurrent = currentData;
+
+        if (!hasForecastTrays && groupsData.length > 0) {
+          console.log('[loadInventory] Forecast empty, building from groups data');
+          const syntheticTrays = [];
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const defaultGrowDays = 35;
+
+          groupsData.forEach(group => {
+            const groupId = group.id || group.groupId || group.name;
+            const trayCount = Math.max(0, Number(group.trays || 0));
+            if (!trayCount) return;
+            const totalPlants = Number(group.plants || 0);
+            const roomId = group.roomId || group.room || 'ROOM-1';
+            const zoneId = group.zoneId || group.zone || 'ZONE-1';
+            const crop = group.crop || group.recipe || '';
+            const seedDateRaw = group?.planConfig?.anchor?.seedDate || group?.seedDate;
+            const seedDate = seedDateRaw ? new Date(seedDateRaw) : null;
+            let daysToHarvest = defaultGrowDays;
+            let currentDay = 1;
+            let estimatedHarvestDate = '-';
+            if (seedDate && !Number.isNaN(seedDate.getTime())) {
+              currentDay = Math.max(1, Math.floor((today - seedDate) / 86400000) + 1);
+              daysToHarvest = Math.max(0, defaultGrowDays - currentDay);
+              const hd = new Date(today);
+              hd.setDate(hd.getDate() + daysToHarvest);
+              estimatedHarvestDate = hd.toISOString().split('T')[0];
+            }
+            const plantsPerTray = trayCount > 0 ? Math.round(totalPlants / trayCount) : 0;
+            for (let i = 0; i < trayCount; i++) {
+              syntheticTrays.push({
+                trayId: groupId + '#' + (i + 1),
+                groupId: groupId,
+                recipe: crop || group.name || 'Unassigned',
+                plantCount: plantsPerTray,
+                currentDay: currentDay,
+                daysToHarvest: daysToHarvest,
+                estimatedHarvestDate: estimatedHarvestDate,
+                location: roomId + ' - ' + zoneId,
+                status: group.active === false ? 'inactive' : 'active'
+              });
+            }
+          });
+
+          const buckets = { next7Days: [], next14Days: [], next30Days: [], beyond30Days: [] };
+          syntheticTrays.forEach(tray => {
+            const days = tray.daysToHarvest;
+            if (days <= 7) buckets.next7Days.push(tray);
+            else if (days <= 14) buckets.next14Days.push(tray);
+            else if (days <= 30) buckets.next30Days.push(tray);
+            else buckets.beyond30Days.push(tray);
+          });
+
+          enrichedForecast = {
+            ...forecastData,
+            next7Days: { count: buckets.next7Days.length, trays: buckets.next7Days },
+            next14Days: { count: buckets.next14Days.length, trays: buckets.next14Days },
+            next30Days: { count: buckets.next30Days.length, trays: buckets.next30Days },
+            beyond30Days: { count: buckets.beyond30Days.length, trays: buckets.beyond30Days }
+          };
+
+          // Also enrich summary if API returned zeros
+          if (!enrichedCurrent.activeTrays) {
+            const totalTrayCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.trays || 0)), 0);
+            const totalPlantCount = groupsData.reduce((s, g) => s + Math.max(0, Number(g.plants || 0)), 0);
+            enrichedCurrent = {
+              ...currentData,
+              activeTrays: totalTrayCount,
+              totalPlants: totalPlantCount,
+              farmCount: currentData.farmCount || 1
+            };
+          }
+        }
+
         console.log('[loadInventory] Rendering...');
-        renderSummaryCards(currentData, uniqueCrops.size);
-        renderForecast(forecastData);
-        renderInventoryByLocation(currentData, groupsData, forecastData, roomIdToName);
-        renderInventoryByCrop(currentData, groupsData, forecastData);
-        renderInventoryByHarvest(currentData, groupsData, forecastData, roomIdToName);
+        renderSummaryCards(enrichedCurrent, uniqueCrops.size);
+        renderForecast(enrichedForecast);
+        renderInventoryByLocation(enrichedCurrent, groupsData, enrichedForecast, roomIdToName);
+        renderInventoryByCrop(enrichedCurrent, groupsData, enrichedForecast);
+        renderInventoryByHarvest(enrichedCurrent, groupsData, enrichedForecast, roomIdToName);
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
         console.error('[loadInventory] Error:', error);
