@@ -28,6 +28,7 @@ import {
   deactivateBuyer,
   listAllBuyers,
   loadBuyersFromDb,
+  hydrateBuyerById,
   blacklistToken,
   isTokenBlacklisted,
   recordLoginAttempt,
@@ -170,6 +171,14 @@ async function requireBuyerAuth(req, res, next) {
         console.warn('[wholesale] buyer hydration failed:', hydrateError.message);
       }
     }
+    // Targeted single-buyer hydration as final fallback
+    if (!buyer) {
+      try {
+        buyer = await hydrateBuyerById(buyerId);
+      } catch (singleErr) {
+        console.warn('[wholesale] single buyer hydration failed:', singleErr.message);
+      }
+    }
     if (!buyer) {
       return res.status(401).json({ status: 'error', message: 'Buyer not found' });
     }
@@ -280,13 +289,18 @@ function inferPriceUnit(name, category, fallbackUnit) {
 
   if (family === 'cherry_tomatoes' || family === 'weight_crops') {
     const normalizedFallback = String(fallbackUnit || '').toLowerCase();
-    if (['oz', 'lb', 'g', 'kg'].includes(normalizedFallback)) {
+    if (['oz', 'g', 'kg'].includes(normalizedFallback)) {
       return normalizedFallback;
     }
     return 'oz';
   }
 
-  return String(fallbackUnit || 'unit').toLowerCase();
+  // Default: use 'oz' for weight-like fallbacks since all pricing is per-oz
+  const normFB = String(fallbackUnit || '').toLowerCase();
+  if (['oz', 'g', 'kg'].includes(normFB)) return normFB;
+  if (normFB === 'pint') return 'pint';
+  if (normFB === 'unit' || normFB === 'each') return normFB;
+  return 'oz';
 }
 
 function mean(values) {
@@ -501,6 +515,7 @@ function applyFormulaPricingToCatalogSkus(skus, pricingContext, discountProfile)
     sku.retail_sample_size = rawRetail.length;
     sku.retail_outliers_removed = retailStats.removedCount;
     sku.price_per_unit = roundMoney(finalWholesale);
+    sku.qty_unit = sku.qty_unit || sku.unit;
     sku.unit = priceUnit;
 
     for (const farm of (sku.farms || [])) {

@@ -1282,7 +1282,7 @@ function getCropBackendUnit(cropName) {
     const unit = getCropUnit(cropName);
     if (unit === 'pint') return 'pint';
     if (unit === 'unit') return 'unit';
-    return 'lb';
+    return 'oz';
 }
 
 // Default pricing (per oz) - Based on organic market research Dec 2025
