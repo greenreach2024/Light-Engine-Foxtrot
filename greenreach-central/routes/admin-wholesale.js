@@ -346,12 +346,12 @@ router.get('/buyers/:buyerId', async (req, res) => {
  */
 router.post('/buyers/:buyerId/deactivate', async (req, res) => {
     try {
-        let buyer = deactivateBuyer(req.params.buyerId);
+        let buyer = await deactivateBuyer(req.params.buyerId);
 
         // DB fallback: buyer exists in postgres but not in memory (e.g. after restart)
         if (!buyer) {
             buyer = await hydrateBuyerFromDb(req.params.buyerId);
-            if (buyer) buyer = deactivateBuyer(req.params.buyerId);
+            if (buyer) buyer = await deactivateBuyer(req.params.buyerId);
         }
 
         if (!buyer) {
@@ -371,12 +371,12 @@ router.post('/buyers/:buyerId/deactivate', async (req, res) => {
  */
 router.post('/buyers/:buyerId/reactivate', async (req, res) => {
     try {
-        let buyer = reactivateBuyer(req.params.buyerId);
+        let buyer = await reactivateBuyer(req.params.buyerId);
 
         // DB fallback: buyer exists in postgres but not in memory (e.g. after restart)
         if (!buyer) {
             buyer = await hydrateBuyerFromDb(req.params.buyerId);
-            if (buyer) buyer = reactivateBuyer(req.params.buyerId);
+            if (buyer) buyer = await reactivateBuyer(req.params.buyerId);
         }
 
         if (!buyer) {

@@ -71,7 +71,7 @@ export async function createBuyer({ businessName, contactName, email, password, 
   buyersByEmail.set(normalizedEmail, buyer);
   buyersById.set(buyerId, buyer);
 
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer save error:', err.message));
+  await persistBuyer(buyer);
 
   return sanitizeBuyer(buyer);
 }
@@ -131,6 +131,7 @@ async function persistBuyer(buyer) {
   } catch (err) {
     // Log all persist errors — schema mismatches, type errors, etc.
     console.warn('[BuyerPersist] Error:', err.message);
+    throw err;
   }
 }
 
@@ -210,7 +211,7 @@ export async function updateBuyer(buyerId, updates) {
     buyersByEmail.set(newEmail, buyer);
   }
 
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer update error:', err.message));
+  await persistBuyer(buyer);
   return sanitizeBuyer(buyer);
 }
 
@@ -219,23 +220,23 @@ export async function resetBuyerPassword(email, newPasswordHash) {
   const buyer = buyersByEmail.get(normalizedEmail);
   if (!buyer) return null;
   buyer.passwordHash = newPasswordHash;
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer password reset error:', err.message));
+  await persistBuyer(buyer);
   return sanitizeBuyer(buyer);
 }
 
-export function deactivateBuyer(buyerId) {
+export async function deactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.status = 'deactivated';
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer deactivate error:', err.message));
+  await persistBuyer(buyer);
   return sanitizeBuyer(buyer);
 }
 
-export function reactivateBuyer(buyerId) {
+export async function reactivateBuyer(buyerId) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.status = 'active';
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer reactivate error:', err.message));
+  await persistBuyer(buyer);
   return sanitizeBuyer(buyer);
 }
 
@@ -634,7 +635,7 @@ export async function updateBuyerPassword(buyerId, newPassword) {
   const buyer = buyersById.get(buyerId);
   if (!buyer) return null;
   buyer.passwordHash = await bcrypt.hash(String(newPassword || ''), 10);
-  persistBuyer(buyer).catch(err => console.error('[Persist] Buyer password update error:', err.message));
+  await persistBuyer(buyer);
   return sanitizeBuyer(buyer);
 }
 
