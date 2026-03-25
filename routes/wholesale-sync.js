@@ -335,17 +335,18 @@ router.get('/inventory', async (req, res) => {
     if (db) {
       try {
         const dbResult = await db.query(
-          `SELECT product_id, product_name, quantity_available, quantity_unit,
-                  wholesale_price, retail_price, category
+          `SELECT product_id, product_name, quantity_available, manual_quantity_lbs,
+                  quantity_unit, wholesale_price, retail_price, category,
+                  inventory_source
            FROM farm_inventory
            WHERE farm_id = $1
-             AND available_for_wholesale = true
-             AND COALESCE(quantity_available, 0) > 0`,
+             AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+           ORDER BY product_name`,
           [farmInfo.farmId]
         );
         for (const row of dbResult.rows) {
           const cropName = row.product_name || 'Unknown';
-          const qtyLbs = Number(row.quantity_available || 0);
+          const qtyLbs = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
           const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-MANUAL`;
           const pricePerUnit = Number(row.wholesale_price || row.retail_price || 0);
           lots.push({
