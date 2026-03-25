@@ -2058,7 +2058,7 @@ const marketDataSources = {
         trend: 'stable',
         country: 'USA',
         articles: []
-    }
+    },
 
     // Premium mixed greens (used as fallback for specialty greens not sold standalone)
     'Mixed Greens': {
