@@ -4635,70 +4635,89 @@ async function syncQuickBooksCustomers() {
  */
 async function loadPaymentMethods() {
     try {
-        // Check Square connection status via proxy
-        const statusResponse = await fetch(`${API_BASE}/api/square-proxy/`, {
-            headers: { 'X-Farm-ID': currentSession?.farmId || 'LOCAL-FARM' }
+        const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+        const statusResponse = await fetch('/api/farm/square/status', {
+            headers: { 'X-Farm-ID': farmId }
         });
         const statusData = await statusResponse.json();
-        
+
         const statusContainer = document.getElementById('square-status-container');
-        
-        if (statusData.configured && statusData.connected) {
+
+        if (statusData.ok && statusData.connected) {
+            const d = statusData.data || {};
             statusContainer.innerHTML = `
                 <div style="padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <div>
                             <div style="font-size: 18px; font-weight: bold; color: var(--accent-green); margin-bottom: 8px;">
-                                 Square Connected
+                                Square Connected
                             </div>
-                            <div style="color: var(--text-secondary);">
-                                <div>Merchant: ${statusData.merchantId || 'Configured'}</div>
-                                <div>Location: ${statusData.locationName || 'Default'}</div>
+                            <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">
+                                <div>Merchant ID: ${d.merchantId || 'N/A'}</div>
+                                <div>Location: ${d.locationName || d.locationId || 'Primary'}</div>
+                                <div>Status: ${d.status || 'active'}</div>
+                                ${d.connectedAt ? '<div>Connected: ' + new Date(d.connectedAt).toLocaleDateString() + '</div>' : ''}
                             </div>
                         </div>
-                        <button class="btn" onclick="reconnectSquare()" style="background: var(--accent-blue);">
-                            Reconnect Account
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button class="btn" onclick="reconnectSquare()" style="background: var(--accent-blue);">
+                                Reconnect
+                            </button>
+                            <button class="btn" onclick="disconnectSquare()" style="background: var(--accent-red);">
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+                    <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+                        <button class="btn" onclick="testSquareConnection()" style="background: var(--accent-blue); margin-right: 8px;">
+                            Test Connection
+                        </button>
+                        <span id="square-test-result" style="color: var(--text-muted); font-size: 13px;"></span>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
+                        Square Not Connected
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                        Connect your Square account to accept credit cards, debit cards, and digital payments from your customers.
+                    </p>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
+                            Connect Square Account
+                        </button>
+                        <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-blue);">
+                            Open Setup Wizard
                         </button>
                     </div>
                 </div>
             `;
-        } else if (statusData.configured) {
+        }
+
+        // Load receipts
+        await loadReceipts();
+
+    } catch (error) {
+        console.error('[Payment] Error loading payment methods:', error);
+        const statusContainer = document.getElementById('square-status-container');
+        if (statusContainer) {
             statusContainer.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
-                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 15px;">
-                        Square Payment Processing Not Connected
+                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
+                        Square Not Connected
                     </div>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Click below to authorize your Square account.</p>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                        Connect your Square account to accept payments from customers.
+                    </p>
                     <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
                         Connect Square Account
                     </button>
                 </div>
             `;
-        } else {
-            // Square not configured on the server
-            statusContainer.innerHTML = `
-                <div style="padding: 20px; text-align: center;">
-                    <div style="font-size: 48px; margin-bottom: 15px;"></div>
-                    <div style="font-size: 18px; color: var(--text-secondary); margin-bottom: 10px;">
-                        Square Integration Available
-                    </div>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
-                        Square payment processing lets you accept credit cards, debit cards, and digital payments from your customers. 
-                        To connect, open <strong>Setup &amp; Update → Business Setup → Payment Processing</strong> and follow the setup wizard.
-                    </p>
-                    <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
-                        Open Payment Setup Wizard
-                    </button>
-                </div>
-            `;
         }
-        
-        // Load receipts
-        await loadReceipts();
-        
-    } catch (error) {
-        console.error(' Error loading payment methods:', error);
-        showToast('Failed to load payment methods', 'error');
     }
 }
 
@@ -4715,48 +4734,44 @@ async function refreshPaymentMethods() {
  */
 async function connectSquare() {
     try {
-        const farmId = currentSession?.farmId || 'LOCAL-FARM';
-        // Check if Square is configured first
-        const proxyStatus = await fetch(`${API_BASE}/api/square-proxy/`);
-        const proxyData = await proxyStatus.json();
-        
-        if (!proxyData.configured) {
-            showToast('Square is not yet configured. Use the Payment Setup wizard in Setup & Update to get started.', 'info');
-            return;
-        }
-        
-        // Get Square OAuth URL from proxy
-        const response = await fetch(`${API_BASE}/api/square-proxy/authorize?farm_id=${encodeURIComponent(farmId)}`);
+        const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+        const farmName = currentSession?.farmName || localStorage.getItem('farm_name') || 'My Farm';
+
+        const response = await fetch('/api/farm/square/authorize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farmId: farmId, farmName: farmName })
+        });
         const data = await response.json();
-        
-        if (!data.success || !data.authUrl) {
+
+        if (!response.ok || !data.ok) {
             showToast(data.error || 'Failed to initialize Square connection', 'error');
             return;
         }
-        
+
         // Open Square OAuth in popup
         const width = 600;
         const height = 700;
         const left = (screen.width - width) / 2;
         const top = (screen.height - height) / 2;
-        
-        const popup = window.open(
-            data.authUrl,
+
+        window.open(
+            data.data.authorizationUrl,
             'square-oauth',
             `width=${width},height=${height},left=${left},top=${top}`
         );
-        
+
         // Listen for callback message
         window.addEventListener('message', function handleSquareCallback(event) {
-            if (event.data.type === 'square-connected') {
+            if (event.data && event.data.type === 'square-connected') {
                 window.removeEventListener('message', handleSquareCallback);
                 showToast('Square account connected successfully!', 'success');
                 loadPaymentMethods();
             }
         });
-        
+
     } catch (error) {
-        console.error('Square connection error:', error);
+        console.error('[Payment] Square connection error:', error);
         showToast('Failed to connect Square account', 'error');
     }
 }
@@ -4766,6 +4781,70 @@ async function connectSquare() {
  */
 function reconnectSquare() {
     connectSquare();
+}
+
+/**
+ * Disconnect Square account
+ */
+async function disconnectSquare() {
+    if (!confirm('Are you sure you want to disconnect your Square account? You will not be able to process payments until you reconnect.')) {
+        return;
+    }
+    try {
+        const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+        const response = await fetch('/api/farm/square/disconnect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Farm-ID': farmId
+            },
+            body: JSON.stringify({ farmId: farmId })
+        });
+        const data = await response.json();
+        if (data.ok) {
+            showToast('Square account disconnected', 'success');
+        } else {
+            showToast(data.error || 'Failed to disconnect', 'error');
+        }
+        await loadPaymentMethods();
+    } catch (error) {
+        console.error('[Payment] Disconnect error:', error);
+        showToast('Failed to disconnect Square account', 'error');
+    }
+}
+
+/**
+ * Test Square connection
+ */
+async function testSquareConnection() {
+    const resultEl = document.getElementById('square-test-result');
+    if (resultEl) resultEl.textContent = 'Testing...';
+    try {
+        const farmId = currentSession?.farmId || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+        const response = await fetch('/api/farm/square/test-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Farm-ID': farmId
+            },
+            body: JSON.stringify({ farmId: farmId })
+        });
+        const data = await response.json();
+        if (resultEl) {
+            if (data.ok) {
+                resultEl.textContent = 'Connection verified - ' + (data.data?.locations?.length || 0) + ' location(s) active';
+                resultEl.style.color = 'var(--accent-green)';
+            } else {
+                resultEl.textContent = 'Test failed: ' + (data.error || 'Unknown error');
+                resultEl.style.color = 'var(--accent-red)';
+            }
+        }
+    } catch (error) {
+        if (resultEl) {
+            resultEl.textContent = 'Connection test failed';
+            resultEl.style.color = 'var(--accent-red)';
+        }
+    }
 }
 
 /**
