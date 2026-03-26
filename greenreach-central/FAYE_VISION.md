@@ -311,6 +311,50 @@ Migration 036 in `config/database.js` creates:
 
 ---
 
+
+---
+
+## Foundational AI/ML Literature
+
+Core references that inform F.A.Y.E.'s autonomy framework, safety design, governance practices, and future development roadmap. Full annotated bibliography with GreenReach-specific relevance notes is maintained in `.github/AI_VISION_RULES_AND_SKILLS.md` Section 16.
+
+### Autonomy & Decision-Making
+
+| Ref | Paper | Relevance to F.A.Y.E. |
+|-----|-------|----------------------|
+| 16.1.3 | Mnih et al. (2015) -- DQN (Deep Reinforcement Learning) | Conceptual foundation for autonomous environment control and reward-based learning |
+| 16.2.1 | Kaplan et al. (2020) -- Scaling Laws | Guides model size selection for latency-sensitive operations vs. complex administrative reasoning |
+| 16.2.2 | Hoffmann et al. (2022) -- Chinchilla | Validates well-trained smaller models over undertrained larger ones for cost-effective operations |
+| 16.2.3 | Brown et al. (2020) -- GPT-3 (Few-Shot Learning) | The in-context learning paradigm that F.A.Y.E. uses -- farm state in prompt, responses without fine-tuning |
+
+### Safety & Alignment (Critical for Governed Autonomy)
+
+| Ref | Paper | Relevance to F.A.Y.E. |
+|-----|-------|----------------------|
+| 16.3.2 | Ouyang et al. (2022) -- InstructGPT / RLHF | The alignment technique that enables F.A.Y.E.'s instruction-following and guardrail respect |
+| 16.3.3 | Bai et al. (2022) -- Constitutional AI | Maps to F.A.Y.E.'s policy engine: hard boundaries in admin-ai-rules.json constrain behavior like constitutional principles |
+| 16.3.4 | Amodei et al. (2016) -- Concrete Problems in AI Safety | Direct mapping: (1) side effects = write safety rules; (2) reward hacking = diverse promotion metrics; (3) scalable oversight = shadow mode; (4) safe exploration = trust tiers; (5) distributional shift = data integrity validation |
+
+### Governance & Accountability (Critical for Trust Progression)
+
+| Ref | Paper | Relevance to F.A.Y.E. |
+|-----|-------|----------------------|
+| 16.4.1 | Bender et al. (2021) -- Stochastic Parrots | Reinforces "ground responses in live data" rule -- LLM fluency is not understanding |
+| 16.4.2 | Mitchell et al. (2019) -- Model Cards | Template for F.A.Y.E.'s decision logging and outcome documentation |
+| 16.4.3 | Gebru et al. (2021) -- Datasheets for Datasets | Framework for documenting market data, transaction records, and farm health datasets |
+| 16.4.4 | Raji et al. (2020) -- Closing the AI Accountability Gap | Blueprint for auditing F.A.Y.E.'s autonomous decisions; validates shadow mode, outcome tracking, and demotion mechanisms |
+
+### Strategic Context
+
+| Ref | Paper | Relevance to F.A.Y.E. |
+|-----|-------|----------------------|
+| 16.2.4 | Bommasani et al. (2021) -- Foundation Models | Risks of single-provider dependency; importance of domain-specific guardrails |
+| 16.5.1 | Parisi et al. (2019) -- Continual Learning | Core challenge for F.A.Y.E.'s learning engine: adapting to seasonal changes without losing established knowledge |
+
+### Key Principle
+
+F.A.Y.E.'s governed autonomy framework is the practical implementation of AI safety research. The trust tier system (earn trust, don't assume it) embodies safe exploration (Ref 16.3.4). The policy engine enforces constitutional boundaries (Ref 16.3.3). Shadow mode and decision logging implement the accountability audit framework (Ref 16.4.4). Every promotion requires demonstrated competence measured across diverse metrics -- never gaming a single signal (Ref 16.3.4, reward hacking). Learning persistence across seasons addresses continual learning challenges (Ref 16.5.1).
+
 ## Guiding Principles
 
 1. **Earn trust, don't assume it.** Every autonomous action is built on a track record of correct decisions. No shortcuts.

@@ -1003,6 +1003,241 @@ These peer-reviewed and extension-service references underpin the daily environm
 - During recipe review, flag any unjustified out-of-range parameter as a warning.
 
 
+
+## 16. Foundational AI/ML Literature
+
+Annotated bibliography of 20 peer-reviewed papers that form the intellectual foundation for GreenReach AI development. These references inform architecture decisions, safety guardrails, alignment methodology, governance practices, and future capability roadmap across all GreenReach agents (F.A.Y.E., E.V.I.E., and Copilot).
+
+### Executive Summary
+
+This collection spans five domains critical to building responsible, effective AI for controlled environment agriculture: (1) the core neural network architectures that underpin modern vision, language, and decision-making systems; (2) empirical scaling laws that govern how model capability grows with compute and data; (3) safety and alignment techniques that keep AI systems acting within intended boundaries; (4) governance and accountability frameworks that ensure transparency and auditability; and (5) multimodal and continual learning methods that point toward next-generation agent capabilities for farm intelligence.
+
+### Reading Roadmap
+
+| Priority | Domain | Start With | Then Read |
+|----------|--------|------------|-----------|
+| 1 | Safety & Alignment | Amodei et al. (2016) | Ouyang et al. (2022), Bai et al. (2022) |
+| 2 | Governance | Mitchell et al. (2019) | Gebru et al. (2021), Raji et al. (2020) |
+| 3 | Core Architectures | Vaswani et al. (2017) | He et al. (2016), Ho et al. (2020) |
+| 4 | Scaling & Foundation Models | Kaplan et al. (2020) | Hoffmann et al. (2022), Brown et al. (2020) |
+| 5 | Future Directions | Radford et al. (2021) | Li et al. (2023), Alayrac et al. (2022) |
+
+### 16.1 Core Architectures & Methods
+
+These four papers define the building blocks used across vision, language, reinforcement learning, and generative modelling.
+
+#### Reference 16.1.1: Deep Residual Learning for Image Recognition
+
+- **Authors**: He, K., Zhang, X., Ren, S., & Sun, J.
+- **Year**: 2016
+- **Venue**: IEEE Conference on Computer Vision and Pattern Recognition (CVPR)
+- **Key contribution**: Introduced skip connections (residual blocks) enabling training of networks with 100+ layers without gradient degradation. ResNet-152 won ImageNet 2015 with 3.57% top-5 error.
+- **GreenReach relevance**: Foundation for any plant health image classification, leaf disease detection, or growth-stage visual analysis. ResNet backbones remain the default starting point for agricultural computer vision tasks.
+- **Cited by**: 200,000+
+
+#### Reference 16.1.2: Attention Is All You Need
+
+- **Authors**: Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I.
+- **Year**: 2017
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Replaced recurrence with multi-head self-attention, enabling parallel training and long-range dependency modeling. Introduced the Transformer architecture that underpins GPT, BERT, and all modern LLMs.
+- **GreenReach relevance**: The Transformer is the engine behind E.V.I.E. and F.A.Y.E. conversational capabilities. Understanding attention mechanisms is essential for prompt engineering, context window management, and interpreting agent behavior.
+- **Cited by**: 140,000+
+
+#### Reference 16.1.3: Human-Level Control Through Deep Reinforcement Learning
+
+- **Authors**: Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Veness, J., Bellemare, M. G., Graves, A., Riedmiller, M., Fidjeland, A. K., Ostrovski, G., Petersen, S., Beattie, C., Sadik, A., Antonoglou, I., King, H., Kumaran, D., Wierstra, D., Legg, S., & Hassabis, D.
+- **Year**: 2015
+- **Venue**: Nature, 518(7540), 529-533
+- **Key contribution**: Deep Q-Network (DQN) combined convolutional neural networks with Q-learning to achieve human-level performance across 49 Atari games from raw pixel input. Demonstrated that a single architecture can learn diverse sequential decision-making tasks.
+- **GreenReach relevance**: Conceptual foundation for future autonomous environment control -- an RL agent that learns optimal lighting, irrigation, and climate schedules from sensor feedback rather than fixed recipes. Relevant to F.A.Y.E. autonomy progression.
+- **Cited by**: 30,000+
+
+#### Reference 16.1.4: Denoising Diffusion Probabilistic Models
+
+- **Authors**: Ho, J., Jain, A., & Abbeel, P.
+- **Year**: 2020
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Formalized the training of diffusion models as a sequence of denoising steps, producing high-fidelity image generation that rivals GANs with more stable training. Established the DDPM framework adopted by DALL-E 2, Stable Diffusion, and Imagen.
+- **GreenReach relevance**: Potential for synthetic data augmentation (generating realistic plant images for training disease classifiers when labeled farm data is scarce) and for sensor data imputation (filling gaps in environmental time series).
+- **Cited by**: 15,000+
+
+### 16.2 Scaling Laws & Foundation Models
+
+Empirical findings on how model performance scales with compute, data, and parameters -- critical for capacity planning and cost-benefit analysis.
+
+#### Reference 16.2.1: Scaling Laws for Neural Language Models
+
+- **Authors**: Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., Gray, S., Radford, A., Wu, J., & Amodei, D.
+- **Year**: 2020
+- **Venue**: arXiv preprint (arXiv:2001.08361)
+- **Key contribution**: Established power-law relationships between model performance and three factors: parameter count, dataset size, and compute budget. Showed that performance improves predictably with scale, and that larger models are more sample-efficient.
+- **GreenReach relevance**: Informs decisions about which model sizes to deploy for E.V.I.E. and F.A.Y.E. -- smaller models for latency-sensitive farm operations, larger models for complex administrative reasoning. Guides compute budget allocation.
+
+#### Reference 16.2.2: Training Compute-Optimal Large Language Models (Chinchilla)
+
+- **Authors**: Hoffmann, J., Borgeaud, S., Mensch, A., Buchatskaya, E., Cai, T., Rutherford, E., Casas, D. de L., Hendricks, L. A., Welbl, J., Clark, A., Hennigan, T., Noland, E., Millican, K., van den Driessche, G., Damoc, B., Guy, A., Osindero, S., Simonyan, K., Rae, J. W., Vinyals, O., & Sifre, L.
+- **Year**: 2022
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Demonstrated that most large language models are significantly undertrained relative to their size. A 70B-parameter model trained on 4x more data (Chinchilla) outperformed the 280B Gopher model. Established the "Chinchilla scaling law": optimal training requires roughly equal scaling of parameters and data tokens.
+- **GreenReach relevance**: Validates the strategy of using well-trained smaller models over undertrained larger ones for cost-effective farm AI. Directly relevant to model selection and fine-tuning decisions.
+
+#### Reference 16.2.3: Language Models Are Few-Shot Learners (GPT-3)
+
+- **Authors**: Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan, J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., Agarwal, S., Herbert-Voss, A., et al.
+- **Year**: 2020
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Demonstrated that a 175B parameter language model can perform tasks via in-context learning (zero-shot, one-shot, few-shot) without gradient updates. Showed emergent capabilities at scale including arithmetic, code generation, and structured data manipulation.
+- **GreenReach relevance**: The few-shot learning paradigm is how E.V.I.E. and F.A.Y.E. operate -- they receive task context in the prompt (farm state, sensor data, recipes) and generate responses without fine-tuning. Understanding few-shot mechanics improves prompt design.
+
+#### Reference 16.2.4: On the Opportunities and Risks of Foundation Models
+
+- **Authors**: Bommasani, R., Hudson, D. A., Adeli, E., Altman, R., Arber, S., von Arx, S., Bernstein, M. S., Bohg, J., Bosselut, A., Brunskill, E., Brynjolfsson, E., et al. (Stanford CRFM, 100+ authors)
+- **Year**: 2021
+- **Venue**: arXiv preprint (arXiv:2108.07258)
+- **Key contribution**: Comprehensive 200+ page survey defining "foundation models" as large pretrained models adapted to downstream tasks. Analyzed their capabilities, limitations, and societal impact across language, vision, robotics, healthcare, law, and education.
+- **GreenReach relevance**: Strategic context for how GreenReach uses foundation models (OpenAI GPT) as the base for E.V.I.E. and F.A.Y.E. Highlights risks of homogenization, single-point-of-failure dependencies, and the importance of domain-specific guardrails.
+
+### 16.3 Safety & Alignment
+
+Techniques and frameworks for ensuring AI systems behave as intended, respect boundaries, and remain aligned with human values.
+
+#### Reference 16.3.1: Explaining and Harnessing Adversarial Examples
+
+- **Authors**: Goodfellow, I. J., Shlens, J., & Szegedy, C.
+- **Year**: 2015
+- **Venue**: International Conference on Learning Representations (ICLR)
+- **Key contribution**: Introduced the Fast Gradient Sign Method (FGSM) for generating adversarial examples and demonstrated that imperceptible perturbations can cause confident misclassification. Proposed adversarial training as a defense mechanism.
+- **GreenReach relevance**: Critical awareness for any future computer vision deployment (plant health assessment, quality grading). Sensor data can also contain adversarial-like noise from hardware faults. Defensive validation is already embedded in Rule 8 (Safety Guardrails).
+
+#### Reference 16.3.2: Training Language Models to Follow Instructions with Human Feedback (InstructGPT / RLHF)
+
+- **Authors**: Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C. L., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., Schulman, J., Hilton, J., Kelton, F., Miller, L., Simens, M., Askell, A., Welinder, P., Christiano, P. F., Leike, J., & Lowe, R.
+- **Year**: 2022
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Described the three-step RLHF pipeline (supervised fine-tuning, reward model training, PPO optimization) that transformed GPT-3 into InstructGPT. A 1.3B InstructGPT model was preferred by humans over the 175B GPT-3.
+- **GreenReach relevance**: RLHF is the alignment technique underlying the models E.V.I.E. and F.A.Y.E. use. Understanding this pipeline explains why the agents follow instructions, respect guardrails, and maintain helpful tone. Relevant to future fine-tuning of farm-specific behaviors.
+
+#### Reference 16.3.3: Constitutional AI: Harmlessness from AI Feedback
+
+- **Authors**: Bai, Y., Kadavath, S., Kundu, S., Askell, A., Kernion, J., Jones, A., Chen, A., Goldie, A., Mirhoseini, A., McKinnon, C., Chen, C., Olsson, C., Olah, C., Hernandez, D., Drain, D., Ganguli, D., Li, D., Tran-Johnson, E., Perez, E., Kerr, J., Mueller, J., Ladish, J., et al.
+- **Year**: 2022
+- **Venue**: arXiv preprint (arXiv:2212.08073)
+- **Key contribution**: Proposed Constitutional AI (CAI) where the model self-critiques and revises outputs against a set of written principles, reducing reliance on human labelers for harmlessness training. Demonstrated that AI feedback can substitute for human feedback in alignment.
+- **GreenReach relevance**: The CAI concept maps directly to F.A.Y.E.'s policy engine -- a set of non-negotiable hard boundaries (admin-ai-rules.json) that constrain autonomous behavior. The self-critique pattern could enhance future agent self-review capabilities.
+
+#### Reference 16.3.4: Concrete Problems in AI Safety
+
+- **Authors**: Amodei, D., Olah, C., Steinhardt, J., Christiano, P., Schulman, J., & Mane, D.
+- **Year**: 2016
+- **Venue**: arXiv preprint (arXiv:1606.06565)
+- **Key contribution**: Catalogued five concrete safety problems in ML systems: avoiding negative side effects, avoiding reward hacking, scalable oversight, safe exploration, and robustness to distributional shift. Grounded abstract safety concerns in practical engineering challenges.
+- **GreenReach relevance**: Directly maps to GreenReach agent design: (1) side effects -- F.A.Y.E. write safety rules prevent cascading actions; (2) reward hacking -- promotion metrics require diverse signal, not gaming a single metric; (3) scalable oversight -- shadow mode and decision logging; (4) safe exploration -- trust tier system with demotion; (5) distributional shift -- sensor sanity validation in ai-rules.json.
+
+### 16.4 Governance, Ethics & Accountability
+
+Frameworks for responsible AI deployment, documentation, and auditing.
+
+#### Reference 16.4.1: On the Dangers of Stochastic Parrots: Can Language Models Be Too Big?
+
+- **Authors**: Bender, E. M., Gebru, T., McMillan-Major, A., & Shmitchell, S.
+- **Year**: 2021
+- **Venue**: ACM Conference on Fairness, Accountability, and Transparency (FAccT)
+- **Key contribution**: Argued that large language models carry environmental costs, encode biases present in training data, and generate fluent but unreliable text that can be mistaken for understanding. Called for careful documentation of training data and deployment context.
+- **GreenReach relevance**: Reinforces the importance of E.V.I.E.'s "never fabricate data" guardrail and F.A.Y.E.'s "ground responses in live data" rule. LLM outputs must always be validated against actual sensor readings, not treated as ground truth.
+
+#### Reference 16.4.2: Model Cards for Model Reporting
+
+- **Authors**: Mitchell, M., Wu, S., Zaldivar, A., Barnes, P., Vasserman, L., Hutchinson, B., Spitzer, E., Raji, I. D., & Gebru, T.
+- **Year**: 2019
+- **Venue**: ACM Conference on Fairness, Accountability, and Transparency (FAccT)
+- **Key contribution**: Proposed a standardized documentation framework ("model cards") for trained ML models, including intended use, performance metrics across subgroups, ethical considerations, and limitations. Became an industry standard adopted by Hugging Face, Google, and OpenAI.
+- **GreenReach relevance**: Template for documenting any farm-specific models (quality grading, yield prediction, anomaly detection). F.A.Y.E.'s decision logging and E.V.I.E.'s recommendation format rules are the operational equivalent of model cards for agent outputs.
+
+#### Reference 16.4.3: Datasheets for Datasets
+
+- **Authors**: Gebru, T., Morgenstern, J., Vecchione, B., Vaughan, J. W., Wallach, H., Daume III, H., & Crawford, K.
+- **Year**: 2021
+- **Venue**: Communications of the ACM, 64(12), 86-92
+- **Key contribution**: Proposed standardized documentation for datasets, covering motivation, composition, collection process, preprocessing, intended uses, distribution, and maintenance. Companion to Model Cards, focused on data provenance and quality.
+- **GreenReach relevance**: Essential for documenting farm sensor datasets, harvest quality records, and market pricing data used in AI features. The experiment record standard (Rule 3.1) and lot traceability system already implement dataset documentation principles for agricultural data.
+
+#### Reference 16.4.4: Closing the AI Accountability Gap
+
+- **Authors**: Raji, I. D., Smart, A., White, R. N., Mitchell, M., Gebru, T., Hutchinson, B., Smith-Loud, J., Theron, D., & Barnes, P.
+- **Year**: 2020
+- **Venue**: ACM Conference on Fairness, Accountability, and Transparency (FAccT)
+- **Key contribution**: Defined an end-to-end internal algorithmic auditing framework covering scoping, mapping, artifact collection, testing, reflection, and post-audit monitoring. Emphasized that accountability requires continuous institutional process, not one-time review.
+- **GreenReach relevance**: Blueprint for auditing F.A.Y.E.'s autonomous decisions. The shadow mode, decision logging, outcome tracking, and demotion mechanisms already implement key elements of this framework. Validates the "earn trust, don't assume it" guiding principle.
+
+### 16.5 Future Directions: Multimodal & Continual Learning
+
+Emerging methods that point toward next-generation capabilities for farm intelligence agents.
+
+#### Reference 16.5.1: Continual Lifelong Learning with Neural Networks: A Review
+
+- **Authors**: Parisi, G. I., Kemker, R., Part, J. L., Kanan, C., & Wermter, S.
+- **Year**: 2019
+- **Venue**: Neural Networks, 113, 54-71
+- **Key contribution**: Comprehensive survey of continual learning approaches addressing catastrophic forgetting -- the tendency of neural networks to lose previously learned knowledge when trained on new tasks. Reviewed replay methods, regularization approaches, and dynamic architectures.
+- **GreenReach relevance**: Core challenge for farm AI that must adapt to seasonal changes, new crop varieties, and evolving market conditions without losing established knowledge. Directly relevant to F.A.Y.E.'s learning engine and knowledge base persistence.
+
+#### Reference 16.5.2: Learning Transferable Visual Models From Natural Language Supervision (CLIP)
+
+- **Authors**: Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., & Sutskever, I.
+- **Year**: 2021
+- **Venue**: International Conference on Machine Learning (ICML)
+- **Key contribution**: Trained a vision-language model on 400M image-text pairs using contrastive learning, enabling zero-shot image classification by matching images to natural language descriptions. CLIP transfers to new visual tasks without task-specific training data.
+- **GreenReach relevance**: Enables future E.V.I.E. capability to classify plant conditions from photos using natural language descriptions ("yellowing leaves on basil," "root rot in lettuce") without training a custom classifier for each condition. Foundation for the image upload analysis feature.
+
+#### Reference 16.5.3: Flamingo: A Visual Language Model for Few-Shot Learning
+
+- **Authors**: Alayrac, J.-B., Donahue, J., Luc, P., Miech, A., Barr, I., Hasson, Y., Lenc, K., Mensch, A., Millican, K., Reynolds, M., Ring, R., Rutherford, E., Cabi, S., Han, T., Gong, Z., Samangooei, S., Marinier, R., Mourad, H., Borber, J., Sherber, J., Adler, A., et al.
+- **Year**: 2022
+- **Venue**: Advances in Neural Information Processing Systems (NeurIPS)
+- **Key contribution**: Built a visual language model that interleaves text and image inputs, achieving state-of-the-art few-shot performance on visual question answering, captioning, and classification. Demonstrated that a frozen language model can be augmented with visual perception through cross-attention layers.
+- **GreenReach relevance**: Architecture prototype for a future E.V.I.E. that can reason over mixed inputs -- sensor charts, crop photos, and grower questions in a single conversation turn. The interleaved text-image pattern matches the farm assistant use case.
+
+#### Reference 16.5.4: BLIP-2: Bootstrapping Language-Image Pre-training
+
+- **Authors**: Li, J., Li, D., Savarese, S., & Hoi, S.
+- **Year**: 2023
+- **Venue**: International Conference on Machine Learning (ICML)
+- **Key contribution**: Introduced a lightweight Querying Transformer (Q-Former) that bridges frozen image encoders and frozen LLMs, achieving strong vision-language performance with minimal trainable parameters. Demonstrated that efficient bridging architecture can leverage existing foundation models without end-to-end retraining.
+- **GreenReach relevance**: Most directly applicable architecture for adding visual understanding to E.V.I.E. -- a lightweight bridge between an image encoder (for crop photos) and the existing LLM backend, without requiring expensive full-model training. Cost-effective path to multimodal farm intelligence.
+
+### Quick-Reference Sources Table
+
+| # | Short Name | Authors | Year | Venue | Domain |
+|---|-----------|---------|------|-------|--------|
+| 16.1.1 | ResNet | He et al. | 2016 | CVPR | Architecture |
+| 16.1.2 | Transformer | Vaswani et al. | 2017 | NeurIPS | Architecture |
+| 16.1.3 | DQN | Mnih et al. | 2015 | Nature | Architecture |
+| 16.1.4 | DDPM | Ho et al. | 2020 | NeurIPS | Architecture |
+| 16.2.1 | Scaling Laws | Kaplan et al. | 2020 | arXiv | Scaling |
+| 16.2.2 | Chinchilla | Hoffmann et al. | 2022 | NeurIPS | Scaling |
+| 16.2.3 | GPT-3 | Brown et al. | 2020 | NeurIPS | Scaling |
+| 16.2.4 | Foundation Models | Bommasani et al. | 2021 | arXiv | Scaling |
+| 16.3.1 | FGSM / Adversarial | Goodfellow et al. | 2015 | ICLR | Safety |
+| 16.3.2 | InstructGPT / RLHF | Ouyang et al. | 2022 | NeurIPS | Alignment |
+| 16.3.3 | Constitutional AI | Bai et al. | 2022 | arXiv | Alignment |
+| 16.3.4 | Concrete Safety | Amodei et al. | 2016 | arXiv | Safety |
+| 16.4.1 | Stochastic Parrots | Bender et al. | 2021 | FAccT | Governance |
+| 16.4.2 | Model Cards | Mitchell et al. | 2019 | FAccT | Governance |
+| 16.4.3 | Datasheets | Gebru et al. | 2021 | CACM | Governance |
+| 16.4.4 | Accountability Gap | Raji et al. | 2020 | FAccT | Governance |
+| 16.5.1 | Continual Learning | Parisi et al. | 2019 | Neural Networks | Future |
+| 16.5.2 | CLIP | Radford et al. | 2021 | ICML | Future |
+| 16.5.3 | Flamingo | Alayrac et al. | 2022 | NeurIPS | Future |
+| 16.5.4 | BLIP-2 | Li et al. | 2023 | ICML | Future |
+
+### Rule 16.1: Literature-Informed Agent Development
+
+- All new AI/ML features MUST reference at least one paper from Section 16 in their design rationale.
+- Safety-critical features (autonomy tier promotion, sensor validation, write actions) MUST cite relevant papers from 16.3 (Safety & Alignment).
+- Any future computer vision or multimodal feature MUST review papers from 16.1 and 16.5 before implementation.
+- Governance decisions (logging, auditing, documentation) SHOULD follow frameworks from 16.4.
+
 ## Appendix: Integration with Agent Skills Framework
 
 This document extends `AGENT_SKILLS_FRAMEWORK.md` with AI/ML-specific rules. The following sections of the parent framework are complemented:

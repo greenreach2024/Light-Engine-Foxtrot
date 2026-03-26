@@ -203,3 +203,46 @@ E.V.I.E. handles single-farm lot operations. She escalates to F.A.Y.E. when:
 - A lot needs recall (business operation with buyer impact)
 - SFCR audit data is requested at the network level (multi-farm export)
 - Pricing decisions are needed based on quality grades
+
+
+---
+
+## Foundational AI/ML Literature
+
+Core references that inform E.V.I.E.'s capabilities, safety design, and future development roadmap. Full annotated bibliography with GreenReach-specific relevance notes is maintained in `.github/AI_VISION_RULES_AND_SKILLS.md` Section 16.
+
+### Architecture Foundations
+
+| Ref | Paper | Relevance to E.V.I.E. |
+|-----|-------|----------------------|
+| 16.1.1 | He et al. (2016) -- Deep Residual Learning (ResNet) | Backbone for future plant health image classification |
+| 16.1.2 | Vaswani et al. (2017) -- Attention Is All You Need (Transformer) | Engine behind E.V.I.E.'s conversational understanding |
+| 16.1.4 | Ho et al. (2020) -- Denoising Diffusion Probabilistic Models | Synthetic data augmentation for scarce farm imagery |
+
+### Safety & Alignment
+
+| Ref | Paper | Relevance to E.V.I.E. |
+|-----|-------|----------------------|
+| 16.3.1 | Goodfellow et al. (2015) -- Adversarial Examples | Sensor data validation, defensive input handling |
+| 16.3.2 | Ouyang et al. (2022) -- InstructGPT / RLHF | The alignment technique underlying E.V.I.E.'s instruction-following behavior |
+| 16.3.4 | Amodei et al. (2016) -- Concrete Problems in AI Safety | Maps to E.V.I.E.'s guardrails: side effects, safe exploration, distributional shift |
+
+### Governance
+
+| Ref | Paper | Relevance to E.V.I.E. |
+|-----|-------|----------------------|
+| 16.4.1 | Bender et al. (2021) -- Stochastic Parrots | Reinforces "never fabricate data" guardrail |
+| 16.4.2 | Mitchell et al. (2019) -- Model Cards | Template for documenting E.V.I.E.'s recommendation format |
+| 16.4.3 | Gebru et al. (2021) -- Datasheets for Datasets | Framework for farm sensor and harvest data documentation |
+
+### Future Capabilities
+
+| Ref | Paper | Relevance to E.V.I.E. |
+|-----|-------|----------------------|
+| 16.5.2 | Radford et al. (2021) -- CLIP | Zero-shot plant condition classification from photos |
+| 16.5.3 | Alayrac et al. (2022) -- Flamingo | Mixed sensor chart + crop photo + text reasoning |
+| 16.5.4 | Li et al. (2023) -- BLIP-2 | Lightweight bridge to add visual understanding to E.V.I.E.'s LLM backend |
+
+### Key Principle
+
+E.V.I.E. operates on foundation models whose behavior is shaped by RLHF alignment (Ref 16.3.2). Every response is grounded in actual sensor data and tool outputs -- never in model-generated fabrication (Ref 16.4.1). Safety guardrails map directly to the concrete problems catalogue (Ref 16.3.4). Future multimodal capabilities will follow the efficient bridging architecture of BLIP-2 (Ref 16.5.4) rather than expensive end-to-end retraining.
