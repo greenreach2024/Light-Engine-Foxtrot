@@ -3092,6 +3092,32 @@ app.post('/api/farm/auth/login', (req, res, next) => {
 
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
+// Farm Square payment setup routes (proxied to LE)
+app.get('/api/farm/square/status', (req, res) => edgeProxy(req, res, '/api/farm/square/status'));
+app.post('/api/farm/square/authorize', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/authorize', 'POST', req.body));
+app.get('/api/farm/square/callback', async (req, res) => {
+  // Custom proxy for callback -- returns HTML, not JSON
+  const edgeUrl = resolveEdgeUrlForProxy();
+  if (!edgeUrl) return res.status(503).send('Light Engine not available');
+  const qs = new URLSearchParams(req.query).toString();
+  try {
+    const response = await fetch(edgeUrl + '/api/farm/square/callback?' + qs, {
+      headers: leProxyHeaders(),
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = await response.text();
+    const ct = response.headers.get('content-type') || 'text/html';
+    res.status(response.status).type(ct).send(text);
+  } catch (err) {
+    logger.error('[SquareCallbackProxy] error:', err.message);
+    res.status(502).send('Square callback proxy failed');
+  }
+});
+app.post('/api/farm/square/refresh', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/refresh', 'POST', req.body));
+app.post('/api/farm/square/settings', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/settings', 'POST', req.body));
+app.post('/api/farm/square/disconnect', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/disconnect', 'POST', req.body));
+app.post('/api/farm/square/test-payment', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/test-payment', 'POST', req.body));
+
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', authMiddleware, setupWizardRoutes); // First-time farm setup wizard
@@ -3392,31 +3418,6 @@ app.get('/api/bus-mappings', authMiddleware, (req, res) => edgeProxy(req, res, '
 app.post('/api/bus-mapping', authMiddleware, express.json(), (req, res) => edgeProxy(req, res, '/api/bus-mapping', 'POST', req.body));
 app.get('/api/bus/:busId/scan', authMiddleware, (req, res) => edgeProxy(req, res, `/api/bus/${req.params.busId}/scan`));
 
-// Farm Square payment setup routes (proxied to LE)
-app.get('/api/farm/square/status', (req, res) => edgeProxy(req, res, '/api/farm/square/status'));
-app.post('/api/farm/square/authorize', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/authorize', 'POST', req.body));
-app.get('/api/farm/square/callback', async (req, res) => {
-  // Custom proxy for callback -- returns HTML, not JSON
-  const edgeUrl = resolveEdgeUrlForProxy();
-  if (!edgeUrl) return res.status(503).send('Light Engine not available');
-  const qs = new URLSearchParams(req.query).toString();
-  try {
-    const response = await fetch(edgeUrl + '/api/farm/square/callback?' + qs, {
-      headers: leProxyHeaders(),
-      signal: AbortSignal.timeout(15000)
-    });
-    const text = await response.text();
-    const ct = response.headers.get('content-type') || 'text/html';
-    res.status(response.status).type(ct).send(text);
-  } catch (err) {
-    logger.error('[SquareCallbackProxy] error:', err.message);
-    res.status(502).send('Square callback proxy failed');
-  }
-});
-app.post('/api/farm/square/refresh', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/refresh', 'POST', req.body));
-app.post('/api/farm/square/settings', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/settings', 'POST', req.body));
-app.post('/api/farm/square/disconnect', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/disconnect', 'POST', req.body));
-app.post('/api/farm/square/test-payment', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/test-payment', 'POST', req.body));
 
 app.use('/api/ml/insights', authMiddleware, mlForecastRoutes); // ML temperature forecast (Light Engine feature)
 app.use('/api/billing', authOrAdminMiddleware, billingRoutes); // Billing usage (cloud)
