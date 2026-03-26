@@ -896,7 +896,7 @@ async function getInventoryTraysForCompat(farmId) {
 function leProxyHeaders(extra = {}) {
   const headers = { 'Accept': 'application/json', ...extra };
   const farmId = process.env.FARM_ID;
-  if (farmId) headers['X-Farm-ID'] = farmId;
+  if (farmId && !headers['X-Farm-ID']) headers['X-Farm-ID'] = farmId;
   const apiKey = process.env.GREENREACH_API_KEY;
   if (apiKey) headers['X-API-Key'] = apiKey;
   return headers;
@@ -3101,12 +3101,16 @@ app.get('/api/farm/square/callback', async (req, res) => {
   if (!edgeUrl) return res.status(503).send('Light Engine not available');
   const qs = new URLSearchParams(req.query).toString();
   try {
+    const cbHeaders = leProxyHeaders();
+    if (req.headers['x-farm-id']) cbHeaders['X-Farm-ID'] = req.headers['x-farm-id'];
+    logger.info('[SquareCallbackProxy] Proxying to LE: ' + edgeUrl + '/api/farm/square/callback');
     const response = await fetch(edgeUrl + '/api/farm/square/callback?' + qs, {
-      headers: leProxyHeaders(),
+      headers: cbHeaders,
       signal: AbortSignal.timeout(15000)
     });
     const text = await response.text();
     const ct = response.headers.get('content-type') || 'text/html';
+    logger.info('[SquareCallbackProxy] LE responded: ' + response.status + ' (' + ct + ')');
     res.status(response.status).type(ct).send(text);
   } catch (err) {
     logger.error('[SquareCallbackProxy] error:', err.message);
@@ -3183,9 +3187,12 @@ async function edgeProxy(req, res, edgePath, method = 'GET', body = null, timeou
     });
   }
   const url = `${edgeUrl}${edgePath}`;
+  // Forward browser's X-Farm-ID so farm-scoped routes resolve correctly
+  const proxyExtra = { 'Content-Type': 'application/json' };
+  if (req.headers && req.headers['x-farm-id']) proxyExtra['X-Farm-ID'] = req.headers['x-farm-id'];
   const opts = {
     method,
-    headers: leProxyHeaders({ 'Content-Type': 'application/json' }),
+    headers: leProxyHeaders(proxyExtra),
     signal: AbortSignal.timeout(timeoutMs)
   };
   if (body && method !== 'GET') opts.body = JSON.stringify(body);
