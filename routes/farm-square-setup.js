@@ -553,12 +553,12 @@ function callbackHtml(title, bodyContent, success, farmId, merchantData) {
     + bodyContent
     + '<a href="/">Return to Dashboard</a>'
     + (success && farmId
-      ? '<script>if(window.opener){window.opener.postMessage({type:"square-connected",farmId:' + JSON.stringify(farmId)
+      ? '<script>try{if(window.opener){window.opener.postMessage({type:"square-connected",farmId:' + JSON.stringify(farmId)
         + ',merchantId:' + JSON.stringify(md.merchantId || '')
         + ',merchantName:' + JSON.stringify(md.merchantName || '')
         + ',locationId:' + JSON.stringify(md.locationId || '')
         + ',locationName:' + JSON.stringify(md.locationName || '')
-        + '},window.location.origin);setTimeout(function(){window.close()},2000)}</script>'
+        + '},"*")}}catch(e){console.log("postMessage failed:",e)}setTimeout(function(){window.close()},3000)</script>'
       : '')
     + '</body></html>';
 }

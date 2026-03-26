@@ -2761,31 +2761,72 @@
         const w = 600, h = 700;
         const left = (screen.width - w) / 2;
         const top = (screen.height - h) / 2;
-        window.open(
+        var squarePopup = window.open(
           data.data.authorizationUrl,
           'square-oauth',
           'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top
         );
 
-        // Listen for callback message from the popup
+        // Advance wizard to step 3 when Square connects
+        function onSquareConnected(merchantId, merchantName, locationId, locationName) {
+          var wI = document.getElementById("squareWaitingIndicator"); if (wI) wI.style.display = "none";
+          paymentWizardData.squareConnected = true;
+          paymentWizardData.merchantId = merchantId || farmId;
+          paymentWizardData.locationId = locationId || '';
+
+          document.getElementById('squareConnected').style.display = 'block';
+          document.getElementById('connectedMerchantName').textContent = merchantName || farmName;
+          document.getElementById('connectedLocationName').textContent = locationName || 'Primary Location';
+
+          document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'none';
+          document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'block';
+          paymentWizardStep = 3;
+          updatePaymentWizardProgress();
+        }
+
+        // Listen for callback message from the popup (primary method)
         window.addEventListener('message', function handleSquare(event) {
           if (event.data && event.data.type === 'square-connected') {
             window.removeEventListener('message', handleSquare);
-            var wI = document.getElementById("squareWaitingIndicator"); if (wI) wI.style.display = "none";
-            paymentWizardData.squareConnected = true;
-            paymentWizardData.merchantId = event.data.merchantId || farmId;
-            paymentWizardData.locationId = event.data.locationId || '';
-
-            document.getElementById('squareConnected').style.display = 'block';
-            document.getElementById('connectedMerchantName').textContent = event.data.merchantName || farmName;
-            document.getElementById('connectedLocationName').textContent = event.data.locationName || 'Primary Location';
-
-            document.querySelector('#paymentWizardModal .wizard-panel[data-panel="2"]').style.display = 'none';
-            document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'block';
-            paymentWizardStep = 3;
-            updatePaymentWizardProgress();
+            onSquareConnected(event.data.merchantId, event.data.merchantName, event.data.locationId, event.data.locationName);
           }
         });
+
+        // Fallback: poll Square status when popup closes (handles Safari window.opener restrictions)
+        var pollTimer = setInterval(function() {
+          if (!squarePopup || squarePopup.closed) {
+            clearInterval(pollTimer);
+            console.log('[PaymentWizard] Popup closed, checking Square connection status...');
+            var statusFid = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+            var pollAttempts = 0;
+            var statusPoller = setInterval(async function() {
+              pollAttempts++;
+              try {
+                var statusRes = await fetch('/api/farm/square/status', { headers: { 'X-Farm-ID': statusFid } });
+                var statusData = await statusRes.json();
+                if (statusData.ok && statusData.connected) {
+                  clearInterval(statusPoller);
+                  onSquareConnected(
+                    statusData.data.merchantId,
+                    statusData.data.merchantName || farmName,
+                    statusData.data.locationId,
+                    statusData.data.locationName || 'Primary Location'
+                  );
+                  return;
+                }
+              } catch (e) {
+                console.log('[PaymentWizard] Status poll error:', e.message);
+              }
+              if (pollAttempts >= 5) {
+                clearInterval(statusPoller);
+                var wI2 = document.getElementById("squareWaitingIndicator"); if (wI2) wI2.style.display = "none";
+                var connectBtn2 = document.getElementById("connectSquareBtn");
+                if (connectBtn2) { connectBtn2.disabled = false; connectBtn2.textContent = "Connect Square Account"; }
+                alert('Square connection could not be verified. If you completed sign-in on Square, please try again.');
+              }
+            }, 2000);
+          }
+        }, 1000);
       } catch (err) {
         console.error('[PaymentWizard] Square connection error:', err);
         alert('Failed to connect to Square. Check your network connection and try again.');
