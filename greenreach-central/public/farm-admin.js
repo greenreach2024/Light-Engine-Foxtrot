@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v6';
+const PRICING_VERSION = '2026-03-26-v7';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1296,12 +1296,12 @@ const defaultPricing = {
     'Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },             // Generic lettuce
     
     // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
-    'Thai Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Purple Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },        // Same as Genovese
-    'Lemon Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },         // Same as Genovese
-    'Holy Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },               // Generic basil
+    'Genovese Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },      // $2.29/1.0oz Ontario retail
+    'Thai Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
+    'Purple Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },        // Ontario herb pricing
+    'Lemon Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },         // Ontario herb pricing
+    'Holy Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
+    'Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },               // Ontario retail
     
     // Arugula varieties - Specialty green pricing
     'Baby Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
@@ -1313,8 +1313,6 @@ const defaultPricing = {
     
     // Kale varieties - Standard pricing
     'Curly Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-// Dinosaur kale
-// Same as Lacinato
     'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
 // Standard kale
     'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },                // Generic kale
@@ -1326,8 +1324,8 @@ const defaultPricing = {
     'Sprout': { retail: 0.58, ws1: 20, ws2: 25, ws3: 35 },
 
     // Herbs missing from original defaults
-    'Rosemary': { retail: 3.49, ws1: 20, ws2: 25, ws3: 35 },             // $3.49/0.75oz
-    'Sage': { retail: 3.49, ws1: 20, ws2: 25, ws3: 35 },                 // $3.49/0.75oz
+    'Rosemary': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },             // Ontario herb pricing
+    'Sage': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },                 // Ontario herb pricing
     'Watercress': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 }            // $3.99/4oz
 };
 
@@ -1894,9 +1892,7 @@ const marketDataSources = {
         priceRange: [4.99, 6.99],
         trend: 'stable',
         country: 'North America',
-        articles: [
-            { title: 'Organic Living Lettuce Gains Market Share', url: 'https://www.producenews.com/organic-lettuce-trends', date: '2025-11-15' }
-        ]
+        articles: []
     },
     'Romaine Lettuce': {
         retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro', 'Sobeys'],
@@ -1946,60 +1942,57 @@ const marketDataSources = {
     
     // Basil varieties
     'Genovese Basil': {
-        retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Metro', 'Loblaws', 'Farmers Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro', 'Sobeys', 'Farm Boy'],
+        avgPriceUSD: 2.29,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'North America',
-        articles: [
-            { title: 'Fresh Herb Prices Rise as Winter Demand Increases', url: 'https://www.thepacker.com/news/produce-markets/herb-pricing-winter-2025', date: '2025-11-28' },
-            { title: 'California Growers Report Strong Basil Season', url: 'https://www.producenews.com/organic-herbs-2025', date: '2025-11-10' }
-        ]
+        priceRange: [1.99, 2.99],
+        trend: 'stable',
+        country: 'Canada',
+        articles: []
     },
     'Thai Basil': {
-        retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Asian Markets'],
+        avgPriceUSD: 2.49,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'North America',
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     'Purple Basil': {
-        retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
+        avgPriceUSD: 2.49,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'North America',
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     'Lemon Basil': {
         retailers: ['Farm Boy', 'Sobeys', 'Metro', 'Specialty Stores'],
-        avgPriceUSD: 3.49,
+        avgPriceUSD: 2.49,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'North America',
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     'Holy Basil': {
         retailers: ['Metro', 'Loblaws', 'Asian Markets', 'Specialty Stores'],
-        avgPriceUSD: 3.49,
+        avgPriceUSD: 2.49,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'USA',
+        priceRange: [1.99, 3.49],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     'Basil': {
-        retailers: ['Whole Foods', 'Sprouts', 'Farmers Markets'],
-        avgPriceUSD: 3.49,
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
+        avgPriceUSD: 2.29,
         avgWeightOz: 1.0,
-        priceRange: [2.99, 4.99],
-        trend: 'increasing',
-        country: 'USA',
+        priceRange: [1.99, 2.99],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     
@@ -2067,9 +2060,7 @@ const marketDataSources = {
         priceRange: [2.99, 5.49],
         trend: 'stable',
         country: 'USA',
-        articles: [
-            { title: 'Kale Remains Steady Amid Winter Vegetable Price Volatility', url: 'https://www.thepacker.com/news/kale-market-trends-2025', date: '2025-11-22' }
-        ]
+        articles: []
     },
     'Baby Kale': {
         retailers: ['Whole Foods', 'Trader Joes', 'Target'],
@@ -2147,66 +2138,66 @@ const marketDataSources = {
 
     // Common packaged herbs
     'Parsley': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
-        avgPriceUSD: 2.49,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 2.99],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Cilantro': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
         avgPriceUSD: 1.99,
         avgWeightOz: 1.0,
         priceRange: [1.49, 2.49],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
+        articles: []
+    },
+    'Cilantro': {
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
+        avgPriceUSD: 1.49,
+        avgWeightOz: 1.0,
+        priceRange: [0.99, 1.99],
+        trend: 'stable',
+        country: 'Canada',
         articles: []
     },
     'Dill': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
+        avgPriceUSD: 1.99,
+        avgWeightOz: 1.0,
+        priceRange: [1.49, 2.49],
+        trend: 'stable',
+        country: 'Canada',
+        articles: []
+    },
+    'Thyme': {
+        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro'],
+        avgPriceUSD: 2.49,
+        avgWeightOz: 0.71,
+        priceRange: [2.48, 2.79],
+        trend: 'stable',
+        country: 'Canada',
+        articles: []
+    },
+    'Tarragon': {
+        retailers: ['Loblaws', 'Metro', 'Specialty Stores'],
+        avgPriceUSD: 2.99,
+        avgWeightOz: 0.75,
+        priceRange: [2.49, 3.49],
+        trend: 'stable',
+        country: 'Canada',
+        articles: []
+    },
+    'Oregano': {
+        retailers: ['Loblaws', 'No Frills', 'Food Basics', 'Metro'],
+        avgPriceUSD: 2.79,
+        avgWeightOz: 0.88,
+        priceRange: [2.48, 3.00],
+        trend: 'stable',
+        country: 'Canada',
+        articles: []
+    },
+    'Mint': {
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
         avgPriceUSD: 2.49,
         avgWeightOz: 1.0,
         priceRange: [1.99, 2.99],
         trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Thyme': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
-        avgPriceUSD: 3.49,
-        avgWeightOz: 0.75,
-        priceRange: [2.49, 3.99],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Tarragon': {
-        retailers: ['Whole Foods', 'Specialty Stores'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
-        priceRange: [2.99, 4.99],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Oregano': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
-        avgPriceUSD: 2.99,
-        avgWeightOz: 0.75,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Mint': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
-        avgPriceUSD: 2.99,
-        avgWeightOz: 1.0,
-        priceRange: [1.99, 3.49],
-        trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
     'Strawberry': {
@@ -2239,23 +2230,23 @@ const marketDataSources = {
 
     // Rosemary (packaged fresh herb)
     'Rosemary': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws', 'Sobeys'],
-        avgPriceUSD: 3.49,
-        avgWeightOz: 1.0,
-        priceRange: [2.49, 3.99],
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Sobeys'],
+        avgPriceUSD: 2.79,
+        avgWeightOz: 0.71,
+        priceRange: [2.49, 2.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
     // Sage (packaged fresh herb)
     'Sage': {
-        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
-        avgPriceUSD: 3.49,
-        avgWeightOz: 1.0,
-        priceRange: [2.49, 3.99],
+        retailers: ['Loblaws', 'No Frills', 'Metro', 'Food Basics'],
+        avgPriceUSD: 2.79,
+        avgWeightOz: 0.71,
+        priceRange: [2.49, 2.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
@@ -2517,7 +2508,7 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['lettuce', 'salad'], key: 'Lettuce' },
         { test: ['arugula', 'rocket'], key: 'Arugula' },
         { test: ['basil', 'genovese'], key: 'Basil' },
-        { test: ['kale', 'lacinato', 'dinosaur', 'russian kale'], key: 'Kale' },
+        { test: ['kale', 'lacinato', 'russian kale'], key: 'Kale' },
         { test: ['frisee', 'fris\u00e9e', 'endive'], key: 'Mixed Greens' },
         { test: ['watercress'], key: 'Watercress' },
         { test: ['spinach', 'bloomsdale'], key: 'Spinach' },
@@ -2873,20 +2864,7 @@ function displayRecommendations(recommendations) {
                     <strong>Retailers surveyed:</strong> ${(rec.retailers || []).length > 0 ? rec.retailers.join(', ') : 'N/A'}
                 </div>
 
-                ${(rec.articles || []).length > 0 ? `
-                    <div>
-                        <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Related News:</div>
-                        <div class="news-links">
-                            ${rec.articles.map(article => `
-                                <a href="${article.url}" target="_blank" class="news-link">
-                                    <span>[News]</span>
-                                    <span>${article.title}</span>
-                                    <span style="color: var(--text-muted);">(${article.date})</span>
-                                </a>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
+                
 
                 ${hasSignificantChange ? `
                     <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
