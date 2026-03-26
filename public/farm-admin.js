@@ -4880,11 +4880,36 @@ async function testSquareConnection() {
  * Navigate to the Payment Setup wizard in Setup & Update
  */
 function navigateToPaymentWizard() {
-    if (typeof renderEmbeddedView === 'function') {
-        const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        if (navItem) navItem.classList.add('active');
-        renderEmbeddedView('/LE-dashboard.html?wizard=payment-setup', 'Setup & Update');
+    // Navigate to Setup & Update page, then trigger the payment wizard from its sidebar
+    const navItem = document.querySelector('.nav-item[data-url="/LE-dashboard.html"]');
+    if (navItem) {
+        navItem.click();
+        // After LE-dashboard loads in the iframe, open the payment wizard
+        const iframe = document.getElementById('admin-iframe');
+        if (iframe) {
+            iframe.addEventListener('load', function onWizardLoad() {
+                iframe.removeEventListener('load', onWizardLoad);
+                try {
+                    const iframeWin = iframe.contentWindow;
+                    if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
+                        iframeWin.openPaymentWizard();
+                    } else {
+                        // Function may not be ready yet (deferred scripts), retry briefly
+                        let retries = 0;
+                        const interval = setInterval(() => {
+                            if (iframeWin && typeof iframeWin.openPaymentWizard === 'function') {
+                                clearInterval(interval);
+                                iframeWin.openPaymentWizard();
+                            } else if (++retries > 20) {
+                                clearInterval(interval);
+                            }
+                        }, 250);
+                    }
+                } catch (e) {
+                    console.warn('[Payment] Could not auto-open wizard:', e.message);
+                }
+            });
+        }
     }
 }
 
