@@ -2596,7 +2596,7 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
     }
 
     const pricePerOzCAD = marketData.country === 'Canada' || marketData._dataSource === 'database'
-        ? Number(marketData.avgPriceCAD || 0) / avgWeightOz
+        ? Number(marketData.avgPriceCAD || marketData.avgPriceUSD || 0) / avgWeightOz
         : (averageSourcePriceUSD / avgWeightOz) * exchangeMultiplier;
 
     const pricePerOzUSD = marketData._dataSource === 'database'
