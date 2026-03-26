@@ -68,8 +68,8 @@ router.get('/', async (req, res) => {
       if (cropName) growingCrops.add(cropName);
     });
     
-    // Merge: all recipe crops + any extra crops in pricing that aren't in recipes
-    const allCropSet = new Set([...allCropNames, ...Object.keys(priceMap)]);
+    // Merge: recipe crops only (legacy DB entries excluded to prevent ghost rows)
+    const allCropSet = new Set([...allCropNames, ...growingCrops]);
     
     const mergedCrops = Array.from(allCropSet).sort().map(cropName => {
       const existing = priceMap[cropName];

@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-24-v3';
+const PRICING_VERSION = '2026-03-26-v4';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1296,12 +1296,12 @@ const defaultPricing = {
     'Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },             // Generic lettuce
     
     // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
-    'Thai Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Purple Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },        // Same as Genovese
-    'Lemon Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },         // Same as Genovese
-    'Holy Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
-    'Basil': { retail: 7.18, ws1: 20, ws2: 20, ws3: 30 },               // Generic basil
+    'Genovese Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },      // $3.99/0.75oz standard
+    'Thai Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Purple Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },        // Same as Genovese
+    'Lemon Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },         // Same as Genovese
+    'Holy Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },          // Same as Genovese
+    'Basil': { retail: 3.49, ws1: 20, ws2: 20, ws3: 30 },               // Generic basil
     
     // Arugula varieties - Specialty green pricing
     'Baby Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
@@ -1313,10 +1313,10 @@ const defaultPricing = {
     
     // Kale varieties - Standard pricing
     'Curly Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Lacinato Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },       // Dinosaur kale
-    'Dinosaur Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },       // Same as Lacinato
+// Dinosaur kale
+// Same as Lacinato
     'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
-    'Red Russian Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },    // Standard kale
+// Standard kale
     'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },                // Generic kale
     
     // Microgreens - Premium pricing per oz (2oz clamshell @ $4.49)
@@ -1326,8 +1326,8 @@ const defaultPricing = {
     'Sprout': { retail: 0.58, ws1: 20, ws2: 25, ws3: 35 },
 
     // Herbs missing from original defaults
-    'Rosemary': { retail: 4.65, ws1: 20, ws2: 25, ws3: 35 },             // $3.49/0.75oz
-    'Sage': { retail: 4.65, ws1: 20, ws2: 25, ws3: 35 },                 // $3.49/0.75oz
+    'Rosemary': { retail: 3.49, ws1: 20, ws2: 25, ws3: 35 },             // $3.49/0.75oz
+    'Sage': { retail: 3.49, ws1: 20, ws2: 25, ws3: 35 },                 // $3.49/0.75oz
     'Watercress': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 }            // $3.99/4oz
 };
 
@@ -1704,7 +1704,6 @@ const cropClassification = {
     'Buttercrunch Lettuce': { commonName: 'Lettuce', isSpecialty: false },
     'Bibb Butterhead':      { commonName: 'Lettuce', isSpecialty: false },
     'Romaine Lettuce':      { commonName: 'Romaine', isSpecialty: false },
-    'Parris Island Cos Romaine': { commonName: 'Romaine', isSpecialty: false },
     'Red Leaf Lettuce':     { commonName: 'Lettuce', isSpecialty: false },
     'Lettuce':              { commonName: 'Lettuce', isSpecialty: false },
     'Mixed Lettuce':        { commonName: 'Mixed Greens', isSpecialty: false },
@@ -1716,14 +1715,10 @@ const cropClassification = {
     'Curly Kale':         { commonName: 'Kale', isSpecialty: false },
     'Baby Kale':          { commonName: 'Kale', isSpecialty: false },
     'Kale':               { commonName: 'Kale', isSpecialty: false },
-    'Lacinato Kale':      { commonName: 'Kale', isSpecialty: true },
-    'Dinosaur Kale':      { commonName: 'Kale', isSpecialty: true },
-    'Red Russian Kale':   { commonName: 'Kale', isSpecialty: true },
 
     // Herbs
     'Italian Parsley':    { commonName: 'Parsley', isSpecialty: false },
     'Parsley':            { commonName: 'Parsley', isSpecialty: false },
-    'Santo Cilantro':     { commonName: 'Cilantro', isSpecialty: false },
     'Cilantro':           { commonName: 'Cilantro', isSpecialty: false },
     'Dill Bouquet':       { commonName: 'Dill', isSpecialty: false },
     'Dill':               { commonName: 'Dill', isSpecialty: false },
@@ -1752,9 +1747,7 @@ const cropClassification = {
     // Specialty greens
     'Watercress':         { commonName: 'Watercress', isSpecialty: false },
     'Fris\u00e9e Endive':  { commonName: 'Mixed Greens', isSpecialty: true },
-    'Bloomsdale Spinach': { commonName: 'Spinach', isSpecialty: false },
     'Spinach':            { commonName: 'Spinach', isSpecialty: false },
-    'Fordhook Giant Swiss Chard': { commonName: 'Swiss Chard', isSpecialty: false },
     'Swiss Chard':        { commonName: 'Swiss Chard', isSpecialty: false },
 
     // Strawberries
@@ -1954,8 +1947,8 @@ const marketDataSources = {
     // Basil varieties
     'Genovese Basil': {
         retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Metro', 'Loblaws', 'Farmers Markets'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'North America',
@@ -1966,8 +1959,8 @@ const marketDataSources = {
     },
     'Thai Basil': {
         retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'North America',
@@ -1975,8 +1968,8 @@ const marketDataSources = {
     },
     'Purple Basil': {
         retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'North America',
@@ -1984,8 +1977,8 @@ const marketDataSources = {
     },
     'Lemon Basil': {
         retailers: ['Farm Boy', 'Sobeys', 'Metro', 'Specialty Stores'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'North America',
@@ -1993,8 +1986,8 @@ const marketDataSources = {
     },
     'Holy Basil': {
         retailers: ['Metro', 'Loblaws', 'Asian Markets', 'Specialty Stores'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'USA',
@@ -2002,8 +1995,8 @@ const marketDataSources = {
     },
     'Basil': {
         retailers: ['Whole Foods', 'Sprouts', 'Farmers Markets'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 0.75,
+        avgPriceUSD: 3.49,
+        avgWeightOz: 1.0,
         priceRange: [2.99, 4.99],
         trend: 'increasing',
         country: 'USA',
@@ -2078,35 +2071,8 @@ const marketDataSources = {
             { title: 'Kale Remains Steady Amid Winter Vegetable Price Volatility', url: 'https://www.thepacker.com/news/kale-market-trends-2025', date: '2025-11-22' }
         ]
     },
-    'Lacinato Kale': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
-        trend: 'stable',
-        country: 'USA',
-        articles: []
-    },
-    'Dinosaur Kale': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
-        trend: 'stable',
-        country: 'USA',
-        articles: []
-    },
     'Baby Kale': {
         retailers: ['Whole Foods', 'Trader Joes', 'Target'],
-        avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
-        trend: 'stable',
-        country: 'USA',
-        articles: []
-    },
-    'Red Russian Kale': {
-        retailers: ['Whole Foods', 'Farmers Markets', 'Specialty Stores'],
         avgPriceUSD: 4.49,
         avgWeightOz: 8,
         priceRange: [2.99, 5.49],
@@ -2183,7 +2149,7 @@ const marketDataSources = {
     'Parsley': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 2.49,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [1.99, 2.99],
         trend: 'stable',
         country: 'North America',
@@ -2192,7 +2158,7 @@ const marketDataSources = {
     'Cilantro': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 1.99,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [1.49, 2.49],
         trend: 'stable',
         country: 'North America',
@@ -2201,7 +2167,7 @@ const marketDataSources = {
     'Dill': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 2.49,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [1.99, 2.99],
         trend: 'stable',
         country: 'North America',
@@ -2210,7 +2176,7 @@ const marketDataSources = {
     'Thyme': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 3.49,
-        avgWeightOz: 0.5,
+        avgWeightOz: 0.75,
         priceRange: [2.49, 3.99],
         trend: 'stable',
         country: 'North America',
@@ -2219,7 +2185,7 @@ const marketDataSources = {
     'Tarragon': {
         retailers: ['Whole Foods', 'Specialty Stores'],
         avgPriceUSD: 3.99,
-        avgWeightOz: 0.5,
+        avgWeightOz: 0.75,
         priceRange: [2.99, 4.99],
         trend: 'stable',
         country: 'North America',
@@ -2228,7 +2194,7 @@ const marketDataSources = {
     'Oregano': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 2.99,
-        avgWeightOz: 0.5,
+        avgWeightOz: 0.75,
         priceRange: [1.99, 3.49],
         trend: 'stable',
         country: 'North America',
@@ -2237,7 +2203,7 @@ const marketDataSources = {
     'Mint': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 2.99,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [1.99, 3.49],
         trend: 'stable',
         country: 'North America',
@@ -2275,7 +2241,7 @@ const marketDataSources = {
     'Rosemary': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws', 'Sobeys'],
         avgPriceUSD: 3.49,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [2.49, 3.99],
         trend: 'stable',
         country: 'North America',
@@ -2286,7 +2252,7 @@ const marketDataSources = {
     'Sage': {
         retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
         avgPriceUSD: 3.49,
-        avgWeightOz: 0.75,
+        avgWeightOz: 1.0,
         priceRange: [2.49, 3.99],
         trend: 'stable',
         country: 'North America',
@@ -3202,11 +3168,8 @@ const cropGrowthParams = {
     'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
     
     // Kale varieties - 35-42 day cycle, priced per lb
-    'Lacinato Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
     'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    'Dinosaur Kale': { daysToHarvest: 40, retailPricePerLb: 6.50, yieldFactor: 0.88 },
     'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
-    'Red Russian Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
     
     // Asian Greens - priced per lb
     'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
