@@ -2753,22 +2753,19 @@
           return;
         }
 
-        // Show waiting indicator and open Square OAuth in a popup
+        // Show waiting indicator
         var waitEl = document.getElementById("squareWaitingIndicator");
         if (waitEl) waitEl.style.display = "block";
         var connectBtn = document.getElementById("connectSquareBtn");
         if (connectBtn) { connectBtn.disabled = true; connectBtn.textContent = "Waiting..."; }
-        const w = 600, h = 700;
-        const left = (screen.width - w) / 2;
-        const top = (screen.height - h) / 2;
-        var squarePopup = window.open(
-          data.data.authorizationUrl,
-          'square-oauth',
-          'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top
-        );
 
         // Advance wizard to step 3 when Square connects
         function onSquareConnected(merchantId, merchantName, locationId, locationName) {
+          // Clean up listeners
+          window.removeEventListener('storage', handleStorageSignal);
+          if (pollTimer) clearInterval(pollTimer);
+          if (statusPoller) clearInterval(statusPoller);
+
           var wI = document.getElementById("squareWaitingIndicator"); if (wI) wI.style.display = "none";
           paymentWizardData.squareConnected = true;
           paymentWizardData.merchantId = merchantId || farmId;
@@ -2782,38 +2779,83 @@
           document.querySelector('#paymentWizardModal .wizard-panel[data-panel="3"]').style.display = 'block';
           paymentWizardStep = 3;
           updatePaymentWizardProgress();
+          console.log('[PaymentWizard] Square connected -- advancing to step 3');
         }
 
-        // Listen for callback message from the popup (primary method)
+        // --- Signal Method 1: localStorage event (works cross-window, no opener needed) ---
+        var statusPoller = null;
+        function handleStorageSignal(e) {
+          if (e.key === 'square_connected_signal' && e.newValue) {
+            console.log('[PaymentWizard] Received localStorage signal from callback');
+            try {
+              var sig = JSON.parse(e.newValue);
+              localStorage.removeItem('square_connected_signal');
+              onSquareConnected(sig.merchantId, sig.merchantName, sig.locationId, sig.locationName);
+            } catch (err) {
+              console.log('[PaymentWizard] Signal parse error:', err);
+            }
+          }
+        }
+        window.addEventListener('storage', handleStorageSignal);
+
+        // --- Signal Method 2: postMessage from popup (works if window.opener is not null) ---
         window.addEventListener('message', function handleSquare(event) {
           if (event.data && event.data.type === 'square-connected') {
             window.removeEventListener('message', handleSquare);
+            console.log('[PaymentWizard] Received postMessage from popup');
             onSquareConnected(event.data.merchantId, event.data.merchantName, event.data.locationId, event.data.locationName);
           }
         });
 
-        // Fallback: poll Square status when popup closes (handles Safari window.opener restrictions)
-        // Grace period: don't check popup.closed for first 10 seconds (user needs time on Square)
-        var popupOpenedAt = Date.now();
-        var GRACE_PERIOD_MS = 10000;
+        // --- Open popup ---
+        var authUrl = data.data.authorizationUrl;
+        var w = 600, h = 700;
+        var left = (screen.width - w) / 2;
+        var top = (screen.height - h) / 2;
+        var squarePopup = window.open(authUrl, 'square-oauth', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+
         var popupWasBlocked = !squarePopup;
         if (popupWasBlocked) {
-          console.log('[PaymentWizard] Popup may have been blocked by browser');
+          console.log('[PaymentWizard] Popup was blocked -- falling back to full-page redirect');
+          // Save wizard state so we can resume after redirect
+          sessionStorage.setItem('payment_wizard_pending', JSON.stringify({
+            farmName: farmName,
+            farmId: farmId,
+            step: 2
+          }));
+          // Redirect the top-level window to Square OAuth
+          window.top.location.href = authUrl;
+          return;
         }
+
+        // --- Signal Method 3: Poll /status after popup closes ---
+        var popupOpenedAt = Date.now();
+        var GRACE_PERIOD_MS = 10000;
         var pollTimer = setInterval(function() {
           var elapsed = Date.now() - popupOpenedAt;
-          // Skip closed-checks during grace period unless popup was blocked
-          if (!popupWasBlocked && elapsed < GRACE_PERIOD_MS) return;
-          // Check if popup is still open
-          var isClosed = popupWasBlocked || !squarePopup || squarePopup.closed;
+          if (elapsed < GRACE_PERIOD_MS) return;
+          var isClosed = !squarePopup || squarePopup.closed;
           if (!isClosed) return;
           clearInterval(pollTimer);
-          console.log('[PaymentWizard] Popup closed after ' + Math.round(elapsed / 1000) + 's, checking Square connection status...');
-          var statusFid = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || 'LOCAL-FARM';
+          console.log('[PaymentWizard] Popup closed after ' + Math.round(elapsed / 1000) + 's, polling status...');
+
+          // Also check localStorage in case the storage event was missed
+          try {
+            var sig = localStorage.getItem('square_connected_signal');
+            if (sig) {
+              var sigData = JSON.parse(sig);
+              localStorage.removeItem('square_connected_signal');
+              console.log('[PaymentWizard] Found localStorage signal (missed event)');
+              onSquareConnected(sigData.merchantId, sigData.merchantName, sigData.locationId, sigData.locationName);
+              return;
+            }
+          } catch (e) { /* ignore */ }
+
+          var statusFid = farmId;
           var pollAttempts = 0;
           var maxAttempts = 15;
           var pollIntervalMs = 3000;
-          var statusPoller = setInterval(async function() {
+          statusPoller = setInterval(async function() {
             pollAttempts++;
             try {
               var statusRes = await fetch('/api/farm/square/status', { headers: { 'X-Farm-ID': statusFid } });
@@ -2834,6 +2876,7 @@
             }
             if (pollAttempts >= maxAttempts) {
               clearInterval(statusPoller);
+              window.removeEventListener('storage', handleStorageSignal);
               var wI2 = document.getElementById("squareWaitingIndicator"); if (wI2) wI2.style.display = "none";
               var connectBtn2 = document.getElementById("connectSquareBtn");
               if (connectBtn2) { connectBtn2.disabled = false; connectBtn2.textContent = "Connect Square Account"; }
@@ -3201,6 +3244,36 @@
       } else if (wizardParam === 'store-setup') {
         openStoreWizard();
       }
+
+      // Detect return from Square OAuth redirect (popup-blocked fallback)
+      var pendingWizard = sessionStorage.getItem('payment_wizard_pending');
+      if (pendingWizard) {
+        sessionStorage.removeItem('payment_wizard_pending');
+        try {
+          var wizardState = JSON.parse(pendingWizard);
+          console.log('[PaymentWizard] Detected redirect return, resuming wizard');
+          openPaymentWizard();
+        } catch (e) {
+          console.log('[PaymentWizard] Redirect state parse error:', e);
+        }
+      }
+
+      // Check if Square just connected via localStorage signal (redirect flow)
+      try {
+        var squareSig = localStorage.getItem('square_connected_signal');
+        if (squareSig) {
+          var sigData = JSON.parse(squareSig);
+          // Only act on signals from the last 5 minutes
+          if (sigData.ts && (Date.now() - sigData.ts) < 300000) {
+            localStorage.removeItem('square_connected_signal');
+            console.log('[PaymentWizard] Found fresh Square connection signal on page load');
+            // Auto-open wizard -- it will detect connected status via /status check
+            openPaymentWizard();
+          } else {
+            localStorage.removeItem('square_connected_signal');
+          }
+        }
+      } catch (e) { /* ignore */ }
     }
     
     if (document.readyState === 'loading') {

@@ -553,12 +553,20 @@ function callbackHtml(title, bodyContent, success, farmId, merchantData) {
     + bodyContent
     + '<a href="/">Return to Dashboard</a>'
     + (success && farmId
-      ? '<script>try{if(window.opener){window.opener.postMessage({type:"square-connected",farmId:' + JSON.stringify(farmId)
+      ? '<script>'
+        + 'var signalData={type:"square-connected"'
+        + ',farmId:' + JSON.stringify(farmId)
         + ',merchantId:' + JSON.stringify(md.merchantId || '')
         + ',merchantName:' + JSON.stringify(md.merchantName || '')
         + ',locationId:' + JSON.stringify(md.locationId || '')
         + ',locationName:' + JSON.stringify(md.locationName || '')
-        + '},"*")}}catch(e){console.log("postMessage failed:",e)}setTimeout(function(){window.close()},3000)</script>'
+        + ',ts:Date.now()};'
+        + 'try{localStorage.setItem("square_connected_signal",JSON.stringify(signalData));'
+        + 'console.log("[SquareCallback] localStorage signal written")}catch(e){console.log("[SquareCallback] localStorage error:",e)}'
+        + 'try{if(window.opener){window.opener.postMessage(signalData,"*");'
+        + 'console.log("[SquareCallback] postMessage sent to opener")}}catch(e){console.log("[SquareCallback] postMessage skipped:",e)}'
+        + 'setTimeout(function(){window.close()},3000)'
+        + '</script>'
       : '')
     + '</body></html>';
 }
