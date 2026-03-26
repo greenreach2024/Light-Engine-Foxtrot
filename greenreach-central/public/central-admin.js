@@ -4895,7 +4895,8 @@ function renderRecipesTable(recipes) {
         return `
             <tr>
                 <td>
-                    <strong>${recipe.name || 'Unknown'}</strong>
+                    <strong class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name || 'Unknown'}</strong>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;max-width:320px;line-height:1.3;">${recipe.description}</div>` : ''}
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${groupsTrays} · ${dayRange} · ${remainingRange}</div>
                 </td>
                 <td>
@@ -4920,34 +4921,38 @@ function renderRecipesTable(recipes) {
 function viewRecipeDetails(recipeId) {
     const recipe = recipesData.find(r => r.recipe_id === recipeId || r.id === recipeId);
     if (!recipe) {
-        alert('Recipe not found');
+        showRecipeModal('Recipe Not Found', '<p>Could not find this recipe.</p>');
         return;
     }
 
     const dayRange = recipe.currentDayMin != null
         ? `${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
-        : '—';
+        : '---';
     const remainingRange = recipe.daysRemainingMin != null
         ? `${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}`
-        : '—';
+        : '---';
     const seedRange = recipe.seedDateMin
-        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` → ${recipe.seedDateMax}` : ''}`
-        : '—';
+        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` to ${recipe.seedDateMax}` : ''}`
+        : '---';
 
-    const details = `
-Recipe: ${recipe.name}
-Category: ${recipe.category || recipe.cropType || 'Unknown'}
-Cycle Duration: ${recipe.totalDays ?? recipe.total_days ?? '—'} days
-Stages: ${recipe.scheduleLength ?? recipe.schedule_length ?? '—'}
-Active Groups: ${recipe.activeGroups || 0}
-Active Trays: ${recipe.activeTrays || 0}
-Seed Date Range: ${seedRange}
-Current Day: ${dayRange}
-Days to Harvest: ${remainingRange}
-Description: ${recipe.description || 'No description'}
-    `.trim();
-    
-    alert(details);
+    const catColor = getCategoryColor(recipe.category);
+    let html = `
+        <div style="margin-bottom:16px;">
+            <span style="background:${catColor};color:#fff;padding:4px 10px;border-radius:4px;font-size:0.85rem;">${recipe.category || 'Uncategorized'}</span>
+        </div>
+        ${recipe.description ? `<p style="color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">${recipe.description}</p>` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Cycle Duration</td><td style="padding:6px 0;font-weight:500;">${recipe.totalDays ?? recipe.total_days ?? '---'} days</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Stages</td><td style="padding:6px 0;font-weight:500;">${recipe.scheduleLength ?? recipe.schedule_length ?? '---'}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Active Groups</td><td style="padding:6px 0;font-weight:500;">${recipe.activeGroups || 0}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Active Trays</td><td style="padding:6px 0;font-weight:500;">${recipe.activeTrays || 0}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Seed Date Range</td><td style="padding:6px 0;font-weight:500;">${seedRange}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Current Day</td><td style="padding:6px 0;font-weight:500;">${dayRange}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Days to Harvest</td><td style="padding:6px 0;font-weight:500;">${remainingRange}</td></tr>
+        </table>
+    `;
+
+    showRecipeModal(recipe.name, html);
 }
 
 // ── Farm-level Recipe Library (read-only) + Recipe Requests ──
@@ -5026,8 +5031,8 @@ function renderFarmRecipeLibrary(recipes, activeNames) {
         return `
             <tr>
                 <td>
-                    <div style="font-weight:500;">${recipe.name}</div>
-                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;">${recipe.description}</div>` : ''}
+                    <div style="font-weight:500;" class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name}</div>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;max-width:360px;line-height:1.3;">${recipe.description}</div>` : ''}
                 </td>
                 <td><span style="background:${getCategoryColor(recipe.category)};color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;">${recipe.category || 'Other'}</span></td>
                 <td>${stages}</td>
@@ -5064,26 +5069,57 @@ async function showRecipeLibraryDetail(recipeId) {
         const recipe = data.recipe || {};
         const schedule = normalizeRecipeSchedule(recipe);
 
-        let info = `Recipe: ${recipe.name}\nCategory: ${recipe.category || 'Unknown'}\nTotal Days: ${schedule.length}\nDescription: ${recipe.description || 'N/A'}\n\n`;
+        // Also get description from the library cache
+        const libEntry = _farmRecipeLibrary.find(r => r.id === recipeId || r.name === recipeId);
+        const description = libEntry?.description || recipe.description || '';
+
+        const catColor = getCategoryColor(recipe.category || libEntry?.category || 'Other');
+        let html = `
+            <div style="margin-bottom:12px;">
+                <span style="background:${catColor};color:#fff;padding:4px 10px;border-radius:4px;font-size:0.85rem;">${recipe.category || libEntry?.category || 'Unknown'}</span>
+                <span style="margin-left:12px;color:var(--text-secondary);font-size:0.9rem;">${schedule.length} days total</span>
+            </div>
+            ${description ? `<p style="color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">${description}</p>` : ''}
+        `;
+
         if (schedule.length > 0) {
-            info += 'Day | Stage | Temp(°C) | PPFD | DLI | VPD\n';
-            info += '─'.repeat(50) + '\n';
-            const step = Math.max(1, Math.floor(schedule.length / 15));
+            html += `<div style="max-height:400px;overflow-y:auto;margin-top:8px;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);">
+                            <th style="padding:6px 4px;text-align:left;">Day</th>
+                            <th style="padding:6px 4px;text-align:left;">Stage</th>
+                            <th style="padding:6px 4px;text-align:right;">Temp (C)</th>
+                            <th style="padding:6px 4px;text-align:right;">PPFD</th>
+                            <th style="padding:6px 4px;text-align:right;">DLI</th>
+                            <th style="padding:6px 4px;text-align:right;">VPD</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            const step = Math.max(1, Math.floor(schedule.length / 20));
             for (let i = 0; i < schedule.length; i += step) {
                 const d = schedule[i];
-                const day = d.day || i+1;
-                const stage = (d.stage || '').substring(0, 12);
-                const temp = (d.temperature || d.tempC || '—');
-                const ppfd = (d.ppfd || d.ppfd_target || '—');
-                const dli = (d.dli || d.dli_target || '—');
-                const vpd = (d.vpd || d.vpd_target || '—');
-                info += `${String(day).padStart(3)} | ${stage.padEnd(12)} | ${String(temp).padStart(6)} | ${String(ppfd).padStart(5)} | ${String(dli).padStart(4)} | ${vpd}\n`;
+                const day = d.day || i + 1;
+                const stage = (d.stage || d.growth_stage || '').substring(0, 16);
+                const temp = d.temperature || d.tempC || d.afternoon_temp || '---';
+                const ppfd = d.ppfd || d.ppfd_target || '---';
+                const dli = d.dli || d.dli_target || '---';
+                const vpd = d.vpd || d.vpd_target || '---';
+                html += `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 4px;">${day}</td>
+                    <td style="padding:5px 4px;">${stage}</td>
+                    <td style="padding:5px 4px;text-align:right;">${temp}</td>
+                    <td style="padding:5px 4px;text-align:right;">${ppfd}</td>
+                    <td style="padding:5px 4px;text-align:right;">${dli}</td>
+                    <td style="padding:5px 4px;text-align:right;">${vpd}</td>
+                </tr>`;
             }
-            if (step > 1) info += `\n(Showing every ${step} days — ${schedule.length} days total)`;
+            html += `</tbody></table></div>`;
+            if (step > 1) html += `<p style="color:var(--text-secondary);font-size:0.8rem;margin-top:8px;">Showing every ${step} days of ${schedule.length} total</p>`;
         }
-        alert(info);
+        showRecipeModal(recipe.name || recipeId, html);
     } catch (err) {
-        alert('Error loading recipe: ' + err.message);
+        showRecipeModal('Error', `<p style="color:var(--accent-red);">Error loading recipe: ${err.message}</p>`);
     }
 }
 
@@ -8476,7 +8512,7 @@ function renderRecipesTableDetailed(recipes) {
         return `
             <tr>
                 <td>
-                    <div style="font-weight: 500;">${recipe.name}</div>
+                    <div style="font-weight: 500;" class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name}</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${recipe.description || ''}</div>
                 </td>
                 <td>
@@ -8561,11 +8597,82 @@ function updateRecipeStats(recipes) {
 /**
  * Get category color
  */
+// -- Recipe Modal + Hover Tooltip --
+
+/**
+ * Show a styled modal popup for recipe details (replaces alert())
+ */
+function showRecipeModal(title, contentHtml) {
+    // Remove existing modal if any
+    const existing = document.getElementById('recipe-detail-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'recipe-detail-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+    overlay.innerHTML = `
+        <div style="background:var(--bg, #fff);border:1px solid var(--border, #e5e7eb);border-radius:12px;max-width:640px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;font-size:1.2rem;">${title}</h3>
+                <button onclick="document.getElementById('recipe-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;line-height:1;">&times;</button>
+            </div>
+            <div>${contentHtml}</div>
+        </div>
+    `;
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+}
+
+/**
+ * Initialize recipe name hover tooltips
+ */
+(function initRecipeTooltips() {
+    // Inject tooltip CSS once
+    if (!document.getElementById('recipe-tooltip-style')) {
+        const style = document.createElement('style');
+        style.id = 'recipe-tooltip-style';
+        style.textContent = `
+            .recipe-name-hover {
+                position: relative;
+                cursor: default;
+            }
+            .recipe-name-hover[data-desc]:not([data-desc=""]):hover::after {
+                content: attr(data-desc);
+                position: absolute;
+                left: 0;
+                top: 100%;
+                z-index: 9999;
+                background: var(--bg, #1f2937);
+                color: var(--text, #f3f4f6);
+                border: 1px solid var(--border, #374151);
+                border-radius: 8px;
+                padding: 10px 14px;
+                font-size: 0.82rem;
+                font-weight: 400;
+                line-height: 1.45;
+                max-width: 340px;
+                white-space: normal;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+})();
+
+
 function getCategoryColor(category) {
     const colors = {
         'Leafy Greens': '#10b981',
         'Herbs': '#8b5cf6',
+        'Microgreens': '#06b6d4',
+        'Sprouts': '#14b8a6',
+        'Tomatoes': '#ef4444',
+        'Berries': '#ec4899',
         'Fruiting Crops': '#f59e0b',
+        'Vegetables': '#f97316',
         'Other': '#6b7280'
     };
     return colors[category] || colors['Other'];

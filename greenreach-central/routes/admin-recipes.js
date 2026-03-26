@@ -10,6 +10,20 @@ const __dirname = path.dirname(__filename);
 // Path to recipes directory (match public recipes API)
 const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
 
+// Load crop descriptions from lighting-recipes.json
+const RECIPES_JSON_PATH = path.join(__dirname, '../public/data/lighting-recipes.json');
+let cropDescriptions = {};
+try {
+    const jsonData = JSON.parse(require('fs').readFileSync(RECIPES_JSON_PATH, 'utf-8'));
+    if (jsonData.crops) {
+        for (const [name, entry] of Object.entries(jsonData.crops)) {
+            cropDescriptions[name.toLowerCase()] = entry.description || '';
+        }
+    }
+} catch (err) {
+    console.warn('[Recipes] Could not load lighting-recipes.json for descriptions:', err.message);
+}
+
 /**
  * Parse a recipe CSV file and return structured data
  */
@@ -71,7 +85,11 @@ router.get('/', async (req, res) => {
             let category = 'Vegetables';
             const lowerName = name.toLowerCase();
             
-            if (lowerName.includes('basil') || lowerName.includes('cilantro') || 
+            if (lowerName.startsWith('microgreen')) {
+                category = 'Microgreens';
+            } else if (lowerName.startsWith('sprout')) {
+                category = 'Sprouts';
+            } else if (lowerName.includes('basil') || lowerName.includes('cilantro') || 
                 lowerName.includes('parsley') || lowerName.includes('thyme') ||
                 lowerName.includes('oregano') || lowerName.includes('rosemary') ||
                 lowerName.includes('sage') || lowerName.includes('dill') ||
@@ -110,7 +128,7 @@ router.get('/', async (req, res) => {
                     name: name,
                     category: category,
                     file: file,
-                    description: `Growing recipe for ${name}`,
+                    description: cropDescriptions[name.toLowerCase()] || `Growing recipe for ${name}`,
                     total_days: recipeData.totalDays,
                     schedule_length: recipeData.phases.length,
                     data: {
@@ -125,7 +143,7 @@ router.get('/', async (req, res) => {
                     name: name,
                     category: category,
                     file: file,
-                    description: `Growing recipe for ${name}`,
+                    description: cropDescriptions[name.toLowerCase()] || `Growing recipe for ${name}`,
                     total_days: 0,
                     schedule_length: 0,
                     data: null
@@ -232,6 +250,8 @@ router.get('/categories/list', async (req, res) => {
         const categories = [
             'Leafy Greens',
             'Herbs',
+            'Microgreens',
+            'Sprouts',
             'Tomatoes',
             'Berries',
             'Vegetables'
