@@ -3395,7 +3395,24 @@ app.get('/api/bus/:busId/scan', authMiddleware, (req, res) => edgeProxy(req, res
 // Farm Square payment setup routes (proxied to LE)
 app.get('/api/farm/square/status', (req, res) => edgeProxy(req, res, '/api/farm/square/status'));
 app.post('/api/farm/square/authorize', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/authorize', 'POST', req.body));
-app.get('/api/farm/square/callback', (req, res) => { const qs = new URLSearchParams(req.query).toString(); edgeProxy(req, res, '/api/farm/square/callback?' + qs); });
+app.get('/api/farm/square/callback', async (req, res) => {
+  // Custom proxy for callback -- returns HTML, not JSON
+  const edgeUrl = resolveEdgeUrlForProxy();
+  if (!edgeUrl) return res.status(503).send('Light Engine not available');
+  const qs = new URLSearchParams(req.query).toString();
+  try {
+    const response = await fetch(edgeUrl + '/api/farm/square/callback?' + qs, {
+      headers: leProxyHeaders(),
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = await response.text();
+    const ct = response.headers.get('content-type') || 'text/html';
+    res.status(response.status).type(ct).send(text);
+  } catch (err) {
+    logger.error('[SquareCallbackProxy] error:', err.message);
+    res.status(502).send('Square callback proxy failed');
+  }
+});
 app.post('/api/farm/square/refresh', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/refresh', 'POST', req.body));
 app.post('/api/farm/square/settings', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/settings', 'POST', req.body));
 app.post('/api/farm/square/disconnect', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/disconnect', 'POST', req.body));
