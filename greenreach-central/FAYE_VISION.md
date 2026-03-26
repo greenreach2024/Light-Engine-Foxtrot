@@ -312,6 +312,91 @@ Migration 036 in `config/database.js` creates:
 ---
 
 
+
+---
+
+## Nightly AI Checklist -- Self-Evolving Operations
+
+F.A.Y.E. runs a nightly self-improvement checklist at 2 AM ET, immediately before the existing 3 AM system audit. F.A.Y.E.'s role covers business operations health, model/data drift detection, market signals, compliance, and strategic recommendations. The nightly loop compounds improvements by catching issues before they become visible to growers or the admin.
+
+### F.A.Y.E.'s Nightly Responsibilities
+
+#### 1. Daily Learning Notes Exchange
+
+Before running the nightly checklist questions, both agents share learning notes:
+
+- **F.A.Y.E. sends to E.V.I.E.**: A "Business Context Brief" covering order trends, pricing changes, new buyers, upcoming deliveries, policy updates that affect grower advice, and any business-level anomalies detected
+- **E.V.I.E. sends to F.A.Y.E.**: A "User Use Note" covering grower interaction patterns, recommendation adoption rates, workflow friction points, feature gaps, and escalation outcomes
+- Both notes are tagged with the date and persisted to `faye_knowledge` for long-term trend analysis
+
+This exchange ensures F.A.Y.E. makes business decisions informed by actual grower behavior, and E.V.I.E. gives growers advice informed by the latest business context.
+
+#### 2. F.A.Y.E.'s Nightly Checklist Questions
+
+| Theme | Question | Data to Check | Action if Flagged | Priority |
+|-------|----------|---------------|-------------------|----------|
+| **Data & Drift** | Did any key feature drift today (input stats changed significantly)? | Feature distribution vs training baseline | Trigger retraining or model validation | High |
+| **Data & Drift** | Are external data feeds current (weather, market prices, energy tariffs)? | API token validity, last-update timestamps | Re-authenticate or switch to backup feeds | Medium |
+| **Data & Drift** | Has input data drifted without labels (unseen conditions)? | Unsupervised drift detectors on recent data | Slow model rollout, sample for re-labeling | High |
+| **Learning** | Are any models showing overnight performance degradation? | End-of-day vs baseline error metrics | Roll back model, investigate cause | High |
+| **Learning** | Did growers provide corrections suggesting retraining is needed? | Count of new labeled outcomes vs retraining threshold | Queue retrain if enough data, else label collection reminders | Medium |
+| **Business** | Did energy prices or input costs spike? | Utility tariff APIs, commodity price feeds | Alert on cost-saving modes, update ROI models | Medium |
+| **Business** | Are there legislative or regulatory changes imminent? | Regulatory news feeds, grower location metadata | Update compliance modules, notify growers | Low |
+| **Business** | Are market trends suggesting new product features or crop additions? | Market reports, user feedback categorization | Highlight potential feature development | Low |
+| **Compliance** | Did any recommendation risk violating safety thresholds? | Validate recs against safety limits and regulations | Immediately disable or correct, notify grower | High |
+| **Compliance** | Are we meeting data privacy and consent requirements? | Data retention and access logs vs policy | Purge stale data, tighten access controls | Medium |
+| **Compliance** | Is model and data documentation current (model cards, datasheets)? | Presence of required documentation | Create missing docs, tag with metadata | Medium |
+| **Ops/DevOps** | Did any nightly processing jobs fail or run overdue? | Job status dashboards, system logs | Retry or rollback, page ops | High |
+| **Ops/DevOps** | Are all API keys/secrets valid? | Secret manager checks, authentication failures | Rotate secrets, halt dependent features | High |
+| **Ops/DevOps** | Did we exceed cost or usage budgets? | Financial dashboards, usage logs | Throttle non-critical jobs, report to admin | Medium |
+| **Ops/DevOps** | Was there anomalous activity (unexpected traffic, login failures)? | Security logs, unusual IP/geolocation | Trigger security incident response | High |
+| **Research** | Did any agricultural research publish findings we should incorporate? | Internal reading list, journal alerts | Summarize and recommend to admin | Low |
+| **Research** | Have any new relevant technologies been released? | Tech news, partner bulletins | Propose pilot integration or partnership | Low |
+
+#### 3. Nightly Runbook
+
+1. **Data ingestion & validation** -- Fetch sensor telemetry, recipe/state logs, user tickets, experiment registry, external feeds. Validate schema and freshness.
+2. **QC & preprocessing** -- Sensor sanity, unit conversion, missing values. Compute derived features (daily totals, deltas, DLI/VPD).
+3. **Process monitoring** -- Check for job failures or delays in the data pipeline.
+4. **User/workflow analysis** -- Identify incomplete workflows and recurring tickets. Classify urgency.
+5. **Model monitoring** -- Compute key model performance metrics. Run data drift detectors.
+6. **Business scan** -- Retrieve external signals (energy prices, market news) from APIs.
+7. **Decision logic** -- For each question, apply thresholds: data gap if coverage <95%, drift if p<0.01 by KS-test, job fail if exit code != 0.
+8. **Generate alerts/actions** -- High: immediate notification. Medium: queue for next workday. Update dashboards and tracking system.
+9. **Summarize & store** -- Compile nightly report summarizing all flags, actions taken, and recommended next steps. Persist to `faye_knowledge`.
+
+### KPIs F.A.Y.E. Tracks Over Time
+
+| Category | KPI | Calculation |
+|----------|-----|-------------|
+| System Health | Job success rate | (# jobs completed successfully) / (total jobs run) |
+| System Health | Data freshness | % of expected data present on time |
+| System Health | Model performance | Recent error or accuracy on held-out test |
+| System Health | Drift rate | # nights drift detected / total nights |
+| Operational | Recommendation adoption | % of AI suggestions accepted or acted upon |
+| Operational | Task completion | % of recommended tasks done |
+| Business | Yield vs target | (actual yield - target) / target |
+| Business | Quality rate | % produce meeting quality grade |
+| Business | Energy efficiency | grow output (kg or $) / energy (kWh) |
+| Experimentation | Closed-loop latency | Time from data collection to actionable insight |
+| Experimentation | Lessons per sprint | Successful lessons or model updates per week |
+
+### Sprint Backlog (Triggered by Nightly Flags)
+
+1. **Sensor Health Module** -- Flag faulty sensors (flatlines, spikes). Target: >50% reduction in false-positive anomalies.
+2. **Automated DLI/VPD Control Test** -- Small schedule adjustments based on deviations. Target: measurable reduction in yield deviation.
+3. **Drift Alert & Rerun Pipeline** -- Drift detector with automatic retraining trigger. Target: fewer nights with undetected model errors.
+4. **Experiment Design Checklist** -- Auto-check new trials for single-variable compliance. Target: all new trials comply.
+5. **Integration Adapters** -- Build modules for requested external data feeds. Target: new data streams ingested with at least one actionable insight.
+
+### Sources
+
+- Sculley et al. 2015, "Hidden technical debt in machine learning systems"
+- Breck et al. 2017, "The ML Test Score"
+- NIST AI RMF (2023), continuous risk management for trustworthy AI
+- Raji et al. 2020, "Closing the AI accountability gap"
+- Oikarinen et al. 2021, "Detecting concept drift for regressors without ground truth"
+
 ---
 
 ## Foundational AI/ML Literature

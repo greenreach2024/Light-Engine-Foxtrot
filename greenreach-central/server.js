@@ -110,6 +110,7 @@ import { farmStore, initFarmStore } from './lib/farm-data-store.js';
 import { initDatabase, getDatabase, query, isDatabaseAvailable } from './config/database.js';
 import { startHealthCheckService, stopHealthCheckService } from './services/healthCheck.js';
 import { startNightlyAuditService } from './services/nightly-audit.js';
+import { startNightlyChecklist } from './services/nightly-checklist.js';
 import { startFayeIntelligence } from './services/faye-intelligence.js';
 import { startSyncMonitor } from './services/syncMonitor.js';
 import { startWholesaleNetworkSync } from './services/wholesaleNetworkSync.js';
@@ -4741,6 +4742,7 @@ async function startServer() {
       startMarketDataFetcher(); // Phase 1A: daily USDA price ingestion
       startMarketAnalysisAgent(); // Phase 2A: daily GPT market analysis
       startFayeIntelligence(); // F.A.Y.E. Phase 3: anomaly detection + daily briefing
+      startNightlyChecklist(); // Nightly AI Checklist: learning notes exchange + self-eval questions
 
       // AI Vision Phase 3: weekly cross-farm yield regression (T31/T32)
       // Run once after 5 min, then weekly

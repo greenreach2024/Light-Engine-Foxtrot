@@ -205,6 +205,66 @@ E.V.I.E. handles single-farm lot operations. She escalates to F.A.Y.E. when:
 - Pricing decisions are needed based on quality grades
 
 
+
+---
+
+## Nightly AI Checklist -- Self-Evolving Grower App
+
+E.V.I.E. participates in a nightly self-improvement loop shared with F.A.Y.E. The checklist runs every night at 2 AM ET, immediately before the existing 3 AM system audit. E.V.I.E.'s role focuses on grower-facing workflow health, sensor data quality, and generating the daily User Use Note that feeds both agents' learning.
+
+### E.V.I.E.'s Nightly Responsibilities
+
+#### 1. Daily User Use Note (E.V.I.E. -> F.A.Y.E.)
+
+Before the nightly questions run, E.V.I.E. compiles a User Use Note summarizing the day's grower interactions. This note is shared with F.A.Y.E. via inter-agent messaging and persisted to `faye_knowledge` for long-term learning. The note covers:
+
+- **Interaction Summary**: Total conversations, unique growers, average turns per session
+- **Top Questions Asked**: Most frequent topics (planting, pricing, devices, environment, harvest)
+- **Tool Usage Patterns**: Which tools were called most, which were never used
+- **Recommendation Adoption**: How many AI suggestions were accepted vs ignored
+- **Workflow Completions**: Which grower workflows ran to completion vs abandoned mid-flow
+- **Friction Points**: Where growers got stuck, repeated their question, or expressed confusion
+- **Feature Gaps**: Requests E.V.I.E. could not fulfill (unsupported integrations, missing data)
+- **Escalations to F.A.Y.E.**: Count, categories, and outcomes of business escalations
+
+#### 2. Daily Learning Notes Exchange
+
+Before running the nightly checklist questions, both agents share learning notes:
+
+- **E.V.I.E. sends to F.A.Y.E.**: The User Use Note (above) plus a "Grower Health Pulse" (sensor coverage, environment compliance, nutrient drift across all farms)
+- **F.A.Y.E. sends to E.V.I.E.**: A "Business Context Brief" (order trends, pricing changes, new buyers, upcoming deliveries, policy updates that affect grower advice)
+- Both notes are tagged with the date and persisted for trend analysis
+
+This exchange ensures E.V.I.E. gives growers advice informed by the latest business context, and F.A.Y.E. makes business decisions informed by actual grower behavior.
+
+#### 3. E.V.I.E.'s Nightly Checklist Questions
+
+| Theme | Question | Data to Check | Action if Flagged |
+|-------|----------|---------------|-------------------|
+| **User Workflows** | Did any grower's daily workflow (planting, monitoring, harvest logging) fail to complete critical steps? | Workflow status logs, task completion rates | Prompt user reminders, log gaps, update UI guidance |
+| **User Workflows** | Are key metrics (yield targets, harvest dates) being updated when growers complete tasks? | End-of-day harvest logs vs planned schedules | Remind grower to log missing data, adjust forecasts |
+| **User Workflows** | Are growers reporting inconsistent or contradicting advice from E.V.I.E.? | Feedback flags, support tickets | Flag for review, halt conflicting recs, issue correction |
+| **Sensor Health** | Are all expected sensors online and reporting? | Sensor telemetry presence/absence, last-reported timestamp | Alert ops, disable affected auto-actions, schedule repair |
+| **Sensor Health** | Are any sensor streams flatlining or showing impossible values? | Telemetry ranges, zero-hour variation analysis | Suppress bad data, flag device for calibration |
+| **Sensor Health** | Is data coverage uniform across all zones (no blind spots)? | Sensor count and uptime per zone vs expected | Prompt grower to add missing instrumentation |
+| **Environment** | Are environmental setpoints consistent with active crop recipes? | Current controls vs recipe targets | Ask grower to reconcile, roll back unintentional changes |
+| **Environment** | Did any zone's DLI, VPD, or temperature deviate significantly from recipe targets? | Sensor averages vs recipe day targets | Flag deviation, propose corrective action |
+| **Recommendations** | Are AI recommendations being utilized or ignored? | "Recommendation accepted" vs offered ratio | A/B test different advice styles, collect reasons |
+| **Recommendations** | Is recommendation confidence changing unexpectedly? | Aggregate confidence scores | If confidence drops, slow updates, flag possible drift |
+| **Experiments** | Did any trial results meet stopping criteria (success/failure)? | Trial metrics vs thresholds | Conclude trial, update recipe if success |
+| **Experiments** | Are growers mixing variables in A/B tests (confounding trials)? | Trial change logs for simultaneous edits | Alert grower, recommend clean experiment design |
+
+### KPIs E.V.I.E. Tracks
+
+| KPI | Calculation | Target |
+|-----|-------------|--------|
+| Sensor uptime | % of expected sensors reporting on time | >95% |
+| Recipe compliance | % of zones within recipe target ranges | >90% |
+| Recommendation adoption | % of suggestions acted upon | >60% |
+| Workflow completion | % of started workflows finished | >80% |
+| Grower satisfaction | Sentiment analysis of conversation tone | Positive trend |
+| Closed-loop latency | Time from data collection to actionable insight | <24 hours |
+
 ---
 
 ## Foundational AI/ML Literature
