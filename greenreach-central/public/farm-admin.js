@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v5';
+const PRICING_VERSION = '2026-03-26-v6';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1700,9 +1700,9 @@ const cropClassification = {
     'Purple Basil':       { commonName: 'Basil', isSpecialty: true },
 
     // Lettuce family
-    'Butterhead Lettuce':   { commonName: 'Lettuce', isSpecialty: false },
-    'Buttercrunch Lettuce': { commonName: 'Lettuce', isSpecialty: false },
-    'Bibb Butterhead':      { commonName: 'Lettuce', isSpecialty: false },
+    'Butterhead Lettuce':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Buttercrunch Lettuce': { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Bibb Butterhead':      { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Romaine Lettuce':      { commonName: 'Romaine', isSpecialty: false },
     'Red Leaf Lettuce':     { commonName: 'Lettuce', isSpecialty: false },
     'Lettuce':              { commonName: 'Lettuce', isSpecialty: false },
@@ -1773,19 +1773,19 @@ const cropClassification = {
     'San Marzano-':      { commonName: 'Tomato', isSpecialty: true },
     'Tribute':            { commonName: 'Tomato', isSpecialty: false },
     // -- Pelleted & Eazyleaf lettuce varieties (added for v3.0.0 recipes) --
-    'Alkindus Pelleted Organic': { commonName: 'Lettuce', isSpecialty: false },
-    'Amaze':                     { commonName: 'Lettuce', isSpecialty: false },
-    'Breen Pelleted Organic':    { commonName: 'Lettuce', isSpecialty: false },
-    'Brentwood Eazyleaf Organic':{ commonName: 'Lettuce', isSpecialty: false },
-    'Burgandy Eazyleaf Organic': { commonName: 'Lettuce', isSpecialty: false },
+    'Alkindus Pelleted Organic': { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Amaze':                     { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Breen Pelleted Organic':    { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Brentwood Eazyleaf Organic':{ commonName: 'Mixed Greens', isSpecialty: false },
+    'Burgandy Eazyleaf Organic': { commonName: 'Mixed Greens', isSpecialty: false },
     'Eazyleaf Blend Organic':    { commonName: 'Mixed Greens', isSpecialty: false },
-    'Hampton Eazyleaf Organic':  { commonName: 'Lettuce', isSpecialty: false },
-    'Ilema Organic':             { commonName: 'Lettuce', isSpecialty: true },
-    'Little Gem':                { commonName: 'Lettuce', isSpecialty: false },
-    'Newham Pelleted Organic':   { commonName: 'Lettuce', isSpecialty: false },
-    'Spretnak Organic':          { commonName: 'Lettuce', isSpecialty: false },
-    'Tropicana Pelleted Organic':{ commonName: 'Lettuce', isSpecialty: false },
-    'Truchas Pelleted Organic':  { commonName: 'Lettuce', isSpecialty: false },
+    'Hampton Eazyleaf Organic':  { commonName: 'Mixed Greens', isSpecialty: false },
+    'Ilema Organic':             { commonName: 'Butterhead Lettuce', isSpecialty: true },
+    'Little Gem':                { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Newham Pelleted Organic':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Spretnak Organic':          { commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Tropicana Pelleted Organic':{ commonName: 'Butterhead Lettuce', isSpecialty: false },
+    'Truchas Pelleted Organic':  { commonName: 'Butterhead Lettuce', isSpecialty: false },
 
     // -- Greens with exact-name mismatch --
     'KX-1 Kale (baby leaf)':       { commonName: 'Kale', isSpecialty: false },
@@ -2508,8 +2508,9 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['microgreen'], key: 'Microgreen' },
         { test: ['sprout'], key: 'Sprout' },
         // Pelleted/Eazyleaf lettuce varieties
-        { test: ['pelleted', 'eazyleaf', 'little gem', 'amaze', 'ilema'], key: 'Lettuce' },
-        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Lettuce' },
+        { test: ['pelleted', 'little gem', 'amaze', 'ilema'], key: 'Butterhead Lettuce' },
+        { test: ['eazyleaf'], key: 'Mixed Greens' },
+        { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
         { test: ['romaine', 'cos'], key: 'Romaine' },
         { test: ['red leaf'], key: 'Lettuce' },
         { test: ['oakleaf', 'oak leaf', 'salad bowl', 'escarole', 'batavian'], key: 'Mixed Greens' },
