@@ -186,43 +186,6 @@
       "active": false,
       "unit": "weight"
     },
-    "Romaine Lettuce": {
-      "aliases": [
-        "romaine",
-        "romaine lettuce",
-        "cos lettuce"
-      ],
-      "planIds": [
-        "crop-romaine-lettuce"
-      ],
-      "category": "lettuce",
-      "nutrientProfile": "leafy_greens",
-      "growth": {
-        "daysToHarvest": 35,
-        "retailPricePerLb": 23.52,
-        "yieldFactor": 0.9,
-        "harvestStrategy": "cut_and_come_again",
-        "regrowthDays": 14,
-        "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
-      },
-      "pricing": {
-        "retailPerOz": 1.47,
-        "wholesaleDiscounts": {
-          "tier1": 15,
-          "tier2": 25,
-          "tier3": 35
-        },
-        "currency": "CAD",
-        "pricingSource": "greenreach-central",
-        "lastUpdated": "2026-03-08"
-      },
-      "market": {
-        "resolveAs": "Romaine Lettuce"
-      },
-      "active": false,
-      "unit": "weight"
-    },
     "Red Leaf Lettuce": {
       "aliases": [
         "red leaf",
@@ -291,88 +254,6 @@
       },
       "market": {
         "resolveAs": "Oak Leaf Lettuce"
-      },
-      "active": false,
-      "unit": "weight"
-    },
-    "Mixed Lettuce": {
-      "aliases": [
-        "mixed lettuce",
-        "salad mix",
-        "spring mix",
-        "mixed greens",
-        "greens",
-        "baby greens",
-        "baby leaf",
-        "baby lettuce",
-        "mesclun",
-        "lettuce mix"
-      ],
-      "planIds": [
-        "crop-mixed-lettuce",
-        "crop-mixed-greens"
-      ],
-      "category": "lettuce",
-      "nutrientProfile": "leafy_greens",
-      "growth": {
-        "daysToHarvest": 30,
-        "retailPricePerLb": 23.52,
-        "yieldFactor": 0.9,
-        "harvestStrategy": "cut_and_come_again",
-        "regrowthDays": 14,
-        "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
-      },
-      "pricing": {
-        "retailPerOz": 1.47,
-        "wholesaleDiscounts": {
-          "tier1": 15,
-          "tier2": 25,
-          "tier3": 35
-        },
-        "currency": "CAD",
-        "pricingSource": "greenreach-central",
-        "lastUpdated": "2026-03-08"
-      },
-      "market": {
-        "resolveAs": "Mixed Lettuce"
-      },
-      "active": false,
-      "unit": "weight"
-    },
-    "Lettuce": {
-      "aliases": [
-        "lettuce",
-        "salad",
-        "salad greens"
-      ],
-      "planIds": [
-        "crop-lettuce"
-      ],
-      "category": "lettuce",
-      "nutrientProfile": "leafy_greens",
-      "growth": {
-        "daysToHarvest": 32,
-        "retailPricePerLb": 23.52,
-        "yieldFactor": 0.9,
-        "harvestStrategy": "cut_and_come_again",
-        "regrowthDays": 14,
-        "maxHarvests": 4,
-        "regrowthYieldFactor": 0.85
-      },
-      "pricing": {
-        "retailPerOz": 1.47,
-        "wholesaleDiscounts": {
-          "tier1": 15,
-          "tier2": 25,
-          "tier3": 35
-        },
-        "currency": "CAD",
-        "pricingSource": "greenreach-central",
-        "lastUpdated": "2026-03-08"
-      },
-      "market": {
-        "resolveAs": "Lettuce"
       },
       "active": false,
       "unit": "weight"
@@ -1166,6 +1047,72 @@
       },
       "active": false,
       "unit": "weight"
+    },
+    "Breen Pelleted Organic": {
+      "planId": "crop-breen-pelleted",
+      "aliases": [
+        "breen",
+        "breen pelleted",
+        "breen organic",
+        "breen lettuce"
+      ],
+      "category": "Butterhead Lettuce",
+      "growth": {
+        "daysToHarvest": 55,
+        "regrowCycles": 0,
+        "yieldPerPlantOz": 4,
+        "retailPricePerLb": 23.52,
+        "wholesalePricePerLb": 16.46
+      },
+      "pricing": {
+        "retailPerOz": 1.47,
+        "comparisonProduct": "packaged premium lettuce (5oz clamshell)",
+        "comparisonPriceCAD": 4.99
+      }
+    },
+    "Truchas Pelleted Organic": {
+      "planId": "crop-truchas-pelleted",
+      "aliases": [
+        "truchas",
+        "truchas pelleted",
+        "truchas organic",
+        "truchas lettuce"
+      ],
+      "category": "Butterhead Lettuce",
+      "growth": {
+        "daysToHarvest": 55,
+        "regrowCycles": 0,
+        "yieldPerPlantOz": 4,
+        "retailPricePerLb": 23.52,
+        "wholesalePricePerLb": 16.46
+      },
+      "pricing": {
+        "retailPerOz": 1.47,
+        "comparisonProduct": "packaged premium lettuce (5oz clamshell)",
+        "comparisonPriceCAD": 4.99
+      }
+    },
+    "Seaside F1 Spinach (baby leaf)": {
+      "planId": "crop-seaside-spinach",
+      "aliases": [
+        "seaside",
+        "seaside spinach",
+        "seaside f1",
+        "baby spinach"
+      ],
+      "category": "Spinach",
+      "growth": {
+        "daysToHarvest": 28,
+        "regrowCycles": 2,
+        "yieldPerPlantOz": 2,
+        "retailPricePerLb": 23.52,
+        "wholesalePricePerLb": 16.46
+      },
+      "pricing": {
+        "retailPerOz": 1.47,
+        "comparisonProduct": "packaged baby spinach (5oz clamshell)",
+        "comparisonPriceCAD": 4.49
+      }
     }
   }
 }

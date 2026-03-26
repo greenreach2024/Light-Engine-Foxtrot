@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v7';
+const PRICING_VERSION = '2026-03-26-v9';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1288,12 +1288,12 @@ function getCropBackendUnit(cropName) {
 // Prices calculated from actual retail packages and converted to per-oz rates
 const defaultPricing = {
     // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },  // $5.99/6oz living head
-    'Romaine Lettuce': { retail: 0.41, ws1: 20, ws2: 25, ws3: 35 },     // $5.49/18oz hearts
-    'Red Leaf Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Oak Leaf Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },    // Standard lettuce pricing
-    'Mixed Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },       // Standard lettuce pricing
-    'Lettuce': { retail: 0.61, ws1: 20, ws2: 25, ws3: 35 },             // Generic lettuce
+    'Butterhead Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // $4.99/5oz packaged
+    'Breen Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
+    'Truchas Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
+    'Seaside F1 Spinach (baby leaf)': { retail: 0.90, ws1: 20, ws2: 25, ws3: 35 },  // $4.49/5oz packaged baby spinach
+    'Red Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged salad mix
+    'Oak Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged mixed greens
     
     // Basil varieties - Premium herb pricing
     'Genovese Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },      // $2.29/1.0oz Ontario retail
@@ -1701,9 +1701,9 @@ const cropClassification = {
     'Butterhead Lettuce':   { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Buttercrunch Lettuce': { commonName: 'Butterhead Lettuce', isSpecialty: false },
     'Bibb Butterhead':      { commonName: 'Butterhead Lettuce', isSpecialty: false },
-    'Romaine Lettuce':      { commonName: 'Romaine', isSpecialty: false },
+    'Romaine Lettuce':      { commonName: 'Mixed Greens', isSpecialty: false },
     'Red Leaf Lettuce':     { commonName: 'Lettuce', isSpecialty: false },
-    'Lettuce':              { commonName: 'Lettuce', isSpecialty: false },
+    'Lettuce':              { commonName: 'Mixed Greens', isSpecialty: false },
     'Mixed Lettuce':        { commonName: 'Mixed Greens', isSpecialty: false },
     'Oak Leaf Lettuce':     { commonName: 'Mixed Greens', isSpecialty: true },
     'Salad Bowl Oakleaf':   { commonName: 'Mixed Greens', isSpecialty: true },
@@ -1886,57 +1886,30 @@ let currentExchangeRate = 1.35; // Default rate
 const marketDataSources = {
     // Lettuce varieties
     'Butterhead Lettuce': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts', 'Metro', 'Sobeys', 'Farm Boy'],
-        avgPriceUSD: 5.99,
-        avgWeightOz: 6,
-        priceRange: [4.99, 6.99],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
         trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Romaine Lettuce': {
-        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro', 'Sobeys'],
-        avgPriceUSD: 5.49,
-        avgWeightOz: 18,
-        priceRange: [4.99, 6.49],
-        trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
     'Red Leaf Lettuce': {
-        retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Farmers Markets'],
-        avgPriceUSD: 5.49,
-        avgWeightOz: 12,
-        priceRange: [3.99, 6.99],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
     'Oak Leaf Lettuce': {
-        retailers: ['Whole Foods', 'Metro', 'Specialty Markets'],
-        avgPriceUSD: 5.49,
-        avgWeightOz: 12,
-        priceRange: [3.99, 6.99],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.99,
+        avgWeightOz: 5,
+        priceRange: [3.99, 5.99],
         trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Mixed Lettuce': {
-        retailers: ['Whole Foods', 'Loblaws', 'Farm Boy', 'Sobeys'],
-        avgPriceUSD: 5.49,
-        avgWeightOz: 12,
-        priceRange: [3.99, 6.99],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
-    'Lettuce': {
-        retailers: ['Whole Foods', 'Metro', 'Loblaws'],
-        avgPriceUSD: 5.49,
-        avgWeightOz: 12,
-        priceRange: [3.99, 6.99],
-        trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     
@@ -1998,141 +1971,131 @@ const marketDataSources = {
     
     // Arugula varieties
     'Baby Arugula': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Cultivated Arugula': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Wild Arugula': {
-        retailers: ['Whole Foods', 'Specialty Stores'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Wasabi Arugula': {
-        retailers: ['Specialty Stores', 'Farmers Markets'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Red Arugula': {
-        retailers: ['Whole Foods', 'Specialty Stores'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Arugula': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts'],
-        avgPriceUSD: 4.99,
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
+        avgPriceUSD: 4.49,
         avgWeightOz: 5,
-        priceRange: [3.99, 5.99],
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     
     // Kale varieties
     'Curly Kale': {
-        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Target'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
         avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
+        avgWeightOz: 5,
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Baby Kale': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Target'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
         avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
+        avgWeightOz: 5,
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
     'Kale': {
-        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Target'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
         avgPriceUSD: 4.49,
-        avgWeightOz: 8,
-        priceRange: [2.99, 5.49],
+        avgWeightOz: 5,
+        priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'USA',
+        country: 'Canada',
         articles: []
     },
 
     // Premium mixed greens (used as fallback for specialty greens not sold standalone)
     'Mixed Greens': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Sprouts', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
         avgPriceUSD: 4.99,
         avgWeightOz: 5,
-        priceRange: [3.99, 6.49],
+        priceRange: [3.99, 5.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
-    // Romaine (packaged hearts / chopped)
-    'Romaine': {
-        retailers: ['Whole Foods', 'Kroger', 'Safeway', 'Loblaws', 'Metro', 'Sobeys'],
-        avgPriceUSD: 3.99,
-        avgWeightOz: 10,
-        priceRange: [2.99, 4.99],
-        trend: 'stable',
-        country: 'North America',
-        articles: []
-    },
 
     // Spinach (packaged baby spinach)
     'Spinach': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Kroger', 'Loblaws', 'Metro'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'No Frills'],
         avgPriceUSD: 4.49,
         avgWeightOz: 5,
         priceRange: [3.49, 5.49],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
     // Swiss Chard (bunch)
     'Swiss Chard': {
-        retailers: ['Whole Foods', 'Sprouts', 'Farm Boy', 'Farmers Markets'],
+        retailers: ['Loblaws', 'Farm Boy', 'Sobeys', 'Farmers Markets'],
         avgPriceUSD: 3.49,
-        avgWeightOz: 12,
+        avgWeightOz: 8,
         priceRange: [2.49, 4.49],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
     // Bok Choy (packaged)
     'Bok Choy': {
-        retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Asian Markets'],
-        avgPriceUSD: 2.99,
-        avgWeightOz: 12,
-        priceRange: [1.99, 3.99],
+        retailers: ['Loblaws', 'Metro', 'Farm Boy', 'Asian Markets'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 6,
+        priceRange: [2.99, 3.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
@@ -2252,12 +2215,12 @@ const marketDataSources = {
 
     // Watercress (packaged)
     'Watercress': {
-        retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'Loblaws', 'Sobeys'],
+        retailers: ['Loblaws', 'Metro', 'Sobeys', 'Farm Boy', 'Whole Foods'],
         avgPriceUSD: 3.99,
         avgWeightOz: 4,
         priceRange: [2.99, 4.99],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
         articles: []
     },
 
@@ -2267,19 +2230,21 @@ const marketDataSources = {
         avgPriceUSD: 4.49,
         avgWeightOz: 2,
         priceRange: [3.49, 5.99],
-        trend: 'increasing',
-        country: 'North America',
+        trend: 'stable',
+        country: 'Canada',
+        _lookupOnly: true,
         articles: []
     },
 
     // Sprouts (packaged container)
     'Sprout': {
-        retailers: ['Whole Foods', 'Trader Joes', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
+        retailers: ['Whole Foods', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
         avgPriceUSD: 3.49,
         avgWeightOz: 6,
         priceRange: [2.49, 4.49],
         trend: 'stable',
-        country: 'North America',
+        country: 'Canada',
+        _lookupOnly: true,
         articles: []
     }
 };
@@ -2502,10 +2467,10 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['pelleted', 'little gem', 'amaze', 'ilema'], key: 'Butterhead Lettuce' },
         { test: ['eazyleaf'], key: 'Mixed Greens' },
         { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Butterhead Lettuce' },
-        { test: ['romaine', 'cos'], key: 'Romaine' },
-        { test: ['red leaf'], key: 'Lettuce' },
+        { test: ['romaine', 'cos'], key: 'Mixed Greens' },
+        { test: ['red leaf'], key: 'Red Leaf Lettuce' },
         { test: ['oakleaf', 'oak leaf', 'salad bowl', 'escarole', 'batavian'], key: 'Mixed Greens' },
-        { test: ['lettuce', 'salad'], key: 'Lettuce' },
+        { test: ['lettuce', 'salad'], key: 'Mixed Greens' },
         { test: ['arugula', 'rocket'], key: 'Arugula' },
         { test: ['basil', 'genovese'], key: 'Basil' },
         { test: ['kale', 'lacinato', 'russian kale'], key: 'Kale' },
@@ -2645,7 +2610,7 @@ function generateRecommendations() {
     }
 
     for (const key of Object.keys(marketDataSources)) {
-        if (!seenMarketKeys.has(key)) {
+        if (!seenMarketKeys.has(key) && !marketDataSources[key]._lookupOnly) {
             analysisCrops.push(key);
         }
     }
@@ -3141,10 +3106,11 @@ const cropGrowthParams = {
     'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
     'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
     'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Romaine Lettuce': { daysToHarvest: 35, retailPricePerLb: 5.00, yieldFactor: 0.90 },
+    'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
     'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
     'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Mixed Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.90 },
     
     // Kale varieties - 35-42 day cycle, priced per lb
     'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },

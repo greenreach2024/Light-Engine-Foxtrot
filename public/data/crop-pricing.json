@@ -1,7 +1,7 @@
 {
   "version": "2026-03-26-v8",
   "farmId": "light-engine-demo",
-  "lastUpdated": "2026-03-26T12:58:13.412Z",
+  "lastUpdated": "2026-03-26T14:10:31.911Z",
   "crops": [
     {
       "crop": "Mei Qing Pak Choi",
@@ -125,17 +125,6 @@
       "pricingSource": "crop-registry"
     },
     {
-      "crop": "Romaine Lettuce",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
       "crop": "Red Leaf Lettuce",
       "unit": "lb",
       "retailPrice": 23.52,
@@ -148,28 +137,6 @@
     },
     {
       "crop": "Oak Leaf Lettuce",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Mixed Lettuce",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Lettuce",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -354,6 +321,39 @@
       "ws3Discount": 30,
       "currency": "CAD",
       "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Breen Pelleted Organic",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Truchas Pelleted Organic",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Seaside F1 Spinach (baby leaf)",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     }
   ]
 }
