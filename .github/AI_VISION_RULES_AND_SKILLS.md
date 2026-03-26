@@ -24,6 +24,7 @@
 12. [Pre-Implementation Checklist](#12-pre-implementation-checklist)
 13. [Automatic Rejection Criteria](#13-automatic-rejection-criteria)
 14. [Quick Reference: 52 Opportunities](#14-quick-reference-52-opportunities)
+15. [CEA Environment Reference Sources](#15-cea-environment-reference-sources)
 
 ---
 
@@ -922,6 +923,85 @@ Agent: [designation]
 **Totals: 27 Farm-side, 25 Central-side across 5 phases.**
 
 ---
+
+## 15. CEA Environment Reference Sources
+
+These peer-reviewed and extension-service references underpin the daily environment targets in every grow recipe. Agents MUST cite the relevant source when proposing recipe modifications or defending parameter values. Do not invent targets -- trace them to a source below.
+
+### Reference 15.1: Cornell CEA Lettuce Handbook
+
+- **Scope**: Head lettuce, baby leaf, romaine, butterhead -- the benchmark for indoor lettuce production.
+- **Key setpoints**: DLI ramp to ~17 mol/m2/d at maturity; PPFD ~295 umol/m2/s for a 16 h photoperiod; 60-70% RH; VPD 0.75-1.0 kPa.
+- **When to use**: Default authority for any lettuce variety. Other lettuce sources must agree with or explicitly override Cornell values.
+
+### Reference 15.2: UF/IFAS Extension HS1279 (Hydroponic Production)
+
+- **Scope**: Broad hydroponic guidance -- spinach, basil, leafy greens, herbs.
+- **Key insights**: Spinach and basil are susceptible to Pythium; maintain higher dissolved-O2 levels and cooler nutrient-solution temperatures. General indoor production best practices.
+- **When to use**: Cross-reference whenever root-zone disease risk is elevated or solution temperature exceeds 22 C.
+
+### Reference 15.3: Johnny's Selected Seeds (Crop Timing Data)
+
+- **Scope**: Variety-specific days-to-harvest and cultural notes.
+- **Key data points**: Mini-head lettuce 30-32 d post-transplant; full romaine 45-50 d; herb and specialty crop timing benchmarks.
+- **When to use**: Validate or calibrate the day-count in any recipe. If a recipe's total days disagree with Johnny's data by more than 15%, flag it.
+
+### Reference 15.4: Hydroponic Basil Production Studies
+
+- **Scope**: Sweet basil, Genovese basil, Thai basil -- CEA-specific.
+- **Key setpoints**: Day temp 24-26 C, night temp 18-20 C; PPFD 250-300 umol/m2/s; DLI 14-15 mol/m2/d; EC 1.4-1.8 mS/cm.
+- **When to use**: Authority for all basil varieties. Override generic herb defaults with these basil-specific values.
+
+### Reference 15.5: Arugula CEA Studies
+
+- **Scope**: Arugula / rocket in controlled environment.
+- **Key setpoints**: Day temp 20-25 C, night temp 15-18 C; DLI 10-15 mol/m2/d; <25-day crop cycle.
+- **When to use**: Authority for arugula and related brassica greens with similar bolting sensitivity.
+
+### Reference 15.6: Spinach & Chard CEA Review
+
+- **Scope**: Spinach, Swiss chard -- cool-season leafy crops.
+- **Key setpoints**: Day temp 18-20 C, night temp 12-15 C (cooler nights critical); VPD 0.8-1.2 kPa.
+- **When to use**: Authority for spinach and chard varieties. These crops need the lowest night temperatures in the catalog.
+
+### Reference 15.7: Light Spectrum Research (General Indoor Greens)
+
+- **Scope**: LED spectrum ratios for photosynthesis, morphology, and secondary metabolite production.
+- **Key ratios**: ~40% red (630-660 nm), 20-30% blue (440-470 nm), 20-30% green (500-550 nm), 5-15% far-red (720-740 nm); 16-18 h photoperiod.
+- **When to use**: Default spectrum template for any crop lacking crop-specific spectrum data. Adjust blue upward for compact morphology, far-red upward for stem extension.
+
+### Reference 15.8: VPD Control Studies
+
+- **Scope**: Vapour Pressure Deficit management across growth stages.
+- **Key setpoints**: Ideal range 0.8-1.2 kPa; seedling/clone stage ~0.75 kPa rising to ~1.0 kPa by harvest; >1.5 kPa triggers stomatal closure; <0.4 kPa invites fungal pressure.
+- **When to use**: Cross-check every recipe's VPD column. Flag any day where VPD falls outside 0.4-1.5 kPa as an error.
+
+### Reference 15.9: EC / pH Recommendations (Nutrient Management)
+
+- **Scope**: Electrical conductivity and pH targets by crop category.
+- **Key setpoints**: Most greens EC 1.2-1.8 mS/cm, pH 5.8-6.2; basil EC 1.4-1.8; spinach and chard tolerate up to EC 2.0; microgreens on pads EC 0.5-1.0; sprouts (rinse method) EC near 0.
+- **When to use**: Validate every recipe's EC and pH columns. Recipes outside these ranges require an explicit justification note in the description field.
+
+### Quick-Reference Setpoint Table
+
+| Parameter | Lettuce | Basil | Arugula | Spinach/Chard | Microgreens | Sprouts |
+|-----------|---------|-------|---------|---------------|-------------|---------|
+| Day temp (C) | 20-24 | 24-26 | 20-25 | 18-20 | 20-24 | 18-22 |
+| Night temp (C) | 16-18 | 18-20 | 15-18 | 12-15 | 16-20 | 16-20 |
+| DLI (mol/m2/d) | 14-17 | 14-15 | 10-15 | 10-14 | 8-12 | 0-2 |
+| PPFD (umol/m2/s) | 200-295 | 250-300 | 180-260 | 180-250 | 150-200 | 0-50 |
+| VPD (kPa) | 0.75-1.0 | 0.8-1.2 | 0.8-1.2 | 0.8-1.2 | 0.6-1.0 | N/A |
+| EC (mS/cm) | 1.2-1.6 | 1.4-1.8 | 1.2-1.6 | 1.4-2.0 | 0.5-1.0 | 0 |
+| pH | 5.8-6.2 | 5.8-6.2 | 6.0-6.5 | 6.0-6.5 | 5.5-6.0 | N/A |
+| Photoperiod (h) | 16-18 | 16-18 | 14-16 | 14-16 | 16 | 0 |
+
+### Rule 15.1: Source-Traced Recipe Validation
+
+- Every recipe parameter MUST be traceable to one of the references above (15.1-15.9) or to a documented farm-specific experiment record (Rule 3.1).
+- When an agent proposes a recipe modification, it MUST cite the reference number (e.g. "Per Ref 15.4, basil day temp should be 24-26 C").
+- If a parameter falls outside the ranges in the Quick-Reference Table, the recipe description field MUST contain a justification note explaining the deviation.
+- During recipe review, flag any unjustified out-of-range parameter as a warning.
+
 
 ## Appendix: Integration with Agent Skills Framework
 

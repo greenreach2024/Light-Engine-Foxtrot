@@ -1,0 +1,6 @@
+Table 1
+Day,Stage,DLI Target (mol/m2/d),Temp Target (C),PPFD (umol/m2/s),Blue %,Green %,Red %,Far Red %,VPD (kPa),Max Humidity %,EC (mS/cm),pH,Veg,Fruit
+1,Sprouting,0,21,0,0,0,0,0,0.4,85,0,6.5,1,0
+2,Sprouting,0,21,0,0,0,0,0,0.4,85,0,6.5,1,0
+3,Sprouting,0,21,0,0,0,0,0,0.4,85,0,6.5,1,0
+4,Sprouting,0,21,0,0,0,0,0,0.4,85,0,6.5,1,0
