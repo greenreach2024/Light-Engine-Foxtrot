@@ -75,7 +75,7 @@ router.get('/', async (req, res) => {
       const existing = priceMap[cropName];
       return {
         crop: cropName,
-        unit: existing?.unit || 'lb',
+        unit: existing?.unit || 'oz',
         retailPrice: existing?.retailPrice || 0,
         wholesalePrice: existing?.wholesalePrice || 0,
         ws1Discount: existing?.ws1Discount || 15,

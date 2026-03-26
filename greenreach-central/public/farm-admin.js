@@ -1260,8 +1260,7 @@ const cropUnitMap = {
     'Brandywine': 'unit',
     'Celebrity': 'unit',
     'Heatmaster F1': 'unit',
-    'San Marzano': 'unit',
-    'San Marzano': 'unit',
+    'San Marzano-': 'unit',
     // Cherry tomatoes -- sold by weight
     'Sun Gold': 'weight'
     // All leafy greens, herbs, and other crops default to 'weight'
@@ -1318,7 +1317,18 @@ const defaultPricing = {
     'Dinosaur Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },       // Same as Lacinato
     'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
     'Red Russian Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },    // Standard kale
-    'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 }                 // Generic kale
+    'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },                // Generic kale
+    
+    // Microgreens - Premium pricing per oz (2oz clamshell @ $4.49)
+    'Microgreen': { retail: 2.25, ws1: 15, ws2: 20, ws3: 30 },
+
+    // Sprouts - Value pricing per oz (6oz container @ $3.49)
+    'Sprout': { retail: 0.58, ws1: 20, ws2: 25, ws3: 35 },
+
+    // Herbs missing from original defaults
+    'Rosemary': { retail: 4.65, ws1: 20, ws2: 25, ws3: 35 },             // $3.49/0.75oz
+    'Sage': { retail: 4.65, ws1: 20, ws2: 25, ws3: 35 },                 // $3.49/0.75oz
+    'Watercress': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 }            // $3.99/4oz
 };
 
 /**
@@ -1767,7 +1777,61 @@ const cropClassification = {
     'Celebrity':          { commonName: 'Tomato', isSpecialty: false },
     'Heatmaster F1':      { commonName: 'Tomato', isSpecialty: false },
     'San Marzano':       { commonName: 'Tomato', isSpecialty: true },
-    'Tribute':            { commonName: 'Tomato', isSpecialty: false }
+    'San Marzano-':      { commonName: 'Tomato', isSpecialty: true },
+    'Tribute':            { commonName: 'Tomato', isSpecialty: false },
+    // -- Pelleted & Eazyleaf lettuce varieties (added for v3.0.0 recipes) --
+    'Alkindus Pelleted Organic': { commonName: 'Lettuce', isSpecialty: false },
+    'Amaze':                     { commonName: 'Lettuce', isSpecialty: false },
+    'Breen Pelleted Organic':    { commonName: 'Lettuce', isSpecialty: false },
+    'Brentwood Eazyleaf Organic':{ commonName: 'Lettuce', isSpecialty: false },
+    'Burgandy Eazyleaf Organic': { commonName: 'Lettuce', isSpecialty: false },
+    'Eazyleaf Blend Organic':    { commonName: 'Mixed Greens', isSpecialty: false },
+    'Hampton Eazyleaf Organic':  { commonName: 'Lettuce', isSpecialty: false },
+    'Ilema Organic':             { commonName: 'Lettuce', isSpecialty: true },
+    'Little Gem':                { commonName: 'Lettuce', isSpecialty: false },
+    'Newham Pelleted Organic':   { commonName: 'Lettuce', isSpecialty: false },
+    'Spretnak Organic':          { commonName: 'Lettuce', isSpecialty: false },
+    'Tropicana Pelleted Organic':{ commonName: 'Lettuce', isSpecialty: false },
+    'Truchas Pelleted Organic':  { commonName: 'Lettuce', isSpecialty: false },
+
+    // -- Greens with exact-name mismatch --
+    'KX-1 Kale (baby leaf)':       { commonName: 'Kale', isSpecialty: false },
+    'Magenta Sunset Swiss Chard':   { commonName: 'Swiss Chard', isSpecialty: true },
+    'Seaside F1 Spinach (baby leaf)':{ commonName: 'Spinach', isSpecialty: false },
+    'San Marzano-':                 { commonName: 'Tomato', isSpecialty: true },
+
+    // -- Microgreens --
+    'Microgreen Arugula':           { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Basil':             { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Beet':              { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Broccoli Organic':  { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Kale':              { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Kohlrabi':          { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Pac Choi':          { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Pea Shoots':        { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Radish Organic':    { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Sunflower Organic': { commonName: 'Microgreen', isSpecialty: false },
+    'Microgreen Swiss Chard':       { commonName: 'Microgreen', isSpecialty: false },
+
+    // -- Sprouts --
+    'Sprout Adzuki Bean Organic':       { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Alfalfa Organic':           { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Barley Organic':            { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Bean Salad Mix Organic':    { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Broccoli Organic':          { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Brown Mustard Organic':     { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Go Go Mix Organic':         { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Gourmet Mix Organic':       { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Green Hunter Organic':      { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Green Lentils Organic':     { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Green Peas Organic':        { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Mung Bean Organic':         { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Radish Organic':            { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Red Clover Organic':        { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Salad Mix Organic':         { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Sandwich Booster Mix Organic': { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Wheatgrass Organic':        { commonName: 'Sprout', isSpecialty: false },
+    'Sprout Yellow Mustard Organic':    { commonName: 'Sprout', isSpecialty: false }
 };
 
 // Resolve classification for any crop name, with fuzzy fallback
@@ -2205,6 +2269,61 @@ const marketDataSources = {
         country: 'North America',
         comparisonUnit: 'unit',
         articles: []
+    },
+
+    // Rosemary (packaged fresh herb)
+    'Rosemary': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws', 'Sobeys'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 0.75,
+        priceRange: [2.49, 3.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Sage (packaged fresh herb)
+    'Sage': {
+        retailers: ['Whole Foods', 'Kroger', 'Metro', 'Loblaws'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 0.75,
+        priceRange: [2.49, 3.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Watercress (packaged)
+    'Watercress': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Metro', 'Loblaws', 'Sobeys'],
+        avgPriceUSD: 3.99,
+        avgWeightOz: 4,
+        priceRange: [2.99, 4.99],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
+    },
+
+    // Microgreens (packaged tray/clamshell)
+    'Microgreen': {
+        retailers: ['Whole Foods', 'Farm Boy', 'Loblaws', 'Sobeys', 'Farmers Markets'],
+        avgPriceUSD: 4.49,
+        avgWeightOz: 2,
+        priceRange: [3.49, 5.99],
+        trend: 'increasing',
+        country: 'North America',
+        articles: []
+    },
+
+    // Sprouts (packaged container)
+    'Sprout': {
+        retailers: ['Whole Foods', 'Trader Joes', 'Loblaws', 'Metro', 'Sobeys', 'Farm Boy'],
+        avgPriceUSD: 3.49,
+        avgWeightOz: 6,
+        priceRange: [2.49, 4.49],
+        trend: 'stable',
+        country: 'North America',
+        articles: []
     }
 };
 
@@ -2386,8 +2505,9 @@ async function fetchExchangeRate() {
     if (savedRateData && (Date.now() - savedRateData.timestamp) < 86400000) {
         currentExchangeRate = savedRateData.rate;
     } else {
-        // Simulate API call - in production, replace with real API
-        currentExchangeRate = 1.35 + (Math.random() * 0.05 - 0.025); // 1.325 to 1.375
+        // Static fallback rate (updated 2026-01). In production, fetch from
+        // https://api.exchangerate-api.com/v4/latest/USD or Bank of Canada RSS
+        currentExchangeRate = 1.44; // USD/CAD as of Jan 2026
         
         localStorage.setItem(USD_TO_CAD_RATE_KEY, JSON.stringify({
             rate: currentExchangeRate,
@@ -2418,6 +2538,11 @@ function resolveMarketDataForCrop(cropName) {
     const normalized = String(cropName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
     const aliasChecks = [
+        // Microgreens and sprouts (must precede crop-specific aliases)
+        { test: ['microgreen'], key: 'Microgreen' },
+        { test: ['sprout'], key: 'Sprout' },
+        // Pelleted/Eazyleaf lettuce varieties
+        { test: ['pelleted', 'eazyleaf', 'little gem', 'amaze', 'ilema'], key: 'Lettuce' },
         { test: ['butterhead', 'buttercrunch', 'bibb'], key: 'Lettuce' },
         { test: ['romaine', 'cos'], key: 'Romaine' },
         { test: ['red leaf'], key: 'Lettuce' },
@@ -2430,7 +2555,7 @@ function resolveMarketDataForCrop(cropName) {
         { test: ['watercress'], key: 'Watercress' },
         { test: ['spinach', 'bloomsdale'], key: 'Spinach' },
         { test: ['chard'], key: 'Swiss Chard' },
-        { test: ['pak choi', 'bok choy'], key: 'Bok Choy' },
+        { test: ['pak choi', 'pac choi', 'bok choy'], key: 'Bok Choy' },
         { test: ['tatsoi', 'mizuna', 'komatsuna', 'mustard'], key: 'Mixed Greens' },
         { test: ['parsley'], key: 'Parsley' },
         { test: ['cilantro'], key: 'Cilantro' },
