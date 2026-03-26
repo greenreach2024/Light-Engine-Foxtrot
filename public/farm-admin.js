@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per oz, true = per 25g
 const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v4';
+const PRICING_VERSION = '2026-03-26-v5';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -2414,10 +2414,10 @@ async function runAIPricingAnalysis() {
         for (const rec of liveData.recommendations) {
             marketDataSources[rec.product] = {
                 retailers: rec.retailers || [],
-                avgPriceCAD: rec.avgPriceCAD || 0,
-                avgPriceUSD: (rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
-                avgWeightOz: 1, // DB data is already per-unit
-                priceRange: (rec.priceRange || [0, 0]).map(p => p * 1), // already per oz
+                avgPriceCAD: rec.pricePerOzCAD || rec.avgPriceCAD || 0,
+                avgPriceUSD: (rec.pricePerOzCAD || rec.avgPriceCAD || 0) / (liveData.fxRate || 1.36),
+                avgWeightOz: 1, // Backend returns per-oz values via pricePerOzCAD
+                priceRange: rec.priceRange || [0, 0], // Backend returns per-oz ranges
                 trend: rec.trend || 'stable',
                 trendPercent: rec.trendPercent ?? 0,
                 country: 'Canada',

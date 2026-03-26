@@ -14,16 +14,16 @@ import logger from '../utils/logger.js';
 
 // Fallback seed prices (used only when DB has no observations)
 const SEED_PRICES = {
-  'Basil':               { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Trader Joes'], baseCAD: 3.99, unit: 'per_bunch' },
-  'Kale':                { retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Loblaws', 'Kroger'],   baseCAD: 3.99, unit: 'per_bunch' },
-  'Lettuce (Romaine)':   { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Safeway'],     baseCAD: 3.49, unit: 'per_head' },
-  'Spinach':             { retailers: ['Whole Foods', 'Trader Joes', 'Metro', 'Loblaws', 'Target'], baseCAD: 4.29, unit: 'per_10oz' },
-  'Arugula':             { retailers: ['Whole Foods', 'Trader Joes', 'Sobeys', 'Metro'],            baseCAD: 5.29, unit: 'per_5oz' },
-  'Microgreens':         { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],               baseCAD: 5.99, unit: 'per_4oz' },
-  'Cilantro':            { retailers: ['Sobeys', 'Metro', 'Loblaws', 'Walmart', 'FreshCo'],        baseCAD: 1.49, unit: 'per_bunch' },
-  'Mint':                { retailers: ['Whole Foods', 'Metro', 'Sobeys', 'Loblaws'],               baseCAD: 2.49, unit: 'per_bunch' },
-  'Bok Choy':            { retailers: ['Whole Foods', 'T&T', 'Metro', 'Loblaws'],                  baseCAD: 2.99, unit: 'per_lb' },
-  'Watercress':          { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys'],                       baseCAD: 4.99, unit: 'per_bunch' },
+  'Basil':               { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Trader Joes'], baseCAD: 3.99, unit: 'per_bunch', weightOz: 1 },
+  'Kale':                { retailers: ['Whole Foods', 'Sobeys', 'Farm Boy', 'Loblaws', 'Kroger'],   baseCAD: 3.99, unit: 'per_bunch', weightOz: 8 },
+  'Lettuce (Romaine)':   { retailers: ['Whole Foods', 'Sobeys', 'Metro', 'Loblaws', 'Safeway'],     baseCAD: 3.49, unit: 'per_head',  weightOz: 16 },
+  'Spinach':             { retailers: ['Whole Foods', 'Trader Joes', 'Metro', 'Loblaws', 'Target'], baseCAD: 4.29, unit: 'per_10oz', weightOz: 10 },
+  'Arugula':             { retailers: ['Whole Foods', 'Trader Joes', 'Sobeys', 'Metro'],            baseCAD: 5.29, unit: 'per_5oz',  weightOz: 5 },
+  'Microgreens':         { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys', 'Metro'],               baseCAD: 5.99, unit: 'per_4oz',  weightOz: 4 },
+  'Cilantro':            { retailers: ['Sobeys', 'Metro', 'Loblaws', 'Walmart', 'FreshCo'],        baseCAD: 1.49, unit: 'per_bunch', weightOz: 1 },
+  'Mint':                { retailers: ['Whole Foods', 'Metro', 'Sobeys', 'Loblaws'],               baseCAD: 2.49, unit: 'per_bunch', weightOz: 0.75 },
+  'Bok Choy':            { retailers: ['Whole Foods', 'T&T', 'Metro', 'Loblaws'],                  baseCAD: 2.99, unit: 'per_lb',   weightOz: 16 },
+  'Watercress':          { retailers: ['Whole Foods', 'Farm Boy', 'Sobeys'],                       baseCAD: 4.99, unit: 'per_bunch', weightOz: 3 },
 };
 
 /**
@@ -336,6 +336,7 @@ function formatSeedDataAsMarketData() {
     data[product] = {
       retailers: config.retailers,
       avgPriceCAD: config.baseCAD,
+      avgWeightOz: config.weightOz || 1,
       priceRange: [config.baseCAD * 0.85, config.baseCAD * 1.15],
       trend: 'stable',
       trendPercent: 0,

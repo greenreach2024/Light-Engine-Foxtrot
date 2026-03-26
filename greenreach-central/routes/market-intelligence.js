@@ -312,7 +312,7 @@ router.get('/pricing-recommendations', async (req, res) => {
     const recommendations = [];
     for (const [product, data] of Object.entries(marketData)) {
       const ai = aiMap.get(product) || null;
-      const avgWeight = data.avgWeightOz || 1;
+      const avgWeight = data.avgWeightOz || MARKET_DATA_SOURCES[product]?.avgWeightOz || 1;
       const avgPriceCAD = data.avgPriceCAD || 0;
       const pricePerOzCAD = avgPriceCAD / avgWeight;
       const priceRange = data.priceRange || [avgPriceCAD * 0.85, avgPriceCAD * 1.15];
