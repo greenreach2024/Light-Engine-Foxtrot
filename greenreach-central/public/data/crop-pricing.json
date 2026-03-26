@@ -1,7 +1,7 @@
 {
-  "version": "2026-03-08-v1",
+  "version": "2026-03-26-v8",
   "farmId": "light-engine-demo",
-  "lastUpdated": "2026-03-08T12:00:00Z",
+  "lastUpdated": "2026-03-26T12:58:13.412Z",
   "crops": [
     {
       "crop": "Mei Qing Pak Choi",
@@ -90,8 +90,270 @@
       "ws3Discount": 35,
       "currency": "CAD",
       "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Salad Bowl Oakleaf",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Astro Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Butterhead Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Romaine Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Red Leaf Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Oak Leaf Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Mixed Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Curly Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Dinosaur Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Baby Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Baby Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Cultivated Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Wild Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Wasabi Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Red Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Genovese Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Thai Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Purple Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Lemon Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Holy Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
     }
-  ],
-  "currency": "CAD",
-  "pricingSource": "greenreach-central"
+  ]
 }

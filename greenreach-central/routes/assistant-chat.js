@@ -862,11 +862,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_yield_forecast',
-      description: 'Forecast upcoming yields from active plantings — expected harvest dates, estimated weights, revenue projections based on crop benchmarks and pricing.',
+      description: 'Forecast yields and revenue. Works with active plantings OR hypothetical scenarios (pass just a crop name for "what if" forecasting). Supports tray format selection and wholesale pricing.',
       parameters: {
         type: 'object',
         properties: {
-          crop: { type: 'string', description: 'Filter by crop name (optional)' }
+          crop: { type: 'string', description: 'Crop name — resolves aliases automatically (e.g. "mixed greens" -> "Mixed Lettuce"). For hypothetical forecasting, just pass the crop name without active plantings.' },
+          tray_format: { type: 'string', description: 'Tray format ID or name (e.g. "lettuce-5x10", "microgreens-10x20", "nft-channel-36"). Uses plant site count from tray-formats.json instead of default 50.' },
+          tray_count: { type: 'number', description: 'Number of trays to forecast for (default: 1)' },
+          pricing_tier: { type: 'string', enum: ['retail', 'wholesale'], description: 'Use retail or wholesale pricing (default: retail). Wholesale = 70% of retail.' }
         },
         required: []
       }
@@ -876,11 +879,13 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_cost_analysis',
-      description: 'Analyze cost-per-tray and profitability for crops — grow time, estimated costs, revenue per tray, and profit margins. Sorted by margin.',
+      description: 'Analyze cost-per-tray and profitability for any crop in the system. Includes annual revenue projection, tray format support, and wholesale vs retail pricing. Falls back to crop registry if crop is not in pricing table — all crops have pricing data.',
       parameters: {
         type: 'object',
         properties: {
-          crop: { type: 'string', description: 'Filter by crop name (optional)' }
+          crop: { type: 'string', description: 'Crop name — resolves aliases automatically (e.g. "mixed greens", "greens", "basil"). Omit for all crops.' },
+          tray_format: { type: 'string', description: 'Tray format ID or name (e.g. "lettuce-5x10", "microgreens-10x20"). Uses plant site count from tray data.' },
+          pricing_tier: { type: 'string', enum: ['retail', 'wholesale'], description: 'Use retail or wholesale pricing (default: retail). Wholesale = 70% of retail.' }
         },
         required: []
       }
@@ -1649,6 +1654,35 @@ YIELD FORECASTING:
   1. Call get_cost_analysis to see per-crop cost breakdown, revenue, and margins.
   2. Identify the most and least profitable crops.
   3. Suggest optimizations: focus on high-margin crops, review pricing for low-margin ones.
+
+SCENARIO FORECASTING (hypothetical / "what if" analysis):
+- When a farmer asks for a revenue forecast for a crop they are NOT currently growing, or asks about a specific tray format, or says "what if I grew X":
+  1. Use get_yield_forecast with the crop name and optional tray_format. The tool supports hypothetical forecasting without active plantings.
+  2. If the farmer specifies a tray format (e.g. "Agrea trays", "NFT channels", "microgreens flats"), pass tray_format to use the correct plant site count.
+  3. If the farmer says "wholesale" or "100% wholesale", pass pricing_tier: "wholesale". Wholesale pricing = 70% of retail.
+  4. Also call get_cost_analysis with the same parameters to show cost/margin breakdown.
+  5. Always include annual revenue projection per tray (the tools calculate cycles_per_year and annual_revenue_per_tray_cad).
+- IMPORTANT: If the tray format is not found in the system, note this and use the default (50 sites), but suggest the farmer add the tray format via settings.
+- PRICING RULE: Every crop in the system has pricing. If get_cost_analysis returns 0 revenue for a crop, call get_crop_info to verify the crop exists, then call update_crop_price with the registry pricing to fix the gap.
+
+MIXED GREENS / GENERAL CROP FORECASTING:
+- "Mixed greens", "greens", "baby greens", "salad mix", "lettuce mix" all resolve to "Mixed Lettuce" in the crop registry.
+- When a farmer asks about mixed greens forecasting, present MULTIPLE scenarios:
+  1. Mature mixed greens (standard lettuce mix, 30-day cycle, cut-and-come-again with up to 4 harvests)
+  2. Baby leaf mix (faster 21-day harvest for tender baby greens — use 21 grow days as estimate)
+  3. Recommended premium combinations: check get_market_intelligence for regional demand signals. If butter lettuce, romaine, or specialty greens show strong demand, recommend a specific blend.
+- COMPLEMENTARY HERB RECOMMENDATION: When forecasting greens, always suggest dedicating 5-10% of tray capacity to high-value herbs (basil, cilantro, mint). Herbs have higher per-oz pricing ($2.70/oz vs $1.47/oz for greens) and can increase overall revenue significantly. Run get_cost_analysis for the herb to show the farmer the margin uplift.
+- When regional market data shows specific demand (e.g. high demand for red and green butter lettuce), recommend that specific combination rather than a generic mix.
+
+WHOLESALE PRICING MODEL:
+- Wholesale pricing follows a formula: wholesale_price = retail_price * 0.70 (base wholesale).
+- Volume discount tiers: Tier 1 = 15% off retail, Tier 2 = 25% off retail, Tier 3 = 35% off retail.
+- The 12% broker commission (app_fee_money via Square) is separate from the wholesale price — do not subtract it from the forecast.
+- When the farmer specifies "100% wholesale", use pricing_tier: "wholesale" in tool calls. Present the wholesale price clearly and note the volume discount tiers available to buyers.
+
+AUTO-PRICING:
+- All crops in the system should have pricing in crop-pricing.json. If you encounter a crop with no pricing data, use update_crop_price to set the recommended price from the crop registry.
+- When retail pricing is set or updated, wholesale pricing auto-fills at 70% of retail. The farmer does not need to set wholesale separately.
 
 AUTONOMY MINDSET:
 - You are evolving toward full farm autonomy. When you detect issues, don't just report — propose specific actions.

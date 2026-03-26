@@ -299,10 +299,18 @@
       "aliases": [
         "mixed lettuce",
         "salad mix",
-        "spring mix"
+        "spring mix",
+        "mixed greens",
+        "greens",
+        "baby greens",
+        "baby leaf",
+        "baby lettuce",
+        "mesclun",
+        "lettuce mix"
       ],
       "planIds": [
-        "crop-mixed-lettuce"
+        "crop-mixed-lettuce",
+        "crop-mixed-greens"
       ],
       "category": "lettuce",
       "nutrientProfile": "leafy_greens",
@@ -335,7 +343,8 @@
     "Lettuce": {
       "aliases": [
         "lettuce",
-        "salad"
+        "salad",
+        "salad greens"
       ],
       "planIds": [
         "crop-lettuce"

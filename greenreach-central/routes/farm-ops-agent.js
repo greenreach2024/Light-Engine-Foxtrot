@@ -1490,10 +1490,39 @@ export const TOOL_CATALOG = {
         const raw = params.crop.toLowerCase();
         return cName === target || cName === raw || cName.includes(raw);
       });
-      if (cropIdx === -1) return { ok: false, error: `Crop not found: ${params.crop}. Use get_pricing_info to see available crops.` };
-      const previous = { ...crops[cropIdx] };
-      if (params.retail_price != null) crops[cropIdx].retailPrice = parseFloat(params.retail_price);
-      if (params.wholesale_price != null) crops[cropIdx].wholesalePrice = parseFloat(params.wholesale_price);
+      let previous;
+      if (cropIdx === -1) {
+        // Auto-add crop from registry data when not found in pricing
+        const registry = readJSON('crop-registry.json', {});
+        const regCrops = registry.crops || registry;
+        const regData = regCrops[resolvedName] || {};
+        const g = regData.growth || {};
+        const p = regData.pricing || {};
+        const retailPerLb = g.retailPricePerLb || (p.retailPerOz ? p.retailPerOz * 16 : 0);
+        crops.push({
+          crop: resolvedName,
+          unit: 'lb',
+          retailPrice: retailPerLb,
+          wholesalePrice: parseFloat((retailPerLb * 0.70).toFixed(2)),
+          ws1Discount: p.wholesaleDiscounts?.tier1 || 15,
+          ws2Discount: p.wholesaleDiscounts?.tier2 || 25,
+          ws3Discount: p.wholesaleDiscounts?.tier3 || 35,
+          currency: p.currency || 'CAD',
+          pricingSource: 'auto-added'
+        });
+        previous = {};
+      } else {
+        previous = { ...crops[cropIdx] };
+      }
+      const idx = cropIdx === -1 ? crops.length - 1 : cropIdx;
+      if (params.retail_price != null) {
+        crops[idx].retailPrice = parseFloat(params.retail_price);
+        // Auto-fill wholesale from retail if wholesale not explicitly provided
+        if (params.wholesale_price == null) {
+          crops[idx].wholesalePrice = parseFloat((crops[idx].retailPrice * 0.70).toFixed(2));
+        }
+      }
+      if (params.wholesale_price != null) crops[idx].wholesalePrice = parseFloat(params.wholesale_price);
       // Save back in the original wrapper format
       if (Array.isArray(data)) {
         await farmStore.set(farm_id, 'crop_pricing', crops);
@@ -1506,15 +1535,15 @@ export const TOOL_CATALOG = {
         try {
           await dbQuery(
             'INSERT INTO pricing_decisions (farm_id, crop, previous_price, applied_price, decision, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
-            [farm_id, resolvedName, previous.retailPrice || 0, crops[cropIdx].retailPrice || 0, 'assistant-chat']
+            [farm_id, resolvedName, previous.retailPrice || 0, crops[idx].retailPrice || 0, 'assistant-chat']
           );
         } catch { /* ok */ }
       }
       return {
-        ok: true, crop: resolvedName, unit: crops[cropIdx].unit || 'lb',
-        previous: { retail: previous.retailPrice, wholesale: previous.wholesalePrice },
-        updated: { retail: crops[cropIdx].retailPrice, wholesale: crops[cropIdx].wholesalePrice },
-        _undo_state: { farm_id, previous, cropIdx }
+        ok: true, crop: resolvedName, unit: crops[idx].unit || 'lb',
+        previous: { retail: previous.retailPrice || 0, wholesale: previous.wholesalePrice || 0 },
+        updated: { retail: crops[idx].retailPrice, wholesale: crops[idx].wholesalePrice },
+        _undo_state: { farm_id, previous, cropIdx: idx }
       };
     },
     undoHandler: async ({ crop }, prevState) => {
@@ -1975,66 +2004,192 @@ export const TOOL_CATALOG = {
 
   // --- Yield Forecasting Tools ---
   'get_yield_forecast': {
-    description: 'Forecast upcoming yields based on active plantings, crop benchmarks, and growth schedules. Shows expected harvest dates, estimated weights, and revenue projections.',
+    description: 'Forecast yields and revenue. Works with active plantings OR hypothetical scenarios (pass crop + tray_format for "what if" forecasting without active plantings). Supports wholesale pricing.',
     category: 'read',
     required: [],
-    optional: ['farm_id', 'crop'],
+    optional: ['farm_id', 'crop', 'tray_format', 'tray_count', 'pricing_tier'],
     handler: async (params) => {
-      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
       const farm_id = params.farm_id || 'demo-farm';
 
-      // Get active plantings
-      const plantings = await dbQuery(
-        'SELECT * FROM planting_assignments WHERE farm_id = $1 AND status = $2 ORDER BY expected_harvest_date ASC',
-        [farm_id, 'active']
-      );
+      // Resolve tray format for plant count
+      let plantsPerTray = 50;
+      let trayName = 'Standard (50 sites)';
+      let isWeightBased = false;
+      let targetWeightPerSite = 0;
+      if (params.tray_format) {
+        const trayFormats = readJSON('tray-formats.json', []);
+        const tray = trayFormats.find(t =>
+          t.trayFormatId === params.tray_format ||
+          (t.name || '').toLowerCase().includes(params.tray_format.toLowerCase()) ||
+          (t.trayFormatId || '').toLowerCase().includes(params.tray_format.toLowerCase())
+        );
+        if (tray) {
+          if (tray.isWeightBased) {
+            plantsPerTray = 1;
+            isWeightBased = true;
+            targetWeightPerSite = tray.targetWeightPerSite || 8;
+            trayName = tray.name + ' (weight-based, ' + targetWeightPerSite + ' oz target)';
+          } else {
+            plantsPerTray = tray.plantSiteCount || 50;
+            trayName = tray.name + ' (' + plantsPerTray + ' sites)';
+          }
+        }
+      }
 
-      // Get benchmarks
-      const benchmarks = await dbQuery('SELECT * FROM crop_benchmarks');
+      const useWholesale = params.pricing_tier === 'wholesale';
+
+      // Get benchmarks (from DB if available, else empty)
       const benchMap = {};
-      for (const b of benchmarks.rows) benchMap[b.crop_name?.toLowerCase()] = b;
+      if (isDatabaseAvailable()) {
+        try {
+          const benchmarks = await dbQuery('SELECT * FROM crop_benchmarks');
+          for (const b of benchmarks.rows) benchMap[b.crop_name?.toLowerCase()] = b;
+        } catch { /* ok */ }
+      }
 
-      // Get pricing
+      // Get pricing from crop-pricing.json + registry fallback
       const pricing = readJSON('crop-pricing.json', {});
       const priceMap = {};
       if (pricing.crops) {
         for (const c of pricing.crops) priceMap[c.crop?.toLowerCase()] = c;
       }
+      // Registry fallback
+      const registry = readJSON('crop-registry.json', {});
+      const regCrops = registry.crops || registry;
+      for (const [name, data] of Object.entries(regCrops)) {
+        if (!priceMap[name.toLowerCase()]) {
+          const g = data.growth || {};
+          const p = data.pricing || {};
+          const retailPerLb = g.retailPricePerLb || (p.retailPerOz ? p.retailPerOz * 16 : 0);
+          if (retailPerLb > 0) {
+            priceMap[name.toLowerCase()] = {
+              crop: name, retailPrice: retailPerLb,
+              wholesalePrice: parseFloat((retailPerLb * 0.70).toFixed(2))
+            };
+          }
+        }
+      }
 
       const forecasts = [];
       const now = new Date();
 
-      for (const p of plantings.rows) {
-        if (params.crop && !p.crop_name?.toLowerCase().includes(params.crop.toLowerCase())) continue;
-        const cropKey = p.crop_name?.toLowerCase();
-        const bench = benchMap[cropKey] || {};
-        const price = priceMap[cropKey] || {};
+      // Try active plantings from DB first
+      let hasPlantings = false;
+      if (isDatabaseAvailable()) {
+        try {
+          const plantings = await dbQuery(
+            'SELECT * FROM planting_assignments WHERE farm_id = $1 AND status = $2 ORDER BY expected_harvest_date ASC',
+            [farm_id, 'active']
+          );
+          for (const p of plantings.rows) {
+            if (params.crop) {
+              const resolved = resolveCropName(params.crop);
+              const cLower = (p.crop_name || '').toLowerCase();
+              if (cLower !== resolved.toLowerCase() && !cLower.includes(params.crop.toLowerCase())) continue;
+            }
+            hasPlantings = true;
+            const cropKey = p.crop_name?.toLowerCase();
+            const bench = benchMap[cropKey] || {};
+            const price = priceMap[cropKey] || {};
 
-        const seedDate = new Date(p.seed_date);
-        const harvestDate = p.expected_harvest_date ? new Date(p.expected_harvest_date) : null;
-        const daysRemaining = harvestDate ? Math.max(0, Math.ceil((harvestDate - now) / (1000 * 60 * 60 * 24))) : null;
-        const growDays = harvestDate ? Math.ceil((harvestDate - seedDate) / (1000 * 60 * 60 * 24)) : bench.avg_grow_days;
+            const seedDate = new Date(p.seed_date);
+            const harvestDate = p.expected_harvest_date ? new Date(p.expected_harvest_date) : null;
+            const daysRemaining = harvestDate ? Math.max(0, Math.ceil((harvestDate - now) / (1000 * 60 * 60 * 24))) : null;
+            const growDays = harvestDate ? Math.ceil((harvestDate - seedDate) / (1000 * 60 * 60 * 24)) : bench.avg_grow_days;
 
-        // Estimate yield
-        const trays = p.tray_count || 1;
-        const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
-        const plantsPerTray = 50; // standard estimate
+            const trays = params.tray_count || p.tray_count || 1;
+            const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
+            const lossRate = bench.avg_loss_rate || 0.05;
+            const estYieldLbs = isWeightBased
+              ? ((targetWeightPerSite * (1 - lossRate)) / 16).toFixed(1)
+              : ((trays * plantsPerTray * avgWeightOz * (1 - lossRate)) / 16).toFixed(1);
+
+            const retailPerLb = price.retailPrice || price.price_per_lb || price.pricePerLb || 0;
+            const wholesalePerLb = price.wholesalePrice || parseFloat((retailPerLb * 0.70).toFixed(2));
+            const pricePerLb = useWholesale ? wholesalePerLb : retailPerLb;
+            const estRevenue = (estYieldLbs * pricePerLb).toFixed(2);
+
+            const cyclesPerYear = growDays > 0 ? Math.floor(365 / growDays) : 0;
+
+            forecasts.push({
+              crop: p.crop_name,
+              zone: p.zone_id,
+              seed_date: p.seed_date,
+              expected_harvest: p.expected_harvest_date,
+              days_remaining: daysRemaining,
+              grow_days: growDays,
+              tray_format: trayName,
+              tray_count: trays,
+              est_yield_lbs: parseFloat(estYieldLbs),
+              est_revenue_cad: parseFloat(estRevenue),
+              cycles_per_year: cyclesPerYear,
+              annual_revenue_per_tray_cad: parseFloat((parseFloat(estRevenue) * cyclesPerYear).toFixed(2)),
+              pricing_tier: useWholesale ? 'wholesale' : 'retail',
+              price_per_lb: pricePerLb,
+              benchmark_available: !!benchMap[cropKey]
+            });
+          }
+        } catch { /* ok */ }
+      }
+
+      // Hypothetical forecasting: if no active plantings found for this crop, use registry data
+      if (!hasPlantings && params.crop) {
+        const resolved = resolveCropName(params.crop);
+        const regData = regCrops[resolved] || {};
+        const growth = regData.growth || {};
+        const price = priceMap[resolved.toLowerCase()] || {};
+        const bench = benchMap[resolved.toLowerCase()] || {};
+
+        const growDays = bench.avg_grow_days || growth.daysToHarvest || 28;
         const lossRate = bench.avg_loss_rate || 0.05;
-        const estYieldLbs = ((trays * plantsPerTray * avgWeightOz * (1 - lossRate)) / 16).toFixed(1);
-        const pricePerLb = price.price_per_lb || price.pricePerLb || 0;
+        const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
+        const trays = params.tray_count || 1;
+
+        const estYieldLbs = isWeightBased
+          ? ((targetWeightPerSite * (1 - lossRate)) / 16).toFixed(1)
+          : ((trays * plantsPerTray * avgWeightOz * (1 - lossRate)) / 16).toFixed(1);
+
+        const retailPerLb = price.retailPrice || growth.retailPricePerLb || 0;
+        const wholesalePerLb = price.wholesalePrice || parseFloat((retailPerLb * 0.70).toFixed(2));
+        const pricePerLb = useWholesale ? wholesalePerLb : retailPerLb;
         const estRevenue = (estYieldLbs * pricePerLb).toFixed(2);
+        const cyclesPerYear = growDays > 0 ? Math.floor(365 / growDays) : 0;
+
+        // Regrowth harvests (cut-and-come-again)
+        const maxHarvests = growth.maxHarvests || 1;
+        const regrowthDays = growth.regrowthDays || 0;
+        const regrowthYieldFactor = growth.regrowthYieldFactor || 0.85;
+        let totalAnnualYield = parseFloat(estYieldLbs) * cyclesPerYear;
+        let totalAnnualRevenue = parseFloat(estRevenue) * cyclesPerYear;
+
+        if (maxHarvests > 1 && regrowthDays > 0) {
+          // Each cycle gets primary harvest + regrowth harvests
+          const regrowthHarvests = maxHarvests - 1;
+          const regrowthYieldPerCycle = parseFloat(estYieldLbs) * regrowthYieldFactor * regrowthHarvests;
+          totalAnnualYield += regrowthYieldPerCycle * cyclesPerYear;
+          totalAnnualRevenue += (regrowthYieldPerCycle * pricePerLb) * cyclesPerYear;
+        }
 
         forecasts.push({
-          crop: p.crop_name,
-          zone: p.zone_id,
-          seed_date: p.seed_date,
-          expected_harvest: p.expected_harvest_date,
-          days_remaining: daysRemaining,
+          crop: resolved,
+          type: 'hypothetical',
+          note: 'No active planting — forecast based on registry growth data and pricing',
           grow_days: growDays,
+          tray_format: trayName,
+          plants_per_tray: plantsPerTray,
           tray_count: trays,
-          est_yield_lbs: parseFloat(estYieldLbs),
-          est_revenue_cad: parseFloat(estRevenue),
-          benchmark_available: !!benchMap[cropKey]
+          est_yield_lbs_per_harvest: parseFloat(estYieldLbs),
+          est_revenue_per_harvest_cad: parseFloat(estRevenue),
+          cycles_per_year: cyclesPerYear,
+          max_harvests_per_cycle: maxHarvests,
+          regrowth_days: regrowthDays,
+          annual_yield_lbs: parseFloat(totalAnnualYield.toFixed(1)),
+          annual_revenue_per_tray_cad: parseFloat(totalAnnualRevenue.toFixed(2)),
+          pricing_tier: useWholesale ? 'wholesale' : 'retail',
+          price_per_lb: pricePerLb,
+          retail_price_per_lb: retailPerLb,
+          wholesale_price_per_lb: wholesalePerLb,
+          benchmark_available: !!benchMap[resolved.toLowerCase()]
         });
       }
 
@@ -2042,21 +2197,67 @@ export const TOOL_CATALOG = {
         ok: true,
         forecasts,
         count: forecasts.length,
-        total_est_revenue: parseFloat(forecasts.reduce((s, f) => s + f.est_revenue_cad, 0).toFixed(2))
+        total_est_revenue: parseFloat(forecasts.reduce((s, f) => s + (f.est_revenue_cad || f.annual_revenue_per_tray_cad || 0), 0).toFixed(2))
       };
     }
   },
 
   'get_cost_analysis': {
-    description: 'Analyze cost-per-tray and profitability for active or recent crops — includes grow time, estimated resource use, revenue, and margin.',
+    description: 'Analyze cost-per-tray and profitability for crops. Supports tray format selection and wholesale vs retail pricing. Falls back to crop registry if crop not in pricing table.',
     category: 'read',
     required: [],
-    optional: ['crop'],
+    optional: ['crop', 'pricing_tier', 'tray_format'],
     handler: async (params) => {
       const pricing = readJSON('crop-pricing.json', {});
-      const crops = pricing.crops || [];
+      let crops = pricing.crops || [];
 
-      // Get benchmarks
+      // Fall back to crop-registry.json for crops not in pricing table
+      const registry = readJSON('crop-registry.json', {});
+      const regCrops = registry.crops || registry;
+      const pricingCropNames = new Set(crops.map(c => (c.crop || '').toLowerCase()));
+      for (const [name, data] of Object.entries(regCrops)) {
+        if (!pricingCropNames.has(name.toLowerCase())) {
+          const g = data.growth || {};
+          const p = data.pricing || {};
+          const retailPerLb = g.retailPricePerLb || (p.retailPerOz ? p.retailPerOz * 16 : 0);
+          if (retailPerLb > 0) {
+            crops.push({
+              crop: name,
+              unit: 'lb',
+              retailPrice: retailPerLb,
+              wholesalePrice: parseFloat((retailPerLb * 0.70).toFixed(2)),
+              currency: p.currency || 'CAD',
+              pricingSource: 'crop-registry-fallback'
+            });
+          }
+        }
+      }
+
+      // Resolve tray format for plant count
+      let plantsPerTray = 50; // default
+      let trayName = 'Standard (50 sites)';
+      if (params.tray_format) {
+        const trayFormats = readJSON('tray-formats.json', []);
+        const tray = trayFormats.find(t =>
+          t.trayFormatId === params.tray_format ||
+          (t.name || '').toLowerCase().includes(params.tray_format.toLowerCase()) ||
+          (t.trayFormatId || '').toLowerCase().includes(params.tray_format.toLowerCase())
+        );
+        if (tray) {
+          // For weight-based trays (microgreens), use 1 site but targetWeight
+          if (tray.isWeightBased) {
+            plantsPerTray = 1;
+            trayName = tray.name + ' (weight-based)';
+          } else {
+            plantsPerTray = tray.plantSiteCount || 50;
+            trayName = tray.name + ' (' + plantsPerTray + ' sites)';
+          }
+        }
+      }
+
+      const useWholesale = params.pricing_tier === 'wholesale';
+
+      // Get benchmarks from DB
       let benchRows = [];
       if (isDatabaseAvailable()) {
         try {
@@ -2069,32 +2270,53 @@ export const TOOL_CATALOG = {
 
       const analysis = [];
       for (const c of crops) {
-        if (params.crop && !c.crop?.toLowerCase().includes(params.crop.toLowerCase())) continue;
+        if (params.crop) {
+          const resolved = resolveCropName(params.crop);
+          const cLower = (c.crop || '').toLowerCase();
+          const pLower = params.crop.toLowerCase();
+          const rLower = resolved.toLowerCase();
+          if (cLower !== rLower && cLower !== pLower && !cLower.includes(pLower)) continue;
+        }
         const bench = benchMap[c.crop?.toLowerCase()] || {};
         const growDays = bench.avg_grow_days || 28;
         const lossRate = bench.avg_loss_rate || 0.05;
 
-        // Estimated costs per tray (approximate)
+        // Estimated costs per tray
         const seedCostPerTray = 1.50;
         const mediaCostPerTray = 0.80;
         const nutrientCostPerDay = 0.15;
         const electricityPerDay = 0.25;
         const totalCostPerTray = seedCostPerTray + mediaCostPerTray + (nutrientCostPerDay + electricityPerDay) * growDays;
 
-        const pricePerLb = c.price_per_lb || c.pricePerLb || 0;
+        // Use retailPrice or wholesalePrice based on tier
+        const retailPerLb = c.retailPrice || c.price_per_lb || c.pricePerLb || 0;
+        const wholesalePerLb = c.wholesalePrice || parseFloat((retailPerLb * 0.70).toFixed(2));
+        const pricePerLb = useWholesale ? wholesalePerLb : retailPerLb;
+
         const avgWeightOz = bench.avg_weight_per_plant_oz || 2;
-        const yieldPerTrayLbs = (50 * avgWeightOz * (1 - lossRate)) / 16;
+        const yieldPerTrayLbs = (plantsPerTray * avgWeightOz * (1 - lossRate)) / 16;
         const revenuePerTray = yieldPerTrayLbs * pricePerLb;
         const margin = revenuePerTray > 0 ? ((revenuePerTray - totalCostPerTray) / revenuePerTray * 100).toFixed(1) : 0;
+
+        // Annual projection: cycles per year based on grow days
+        const cyclesPerYear = Math.floor(365 / growDays);
+        const annualRevenuePerTray = parseFloat((revenuePerTray * cyclesPerYear).toFixed(2));
 
         analysis.push({
           crop: c.crop,
           grow_days: growDays,
+          cycles_per_year: cyclesPerYear,
+          tray_format: trayName,
+          plants_per_tray: plantsPerTray,
+          pricing_tier: useWholesale ? 'wholesale' : 'retail',
           cost_per_tray_cad: parseFloat(totalCostPerTray.toFixed(2)),
           yield_per_tray_lbs: parseFloat(yieldPerTrayLbs.toFixed(2)),
           revenue_per_tray_cad: parseFloat(revenuePerTray.toFixed(2)),
+          annual_revenue_per_tray_cad: annualRevenuePerTray,
           margin_pct: parseFloat(margin),
-          price_per_lb: pricePerLb
+          price_per_lb: pricePerLb,
+          retail_price_per_lb: retailPerLb,
+          wholesale_price_per_lb: wholesalePerLb
         });
       }
 
