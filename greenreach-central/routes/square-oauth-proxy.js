@@ -8,8 +8,8 @@ import express from 'express';
 
 const router = express.Router();
 
-const SQUARE_APP_ID = process.env.SQUARE_APP_ID || null;
-const SQUARE_APP_SECRET = process.env.SQUARE_APP_SECRET || null;
+const SQUARE_APP_ID = process.env.SQUARE_APP_ID || process.env.SQUARE_APPLICATION_ID || null;
+const SQUARE_APP_SECRET = process.env.SQUARE_APP_SECRET || process.env.SQUARE_APPLICATION_SECRET || null;
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox';
 const SQUARE_BASE = SQUARE_ENVIRONMENT === 'production'
   ? 'https://connect.squareup.com'
