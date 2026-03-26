@@ -2761,8 +2761,12 @@
           waitEl.style.display = "block";
         }
 
+        // Hide the entire wizard actions bar (Back + Connect buttons)
         var connectBtn = document.getElementById("connectSquareBtn");
-        if (connectBtn) { connectBtn.disabled = true; connectBtn.textContent = "Waiting for authorization..."; }
+        if (connectBtn) {
+          var actionsBar = connectBtn.closest('.wizard-actions');
+          if (actionsBar) actionsBar.style.display = 'none';
+        }
 
         // Called when Square connection is detected
         function onSquareConnected(merchantId, merchantName, locationId, locationName) {
@@ -2771,6 +2775,9 @@
 
           var wI = document.getElementById("squareWaitingIndicator");
           if (wI) wI.style.display = "none";
+          // Restore wizard actions bar
+          var cBtn = document.getElementById("connectSquareBtn");
+          if (cBtn) { var ab = cBtn.closest('.wizard-actions'); if (ab) ab.style.display = ''; }
           paymentWizardData.squareConnected = true;
           paymentWizardData.merchantId = merchantId || farmId;
           paymentWizardData.locationId = locationId || '';
@@ -2841,7 +2848,12 @@
             window.removeEventListener('storage', handleStorageSignal);
             var wI2 = document.getElementById("squareWaitingIndicator"); if (wI2) wI2.style.display = "none";
             var connectBtn2 = document.getElementById("connectSquareBtn");
-            if (connectBtn2) { connectBtn2.disabled = false; connectBtn2.textContent = "Connect Square Account"; }
+            if (connectBtn2) {
+              connectBtn2.disabled = false;
+              connectBtn2.textContent = "Connect to Square";
+              var ab2 = connectBtn2.closest('.wizard-actions');
+              if (ab2) ab2.style.display = '';
+            }
             alert('Square connection timed out. If you completed authorization on Square, click Connect again.');
           }
         }, 5000);
