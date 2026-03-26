@@ -3137,6 +3137,15 @@
       // Make functions globally accessible for testing
       window.testPaymentWizard = openPaymentWizard;
       window.testStoreWizard = openStoreWizard;
+
+      // Auto-open wizard if requested via URL parameter
+      var urlParams = new URLSearchParams(window.location.search);
+      var wizardParam = urlParams.get('wizard');
+      if (wizardParam === 'payment-setup') {
+        openPaymentWizard();
+      } else if (wizardParam === 'store-setup') {
+        openStoreWizard();
+      }
     }
     
     if (document.readyState === 'loading') {

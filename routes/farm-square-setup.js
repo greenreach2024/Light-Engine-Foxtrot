@@ -336,7 +336,8 @@ router.get('/callback', async (req, res) => {
         + '<p>Merchant ID: ' + escapeHtml(merchantId) + '</p>'
         + '<p>Location: ' + escapeHtml(defaultLocation.name) + '</p></div>',
       true,
-      farm_id
+      farm_id,
+      { merchantId: merchantId, merchantName: farm_name, locationId: defaultLocation.id, locationName: defaultLocation.name }
     ));
   } catch (error) {
     console.error('[farm-square] Callback error:', error);
@@ -536,7 +537,8 @@ router.post('/test-payment', async (req, res) => {
 // ---------------------------------------------------------------------------
 // HTML template helper (XSS-safe)
 // ---------------------------------------------------------------------------
-function callbackHtml(title, bodyContent, success, farmId) {
+function callbackHtml(title, bodyContent, success, farmId, merchantData) {
+  const md = merchantData || {};
   return '<!DOCTYPE html>'
     + '<html><head>'
     + '<title>' + escapeHtml(title) + '</title>'
@@ -551,7 +553,12 @@ function callbackHtml(title, bodyContent, success, farmId) {
     + bodyContent
     + '<a href="/">Return to Dashboard</a>'
     + (success && farmId
-      ? '<script>if(window.opener){window.opener.postMessage({type:"square-connected",farmId:' + JSON.stringify(farmId) + '},window.location.origin);setTimeout(function(){window.close()},2000)}</script>'
+      ? '<script>if(window.opener){window.opener.postMessage({type:"square-connected",farmId:' + JSON.stringify(farmId)
+        + ',merchantId:' + JSON.stringify(md.merchantId || '')
+        + ',merchantName:' + JSON.stringify(md.merchantName || '')
+        + ',locationId:' + JSON.stringify(md.locationId || '')
+        + ',locationName:' + JSON.stringify(md.locationName || '')
+        + '},window.location.origin);setTimeout(function(){window.close()},2000)}</script>'
       : '')
     + '</body></html>';
 }

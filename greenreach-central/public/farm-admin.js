@@ -4717,13 +4717,9 @@ async function loadPaymentMethods() {
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px; max-width: 500px; margin-left: auto; margin-right: auto;">
                         Connect your Square account to accept credit cards, debit cards, and digital payments from your customers.
-                    </p>
                     <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
-                            Connect Square Account
-                        </button>
-                        <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-blue);">
-                            Open Setup Wizard
+                        <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                            Set Up Square Payments
                         </button>
                     </div>
                 </div>
@@ -4745,8 +4741,8 @@ async function loadPaymentMethods() {
                     <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
                         Connect your Square account to accept payments from customers.
                     </p>
-                    <button class="btn" onclick="connectSquare()" style="background: var(--accent-green);">
-                        Connect Square Account
+                    <button class="btn" onclick="navigateToPaymentWizard()" style="background: var(--accent-green);">
+                        Set Up Square Payments
                     </button>
                 </div>
             `;
