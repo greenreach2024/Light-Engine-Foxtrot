@@ -8371,13 +8371,20 @@ const recipeFieldMap = new Map([
     ['ppfd target (umol m2 s)', 'ppfd'],
     ['ppfd target (umol m 2 s)', 'ppfd'],
     ['ppfd target', 'ppfd'],
+    ['ppfd umol m2 s', 'ppfd'],
+    ['ppfd', 'ppfd'],
     ['vpd target kpa', 'vpd_target'],
     ['vpd target', 'vpd_target'],
+    ['vpd kpa', 'vpd_target'],
+    ['vpd', 'vpd_target'],
     ['max humidity', 'max_humidity'],
     ['ec target ds m', 'ec'],
     ['ec target', 'ec'],
+    ['ec ms cm', 'ec'],
     ['ph target', 'ph'],
-    ['ph', 'ph']
+    ['ph', 'ph'],
+    ['veg', 'veg'],
+    ['fruit', 'fruit']
 ]);
 
 function isRecipeResponseOk(data) {

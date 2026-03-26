@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs/promises';
+import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,7 +15,7 @@ const RECIPES_DIR = path.join(__dirname, '../data/recipes-v2');
 const RECIPES_JSON_PATH = path.join(__dirname, '../public/data/lighting-recipes.json');
 let cropDescriptions = {};
 try {
-    const jsonData = JSON.parse(require('fs').readFileSync(RECIPES_JSON_PATH, 'utf-8'));
+    const jsonData = JSON.parse(readFileSync(RECIPES_JSON_PATH, 'utf-8'));
     if (jsonData.crops) {
         for (const [name, entry] of Object.entries(jsonData.crops)) {
             cropDescriptions[name.toLowerCase()] = entry.description || '';
@@ -95,14 +96,21 @@ router.get('/', async (req, res) => {
                 lowerName.includes('sage') || lowerName.includes('dill') ||
                 lowerName.includes('tarragon') || lowerName.includes('marjoram') ||
                 lowerName.includes('mint') || lowerName.includes('chervil') ||
-                lowerName.includes('lovage') || lowerName.includes('lemon balm')) {
+                lowerName.includes('lovage') || lowerName.includes('lemon balm') ||
+                lowerName.includes('sorrel')) {
                 category = 'Herbs';
             } else if (lowerName.includes('lettuce') || lowerName.includes('arugula') ||
                        lowerName.includes('spinach') || lowerName.includes('kale') ||
                        lowerName.includes('chard') || lowerName.includes('endive') ||
                        lowerName.includes('escarole') || lowerName.includes('frisée') ||
                        lowerName.includes('romaine') || lowerName.includes('oakleaf') ||
-                       lowerName.includes('butterhead')) {
+                       lowerName.includes('butterhead') || lowerName.includes('pelleted') ||
+                       lowerName.includes('eazyleaf') || lowerName.includes('little gem') ||
+                       lowerName.includes('watercress') || lowerName.includes('mizuna') ||
+                       lowerName.includes('tatsoi') || lowerName.includes('pak choi') ||
+                       lowerName.includes('komatsuna') ||
+                       lowerName.includes('amaze') || lowerName.includes('ilema') ||
+                       lowerName.includes('spretnak')) {
                 category = 'Leafy Greens';
             } else if (lowerName.includes('tomato') || lowerName.includes('boy') ||
                        lowerName.includes('brandywine') || lowerName.includes('celebrity') ||
@@ -114,7 +122,8 @@ router.get('/', async (req, res) => {
                        lowerName.includes('mara') || lowerName.includes('monterey') ||
                        lowerName.includes('ozark') || lowerName.includes('seascape') ||
                        lowerName.includes('sequoia') || lowerName.includes('tribute') ||
-                       lowerName.includes('tristar')) {
+                       lowerName.includes('tristar') || lowerName.includes('fort laramie') ||
+                       lowerName.includes('jewel')) {
                 category = 'Berries';
             }
             
