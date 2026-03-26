@@ -2807,25 +2807,28 @@
           }
         });
 
-        // --- Open popup ---
+        // --- Open popup via top window (iframe popups get blocked) ---
         var authUrl = data.data.authorizationUrl;
         var w = 600, h = 700;
         var left = (screen.width - w) / 2;
-        var top = (screen.height - h) / 2;
-        var squarePopup = window.open(authUrl, 'square-oauth', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+        var topPos = (screen.height - h) / 2;
+        // Use window.top.open to escape iframe popup restrictions (same origin)
+        var openerWindow = window.top || window;
+        var squarePopup = openerWindow.open(authUrl, 'square-oauth', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + topPos);
 
         var popupWasBlocked = !squarePopup;
         if (popupWasBlocked) {
-          console.log('[PaymentWizard] Popup was blocked -- falling back to full-page redirect');
-          // Save wizard state so we can resume after redirect
-          sessionStorage.setItem('payment_wizard_pending', JSON.stringify({
-            farmName: farmName,
-            farmId: farmId,
-            step: 2
-          }));
-          // Redirect the top-level window to Square OAuth
-          window.top.location.href = authUrl;
-          return;
+          console.log('[PaymentWizard] Popup blocked even from top -- showing manual link');
+          var waitEl2 = document.getElementById("squareWaitingIndicator");
+          if (waitEl2) {
+            waitEl2.innerHTML = '<p style="color:#b45309;font-weight:bold;">Your browser blocked the popup window.</p>'
+              + '<p>Click the button below to open Square in a new tab, then return here when done.</p>'
+              + '<a href="' + authUrl + '" target="_blank" rel="noopener" '
+              + 'style="display:inline-block;background:#2e7d32;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:10px;">'
+              + 'Open Square Authorization</a>';
+            waitEl2.style.display = "block";
+          }
+          // Do NOT redirect -- keep this page alive so localStorage signal works
         }
 
         // --- Signal Method 3: Poll /status after popup closes ---
