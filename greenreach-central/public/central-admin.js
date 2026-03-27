@@ -1330,6 +1330,13 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
+                    title: 'Network',
+                    items: [
+                        { label: 'Network Dashboard', view: 'network' },
+                        { label: 'Grower Network', view: 'grower-mgmt' }
+                    ]
+                },
+                {
                     title: 'AI Governance',
                     items: [
                         { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
@@ -5483,6 +5490,16 @@ async function navigate(view, element) {
             if (INFO_CARDS['energy']) {
                 showInfoCard(createInfoCard(INFO_CARDS['energy'].title, INFO_CARDS['energy'].subtitle, INFO_CARDS['energy'].sections));
             }
+            break;
+            
+        case 'network':
+            document.getElementById('network-view').style.display = 'block';
+            await loadNetworkDashboard();
+            break;
+            
+        case 'grower-mgmt':
+            document.getElementById('grower-mgmt-view').style.display = 'block';
+            await loadGrowerManagement();
             break;
             
         case 'yield':

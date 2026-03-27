@@ -4364,19 +4364,20 @@ async function loadOperationsData(startDate) {
         //     }
         // } catch (e) { /* AI service not available */ }
 
-        // Phase 2: uncomment when network intelligence API is live
-        // try {
-        //     const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
-        //     if (niResp.ok) {
-        //         const niData = await niResp.json();
-        //         const ni = niData.network_intelligence || {};
-        //         const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
-        //         const demandCount = Object.keys(ni.demand_signals || {}).length;
-        //         if (benchmarkCount > 0 || demandCount > 0) {
-        //             aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
-        //         }
-        //     }
-        // } catch (e) { /* non-fatal */ }
+        // Network intelligence - activated Phase 1
+        try {
+            const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
+            if (niResp.ok) {
+                const niData = await niResp.json();
+                const ni = niData.network_intelligence || {};
+                const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
+                const demandCount = Object.keys(ni.demand_signals || {}).length;
+                if (benchmarkCount > 0 || demandCount > 0) {
+                    aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
+                }
+                renderNetworkBenchmarks(ni);
+            }
+        } catch (e) { /* non-fatal */ }
 
         // Phase 2: uncomment when suggested-crop API is live
         // try {
@@ -6545,6 +6546,63 @@ async function seedBenchmarksStep() {
     }
 }
 
+
+
+/**
+ * Render network benchmark comparisons into the farm dashboard.
+ * Shows crop benchmarks from Central's push so growers can compare their farm performance.
+ */
+function renderNetworkBenchmarks(ni) {
+    const container = document.getElementById('network-benchmarks-panel');
+    if (!container) return;
+
+    const benchmarks = ni.crop_benchmarks || {};
+    const demandSignals = ni.demand_signals || {};
+    const riskAlerts = ni.risk_alerts || [];
+    const cropNames = Object.keys(benchmarks);
+
+    if (cropNames.length === 0 && riskAlerts.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px;">No network benchmarks received yet. Data arrives every 30 minutes from Central.</div>';
+        return;
+    }
+
+    let html = '';
+
+    // Risk alerts
+    if (riskAlerts.length > 0) {
+        html += '<div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">';
+        html += '<div style="font-weight: 600; color: var(--accent-red); font-size: 12px; margin-bottom: 4px;">Network Risk Alerts</div>';
+        riskAlerts.forEach(function(alert) {
+            html += '<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">' + (alert.message || alert.type || 'Unknown alert') + '</div>';
+        });
+        html += '</div>';
+    }
+
+    // Crop benchmarks
+    cropNames.forEach(function(crop) {
+        var bm = benchmarks[crop];
+        var demand = demandSignals[crop] || {};
+        var demandLabel = demand.demand_score >= 80 ? 'High' : (demand.demand_score >= 50 ? 'Medium' : 'Low');
+        var demandColor = demand.demand_score >= 80 ? 'var(--accent-green)' : (demand.demand_score >= 50 ? 'var(--accent-yellow)' : 'var(--text-muted)');
+
+        html += '<div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;">';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+        html += '<div style="font-weight: 600; font-size: 14px; color: var(--text-primary); text-transform: capitalize;">' + crop + '</div>';
+        if (demand.demand_score != null) {
+            html += '<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ' + demandColor + '22; color: ' + demandColor + '; font-weight: 600;">Demand: ' + demandLabel + '</span>';
+        }
+        html += '</div>';
+
+        html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12px; color: var(--text-secondary);">';
+        html += '<div>Network Yield: <strong style="color: var(--text-primary);">' + (bm.avg_yield_oz != null ? bm.avg_yield_oz + ' oz' : '--') + '</strong></div>';
+        html += '<div>Cycle: <strong style="color: var(--text-primary);">' + (bm.avg_cycle_days != null ? bm.avg_cycle_days + ' days' : '--') + '</strong></div>';
+        html += '<div>Farms: <strong style="color: var(--text-primary);">' + (bm.network_farms || 0) + '</strong></div>';
+        html += '</div>';
+        html += '</div>';
+    });
+
+    container.innerHTML = html;
+}
 /**
  * Activate device with activation code
  */

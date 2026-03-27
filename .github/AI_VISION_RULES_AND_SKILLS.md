@@ -635,7 +635,7 @@ GET /api/ai/training-data
 **Mandate**: Implementation phases are sequential. Phase N prerequisites MUST be complete before Phase N+1 work begins.
 
 ```
-Phase 1 → Phase 2: All P0 data captured + Central receiving experiment records
+Phase 1 → Phase 2: All P0 data captured + Central receiving experiment records [GATE PASSED]
 Phase 2 → Phase 3: Workflow reduced to ≤4 steps + Central providing benchmarks
 Phase 3 → Phase 4: Farm recipe modifiers working + Central ML models trained
 Phase 4 → Phase 5: Network coordination validated + grower acceptance >90%
@@ -843,22 +843,31 @@ Agent: [designation]
 
 ## 14. Quick Reference: 52 Opportunities
 
-### Phase 1 — Wire the Data + Central Benchmarks (12 tasks)
+### Phase 1 — Wire the Data + Central Benchmarks (12 tasks) [COMPLETE]
 
-| # | Task | Owner | Effort |
-|---|------|-------|--------|
-| 1 | Persist recipe parameters applied per day | Farm | S |
-| 2 | Build harvest outcome "experiment record" | Farm | M |
-| 3 | POST experiment records to Central on harvest | Farm | S |
-| 4 | Wire loss events → environment correlation | Farm | S |
-| 5 | Feed real demand into crop recommendation | Farm | S |
-| 6 | Surface learning correlations on dashboard | Farm | S |
-| 7 | Ingest experiment records endpoint | Central | S |
-| 8 | Nightly crop benchmark aggregation job | Central | M |
-| 9 | Push crop benchmarks in AI recommendation channel | Central | S |
-| 10 | Extend AI training export with recipe params | Farm | S |
-| 11 | Populate comparative analytics endpoint | Central | M |
-| 12 | Populate leaderboard with real scores | Central | S |
+| # | Task | Owner | Effort | Status |
+|---|------|-------|--------|--------|
+| 1 | Persist recipe parameters applied per day | Farm | S | Done |
+| 2 | Build harvest outcome "experiment record" | Farm | M | Done |
+| 3 | POST experiment records to Central on harvest | Farm | S | Done |
+| 4 | Wire loss events → environment correlation | Farm | S | Done |
+| 5 | Feed real demand into crop recommendation | Farm | S | Done |
+| 6 | Surface learning correlations on dashboard | Farm | S | Done |
+| 7 | Ingest experiment records endpoint | Central | S | Done |
+| 8 | Nightly crop benchmark aggregation job | Central | M | Done |
+| 9 | Push crop benchmarks in AI recommendation channel | Central | S | Done |
+| 10 | Extend AI training export with recipe params | Farm | S | Done |
+| 11 | Populate comparative analytics endpoint | Central | M | Done |
+| 12 | Populate leaderboard with real scores | Central | S | Done |
+
+Phase 1 Completion Notes:
+- Backend: All 16 network endpoints live in network-growers.js with real PostgreSQL queries
+- Scheduler: computeCropBenchmarks() runs nightly at 2AM via startBenchmarkScheduler()
+- Push: AI recommendations pusher sends crop_benchmarks + demand_signals every 30 min
+- Frontend: Network Dashboard view in GR-central-admin.html with KPIs, farm grid, charts
+- Navigation: Network section added to sidebar, navigate() cases wired
+- Farm correlation: Network Intelligence panel in LE-farm-admin.html showing benchmarks
+- Leaderboard: Composite scoring (yield 40% + loss 30% + consistency 30%)
 
 ### Phase 2 — Workflow Automation + Central Intelligence (12 tasks)
 

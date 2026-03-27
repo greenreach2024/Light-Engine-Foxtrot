@@ -3144,6 +3144,112 @@
                 </div>
             </div>
 
+
+            <!-- Network Dashboard View (Phase 1) -->
+            <div id="network-view" class="view" style="display: none;">
+                <div class="breadcrumb">
+                    <a href="#" onclick="event.preventDefault(); navigate('overview', this)">Overview</a>
+                    <span>/</span>
+                    <span>Network Dashboard</span>
+                </div>
+
+                <div class="header">
+                    <h1>Multi-Farm Network Dashboard</h1>
+                    <div class="header-actions">
+                        <select id="network-timeframe" onchange="loadNetworkDashboard()" style="padding: 6px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.9rem;">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="exportNetworkReport()">Export Report</button>
+                    </div>
+                </div>
+
+                <!-- Network Health KPIs -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Farms</div>
+                        <div class="kpi-value" id="network-total-farms">0</div>
+                        <div class="kpi-change positive" id="network-farms-status">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Network Harvests</div>
+                        <div class="kpi-value" id="network-total-production">0</div>
+                        <div class="kpi-change positive" id="network-production-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Network Alerts</div>
+                        <div class="kpi-value" id="network-total-revenue">None</div>
+                        <div class="kpi-change positive" id="network-revenue-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Network Health</div>
+                        <div class="kpi-value" id="network-qa-score">--</div>
+                        <div class="kpi-change" id="network-qa-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Recent Activity</div>
+                        <div class="kpi-value" id="network-capacity">0</div>
+                        <div class="kpi-change" id="network-capacity-details">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Farms</div>
+                        <div class="kpi-value" id="network-active-batches">0</div>
+                        <div class="kpi-change" id="network-batches-status">--</div>
+                    </div>
+                </div>
+
+                <!-- Network Alerts -->
+                <div id="network-alerts-section" style="margin-bottom: 30px;"></div>
+
+                <!-- Farm Grid -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <div class="card-header">
+                        <div class="card-title">Farm Overview</div>
+                        <div>
+                            <select id="filter-farm-status" onchange="filterNetworkFarms()" style="padding: 6px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.9rem;">
+                                <option value="">All Status</option>
+                                <option value="ONLINE">Online</option>
+                                <option value="OFFLINE">Offline</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="farm-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+                            <div style="text-align: center; padding: 30px; color: var(--text-secondary);">Loading farms...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparative Analytics Chart -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <div class="card-header">
+                        <div class="card-title">Comparative Farm Performance</div>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="comparison-metric" onchange="loadComparativeAnalytics()" style="padding: 6px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.9rem;">
+                                <option value="yield_oz">Avg Yield (oz)</option>
+                                <option value="loss_rate">Loss Rate (%)</option>
+                                <option value="grow_days">Grow Days</option>
+                                <option value="harvest_count">Harvest Count</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="comparativeChart" style="max-height: 350px;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Network Production Trends -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Network Production Trend</div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="networkTrendChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- Grower Management View -->
             <div id="grower-mgmt-view" class="view" style="display: none;">
                 <div class="breadcrumb">
@@ -3291,23 +3397,22 @@
                     <!-- Leaderboard -->
                     <div class="card" style="margin-bottom: 20px;">
                         <div class="card-header">
-                            <div class="card-title">🏆 Top Performing Growers</div>
+                            <div class="card-title">Top Performing Farms</div>
                         </div>
                         <div class="card-body">
                             <table class="data-table">
                                 <thead>
                                     <tr>
                                         <th>Rank</th>
-                                        <th>Grower</th>
-                                        <th>Acceptance Rate</th>
-                                        <th>Avg Response Time</th>
-                                        <th>On-Time %</th>
-                                        <th>Quality Score</th>
-                                        <th>Revenue (30d)</th>
+                                        <th>Farm</th>
+                                        <th>Score</th>
+                                        <th>Harvests</th>
+                                        <th>Avg Yield (oz)</th>
+                                        <th>Avg Loss Rate</th>
                                     </tr>
                                 </thead>
                                 <tbody id="leaderboard-tbody">
-                                    <tr><td colspan="7" class="gr-u-empty-center-sm">Loading leaderboard...</td></tr>
+                                    <tr><td colspan="6" class="gr-u-empty-center-sm">Loading leaderboard...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -5124,37 +5229,29 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/dashboard`);
                 const data = await response.json();
                 
-                if (data.ok) {
-                    // Network Health
-                    const health = data.dashboard.network_health;
-                    document.getElementById('network-total-farms').textContent = health.total_farms;
+                if (data.success) {
+                    const db = data.dashboard;
+                    document.getElementById('network-total-farms').textContent = db.totalFarms || 0;
                     document.getElementById('network-farms-status').textContent = 
-                        `${health.online} online, ${health.warning} warning, ${health.offline} offline`;
+                        (db.activeFarms || 0) + ' active, ' + (db.offlineFarms || 0) + ' offline';
                     
-                    // Production
-                    const prod = data.dashboard.total_production_7_days;
-                    document.getElementById('network-total-production').textContent = `${prod.toFixed(1)} kg`;
-                    document.getElementById('network-production-trend').textContent = 
-                        `${data.dashboard.daily_avg_production.toFixed(1)} kg/day avg`;
+                    document.getElementById('network-total-production').textContent = (db.totalProductionCapacity || 0) + ' harvests';
+                    document.getElementById('network-production-trend').textContent = 'Last 30 days';
                     
-                    // Top Performers (use first farm's revenue as network total for demo)
-                    if (data.dashboard.top_producers_7_days.length > 0) {
-                        const totalRevenue = data.dashboard.top_producers_7_days.reduce((sum, f) => sum + f.total_production, 0) * 5; // Estimate $5/kg
-                        document.getElementById('network-total-revenue').textContent = `$${totalRevenue.toFixed(0)}`;
-                    }
+                    const alertCount = (db.alerts || []).length;
+                    document.getElementById('network-total-revenue').textContent = alertCount > 0 ? alertCount + ' alerts' : 'None';
+                    document.getElementById('network-revenue-trend').textContent = alertCount > 0 ? 'Needs attention' : 'All clear';
                     
-                    // QA Score (average from top performers)
-                    const avgQA = data.dashboard.top_performers_qa.reduce((sum, f) => sum + f.avg_qa_score, 0) / data.dashboard.top_performers_qa.length;
-                    document.getElementById('network-qa-score').textContent = `${avgQA.toFixed(1)}%`;
+                    const healthLabel = db.networkHealth === 'healthy' ? 'Healthy' : (db.networkHealth === 'no_farms' ? 'No farms' : db.networkHealth || '--');
+                    document.getElementById('network-qa-score').textContent = healthLabel;
+                    document.getElementById('network-qa-trend').textContent = '';
                     
-                    // Capacity
-                    const cap = data.dashboard.total_capacity;
-                    document.getElementById('network-capacity').textContent = `${cap.utilization_percentage.toFixed(1)}%`;
-                    document.getElementById('network-capacity-details').textContent = 
-                        `${cap.cells_occupied} / ${cap.total_capacity} cells`;
+                    const activityCount = (db.recentActivity || []).length;
+                    document.getElementById('network-capacity').textContent = activityCount;
+                    document.getElementById('network-capacity-details').textContent = 'Recent harvests';
                     
-                    // Active Batches
-                    document.getElementById('network-active-batches').textContent = cap.active_batches;
+                    document.getElementById('network-active-batches').textContent = db.activeFarms || 0;
+                    document.getElementById('network-batches-status').textContent = 'Active farms';
                 }
             } catch (error) {
                 console.error('Error loading network stats:', error);
@@ -5166,8 +5263,15 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/farms/list`);
                 const data = await response.json();
                 
-                if (data.ok) {
-                    allFarms = data.farms;
+                if (data.success) {
+                    allFarms = (data.farms || []).map(f => ({
+                        farm_id: f.farmId || f.farm_id,
+                        farm_name: f.name || f.farmName || f.farm_id || '',
+                        status: (f.status || 'active').toUpperCase() === 'ACTIVE' ? 'ONLINE' : 'OFFLINE',
+                        location: f.location || 'Cloud',
+                        farm_type: f.farm_type || 'Indoor Vertical',
+                        metrics_7_days: f.metrics_7_days || { total_production: 0, avg_qa_score: 0, avg_capacity_utilization: 0, total_active_batches: 0 }
+                    }));
                     renderFarmGrid(allFarms);
                 }
             } catch (error) {
@@ -5242,16 +5346,27 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/comparative-analytics?metric=${metric}&days=${days}`);
                 const data = await response.json();
                 
-                if (data.ok && data.comparison.length > 0) {
+                if (data.success && data.analytics && data.analytics.data && data.analytics.data.length > 0) {
                     const ctx = document.getElementById('comparativeChart').getContext('2d');
                     
                     if (comparativeChart) {
                         comparativeChart.destroy();
                     }
 
-                    const labels = data.comparison.map(f => f.farm_name);
-                    const values = data.comparison.map(f => f.value);
-                    const colors = data.comparison.map((f, idx) => 
+                    const metricMap = {
+                        'yield_oz': { field: 'avg_yield_oz', unit: 'oz', label: 'Avg Yield (oz)' },
+                        'loss_rate': { field: 'avg_loss_rate', unit: '%', label: 'Avg Loss Rate' },
+                        'grow_days': { field: 'avg_grow_days', unit: 'days', label: 'Avg Grow Days' },
+                        'harvest_count': { field: 'harvest_count', unit: 'harvests', label: 'Harvest Count' }
+                    };
+                    const m = metricMap[metric] || metricMap['yield_oz'];
+
+                    const labels = data.analytics.data.map(f => f.farm_name);
+                    const values = data.analytics.data.map(f => {
+                        const v = parseFloat(f[m.field]) || 0;
+                        return metric === 'loss_rate' ? +(v * 100).toFixed(1) : +v.toFixed(2);
+                    });
+                    const colors = data.analytics.data.map((f, idx) => 
                         ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'][idx % 5]
                     );
 
@@ -5260,7 +5375,7 @@
                         data: {
                             labels: labels,
                             datasets: [{
-                                label: metric.replace('_', ' ').toUpperCase(),
+                                label: m.label,
                                 data: values,
                                 backgroundColor: colors.map(c => c + '88'),
                                 borderColor: colors,
@@ -5276,7 +5391,7 @@
                             scales: {
                                 y: { 
                                     beginAtZero: true,
-                                    title: { display: true, text: data.comparison[0]?.unit || '' }
+                                    title: { display: true, text: m.unit }
                                 }
                             }
                         }
@@ -5293,16 +5408,17 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/trends?days=${days}`);
                 const data = await response.json();
                 
-                if (data.ok && data.trends.length > 0) {
+                if (data.success && data.trends && data.trends.productionTrend && data.trends.productionTrend.length > 0) {
                     const ctx = document.getElementById('networkTrendChart').getContext('2d');
                     
                     if (trendChart) {
                         trendChart.destroy();
                     }
 
-                    const labels = data.trends.map(t => new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-                    const production = data.trends.map(t => t.total_production);
-                    const revenue = data.trends.map(t => t.total_revenue);
+                    const pt = data.trends.productionTrend;
+                    const labels = pt.map(t => new Date(t.week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    const harvests = pt.map(t => t.harvests || 0);
+                    const yields = pt.map(t => parseFloat(t.avg_yield_oz) || 0);
 
                     trendChart = new Chart(ctx, {
                         type: 'line',
@@ -5310,16 +5426,16 @@
                             labels: labels,
                             datasets: [
                                 {
-                                    label: 'Production (kg)',
-                                    data: production,
+                                    label: 'Harvests',
+                                    data: harvests,
                                     borderColor: '#10b981',
                                     backgroundColor: '#10b98133',
                                     yAxisID: 'y',
                                     tension: 0.3
                                 },
                                 {
-                                    label: 'Revenue ($)',
-                                    data: revenue,
+                                    label: 'Avg Yield (oz)',
+                                    data: yields,
                                     borderColor: '#3b82f6',
                                     backgroundColor: '#3b82f633',
                                     yAxisID: 'y1',
@@ -5339,13 +5455,13 @@
                                     type: 'linear',
                                     display: true,
                                     position: 'left',
-                                    title: { display: true, text: 'Production (kg)' }
+                                    title: { display: true, text: 'Harvest Count' }
                                 },
                                 y1: {
                                     type: 'linear',
                                     display: true,
                                     position: 'right',
-                                    title: { display: true, text: 'Revenue ($)' },
+                                    title: { display: true, text: 'Avg Yield (oz)' },
                                     grid: { drawOnChartArea: false }
                                 }
                             }
@@ -5362,7 +5478,7 @@
                 const response = await fetch(`${NETWORK_API_URL}/api/network/alerts`);
                 const data = await response.json();
                 
-                if (data.ok && data.alerts.length > 0) {
+                if (data.success && data.alerts && data.alerts.length > 0) {
                     const section = document.getElementById('network-alerts-section');
                     const criticalAlerts = data.alerts.filter(a => a.severity === 'critical');
                     const warningAlerts = data.alerts.filter(a => a.severity === 'warning');
@@ -5427,7 +5543,7 @@
                                 <div class="kpi-value">$${totalRevenue.toFixed(0)}</div>
                             </div>
                             <div class="kpi-card">
-                                <div class="kpi-label">Avg QA Score</div>
+                                <div class="kpi-label">Network Health</div>
                                 <div class="kpi-value">${avgQaScore.toFixed(1)}%</div>
                             </div>
                             <div class="kpi-card">
@@ -5638,25 +5754,24 @@
                 
                 const tbody = document.getElementById('leaderboard-tbody');
                 if (data.leaderboard.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-secondary);">No performance data available</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">No performance data available</td></tr>';
                     return;
                 }
                 
                 tbody.innerHTML = data.leaderboard.map((entry, index) => `
                     <tr>
-                        <td><strong>${index + 1}</strong></td>
-                        <td>${entry.grower_business_name}<br><small style="color: var(--text-secondary);">${entry.grower_id}</small></td>
-                        <td>${entry.acceptance_rate.toFixed(1)}%</td>
-                        <td>${entry.avg_response_time_hours.toFixed(1)}h</td>
-                        <td>${entry.on_time_fulfillment_rate.toFixed(1)}%</td>
-                        <td><strong style="color: ${entry.quality_score >= 90 ? 'var(--success)' : entry.quality_score >= 70 ? 'var(--warning)' : 'var(--error)'};">${entry.quality_score.toFixed(1)}</strong></td>
-                        <td>$${entry.total_revenue_30d.toLocaleString()}</td>
+                        <td><strong>${entry.rank || (index + 1)}</strong></td>
+                        <td>${entry.name || entry.farmId}<br><small style="color: var(--text-secondary);">${entry.farmId || ''}</small></td>
+                        <td><strong style="color: ${entry.score >= 80 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--error)'};">${entry.score || 0}</strong></td>
+                        <td>${entry.harvest_count || 0}</td>
+                        <td>${entry.avg_yield_oz || '--'}</td>
+                        <td>${entry.avg_loss_rate ? (parseFloat(entry.avg_loss_rate) * 100).toFixed(1) + '%' : '--'}</td>
                     </tr>
                 `).join('');
             } catch (error) {
                 console.error('Error loading leaderboard:', error);
                 document.getElementById('leaderboard-tbody').innerHTML = 
-                    '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--error);">Error loading leaderboard</td></tr>';
+                    '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--error);">Error loading leaderboard</td></tr>';
             }
         }
 
@@ -5676,33 +5791,31 @@
                 document.getElementById('performance-details').innerHTML = `
                     <div class="kpi-grid" style="margin-bottom: 20px;">
                         <div class="kpi-card">
-                            <div class="kpi-label">Acceptance Rate</div>
-                            <div class="kpi-value">${perf.acceptance_rate.toFixed(1)}%</div>
-                            <div class="kpi-label" style="font-size: 12px; margin-top: 5px;">${perf.orders_accepted} / ${perf.orders_received} orders</div>
+                            <div class="kpi-label">Overall Rating</div>
+                            <div class="kpi-value" style="color: ${perf.overallRating >= 80 ? 'var(--success)' : perf.overallRating >= 50 ? 'var(--warning)' : 'var(--error)'};">${perf.overallRating || 0}</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-label">Avg Response Time</div>
-                            <div class="kpi-value">${perf.avg_response_time_hours.toFixed(1)}h</div>
+                            <div class="kpi-label">Total Harvests</div>
+                            <div class="kpi-value">${perf.harvest_count || 0}</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-label">On-Time Fulfillment</div>
-                            <div class="kpi-value">${perf.on_time_fulfillment_rate.toFixed(1)}%</div>
-                            <div class="kpi-label" style="font-size: 12px; margin-top: 5px;">${perf.orders_fulfilled_on_time} / ${perf.orders_fulfilled} orders</div>
+                            <div class="kpi-label">Avg Yield (oz)</div>
+                            <div class="kpi-value">${perf.avg_yield_oz || '--'}</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-label">Quality Score</div>
-                            <div class="kpi-value" style="color: ${perf.quality_score >= 90 ? 'var(--success)' : perf.quality_score >= 70 ? 'var(--warning)' : 'var(--error)'};">${perf.quality_score.toFixed(1)}</div>
+                            <div class="kpi-label">Avg Loss Rate</div>
+                            <div class="kpi-value">${perf.avg_loss_rate ? (parseFloat(perf.avg_loss_rate) * 100).toFixed(1) + '%' : '--'}</div>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
                         <div>
-                            <div style="font-weight: 600; margin-bottom: 8px;">Revenue (30 days)</div>
-                            <div style="font-size: 24px; color: var(--primary);">$${perf.total_revenue_30d.toLocaleString()}</div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Yield Score</div>
+                            <div style="font-size: 24px; color: var(--primary);">${perf.metrics?.yield || 0}/100</div>
                         </div>
                         <div>
-                            <div style="font-weight: 600; margin-bottom: 8px;">Growth Rate</div>
-                            <div style="font-size: 24px; color: ${perf.growth_rate_percentage >= 0 ? 'var(--success)' : 'var(--error)'};">
-                                ${perf.growth_rate_percentage >= 0 ? '↑' : '↓'} ${Math.abs(perf.growth_rate_percentage).toFixed(1)}%
+                            <div style="font-weight: 600; margin-bottom: 8px;">Consistency Score</div>
+                            <div style="font-size: 24px; color: ${(perf.metrics?.reliability || 0) >= 50 ? 'var(--success)' : 'var(--error)'};">
+                                ${perf.metrics?.reliability || 0}/100
                             </div>
                         </div>
                     </div>

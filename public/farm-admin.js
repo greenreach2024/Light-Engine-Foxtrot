@@ -179,6 +179,7 @@ function initLogin() {
         if (document.getElementById('email')) {
             document.getElementById('email').value = 'info@greenreachgreens.com';
         }
+        // Test credential auto-fill removed for security
     }
 }
 
@@ -1233,11 +1234,11 @@ function formatTime(timestamp) {
 
 // Pricing data structure
 let pricingData = [];
-let isPerGram = false; // false = per oz, true = per 25g
-const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
+let isPerGram = false; // false = per lb, true = per 100g
+const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v9';
+const PRICING_VERSION = '2026-03-27-v10';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1273,61 +1274,101 @@ function getCropUnitLabel(cropName) {
     const unit = getCropUnit(cropName);
     if (unit === 'pint') return '/pint';
     if (unit === 'unit') return '/each';
-    return isPerGram ? '/25g' : '/oz';
+    return isPerGram ? '/100g' : '/lb';
 }
 
 function getCropBackendUnit(cropName) {
     const unit = getCropUnit(cropName);
     if (unit === 'pint') return 'pint';
     if (unit === 'unit') return 'unit';
-    return 'oz';
+    return 'lb';
 }
 
-// Default pricing (per oz) - Based on organic market research Dec 2025
-// Prices calculated from actual retail packages and converted to per-oz rates
+// Default pricing per lb (CAD) - AI-generated from Canadian retail market data
+// Formula: (package_price_CAD / package_weight_oz) * 16 oz/lb * 1.05 premium
+// Source: Loblaws, Metro, Sobeys, Farm Boy, No Frills (Ontario observed prices)
 const defaultPricing = {
-    // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // $4.99/5oz packaged
-    'Breen Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
-    'Truchas Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
-    'Seaside F1 Spinach (baby leaf)': { retail: 0.90, ws1: 20, ws2: 25, ws3: 35 },  // $4.49/5oz packaged baby spinach
-    'Red Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged salad mix
-    'Oak Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged mixed greens
-    
-    // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },      // $2.29/1.0oz Ontario retail
-    'Thai Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
-    'Purple Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },        // Ontario herb pricing
-    'Lemon Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },         // Ontario herb pricing
-    'Holy Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
-    'Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },               // Ontario retail
-    
-    // Arugula varieties - Specialty green pricing
-    'Baby Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
-    'Cultivated Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },  // Standard arugula
-    'Wild Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // Standard arugula
-    'Wasabi Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },      // Standard arugula
-    'Red Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },         // Standard arugula
-    'Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },             // Generic arugula
-    
-    // Kale varieties - Standard pricing
-    'Curly Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
-// Standard kale
-    'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },                // Generic kale
-    
-    // Microgreens - Premium pricing per oz (2oz clamshell @ $4.49)
-    'Microgreen': { retail: 2.25, ws1: 15, ws2: 20, ws3: 30 },
+    // Lettuce: $4.99 CAD / 5oz pkg -> $16.77/lb
+    'Butterhead Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Breen Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Truchas Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Oak Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Sprouts - Value pricing per oz (6oz container @ $3.49)
-    'Sprout': { retail: 0.58, ws1: 20, ws2: 25, ws3: 35 },
+    // Spinach: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Seaside F1 Spinach (baby leaf)': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Spinach': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Herbs missing from original defaults
-    'Rosemary': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },             // Ontario herb pricing
-    'Sage': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },                 // Ontario herb pricing
-    'Watercress': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 }            // $3.99/4oz
+    // Basil: $2.29-2.49 CAD / 1oz pkg -> $38.47-41.83/lb
+    'Genovese Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Thai Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Purple Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Holy Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Arugula: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Baby Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Cultivated Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Wild Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Wasabi Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Kale: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Curly Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Swiss Chard: $3.49 CAD / 8oz bunch -> $7.33/lb
+    'Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
+    'Magenta Sunset Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Watercress: $3.99 CAD / 4oz pkg -> $16.76/lb
+    'Watercress': { retail: 16.76, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Bok Choy/Asian greens: $3.49 CAD / 6oz pkg -> $9.77/lb
+    'Mei Qing Pak Choi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Tatsoi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Komatsuna Mustard Spinach': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Mizuna Mustard Greens': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Mixed Greens: $4.99 CAD / 5oz pkg -> $16.77/lb
+    'Mixed Greens': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Escarole Batavian': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Sorrel': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Herbs (per lb from packaged fresh herbs)
+    'Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Italian Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Cilantro': { retail: 25.03, ws1: 15, ws2: 25, ws3: 35 },
+    'Dill Bouquet': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Common Thyme': { retail: 58.92, ws1: 15, ws2: 25, ws3: 35 },
+    'French Tarragon': { retail: 66.97, ws1: 15, ws2: 25, ws3: 35 },
+    'Greek Oregano': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
+    'Rosemary': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
+    'Sage': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
+    'Marjoram': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
+    'Chervil': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Balm': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Lovage': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Kentucky Colonel Spearmint': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Microgreens: $4.49 CAD / 2oz tray -> $37.72/lb
+    'Microgreen': { retail: 37.72, ws1: 15, ws2: 20, ws3: 30 },
+
+    // Sprouts: $3.49 CAD / 6oz container -> $9.77/lb
+    'Sprout': { retail: 9.77, ws1: 20, ws2: 25, ws3: 35 },
+
+    // Strawberries: $5.99 USD/pint * 1.35 fx * 1.05 premium = $8.49/pint
+    'Strawberry': { retail: 8.49, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Cherry Tomato: $4.99 USD / 10oz * 1.35 fx * 16/oz * 1.05 = $11.32/lb
+    'Cherry Tomato': { retail: 11.32, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Tomato: $2.49 USD/each * 1.35 fx * 1.05 premium = $3.53/each
+    'Tomato': { retail: 3.53, ws1: 15, ws2: 25, ws3: 35 }
 };
-
 /**
  * Load crops and pricing — API first, localStorage fallback
  */
@@ -1383,7 +1424,7 @@ async function loadCropsFromDatabase() {
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
-                const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 20, ws2: 25, ws3: 35 };
+                const defaults = defaultPricing[crop] || { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 };
                 return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
             });
         }
@@ -1402,7 +1443,7 @@ async function loadCropsFromDatabase() {
  */
 function exportPricingCSV() {
     if (!pricingData.length) { alert('No pricing data to export.'); return; }
-    const unitLabel = isPerGram ? '/25g' : '/oz';
+    const unitLabel = isPerGram ? '/100g' : '/lb';
     const rows = [['Crop', `Retail (${unitLabel})`, 'Floor Price', 'SKU Factor', `Formula WS (${unitLabel})`, 'Taxable']];
     pricingData.forEach(item => {
         const r = isPerGram ? convertPrice(item.retail, true) : item.retail;
@@ -1428,11 +1469,11 @@ function exportPricingCSV() {
  */
 function convertPrice(price, toGram = false) {
     if (toGram) {
-        // Convert oz to 25g: multiply by conversion factor
-        return price * OZ_TO_25G;
+        // Convert lb to 100g: multiply by conversion factor
+        return price * LB_TO_100G;
     } else {
-        // Convert 25g to oz: divide by conversion factor
-        return price / OZ_TO_25G;
+        // Convert 100g to lb: divide by conversion factor
+        return price / LB_TO_100G;
     }
 }
 
@@ -1470,7 +1511,7 @@ function renderPricingTable() {
     const tbody = document.querySelector('#pricing-table tbody');
     if (!tbody) return;
     
-    const weightUnitLabel = isPerGram ? '/25g' : '/oz';
+    const weightUnitLabel = isPerGram ? '/100g' : '/lb';
     
     // Update header labels to show weight unit (majority of crops)
     document.getElementById('unit-retail').textContent = `($${weightUnitLabel})`;
@@ -2548,8 +2589,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
             marketAverageCAD,
             sourceAverageUSD,
             priceRangeCAD,
+            pricePerLbCAD: null,
+            pricePer100gCAD: null,
             pricePerOzCAD: null,
-            pricePer25gCAD: null,
             pricePerOzUSD: null
         };
     }
@@ -2567,20 +2609,22 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
         ? pricePerOzCAD / (currentExchangeRate || 1)
         : averageSourcePriceUSD / avgWeightOz;
 
-    const pricePer25gCAD = pricePerOzCAD * OZ_TO_25G;
+    const pricePerLbCAD = pricePerOzCAD * 16;
+    const pricePer100gCAD = pricePerLbCAD * LB_TO_100G;
 
     const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
-        ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * exchangeMultiplier)
-        : (marketData.priceRange || [0, 0]).map(p => p / avgWeightOz);
+        ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16 * exchangeMultiplier)
+        : (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16);
 
     return {
         comparisonUnit,
-        comparisonUnitLabel: '/oz',
-        marketAverageCAD: pricePerOzCAD,
+        comparisonUnitLabel: '/lb',
+        marketAverageCAD: pricePerLbCAD,
         sourceAverageUSD: pricePerOzUSD,
         priceRangeCAD,
+        pricePerLbCAD,
+        pricePer100gCAD,
         pricePerOzCAD,
-        pricePer25gCAD,
         pricePerOzUSD
     };
 }
@@ -2678,8 +2722,8 @@ function generateRecommendations() {
             marketAverage: marketAvg,
             comparisonUnit: normalizedMarket.comparisonUnit,
             comparisonUnitLabel: normalizedMarket.comparisonUnitLabel,
-            pricePerOzCAD: normalizedMarket.pricePerOzCAD,
-            pricePer25gCAD: normalizedMarket.pricePer25gCAD,
+            pricePerLbCAD: normalizedMarket.pricePerLbCAD,
+            pricePer100gCAD: normalizedMarket.pricePer100gCAD,
             sourcePriceUSD: normalizedMarket.sourceAverageUSD,
             priceRange: normalizedMarket.priceRangeCAD,
             exchangeRate: currentExchangeRate,
@@ -2760,10 +2804,10 @@ function displayRecommendations(recommendations) {
                         <div class="price-label">Market Price (CAD)</div>
                         ${isWeightComparison ? `
                             <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
-                                $${rec.pricePerOzCAD.toFixed(2)}/oz
+                                $${rec.pricePerLbCAD.toFixed(2)}/lb
                             </div>
                             <div style="font-size: 13px; color: var(--text-secondary);">
-                                $${rec.pricePer25gCAD.toFixed(2)}/25g
+                                $${rec.pricePer100gCAD.toFixed(2)}/100g
                             </div>
                         ` : `
                             <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
@@ -3102,40 +3146,40 @@ function checkForScheduledPriceUpdates() {
 // Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
     // Lettuce varieties - 28-35 day cycle, priced per lb
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 16.77, yieldFactor: 0.90 },
+    'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 16.77, yieldFactor: 0.90 },
+    'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.91 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 16.77, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 16.77, yieldFactor: 0.91 },
     
     // Kale varieties - 35-42 day cycle, priced per lb
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 15.08, yieldFactor: 0.89 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.92 },
     
     // Asian Greens - priced per lb
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 9.77, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 9.77, yieldFactor: 0.91 },
     
     // Specialty Greens - priced per lb
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 16.77, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 16.76, yieldFactor: 0.90 },
     
     // Arugula varieties - 21-28 day cycle, priced per lb
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 15.08, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.90 },
     
-    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
+    // Basil varieties - 21-28 day cycle, priced per lb (CAD, from crop-registry)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 38.47, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 41.83, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 41.83, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 41.83, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 41.83, yieldFactor: 0.86 }
 };
 
 // Global crop value data
@@ -3163,7 +3207,10 @@ function calculateTrayValue(crop, plantCount, daysPostSeed) {
     if (!params) return 0;
     
     const growthPercent = calculateGrowthPercentage(crop, daysPostSeed) / 100;
-    const retailPricePerLb = params.retailPricePerLb;
+    // Prefer DB pricing (from pricingData loaded via API) over hardcoded params
+    const dbEntry = (typeof pricingData !== 'undefined' && Array.isArray(pricingData))
+        ? pricingData.find(p => p.crop === crop) : null;
+    const retailPricePerLb = (dbEntry && dbEntry.retail > 0) ? dbEntry.retail : params.retailPricePerLb;
     const yieldFactor = params.yieldFactor;
     
     // Average weight per plant (in lbs) - conservative estimate
@@ -3475,9 +3522,9 @@ async function renderCropValue() {
     Object.entries(data.cropSummary).forEach(([crop, summary]) => {
         const avgDays = summary.totalDays / summary.trays;
         const percentOfTotal = (summary.value / data.totalValue * 100).toFixed(1);
-        const params = cropGrowthParams[crop] || { retailPricePerLb: 0 };
+        const retailPerLb = summary.retailPricePerLb || (cropGrowthParams[crop] || {}).retailPricePerLb || 0;
         
-        const pricePerOz = (params.retailPricePerLb || 0) / 16;
+        const pricePerOz = retailPerLb / 16;
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${crop}</td>
@@ -4317,19 +4364,20 @@ async function loadOperationsData(startDate) {
         //     }
         // } catch (e) { /* AI service not available */ }
 
-        // Phase 2: uncomment when network intelligence API is live
-        // try {
-        //     const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
-        //     if (niResp.ok) {
-        //         const niData = await niResp.json();
-        //         const ni = niData.network_intelligence || {};
-        //         const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
-        //         const demandCount = Object.keys(ni.demand_signals || {}).length;
-        //         if (benchmarkCount > 0 || demandCount > 0) {
-        //             aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
-        //         }
-        //     }
-        // } catch (e) { /* non-fatal */ }
+        // Network intelligence - activated Phase 1
+        try {
+            const niResp = await fetch(`${API_BASE}/api/ai/network-intelligence`);
+            if (niResp.ok) {
+                const niData = await niResp.json();
+                const ni = niData.network_intelligence || {};
+                const benchmarkCount = Object.keys(ni.crop_benchmarks || {}).length;
+                const demandCount = Object.keys(ni.demand_signals || {}).length;
+                if (benchmarkCount > 0 || demandCount > 0) {
+                    aiContext = `Live network signal: ${benchmarkCount} crop benchmarks, ${demandCount} demand signals.`;
+                }
+                renderNetworkBenchmarks(ni);
+            }
+        } catch (e) { /* non-fatal */ }
 
         // Phase 2: uncomment when suggested-crop API is live
         // try {
@@ -6498,6 +6546,63 @@ async function seedBenchmarksStep() {
     }
 }
 
+
+
+/**
+ * Render network benchmark comparisons into the farm dashboard.
+ * Shows crop benchmarks from Central's push so growers can compare their farm performance.
+ */
+function renderNetworkBenchmarks(ni) {
+    const container = document.getElementById('network-benchmarks-panel');
+    if (!container) return;
+
+    const benchmarks = ni.crop_benchmarks || {};
+    const demandSignals = ni.demand_signals || {};
+    const riskAlerts = ni.risk_alerts || [];
+    const cropNames = Object.keys(benchmarks);
+
+    if (cropNames.length === 0 && riskAlerts.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px;">No network benchmarks received yet. Data arrives every 30 minutes from Central.</div>';
+        return;
+    }
+
+    let html = '';
+
+    // Risk alerts
+    if (riskAlerts.length > 0) {
+        html += '<div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">';
+        html += '<div style="font-weight: 600; color: var(--accent-red); font-size: 12px; margin-bottom: 4px;">Network Risk Alerts</div>';
+        riskAlerts.forEach(function(alert) {
+            html += '<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">' + (alert.message || alert.type || 'Unknown alert') + '</div>';
+        });
+        html += '</div>';
+    }
+
+    // Crop benchmarks
+    cropNames.forEach(function(crop) {
+        var bm = benchmarks[crop];
+        var demand = demandSignals[crop] || {};
+        var demandLabel = demand.demand_score >= 80 ? 'High' : (demand.demand_score >= 50 ? 'Medium' : 'Low');
+        var demandColor = demand.demand_score >= 80 ? 'var(--accent-green)' : (demand.demand_score >= 50 ? 'var(--accent-yellow)' : 'var(--text-muted)');
+
+        html += '<div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;">';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+        html += '<div style="font-weight: 600; font-size: 14px; color: var(--text-primary); text-transform: capitalize;">' + crop + '</div>';
+        if (demand.demand_score != null) {
+            html += '<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ' + demandColor + '22; color: ' + demandColor + '; font-weight: 600;">Demand: ' + demandLabel + '</span>';
+        }
+        html += '</div>';
+
+        html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12px; color: var(--text-secondary);">';
+        html += '<div>Network Yield: <strong style="color: var(--text-primary);">' + (bm.avg_yield_oz != null ? bm.avg_yield_oz + ' oz' : '--') + '</strong></div>';
+        html += '<div>Cycle: <strong style="color: var(--text-primary);">' + (bm.avg_cycle_days != null ? bm.avg_cycle_days + ' days' : '--') + '</strong></div>';
+        html += '<div>Farms: <strong style="color: var(--text-primary);">' + (bm.network_farms || 0) + '</strong></div>';
+        html += '</div>';
+        html += '</div>';
+    });
+
+    container.innerHTML = html;
+}
 /**
  * Activate device with activation code
  */
@@ -6659,7 +6764,7 @@ async function completeSetup() {
             // Also POST to /farm endpoint for index.html compatibility
             await fetch('/farm', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.token}` },
                 body: JSON.stringify(farmData)
             });
             
@@ -6667,7 +6772,7 @@ async function completeSetup() {
             if (setupData.rooms && setupData.rooms.length > 0) {
                 await fetch('/rooms', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.token}` },
                     body: JSON.stringify(setupData.rooms)
                 });
             }
