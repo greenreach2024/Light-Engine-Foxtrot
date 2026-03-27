@@ -5573,5 +5573,32 @@
   </script>
   <script src="/js/light-engine-help.js"></script>
   <script src="/js/evie-presence.js"></script>
+
+  <!-- Voice Command Modal (Phase 5 T47) -->
+  <div id="voiceCommandModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-primary, #1a2332); border:1px solid var(--border, #2a3a4e); border-radius:16px; padding:32px; max-width:440px; width:90%; text-align:center; position:relative;">
+      <button onclick="closeVoiceModal()" style="position:absolute; top:12px; right:12px; background:none; border:none; color:var(--text-secondary, #94a3b8); font-size:20px; cursor:pointer;">X</button>
+      <h3 style="color:var(--text-primary, #e2e8f0); margin:0 0 8px 0; font-size:18px; font-weight:600;">Voice Command</h3>
+      <p style="color:var(--text-secondary, #94a3b8); font-size:13px; margin:0 0 20px 0;">Speak a farming action: seed, harvest, move, quality check, or loss report</p>
+      <div id="voiceStatus" style="color:var(--accent-green, #34d399); font-size:14px; margin-bottom:16px; min-height:20px;"></div>
+      <div id="voiceTranscript" style="background:var(--bg-secondary, #0f1923); border:1px solid var(--border, #2a3a4e); border-radius:8px; padding:16px; min-height:48px; color:var(--text-primary, #e2e8f0); font-size:15px; margin-bottom:16px; display:none;"></div>
+      <div id="voiceParsed" style="display:none; background:var(--bg-secondary, #0f1923); border:1px solid rgba(52,211,153,0.3); border-radius:8px; padding:16px; margin-bottom:16px; text-align:left;">
+        <div style="color:var(--text-secondary, #94a3b8); font-size:12px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Parsed Intent</div>
+        <div id="voiceParsedAction" style="color:var(--accent-green, #34d399); font-size:16px; font-weight:600; margin-bottom:4px;"></div>
+        <div id="voiceParsedParams" style="color:var(--text-primary, #e2e8f0); font-size:13px;"></div>
+        <div id="voiceParsedConfidence" style="color:var(--text-secondary, #94a3b8); font-size:12px; margin-top:4px;"></div>
+      </div>
+      <div id="voiceButtons" style="display:flex; gap:12px; justify-content:center;">
+        <button id="voiceStartBtn" onclick="toggleVoiceRecording()" style="background:var(--accent-green, #34d399); color:#0f1923; border:none; border-radius:50%; width:64px; height:64px; font-size:24px; cursor:pointer; transition:all 0.2s;">Mic</button>
+      </div>
+      <div id="voiceConfirmBtns" style="display:none; margin-top:12px; gap:12px; justify-content:center;">
+        <button onclick="executeVoiceAction()" style="background:var(--accent-green, #34d399); color:#0f1923; border:none; border-radius:8px; padding:10px 24px; font-size:14px; font-weight:600; cursor:pointer;">Execute</button>
+        <button onclick="resetVoiceModal()" style="background:var(--bg-secondary, #0f1923); color:var(--text-secondary, #94a3b8); border:1px solid var(--border, #2a3a4e); border-radius:8px; padding:10px 24px; font-size:14px; cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <!-- Floating Voice Button (Phase 5 T47) -->
+  <button id="voiceFab" onclick="openVoiceModal()" title="Voice Command" style="position:fixed; bottom:80px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--accent-green, #34d399); color:#0f1923; border:none; font-size:22px; cursor:pointer; z-index:9990; box-shadow:0 4px 12px rgba(52,211,153,0.3); transition:transform 0.2s;">Mic</button>
+
 </body>
 </html>

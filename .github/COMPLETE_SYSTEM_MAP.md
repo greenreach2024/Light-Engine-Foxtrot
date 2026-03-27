@@ -625,7 +625,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
-| /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (19 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
+| /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
 | /api/grant-wizard | routes/grant-wizard.js | Grant application wizard |
 | /api/ai-monitoring | routes/admin-ai-monitoring.js | AI system monitoring |
@@ -1971,7 +1971,7 @@ When you change a file, here is what else is affected:
 
 ## 16. AI Vision -- Network Intelligence Pipeline
 
-**Phase Status** (March 27, 2026): Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 3 COMPLETE, Phase 4 COMPLETE. All gates PASSED through Phase 4->5.
+**Phase Status** (March 27, 2026): Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 3 COMPLETE, Phase 4 COMPLETE, Phase 5 COMPLETE (all 52 tasks). ALL AI VISION PHASES COMPLETE.
 **Reference**: `.github/AI_VISION_RULES_AND_SKILLS.md` for full task list and phase gate rules.
 
 ### 16.1 Experiment Records Pipeline

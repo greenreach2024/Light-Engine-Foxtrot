@@ -8255,3 +8255,170 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+
+// ── Phase 5 T47: Voice-first Activity Hub ────────────────────────────────
+let voiceRecognition = null;
+let voiceLastIntent = null;
+
+function openVoiceModal() {
+    const modal = document.getElementById('voiceCommandModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    resetVoiceModal();
+}
+
+function closeVoiceModal() {
+    const modal = document.getElementById('voiceCommandModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    if (voiceRecognition) {
+        try { voiceRecognition.stop(); } catch (_) {}
+        voiceRecognition = null;
+    }
+}
+
+function resetVoiceModal() {
+    document.getElementById('voiceStatus').textContent = 'Tap the microphone to start';
+    document.getElementById('voiceTranscript').style.display = 'none';
+    document.getElementById('voiceTranscript').textContent = '';
+    document.getElementById('voiceParsed').style.display = 'none';
+    document.getElementById('voiceConfirmBtns').style.display = 'none';
+    const btn = document.getElementById('voiceStartBtn');
+    if (btn) {
+        btn.style.background = 'var(--accent-green, #34d399)';
+        btn.style.display = '';
+    }
+    voiceLastIntent = null;
+}
+
+function toggleVoiceRecording() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        document.getElementById('voiceStatus').textContent = 'Voice input not supported in this browser';
+        return;
+    }
+    if (voiceRecognition) {
+        voiceRecognition.stop();
+        voiceRecognition = null;
+        document.getElementById('voiceStartBtn').style.background = 'var(--accent-green, #34d399)';
+        document.getElementById('voiceStatus').textContent = 'Stopped. Tap to try again.';
+        return;
+    }
+    voiceRecognition = new SpeechRecognition();
+    voiceRecognition.continuous = false;
+    voiceRecognition.interimResults = true;
+    voiceRecognition.lang = 'en-US';
+    const statusEl = document.getElementById('voiceStatus');
+    const transcriptEl = document.getElementById('voiceTranscript');
+    const btn = document.getElementById('voiceStartBtn');
+    statusEl.textContent = 'Listening...';
+    btn.style.background = '#ef4444';
+    transcriptEl.style.display = 'block';
+    transcriptEl.textContent = '...';
+
+    voiceRecognition.onresult = (event) => {
+        const result = event.results[event.results.length - 1];
+        transcriptEl.textContent = result[0].transcript;
+        if (result.isFinal) {
+            statusEl.textContent = 'Processing...';
+            parseVoiceIntent(result[0].transcript);
+        }
+    };
+    voiceRecognition.onerror = (event) => {
+        statusEl.textContent = 'Error: ' + (event.error || 'unknown');
+        btn.style.background = 'var(--accent-green, #34d399)';
+        voiceRecognition = null;
+    };
+    voiceRecognition.onend = () => {
+        btn.style.background = 'var(--accent-green, #34d399)';
+        voiceRecognition = null;
+    };
+    voiceRecognition.start();
+}
+
+async function parseVoiceIntent(transcript) {
+    try {
+        const resp = await fetch(API_BASE + '/api/voice/parse-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({ transcript })
+        });
+        const data = await resp.json();
+        if (!data.ok || !data.intent || data.intent.action === 'unknown') {
+            document.getElementById('voiceStatus').textContent = 'Could not understand. Try again.';
+            if (data.intent?.suggestion) {
+                document.getElementById('voiceStatus').textContent += ' ' + data.intent.suggestion;
+            }
+            return;
+        }
+        voiceLastIntent = data.intent;
+        const parsedEl = document.getElementById('voiceParsed');
+        parsedEl.style.display = 'block';
+        document.getElementById('voiceParsedAction').textContent = data.intent.action.replace(/_/g, ' ').toUpperCase();
+        const paramStrs = Object.entries(data.intent.params || {}).filter(([,v]) => v != null).map(([k,v]) => k + ': ' + v);
+        document.getElementById('voiceParsedParams').textContent = paramStrs.join(', ') || 'No parameters detected';
+        document.getElementById('voiceParsedConfidence').textContent = 'Confidence: ' + Math.round((data.intent.confidence || 0) * 100) + '%';
+        document.getElementById('voiceStatus').textContent = 'Action detected. Confirm or cancel.';
+        document.getElementById('voiceStartBtn').style.display = 'none';
+        document.getElementById('voiceConfirmBtns').style.display = 'flex';
+    } catch (err) {
+        console.error('[voice] parse error:', err);
+        document.getElementById('voiceStatus').textContent = 'Parse failed: ' + err.message;
+    }
+}
+
+async function executeVoiceAction() {
+    if (!voiceLastIntent || !voiceLastIntent.api) {
+        showToast('No action to execute', 'error');
+        closeVoiceModal();
+        return;
+    }
+    const { method, endpoint } = voiceLastIntent.api;
+    const params = voiceLastIntent.params || {};
+    document.getElementById('voiceStatus').textContent = 'Executing...';
+    try {
+        const resp = await fetch(API_BASE + endpoint, {
+            method: method || 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: method === 'GET' ? undefined : JSON.stringify(params)
+        });
+        const data = await resp.json();
+        if (data.ok || data.success) {
+            showToast('Voice command executed: ' + voiceLastIntent.action.replace(/_/g, ' '), 'success');
+            // Speak confirmation via TTS
+            speakConfirmation(voiceLastIntent.action, params);
+        } else {
+            showToast('Action failed: ' + (data.error || 'unknown'), 'error');
+        }
+    } catch (err) {
+        console.error('[voice] execute error:', err);
+        showToast('Execution failed: ' + err.message, 'error');
+    }
+    closeVoiceModal();
+}
+
+async function speakConfirmation(action, params) {
+    const messages = {
+        seed: 'Seeding recorded' + (params.crop ? ' for ' + params.crop : ''),
+        harvest: 'Harvest recorded' + (params.crop_or_group ? ' for ' + params.crop_or_group : ''),
+        move: 'Move recorded' + (params.crop ? ' for ' + params.crop : ''),
+        quality_check: 'Quality check logged' + (params.crop ? ' for ' + params.crop : ''),
+        loss_report: 'Loss report filed' + (params.quantity ? ': ' + params.quantity + ' units' : '')
+    };
+    const text = messages[action] || 'Action completed';
+    try {
+        const resp = await fetch(API_BASE + '/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({ text })
+        });
+        if (resp.ok) {
+            const blob = await resp.blob();
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.play().catch(() => {});
+        }
+    } catch (_) {
+        // TTS is best-effort
+    }
+}

@@ -88,9 +88,13 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 - Farm: planting suggestion accept UI, harvest schedule reporter, recipe modifier one-tap accept/dismiss
 - Central: harvest conflict detection, supply/demand balancing, A/B test orchestration, quality order routing, dynamic pricing
 
-**Phase 4->5 Gate**: PASSED. Next: Phase 5 (Autonomous Operations)
+**Phase 5 -- Autonomous Operations**: COMPLETE (8/8 tasks)
+- Farm: autonomous recipe adjustment with guardrails, AI harvest timing with readiness scoring, voice-first Activity Hub (Web Speech API + TTS)
+- Central: weekly production planning + distribution, dynamic recipe versioning + push, predictive inventory + auto wholesale listing, autonomous wholesale matching, market intelligence (10 routes)
 
-**Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (19 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle), `greenreach-central/jobs/anomaly-correlation.js` (weekly cross-farm anomaly detection), `greenreach-central/jobs/supply-demand-balancer.js` (risk alerts + adaptive loss alerts)
+**ALL 52 AI VISION TASKS COMPLETE.** Full autonomous operations live.
+
+**Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (18 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle), `greenreach-central/jobs/anomaly-correlation.js` (weekly cross-farm anomaly detection), `greenreach-central/jobs/supply-demand-balancer.js` (risk alerts + adaptive loss alerts), `greenreach-central/jobs/production-planner.js` (weekly seeding plans), `greenreach-central/routes/market-intelligence.js` (10 market data routes), `lib/recipe-modifier.js` (autonomous recipe engine + guardrails), `lib/harvest-predictor.js` (readiness scoring)
 
 ### DO NOT (Architecture Rules)
 

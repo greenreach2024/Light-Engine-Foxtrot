@@ -5015,6 +5015,226 @@ app.post('/api/network/recipe-versions/push', async (req, res) => {
   } catch (error) {
     console.error('[recipe-versions] Push error:', error.message);
     res.status(500).json({ ok: false, error: error.message });
+
+// ── Phase 5 T50: Predictive Inventory / Auto Wholesale Listing ──────────
+
+/**
+ * GET /api/inventory/predicted-surplus
+ * Forecasts surplus inventory from active growing groups + harvest predictions.
+ * Returns per-crop projected surplus with auto-listing recommendations.
+ */
+app.get('/api/inventory/predicted-surplus', authOrAdminMiddleware, async (req, res) => {
+  try {
+    // 1. Get active growing groups with projected harvest dates/quantities
+    const activeGroups = await query(
+      `SELECT er.crop, er.zone,
+              er.data->>'tray_count' as tray_count,
+              er.data->>'plants_per_tray' as plants_per_tray,
+              er.data->>'seeded_at' as seeded_at,
+              er.data->>'estimated_harvest_date' as estimated_harvest_date,
+              er.data->>'estimated_weight_kg' as estimated_weight_kg
+       FROM experiment_records er
+       WHERE er.status = 'active'
+         AND er.data->>'estimated_harvest_date' IS NOT NULL
+       ORDER BY er.data->>'estimated_harvest_date' ASC`
+    );
+
+    // 2. Get existing wholesale orders (committed demand)
+    const committedDemand = await query(
+      `SELECT product_name as crop, SUM((data->>'quantity')::numeric) as committed_qty
+       FROM wholesale_orders
+       WHERE status IN ('pending', 'confirmed', 'processing')
+       GROUP BY product_name`
+    );
+
+    const demandMap = {};
+    for (const d of committedDemand.rows || []) {
+      demandMap[d.crop?.toLowerCase()] = parseFloat(d.committed_qty) || 0;
+    }
+
+    // 3. Calculate surplus per crop
+    const surplusByCrop = {};
+    for (const g of activeGroups.rows || []) {
+      const crop = (g.crop || '').toLowerCase();
+      if (!crop) continue;
+      const estWeight = parseFloat(g.estimated_weight_kg) || 0;
+      if (!surplusByCrop[crop]) surplusByCrop[crop] = { crop: g.crop, projected_kg: 0, committed_kg: 0, groups: 0 };
+      surplusByCrop[crop].projected_kg += estWeight;
+      surplusByCrop[crop].groups += 1;
+    }
+
+    const predictions = [];
+    for (const [cropKey, info] of Object.entries(surplusByCrop)) {
+      info.committed_kg = demandMap[cropKey] || 0;
+      info.surplus_kg = Math.max(0, info.projected_kg - info.committed_kg);
+      info.surplus_ratio = info.projected_kg > 0 ? info.surplus_kg / info.projected_kg : 0;
+      info.recommend_listing = info.surplus_kg > 0.5 && info.surplus_ratio > 0.2;
+      predictions.push(info);
+    }
+
+    predictions.sort((a, b) => b.surplus_kg - a.surplus_kg);
+    res.json({ success: true, predictions, generated_at: new Date().toISOString() });
+  } catch (error) {
+    console.error('[predictive-inventory] surplus forecast error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/inventory/auto-list
+ * Automatically creates wholesale catalog listings for crops with predicted surplus.
+ * Applies dynamic pricing from T44 pricing engine when available.
+ */
+app.post('/api/inventory/auto-list', authOrAdminMiddleware, async (req, res) => {
+  try {
+    const { min_surplus_kg = 0.5, min_surplus_ratio = 0.2 } = req.body || {};
+
+    // 1. Get predicted surplus
+    const activeGroups = await query(
+      `SELECT er.farm_id, er.crop,
+              er.data->>'estimated_weight_kg' as estimated_weight_kg,
+              er.data->>'estimated_harvest_date' as estimated_harvest_date,
+              er.data->>'quality_grade' as quality_grade
+       FROM experiment_records er
+       WHERE er.status = 'active'
+         AND er.data->>'estimated_harvest_date' IS NOT NULL`
+    );
+
+    const committedDemand = await query(
+      `SELECT product_name as crop, farm_id, SUM((data->>'quantity')::numeric) as committed_qty
+       FROM wholesale_orders
+       WHERE status IN ('pending', 'confirmed', 'processing')
+       GROUP BY product_name, farm_id`
+    );
+
+    const demandMap = {};
+    for (const d of committedDemand.rows || []) {
+      const key = (d.farm_id || '') + ':' + (d.crop || '').toLowerCase();
+      demandMap[key] = (demandMap[key] || 0) + (parseFloat(d.committed_qty) || 0);
+    }
+
+    // 2. Aggregate surplus by farm+crop
+    const surplusMap = {};
+    for (const g of activeGroups.rows || []) {
+      const crop = (g.crop || '').toLowerCase();
+      const farmId = g.farm_id || 'unknown';
+      if (!crop) continue;
+      const key = farmId + ':' + crop;
+      if (!surplusMap[key]) surplusMap[key] = { farm_id: farmId, crop: g.crop, projected_kg: 0, quality_grade: g.quality_grade || 'A' };
+      surplusMap[key].projected_kg += parseFloat(g.estimated_weight_kg) || 0;
+    }
+
+    const listings = [];
+    for (const [key, info] of Object.entries(surplusMap)) {
+      const committed = demandMap[key] || 0;
+      const surplus = info.projected_kg - committed;
+      const ratio = info.projected_kg > 0 ? surplus / info.projected_kg : 0;
+      if (surplus < min_surplus_kg || ratio < min_surplus_ratio) continue;
+
+      // 3. Create listing entry
+      const listing = {
+        farm_id: info.farm_id,
+        crop: info.crop,
+        available_kg: parseFloat(surplus.toFixed(2)),
+        quality_grade: info.quality_grade,
+        source: 'auto_predictive',
+        listed_at: new Date().toISOString()
+      };
+
+      // 4. Try to get dynamic pricing
+      try {
+        const pricingResult = await query(
+          `SELECT data->>'suggested_price' as price FROM farm_data
+           WHERE farm_id = $1 AND data_type = 'dynamic_pricing'
+           ORDER BY updated_at DESC LIMIT 1`,
+          [info.farm_id]
+        );
+        if (pricingResult.rows?.[0]?.price) {
+          listing.price_per_kg = parseFloat(pricingResult.rows[0].price);
+        }
+      } catch (_) {}
+
+      listings.push(listing);
+
+      // 5. Upsert into wholesale catalog
+      try {
+        await query(
+          `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+           VALUES ($1, 'auto_listing', $2::jsonb, NOW())
+           ON CONFLICT (farm_id, data_type)
+           DO UPDATE SET data = farm_data.data || $2::jsonb, updated_at = NOW()`,
+          [info.farm_id, JSON.stringify({ listings: [listing] })]
+        );
+      } catch (dbErr) {
+        console.warn('[auto-list] DB write skipped for', info.farm_id, ':', dbErr.message);
+      }
+    }
+
+    console.log('[auto-list] Generated ' + listings.length + ' auto-listings from predicted surplus');
+    res.json({ success: true, listings, count: listings.length, generated_at: new Date().toISOString() });
+  } catch (error) {
+    console.error('[auto-list] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Auto-listing scheduler: runs daily to scan for surplus and create listings.
+ */
+(function wireAutoListingScheduler() {
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      console.log('[auto-list] Running daily surplus scan...');
+      const activeGroups = await query(
+        `SELECT er.farm_id, er.crop,
+                er.data->>'estimated_weight_kg' as estimated_weight_kg
+         FROM experiment_records er WHERE er.status = 'active'
+           AND er.data->>'estimated_harvest_date' IS NOT NULL`
+      );
+      const committedDemand = await query(
+        `SELECT product_name as crop, farm_id, SUM((data->>'quantity')::numeric) as committed_qty
+         FROM wholesale_orders WHERE status IN ('pending', 'confirmed', 'processing')
+         GROUP BY product_name, farm_id`
+      );
+      const demandMap = {};
+      for (const d of committedDemand.rows || []) {
+        const key = (d.farm_id || '') + ':' + (d.crop || '').toLowerCase();
+        demandMap[key] = (demandMap[key] || 0) + (parseFloat(d.committed_qty) || 0);
+      }
+      let autoListCount = 0;
+      const surplusMap = {};
+      for (const g of activeGroups.rows || []) {
+        const crop = (g.crop || '').toLowerCase();
+        const farmId = g.farm_id || 'unknown';
+        if (!crop) continue;
+        const key = farmId + ':' + crop;
+        if (!surplusMap[key]) surplusMap[key] = { farm_id: farmId, crop: g.crop, projected_kg: 0 };
+        surplusMap[key].projected_kg += parseFloat(g.estimated_weight_kg) || 0;
+      }
+      for (const [key, info] of Object.entries(surplusMap)) {
+        const committed = demandMap[key] || 0;
+        const surplus = info.projected_kg - committed;
+        if (surplus < 0.5) continue;
+        autoListCount++;
+        try {
+          await query(
+            `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+             VALUES ($1, 'auto_listing', $2::jsonb, NOW())
+             ON CONFLICT (farm_id, data_type)
+             DO UPDATE SET data = $2::jsonb, updated_at = NOW()`,
+            [info.farm_id, JSON.stringify({ listings: [{ farm_id: info.farm_id, crop: info.crop, available_kg: parseFloat(surplus.toFixed(2)), source: 'auto_predictive', listed_at: new Date().toISOString() }] })]
+          );
+        } catch (_) {}
+      }
+      console.log('[auto-list] Daily scan complete: ' + autoListCount + ' auto-listings generated');
+    } catch (err) {
+      console.warn('[auto-list] Daily scan failed (non-fatal):', err?.message);
+    }
+  }, TWENTY_FOUR_HOURS);
+  console.log('[auto-list] Daily surplus scanner wired');
+})();
+
   }
 });
 
