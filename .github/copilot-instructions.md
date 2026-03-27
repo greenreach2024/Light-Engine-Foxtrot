@@ -21,6 +21,27 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
 
+### Recent Fixes (Mar 27, 2026)
+
+5. **POS iframe auto-login from LE-farm-admin**
+   - File: `greenreach-central/public/farm-sales-pos.html` (synced to root `public/`)
+   - POS token lookup now falls back through `farm_token`, `token` (localStorage), `token` (sessionStorage)
+   - New embedded mode (`?embedded=1`): inherits admin session, skips login screen
+   - Default role is `manager` when `user_role` unset
+
+6. **Square connection: standalone payment-setup.html**
+   - File: `greenreach-central/public/payment-setup.html` (synced to root `public/`)
+   - 614 lines of wizard HTML/JS removed from LE-dashboard.html
+   - payment-setup.html is security-hardened: same-origin returnUrl, DOM API rendering
+   - LE-dashboard.html `openPaymentWizard()` now redirects to `/payment-setup.html`
+
+
+7. **Wholesale remediation (order lifecycle, payments, inventory)**
+   - Files: `greenreach-central/routes/wholesale.js`, `greenreach-central/services/wholesaleMemoryStore.js`, `greenreach-central/routes/payment-webhooks.js`, `greenreach-central/lib/wholesale/invoice-generator.js`
+   - Order expiry: 48h auto-expire for unconfirmed orders
+   - Payment reconciliation: idempotent webhook handling, refund state machine
+   - Inventory: hold-to-commit pattern, restock on order cancel/expire
+
 ### Recent Fixes (Mar 19, 2026)
 
 Agents touching dashboard, weather, or devices must preserve these behaviors:
