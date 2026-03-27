@@ -1323,14 +1323,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'read_skill_file',
-      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
+      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping), social-media-marketing (social media strategy, content planning, platform selection, influencer partnerships, AI content guidelines). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
       parameters: {
         type: 'object',
         properties: {
           skill_name: {
             type: 'string',
-            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail',
-            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail']
+            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail, social-media-marketing',
+            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail', 'social-media-marketing']
           }
         },
         required: ['skill_name']
@@ -1868,10 +1868,17 @@ RULES:
 - For prices, always show currency (CAD).
 - When comparing crops, use tables for clarity.
 
+PLATFORM INTELLIGENCE:
+- GreenReach runs a 52-task AI Vision framework across 5 phases -- all COMPLETE. You operate within Phase 5 (Autonomous Operations).
+- Key Phase 5 capabilities you power: autonomous recipe adjustment with guardrails (lib/recipe-modifier.js), AI-driven harvest timing with readiness scoring (lib/harvest-predictor.js), voice-first Activity Hub (POST /api/voice/parse-intent), predictive inventory and auto wholesale listing.
+- CEA environment reference sources (Cornell lettuce, UF/IFAS hydroponic, Johnny's Seeds timing, basil/arugula/spinach studies, VPD control, light spectrum, EC/pH) are documented in the AI Vision rules. When growers ask about optimal setpoints, your recommendations should align with these peer-reviewed references.
+- Architecture documents are available via read_skill_file if needed for diagnostic context. The full AI Vision rules and skills document is at greenreach-central/.github/AI_VISION_RULES_AND_SKILLS.md (readable via read_skill_file with skill_name "ai-vision-rules").
+
 SKILL REFERENCE LIBRARY:
 - You have access to peer-reviewed research skill documents via the read_skill_file tool.
 - When a farmer asks about environmental management, climate control, equipment placement, lighting effects on humidity/transpiration, sensor data interpretation, dehumidification, airflow, or grow-room design: call read_skill_file with skill_name "environmental-management-control" BEFORE answering.
 - When asked about food safety, security, lot tracing, labels, or audit trails: call the relevant skill (security, lot-code-traceability, label-document-generation, record-keeping-audit-trail).
+- When asked about social media, marketing, content strategy, posting, social accounts, brand presence, or platform selection: call read_skill_file with skill_name "social-media-marketing" BEFORE answering.
 - Skill documents contain research-backed principles and frameworks. Use them to ground your recommendations in published evidence, not guesswork.
 - Do NOT summarise the entire skill document to the user. Extract the specific principles and research that apply to their question.`;
 }
@@ -3655,13 +3662,15 @@ async function executeExtendedTool(toolName, params, farmId) {
           'security',
           'label-document-generation',
           'lot-code-traceability',
-          'record-keeping-audit-trail'
+          'record-keeping-audit-trail',
+          'ai-vision-rules'
         ]);
         const skillName = (params.skill_name || '').toLowerCase().trim();
         if (!VALID_SKILLS.has(skillName)) {
           return { ok: false, error: `Unknown skill: ${skillName}. Available: ${[...VALID_SKILLS].join(', ')}` };
         }
-        const skillPath = path.join(__dirname, '..', '.github', 'skills', `${skillName}.md`);
+        const SKILL_FILE_MAP = { 'ai-vision-rules': path.join(__dirname, '..', '.github', 'AI_VISION_RULES_AND_SKILLS.md') };
+        const skillPath = SKILL_FILE_MAP[skillName] || path.join(__dirname, '..', '.github', 'skills', `${skillName}.md`);
         if (!fs.existsSync(skillPath)) {
           return { ok: false, error: `Skill file not found: ${skillName}.md` };
         }
