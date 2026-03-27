@@ -1323,14 +1323,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'read_skill_file',
-      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping), social-media-marketing (social media strategy, content planning, platform selection, influencer partnerships, AI content guidelines). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
+      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping), social-media-marketing (social media strategy, content planning, platform selection, influencer partnerships, AI content guidelines), device-setup-onboarding (IoT device discovery, sensor pairing, BLE setup, onboarding workflows, permissions, accessibility-adaptive setup). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
       parameters: {
         type: 'object',
         properties: {
           skill_name: {
             type: 'string',
-            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail, social-media-marketing',
-            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail', 'social-media-marketing']
+            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail, social-media-marketing, device-setup-onboarding',
+            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail', 'social-media-marketing', 'device-setup-onboarding']
           }
         },
         required: ['skill_name']
@@ -1879,6 +1879,7 @@ SKILL REFERENCE LIBRARY:
 - When a farmer asks about environmental management, climate control, equipment placement, lighting effects on humidity/transpiration, sensor data interpretation, dehumidification, airflow, or grow-room design: call read_skill_file with skill_name "environmental-management-control" BEFORE answering.
 - When asked about food safety, security, lot tracing, labels, or audit trails: call the relevant skill (security, lot-code-traceability, label-document-generation, record-keeping-audit-trail).
 - When asked about social media, marketing, content strategy, posting, social accounts, brand presence, or platform selection: call read_skill_file with skill_name "social-media-marketing" BEFORE answering.
+- When asked about device setup, sensor onboarding, adding new devices, pairing sensors, BLE setup, SwitchBot configuration, device discovery, or IoT integration: call read_skill_file with skill_name "device-setup-onboarding" BEFORE answering.
 - Skill documents contain research-backed principles and frameworks. Use them to ground your recommendations in published evidence, not guesswork.
 - Do NOT summarise the entire skill document to the user. Extract the specific principles and research that apply to their question.`;
 }
