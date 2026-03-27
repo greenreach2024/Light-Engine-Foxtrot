@@ -12,6 +12,7 @@ import { getCropBenchmarksForPush, getEnvironmentBenchmarksForPush } from '../ro
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import { getNetworkModifiers } from '../jobs/yield-regression.js';
 import { generateNetworkRiskAlerts } from '../jobs/supply-demand-balancer.js';
+import { getAnomalyCorrelations } from '../jobs/anomaly-correlation.js';
 import { getExperimentsForFarm } from '../jobs/experiment-orchestrator.js';
 import { getLatestAnalyses } from '../services/market-analysis-agent.js';
 import { getMarketDataAsync } from '../routes/market-intelligence.js';
@@ -506,6 +507,18 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Pricing intelligence load failed (non-fatal):', pricingErr.message);
       }
 
+      // Phase 3 Task 33: Cross-farm anomaly correlations
+      let anomalyCorrelations = [];
+      try {
+        const ac = await getAnomalyCorrelations();
+        anomalyCorrelations = ac.correlations || [];
+        if (anomalyCorrelations.length > 0) {
+          console.log(`[AI Pusher] Loaded ${anomalyCorrelations.length} anomaly correlation(s)`);
+        }
+      } catch (acErr) {
+        console.warn('[AI Pusher] Anomaly correlations load failed (non-fatal):', acErr.message);
+      }
+
       // Phase 2 Task 22: Environmental benchmark push
       let environmentBenchmarks = {};
       try {
@@ -524,6 +537,7 @@ export async function analyzeAndPushToAllFarms() {
           recipe_modifiers: recipeModifiers,
           risk_alerts: riskAlerts,
           environment_benchmarks: environmentBenchmarks,
+          anomaly_correlations: anomalyCorrelations,
           device_integrations: deviceIntegrations,
           integration_warnings: integrationWarnings,          pricing_intelligence: pricingIntelligence,          generated_at: new Date().toISOString()
         };

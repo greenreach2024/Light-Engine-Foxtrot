@@ -256,6 +256,87 @@ export async function analyzeSupplyDemand(forecastDays = 30) {
  * Generate network risk alerts for the AI push payload.
  * Combines harvest conflicts + supply/demand gaps.
  */
+
+// Phase 3 Task 34: Adaptive loss pattern alerts
+// Compares each farm's recent loss rate against its own rolling baseline
+async function detectAdaptiveLossAlerts() {
+  const alerts = [];
+  try {
+    const result = await pool.query(`
+      WITH farm_baselines AS (
+        SELECT
+          farm_id,
+          crop,
+          AVG(loss_pct) AS baseline_loss,
+          STDDEV(loss_pct) AS loss_stddev,
+          COUNT(*) AS history_count
+        FROM loss_events
+        WHERE event_date >= NOW() - INTERVAL '90 days'
+          AND event_date < NOW() - INTERVAL '14 days'
+        GROUP BY farm_id, crop
+        HAVING COUNT(*) >= 3
+      ),
+      recent_losses AS (
+        SELECT
+          farm_id,
+          crop,
+          AVG(loss_pct) AS recent_loss,
+          array_agg(DISTINCT cause) FILTER (WHERE cause IS NOT NULL) AS causes,
+          COUNT(*) AS event_count
+        FROM loss_events
+        WHERE event_date >= NOW() - INTERVAL '14 days'
+        GROUP BY farm_id, crop
+      )
+      SELECT
+        r.farm_id,
+        r.crop,
+        r.recent_loss,
+        r.causes,
+        r.event_count,
+        b.baseline_loss,
+        b.loss_stddev,
+        b.history_count,
+        CASE
+          WHEN b.loss_stddev > 0 THEN (r.recent_loss - b.baseline_loss) / b.loss_stddev
+          ELSE CASE WHEN r.recent_loss > b.baseline_loss * 1.5 THEN 3 ELSE 0 END
+        END AS z_score
+      FROM recent_losses r
+      JOIN farm_baselines b ON r.farm_id = b.farm_id AND r.crop = b.crop
+      WHERE r.recent_loss > b.baseline_loss * 1.3
+      ORDER BY r.recent_loss - b.baseline_loss DESC
+    `);
+
+    for (const row of result.rows) {
+      const zScore = parseFloat(row.z_score) || 0;
+      const severity = zScore >= 3 ? 'high' : zScore >= 2 ? 'medium' : 'low';
+      const baselinePct = parseFloat(row.baseline_loss || 0).toFixed(1);
+      const recentPct = parseFloat(row.recent_loss || 0).toFixed(1);
+      const causes = row.causes && row.causes.length > 0
+        ? row.causes.join(', ')
+        : 'unknown';
+
+      alerts.push({
+        type: 'loss_pattern',
+        severity,
+        crop: row.crop,
+        farm_id: row.farm_id,
+        message: `${row.crop} loss spike on farm ${row.farm_id}: ${recentPct}% vs ${baselinePct}% baseline (causes: ${causes})`,
+        details: {
+          recent_loss_pct: parseFloat(recentPct),
+          baseline_loss_pct: parseFloat(baselinePct),
+          z_score: parseFloat(zScore.toFixed(2)),
+          event_count: parseInt(row.event_count),
+          causes: row.causes || [],
+          history_depth: parseInt(row.history_count)
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[SupplyDemand] Adaptive loss alert error:', err.message);
+  }
+  return alerts;
+}
+
 export async function generateNetworkRiskAlerts() {
   const conflicts = await detectHarvestConflicts(14);
   const balance = await analyzeSupplyDemand(30);
@@ -280,6 +361,13 @@ export async function generateNetworkRiskAlerts() {
       message: `Supply gap: ${g.crop} — demand ${g.monthly_demand}/mo, supply ${g.projected_supply}/mo (shortfall: ${g.shortfall})`,
       details: g
     });
+  }
+
+  // T34: Adaptive loss pattern alerts
+  const lossAlerts = await detectAdaptiveLossAlerts();
+  alerts.push(...lossAlerts);
+  if (lossAlerts.length > 0) {
+    console.log(`[SupplyDemand] ${lossAlerts.length} adaptive loss alert(s)`);
   }
 
   return alerts;

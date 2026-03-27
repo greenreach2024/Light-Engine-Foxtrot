@@ -1971,7 +1971,7 @@ When you change a file, here is what else is affected:
 
 ## 16. AI Vision -- Network Intelligence Pipeline
 
-**Phase Status** (March 27, 2026): Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 2->3 gate PASSED.
+**Phase Status** (March 27, 2026): Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 3 COMPLETE. All gates PASSED through Phase 3->4.
 **Reference**: `.github/AI_VISION_RULES_AND_SKILLS.md` for full task list and phase gate rules.
 
 ### 16.1 Experiment Records Pipeline
@@ -1994,9 +1994,10 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 | crop_benchmarks | crop_benchmarks table | Per-crop avg/min/max yield, grow days, loss rate, temp, humidity, PPFD |
 | demand_signals | wholesaleMemoryStore.js | Real wholesale order data aggregated per crop |
 | recipe_modifiers | yield-regression.js | Cross-farm yield regression adjustments |
-| risk_alerts | supply-demand-balancer.js | Harvest conflicts + supply gaps |
+| risk_alerts | supply-demand-balancer.js | Harvest conflicts + supply gaps + adaptive loss alerts |
 | environment_benchmarks | experiment_records (actual achieved) | Per-crop temp/humidity/PPFD/VPD/DLI/photoperiod min/max/avg |
 | device_integrations | Device integration service | Protocol-specific integration recommendations |
+| anomaly_correlations | anomaly-correlation.js | Cross-farm loss + env deviation patterns (weekly) |
 | pricing_intelligence | market-analysis-agent.js | Market price trends + AI outlook |
 
 ### 16.3 Network Intelligence Routes (network-growers.js)
@@ -2019,6 +2020,9 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 | GET | /api/growers/invitations/list | Grower invitation tracking |
 | POST | /api/growers/invite | Send grower invitation |
 | POST | /api/growers/:growerId/remove | Remove grower from network |
+| GET | /api/network/energy-benchmarks | Per-crop and per-farm energy efficiency (kWh/kg) rankings |
+| GET | /api/network/farm-performance/:farmId | Per-farm weekly yield/loss trends, period comparison, network rank |
+| GET | /api/network/performance-leaderboard | Network-wide ranking with consistency scores + trend direction |
 
 ### 16.4 Farm-Side Intelligence Consumption
 
@@ -2043,6 +2047,23 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 | Environmental benchmark push | getEnvironmentBenchmarksForPush() aggregates actual achieved env data per crop |
 | Network trends | Real PostgreSQL aggregations: production, demand, network growth per week |
 | Buyer behavior + churn | 3-tier classification (active/at_risk/churned) from wholesale_orders |
+
+### 16.6 Phase 3 Adaptive Intelligence + Central ML
+
+| Feature | Implementation |
+|---------|---------------|
+| Per-crop recipe modifiers | Modifier engine computes farm-specific adjustments from experiment outcomes |
+| Tier 2 adaptive control | HVAC learning curves with environment feedback optimization |
+| LED aging detection | Lumen-depreciation tracking + replacement alerting |
+| ML harvest date prediction | Grow-day regression on environment data (temp, humidity, PPFD) |
+| Loss prediction | Environment trend deviations trigger proactive loss alerts |
+| Quality trend analysis | AI vision quality scores blended into yield-quality composites |
+| Cross-farm yield regression | yield-regression.js multi-variable regression, weekly retraining |
+| Network recipe modifiers | Computed from yield regression, pushed via AI pusher |
+| Cross-farm anomaly correlation | anomaly-correlation.js: loss + env deviations affecting 2+ farms, weekly job |
+| Adaptive loss alerts | detectAdaptiveLossAlerts() in supply-demand-balancer.js: per-farm rolling baselines, z-score severity |
+| Energy benchmarks | GET /network/energy-benchmarks with per-crop and per-farm kWh/kg rankings |
+| Performance tracking | GET /network/farm-performance/:farmId (weekly trends) + GET /network/performance-leaderboard (network ranking) |
 
 ## 14. Category Quick Reference
 

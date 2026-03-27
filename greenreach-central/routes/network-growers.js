@@ -967,4 +967,187 @@ router.get('/invitations/list', (req, res) => {
   res.json({ success: true, invitations: [], total: 0 });
 });
 
+
+// Phase 3 Task 36: Per-farm performance tracking (time-series)
+router.get('/network/farm-performance/:farmId', async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const days = parseInt(req.query.days) || 90;
+
+    const trendsResult = await pool.query(`
+      SELECT
+        date_trunc('week', recorded_at) AS week,
+        COUNT(*) AS harvest_count,
+        AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield_oz,
+        AVG((outcomes->>'loss_rate')::DECIMAL) AS avg_loss_rate,
+        AVG(grow_days) AS avg_grow_days
+      FROM experiment_records
+      WHERE farm_id = $1
+        AND recorded_at >= NOW() - make_interval(days => $2)
+        AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+      GROUP BY week
+      ORDER BY week ASC
+    `, [farmId, days]);
+
+    const compResult = await pool.query(`
+      WITH current_period AS (
+        SELECT
+          AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield,
+          AVG((outcomes->>'loss_rate')::DECIMAL) AS avg_loss,
+          COUNT(*) AS harvests
+        FROM experiment_records
+        WHERE farm_id = $1
+          AND recorded_at >= NOW() - INTERVAL '30 days'
+          AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+      ),
+      previous_period AS (
+        SELECT
+          AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield,
+          AVG((outcomes->>'loss_rate')::DECIMAL) AS avg_loss,
+          COUNT(*) AS harvests
+        FROM experiment_records
+        WHERE farm_id = $1
+          AND recorded_at >= NOW() - INTERVAL '60 days'
+          AND recorded_at < NOW() - INTERVAL '30 days'
+          AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+      )
+      SELECT
+        c.avg_yield AS current_yield,
+        c.avg_loss AS current_loss,
+        c.harvests AS current_harvests,
+        p.avg_yield AS previous_yield,
+        p.avg_loss AS previous_loss,
+        p.harvests AS previous_harvests
+      FROM current_period c, previous_period p
+    `, [farmId]);
+
+    const comp = compResult.rows[0] || {};
+    const yieldChange = comp.current_yield && comp.previous_yield
+      ? ((parseFloat(comp.current_yield) - parseFloat(comp.previous_yield)) / parseFloat(comp.previous_yield) * 100).toFixed(1)
+      : null;
+    const lossChange = comp.current_loss && comp.previous_loss
+      ? ((parseFloat(comp.current_loss) - parseFloat(comp.previous_loss)) / parseFloat(comp.previous_loss) * 100).toFixed(1)
+      : null;
+    const trend = yieldChange !== null
+      ? (parseFloat(yieldChange) > 2 ? 'improving' : parseFloat(yieldChange) < -2 ? 'declining' : 'stable')
+      : 'insufficient_data';
+
+    const rankResult = await pool.query(`
+      WITH farm_scores AS (
+        SELECT
+          farm_id,
+          AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield,
+          RANK() OVER (ORDER BY AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) DESC) AS rank,
+          COUNT(*) OVER () AS total_farms
+        FROM experiment_records
+        WHERE recorded_at >= NOW() - INTERVAL '30 days'
+          AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+        GROUP BY farm_id
+      )
+      SELECT rank, total_farms FROM farm_scores WHERE farm_id = $1
+    `, [farmId]);
+
+    const rank = rankResult.rows[0] || {};
+
+    res.json({
+      success: true,
+      performance: {
+        farm_id: farmId,
+        period_days: days,
+        trend,
+        current_period: {
+          avg_yield_oz: comp.current_yield ? parseFloat(parseFloat(comp.current_yield).toFixed(2)) : null,
+          avg_loss_rate: comp.current_loss ? parseFloat(parseFloat(comp.current_loss).toFixed(3)) : null,
+          harvest_count: parseInt(comp.current_harvests) || 0
+        },
+        change: {
+          yield_pct: yieldChange ? parseFloat(yieldChange) : null,
+          loss_pct: lossChange ? parseFloat(lossChange) : null
+        },
+        network_rank: rank.rank ? parseInt(rank.rank) : null,
+        network_total: rank.total_farms ? parseInt(rank.total_farms) : null,
+        weekly_trends: trendsResult.rows.map(r => ({
+          week: r.week,
+          harvest_count: parseInt(r.harvest_count),
+          avg_yield_oz: parseFloat(parseFloat(r.avg_yield_oz).toFixed(2)),
+          avg_loss_rate: r.avg_loss_rate ? parseFloat(parseFloat(r.avg_loss_rate).toFixed(3)) : null,
+          avg_grow_days: r.avg_grow_days ? parseFloat(parseFloat(r.avg_grow_days).toFixed(1)) : null
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('[Network] Farm performance error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get farm performance' });
+  }
+});
+
+// Phase 3 Task 36b: Network performance leaderboard with trends
+router.get('/network/performance-leaderboard', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      WITH current_period AS (
+        SELECT
+          farm_id,
+          AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield,
+          AVG((outcomes->>'loss_rate')::DECIMAL) AS avg_loss,
+          COUNT(*) AS harvests,
+          STDDEV((outcomes->>'weight_per_plant_oz')::DECIMAL) AS yield_stddev
+        FROM experiment_records
+        WHERE recorded_at >= NOW() - INTERVAL '30 days'
+          AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+        GROUP BY farm_id
+        HAVING COUNT(*) >= 2
+      ),
+      previous_period AS (
+        SELECT
+          farm_id,
+          AVG((outcomes->>'weight_per_plant_oz')::DECIMAL) AS avg_yield
+        FROM experiment_records
+        WHERE recorded_at >= NOW() - INTERVAL '60 days'
+          AND recorded_at < NOW() - INTERVAL '30 days'
+          AND outcomes->>'weight_per_plant_oz' IS NOT NULL
+        GROUP BY farm_id
+      )
+      SELECT
+        c.farm_id,
+        f.name AS farm_name,
+        c.avg_yield,
+        c.avg_loss,
+        c.harvests,
+        c.yield_stddev,
+        p.avg_yield AS prev_yield,
+        CASE
+          WHEN p.avg_yield IS NOT NULL AND p.avg_yield > 0
+          THEN ((c.avg_yield - p.avg_yield) / p.avg_yield * 100)
+          ELSE NULL
+        END AS yield_change_pct
+      FROM current_period c
+      LEFT JOIN farms f ON c.farm_id = f.farm_id
+      LEFT JOIN previous_period p ON c.farm_id = p.farm_id
+      ORDER BY c.avg_yield DESC
+    `);
+
+    const leaderboard = result.rows.map((r, i) => ({
+      rank: i + 1,
+      farm_id: r.farm_id,
+      farm_name: r.farm_name || r.farm_id,
+      avg_yield_oz: parseFloat(parseFloat(r.avg_yield).toFixed(2)),
+      avg_loss_rate: r.avg_loss ? parseFloat(parseFloat(r.avg_loss).toFixed(3)) : null,
+      harvest_count: parseInt(r.harvests),
+      consistency: r.yield_stddev && parseFloat(r.avg_yield) > 0
+        ? parseFloat((1 - Math.min(parseFloat(r.yield_stddev) / parseFloat(r.avg_yield), 1)).toFixed(2))
+        : null,
+      trend: r.yield_change_pct !== null
+        ? (parseFloat(r.yield_change_pct) > 2 ? 'improving' : parseFloat(r.yield_change_pct) < -2 ? 'declining' : 'stable')
+        : 'insufficient_data',
+      yield_change_pct: r.yield_change_pct ? parseFloat(parseFloat(r.yield_change_pct).toFixed(1)) : null
+    }));
+
+    res.json({ success: true, leaderboard, computed_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('[Network] Performance leaderboard error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get leaderboard' });
+  }
+});
+
 export default router;

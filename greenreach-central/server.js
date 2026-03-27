@@ -73,6 +73,7 @@ import farmSalesRouter from './routes/farm-sales.js';
 import networkGrowersRouter from './routes/network-growers.js';
 import experimentRecordsRouter, { startBenchmarkScheduler } from './routes/experiment-records.js';
 import { runYieldRegression } from './jobs/yield-regression.js';
+import { correlateAnomalies } from './jobs/anomaly-correlation.js';
 import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import producerPortalRouter from './routes/producer-portal.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
@@ -1453,7 +1454,12 @@ function scheduleDailySync() {
     syncFarmData({ isDaily: true });
     // Reschedule for next day
     setInterval(() => syncFarmData({ isDaily: true }), 24 * 60 * 60 * 1000);
-  }, msUntilNext);
+
+  // Phase 3 Task 33: Weekly anomaly correlation
+  setTimeout(() => {
+    correlateAnomalies();
+    setInterval(correlateAnomalies, 7 * 24 * 60 * 60 * 1000);
+  }, 10 * 60 * 1000);  }, msUntilNext);
 }
 
 // Run initial sync after 10 seconds, then at configured interval + daily schedule
