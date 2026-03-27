@@ -636,7 +636,7 @@ GET /api/ai/training-data
 
 ```
 Phase 1 → Phase 2: All P0 data captured + Central receiving experiment records [GATE PASSED]
-Phase 2 → Phase 3: Workflow reduced to ≤4 steps + Central providing benchmarks
+Phase 2 → Phase 3: Workflow reduced to ≤4 steps + Central providing benchmarks [GATE PASSED]
 Phase 3 → Phase 4: Farm recipe modifiers working + Central ML models trained
 Phase 4 → Phase 5: Network coordination validated + grower acceptance >90%
 ```
@@ -869,22 +869,29 @@ Phase 1 Completion Notes:
 - Farm correlation: Network Intelligence panel in LE-farm-admin.html showing benchmarks
 - Leaderboard: Composite scoring (yield 40% + loss 30% + consistency 30%)
 
-### Phase 2 — Workflow Automation + Central Intelligence (12 tasks)
+### Phase 2 — Workflow Automation + Central Intelligence (12 tasks) [COMPLETE]
 
-| # | Task | Owner | Effort |
-|---|------|-------|--------|
-| 13 | Auto-derive plant count from tray format | Farm | S |
-| 14 | AI pre-fill crop at seeding + Central demand signals | Farm | S |
-| 15 | Combine seed + group assignment | Farm | M |
-| 16 | Auto-trigger label print on harvest | Farm | S |
-| 17 | Auto-derive photoperiod from recipe | Farm | S |
-| 18 | Remove duplicate seed date entry | Farm | S |
-| 19 | Auto-discover lights from controller | Farm | M |
-| 20 | Demand signal aggregation + push to farms | Central | M |
-| 21 | New farm onboarding with network benchmarks | Central | S |
-| 22 | Environmental benchmark push | Central | S |
-| 23 | Populate network trends endpoint | Central | M |
-| 24 | Buyer behavior analysis + churn detection | Central | M |
+| # | Task | Owner | Effort | Status |
+|---|------|-------|--------|--------|
+| 13 | Auto-derive plant count from tray format | Farm | S | Done |
+| 14 | AI pre-fill crop at seeding + Central demand signals | Farm | S | Done |
+| 15 | Combine seed + group assignment | Farm | M | Done |
+| 16 | Auto-trigger label print on harvest | Farm | S | Done |
+| 17 | Auto-derive photoperiod from recipe | Farm | S | Done |
+| 18 | Remove duplicate seed date entry | Farm | S | Done |
+| 19 | Auto-discover lights from controller | Farm | M | Done |
+| 20 | Demand signal aggregation + push to farms | Central | M | Done |
+| 21 | New farm onboarding with network benchmarks | Central | S | Done |
+| 22 | Environmental benchmark push | Central | S | Done |
+| 23 | Populate network trends endpoint | Central | M | Done |
+| 24 | Buyer behavior analysis + churn detection | Central | M | Done |
+
+
+#### Phase 2 Completion Notes
+
+- **Farm-side workflow automation (Tasks 13-19):** All 7 tasks implemented in server-foxtrot.js. Auto-derive plant count from tray format, AI pre-fill crop at seeding with demand signals, combined seed + group assignment, auto-trigger label print on harvest, auto-derive photoperiod from DLI/PPFD, seed date sync to group, device auto-discovery with zone assignment.
+- **Central intelligence (Tasks 20-24):** All 5 tasks implemented. Demand signal aggregation via analyzeDemandPatterns() pushed every 30 min. Farm onboarding seeds benchmarks from Central. Environmental benchmarks (actual achieved temp/humidity/PPFD/VPD/DLI per crop) added to network_intelligence payload. Network trends endpoint returns real PostgreSQL aggregations. Buyer behavior analysis with 3-tier churn classification (active/at_risk/churned).
+- **Task 22 (Environmental benchmark push):** getEnvironmentBenchmarksForPush() in experiment-records.js queries actual environment_achieved_avg (with recipe_params_avg fallback) per crop. Provides temp/humidity min/max/avg, PPFD, VPD, DLI, photoperiod. Pushed as environment_benchmarks key in network_intelligence payload.
 
 ### Phase 3 — Adaptive Intelligence + Central ML (12 tasks)
 

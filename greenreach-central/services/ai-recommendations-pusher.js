@@ -8,7 +8,7 @@ import OpenAI from 'openai';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 import fetch from 'node-fetch';
-import { getCropBenchmarksForPush } from '../routes/experiment-records.js';
+import { getCropBenchmarksForPush, getEnvironmentBenchmarksForPush } from '../routes/experiment-records.js';
 import { analyzeDemandPatterns } from '../services/wholesaleMemoryStore.js';
 import { getNetworkModifiers } from '../jobs/yield-regression.js';
 import { generateNetworkRiskAlerts } from '../jobs/supply-demand-balancer.js';
@@ -506,12 +506,24 @@ export async function analyzeAndPushToAllFarms() {
         console.warn('[AI Pusher] Pricing intelligence load failed (non-fatal):', pricingErr.message);
       }
 
+      // Phase 2 Task 22: Environmental benchmark push
+      let environmentBenchmarks = {};
+      try {
+        environmentBenchmarks = await getEnvironmentBenchmarksForPush();
+        if (Object.keys(environmentBenchmarks).length > 0) {
+          console.log(`[AI Pusher] Loaded environment benchmarks for ${Object.keys(environmentBenchmarks).length} crop(s)`);
+        }
+      } catch (envErr) {
+        console.warn('[AI Pusher] Environment benchmarks load failed (non-fatal):', envErr.message);
+      }
+
       if (Object.keys(cropBenchmarks).length > 0 || Object.keys(demandSignals).length > 0 || Object.keys(recipeModifiers).length > 0 || deviceIntegrations || integrationWarnings.length > 0) {
         networkIntelligence = {
           crop_benchmarks: cropBenchmarks,
           demand_signals: demandSignals,
           recipe_modifiers: recipeModifiers,
           risk_alerts: riskAlerts,
+          environment_benchmarks: environmentBenchmarks,
           device_integrations: deviceIntegrations,
           integration_warnings: integrationWarnings,          pricing_intelligence: pricingIntelligence,          generated_at: new Date().toISOString()
         };

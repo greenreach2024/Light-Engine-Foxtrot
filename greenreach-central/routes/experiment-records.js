@@ -427,6 +427,96 @@ export async function getCropBenchmarksForPush() {
 }
 
 /**
+ * Phase 2 Task 22: Environmental benchmark push
+ * Aggregates actual achieved environmental conditions per crop from experiment records.
+ * Uses environment_achieved_avg (actual) rather than recipe_params_avg (planned).
+ * Falls back to recipe_params_avg when achieved data is not available.
+ */
+export async function getEnvironmentBenchmarksForPush() {
+  if (!(await isDatabaseAvailable())) return {};
+
+  try {
+    const result = await query(`
+      SELECT
+        crop,
+        COUNT(*) AS sample_count,
+        COUNT(DISTINCT farm_id) AS farm_count,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'temp_c')::DECIMAL,
+          (recipe_params_avg->>'temp_c')::DECIMAL
+        )) AS avg_temp_c,
+        MIN(COALESCE(
+          (environment_achieved_avg->>'temp_c')::DECIMAL,
+          (recipe_params_avg->>'temp_c')::DECIMAL
+        )) AS min_temp_c,
+        MAX(COALESCE(
+          (environment_achieved_avg->>'temp_c')::DECIMAL,
+          (recipe_params_avg->>'temp_c')::DECIMAL
+        )) AS max_temp_c,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'humidity_pct')::DECIMAL,
+          (recipe_params_avg->>'humidity_pct')::DECIMAL
+        )) AS avg_humidity_pct,
+        MIN(COALESCE(
+          (environment_achieved_avg->>'humidity_pct')::DECIMAL,
+          (recipe_params_avg->>'humidity_pct')::DECIMAL
+        )) AS min_humidity_pct,
+        MAX(COALESCE(
+          (environment_achieved_avg->>'humidity_pct')::DECIMAL,
+          (recipe_params_avg->>'humidity_pct')::DECIMAL
+        )) AS max_humidity_pct,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'ppfd')::DECIMAL,
+          (recipe_params_avg->>'ppfd')::DECIMAL
+        )) AS avg_ppfd,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'vpd')::DECIMAL,
+          (recipe_params_avg->>'vpd')::DECIMAL
+        )) AS avg_vpd,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'dli')::DECIMAL,
+          (recipe_params_avg->>'dli')::DECIMAL
+        )) AS avg_dli,
+        AVG(COALESCE(
+          (environment_achieved_avg->>'photoperiod_hours')::DECIMAL,
+          (recipe_params_avg->>'photoperiod_hours')::DECIMAL
+        )) AS avg_photoperiod_hours
+      FROM experiment_records
+      WHERE outcomes->>'weight_per_plant_oz' IS NOT NULL
+      GROUP BY crop
+      HAVING COUNT(*) >= 1
+    `);
+
+    const benchmarks = {};
+    for (const row of result.rows) {
+      benchmarks[row.crop] = {
+        sample_count: parseInt(row.sample_count) || 0,
+        farm_count: parseInt(row.farm_count) || 0,
+        temp_c: {
+          avg: row.avg_temp_c ? parseFloat(parseFloat(row.avg_temp_c).toFixed(1)) : null,
+          min: row.min_temp_c ? parseFloat(parseFloat(row.min_temp_c).toFixed(1)) : null,
+          max: row.max_temp_c ? parseFloat(parseFloat(row.max_temp_c).toFixed(1)) : null
+        },
+        humidity_pct: {
+          avg: row.avg_humidity_pct ? parseFloat(parseFloat(row.avg_humidity_pct).toFixed(1)) : null,
+          min: row.min_humidity_pct ? parseFloat(parseFloat(row.min_humidity_pct).toFixed(1)) : null,
+          max: row.max_humidity_pct ? parseFloat(parseFloat(row.max_humidity_pct).toFixed(1)) : null
+        },
+        ppfd_avg: row.avg_ppfd ? parseFloat(parseFloat(row.avg_ppfd).toFixed(0)) : null,
+        vpd_avg: row.avg_vpd ? parseFloat(parseFloat(row.avg_vpd).toFixed(2)) : null,
+        dli_avg: row.avg_dli ? parseFloat(parseFloat(row.avg_dli).toFixed(1)) : null,
+        photoperiod_hours_avg: row.avg_photoperiod_hours ? parseFloat(parseFloat(row.avg_photoperiod_hours).toFixed(1)) : null
+      };
+    }
+
+    return benchmarks;
+  } catch (error) {
+    console.error('[EnvBenchmarks] Failed to get environment benchmarks for push:', error);
+    return {};
+  }
+}
+
+/**
  * Start nightly benchmark scheduler (Task 1.8)
  * Runs at 2:00 AM daily.
  */
