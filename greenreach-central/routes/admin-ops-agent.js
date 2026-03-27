@@ -2269,11 +2269,23 @@ export const ADMIN_TOOL_CATALOG = {
           return { ok: false, error: `Access denied: "${rel}" is not in the allowed file list. Allowed: server-foxtrot.js, routes/*.js, public/*.{js,html,css}, services/*.js, config/*.js, package.json (and greenreach-central/ equivalents).` };
         }
 
-        if (!fs.default.existsSync(requested)) {
+        // EB deployment fallback: on Central EB, greenreach-central/ contents
+        // are deployed as the app root. Strip the prefix and resolve relative
+        // to Central root (one dir up from routes/).
+        let filePath = requested;
+        if (!fs.default.existsSync(filePath) && params.file_path.startsWith('greenreach-central/')) {
+          const centralRoot = pathMod.default.resolve(centralDir, '..');
+          const stripped = params.file_path.replace(/^greenreach-central\//, '');
+          const altPath = pathMod.default.resolve(centralRoot, stripped);
+          if (altPath.startsWith(centralRoot) && fs.default.existsSync(altPath)) {
+            filePath = altPath;
+          }
+        }
+        if (!fs.default.existsSync(filePath)) {
           return { ok: false, error: `File not found: ${rel}` };
         }
 
-        const content = fs.default.readFileSync(requested, 'utf8');
+        const content = fs.default.readFileSync(filePath, 'utf8');
         const lines = content.split('\n');
         const totalLines = lines.length;
 
