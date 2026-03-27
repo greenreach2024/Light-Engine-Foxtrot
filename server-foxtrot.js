@@ -10984,9 +10984,19 @@ app.post('/api/recipe-modifiers/network/:crop/accept', async (req, res) => {
  * Dismiss a network recipe modifier suggestion.
  */
 app.post('/api/recipe-modifiers/network/:crop/dismiss', async (req, res) => {
-  const crop = req.params.crop.toLowerCase().replace(/\s+/g, '-');
-  console.log(`[recipe-modifier] Dismissed network modifier for ${crop}`);
-  res.json({ ok: true, crop, dismissed: true });
+  try {
+    const crop = req.params.crop.toLowerCase().replace(/\s+/g, '-');
+    const dismissPath = path.join(__dirname, 'data', 'dismissed-modifiers.json');
+    let dismissed = {};
+    try { dismissed = JSON.parse(fs.readFileSync(dismissPath, 'utf8')); } catch (_) {}
+    dismissed[crop] = { dismissed_at: new Date().toISOString(), expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() };
+    fs.writeFileSync(dismissPath, JSON.stringify(dismissed, null, 2));
+    console.log(`[recipe-modifier] Dismissed network modifier for ${crop} (persisted, expires in 7d)`);
+    res.json({ ok: true, crop, dismissed: true });
+  } catch (err) {
+    console.error('[recipe-modifier] Dismiss error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 

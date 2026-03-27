@@ -84,7 +84,11 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 - Central ML: yield regression, recipe modifiers, anomaly correlation, adaptive loss alerts
 - Endpoints: energy benchmarks, farm performance tracking, performance leaderboard
 
-**Phase 3->4 Gate**: PASSED. Next: Phase 4 (Network Coordination)
+**Phase 4 -- Network Coordination**: COMPLETE (8/8 tasks)
+- Farm: planting suggestion accept UI, harvest schedule reporter, recipe modifier one-tap accept/dismiss
+- Central: harvest conflict detection, supply/demand balancing, A/B test orchestration, quality order routing, dynamic pricing
+
+**Phase 4->5 Gate**: PASSED. Next: Phase 5 (Autonomous Operations)
 
 **Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (19 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle), `greenreach-central/jobs/anomaly-correlation.js` (weekly cross-farm anomaly detection), `greenreach-central/jobs/supply-demand-balancer.js` (risk alerts + adaptive loss alerts)
 

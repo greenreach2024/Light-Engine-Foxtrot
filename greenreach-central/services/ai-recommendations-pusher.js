@@ -509,6 +509,7 @@ export async function analyzeAndPushToAllFarms() {
 
       // Phase 3 Task 33: Cross-farm anomaly correlations
       let anomalyCorrelations = [];
+      let plantingSuggestions = [];
       try {
         const ac = await getAnomalyCorrelations();
         anomalyCorrelations = ac.correlations || [];
@@ -538,6 +539,7 @@ export async function analyzeAndPushToAllFarms() {
           risk_alerts: riskAlerts,
           environment_benchmarks: environmentBenchmarks,
           anomaly_correlations: anomalyCorrelations,
+          planting_suggestions: plantingSuggestions,
           device_integrations: deviceIntegrations,
           integration_warnings: integrationWarnings,          pricing_intelligence: pricingIntelligence,          generated_at: new Date().toISOString()
         };

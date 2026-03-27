@@ -6602,6 +6602,163 @@ function renderNetworkBenchmarks(ni) {
     });
 
     container.innerHTML = html;
+
+    // Phase 4 T37: Render planting suggestions if available
+    renderPlantingSuggestions(ni);
+    // Phase 4 T39: Render recipe modifier accept/dismiss if available
+    renderRecipeModifiers(ni);
+}
+
+/**
+ * Phase 4 Task 37: Render planting suggestions from Central.
+ * Suggestions arrive in the network_intelligence push payload.
+ */
+function renderPlantingSuggestions(ni) {
+    const suggestions = ni.planting_suggestions || [];
+    if (suggestions.length === 0) return;
+    const container = document.getElementById('network-benchmarks-panel');
+    if (!container) return;
+
+    let html = '<div style="margin-top: 16px; padding: 12px 14px; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">';
+    html += '<div style="font-weight: 600; color: var(--accent-blue); font-size: 13px; margin-bottom: 8px;">Planting Suggestions from Network</div>';
+
+    suggestions.forEach(function(s, i) {
+        const urgencyColor = s.urgency === 'high' ? 'var(--accent-red)' : s.urgency === 'medium' ? 'var(--accent-yellow)' : 'var(--text-muted)';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border);" id="suggestion-row-' + i + '">';
+        html += '<div style="flex: 1;">';
+        html += '<div style="font-weight: 500; font-size: 13px; text-transform: capitalize;">' + (s.crop || 'Unknown') + '</div>';
+        html += '<div style="font-size: 11px; color: var(--text-secondary);">' + (s.action || s.message || '') + '</div>';
+        html += '<div style="font-size: 10px; margin-top: 2px;"><span style="color: ' + urgencyColor + '; font-weight: 600;">' + (s.urgency || 'low').toUpperCase() + '</span>';
+        if (s.recommended_trays) html += ' | ' + s.recommended_trays + ' trays recommended';
+        html += '</div>';
+        html += '</div>';
+        html += '<div style="display: flex; gap: 6px;">';
+        html += '<button onclick="acceptPlantingSuggestion(' + i + ', \'' + (s.crop || '').replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--accent-green); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Accept</button>';
+        html += '<button onclick="dismissPlantingSuggestion(' + i + ')" style="padding: 4px 12px; font-size: 11px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">Dismiss</button>';
+        html += '</div></div>';
+    });
+
+    html += '</div>';
+    container.innerHTML += html;
+}
+
+/**
+ * Accept a planting suggestion: navigate to seeding with pre-filled crop.
+ */
+function acceptPlantingSuggestion(index, crop) {
+    const row = document.getElementById('suggestion-row-' + index);
+    if (row) {
+        row.style.opacity = '0.5';
+        row.querySelector('button').textContent = 'Accepted';
+        row.querySelector('button').disabled = true;
+    }
+    // Pre-fill the crop in the seeding flow
+    if (typeof navigate === 'function') {
+        sessionStorage.setItem('suggested_crop', crop);
+        navigate('activity-hub');
+    }
+}
+
+/**
+ * Dismiss a planting suggestion.
+ */
+function dismissPlantingSuggestion(index) {
+    const row = document.getElementById('suggestion-row-' + index);
+    if (row) {
+        row.style.opacity = '0.3';
+        row.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); padding: 8px 0;">Dismissed</div>';
+    }
+}
+
+/**
+ * Phase 4 Task 39: Render recipe modifiers with one-tap accept/dismiss.
+ * Modifiers arrive in the network_intelligence push payload.
+ */
+function renderRecipeModifiers(ni) {
+    const modifiers = ni.recipe_modifiers || {};
+    const crops = Object.keys(modifiers);
+    if (crops.length === 0) return;
+    const container = document.getElementById('network-benchmarks-panel');
+    if (!container) return;
+
+    // Check dismissed state
+    let dismissed = {};
+    try { dismissed = JSON.parse(localStorage.getItem('dismissed_modifiers') || '{}'); } catch (_) {}
+
+    let html = '<div style="margin-top: 16px; padding: 12px 14px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px;">';
+    html += '<div style="font-weight: 600; color: var(--accent-green); font-size: 13px; margin-bottom: 8px;">Network Recipe Modifiers</div>';
+
+    let visibleCount = 0;
+    crops.forEach(function(crop) {
+        const mod = modifiers[crop];
+        if (!mod) return;
+        // Skip dismissed
+        if (dismissed[crop] && (Date.now() - dismissed[crop]) < 7 * 24 * 60 * 60 * 1000) return;
+        visibleCount++;
+
+        const confidence = mod.confidence ? (mod.confidence * 100).toFixed(0) + '%' : 'N/A';
+        const adjustments = mod.adjustments || mod;
+
+        html += '<div style="padding: 8px 0; border-bottom: 1px solid var(--border);" id="modifier-row-' + crop + '">';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">';
+        html += '<div style="font-weight: 500; font-size: 13px; text-transform: capitalize;">' + crop + ' <span style="font-size: 10px; color: var(--text-muted);">(confidence: ' + confidence + ')</span></div>';
+        html += '<div style="display: flex; gap: 6px;">';
+        html += '<button onclick="acceptRecipeModifier(\'' + crop.replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--accent-green); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Apply</button>';
+        html += '<button onclick="dismissRecipeModifier(\'' + crop.replace(/'/g, "\\'") + '\')" style="padding: 4px 12px; font-size: 11px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">Dismiss</button>';
+        html += '</div></div>';
+
+        // Show adjustment details
+        html += '<div style="font-size: 11px; color: var(--text-secondary); display: flex; gap: 12px; flex-wrap: wrap;">';
+        if (adjustments.temp_offset) html += '<span>Temp: ' + (adjustments.temp_offset > 0 ? '+' : '') + adjustments.temp_offset + 'F</span>';
+        if (adjustments.humidity_offset) html += '<span>Humidity: ' + (adjustments.humidity_offset > 0 ? '+' : '') + adjustments.humidity_offset + '%</span>';
+        if (adjustments.ppfd_offset) html += '<span>PPFD: ' + (adjustments.ppfd_offset > 0 ? '+' : '') + adjustments.ppfd_offset + '</span>';
+        if (adjustments.photoperiod_offset) html += '<span>Light: ' + (adjustments.photoperiod_offset > 0 ? '+' : '') + adjustments.photoperiod_offset + 'h</span>';
+        if (Object.keys(adjustments).filter(k => k.endsWith('_offset')).length === 0) {
+            html += '<span>Network-optimized parameters available</span>';
+        }
+        html += '</div></div>';
+    });
+
+    if (visibleCount === 0) return; // All dismissed
+    html += '</div>';
+    container.innerHTML += html;
+}
+
+/**
+ * Accept a recipe modifier: POST to LE backend.
+ */
+async function acceptRecipeModifier(crop) {
+    const row = document.getElementById('modifier-row-' + crop);
+    try {
+        const resp = await fetch('/api/recipe-modifiers/network/' + encodeURIComponent(crop) + '/accept', { method: 'POST' });
+        const data = await resp.json();
+        if (row) {
+            row.style.background = 'rgba(16, 185, 129, 0.1)';
+            row.querySelector('button').textContent = 'Applied';
+            row.querySelector('button').disabled = true;
+        }
+    } catch (err) {
+        console.error('Failed to accept modifier:', err);
+        if (row) row.style.background = 'rgba(239, 68, 68, 0.1)';
+    }
+}
+
+/**
+ * Dismiss a recipe modifier: persists to localStorage for 7 days.
+ */
+function dismissRecipeModifier(crop) {
+    const row = document.getElementById('modifier-row-' + crop);
+    if (row) {
+        row.style.opacity = '0.3';
+        row.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); padding: 4px 0;">Dismissed for 7 days</div>';
+    }
+    try {
+        const dismissed = JSON.parse(localStorage.getItem('dismissed_modifiers') || '{}');
+        dismissed[crop] = Date.now();
+        localStorage.setItem('dismissed_modifiers', JSON.stringify(dismissed));
+    } catch (_) {}
+    // Notify backend
+    fetch('/api/recipe-modifiers/network/' + encodeURIComponent(crop) + '/dismiss', { method: 'POST' }).catch(function() {});
 }
 /**
  * Activate device with activation code

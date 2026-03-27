@@ -638,6 +638,7 @@ GET /api/ai/training-data
 Phase 1 → Phase 2: All P0 data captured + Central receiving experiment records [GATE PASSED]
 Phase 2 → Phase 3: Workflow reduced to ≤4 steps + Central providing benchmarks [GATE PASSED]
 Phase 3 → Phase 4: Farm recipe modifiers working + Central ML models trained [GATE PASSED]
+Phase 4 → Phase 5: Coordination features active + Central scheduling live [GATE PASSED]
 Phase 4 → Phase 5: Network coordination validated + grower acceptance >90%
 ```
 
@@ -917,18 +918,24 @@ Phase 1 Completion Notes:
 - **Central ML models (Tasks 31-32):** Cross-farm yield regression model in yield-regression.js using multi-variable regression (temp, humidity, PPFD, VPD, DLI, grow_days) with weekly retraining (T31). Network recipe modifiers computed and pushed via ai-recommendations-pusher.js (T32).
 - **Central intelligence (Tasks 33-36):** Cross-farm anomaly correlation job (anomaly-correlation.js) detects loss patterns and environmental deviations affecting multiple farms, runs weekly (T33). Loss pattern alerts enhanced with adaptive thresholds -- per-farm rolling baselines with z-score severity in supply-demand-balancer.js (T34). Energy benchmarks endpoint (GET /network/energy-benchmarks) provides per-crop and per-farm energy efficiency rankings (T35). Performance tracking: per-farm time-series endpoint (GET /network/farm-performance/:farmId) with weekly trends, period comparison, and network rank; network leaderboard (GET /network/performance-leaderboard) with consistency scores and trend direction (T36).
 
-### Phase 4 — Network Coordination (8 tasks)
+### Phase 4 — Network Coordination (8 tasks) [COMPLETE]
 
-| # | Task | Owner | Effort |
-|---|------|-------|--------|
-| 37 | Accept Central planting suggestions UI | Farm | M |
-| 38 | Report harvest schedule to Central | Farm | S |
-| 39 | One-tap recipe modifier approve/dismiss | Farm | M |
-| 40 | Harvest schedule coordination (anti-flooding) | Central | L |
-| 41 | Supply/demand balancing across farms | Central | L |
-| 42 | A/B test orchestration across farms | Central | L |
-| 43 | Quality-based order routing | Central | M |
-| 44 | Dynamic pricing engine | Central | M |
+| # | Task | Owner | Effort | Status |
+|---|------|-------|--------|--------|
+| 37 | Accept Central planting suggestions UI | Farm | M | Done |
+| 38 | Report harvest schedule to Central | Farm | S | Done |
+| 39 | One-tap recipe modifier approve/dismiss | Farm | M | Done |
+| 40 | Harvest schedule coordination (anti-flooding) | Central | L | Done |
+| 41 | Supply/demand balancing across farms | Central | L | Done |
+| 42 | A/B test orchestration across farms | Central | L | Done |
+| 43 | Quality-based order routing | Central | M | Done |
+| 44 | Dynamic pricing engine | Central | M | Done |
+
+#### Phase 4 Completion Notes
+
+- **Farm-side UI (Tasks 37-39):** Planting suggestions from Central rendered in Network Intelligence panel with accept/dismiss buttons (T37). Accept navigates to seeding with pre-filled crop. Harvest schedule reporter (wireHarvestScheduleReporter) pushes projected harvests to Central daily + on startup (T38). Recipe modifier one-tap accept/dismiss with 7-day dismiss persistence to dismissed-modifiers.json (T39). Modifier UI shows parameter adjustments (temp, humidity, PPFD, photoperiod offsets) with confidence scores.
+- **Central coordination (Tasks 40-42):** Harvest conflict detection via detectHarvestConflicts() in supply-demand-balancer.js, exposed at GET /api/network/harvest-conflicts (T40). Supply/demand analysis with gap/surplus detection, planting suggestions generated from shortfall data and pushed in AI recommendations payload (T41). A/B test orchestration with full CRUD: POST /api/experiments (create), activate, observe, analyze, complete. PostgreSQL tables: ab_experiments, ab_experiment_observations (T42).
+- **Central intelligence (Tasks 43-44):** Quality-based order routing at POST /api/wholesale/orders/route with weighted scoring (quality 40%, proximity 30%, capacity 20%, price 10%) and min_quality threshold (T43). Dynamic pricing engine at POST /api/wholesale/dynamic-pricing with multi-factor model: base prices, seasonality (1.15x winter), supply/demand ratio, quality premium, competition bonus (T44).
 
 ### Phase 5 — Autonomous Operations (8 tasks)
 
