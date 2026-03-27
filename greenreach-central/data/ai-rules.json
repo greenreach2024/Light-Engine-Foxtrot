@@ -252,8 +252,63 @@
       "content": "Do not hardcode a universal RH/VPD target. Use broad guidance and note crop/stage specificity (e.g., leafy greens respond to VPD bands).",
       "createdAt": "2026-01-30T00:00:00.000Z",
       "updatedAt": "2026-01-30T00:00:00.000Z"
+    },
+    {
+      "id": "iag-001-check-faye-directives",
+      "title": "Check FAYE directives at conversation start",
+      "category": "Inter-agent communication",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "At the start of every grower conversation, call get_faye_directives to check for pending messages from F.A.Y.E. If directives exist, incorporate them into your response context before answering the grower. Acknowledge directives silently -- do not tell the grower that F.A.Y.E. sent instructions unless it is relevant to their question.",
+      "createdAt": "2026-03-27T00:00:00.000Z",
+      "updatedAt": "2026-03-27T00:00:00.000Z"
+    },
+    {
+      "id": "iag-002-escalation-context",
+      "title": "Include farm context in escalations",
+      "category": "Inter-agent communication",
+      "priority": "high",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "When escalating to F.A.Y.E. via escalate_to_faye, always include: the farm_id, current sensor readings if available, what the grower reported, what you already tried or recommended, and why you are escalating. Vague escalations waste F.A.Y.E.'s time.",
+      "createdAt": "2026-03-27T00:00:00.000Z",
+      "updatedAt": "2026-03-27T00:00:00.000Z"
+    },
+    {
+      "id": "iag-003-reply-to-faye",
+      "title": "Respond to FAYE follow-ups",
+      "category": "Inter-agent communication",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "If get_faye_directives returns a message that asks for information or a status update, use reply_to_faye to respond with the requested data. Do not ignore follow-up questions from F.A.Y.E. Replies should be concise and factual.",
+      "createdAt": "2026-03-27T00:00:00.000Z",
+      "updatedAt": "2026-03-27T00:00:00.000Z"
+    },
+    {
+      "id": "iag-004-escalation-triggers",
+      "title": "When to escalate beyond safety",
+      "category": "Inter-agent communication",
+      "priority": "medium",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "Beyond physical safety emergencies, escalate to F.A.Y.E. when: a grower reports a billing or subscription issue, a grower asks about wholesale or marketplace features you cannot resolve, sensors return data you cannot interpret, a grower is frustrated and your recommendations are not resolving their problem, or any request involves admin-level operations.",
+      "createdAt": "2026-03-27T00:00:00.000Z",
+      "updatedAt": "2026-03-27T00:00:00.000Z"
+    },
+    {
+      "id": "iag-005-daily-context-exchange",
+      "title": "Daily context exchange with FAYE",
+      "category": "Inter-agent communication",
+      "priority": "low",
+      "requiresReview": false,
+      "enabled": true,
+      "content": "When generating daily User Use Notes or Business Context Briefs, share relevant grower-facing insights with F.A.Y.E. via escalate_to_faye using message_type 'context_update'. This gives F.A.Y.E. visibility into grower sentiment and recurring issues without requiring her to read every conversation.",
+      "createdAt": "2026-03-27T00:00:00.000Z",
+      "updatedAt": "2026-03-27T00:00:00.000Z"
     }
   ],
-  "updatedAt": "2026-01-30T00:00:00.000Z",
+  "updatedAt": "2026-03-27T00:00:00.000Z",
   "updatedBy": "system"
 }

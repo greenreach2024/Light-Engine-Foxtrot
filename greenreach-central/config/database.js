@@ -2448,6 +2448,36 @@ async function runMigrations(client) {
     logger.warn('Migration 040 warning:', err.message);
   }
 
+  // Migration 041: agent_messages table for FAYE-EVIE inter-agent communication
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agent_messages (
+        id SERIAL PRIMARY KEY,
+        sender VARCHAR(20) NOT NULL,
+        recipient VARCHAR(20) NOT NULL,
+        message_type VARCHAR(30) NOT NULL,
+        subject VARCHAR(200) NOT NULL,
+        body TEXT NOT NULL,
+        context JSONB DEFAULT '{}',
+        priority VARCHAR(10) DEFAULT 'normal',
+        reply_to_id INTEGER REFERENCES agent_messages(id),
+        status VARCHAR(10) DEFAULT 'unread',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_agent_messages_recipient_status
+        ON agent_messages (recipient, status)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_agent_messages_created_at
+        ON agent_messages (created_at DESC)
+    `);
+    logger.info('agent_messages table ensured (migration 041)');
+  } catch (err) {
+    logger.warn('Migration 041 warning:', err.message);
+  }
+
   logger.info('Database migrations completed');
 }
 
