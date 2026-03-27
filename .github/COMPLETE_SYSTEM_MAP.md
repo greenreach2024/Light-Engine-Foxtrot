@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.3.0
-**Date**: March 24, 2026
-**Last Updated**: March 24, 2026 -- v1.3.0: Pricing formula consistency, AI pricing match fix, wholesale catalog DB fallback, inventory field mapping fix
+**Version**: 1.4.0
+**Date**: March 27, 2026
+**Last Updated**: March 27, 2026 -- v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -795,7 +795,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | farm-sales-landing.html | Farm sales features |
 | farm-sales-shop.html | Direct-to-consumer shop |
 | farm-sales-store.html | Farm retail |
-| farm-sales-pos.html | Point of sale system |
+| farm-sales-pos.html | Point of sale system. Loaded as iframe from LE-farm-admin. Embedded mode auto-login from admin session |
 | about.html | About GreenReach |
 | greenreach-grow.html | Growing guides |
 | growing-made-easy.html | Onboarding education |
@@ -814,7 +814,8 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | activity-hub-qr.html | QR activity tracking |
 | LE-qr-generator.html | QR code generator |
 | schedule.html | Schedule management |
-| LE-dashboard.html | LE configuration wizard (multi-step) |
+| LE-dashboard.html | LE configuration wizard (multi-step). Payment wizard removed -- redirects to payment-setup.html |
+| payment-setup.html | Standalone Square OAuth connection page. Security-hardened (same-origin returnUrl, DOM API rendering). Lives in BOTH public/ dirs |
 | LE-vpd.html | Vapor Pressure Deficit controls |
 | LE-switchbot.html | SwitchBot management |
 | LE-billing.html | Billing/subscription |
@@ -870,6 +871,23 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | iot-manager.css | IoT manager UI |
 | switchbot-manager.css | SwitchBot UI |
 | pwa.css | PWA styling |
+
+### 5.8 Dual-Deploy File Registry (BOTH public/ dirs)
+
+Files that MUST exist in both `greenreach-central/public/` and root `public/`:
+
+| File | Reason |
+|------|--------|
+| LE-farm-admin.html | Main admin page -- served by Central, also needed on LE |
+| LE-dashboard.html | Setup wizard -- embedded in LE-farm-admin iframe |
+| farm-sales-pos.html | POS terminal -- embedded in LE-farm-admin iframe |
+| payment-setup.html | Square OAuth page -- standalone, linked from LE-dashboard |
+| evie-core.css | E.V.I.E. styles |
+| evie-presence.js | E.V.I.E. ambient intelligence |
+| farm-admin.js | Main admin navigation and section handler |
+| auth-guard.js | Client-side JWT validation and redirect |
+
+**Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The `.ebignore` excludes `greenreach-central/public/` from LE deploy, so root `public/` is the only source for LE-EB.
 
 ---
 
@@ -1714,7 +1732,7 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | Service | Env Vars | Purpose | Server |
 |---------|----------|---------|--------|
 | SwitchBot Cloud API | SWITCHBOT_TOKEN, SWITCHBOT_SECRET | Sensor data polling | LE |
-| Square Payments | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale payments (12% commission) | Central |
+| Square Payments | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale payments (12% commission). OAuth connection via standalone payment-setup.html (v1.4.0 -- LE-dashboard wizard removed) | Central |
 | Stripe | Farm-configured | Farm payment setup | LE |
 | OpenAI (GPT-4) | OPENAI_API_KEY | AI insights, recipe recommendations | Both |
 | AWS CloudWatch | CLOUDWATCH_ENABLED, AWS_REGION | Metrics/logs | LE |
@@ -1906,6 +1924,19 @@ When you change a file, here is what else is affected:
 - **Problem**: When a retail price was changed in the pricing table, syncPricingRow() sent the update to the server but did not compute a new wholesale price. The batch-update endpoint used a hardcoded sku_factor of 0.70 regardless of the product's configured factor.
 - **Impact**: Wholesale prices became stale when retail prices changed. All products used the same 0.70 factor instead of their per-product sku_factor (0.50-0.75).
 - **Fix Applied**: syncPricingRow() now auto-computes wholesale = retail * 0.75 as a default when syncing. batch-update reads each product's sku_factor (clamped 0.50-0.75) and applies the formula: wholesale = max(cost_floor, retail * sku_factor).
+
+
+#### E-020: POS Iframe Login Loop -- RESOLVED v1.4.0
+- **File**: greenreach-central/public/farm-sales-pos.html, greenreach-central/public/farm-admin.js
+- **Problem**: farm-sales-pos.html checked farm_token key in localStorage, but farm-admin.js sets token key. When loaded as iframe from LE-farm-admin, the POS page could not find the token and redirected to login in a loop.
+- **Impact**: POS was unusable when embedded as iframe in LE-farm-admin.
+- **Fix Applied**: Token fallback chain (checks both token and farm_token) plus embedded mode auto-login that inherits the admin session.
+
+#### E-021: Square Wizard Popup Blocked -- RESOLVED v1.4.0
+- **File**: greenreach-central/public/LE-dashboard.html
+- **Problem**: LE-dashboard payment wizard opened Square OAuth popups from inside an iframe. Browsers block popups from cross-origin iframes by default.
+- **Impact**: Farm operators could not connect their Square account through the setup wizard.
+- **Fix Applied**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
 
 #### Pricing Formula Reference (v1.3.0)
 - **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
