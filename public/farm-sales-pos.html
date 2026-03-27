@@ -949,6 +949,24 @@
       const urlParams = new URLSearchParams(window.location.search);
       const isDemoMode = urlParams.get('demo') === '1' || urlParams.get('demo') === 'true';
       
+      const isEmbedded = urlParams.get('embedded') === '1';
+      
+      // Embedded mode: auto-login using parent admin session (iframe from LE-farm-admin)
+      if (isEmbedded) {
+        const adminToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const adminFarmId = localStorage.getItem('farm_id') || sessionStorage.getItem('farm_id');
+        const adminFarmName = localStorage.getItem('farm_name') || sessionStorage.getItem('farm_name');
+        if (adminToken && adminFarmId) {
+          token = adminToken;
+          farmId = adminFarmId;
+          farmName = adminFarmName || 'Light Engine Farm';
+          userRole = 'manager';
+          console.log('[POS] Embedded mode: using admin session for farm:', farmName);
+          showApp();
+          return;
+        }
+      }
+      
       // Priority 1: URL parameters (from navigation)
       const urlFarmSlug = urlParams.get('farm');
       const urlFarmId = urlParams.get('id');
@@ -981,10 +999,10 @@
       const targetFarmId = urlFarmId || sessionFarmId || localStorage.getItem('farm_id');
       const targetFarmName = urlFarmName || sessionFarmName || localStorage.getItem('farm_name');
       
-      const savedToken = localStorage.getItem('farm_token');
+      const savedToken = localStorage.getItem('farm_token') || localStorage.getItem('token') || sessionStorage.getItem('token');
       const savedFarmId = localStorage.getItem('farm_id');
       const savedFarmName = localStorage.getItem('farm_name');
-      const savedRole = localStorage.getItem('user_role');
+      const savedRole = localStorage.getItem('user_role') || 'manager';
       
       // If we have a target farm from URL/session, try to auto-authenticate
       if (targetFarmId && targetFarmId !== savedFarmId) {
