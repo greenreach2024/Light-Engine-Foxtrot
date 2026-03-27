@@ -1938,6 +1938,16 @@ When you change a file, here is what else is affected:
 - **Impact**: Farm operators could not connect their Square account through the setup wizard.
 - **Fix Applied**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
 
+
+#### E-022: AI Pricing Assistant Per-Oz/Per-Lb Mismatch -- RESOLVED v10
+- **File**: greenreach-central/public/farm-admin.js (normalizeMarketPriceForCrop, displayRecommendations, generateRecommendations, getCropBackendUnit, defaultPricing, cropGrowthParams)
+- **Problem**: normalizeMarketPriceForCrop() divided package price by weight in oz to get a per-oz average, then returned it as marketAverageCAD. The UI displayed this value with a /lb label (via getCropUnitLabel). When a user clicked "Apply Recommended Price", a per-oz value was stored as if it were per-lb -- a 16x underpricing. defaultPricing used flat tier values ($23.52, $43.20, $25.12) instead of per-crop AI-computed values. getCropBackendUnit returned 'oz' but stored values were per-lb.
+- **Impact**: All 108 crops had uniform placeholder prices (3 tiers) instead of AI-generated per-crop values. AI recommendations were 16x too low. Unit labels showed /oz and /25g instead of /lb and /100g.
+- **Fix Applied**: (1) normalizeMarketPriceForCrop now multiplies per-oz by 16 to return per-lb values. (2) getCropBackendUnit returns 'lb' for weight crops. (3) defaultPricing replaced with AI-computed per-lb CAD values from Canadian retail market data (formula: pkg_price / pkg_weight_oz * 16 * 1.05 premium). (4) crop-pricing.json updated for all 108 crops. (5) cropGrowthParams retailPricePerLb updated. (6) PRICING_VERSION bumped to v10. (7) Display labels changed from /oz,/25g to /lb,/100g.
+- **Price range**: $3.53/each (tomato) to $66.97/lb (French Tarragon). 16 unique price points across 108 crops.
+- **Deploy**: Central only (ai-pricing-fix-perlb-20260327).
+
+
 #### Pricing Formula Reference (v1.3.0)
 - **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
 - **floor** = `max(cost_floor, manual_floor)` -- ensures wholesale never drops below production cost
@@ -1952,7 +1962,7 @@ When you change a file, here is what else is affected:
 - $500 - $999: 6% discount (tier-3)
 - $1,000 - $1,999: 8% discount (tier-4)
 - $2,000+: 10% discount (tier-5)
-- Example: Basil retails at $3.04/oz, SKU factor 0.65 -> base wholesale $1.98/oz. Buyer qualifies for 4% -> final $1.98 x 0.96 = $1.90/oz.
+- Example: Genovese Basil retails at $38.47/lb, SKU factor 0.75 -> base wholesale $28.85/lb. Buyer qualifies for 4% -> final $28.85 x 0.96 = $27.70/lb.
 - **Single source of truth**: lib/wholesale/buyer-discount-service.js (DISCOUNT_TIERS array)
 - **Wired into**: checkout.js (preview + execute), catalog.js (authenticated response), order-allocator.js (line item pricing)
 
