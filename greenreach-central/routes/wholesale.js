@@ -1949,7 +1949,8 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
 
     if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
-    if (!normalizedDeliveryAddress?.street || !normalizedDeliveryAddress?.city || !normalizedDeliveryAddress?.zip) {
+    const isPickup = String(fulfillment_method || '').toLowerCase() === 'pickup';
+    if (!isPickup && (!normalizedDeliveryAddress?.street || !normalizedDeliveryAddress?.city || !normalizedDeliveryAddress?.zip)) {
       throw new ValidationError('delivery_address street/city/zip are required');
     }
     if (!Array.isArray(cart) || cart.length === 0) throw new ValidationError('cart is required');
@@ -1972,7 +1973,10 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         grand_total: Number((Number(result.allocation.grand_total || 0) + deliveryFee).toFixed(2))
       };
 
+      const provisionalOrderId = `wo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
       const order = createOrder({
+        orderId: provisionalOrderId,
         buyerId: req.wholesaleBuyer.id,
         buyerAccount: buyer_account,
         poNumber: po_number,
@@ -1981,7 +1985,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         recurrence: recurrence || { cadence: 'one_time' },
         farmSubOrders: result.allocation.farm_sub_orders,
         totals: orderTotals
-      });
+      }, { persist: false, register: false });
       order.fulfillment_method = String(fulfillment_method || 'delivery').toLowerCase();
       order.delivery_fee = deliveryFee;
 
@@ -1990,7 +1994,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         provider: payment_provider || 'square',
         split: result.payment_split,
         totals: orderTotals
-      });
+      }, { persist: false, register: false });
 
       // Attempt Square payment if farms have Square connected
       let paymentSuccess = false;
@@ -2055,48 +2059,6 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       // ── Synchronous inventory reservation before responding ──
       // Reserve inventory at each farm BEFORE confirming the order to the buyer.
       // If any reservation fails, roll back all previous reservations and fail the checkout.
-      order.payment = payment;
-
-      // ── Accounting: record buyer payment + farm payables ──
-      finalizePayment(payment);
-
-      // Only record revenue + payables when payment actually went through
-      if (payment.status === 'completed' || payment.status === 'pending') {
-        ingestPaymentRevenue({
-          payment_id: payment.payment_id,
-          order_id: order.master_order_id,
-          amount: payment.amount,
-          provider: payment.provider,
-          broker_fee: payment.broker_fee_amount || 0,
-          tax_amount: orderTotals.tax_total || 0,
-          source_type: 'wholesale',
-        }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
-
-        ingestFarmPayables({
-          order_id: order.master_order_id,
-          payment_id: payment.payment_id,
-          farm_sub_orders: result.allocation.farm_sub_orders,
-        }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
-      } else {
-        console.warn(`[Accounting] Skipped revenue/payable ingestion — payment status: ${payment.status}`);
-      }
-
-      // If Square payments succeeded, farms were paid immediately via app_fee_money —
-      // record each farm payout to settle the payable
-      if (paymentSuccess && payment.square_details?.payments) {
-        for (const pr of payment.square_details.payments) {
-          if (!pr.success) continue;
-          const farmSub = result.allocation.farm_sub_orders.find(s => s.farm_id === pr.farmId);
-          ingestFarmPayout({
-            payout_id: pr.paymentId || `payout-${order.master_order_id}-${pr.farmId}`,
-            order_id: order.master_order_id,
-            farm_id: pr.farmId,
-            farm_name: farmSub?.farm_name || pr.farmId,
-            amount: Number(((pr.amountMoney?.amount || 0) - (pr.brokerFeeMoney?.amount || 0)) / 100),
-            provider: 'square',
-          }).catch(err => console.warn(`[Accounting] Farm payout ingest error (${pr.farmId}):`, err.message));
-        }
-      }
 
       const farms = await listNetworkFarms();
       const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
@@ -2176,6 +2138,18 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             console.error(`[Checkout] Rollback failed for farm ${reserved.farm_id}:`, rollbackErr.message);
           }
         }
+
+        if (paymentSuccess) {
+          const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.SES_FROM_EMAIL;
+          if (adminEmail) {
+            emailService.sendEmail({
+              to: adminEmail,
+              subject: '[CRITICAL] Wholesale payment captured but reservation failed',
+              text: `Order ${order.master_order_id} captured payment but failed reservation rollback path. Manual payment reconciliation may be required.\nBuyer: ${buyer_account?.email || 'unknown'}\nDetail: ${reservationError}`
+            }).catch(err => console.error('[Checkout] Failed to send payment/reservation mismatch alert:', err.message));
+          }
+        }
+
         return res.status(409).json({
           status: 'error',
           message: 'Inventory reservation failed — order not placed',
@@ -2196,6 +2170,17 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             console.warn(`[Checkout] Confirm failed for farm ${reserved.farm_id} (reservation still held):`, confirmErr.message);
           }
         }
+      } else {
+        for (const reserved of reservedFarms) {
+          try {
+            await farmCallWithTimeout(reserved.farmUrl, '/api/wholesale/inventory/release', {
+              order_id: order.master_order_id
+            }, reserved.farm_id, reserved.farm, 5000);
+            console.log(`[Checkout] Released reservation (non-success payment) at farm ${reserved.farm_id}`);
+          } catch (releaseErr) {
+            console.error(`[Checkout] Release failed for farm ${reserved.farm_id}:`, releaseErr.message);
+          }
+        }
       }
 
       // Reflect payment outcome in order status
@@ -2203,6 +2188,46 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         order.status = 'payment_failed';
       } else if (payment.status === 'pending') {
         order.status = 'pending_payment';
+      }
+
+      order.payment = payment;
+
+      // ── Persist finalized payment and accounting only after reservation checks ──
+      finalizePayment(payment);
+
+      if (payment.status === 'completed') {
+        ingestPaymentRevenue({
+          payment_id: payment.payment_id,
+          order_id: order.master_order_id,
+          amount: payment.amount,
+          provider: payment.provider,
+          broker_fee: payment.broker_fee_amount || 0,
+          tax_amount: orderTotals.tax_total || 0,
+          source_type: 'wholesale',
+        }).catch(err => console.warn('[Accounting] Revenue ingest error:', err.message));
+
+        ingestFarmPayables({
+          order_id: order.master_order_id,
+          payment_id: payment.payment_id,
+          farm_sub_orders: result.allocation.farm_sub_orders,
+        }).catch(err => console.warn('[Accounting] Farm payable ingest error:', err.message));
+
+        if (payment.square_details?.payments) {
+          for (const pr of payment.square_details.payments) {
+            if (!pr.success) continue;
+            const farmSub = result.allocation.farm_sub_orders.find(s => s.farm_id === pr.farmId);
+            ingestFarmPayout({
+              payout_id: pr.paymentId || `payout-${order.master_order_id}-${pr.farmId}`,
+              order_id: order.master_order_id,
+              farm_id: pr.farmId,
+              farm_name: farmSub?.farm_name || pr.farmId,
+              amount: Number(((pr.amountMoney?.amount || 0) - (pr.brokerFeeMoney?.amount || 0)) / 100),
+              provider: 'square',
+            }).catch(err => console.warn(`[Accounting] Farm payout ingest error (${pr.farmId}):`, err.message));
+          }
+        }
+      } else {
+        console.warn(`[Accounting] Skipped revenue/payable ingestion — payment status: ${payment.status}`);
       }
 
       await saveOrder(order).catch(() => {});
@@ -2276,11 +2301,11 @@ router.get('/oauth/square/farms', (req, res) => {
   return res.json({ status: 'ok', data: { farms: [] } });
 });
 
-router.get('/webhooks/payments', (req, res) => {
+router.get('/webhooks/payments', adminAuthMiddleware, (req, res) => {
   return res.json({ status: 'ok', data: { payments: listPayments() } });
 });
 
-router.get('/refunds', (req, res) => {
+router.get('/refunds', adminAuthMiddleware, (req, res) => {
   return res.json({ status: 'ok', data: { refunds: listRefunds() } });
 });
 

@@ -24,10 +24,12 @@ async function isEventProcessed(eventId, provider) {
   if (!eventId || !isDatabaseAvailable()) return false;
   await ensureDedupTable();
   try {
-    const r = await query('SELECT 1 FROM webhook_events_processed WHERE event_id = $1', [eventId]);
-    if (r.rows.length > 0) return true;
-    await query('INSERT INTO webhook_events_processed (event_id, provider) VALUES ($1, $2) ON CONFLICT DO NOTHING', [eventId, provider]);
-    return false;
+    const scopedEventId = `${provider}:${eventId}`;
+    const inserted = await query(
+      'INSERT INTO webhook_events_processed (event_id, provider) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING event_id',
+      [scopedEventId, provider]
+    );
+    return inserted.rows.length === 0;
   } catch { return false; }
 }
 

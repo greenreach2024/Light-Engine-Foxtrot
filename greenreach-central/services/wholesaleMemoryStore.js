@@ -284,8 +284,9 @@ export async function isTokenBlacklisted(token) {
   return false;
 }
 
-export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals }) {
-  const orderId = `wo-${randomUUID()}`;
+export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, deliveryAddress, recurrence, farmSubOrders, totals, orderId: providedOrderId }, options = {}) {
+  const { persist = true, register = true } = options;
+  const orderId = providedOrderId || `wo-${randomUUID()}`;
   const order = {
     master_order_id: orderId,
     status: 'confirmed',
@@ -302,12 +303,16 @@ export function createOrder({ buyerId, buyerAccount, poNumber, deliveryDate, del
     farm_sub_orders: farmSubOrders
   };
 
-  ordersById.set(orderId, order);
-  if (!ordersByBuyerId.has(buyerId)) ordersByBuyerId.set(buyerId, []);
-  ordersByBuyerId.get(buyerId).unshift(order);
+  if (register) {
+    ordersById.set(orderId, order);
+    if (!ordersByBuyerId.has(buyerId)) ordersByBuyerId.set(buyerId, []);
+    ordersByBuyerId.get(buyerId).unshift(order);
+  }
 
-  persistOrder(order).catch(err => console.error('[Persist] Order save error:', err.message));
-  runArchiveIfNeeded().catch(err => console.error('[Archive] Archive check error:', err.message));
+  if (persist) {
+    persistOrder(order).catch(err => console.error('[Persist] Order save error:', err.message));
+    runArchiveIfNeeded().catch(err => console.error('[Archive] Archive check error:', err.message));
+  }
 
   return order;
 }
@@ -369,6 +374,7 @@ export async function updateFarmSubOrder({ orderId, farmId, updates }) {
     'status',
     'tracking_number',
     'tracking_carrier',
+    'tracking_updated_at',
     'fulfilled_at',
     'cancelled_at',
     'cancellation_reason',
@@ -394,7 +400,8 @@ export async function updateFarmSubOrder({ orderId, farmId, updates }) {
   return subOrder;
 }
 
-export function createPayment({ orderId, provider, split, totals }) {
+export function createPayment({ orderId, provider, split, totals }, options = {}) {
+  const { persist = true, register = true } = options;
   const paymentId = `pay-${randomUUID()}`;
   const payment = {
     id: paymentId,
@@ -409,8 +416,12 @@ export function createPayment({ orderId, provider, split, totals }) {
     split,
     created_at: new Date().toISOString()
   };
-  paymentsById.set(paymentId, payment);
-  persistPayment(payment).catch(err => console.error('[Persist] Payment save error:', err.message));
+  if (register) {
+    paymentsById.set(paymentId, payment);
+  }
+  if (persist) {
+    persistPayment(payment).catch(err => console.error('[Persist] Payment save error:', err.message));
+  }
 
   // NOTE: Revenue ingestion is deferred to checkout handler after payment status is finalized.
   // This avoids recording revenue before knowing if payment succeeded.
