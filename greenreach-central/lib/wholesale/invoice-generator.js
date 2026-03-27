@@ -265,6 +265,21 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
         trailing_spend: order.buyer_discount?.trailing_spend || 0 }
     : null;
 
+  const delivery = order.delivery
+    || order.cart?.delivery
+    || (order.delivery_address
+      ? {
+          address: [
+            order.delivery_address.street,
+            order.delivery_address.city,
+            order.delivery_address.province || order.delivery_address.state,
+            order.delivery_address.postalCode || order.delivery_address.zip
+          ].filter(Boolean).join(', '),
+          zip: order.delivery_address.postalCode || order.delivery_address.zip || '',
+          delivery_date: order.delivery_date || ''
+        }
+      : null);
+
   return {
     invoice_id: `INV-${masterOrderId}`,
     master_order_id: masterOrderId,
@@ -283,7 +298,7 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
     env_score: orderEnvScore,
     totals,
     status: order.status || 'confirmed',
-    delivery: order.cart?.delivery || order.delivery || null
+    delivery
   };
 }
 
