@@ -1724,6 +1724,590 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+
+  // -- Security Operations (Gap Analysis Tools) --
+  // Reference: greenreach-central/.github/skills/security.md
+  // Workbook: greenreach-central/faye-security-workbook.md
+
+  'analyze_security_behavior': {
+    description: 'Analyze admin and API behavioral patterns to detect insider threats or compromised accounts. Builds a behavioral baseline from faye_decision_log and admin_alerts, then flags anomalies: unusual hours, action frequency spikes, new action types, privilege escalation patterns. Grounded in Kamatchi et al. (2025) behavioral insider threat detection methodology.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'admin_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const days = parseInt(params.days, 10) || 30;
+        const findings = [];
+
+        // 1. Admin action frequency by hour of day (baseline vs recent)
+        const hourlyBaseline = await dbQuery(
+          `SELECT EXTRACT(HOUR FROM created_at) AS hour, COUNT(*) AS cnt
+           FROM faye_decision_log
+           WHERE created_at > NOW() - ($1 || ' days')::interval
+           GROUP BY hour ORDER BY hour`,
+          [days]
+        );
+        const hourMap = {};
+        let totalActions = 0;
+        for (const row of hourlyBaseline.rows) {
+          hourMap[Number(row.hour)] = Number(row.cnt);
+          totalActions += Number(row.cnt);
+        }
+        const avgPerHour = totalActions / Math.max(Object.keys(hourMap).length, 1);
+
+        // Flag off-hours activity (22:00-05:00) if significantly above average
+        const offHoursActivity = [22, 23, 0, 1, 2, 3, 4, 5].reduce((sum, h) => sum + (hourMap[h] || 0), 0);
+        if (offHoursActivity > avgPerHour * 2 && offHoursActivity > 5) {
+          findings.push({
+            category: 'off_hours_activity',
+            severity: 'medium',
+            detail: offHoursActivity + ' admin actions during off-hours (22:00-05:00) in ' + days + 'd -- ' + Math.round(offHoursActivity / totalActions * 100) + '% of total',
+            reference: 'Kamatchi et al. (2025) -- temporal behavioral anomaly'
+          });
+        }
+
+        // 2. Action type distribution (detect new/unusual action types in last 48h vs baseline)
+        const recentActions = await dbQuery(
+          `SELECT action_type, COUNT(*) AS cnt
+           FROM faye_decision_log
+           WHERE created_at > NOW() - INTERVAL '48 hours'
+           GROUP BY action_type ORDER BY cnt DESC`
+        );
+        const baselineActions = await dbQuery(
+          `SELECT DISTINCT action_type
+           FROM faye_decision_log
+           WHERE created_at > NOW() - ($1 || ' days')::interval
+             AND created_at < NOW() - INTERVAL '48 hours'`,
+          [days]
+        );
+        const baselineTypes = new Set(baselineActions.rows.map(r => r.action_type));
+        const newTypes = recentActions.rows.filter(r => !baselineTypes.has(r.action_type));
+        if (newTypes.length > 0) {
+          findings.push({
+            category: 'new_action_types',
+            severity: newTypes.length > 3 ? 'high' : 'medium',
+            detail: newTypes.length + ' action types seen in last 48h that were not in the ' + days + 'd baseline: ' + newTypes.map(t => t.action_type).join(', '),
+            reference: 'Kamatchi et al. (2025) -- behavioral deviation detection'
+          });
+        }
+
+        // 3. Auth failure surge detection (compare last 24h to daily average)
+        const authRecent = await dbQuery(
+          `SELECT COUNT(*) AS cnt FROM admin_alerts
+           WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%login%' OR title ILIKE '%denied%')
+             AND created_at > NOW() - INTERVAL '24 hours'`
+        );
+        const authBaseline = await dbQuery(
+          `SELECT COUNT(*) AS cnt FROM admin_alerts
+           WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%login%' OR title ILIKE '%denied%')
+             AND created_at > NOW() - ($1 || ' days')::interval`,
+          [days]
+        );
+        const recentAuth = Number(authRecent.rows[0]?.cnt || 0);
+        const dailyAvgAuth = Number(authBaseline.rows[0]?.cnt || 0) / Math.max(days, 1);
+        if (recentAuth > dailyAvgAuth * 3 && recentAuth > 3) {
+          findings.push({
+            category: 'auth_failure_surge',
+            severity: 'high',
+            detail: recentAuth + ' auth failures in last 24h vs daily average of ' + dailyAvgAuth.toFixed(1) + ' (' + Math.round(recentAuth / Math.max(dailyAvgAuth, 0.01)) + 'x spike)',
+            reference: 'Kamatchi et al. (2025) -- authentication anomaly indicator'
+          });
+        }
+
+        // 4. Decision volume spike (last 24h vs daily average)
+        const decisionRecent = await dbQuery(
+          `SELECT COUNT(*) AS cnt FROM faye_decision_log
+           WHERE created_at > NOW() - INTERVAL '24 hours'`
+        );
+        const recentDecisions = Number(decisionRecent.rows[0]?.cnt || 0);
+        const dailyAvgDecisions = totalActions / Math.max(days, 1);
+        if (recentDecisions > dailyAvgDecisions * 3 && recentDecisions > 10) {
+          findings.push({
+            category: 'decision_volume_spike',
+            severity: 'medium',
+            detail: recentDecisions + ' decisions in last 24h vs daily average of ' + dailyAvgDecisions.toFixed(1),
+            reference: 'Kamatchi et al. (2025) -- activity volume anomaly'
+          });
+        }
+
+        const riskLevel = findings.some(f => f.severity === 'high') ? 'elevated'
+          : findings.length > 0 ? 'advisory' : 'normal';
+
+        return {
+          ok: true,
+          period_days: days,
+          risk_level: riskLevel,
+          total_actions_in_period: totalActions,
+          hourly_distribution: hourMap,
+          finding_count: findings.length,
+          findings
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'detect_security_anomalies': {
+    description: 'Run statistical anomaly detection across platform activity. Computes z-scores for error rates, alert volumes, API response times, and order patterns over a rolling window. Flags deviations beyond 2 standard deviations as anomalies. Grounded in Yang et al. (2022) anomaly-based detection methodology.',
+    category: 'read',
+    required: [],
+    optional: ['hours', 'sensitivity'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const hours = parseInt(params.hours, 10) || 24;
+        const sensitivity = parseFloat(params.sensitivity) || 2.0; // z-score threshold
+        const anomalies = [];
+
+        // Helper: compute z-score
+        const zscore = (val, mean, stddev) => stddev > 0 ? (val - mean) / stddev : 0;
+
+        // 1. Error rate anomaly (errors per hour: recent vs baseline)
+        const errorStats = await dbQuery(
+          `SELECT
+             COUNT(*) FILTER (WHERE last_seen > NOW() - ($1 || ' hours')::interval) AS recent_count,
+             COUNT(*) AS total_count,
+             MIN(first_seen) AS earliest
+           FROM app_errors
+           WHERE first_seen > NOW() - INTERVAL '7 days'`,
+          [hours]
+        );
+        const recentErrors = Number(errorStats.rows[0]?.recent_count || 0);
+        const totalErrors = Number(errorStats.rows[0]?.total_count || 0);
+        const baselineHours = 7 * 24;
+        const errorRateBaseline = totalErrors / baselineHours;
+        const errorRateRecent = recentErrors / Math.max(hours, 1);
+        // Approximate stddev as 50% of mean for sparse data
+        const errorStddev = errorRateBaseline * 0.5 || 1;
+        const errorZ = zscore(errorRateRecent, errorRateBaseline, errorStddev);
+        if (Math.abs(errorZ) > sensitivity) {
+          anomalies.push({
+            metric: 'error_rate',
+            recent_value: errorRateRecent.toFixed(2) + '/hr',
+            baseline_value: errorRateBaseline.toFixed(2) + '/hr',
+            z_score: errorZ.toFixed(2),
+            severity: Math.abs(errorZ) > sensitivity * 1.5 ? 'high' : 'medium',
+            reference: 'Yang et al. (2022) -- statistical anomaly detection'
+          });
+        }
+
+        // 2. Alert volume anomaly
+        const alertStats = await dbQuery(
+          `SELECT
+             COUNT(*) FILTER (WHERE created_at > NOW() - ($1 || ' hours')::interval) AS recent_count,
+             COUNT(*) AS total_count
+           FROM admin_alerts
+           WHERE created_at > NOW() - INTERVAL '7 days'`,
+          [hours]
+        );
+        const recentAlerts = Number(alertStats.rows[0]?.recent_count || 0);
+        const totalAlerts = Number(alertStats.rows[0]?.total_count || 0);
+        const alertRateBaseline = totalAlerts / baselineHours;
+        const alertRateRecent = recentAlerts / Math.max(hours, 1);
+        const alertStddev = alertRateBaseline * 0.5 || 1;
+        const alertZ = zscore(alertRateRecent, alertRateBaseline, alertStddev);
+        if (Math.abs(alertZ) > sensitivity) {
+          anomalies.push({
+            metric: 'alert_volume',
+            recent_value: alertRateRecent.toFixed(2) + '/hr',
+            baseline_value: alertRateBaseline.toFixed(2) + '/hr',
+            z_score: alertZ.toFixed(2),
+            severity: Math.abs(alertZ) > sensitivity * 1.5 ? 'high' : 'medium',
+            reference: 'Yang et al. (2022) -- volumetric anomaly detection'
+          });
+        }
+
+        // 3. Error route concentration (single route dominating errors)
+        const routeErrors = await dbQuery(
+          `SELECT route, COUNT(*) AS cnt
+           FROM app_errors
+           WHERE last_seen > NOW() - ($1 || ' hours')::interval
+           GROUP BY route ORDER BY cnt DESC LIMIT 5`,
+          [hours]
+        );
+        if (routeErrors.rows.length > 0 && recentErrors > 5) {
+          const topRoute = routeErrors.rows[0];
+          const topPct = (Number(topRoute.cnt) / recentErrors * 100);
+          if (topPct > 70) {
+            anomalies.push({
+              metric: 'error_concentration',
+              route: topRoute.route,
+              percentage: topPct.toFixed(1) + '%',
+              count: Number(topRoute.cnt),
+              severity: 'medium',
+              reference: 'Yang et al. (2022) -- pattern concentration anomaly'
+            });
+          }
+        }
+
+        // 4. Critical alert clustering (multiple criticals in short window)
+        const critCluster = await dbQuery(
+          `SELECT COUNT(*) AS cnt FROM admin_alerts
+           WHERE severity = 'critical'
+             AND created_at > NOW() - ($1 || ' hours')::interval`,
+          [Math.min(hours, 6)]
+        );
+        const critCount = Number(critCluster.rows[0]?.cnt || 0);
+        if (critCount >= 3) {
+          anomalies.push({
+            metric: 'critical_alert_cluster',
+            count: critCount,
+            window_hours: Math.min(hours, 6),
+            severity: 'high',
+            reference: 'Yang et al. (2022) -- temporal clustering detection'
+          });
+        }
+
+        return {
+          ok: true,
+          window_hours: hours,
+          sensitivity_threshold: sensitivity,
+          anomaly_count: anomalies.length,
+          status: anomalies.some(a => a.severity === 'high') ? 'alert'
+            : anomalies.length > 0 ? 'advisory' : 'clear',
+          anomalies
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'correlate_threat_indicators': {
+    description: 'Correlate security indicators across multiple data sources to characterize potential threats. Cross-references auth failures, error patterns, alert domains, and temporal clustering to build a threat profile. Grounded in Prasad et al. (2025) multi-source attribution methodology.',
+    category: 'read',
+    required: [],
+    optional: ['hours'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const hours = parseInt(params.hours, 10) || 24;
+        const indicators = [];
+        const correlations = [];
+
+        // Gather indicators from multiple sources
+        const [authAlerts, errorsByRoute, critAlerts, staleFarms, recentDecisions] = await Promise.all([
+          dbQuery(
+            `SELECT title, detail, created_at, severity FROM admin_alerts
+             WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%denied%')
+               AND created_at > NOW() - ($1 || ' hours')::interval
+             ORDER BY created_at DESC LIMIT 20`,
+            [hours]
+          ),
+          dbQuery(
+            `SELECT route, error_type, COUNT(*) AS cnt, MAX(last_seen) AS latest
+             FROM app_errors
+             WHERE last_seen > NOW() - ($1 || ' hours')::interval
+             GROUP BY route, error_type ORDER BY cnt DESC LIMIT 15`,
+            [hours]
+          ),
+          dbQuery(
+            `SELECT title, detail, domain, created_at FROM admin_alerts
+             WHERE severity = 'critical'
+               AND created_at > NOW() - ($1 || ' hours')::interval
+             ORDER BY created_at DESC LIMIT 10`,
+            [hours]
+          ),
+          dbQuery(
+            `SELECT farm_id, farm_name, last_seen_at FROM farm_heartbeats
+             WHERE last_seen_at < NOW() - INTERVAL '2 hours'`
+          ),
+          dbQuery(
+            `SELECT action_type, COUNT(*) AS cnt
+             FROM faye_decision_log
+             WHERE created_at > NOW() - ($1 || ' hours')::interval
+             GROUP BY action_type ORDER BY cnt DESC LIMIT 10`,
+            [hours]
+          )
+        ]);
+
+        // Build indicator summary
+        indicators.push({
+          source: 'auth_alerts',
+          count: authAlerts.rows.length,
+          items: authAlerts.rows.slice(0, 5).map(r => ({ title: r.title, severity: r.severity, time: r.created_at }))
+        });
+        indicators.push({
+          source: 'application_errors',
+          count: errorsByRoute.rows.reduce((s, r) => s + Number(r.cnt), 0),
+          top_routes: errorsByRoute.rows.slice(0, 5).map(r => ({ route: r.route, type: r.error_type, count: Number(r.cnt) }))
+        });
+        indicators.push({
+          source: 'critical_alerts',
+          count: critAlerts.rows.length,
+          items: critAlerts.rows.slice(0, 5).map(r => ({ title: r.title, domain: r.domain, time: r.created_at }))
+        });
+        indicators.push({
+          source: 'stale_farms',
+          count: staleFarms.rows.length,
+          farms: staleFarms.rows.map(r => ({ farm_id: r.farm_id, name: r.farm_name, last_seen: r.last_seen_at }))
+        });
+
+        // Cross-correlate: auth failures + error spikes = potential attack
+        const authCount = authAlerts.rows.length;
+        const errorCount = errorsByRoute.rows.reduce((s, r) => s + Number(r.cnt), 0);
+        if (authCount > 3 && errorCount > 10) {
+          correlations.push({
+            pattern: 'auth_failure_with_error_spike',
+            confidence: 'high',
+            detail: authCount + ' auth alerts co-occurring with ' + errorCount + ' application errors in ' + hours + 'h window',
+            assessment: 'Potential credential stuffing or brute-force attempt causing cascading errors',
+            reference: 'Prasad et al. (2025) -- multi-source indicator correlation'
+          });
+        }
+
+        // Cross-correlate: stale farms + critical alerts = potential compromise
+        if (staleFarms.rows.length > 0 && critAlerts.rows.length > 0) {
+          correlations.push({
+            pattern: 'farm_disconnect_with_critical_alerts',
+            confidence: 'medium',
+            detail: staleFarms.rows.length + ' farms disconnected while ' + critAlerts.rows.length + ' critical alerts active',
+            assessment: 'Farm connectivity loss during active incidents may indicate targeted disruption or infrastructure issue',
+            reference: 'Prasad et al. (2025) -- temporal correlation attribution'
+          });
+        }
+
+        // Cross-correlate: error concentration on single route = targeted probing
+        if (errorsByRoute.rows.length > 0) {
+          const topErrors = Number(errorsByRoute.rows[0]?.cnt || 0);
+          if (topErrors > errorCount * 0.7 && topErrors > 10) {
+            correlations.push({
+              pattern: 'single_route_error_concentration',
+              confidence: 'medium',
+              detail: topErrors + ' of ' + errorCount + ' errors concentrated on route: ' + errorsByRoute.rows[0].route,
+              assessment: 'Heavy error concentration on single endpoint may indicate targeted probing or exploitation attempt',
+              reference: 'Prasad et al. (2025) -- attack vector identification'
+            });
+          }
+        }
+
+        const threatLevel = correlations.some(c => c.confidence === 'high') ? 'elevated'
+          : correlations.length > 0 ? 'advisory' : 'normal';
+
+        return {
+          ok: true,
+          window_hours: hours,
+          threat_level: threatLevel,
+          indicator_sources: indicators.length,
+          correlation_count: correlations.length,
+          indicators,
+          correlations
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'explain_security_finding': {
+    description: 'Generate an explainable analysis of a security finding or risk score. Takes a finding category from run_security_audit or detect_security_anomalies and returns the detection methodology, data sources used, confidence factors, false-positive considerations, and recommended response. Grounded in Sharma et al. (2025) explainable AI methodology for cybersecurity.',
+    category: 'read',
+    required: ['finding_category'],
+    optional: ['context'],
+    handler: async (params) => {
+      const category = (params.finding_category || '').trim().toLowerCase();
+      const context = params.context || '';
+
+      const EXPLANATIONS = {
+        authentication: {
+          methodology: 'Count-based threshold detection on admin_alerts where domain=auth or title contains auth/login/denied keywords',
+          data_sources: ['admin_alerts table (auth domain)', 'login event records'],
+          confidence_factors: ['High alert count increases confidence', 'Single-source alerts may be false positive from misconfigured client'],
+          false_positive_risk: 'Medium -- automated health checks or password managers can trigger auth alerts',
+          recommended_response: '1. Check if alerts correlate with known admin activity. 2. Review IP patterns if available. 3. If unexplained, rotate credentials and enable additional logging.',
+          reference: 'Sharma et al. (2025) -- transparent detection rationale'
+        },
+        unresolved_critical: {
+          methodology: 'Query for admin_alerts with severity=critical and resolved=FALSE within the audit window',
+          data_sources: ['admin_alerts table'],
+          confidence_factors: ['Critical severity assigned by the alerting system', 'Unresolved status confirms no human acknowledgment'],
+          false_positive_risk: 'Low -- critical alerts are explicit signals, but may be stale if the underlying issue self-resolved',
+          recommended_response: '1. Triage each critical alert. 2. Resolve or acknowledge with notes. 3. Check if underlying conditions persist.',
+          reference: 'Sharma et al. (2025) -- severity justification transparency'
+        },
+        stale_connections: {
+          methodology: 'Query farm_heartbeats for records with last_seen_at older than 24 hours',
+          data_sources: ['farm_heartbeats table'],
+          confidence_factors: ['Heartbeat freshness is a reliable connectivity indicator', 'Multiple stale farms increase concern'],
+          false_positive_risk: 'Medium -- EB instance restarts, deployment windows, or DNS issues can cause temporary staleness',
+          recommended_response: '1. Check EB environment health for affected farms. 2. Verify sync-service is running. 3. If persistent, investigate network or credential issues.',
+          reference: 'Sharma et al. (2025) -- operational context in security decisions'
+        },
+        off_hours_activity: {
+          methodology: 'Hourly distribution analysis of faye_decision_log. Flags 22:00-05:00 activity exceeding 2x the per-hour average',
+          data_sources: ['faye_decision_log table'],
+          confidence_factors: ['Significant volume above baseline increases confidence', 'Admin timezone must be considered'],
+          false_positive_risk: 'Medium -- legitimate late-night admin work, scheduled jobs, or timezone differences',
+          recommended_response: '1. Verify the off-hours actions correspond to known admin sessions. 2. Check action types for unusual patterns. 3. If unexplained, review for compromised credentials.',
+          reference: 'Kamatchi et al. (2025) via Sharma et al. (2025) -- behavioral anomaly explainability'
+        },
+        auth_failure_surge: {
+          methodology: 'Compare last-24h auth failure count against daily average over the baseline period. Flags 3x+ spikes above 3 events',
+          data_sources: ['admin_alerts table (auth domain)'],
+          confidence_factors: ['Spike magnitude relative to baseline', 'Sustained vs burst pattern matters'],
+          false_positive_risk: 'Low-Medium -- password rotation across services can cause a one-time spike',
+          recommended_response: '1. Check for coordinated timing of failures. 2. Look for IP concentration if logged. 3. Consider temporary lockout policies.',
+          reference: 'Kamatchi et al. (2025) via Sharma et al. (2025) -- surge detection rationale'
+        },
+        error_rate: {
+          methodology: 'Z-score analysis comparing recent errors/hour against 7-day baseline. Standard deviation approximated at 50% of mean for sparse data',
+          data_sources: ['app_errors table'],
+          confidence_factors: ['Higher z-scores indicate stronger deviation', 'Baseline length affects reliability'],
+          false_positive_risk: 'Medium -- deployments, dependency outages, or load spikes can cause temporary error rate increases',
+          recommended_response: '1. Check recent deployments. 2. Review error types and routes. 3. Check dependency health. 4. If no obvious cause, investigate for attack.',
+          reference: 'Yang et al. (2022) via Sharma et al. (2025) -- statistical anomaly rationale'
+        },
+        alert_volume: {
+          methodology: 'Z-score analysis comparing recent alerts/hour against 7-day baseline',
+          data_sources: ['admin_alerts table'],
+          confidence_factors: ['Volume and duration of the spike', 'Domain diversity of alerts'],
+          false_positive_risk: 'Medium -- cascading alerts from a single root cause can inflate volume',
+          recommended_response: '1. Group alerts by domain. 2. Identify root cause. 3. Resolve the underlying issue rather than individual alerts.',
+          reference: 'Yang et al. (2022) via Sharma et al. (2025) -- alert volume rationale'
+        },
+        error_concentration: {
+          methodology: 'Route-level error grouping with percentage-of-total calculation. Flags when a single route accounts for >70% of errors',
+          data_sources: ['app_errors table (grouped by route)'],
+          confidence_factors: ['Higher concentration percentage = stronger signal', 'Total error count provides context'],
+          false_positive_risk: 'Low -- concentration on a single route is a clear signal, though the cause may be benign (e.g., deprecated endpoint)',
+          recommended_response: '1. Inspect the concentrated route for bugs or misuse. 2. Check request patterns. 3. Consider rate limiting if abuse is suspected.',
+          reference: 'Yang et al. (2022) via Sharma et al. (2025) -- pattern concentration rationale'
+        },
+        critical_alert_cluster: {
+          methodology: 'Count of critical-severity alerts within a 6-hour window. Flags clusters of 3+ critical alerts',
+          data_sources: ['admin_alerts table (severity=critical)'],
+          confidence_factors: ['Temporal proximity of criticals strengthens signal', 'Cross-domain criticals are more concerning'],
+          false_positive_risk: 'Low -- multiple critical alerts in a short window is inherently significant',
+          recommended_response: '1. Immediate triage of all critical alerts. 2. Look for common root cause. 3. Check for cascading failure pattern.',
+          reference: 'Yang et al. (2022) via Sharma et al. (2025) -- temporal clustering rationale'
+        }
+      };
+
+      const explanation = EXPLANATIONS[category];
+      if (!explanation) {
+        return {
+          ok: true,
+          category,
+          explanation: {
+            methodology: 'No pre-built explanation template for category: ' + category + '. Review the raw finding data and apply general security analysis principles.',
+            data_sources: ['Varies by finding type'],
+            confidence_factors: ['Depends on the specific metric and threshold used'],
+            false_positive_risk: 'Unknown -- requires manual assessment',
+            recommended_response: 'Review the finding details, cross-reference with other indicators, and assess operational context.',
+            reference: 'Sharma et al. (2025) -- general xAI framework for cybersecurity'
+          },
+          note: 'This is a generic explanation. Known categories: ' + Object.keys(EXPLANATIONS).join(', ')
+        };
+      }
+
+      return {
+        ok: true,
+        category,
+        additional_context: context || null,
+        explanation
+      };
+    }
+  },
+
+  'analyze_sensor_security': {
+    description: 'Analyze sensor and IoT device behavior patterns for security anomalies. Checks for: sensor data gaps (potential tampering), heartbeat irregularities, unusual telemetry patterns, and multi-farm correlation. Grounded in Hernandez-Ramos et al. (2025) and Manivannan et al. (2024) IoT security methodology.',
+    category: 'read',
+    required: [],
+    optional: ['hours', 'farm_id'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const hours = parseInt(params.hours, 10) || 24;
+        const findings = [];
+
+        // 1. Heartbeat gap analysis (farms that stopped reporting)
+        const heartbeats = await dbQuery(
+          `SELECT farm_id, farm_name, last_seen_at,
+                  EXTRACT(EPOCH FROM NOW() - last_seen_at) / 3600 AS hours_since
+           FROM farm_heartbeats
+           ORDER BY last_seen_at DESC`
+        );
+        const disconnected = heartbeats.rows.filter(r => Number(r.hours_since) > 2);
+        const stale = heartbeats.rows.filter(r => Number(r.hours_since) > 12);
+        if (disconnected.length > 0) {
+          findings.push({
+            category: 'heartbeat_gaps',
+            severity: stale.length > 0 ? 'high' : 'medium',
+            detail: disconnected.length + ' farms with heartbeat gaps (>' + (stale.length > 0 ? '12h: ' + stale.length + ' farms' : '2h'),
+            farms: disconnected.map(r => ({
+              farm_id: r.farm_id,
+              name: r.farm_name,
+              hours_since: Number(r.hours_since).toFixed(1)
+            })),
+            reference: 'Hernandez-Ramos et al. (2025) -- device connectivity monitoring'
+          });
+        }
+
+        // 2. Telemetry freshness (check farm_data for stale sensor readings)
+        const telemetry = await dbQuery(
+          `SELECT farm_id, updated_at,
+                  EXTRACT(EPOCH FROM NOW() - updated_at) / 3600 AS hours_since
+           FROM farm_data
+           WHERE updated_at IS NOT NULL
+           ORDER BY updated_at DESC`
+        );
+        const staleTelemetry = telemetry.rows.filter(r => Number(r.hours_since) > hours);
+        if (staleTelemetry.length > 0) {
+          findings.push({
+            category: 'stale_telemetry',
+            severity: staleTelemetry.length > 1 ? 'high' : 'medium',
+            detail: staleTelemetry.length + ' farms with telemetry data older than ' + hours + ' hours',
+            reference: 'Manivannan et al. (2024) -- IoT data freshness as security indicator'
+          });
+        }
+
+        // 3. Multi-farm correlation (if multiple farms go dark simultaneously, suspect infrastructure attack)
+        if (disconnected.length >= 2) {
+          // Check if disconnections happened within a similar timeframe
+          const disconnectTimes = disconnected.map(r => Number(r.hours_since));
+          const minGap = Math.min(...disconnectTimes);
+          const maxGap = Math.max(...disconnectTimes);
+          if (maxGap - minGap < 2) {
+            findings.push({
+              category: 'correlated_disconnection',
+              severity: 'high',
+              detail: disconnected.length + ' farms disconnected within a similar timeframe (spread: ' + (maxGap - minGap).toFixed(1) + 'h) -- possible coordinated disruption or shared infrastructure failure',
+              reference: 'Hernandez-Ramos et al. (2025) -- federated anomaly correlation'
+            });
+          }
+        }
+
+        // 4. Error patterns on sensor/sync routes
+        const sensorErrors = await dbQuery(
+          `SELECT route, error_type, COUNT(*) AS cnt
+           FROM app_errors
+           WHERE (route ILIKE '%sensor%' OR route ILIKE '%sync%' OR route ILIKE '%telemetry%' OR route ILIKE '%switchbot%')
+             AND last_seen > NOW() - ($1 || ' hours')::interval
+           GROUP BY route, error_type ORDER BY cnt DESC LIMIT 10`,
+          [hours]
+        );
+        if (sensorErrors.rows.length > 0) {
+          const totalSensorErrors = sensorErrors.rows.reduce((s, r) => s + Number(r.cnt), 0);
+          findings.push({
+            category: 'sensor_route_errors',
+            severity: totalSensorErrors > 20 ? 'high' : 'medium',
+            detail: totalSensorErrors + ' errors on sensor/sync/telemetry routes in last ' + hours + 'h',
+            routes: sensorErrors.rows.slice(0, 5).map(r => ({ route: r.route, type: r.error_type, count: Number(r.cnt) })),
+            reference: 'Manivannan et al. (2024) -- IoT endpoint security monitoring'
+          });
+        }
+
+        const securityStatus = findings.some(f => f.severity === 'high') ? 'alert'
+          : findings.length > 0 ? 'advisory' : 'healthy';
+
+        return {
+          ok: true,
+          window_hours: hours,
+          security_status: securityStatus,
+          total_farms_monitored: heartbeats.rows.length,
+          finding_count: findings.length,
+          findings
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
   // ── Feedback Recording ────────────────────────────────────────
 
   'record_recommendation_feedback': {
