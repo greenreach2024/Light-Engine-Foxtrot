@@ -1,6 +1,6 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.4.0
+**Version**: 1.5.0
 **Date**: March 27, 2026
 **Last Updated**: March 27, 2026 -- v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
@@ -625,7 +625,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
-| /api/network/*, /api/growers/* | routes/network-growers.js | Network marketplace |
+| /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (16 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance |
 | /api/lots | routes/lot-system.js | Lot tracking |
 | /api/grant-wizard | routes/grant-wizard.js | Grant application wizard |
 | /api/ai-monitoring | routes/admin-ai-monitoring.js | AI system monitoring |
@@ -691,7 +691,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 |---------|----------|---------|
 | Health Check | Periodic | System health monitoring |
 | Sync Monitor | Continuous | Farm data sync health |
-| AI Recommendations Pusher | Scheduled | GPT-4 recommendations to farms |
+| AI Recommendations Pusher | Every 30 min | GPT-4 recommendations + network_intelligence (crop_benchmarks, demand_signals, recipe_modifiers, risk_alerts, environment_benchmarks, pricing_intelligence) to farms |
 | AWS Cost Explorer Sync | Scheduled | Cloud cost accounting |
 | GitHub Billing Sync | Scheduled | GitHub Actions costs |
 | Wholesale Network Sync | Continuous | Aggregate farm inventory |
@@ -712,7 +712,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 #### GR-central-admin.html -- F.A.Y.E. Admin Dashboard
 - **Auth**: localStorage.admin_token required
-- **Navigation**: Sidebar (Overview, Farms, Users, Analytics, AI Rules)
+- **Navigation**: Sidebar (Overview, Farms, Users, Analytics, AI Rules, Network)
 - **Global Search**: #globalSearch (filters farms, devices, trays)
 - **Key Buttons**: Sync Stats, Export Report, Configure Farm, View Logs, Export Farm Data, Change Password, Logout
 - **Farm Info Edit**: owner, contact, phone, email, website, address fields (toggle editable)
@@ -740,6 +740,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
   - Inventory: seeds, packaging, nutrients, equipment, supplies (CRUD + restock)
   - Sustainability: ESG report, energy/water/carbon/waste tracking
   - IoT Manager: device scanning, auto-assign
+  - Network Intelligence: crop benchmarks, demand signals, risk alerts (from Central push)
 - **API Calls**:
   - GET /api/traceability, /stats, /lot/:lotCode
   - GET /api/inventory/dashboard, /reorder-alerts, /seeds/list, /nutrients/list, /packaging/list, /equipment/list, /supplies/list
@@ -1968,6 +1969,81 @@ When you change a file, here is what else is affected:
 
 ---
 
+## 16. AI Vision -- Network Intelligence Pipeline
+
+**Phase Status** (March 27, 2026): Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 2->3 gate PASSED.
+**Reference**: `.github/AI_VISION_RULES_AND_SKILLS.md` for full task list and phase gate rules.
+
+### 16.1 Experiment Records Pipeline
+
+```
+LE Harvest Event
+  -> server-foxtrot.js records experiment (crop, recipe, grow_days, environment, outcomes)
+  -> sync-service.js POSTs to Central /api/sync/experiment-records (every 5 min)
+  -> Central experiment-records.js ingests + deduplicates
+  -> experiment_records table (PostgreSQL)
+  -> crop_benchmarks table (nightly 2 AM aggregation via computeCropBenchmarks)
+```
+
+### 16.2 Central-to-Farm Intelligence Push
+
+The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `network_intelligence` payload:
+
+| Key | Source | Description |
+|-----|--------|-------------|
+| crop_benchmarks | crop_benchmarks table | Per-crop avg/min/max yield, grow days, loss rate, temp, humidity, PPFD |
+| demand_signals | wholesaleMemoryStore.js | Real wholesale order data aggregated per crop |
+| recipe_modifiers | yield-regression.js | Cross-farm yield regression adjustments |
+| risk_alerts | supply-demand-balancer.js | Harvest conflicts + supply gaps |
+| environment_benchmarks | experiment_records (actual achieved) | Per-crop temp/humidity/PPFD/VPD/DLI/photoperiod min/max/avg |
+| device_integrations | Device integration service | Protocol-specific integration recommendations |
+| pricing_intelligence | market-analysis-agent.js | Market price trends + AI outlook |
+
+### 16.3 Network Intelligence Routes (network-growers.js)
+
+| HTTP | Path | Description |
+|------|------|-------------|
+| GET | /api/network/dashboard | Network KPIs: total/active/offline farms, health, alerts, activity |
+| GET | /api/network/farms/list | All farms with status, harvests, yield |
+| GET | /api/network/farms/:farmId | Single farm detail |
+| GET | /api/network/comparative-analytics | Per-farm yield, loss rate, grow days comparison |
+| GET | /api/network/trends | Production trend (week/harvests/yield), demand, network growth |
+| GET | /api/network/alerts | High loss rate + below benchmark alerts |
+| GET | /api/network/benchmarking | Farm yield/loss ranking against network |
+| GET | /api/network/recipes | Network recipe analytics |
+| GET | /api/network/buyer-behavior | Buyer behavior + 3-tier churn classification |
+| GET | /api/growers/dashboard | Grower management dashboard |
+| GET | /api/growers/list | Grower details with performance |
+| GET | /api/leaderboard | Composite scoring: yield 40% + loss 30% + consistency 30% |
+| GET | /api/growers/performance/:growerId | Per-grower rating, harvest count, yield, loss |
+| GET | /api/growers/invitations/list | Grower invitation tracking |
+| POST | /api/growers/invite | Send grower invitation |
+| POST | /api/growers/:growerId/remove | Remove grower from network |
+
+### 16.4 Farm-Side Intelligence Consumption
+
+- **farm-admin.js**: Fetches `/api/ai/network-intelligence`, renders benchmarks panel
+- **LE-farm-admin.html**: Network Intelligence card with crop benchmarks, demand signals, risk alerts
+- **Event bus**: `demand_signal_refresh` event triggers succession planting suggestions
+- **Onboarding**: `/api/setup-wizard/seed-benchmarks` seeds initial benchmarks from Central
+
+### 16.5 Phase 2 Workflow Automation
+
+| Feature | Implementation |
+|---------|---------------|
+| Auto-derive plant count | trayFormatsDB lookup at seeding, sets plant_count_source: 'tray_format' |
+| AI pre-fill crop | `/api/ai/suggested-crop` scores crops by zone, inventory gaps, demand signals |
+| Combined seed + group | Single API call creates tray run + placement + date sync |
+| Auto-print harvest labels | Server-side `/api/printer/print-harvest` + client triggerAutoHarvestLabelPrint() |
+| Auto-derive photoperiod | Formula: hours = DLI * 1e6 / (PPFD * 3600), clamped [4,24] |
+| Seed date sync to group | Seeding action syncs date + crop to group planConfig.anchor |
+| Device auto-discovery | Multi-protocol scan (SwitchBot, network, MQTT) + auto-assign to zones |
+| Demand signal aggregation | analyzeDemandPatterns() from real wholesale orders, pushed every 30 min |
+| Onboarding benchmarks | /api/setup-wizard/seed-benchmarks fetches Central crop benchmarks |
+| Environmental benchmark push | getEnvironmentBenchmarksForPush() aggregates actual achieved env data per crop |
+| Network trends | Real PostgreSQL aggregations: production, demand, network growth per week |
+| Buyer behavior + churn | 3-tier classification (active/at_risk/churned) from wholesale_orders |
+
 ## 14. Category Quick Reference
 
 ### By Domain
@@ -2439,6 +2515,6 @@ The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. T
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.4.0
-**Generated**: March 24, 2026
+**Document Version**: 1.5.0
+**Generated**: March 27, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

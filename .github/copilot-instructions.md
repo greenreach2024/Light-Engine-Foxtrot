@@ -69,6 +69,21 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 	- Include `x-farm-id` header when farm ID is available (`farm_id`/`farmId` in storage).
 	- Sustainability dashboard fetches (`/api/sustainability/metrics`, `/utility-bills`, `/food-miles`, `/trends`) must fail soft on non-OK responses (no hard JSON parse crash/popups).
 
+
+### AI Vision Phase Completion (Mar 27, 2026)
+
+**Phase 1 -- Data Foundation + Central Benchmarks**: COMPLETE (12/12 tasks)
+- Experiment records pipeline, crop benchmarks, loss events, network dashboard, leaderboard
+- Frontend: network-view in GR-central-admin, sidebar navigation, farm correlation panel
+
+**Phase 2 -- Workflow Automation + Central Intelligence**: COMPLETE (12/12 tasks)
+- Farm: auto-derive plant count, AI pre-fill crop, combined seed+group, auto-print labels, auto-derive photoperiod, seed date sync, device auto-discovery
+- Central: demand signal aggregation, onboarding benchmarks, environmental benchmark push, network trends, buyer behavior + churn detection
+
+**Phase 2->3 Gate**: PASSED. Next: Phase 3 (Adaptive Intelligence + Central ML)
+
+**Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (16 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle)
+
 ### DO NOT (Architecture Rules)
 
 - DO NOT assume any physical device exists (no Pi, no edge box, no local server)

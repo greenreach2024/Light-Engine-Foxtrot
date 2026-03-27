@@ -260,3 +260,57 @@ The codebase contains references to "edge mode," "cloud mode," and mode detectio
 - The sync-service runs ON the LE-EB instance and pushes data to Central -- this is the "edge to cloud sync" path, except both are cloud instances
 
 **DO NOT try to "fix" the edge/cloud mode distinction. It works correctly as-is. The LE-EB instance behaving as an "edge" device in the cloud is the intended architecture.**
+
+---
+
+## AI Vision & Network Intelligence Data Flow
+
+**Phase Status**: Phase 1 COMPLETE, Phase 2 COMPLETE (March 27, 2026)
+
+### Experiment Records Pipeline (Farm -> Central)
+
+```
++---------------------------+       +---------------------------+
+| Light Engine (LE-EB)      |       | GreenReach Central        |
+|                           |       |                           |
+| Harvest Event             |       | POST /api/sync/           |
+|   -> experiment record    | ----> |   experiment-records      |
+|   (crop, recipe, env,     |       |   -> deduplicate          |
+|    yield, loss_rate)       |       |   -> experiment_records   |
+|                           |       |      (PostgreSQL)         |
+| sync-service.js (5 min)   |       |                           |
++---------------------------+       | Nightly 2 AM:             |
+                                    |   computeCropBenchmarks() |
+                                    |   -> crop_benchmarks tbl  |
+                                    +---------------------------+
+```
+
+### Intelligence Push (Central -> Farm, every 30 min)
+
+```
++---------------------------+       +---------------------------+
+| GreenReach Central        |       | Light Engine (LE-EB)      |
+|                           |       |                           |
+| analyzeAndPushToAllFarms()|       | POST /api/health/         |
+|   crop_benchmarks         | ----> |   ai-recommendations      |
+|   demand_signals          |       |   -> ai-recommendations   |
+|   recipe_modifiers        |       |      .json (file)         |
+|   risk_alerts             |       |                           |
+|   environment_benchmarks  |       | Consumed by:              |
+|   pricing_intelligence    |       |   - farm-admin.js         |
+|   device_integrations     |       |   - eventBus listeners    |
+|                           |       |   - /api/ai/suggested-crop|
+| Every 30 min              |       |   - /api/ai/network-intel |
++---------------------------+       +---------------------------+
+```
+
+### Key Tables
+
+| Table | Purpose | Updated |
+|-------|---------|---------|
+| experiment_records | Per-harvest experiment data (crop, recipe, env, outcomes) | On sync (every 5 min) |
+| crop_benchmarks | Aggregated per-crop benchmarks (yield, loss, temp, humidity, PPFD) | Nightly 2 AM |
+| loss_events | Individual loss occurrences with cause analysis | On sync |
+| network_farms | Farm metadata for network intelligence | On farm registration |
+| wholesale_orders | Order data powering demand signal analysis | On order events |
+
