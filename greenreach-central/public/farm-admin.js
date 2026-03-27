@@ -1238,7 +1238,7 @@ let isPerGram = false; // false = per lb, true = per 100g
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
-const PRICING_VERSION = '2026-03-26-v9';
+const PRICING_VERSION = '2026-03-27-v10';
 // Unit-of-measure map for Canadian packaged-goods pricing
 // 'weight' = sold by weight ($/oz or $/25g), 'pint' = sold per pint, 'unit' = sold per item
 const cropUnitMap = {
@@ -1281,54 +1281,93 @@ function getCropBackendUnit(cropName) {
     const unit = getCropUnit(cropName);
     if (unit === 'pint') return 'pint';
     if (unit === 'unit') return 'unit';
-    return 'oz';
+    return 'lb';
 }
 
-// Default pricing (per oz) - Based on organic market research Dec 2025
-// Prices calculated from actual retail packages and converted to per-oz rates
+// Default pricing per lb (CAD) - AI-generated from Canadian retail market data
+// Formula: (package_price_CAD / package_weight_oz) * 16 oz/lb * 1.05 premium
+// Source: Loblaws, Metro, Sobeys, Farm Boy, No Frills (Ontario observed prices)
 const defaultPricing = {
-    // Per-lb CAD retail prices aligned with crop-registry.json
-    // Greens tier: $23.52/lb
-    'Butterhead Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Breen Pelleted Organic': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Truchas Pelleted Organic': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Seaside F1 Spinach (baby leaf)': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Leaf Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Oak Leaf Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    // Lettuce: $4.99 CAD / 5oz pkg -> $16.77/lb
+    'Butterhead Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Breen Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Truchas Pelleted Organic': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Oak Leaf Lettuce': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Basil tier: $43.20/lb
-    'Genovese Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
-    'Thai Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
-    'Purple Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
-    'Lemon Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
-    'Holy Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
-    'Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    // Spinach: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Seaside F1 Spinach (baby leaf)': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Spinach': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Arugula: $23.52/lb (greens tier)
-    'Baby Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Cultivated Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Wild Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Wasabi Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Red Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    // Basil: $2.29-2.49 CAD / 1oz pkg -> $38.47-41.83/lb
+    'Genovese Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
+    'Thai Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Purple Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Holy Basil': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Basil': { retail: 38.47, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Kale: $23.52/lb (greens tier)
-    'Curly Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Baby Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
-    'Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    // Arugula: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Baby Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Cultivated Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Wild Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Wasabi Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Arugula': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Specialty: $25.12/lb
-    'Watercress': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 },
+    // Kale: $4.49 CAD / 5oz pkg -> $15.08/lb
+    'Curly Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
+    'Kale': { retail: 15.08, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Microgreens - premium per-lb pricing
-    'Microgreen': { retail: 36.00, ws1: 15, ws2: 20, ws3: 30 },
+    // Swiss Chard: $3.49 CAD / 8oz bunch -> $7.33/lb
+    'Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
+    'Magenta Sunset Swiss Chard': { retail: 7.33, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Sprouts
-    'Sprout': { retail: 9.28, ws1: 20, ws2: 25, ws3: 35 },
+    // Watercress: $3.99 CAD / 4oz pkg -> $16.76/lb
+    'Watercress': { retail: 16.76, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Herbs: $25.12/lb (specialty tier)
-    'Rosemary': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 },
-    'Sage': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 }
+    // Bok Choy/Asian greens: $3.49 CAD / 6oz pkg -> $9.77/lb
+    'Mei Qing Pak Choi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Tatsoi': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Komatsuna Mustard Spinach': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Mizuna Mustard Greens': { retail: 9.77, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Mixed Greens: $4.99 CAD / 5oz pkg -> $16.77/lb
+    'Mixed Greens': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Escarole Batavian': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+    'Sorrel': { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Herbs (per lb from packaged fresh herbs)
+    'Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Italian Parsley': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Cilantro': { retail: 25.03, ws1: 15, ws2: 25, ws3: 35 },
+    'Dill Bouquet': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Common Thyme': { retail: 58.92, ws1: 15, ws2: 25, ws3: 35 },
+    'French Tarragon': { retail: 66.97, ws1: 15, ws2: 25, ws3: 35 },
+    'Greek Oregano': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
+    'Rosemary': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
+    'Sage': { retail: 66.02, ws1: 15, ws2: 25, ws3: 35 },
+    'Marjoram': { retail: 53.26, ws1: 15, ws2: 25, ws3: 35 },
+    'Chervil': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Balm': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+    'Lovage': { retail: 33.43, ws1: 15, ws2: 25, ws3: 35 },
+    'Kentucky Colonel Spearmint': { retail: 41.83, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Microgreens: $4.49 CAD / 2oz tray -> $37.72/lb
+    'Microgreen': { retail: 37.72, ws1: 15, ws2: 20, ws3: 30 },
+
+    // Sprouts: $3.49 CAD / 6oz container -> $9.77/lb
+    'Sprout': { retail: 9.77, ws1: 20, ws2: 25, ws3: 35 },
+
+    // Strawberries: $5.99 USD/pint * 1.35 fx * 1.05 premium = $8.49/pint
+    'Strawberry': { retail: 8.49, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Cherry Tomato: $4.99 USD / 10oz * 1.35 fx * 16/oz * 1.05 = $11.32/lb
+    'Cherry Tomato': { retail: 11.32, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Tomato: $2.49 USD/each * 1.35 fx * 1.05 premium = $3.53/each
+    'Tomato': { retail: 3.53, ws1: 15, ws2: 25, ws3: 35 }
 };
 /**
  * Load crops and pricing — API first, localStorage fallback
@@ -1385,7 +1424,7 @@ async function loadCropsFromDatabase() {
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
-                const defaults = defaultPricing[crop] || { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 };
+                const defaults = defaultPricing[crop] || { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 };
                 return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
             });
         }
@@ -2550,8 +2589,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
             marketAverageCAD,
             sourceAverageUSD,
             priceRangeCAD,
+            pricePerLbCAD: null,
+            pricePer100gCAD: null,
             pricePerOzCAD: null,
-            pricePer25gCAD: null,
             pricePerOzUSD: null
         };
     }
@@ -2569,20 +2609,22 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
         ? pricePerOzCAD / (currentExchangeRate || 1)
         : averageSourcePriceUSD / avgWeightOz;
 
-    const pricePer25gCAD = pricePerOzCAD * LB_TO_100G;
+    const pricePerLbCAD = pricePerOzCAD * 16;
+    const pricePer100gCAD = pricePerLbCAD * LB_TO_100G;
 
     const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
-        ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * exchangeMultiplier)
-        : (marketData.priceRange || [0, 0]).map(p => p / avgWeightOz);
+        ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16 * exchangeMultiplier)
+        : (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16);
 
     return {
         comparisonUnit,
-        comparisonUnitLabel: '/oz',
-        marketAverageCAD: pricePerOzCAD,
+        comparisonUnitLabel: '/lb',
+        marketAverageCAD: pricePerLbCAD,
         sourceAverageUSD: pricePerOzUSD,
         priceRangeCAD,
+        pricePerLbCAD,
+        pricePer100gCAD,
         pricePerOzCAD,
-        pricePer25gCAD,
         pricePerOzUSD
     };
 }
@@ -2680,8 +2722,8 @@ function generateRecommendations() {
             marketAverage: marketAvg,
             comparisonUnit: normalizedMarket.comparisonUnit,
             comparisonUnitLabel: normalizedMarket.comparisonUnitLabel,
-            pricePerOzCAD: normalizedMarket.pricePerOzCAD,
-            pricePer25gCAD: normalizedMarket.pricePer25gCAD,
+            pricePerLbCAD: normalizedMarket.pricePerLbCAD,
+            pricePer100gCAD: normalizedMarket.pricePer100gCAD,
             sourcePriceUSD: normalizedMarket.sourceAverageUSD,
             priceRange: normalizedMarket.priceRangeCAD,
             exchangeRate: currentExchangeRate,
@@ -2762,10 +2804,10 @@ function displayRecommendations(recommendations) {
                         <div class="price-label">Market Price (CAD)</div>
                         ${isWeightComparison ? `
                             <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
-                                $${rec.pricePerOzCAD.toFixed(2)}/oz
+                                $${rec.pricePerLbCAD.toFixed(2)}/lb
                             </div>
                             <div style="font-size: 13px; color: var(--text-secondary);">
-                                $${rec.pricePer25gCAD.toFixed(2)}/25g
+                                $${rec.pricePer100gCAD.toFixed(2)}/100g
                             </div>
                         ` : `
                             <div style="font-size: 16px; font-weight: 600; color: var(--accent-blue);">
@@ -3104,40 +3146,40 @@ function checkForScheduledPriceUpdates() {
 // Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
     // Lettuce varieties - 28-35 day cycle, priced per lb
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
-    'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 16.77, yieldFactor: 0.92 },
+    'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 16.77, yieldFactor: 0.90 },
+    'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 16.77, yieldFactor: 0.90 },
+    'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.91 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 16.77, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 16.77, yieldFactor: 0.91 },
     
     // Kale varieties - 35-42 day cycle, priced per lb
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 15.08, yieldFactor: 0.89 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.92 },
     
     // Asian Greens - priced per lb
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 9.77, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 9.77, yieldFactor: 0.91 },
     
     // Specialty Greens - priced per lb
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 25.12, yieldFactor: 0.90 },
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 16.77, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 16.76, yieldFactor: 0.90 },
     
     // Arugula varieties - 21-28 day cycle, priced per lb
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 23.52, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 15.08, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 15.08, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 15.08, yieldFactor: 0.90 },
     
     // Basil varieties - 21-28 day cycle, priced per lb (CAD, from crop-registry)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.86 }
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 38.47, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 41.83, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 41.83, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 41.83, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 41.83, yieldFactor: 0.86 }
 };
 
 // Global crop value data
