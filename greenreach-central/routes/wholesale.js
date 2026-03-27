@@ -51,7 +51,7 @@ import {
 } from '../services/wholesaleNetworkAggregator.js';
 import { listNetworkFarms, removeNetworkFarm, upsertNetworkFarm } from '../services/networkFarmsStore.js';
 import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js';
-import { processSquarePayments } from '../services/squarePaymentService.js';
+import { processSquarePayments, refundPayment } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
 import { farmStore } from '../lib/farm-data-store.js';
@@ -1803,6 +1803,25 @@ router.post('/orders/:orderId/cancel', requireBuyerPortalAuth, async (req, res) 
   order.cancelled_at = new Date().toISOString();
   order.cancellation_reason = sanitizeText(req.body?.reason || 'Buyer requested cancellation');
 
+  // Initiate refund if payment was completed
+  if (order.payment?.status === 'completed' && order.payment?.paymentResults) {
+    const refundResults = [];
+    for (const pr of (order.payment.paymentResults || order.payment.payments || [])) {
+      if (pr.success && pr.paymentId) {
+        const refundResult = await refundPayment({
+          paymentId: pr.paymentId,
+          farmId: pr.farmId,
+          amountCents: pr.amountMoney?.amount || 0,
+          reason: order.cancellation_reason,
+          orderId: order.master_order_id
+        }).catch(err => ({ success: false, error: err.message }));
+        refundResults.push({ farmId: pr.farmId, ...refundResult });
+      }
+    }
+    order.refund_results = refundResults;
+    logOrderEvent(order.master_order_id, 'refund_initiated_on_cancel', { refund_results: refundResults });
+  }
+
   await saveOrder(order).catch(() => {});
   logOrderEvent(order.master_order_id, 'order_cancelled', {
     buyer_id: req.wholesaleBuyer.id,
@@ -2096,6 +2115,16 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         }
       };
 
+      // Retry wrapper: 1 retry with 3s delay for transient failures
+      const farmCallWithRetry = async (farmBaseUrl, urlPath, body, farmId, farmObj, timeoutMs = 8000) => {
+        const first = await farmCallWithTimeout(farmBaseUrl, urlPath, body, farmId, farmObj, timeoutMs)
+          .catch(err => ({ ok: false, status: 0, json: null, error: err }));
+        if (first.ok) return first;
+        console.warn(`[Checkout] Retrying ${urlPath} for farm ${farmId} after 3s delay`);
+        await new Promise(r => setTimeout(r, 3000));
+        return farmCallWithTimeout(farmBaseUrl, urlPath, body, farmId, farmObj, timeoutMs);
+      };
+
       // Phase 1: Reserve inventory at every farm (synchronous, with rollback on failure)
       const reservedFarms = []; // track successful reservations for rollback
       let reservationError = null;
@@ -2106,7 +2135,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         if (!farmUrl) continue;
 
         try {
-          const reserveResult = await farmCallWithTimeout(farmUrl, '/api/wholesale/inventory/reserve', {
+          const reserveResult = await farmCallWithRetry(farmUrl, '/api/wholesale/inventory/reserve', {
             order_id: order.master_order_id,
             items: (sub.items || []).map((it) => ({ sku_id: it.sku_id, quantity: it.quantity }))
           }, sub.farm_id, farm);
@@ -2130,7 +2159,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       if (reservationError) {
         for (const reserved of reservedFarms) {
           try {
-            await farmCallWithTimeout(reserved.farmUrl, '/api/wholesale/inventory/release', {
+            await farmCallWithRetry(reserved.farmUrl, '/api/wholesale/inventory/release', {
               order_id: order.master_order_id
             }, reserved.farm_id, reserved.farm, 5000);
             console.log(`[Checkout] Rolled back reservation at farm ${reserved.farm_id}`);
@@ -2140,13 +2169,39 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         }
 
         if (paymentSuccess) {
+          // Auto-refund: payment was captured but inventory reservation failed
+          console.error(`[Checkout] CRITICAL: Payment captured for ${order.master_order_id} but reservation failed. Initiating auto-refund.`);
+          const refundResults = [];
+          for (const pr of (payment.paymentResults || payment.payments || [])) {
+            if (pr.success && pr.paymentId) {
+              const refundResult = await refundPayment({
+                paymentId: pr.paymentId,
+                farmId: pr.farmId,
+                amountCents: pr.amountMoney?.amount || 0,
+                reason: `Inventory reservation failed for order ${order.master_order_id}`,
+                orderId: order.master_order_id
+              }).catch(err => ({ success: false, error: err.message }));
+              refundResults.push({ farmId: pr.farmId, ...refundResult });
+              console.log(`[Checkout] Auto-refund for farm ${pr.farmId}: ${refundResult.success ? 'OK' : refundResult.error}`);
+            }
+          }
+          order.status = 'cancelled';
+          order.cancelled_at = new Date().toISOString();
+          order.cancellation_reason = 'Auto-cancelled: inventory reservation failed after payment';
+          order.refund_results = refundResults;
+          await saveOrder(order).catch(() => {});
+          logOrderEvent(order.master_order_id, 'auto_refund_reservation_failure', {
+            reservation_error: reservationError,
+            refund_results: refundResults
+          });
+
           const adminEmail = process.env.ADMIN_ALERT_EMAIL || process.env.SES_FROM_EMAIL;
           if (adminEmail) {
             emailService.sendEmail({
               to: adminEmail,
-              subject: '[CRITICAL] Wholesale payment captured but reservation failed',
-              text: `Order ${order.master_order_id} captured payment but failed reservation rollback path. Manual payment reconciliation may be required.\nBuyer: ${buyer_account?.email || 'unknown'}\nDetail: ${reservationError}`
-            }).catch(err => console.error('[Checkout] Failed to send payment/reservation mismatch alert:', err.message));
+              subject: '[CRITICAL] Wholesale payment auto-refunded after reservation failure',
+              text: `Order ${order.master_order_id} payment was captured but reservation failed.\nAuto-refund initiated.\nBuyer: ${buyer_account?.email || 'unknown'}\nDetail: ${reservationError}\nRefund results: ${JSON.stringify(refundResults)}`
+            }).catch(err => console.error('[Checkout] Failed to send auto-refund alert:', err.message));
           }
         }
 
@@ -2173,7 +2228,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       } else {
         for (const reserved of reservedFarms) {
           try {
-            await farmCallWithTimeout(reserved.farmUrl, '/api/wholesale/inventory/release', {
+            await farmCallWithRetry(reserved.farmUrl, '/api/wholesale/inventory/release', {
               order_id: order.master_order_id
             }, reserved.farm_id, reserved.farm, 5000);
             console.log(`[Checkout] Released reservation (non-success payment) at farm ${reserved.farm_id}`);
@@ -2479,6 +2534,55 @@ router.get('/network/recommendations', async (req, res) => {
 // ============================================================================
 // ADMIN ENDPOINTS - Payment Management
 // ============================================================================
+
+// Reverse lookup: find all orders containing a specific lot number
+router.get('/admin/orders/by-lot/:lotNumber', adminAuthMiddleware, async (req, res) => {
+  try {
+    const lotNumber = req.params.lotNumber;
+    if (!lotNumber) {
+      return res.status(400).json({ status: 'error', message: 'lotNumber is required' });
+    }
+    if (!isDatabaseAvailable()) {
+      return res.status(503).json({ status: 'error', message: 'Database unavailable' });
+    }
+    // Search order_data JSONB for lot_id matches within farm_sub_orders items
+    const result = await query(
+      `SELECT master_order_id, buyer_id, buyer_email, status, created_at, order_data
+       FROM wholesale_orders
+       WHERE order_data::text LIKE $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [`%${lotNumber}%`]
+    );
+    // Filter to orders that actually contain the lot in their items
+    const matchingOrders = result.rows.filter(row => {
+      const data = row.order_data || {};
+      return (data.farm_sub_orders || []).some(sub =>
+        (sub.items || []).some(item => item.lot_id === lotNumber)
+      );
+    }).map(row => ({
+      master_order_id: row.master_order_id,
+      buyer_id: row.buyer_id,
+      buyer_email: row.buyer_email,
+      status: row.status,
+      created_at: row.created_at,
+      matching_items: (row.order_data?.farm_sub_orders || []).flatMap(sub =>
+        (sub.items || []).filter(item => item.lot_id === lotNumber).map(item => ({
+          farm_id: sub.farm_id,
+          sku_id: item.sku_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          lot_id: item.lot_id
+        }))
+      )
+    }));
+
+    return res.json({ status: 'ok', lot_number: lotNumber, orders: matchingOrders, count: matchingOrders.length });
+  } catch (error) {
+    console.error('[Admin] Lot lookup error:', error.message);
+    return res.status(500).json({ status: 'error', message: 'Lot lookup failed' });
+  }
+});
 
 router.get('/admin/orders', adminAuthMiddleware, async (req, res) => {
   try {

@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { getOrderById } from '../services/wholesaleMemoryStore.js';
 import emailService from '../services/email-service.js';
 import logger from '../utils/logger.js';
 
@@ -367,13 +368,48 @@ router.post('/packing-slip', async (req, res) => {
       return res.status(400).json({ error: 'farmId and orderId are required' });
     }
 
-    // For each item, look up the most recent active lot
+    // Try to get lot data from the order record first (C1 traceability pipeline)
+    let orderLinkedLots = null;
+    try {
+      const order = await getOrderById(orderId, { includeArchived: true });
+      if (order) {
+        const farmSub = (order.farm_sub_orders || []).find(sub => sub.farm_id === farmId);
+        if (farmSub?.items?.length) {
+          orderLinkedLots = new Map();
+          for (const oi of farmSub.items) {
+            if (oi.lot_id) orderLinkedLots.set(oi.sku_id, oi);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[LotSystem] Could not load order for packing slip lot data:', e.message);
+    }
+
+    // For each item, prefer order-linked lot, fall back to most recent active lot
     const slipItems = [];
     const lineItems = items || [];
     for (const item of lineItems) {
       const cropName = item.sku_name || item.product_name || '';
       const cropId = cropName.toLowerCase().replace(/\s+/g, '-');
+      const skuId = item.sku_id || cropId;
 
+      // Check order-linked lot first
+      const orderLot = orderLinkedLots?.get(skuId);
+      if (orderLot?.lot_id) {
+        slipItems.push({
+          product: cropName,
+          quantity: item.qty || item.quantity,
+          unit: item.unit || 'lb',
+          lot_number: orderLot.lot_id,
+          harvest_date: orderLot.harvest_date_start || 'N/A',
+          best_by_date: orderLot.best_by_date || 'N/A',
+          quality_grade: orderLot.quality_flags?.includes('organic') ? 'A' : 'N/A',
+          source: 'order_record'
+        });
+        continue;
+      }
+
+      // Fall back to DB query for most recent active lot
       const lotResult = await query(
         `SELECT lot_number, best_by_date, quality_score, harvest_date
            FROM lot_records
@@ -390,7 +426,8 @@ router.post('/packing-slip', async (req, res) => {
         lot_number: lot?.lot_number || 'N/A',
         harvest_date: lot?.harvest_date || 'N/A',
         best_by_date: lot?.best_by_date || 'N/A',
-        quality_grade: lot ? gradeFromScore(lot.quality_score) : 'N/A'
+        quality_grade: lot ? gradeFromScore(lot.quality_score) : 'N/A',
+        source: 'lot_records'
       });
     }
 

@@ -202,7 +202,12 @@ export function assembleInvoice({ order, subOrders, farmProfiles, buyerProfile }
         discount_rate: item.discount_rate || 0,
         line_total: item.line_total || (item.qty * item.unit_price),
         weight_breakdown: wb,
-        traceability: item.traceability || {}
+        traceability: {
+          lot_id: item.lot_id || item.traceability?.lot_id || null,
+          harvest_date: item.harvest_date_start || item.traceability?.harvest_date || null,
+          best_by_date: item.best_by_date || item.traceability?.best_by_date || null,
+          quality_flags: item.quality_flags || item.traceability?.quality_flags || []
+        }
       };
     });
 

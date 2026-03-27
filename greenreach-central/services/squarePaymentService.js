@@ -150,6 +150,60 @@ export async function processSquarePayments(params) {
   return summarizeResults(paymentResults);
 }
 
+/**
+ * Refund a previously completed Square payment.
+ * @param {object} params
+ * @param {string} params.paymentId - Square payment ID to refund
+ * @param {string} params.farmId - Farm whose credentials were used for original payment
+ * @param {number} params.amountCents - Amount in cents to refund (full or partial)
+ * @param {string} params.reason - Refund reason for audit trail
+ * @param {string} params.orderId - Associated order ID for idempotency
+ * @returns {Promise<{success: boolean, refundId?: string, error?: string}>}
+ */
+export async function refundPayment({ paymentId, farmId, amountCents, reason, orderId }) {
+  if (!paymentId || !farmId || !amountCents || amountCents <= 0) {
+    return { success: false, error: 'paymentId, farmId, and positive amountCents are required' };
+  }
+
+  try {
+    const credentials = await getBatchFarmSquareCredentials([String(farmId)]);
+    const creds = credentials.get(String(farmId));
+    if (!creds?.success || !creds?.access_token) {
+      return { success: false, error: 'square_credentials_unavailable_for_refund' };
+    }
+
+    const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+    if (!squareEnvironment) {
+      return { success: false, error: 'SQUARE_ENVIRONMENT is required' };
+    }
+
+    const provider = PaymentProviderFactory.create('square', {
+      squareAccessToken: creds.access_token,
+      environment: squareEnvironment,
+    });
+
+    const idempotencyKey = crypto.createHash('sha256')
+      .update(`refund:${orderId || paymentId}:${farmId}:${amountCents}`)
+      .digest('hex');
+
+    const refundResponse = await provider.refundPayment({
+      paymentId,
+      amountMoney: { amount: amountCents, currency: 'CAD' },
+      reason: reason || 'Order cancelled',
+      idempotencyKey,
+    });
+
+    return {
+      success: true,
+      refundId: refundResponse.refundId || refundResponse.id,
+      status: refundResponse.status || 'PENDING',
+    };
+  } catch (error) {
+    console.error(`[Refund] Failed for payment ${paymentId} farm ${farmId}:`, error.message);
+    return { success: false, error: error.message || 'refund_failed' };
+  }
+}
+
 export async function createDemoPaymentRecord(orderId, amount) {
   return {
     payment_id: `manual-${orderId}-${Date.now()}`,
@@ -163,5 +217,6 @@ export async function createDemoPaymentRecord(orderId, amount) {
 
 export default {
   processSquarePayments,
+  refundPayment,
   createDemoPaymentRecord
 };

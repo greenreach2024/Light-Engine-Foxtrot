@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { ingestPaymentRevenue, ingestRefundReversal } from '../services/revenue-accounting-connector.js';
 import { getOrderById, saveOrder, logOrderEvent } from '../services/wholesaleMemoryStore.js';
+import { transitionOrderStatus, isValidOrderTransition } from '../services/orderStateMachine.js';
 import emailService from '../services/email-service.js';
 
 const router = express.Router();
@@ -170,6 +171,32 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
         ingestRefundReversal({
           refund_id: refund.id, order_id: refund.order_id || refund.payment_id, amount, provider: 'square',
         }).catch(e => console.error('[Webhook:Square] Refund reversal err:', e.message));
+
+        // Downgrade order status to cancelled if refund is completed
+        if (refund.payment_id) {
+          try {
+            const matchResult = await query(
+              `SELECT master_order_id FROM payment_records WHERE payment_id = $1 OR metadata->>'square_payment_id' = $1 LIMIT 1`,
+              [refund.payment_id]
+            );
+            const orderId = matchResult.rows[0]?.master_order_id;
+            if (orderId) {
+              const order = await getOrderById(orderId);
+              if (order && isValidOrderTransition(order.status, 'cancelled')) {
+                transitionOrderStatus(order, 'cancelled');
+                order.cancelled_at = new Date().toISOString();
+                order.cancellation_reason = `Refund completed via webhook (refund_id: ${refund.id})`;
+                await saveOrder(order);
+                logOrderEvent(orderId, 'order_cancelled_on_refund', {
+                  refund_id: refund.id, amount, previous_status: order.status
+                });
+                console.log(`[Webhook:Square] Order ${orderId} cancelled after refund ${refund.id}`);
+              }
+            }
+          } catch (e) {
+            console.error('[Webhook:Square] Order status downgrade on refund err:', e.message);
+          }
+        }
       }
     }
   } catch (err) {

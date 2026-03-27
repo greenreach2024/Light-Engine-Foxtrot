@@ -193,7 +193,11 @@ function normalizeAllocationResult({ allocations, unavailable, commissionRate = 
       unit: alloc.unit || 'case',
       size: alloc.size || 5,
       price_per_unit: pricePerUnit,
-      line_total: lineTotal
+      line_total: lineTotal,
+      lot_id: alloc.lot_id || null,
+      harvest_date_start: alloc.harvest_date_start || null,
+      harvest_date_end: alloc.harvest_date_end || null,
+      quality_flags: alloc.quality_flags || []
     });
     farmSubOrder.subtotal += lineTotal;
   }
@@ -316,7 +320,11 @@ export async function allocateCartFromNetwork(cartOrInput, sourcing, buyerLocati
           unit: skuData.unit || 'case',
           size: skuData.size || 5,
           quality_score: qualityScores[qualityKey]?.avg_quality || null,
-          routing_reason: qualityScores[qualityKey] ? 'quality_ranked' : 'first_available'
+          routing_reason: qualityScores[qualityKey] ? 'quality_ranked' : 'first_available',
+          lot_id: farm.lot_id || null,
+          harvest_date_start: farm.harvest_date_start || null,
+          harvest_date_end: farm.harvest_date_end || null,
+          quality_flags: farm.quality_flags || []
         });
         remaining -= alloc;
       }

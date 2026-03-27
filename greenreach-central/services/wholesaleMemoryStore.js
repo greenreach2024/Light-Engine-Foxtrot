@@ -801,15 +801,26 @@ async function runArchiveIfNeeded() {
 }
 
 async function archiveOldOrders() {
-  const cutoff = new Date(Date.now() - ARCHIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const result = await query(
-    'SELECT master_order_id, buyer_id, buyer_email, status, created_at, updated_at, order_data FROM wholesale_orders WHERE created_at < $1 ORDER BY created_at ASC',
-    [cutoff]
-  );
-  if (!result.rows.length) return;
-  await appendArchiveRows(result.rows);
-  const ids = result.rows.map((row) => row.master_order_id);
-  await query('DELETE FROM wholesale_orders WHERE master_order_id = ANY($1)', [ids]);
+  // Advisory lock prevents concurrent archive runs across EB instances
+  // Lock ID 8675309 is arbitrary but unique to this archive operation
+  const lockResult = await query('SELECT pg_try_advisory_lock(8675309) AS acquired');
+  if (!lockResult.rows[0]?.acquired) {
+    console.log('[Archive] Skipped: another instance holds the archive lock');
+    return;
+  }
+  try {
+    const cutoff = new Date(Date.now() - ARCHIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const result = await query(
+      'SELECT master_order_id, buyer_id, buyer_email, status, created_at, updated_at, order_data FROM wholesale_orders WHERE created_at < $1 ORDER BY created_at ASC',
+      [cutoff]
+    );
+    if (!result.rows.length) return;
+    await appendArchiveRows(result.rows);
+    const ids = result.rows.map((row) => row.master_order_id);
+    await query('DELETE FROM wholesale_orders WHERE master_order_id = ANY($1)', [ids]);
+  } finally {
+    await query('SELECT pg_advisory_unlock(8675309)').catch(() => {});
+  }
 }
 
 function mergeOrders(primary, secondary) {
