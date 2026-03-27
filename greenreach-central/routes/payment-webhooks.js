@@ -2,6 +2,8 @@ import express from 'express';
 import crypto from 'crypto';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import { ingestPaymentRevenue, ingestRefundReversal } from '../services/revenue-accounting-connector.js';
+import { getOrderById, saveOrder, logOrderEvent } from '../services/wholesaleMemoryStore.js';
+import emailService from '../services/email-service.js';
 
 const router = express.Router();
 
@@ -102,7 +104,7 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
         [status, JSON.stringify({ type: eventType, at: new Date().toISOString() }), payment.id]
       );
 
-      // If payment completed, ingest into accounting
+      // If payment completed, ingest into accounting and advance order state
       if (status === 'completed') {
         const record = await query('SELECT * FROM payment_records WHERE payment_id = $1 OR metadata->>\'square_payment_id\' = $1 LIMIT 1', [payment.id]);
         if (record.rows.length > 0) {
@@ -111,6 +113,38 @@ router.post('/square', express.raw({ type: 'application/json' }), async (req, re
             payment_id: r.payment_id, order_id: r.order_id, amount, provider: 'square',
             broker_fee: Number(r.metadata?.broker_fee || 0), tax_amount: Number(r.metadata?.tax_amount || 0),
           }).catch(e => console.error('[Webhook:Square] Revenue ingest err:', e.message));
+
+          const orderId = r.order_id || r.metadata?.masterOrderId;
+          if (orderId) {
+            try {
+              const order = await getOrderById(orderId);
+              if (order && order.status !== 'confirmed') {
+                const prevStatus = order.status;
+                order.status = 'confirmed';
+                order.payment = order.payment || {};
+                order.payment.status = 'completed';
+                order.payment.confirmed_at = new Date().toISOString();
+                await saveOrder(order);
+                logOrderEvent(orderId, 'payment_confirmed', {
+                  previous_status: prevStatus,
+                  payment_id: payment.id,
+                  amount,
+                  provider: 'square'
+                });
+                const buyerEmail = order.buyer_account?.email;
+                if (buyerEmail) {
+                  emailService.sendEmail({
+                    to: buyerEmail,
+                    subject: `GreenReach Order #${String(orderId).substring(0, 8)} - Payment Confirmed`,
+                    text: `Your payment of $${amount.toFixed(2)} CAD has been confirmed. Order #${String(orderId).substring(0, 8)} is now being prepared for fulfillment.`,
+                    html: `<p>Your payment of <strong>$${amount.toFixed(2)} CAD</strong> has been confirmed.</p><p>Order <strong>#${String(orderId).substring(0, 8)}</strong> is now being prepared for fulfillment.</p>`
+                  }).catch(e => console.warn('[Webhook:Square] Buyer notification email err:', e.message));
+                }
+              }
+            } catch (e) {
+              console.error('[Webhook:Square] Order status update err:', e.message);
+            }
+          }
         }
       }
     } else if (eventType === 'refund.created' || eventType === 'refund.updated') {

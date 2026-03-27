@@ -365,7 +365,22 @@ export async function updateFarmSubOrder({ orderId, farmId, updates }) {
   const subOrder = (order.farm_sub_orders || []).find((sub) => sub.farm_id === farmId);
   if (!subOrder) return null;
 
-  Object.assign(subOrder, updates);
+  const allowedFields = new Set([
+    'status',
+    'tracking_number',
+    'tracking_carrier',
+    'fulfilled_at',
+    'cancelled_at',
+    'cancellation_reason',
+    'notes',
+    'delivery_date',
+    'shipped_at',
+    'delivered_at',
+    'verified_at'
+  ]);
+  Object.entries(updates || {}).forEach(([key, value]) => {
+    if (allowedFields.has(key)) subOrder[key] = value;
+  });
   
   // Update in buyer's list too
   const buyerOrders = ordersByBuyerId.get(order.buyer_id);

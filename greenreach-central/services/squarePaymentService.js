@@ -100,9 +100,14 @@ export async function processSquarePayments(params) {
     const brokerFeeCents = Math.max(0, Math.round(amountCents * Number(commissionRate || 0)));
 
     try {
+      const squareEnvironment = process.env.SQUARE_ENVIRONMENT;
+      if (!squareEnvironment) {
+        throw new Error('SQUARE_ENVIRONMENT is required for Square payment processing');
+      }
+
       const provider = PaymentProviderFactory.create('square', {
         squareAccessToken: creds.access_token,
-        environment: process.env.SQUARE_ENVIRONMENT || 'sandbox',
+        environment: squareEnvironment,
         webhookSecret: process.env.SQUARE_WEBHOOK_SECRET || undefined,
         brokerMerchantId: process.env.SQUARE_BROKER_MERCHANT_ID || undefined,
       });

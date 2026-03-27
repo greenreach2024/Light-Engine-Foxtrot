@@ -200,14 +200,14 @@ function normalizeAllocationResult({ allocations, unavailable, commissionRate = 
 
   const farmSubOrders = Array.from(farmMap.values());
   const subtotal = farmSubOrders.reduce((sum, sub) => sum + Number(sub.subtotal || 0), 0);
-  const brokerFeeTotal = Number((subtotal * Number(commissionRate || 0)).toFixed(2));
-  const netToFarmsTotal = Number((subtotal - brokerFeeTotal).toFixed(2));
-  const grandTotal = Number(subtotal.toFixed(2));
+  const brokerFeeTotal = Math.round(subtotal * Number(commissionRate || 0) * 100) / 100;
+  const netToFarmsTotal = Math.round((subtotal - brokerFeeTotal) * 100) / 100;
+  const grandTotal = Math.round(subtotal * 100) / 100;
 
   const paymentSplit = farmSubOrders.map((sub) => {
     const gross = Number(sub.subtotal || 0);
-    const brokerFee = Number((gross * Number(commissionRate || 0)).toFixed(2));
-    const net = Number((gross - brokerFee).toFixed(2));
+    const brokerFee = Math.round(gross * Number(commissionRate || 0) * 100) / 100;
+    const net = Math.round((gross - brokerFee) * 100) / 100;
     return {
       farm_id: sub.farm_id,
       farm_name: sub.farm_name,

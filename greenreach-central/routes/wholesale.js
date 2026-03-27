@@ -84,6 +84,14 @@ const passwordResetLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const checkoutLimiter = rateLimit({
+  windowMs: 60 * 1000,       // 1 minute
+  max: 10,                    // 10 checkout attempts per buyer per minute
+  message: { status: 'error', message: 'Too many checkout requests. Try again shortly.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // ── Input sanitization helper ────────────────────────────────────────
 function sanitizeText(str) {
   if (typeof str !== 'string') return str;
@@ -1865,7 +1873,7 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
 });
 
 
-router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
+router.post('/checkout/preview', checkoutLimiter, requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
     const { cart, recurrence, sourcing } = req.body || {};
     if (!Array.isArray(cart) || cart.length === 0) {
@@ -1921,7 +1929,7 @@ router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuye
   }
 });
 
-router.post('/checkout/execute', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
+router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {
     const {
       buyer_account,
