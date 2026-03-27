@@ -80,9 +80,13 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 - Farm: auto-derive plant count, AI pre-fill crop, combined seed+group, auto-print labels, auto-derive photoperiod, seed date sync, device auto-discovery
 - Central: demand signal aggregation, onboarding benchmarks, environmental benchmark push, network trends, buyer behavior + churn detection
 
-**Phase 2->3 Gate**: PASSED. Next: Phase 3 (Adaptive Intelligence + Central ML)
+**Phase 3 -- Adaptive Intelligence + Central ML**: COMPLETE (12/12 tasks)
+- Central ML: yield regression, recipe modifiers, anomaly correlation, adaptive loss alerts
+- Endpoints: energy benchmarks, farm performance tracking, performance leaderboard
 
-**Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (16 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle)
+**Phase 3->4 Gate**: PASSED. Next: Phase 4 (Network Coordination)
+
+**Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (19 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle), `greenreach-central/jobs/anomaly-correlation.js` (weekly cross-farm anomaly detection), `greenreach-central/jobs/supply-demand-balancer.js` (risk alerts + adaptive loss alerts)
 
 ### DO NOT (Architecture Rules)
 

@@ -625,7 +625,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
-| /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (16 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance |
+| /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (19 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
 | /api/grant-wizard | routes/grant-wizard.js | Grant application wizard |
 | /api/ai-monitoring | routes/admin-ai-monitoring.js | AI system monitoring |

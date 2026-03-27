@@ -727,6 +727,7 @@ Central Internal:
   Every 5 min:    wholesaleNetworkAggregator refresh
   Nightly 2 AM:   Benchmark aggregation job (NEW - Phase 1)
   Weekly:         Recipe modifier computation (NEW - Phase 3)
+  Weekly:         Anomaly correlation across farms (NEW - Phase 3)
 ```
 
 ### Skill 11.3: Identify Unused Data
