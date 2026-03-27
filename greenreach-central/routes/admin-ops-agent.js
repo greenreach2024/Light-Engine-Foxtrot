@@ -1728,6 +1728,8 @@ export const ADMIN_TOOL_CATALOG = {
   // -- Security Operations (Gap Analysis Tools) --
   // Reference: greenreach-central/.github/skills/security.md
   // Workbook: greenreach-central/faye-security-workbook.md
+          /^greenreach-central\/\.github\/.+\.md$/,
+          /^\.github\/.+\.md$/
 
   'analyze_security_behavior': {
     description: 'Analyze admin and API behavioral patterns to detect insider threats or compromised accounts. Builds a behavioral baseline from faye_decision_log and admin_alerts, then flags anomalies: unusual hours, action frequency spikes, new action types, privilege escalation patterns. Grounded in Kamatchi et al. (2025) behavioral insider threat detection methodology.',
@@ -2804,7 +2806,9 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'read_le_source_file': {
-    description: 'Read a source file from the Light Engine codebase for tracing and debugging. Returns file contents (max 500 lines). Allowed paths: server-foxtrot.js, routes/*, public/*.{js,html,css}, services/*, config/*, package.json, greenreach-central/.github/skills/*.md, greenreach-central/faye-security-workbook.md. FAYE may ONLY read, never edit.',
+    description: 'Read a source file from the Light Engine codebase for tracing and debugging. Returns file contents (max 500 lines). Allowed paths: server-foxtrot.js, routes/*, public/*.{js,html,css}, services/*, config/*, package.json, greenreach-central/.github/*.md (includes skills/, COMPLETE_SYSTEM_MAP, CLOUD_ARCHITECTURE, SENSOR_DATA_PIPELINE), greenreach-central/faye-security-workbook.md. FAYE may ONLY read, never edit.',
+          /^greenreach-central\/\.github\/.+\.md$/,
+          /^\.github\/.+\.md$/
     category: 'read',
     required: ['file_path'],
     optional: ['start_line', 'end_line', 'search_pattern'],
@@ -2840,7 +2844,9 @@ export const ADMIN_TOOL_CATALOG = {
           /^greenreach-central\/public\/.+\.(js|html|css)$/,
           /^greenreach-central\/package\.json$/,
           /^greenreach-central\/.github\/skills\/.+\.md$/,
-          /^greenreach-central\/faye-security-workbook\.md$/
+          /^greenreach-central\/faye-security-workbook\.md$/,
+          /^greenreach-central\/.github\/.+\.md$/,
+          /^\.github\/.+\.md$/
         ];
         const BLOCKED_PATTERNS = [
           /\.env/i, /secret/i, /credential/i, /\.pem$/i, /\.key$/i, /password/i, /token/i

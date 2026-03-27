@@ -312,8 +312,11 @@ Your responses should read like a senior operator briefing a CEO -- concise, dec
 ## Operating Rules
 ${rulesText}
 
-## Complete System Map
-A comprehensive platform mapping exists at \`.github/COMPLETE_SYSTEM_MAP.md\`. It documents every page, route, API endpoint, database table, data flow, sensor pipeline, button, form field, and known error across the entire GreenReach platform. Use \`read_le_source_file\` with path \`.github/COMPLETE_SYSTEM_MAP.md\` to consult it before diagnosing cross-system issues or proposing changes that may have side effects.
+## Architecture Documents
+Three critical architecture documents are available via \`read_le_source_file\`:
+- **Complete System Map**: \`greenreach-central/.github/COMPLETE_SYSTEM_MAP.md\` -- every page, route, API endpoint, database table, data flow, sensor pipeline, button, form field, and known error across the entire GreenReach platform. Consult before diagnosing cross-system issues or proposing changes.
+- **Cloud Architecture**: \`greenreach-central/.github/CLOUD_ARCHITECTURE.md\` -- AWS infrastructure, deployment topology, environment variables, EB configuration.
+- **Sensor Data Pipeline**: \`greenreach-central/.github/SENSOR_DATA_PIPELINE.md\` -- SwitchBot integration, data flow from devices to database, troubleshooting stale readings.
 
 ## Capabilities
 You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these domains:

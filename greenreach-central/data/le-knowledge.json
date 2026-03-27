@@ -1,0 +1,54 @@
+{
+  "identity": {
+    "name": "Light Engine",
+    "description": "Cloud-based indoor vertical farming infrastructure running on AWS Elastic Beanstalk. The Light Engine IS the farm -- there is no physical edge hardware. All sensor data, device control, and farm operations run from AWS.",
+    "version": "Foxtrot (v3)"
+  },
+  "infrastructure": {
+    "compute": "AWS Elastic Beanstalk (Node.js 20), region us-east-1",
+    "environments": [
+      {
+        "name": "Light Engine (LE)",
+        "eb_env": "light-engine-foxtrot-prod-v3",
+        "entry": "server-foxtrot.js",
+        "role": "Sensor data, device APIs, environment control, farm dashboard, EVIE frontend"
+      },
+      {
+        "name": "GreenReach Central",
+        "eb_env": "greenreach-central-prod-v4",
+        "entry": "greenreach-central/server.js",
+        "role": "AI assistants (EVIE + FAYE APIs), admin dashboard, PostgreSQL, wholesale, payments"
+      }
+    ],
+    "database": "PostgreSQL on RDS (farms, plantings, inventory, orders, sensor_data, alerts)"
+  },
+  "sensor_pipeline": {
+    "source": "SwitchBot Hub 2 sensors (temperature + humidity per zone)",
+    "flow": "SwitchBot Cloud API -> LE polling (every 5 min) -> PostgreSQL sensor_data table -> EVIE environment readings",
+    "troubleshooting": [
+      "If sensors show stale data: check SwitchBot credentials (SWITCHBOT_TOKEN, SWITCHBOT_SECRET) on LE environment",
+      "If credentials are missing, sensors silently stop updating with no error",
+      "Sensor data is zone-specific: each zone has its own sensor device mapped via device_registry"
+    ]
+  },
+  "device_management": {
+    "protocols": ["SwitchBot", "WiFi", "Manual"],
+    "device_types": ["sensor", "light_controller", "fan_controller", "dehumidifier", "hvac", "humidifier", "irrigation", "camera", "hub", "relay", "meter"],
+    "registration": "Devices are registered via scan_devices (auto-discover) or register_device (manual). Each device is assigned to a room + zone.",
+    "zones": "Zones are logical grow areas within rooms. Each zone has environment targets (temp, humidity, VPD) and can have sensors, lights, and actuators."
+  },
+  "environment_control": {
+    "targets": "Each zone has configurable target ranges for temperature (C), humidity (%), and VPD (kPa)",
+    "monitoring": "Real-time sensor readings compared to targets. Drift detection generates alerts via daily todo.",
+    "light_schedules": "Per-zone photoperiod (on/off times) + PPFD targets. Tied to crop growth recipes."
+  },
+  "key_facts": [
+    "The farm is 100% cloud-hosted. There is no Raspberry Pi, no physical edge server.",
+    "EVIE is the grower-facing AI. FAYE is the admin/business AI. FAYE supervises EVIE.",
+    "Farm ID format: FARM-XXXXXXXX-XXXXXXXX",
+    "All API routes are proxied: EVIE frontend on LE calls Central APIs via server-foxtrot.js proxy middleware.",
+    "Crop growth recipes (89 total) define day-by-day environment targets per growth stage.",
+    "Wholesale orders use Square for payments with a 12% broker commission (app_fee_money).",
+    "POS (Point of Sale) for direct farm sales operates at /farm-sales-pos.html."
+  ]
+}

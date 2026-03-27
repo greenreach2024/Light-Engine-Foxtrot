@@ -1522,6 +1522,24 @@ async function buildSystemPrompt(farmId) {
     }
   } catch { /* non-fatal — guardrails enhance but aren't required */ }
 
+  // Load Light Engine knowledge for infrastructure awareness
+  let leKnowledgeBlock = '';
+  try {
+    const leKnPath = path.join(__dirname, '..', 'data', 'le-knowledge.json');
+    if (fs.existsSync(leKnPath)) {
+      const leKn = JSON.parse(fs.readFileSync(leKnPath, 'utf8'));
+      const facts = leKn.key_facts || [];
+      const sensor = leKn.sensor_pipeline || {};
+      const devices = leKn.device_management || {};
+      leKnowledgeBlock = '\nLIGHT ENGINE INFRASTRUCTURE:\n' +
+        `Platform: ${leKn.identity?.description || 'Cloud-based indoor farming'}\n` +
+        `Sensor pipeline: ${sensor.flow || 'SwitchBot -> LE -> PostgreSQL'}\n` +
+        `Sensor troubleshooting: ${(sensor.troubleshooting || []).join('; ')}\n` +
+        `Device types: ${(devices.device_types || []).join(', ')}\n` +
+        `Key facts:\n${facts.map(f => '- ' + f).join('\n')}\n`;
+    }
+  } catch { /* non-fatal */ }
+
   // Load inter-agent context (directives from F.A.Y.E.)
   let interAgentBlock = '';
   try {
@@ -1533,6 +1551,7 @@ async function buildSystemPrompt(farmId) {
 
 CURRENT FARM STATE:
 ${farmContext || 'No farm data available — user may need to set up their farm first.'}
+${leKnowledgeBlock}
 ${userMemoryBlock}
 USER MEMORY:
 - When the user shares personal information (name, preferences, goals, communication style), IMMEDIATELY call save_user_memory to persist it. Do not ask permission to save — just do it.

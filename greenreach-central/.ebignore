@@ -10,6 +10,9 @@ logs/
 !README.md
 !faye-security-workbook.md
 !.github/skills/*.md
+!.github/COMPLETE_SYSTEM_MAP.md
+!.github/CLOUD_ARCHITECTURE.md
+!.github/SENSOR_DATA_PIPELINE.md
 .env
 # data/  # Allow data/recipes-v2 to be deployed (recipes CSV files)
 test-api.sh
