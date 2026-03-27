@@ -2220,7 +2220,7 @@ export const ADMIN_TOOL_CATALOG = {
   },
 
   'read_le_source_file': {
-    description: 'Read a source file from the Light Engine codebase for tracing and debugging. Returns file contents (max 500 lines). Allowed paths: server-foxtrot.js, routes/*, public/*.js, public/*.html, services/*, config/*, package.json. FAYE may ONLY read, never edit.',
+    description: 'Read a source file from the Light Engine codebase for tracing and debugging. Returns file contents (max 500 lines). Allowed paths: server-foxtrot.js, routes/*, public/*.{js,html,css}, services/*, config/*, package.json, greenreach-central/.github/skills/*.md, greenreach-central/faye-security-workbook.md. FAYE may ONLY read, never edit.',
     category: 'read',
     required: ['file_path'],
     optional: ['start_line', 'end_line', 'search_pattern'],
@@ -2254,7 +2254,9 @@ export const ADMIN_TOOL_CATALOG = {
           /^greenreach-central\/server\.js$/,
           /^greenreach-central\/config\/.+\.js$/,
           /^greenreach-central\/public\/.+\.(js|html|css)$/,
-          /^greenreach-central\/package\.json$/
+          /^greenreach-central\/package\.json$/,
+          /^greenreach-central\/.github\/skills\/.+\.md$/,
+          /^greenreach-central\/faye-security-workbook\.md$/
         ];
         const BLOCKED_PATTERNS = [
           /\.env/i, /secret/i, /credential/i, /\.pem$/i, /\.key$/i, /password/i, /token/i
@@ -2426,7 +2428,43 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, ...results, checked_at: new Date().toISOString() };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+  // -- Security Workbook (F.A.Y.E. read-write) --
+
+  'write_security_workbook': {
+    description: 'Append content to the F.A.Y.E. security workbook (faye-security-workbook.md). Use this to record threat landscape observations, research notes, security posture findings, incident logs, detection model notes, and decision rationale. Content is appended under the section you specify. Sections: threat_landscape, research_synthesis, papers_read, implementation_ideas, gaps_identified, improvement_backlog, incident_log, detection_models, decision_rationale.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['section', 'content'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const fs = await import('fs');
+        const pathMod = await import('path');
+        const { fileURLToPath } = await import('url');
+        const centralDir = pathMod.default.dirname(fileURLToPath(import.meta.url));
+        const wbPath = pathMod.default.resolve(centralDir, '..', 'faye-security-workbook.md');
+        if (!fs.default.existsSync(wbPath)) {
+          return { ok: false, error: 'Security workbook file not found.' };
+        }
+        const VALID_SECTIONS = [
+          'threat_landscape', 'research_synthesis', 'papers_read',
+          'implementation_ideas', 'gaps_identified', 'improvement_backlog',
+          'incident_log', 'detection_models', 'decision_rationale'
+        ];
+        const section = (params.section || '').trim().toLowerCase();
+        if (!VALID_SECTIONS.includes(section)) {
+          return { ok: false, error: `Invalid section: "${section}". Valid: ${VALID_SECTIONS.join(', ')}` };
+        }
+        const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        const entry = `\n### [${timestamp}] (${section})\n${params.content.trim()}\n`;
+        fs.default.appendFileSync(wbPath, entry, 'utf8');
+        return { ok: true, message: `Appended to security workbook (${section})`, timestamp };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
   }
+
 };
 
 // ── LE URL + Header Helpers (used by diagnostic tools) ────────────

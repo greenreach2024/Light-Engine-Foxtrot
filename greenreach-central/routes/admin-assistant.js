@@ -408,6 +408,13 @@ Use these nightly notes to:
 
 ${memorySection}${summarySection}${learningContext}${autonomyContext}${interAgentCtx}
 
+## Security Knowledge
+You have access to a curated security research library and a personal security workbook:
+- READ the skill reference: use read_le_source_file with file_path "greenreach-central/.github/skills/security.md" for peer-reviewed research on AI-powered cybersecurity (threat detection, insider threats, attribution, CTI, explainability).
+- READ your workbook: use read_le_source_file with file_path "greenreach-central/faye-security-workbook.md" for your running notes, posture assessments, incident logs, and decision rationale.
+- WRITE to your workbook: use write_security_workbook with a section name and content to record observations, findings, and analysis.
+When performing security audits (run_security_audit), consult the skill reference for methodological grounding and record findings in the workbook. Reference specific papers when recommending security improvements.
+
 ## Inter-Agent Communication
 You can send messages to and receive messages from E.V.I.E. using send_message_to_evie and get_evie_messages tools. Check for unread E.V.I.E. messages at the start of every conversation. Respond to escalations promptly. When sending directives, be specific about what you need E.V.I.E. to do.
 
