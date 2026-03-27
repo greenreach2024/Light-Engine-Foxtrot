@@ -153,7 +153,7 @@ const pendingActions = new Map();
 // ── Autonomous Action Trust Tiers ─────────────────────────────────────
 const TRUST_TIERS = {
   // AUTO: Execute immediately, notify after
-  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives']),
+  auto: new Set(['dismiss_alert', 'save_user_memory', 'escalate_to_faye', 'reply_to_faye', 'get_faye_directives', 'read_skill_file']),
   // QUICK-CONFIRM: Execute with brief undo window
   quick_confirm: new Set(['mark_harvest_complete']),
   // CONFIRM: Ask before executing (default for write tools)
@@ -1317,6 +1317,25 @@ const GPT_TOOLS = [
         }
       }
     }
+  },
+  // --- Skill / Knowledge Tools ---
+  {
+    type: 'function',
+    function: {
+      name: 'read_skill_file',
+      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: {
+            type: 'string',
+            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail',
+            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail']
+          }
+        },
+        required: ['skill_name']
+      }
+    }
   }
 ];
 
@@ -1847,7 +1866,14 @@ RULES:
 - Format responses with simple HTML: <strong> for emphasis, <ul>/<li> for lists, <table class="evie-data-table"> for tabular data, <div class="evie-card"> for metric cards. Keep it clean.
 - When listing tasks or items, show the top 3-5 most relevant, mention the total count.
 - For prices, always show currency (CAD).
-- When comparing crops, use tables for clarity.`;
+- When comparing crops, use tables for clarity.
+
+SKILL REFERENCE LIBRARY:
+- You have access to peer-reviewed research skill documents via the read_skill_file tool.
+- When a farmer asks about environmental management, climate control, equipment placement, lighting effects on humidity/transpiration, sensor data interpretation, dehumidification, airflow, or grow-room design: call read_skill_file with skill_name "environmental-management-control" BEFORE answering.
+- When asked about food safety, security, lot tracing, labels, or audit trails: call the relevant skill (security, lot-code-traceability, label-document-generation, record-keeping-audit-trail).
+- Skill documents contain research-backed principles and frameworks. Use them to ground your recommendations in published evidence, not guesswork.
+- Do NOT summarise the entire skill document to the user. Extract the specific principles and research that apply to their question.`;
 }
 
 // ── Tool Execution Layer ──────────────────────────────────────────────
@@ -3619,6 +3645,35 @@ async function executeExtendedTool(toolName, params, farmId) {
         };
       } catch (err) {
         return { ok: false, error: err.message };
+      }
+    }
+
+    case 'read_skill_file': {
+      try {
+        const VALID_SKILLS = new Set([
+          'environmental-management-control',
+          'security',
+          'label-document-generation',
+          'lot-code-traceability',
+          'record-keeping-audit-trail'
+        ]);
+        const skillName = (params.skill_name || '').toLowerCase().trim();
+        if (!VALID_SKILLS.has(skillName)) {
+          return { ok: false, error: `Unknown skill: ${skillName}. Available: ${[...VALID_SKILLS].join(', ')}` };
+        }
+        const skillPath = path.join(__dirname, '..', '.github', 'skills', `${skillName}.md`);
+        if (!fs.existsSync(skillPath)) {
+          return { ok: false, error: `Skill file not found: ${skillName}.md` };
+        }
+        const skillContent = fs.readFileSync(skillPath, 'utf8');
+        return {
+          ok: true,
+          skill_name: skillName,
+          content: skillContent,
+          note: 'Use the research and principles in this document to ground your response. Do not dump the entire document to the user.'
+        };
+      } catch (err) {
+        return { ok: false, error: `Failed to read skill: ${err.message}` };
       }
     }
 
