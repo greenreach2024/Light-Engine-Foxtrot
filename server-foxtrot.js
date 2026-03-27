@@ -24,7 +24,22 @@ import {
   AuditEventType as SecurityAuditEventType
 } from './server/middleware/audit-logger.js';
 import { getJwtSecret } from './server/utils/secrets-manager.js';
+// --- Secure JWT Secret Initialization ---
+// Fails fast in production if JWT_SECRET is not configured.
+// In development, generates an ephemeral random secret (tokens expire on restart).
+const JWT_SECRET_KEY = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[SECURITY] FATAL: JWT_SECRET environment variable is required in production. Server cannot start.');
+    process.exit(1);
+  }
+  const ephemeral = crypto.randomBytes(64).toString('hex');
+  console.warn('[SECURITY] JWT_SECRET not set -- using random ephemeral secret (development only, tokens will not persist across restarts)');
+  return ephemeral;
+})();
 
+// --- Secure JWT Secret Initialization ---
 // Setup console wrapper for demo mode BEFORE any other logs
 import { setupConsoleWrapper } from './server/utils/console-wrapper.js';
 setupConsoleWrapper();
@@ -99,7 +114,7 @@ function requireEdgeForControl(req, res, next) {
   }
   
   try {
-    const jwtSecret = process.env.JWT_SECRET || getJwtSecret();
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     const planType = (decoded.planType || '').toLowerCase();
     
@@ -141,7 +156,7 @@ function authenticateToken(req, res, next) {
   const token = authHeader.substring(7);
   
   try {
-    const jwtSecret = process.env.JWT_SECRET || getJwtSecret();
+    const jwtSecret = JWT_SECRET_KEY;
     if (!jwtSecret) {
       return res.status(500).json({
         success: false,
@@ -306,7 +321,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
@@ -13746,7 +13761,7 @@ app.get('/api/setup-wizard/status', async (req, res) => {
       } else {
         // SECOND: Try JWT verification (cloud mode)
         try {
-          const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+          const jwtSecret = JWT_SECRET_KEY;
           const decoded = jwt.verify(token, jwtSecret);
           farmId = decoded.farmId;
           email = decoded.email;
@@ -18164,7 +18179,7 @@ app.post('/api/farm/auth/login', authRateLimiter, asyncHandler(async (req, res) 
     }
 
     // Generate JWT token
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const jwtToken = jwt.sign(
       {
         farmId: farm.farm_id,
@@ -18317,10 +18332,10 @@ app.post('/api/farm/auth/change-password', asyncHandler(async (req, res) => {
     });
   }
 
-  if (newPassword.length < 8) {
+  if (newPassword.length < 12) {
     return res.status(400).json({
       status: 'error',
-      message: 'New password must be at least 8 characters long'
+      message: 'New password must be at least 12 characters long'
     });
   }
 
@@ -18339,7 +18354,7 @@ app.post('/api/farm/auth/change-password', asyncHandler(async (req, res) => {
   let farmId, email;
   
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     farmId = decoded.farmId;
     email = decoded.email;
@@ -18596,7 +18611,7 @@ app.get('/api/user/profile', asyncHandler(async (req, res) => {
   
   // Try JWT token
   try {
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     
     console.log('[/api/user/profile] JWT decoded, fetching user data');
@@ -18677,7 +18692,7 @@ app.post('/api/user/change-password', asyncHandler(async (req, res) => {
   
   try {
     // Verify token and decode
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || !decoded.farmId || !decoded.email) {
       return res.status(401).json({
@@ -18757,7 +18772,7 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
   
   try {
     // Verify token and check admin role
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || decoded.role !== 'admin') {
       return res.status(403).json({
@@ -18830,7 +18845,7 @@ app.get('/api/users/list', asyncHandler(async (req, res) => {
   
   try {
     // Verify token
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     jwt.verify(token, jwtSecret);
     
     const result = await req.app.locals.db.query(
@@ -18878,7 +18893,7 @@ app.delete('/api/users/delete', asyncHandler(async (req, res) => {
   
   try {
     // Verify token and check admin role
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = JWT_SECRET_KEY;
     const decoded = jwt.verify(token, jwtSecret);
     if (!decoded || decoded.role !== 'admin') {
       return res.status(403).json({
@@ -19152,7 +19167,7 @@ app.get('/api/farm/profile', asyncHandler(async (req, res) => {
     }
     
     const farm = farmResult.rows[0];
-    const jwtSecret = farm.jwt_secret || process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+    const jwtSecret = farm.jwt_secret || JWT_SECRET_KEY;
     
     // Now verify the token with the farm's specific secret
     try {

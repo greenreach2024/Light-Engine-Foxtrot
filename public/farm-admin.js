@@ -177,7 +177,7 @@ function initLogin() {
     if (window.location.search.includes('demo=true') || window.location.search.includes('test=true')) {
         document.getElementById('farmId').value = 'FARM-TEST-WIZARD-001';
         if (document.getElementById('email')) {
-            document.getElementById('email').value = 'admin@test-farm.com';
+            document.getElementById('email').value = 'info@greenreachgreens.com';
         }
         document.getElementById('password').value = 'Grow123';
     }
@@ -208,7 +208,7 @@ async function initDashboard() {
                     farmId: payload.farm_id || payload.farmId || existingFarmId,
                     userId: payload.user_id || payload.userId,
                     farmName: localStorage.getItem('farm_name') || payload.name || payload.farmName || 'Light Engine Farm',
-                    email: payload.email || existingEmail || 'admin@farm.com',
+                    email: payload.email || existingEmail || 'info@greenreachgreens.com',
                     role: payload.role || 'admin'
                 };
                 grLog(' Using existing session:', currentSession.farmId, currentSession.email);
@@ -220,7 +220,7 @@ async function initDashboard() {
                 token: existingToken,
                 farmId: existingFarmId,
                 farmName: sessionStorage.getItem('farm_name') || localStorage.getItem('farm_name') || 'Light Engine Farm',
-                email: existingEmail || 'admin@farm.com',
+                email: existingEmail || 'info@greenreachgreens.com',
                 role: 'admin'
             };
             grLog(' Using existing session (non-JWT):', currentSession.farmId, currentSession.email);
@@ -247,7 +247,7 @@ async function initDashboard() {
             token: 'local-access',
             farmId: 'LOCAL-FARM',
             farmName: currentSession?.farmName || localStorage.getItem('farm_name') || 'My Farm',
-            email: 'admin@local-farm.com',
+            email: 'info@greenreachgreens.com',
             role: 'admin'
         };
         

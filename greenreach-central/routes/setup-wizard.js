@@ -12,7 +12,17 @@ const router = express.Router();
 const isProductionRuntime =
   process.env.NODE_ENV === 'production' ||
   String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
-const JWT_SECRET = process.env.JWT_SECRET || 'greenreach-jwt-secret-2025';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (isProductionRuntime) {
+    console.error('[SECURITY] FATAL: JWT_SECRET is required in production');
+    throw new Error('JWT_SECRET not configured');
+  }
+  const ephemeral = randomBytes(64).toString('hex');
+  console.warn('[SECURITY] JWT_SECRET not set -- using ephemeral dev secret');
+  return ephemeral;
+})();
 
 /**
  * JWT Authentication Middleware
@@ -82,10 +92,10 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     const userId = req.userId;
 
     // Validate password
-    if (!newPassword || newPassword.length < 8) {
+    if (!newPassword || newPassword.length < 12) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Password must be at least 8 characters long' 
+        error: 'Password must be at least 12 characters long' 
       });
     }
 
