@@ -1,12 +1,14 @@
 # Don't upload these to Elastic Beanstalk
 .git/
 .github/
+!.github/skills/
 .vscode/
 node_modules/
 logs/
 *.log
 *.md
 !README.md
+!faye-security-workbook.md
 .env
 # data/  # Allow data/recipes-v2 to be deployed (recipes CSV files)
 test-api.sh
