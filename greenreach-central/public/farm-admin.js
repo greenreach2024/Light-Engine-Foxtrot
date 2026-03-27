@@ -1234,8 +1234,8 @@ function formatTime(timestamp) {
 
 // Pricing data structure
 let pricingData = [];
-let isPerGram = false; // false = per oz, true = per 25g
-const OZ_TO_25G = 0.8818; // 1 oz = 28.35g, so 1 oz = 28.35/25 = 1.134 units of 25g, inverse = 0.8818
+let isPerGram = false; // false = per lb, true = per 100g
+const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
 const PRICING_VERSION = '2026-03-26-v9';
@@ -1274,7 +1274,7 @@ function getCropUnitLabel(cropName) {
     const unit = getCropUnit(cropName);
     if (unit === 'pint') return '/pint';
     if (unit === 'unit') return '/each';
-    return isPerGram ? '/25g' : '/oz';
+    return isPerGram ? '/100g' : '/lb';
 }
 
 function getCropBackendUnit(cropName) {
@@ -1287,48 +1287,49 @@ function getCropBackendUnit(cropName) {
 // Default pricing (per oz) - Based on organic market research Dec 2025
 // Prices calculated from actual retail packages and converted to per-oz rates
 const defaultPricing = {
-    // Lettuce varieties - Premium butterhead, standard for others
-    'Butterhead Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // $4.99/5oz packaged
-    'Breen Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
-    'Truchas Pelleted Organic': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },  // Butterhead variety
-    'Seaside F1 Spinach (baby leaf)': { retail: 0.90, ws1: 20, ws2: 25, ws3: 35 },  // $4.49/5oz packaged baby spinach
-    'Red Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged salad mix
-    'Oak Leaf Lettuce': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 },    // $4.99/5oz packaged mixed greens
-    
-    // Basil varieties - Premium herb pricing
-    'Genovese Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },      // $2.29/1.0oz Ontario retail
-    'Thai Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
-    'Purple Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },        // Ontario herb pricing
-    'Lemon Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },         // Ontario herb pricing
-    'Holy Basil': { retail: 2.49, ws1: 20, ws2: 20, ws3: 30 },          // Ontario herb pricing
-    'Basil': { retail: 2.29, ws1: 20, ws2: 20, ws3: 30 },               // Ontario retail
-    
-    // Arugula varieties - Specialty green pricing
-    'Baby Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // $4.99/5oz tender baby
-    'Cultivated Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },  // Standard arugula
-    'Wild Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },        // Standard arugula
-    'Wasabi Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },      // Standard arugula
-    'Red Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },         // Standard arugula
-    'Arugula': { retail: 1.35, ws1: 20, ws2: 25, ws3: 35 },             // Generic arugula
-    
-    // Kale varieties - Standard pricing
-    'Curly Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },          // $4.49/8oz bunch
-    'Baby Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },           // Tender baby leaves
-// Standard kale
-    'Kale': { retail: 0.76, ws1: 20, ws2: 25, ws3: 35 },                // Generic kale
-    
-    // Microgreens - Premium pricing per oz (2oz clamshell @ $4.49)
-    'Microgreen': { retail: 2.25, ws1: 15, ws2: 20, ws3: 30 },
+    // Per-lb CAD retail prices aligned with crop-registry.json
+    // Greens tier: $23.52/lb
+    'Butterhead Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Breen Pelleted Organic': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Truchas Pelleted Organic': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Seaside F1 Spinach (baby leaf)': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Leaf Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Oak Leaf Lettuce': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Sprouts - Value pricing per oz (6oz container @ $3.49)
-    'Sprout': { retail: 0.58, ws1: 20, ws2: 25, ws3: 35 },
+    // Basil tier: $43.20/lb
+    'Genovese Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    'Thai Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    'Purple Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    'Lemon Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    'Holy Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
+    'Basil': { retail: 43.20, ws1: 15, ws2: 25, ws3: 35 },
 
-    // Herbs missing from original defaults
-    'Rosemary': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },             // Ontario herb pricing
-    'Sage': { retail: 2.79, ws1: 20, ws2: 25, ws3: 35 },                 // Ontario herb pricing
-    'Watercress': { retail: 1.00, ws1: 20, ws2: 25, ws3: 35 }            // $3.99/4oz
+    // Arugula: $23.52/lb (greens tier)
+    'Baby Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Cultivated Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Wild Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Wasabi Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Red Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Arugula': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Kale: $23.52/lb (greens tier)
+    'Curly Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Baby Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+    'Kale': { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Specialty: $25.12/lb
+    'Watercress': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 },
+
+    // Microgreens - premium per-lb pricing
+    'Microgreen': { retail: 36.00, ws1: 15, ws2: 20, ws3: 30 },
+
+    // Sprouts
+    'Sprout': { retail: 9.28, ws1: 20, ws2: 25, ws3: 35 },
+
+    // Herbs: $25.12/lb (specialty tier)
+    'Rosemary': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 },
+    'Sage': { retail: 25.12, ws1: 15, ws2: 25, ws3: 35 }
 };
-
 /**
  * Load crops and pricing — API first, localStorage fallback
  */
@@ -1384,7 +1385,7 @@ async function loadCropsFromDatabase() {
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
                 if (saved) return JSON.parse(saved);
-                const defaults = defaultPricing[crop] || { retail: 10.00, ws1: 20, ws2: 25, ws3: 35 };
+                const defaults = defaultPricing[crop] || { retail: 23.52, ws1: 15, ws2: 25, ws3: 35 };
                 return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
             });
         }
@@ -1403,7 +1404,7 @@ async function loadCropsFromDatabase() {
  */
 function exportPricingCSV() {
     if (!pricingData.length) { alert('No pricing data to export.'); return; }
-    const unitLabel = isPerGram ? '/25g' : '/oz';
+    const unitLabel = isPerGram ? '/100g' : '/lb';
     const rows = [['Crop', `Retail (${unitLabel})`, 'Floor Price', 'SKU Factor', `Formula WS (${unitLabel})`, 'Taxable']];
     pricingData.forEach(item => {
         const r = isPerGram ? convertPrice(item.retail, true) : item.retail;
@@ -1429,11 +1430,11 @@ function exportPricingCSV() {
  */
 function convertPrice(price, toGram = false) {
     if (toGram) {
-        // Convert oz to 25g: multiply by conversion factor
-        return price * OZ_TO_25G;
+        // Convert lb to 100g: multiply by conversion factor
+        return price * LB_TO_100G;
     } else {
-        // Convert 25g to oz: divide by conversion factor
-        return price / OZ_TO_25G;
+        // Convert 100g to lb: divide by conversion factor
+        return price / LB_TO_100G;
     }
 }
 
@@ -1471,7 +1472,7 @@ function renderPricingTable() {
     const tbody = document.querySelector('#pricing-table tbody');
     if (!tbody) return;
     
-    const weightUnitLabel = isPerGram ? '/25g' : '/oz';
+    const weightUnitLabel = isPerGram ? '/100g' : '/lb';
     
     // Update header labels to show weight unit (majority of crops)
     document.getElementById('unit-retail').textContent = `($${weightUnitLabel})`;
@@ -2568,7 +2569,7 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
         ? pricePerOzCAD / (currentExchangeRate || 1)
         : averageSourcePriceUSD / avgWeightOz;
 
-    const pricePer25gCAD = pricePerOzCAD * OZ_TO_25G;
+    const pricePer25gCAD = pricePerOzCAD * LB_TO_100G;
 
     const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
         ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * exchangeMultiplier)

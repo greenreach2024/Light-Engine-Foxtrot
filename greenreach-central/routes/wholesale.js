@@ -55,6 +55,7 @@ import { processSquarePayments } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
 import { farmStore } from '../lib/farm-data-store.js';
+import { assembleInvoice, renderInvoiceHTML } from '../lib/wholesale/invoice-generator.js';
 
 const router = express.Router();
 
@@ -1804,7 +1805,7 @@ router.post('/orders/:orderId/cancel', requireBuyerPortalAuth, async (req, res) 
   return res.json({ status: 'ok', data: { order } });
 });
 
-// Get invoice for a specific order
+// Get invoice for a specific order (enriched with traceability, env scores, per-100g pricing)
 router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) => {
   const orderId = req.params.orderId;
   const order = await getOrderById(orderId, { includeArchived: true });
@@ -1817,63 +1818,52 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
     return res.status(404).json({ status: 'error', message: 'Order not found' });
   }
 
-  // Build invoice data structure
-  const invoice = {
-    invoice_number: `INV-${orderId.substring(0, 8)}`,
-    order_id: orderId,
-    po_number: order.po_number || null,
-    invoice_date: new Date().toISOString(),
-    order_date: order.created_at,
-    delivery_date: order.delivery_date,
-    buyer: {
-      id: order.buyer_id,
-      business_name: order.buyer_account?.business_name || 'N/A',
-      contact_name: order.buyer_account?.contact_name || 'N/A',
-      email: order.buyer_account?.email || 'N/A',
-      phone: order.buyer_account?.phone || 'N/A'
-    },
-    delivery_address: order.delivery_address || {},
-    items: (order.farm_sub_orders || []).flatMap((sub) => 
-      (sub.items || []).map((item) => ({
-        product_name: item.product_name,
-        sku_id: item.sku_id,
-        quantity: item.quantity,
-        unit: item.unit,
-        size: item.size,
-        price_per_unit: item.price_per_unit,
-        line_total: Number(item.quantity) * Number(item.price_per_unit),
-        farm_name: sub.farm_name,
-        farm_id: sub.farm_id
-      }))
-    ),
-    farms: (order.farm_sub_orders || []).map((sub) => ({
-      farm_id: sub.farm_id,
-      farm_name: sub.farm_name,
-      subtotal: sub.subtotal,
-      status: sub.status,
-      tracking_number: sub.tracking_number || null,
-      tracking_carrier: sub.tracking_carrier || null
-    })),
-    summary: {
-      subtotal: order.subtotal,
-      delivery_fee: order.delivery_fee || 0,
-      broker_fee: order.broker_fee || 0,
-      grand_total: order.grand_total
-    },
-    recurrence: order.recurrence || { cadence: 'one_time' },
-    payment: {
-      status: order.payment?.status || 'pending',
-      method: order.payment?.method || 'manual'
-    },
-    status: order.status,
-    notes: order.delivery_address?.instructions || ''
+  // Build farm profiles map from network farms for traceability
+  const networkFarms = await listNetworkFarms();
+  const farmProfiles = {};
+  for (const farm of networkFarms) {
+    farmProfiles[farm.farm_id] = {
+      name: farm.name,
+      city: farm.city || '',
+      state: farm.state || '',
+      location: farm.location || {},
+      practices: farm.practices || [],
+      certifications: farm.certifications || []
+    };
+  }
+
+  // Build buyer profile with location for environmental scoring
+  const buyerAccount = order.buyer_account || {};
+  const buyerLocation = getBuyerLocationFromBuyer(req.wholesaleBuyer);
+  const buyerProfile = {
+    business_name: buyerAccount.business_name || '',
+    contact_name: buyerAccount.contact_name || '',
+    email: buyerAccount.email || '',
+    location: {
+      ...buyerLocation,
+      ...(order.delivery_address || {})
+    }
   };
+
+  // Assemble enriched invoice: farm traceability, env scores, per-100g/pint pricing
+  const invoice = assembleInvoice({
+    order,
+    subOrders: order.farm_sub_orders || [],
+    farmProfiles,
+    buyerProfile
+  });
+
+  // Return print-ready HTML or enriched JSON
+  if (req.query.format === 'html') {
+    return res.type('html').send(renderInvoiceHTML(invoice));
+  }
 
   return res.json({
     status: 'ok',
     data: invoice
   });
 });
+
 
 router.post('/checkout/preview', requireWholesaleDbForCriticalPaths, requireBuyerAuth, async (req, res, next) => {
   try {

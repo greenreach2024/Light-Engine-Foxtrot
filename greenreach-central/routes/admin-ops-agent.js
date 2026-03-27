@@ -2442,6 +2442,435 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+  // -- Platform Diagnostics (F.A.Y.E. read-only) --
+
+  'get_data_freshness': {
+    description: 'Check data freshness across all critical subsystems: environment sensors (temp, humidity, CO2), nutrient readings, inventory timestamps, sync telemetry, and heartbeats. Returns seconds-since-last-update for each data source with staleness thresholds. Use when investigating stale dashboard data, slow-updating sensors, or data pipeline delays.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params) => {
+      try {
+        const results = { checked_at: new Date().toISOString(), sources: {} };
+        const farmId = params.farm_id || process.env.FARM_ID || null;
+
+        // 1. Environment sensor data freshness (from farm_data telemetry)
+        if (isDatabaseAvailable()) {
+          try {
+            const envData = await dbQuery(
+              `SELECT data_type, updated_at, 
+                      EXTRACT(EPOCH FROM (NOW() - updated_at))::int AS seconds_stale
+               FROM farm_data 
+               WHERE ($1::text IS NULL OR farm_id = $1)
+                 AND data_type IN ('environment', 'sensors', 'telemetry', 'nutrients', 'env_snapshot')
+               ORDER BY updated_at DESC`,
+              [farmId]
+            );
+            results.sources.environment = envData.rows.map(r => ({
+              data_type: r.data_type,
+              last_updated: r.updated_at,
+              seconds_stale: r.seconds_stale,
+              status: r.seconds_stale < 120 ? 'fresh' : r.seconds_stale < 600 ? 'aging' : r.seconds_stale < 1800 ? 'stale' : 'critical'
+            }));
+          } catch (e) { results.sources.environment = { error: e.message }; }
+
+          // 2. Inventory data freshness
+          try {
+            const invData = await dbQuery(
+              `SELECT 'farm_inventory' AS source, MAX(updated_at) AS last_updated,
+                      EXTRACT(EPOCH FROM (NOW() - MAX(updated_at)))::int AS seconds_stale
+               FROM farm_inventory WHERE ($1::text IS NULL OR farm_id = $1)
+               UNION ALL
+               SELECT 'products' AS source, MAX(updated_at) AS last_updated,
+                      EXTRACT(EPOCH FROM (NOW() - MAX(updated_at)))::int AS seconds_stale
+               FROM products WHERE ($1::text IS NULL OR farm_id = $1)`,
+              [farmId]
+            );
+            results.sources.inventory = invData.rows.map(r => ({
+              source: r.source,
+              last_updated: r.last_updated,
+              seconds_stale: r.seconds_stale,
+              status: !r.last_updated ? 'no_data' : r.seconds_stale < 3600 ? 'fresh' : r.seconds_stale < 86400 ? 'aging' : 'stale'
+            }));
+          } catch (e) { results.sources.inventory = { error: e.message }; }
+
+          // 3. Sync telemetry freshness
+          try {
+            const syncData = await dbQuery(
+              `SELECT farm_id, data_type AS sync_type, updated_at AS last_success,
+                      EXTRACT(EPOCH FROM (NOW() - updated_at))::int AS seconds_stale
+               FROM farm_data
+               WHERE ($1::text IS NULL OR farm_id = $1)
+               ORDER BY updated_at DESC LIMIT 10`,
+              [farmId]
+            );
+            results.sources.sync = syncData.rows.map(r => ({
+              farm_id: r.farm_id,
+              sync_type: r.sync_type,
+              last_success: r.last_success,
+              seconds_stale: r.seconds_stale,
+              status: r.seconds_stale < 120 ? 'fresh' : r.seconds_stale < 600 ? 'aging' : 'stale'
+            }));
+          } catch (e) { results.sources.sync = { error: e.message }; }
+
+          // 4. Heartbeat freshness
+          try {
+            const hbData = await dbQuery(
+              `SELECT farm_id, last_seen_at,
+                      EXTRACT(EPOCH FROM (NOW() - last_seen_at))::int AS seconds_stale
+               FROM farm_heartbeats
+               WHERE ($1::text IS NULL OR farm_id = $1)
+               ORDER BY last_seen_at DESC LIMIT 5`,
+              [farmId]
+            );
+            results.sources.heartbeats = hbData.rows.map(r => ({
+              farm_id: r.farm_id,
+              last_seen: r.last_seen_at,
+              seconds_stale: r.seconds_stale,
+              status: r.seconds_stale < 120 ? 'healthy' : r.seconds_stale < 900 ? 'delayed' : r.seconds_stale < 1800 ? 'stale' : 'critical'
+            }));
+          } catch (e) { results.sources.heartbeats = { error: e.message }; }
+        } else {
+          results.sources.database = { error: 'Database not available' };
+        }
+
+        // 5. LE sensor freshness via /env endpoint
+        const farmUrl = await _getLeUrl();
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/env`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const envSnapshot = await r.json();
+            const sensors = envSnapshot.sensors || envSnapshot.data || envSnapshot;
+            if (typeof sensors === 'object') {
+              const sensorFreshness = [];
+              for (const [key, val] of Object.entries(sensors)) {
+                if (val && (val.lastUpdate || val.timestamp || val.updated_at)) {
+                  const ts = val.lastUpdate || val.timestamp || val.updated_at;
+                  const age = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+                  sensorFreshness.push({
+                    sensor: key,
+                    last_reading: ts,
+                    seconds_stale: age,
+                    status: age < 120 ? 'fresh' : age < 600 ? 'aging' : age < 1800 ? 'stale' : 'critical'
+                  });
+                }
+              }
+              results.sources.le_sensors = sensorFreshness.length > 0 ? sensorFreshness : { note: 'Sensor data retrieved but no timestamps found in response' };
+            }
+          } catch (e) { results.sources.le_sensors = { error: e.message }; }
+        }
+
+        // Summary: count statuses
+        const allStatuses = [];
+        for (const [, src] of Object.entries(results.sources)) {
+          if (Array.isArray(src)) src.forEach(s => { if (s.status) allStatuses.push(s.status); });
+        }
+        results.summary = {
+          total_sources: allStatuses.length,
+          fresh: allStatuses.filter(s => s === 'fresh' || s === 'healthy').length,
+          aging: allStatuses.filter(s => s === 'aging' || s === 'delayed').length,
+          stale: allStatuses.filter(s => s === 'stale').length,
+          critical: allStatuses.filter(s => s === 'critical').length,
+          no_data: allStatuses.filter(s => s === 'no_data').length
+        };
+
+        return { ok: true, ...results };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_db_pool_status': {
+    description: 'Check Central PostgreSQL connection pool health: total connections, idle, waiting, active queries, pool size limits, and recent query performance. Use when investigating database connectivity issues, slow queries, or pool exhaustion.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        if (!isDatabaseAvailable()) {
+          return { ok: false, error: 'Database not available' };
+        }
+        const results = {};
+
+        // Pool stats from pg_stat_activity
+        try {
+          const poolStats = await dbQuery(
+            `SELECT state, COUNT(*) AS count 
+             FROM pg_stat_activity 
+             WHERE datname = current_database()
+             GROUP BY state`
+          );
+          results.connections_by_state = {};
+          poolStats.rows.forEach(r => { results.connections_by_state[r.state || 'null'] = parseInt(r.count); });
+        } catch (e) { results.connections_by_state = { error: e.message }; }
+
+        // Active queries
+        try {
+          const active = await dbQuery(
+            `SELECT pid, state, EXTRACT(EPOCH FROM (NOW() - query_start))::int AS duration_seconds,
+                    LEFT(query, 100) AS query_preview, wait_event_type
+             FROM pg_stat_activity 
+             WHERE datname = current_database() AND state = 'active' AND pid != pg_backend_pid()
+             ORDER BY query_start ASC LIMIT 10`
+          );
+          results.active_queries = active.rows;
+        } catch (e) { results.active_queries = { error: e.message }; }
+
+        // Connection limits
+        try {
+          const limits = await dbQuery(
+            `SELECT setting AS max_connections FROM pg_settings WHERE name = 'max_connections'`
+          );
+          const totalConns = await dbQuery(
+            `SELECT COUNT(*) AS total FROM pg_stat_activity WHERE datname = current_database()`
+          );
+          results.capacity = {
+            max_connections: parseInt(limits.rows[0]?.max_connections || 0),
+            current_connections: parseInt(totalConns.rows[0]?.total || 0),
+            utilization_pct: limits.rows[0]?.max_connections
+              ? Math.round((parseInt(totalConns.rows[0]?.total || 0) / parseInt(limits.rows[0]?.max_connections)) * 100)
+              : null
+          };
+        } catch (e) { results.capacity = { error: e.message }; }
+
+        // Database size
+        try {
+          const size = await dbQuery(
+            `SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size`
+          );
+          results.database_size = size.rows[0]?.db_size;
+        } catch (e) { results.database_size = { error: e.message }; }
+
+        // Basic health check latency
+        const start = Date.now();
+        await dbQuery('SELECT 1');
+        results.ping_ms = Date.now() - start;
+
+        return { ok: true, ...results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'check_certificate_expiry': {
+    description: 'Check TLS certificate expiration status for all platform endpoints: greenreachgreens.com (Central), LE EB endpoint, and any configured custom domains. Returns days until expiry, issuer, and renewal urgency. Use when investigating TLS errors, connection security, or during security audits.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        const https = await import('https');
+        const results = {};
+
+        const endpoints = [
+          { name: 'central_greenreachgreens', host: 'greenreachgreens.com', port: 443 },
+          { name: 'central_eb', host: 'greenreach-central.us-east-1.elasticbeanstalk.com', port: 443 }
+        ];
+
+        // Also check LE endpoint
+        const farmUrl = await _getLeUrl();
+        if (farmUrl) {
+          try {
+            const url = new URL(farmUrl);
+            if (url.protocol === 'https:') {
+              endpoints.push({ name: 'light_engine', host: url.hostname, port: parseInt(url.port) || 443 });
+            }
+          } catch (_) { /* skip if URL parse fails */ }
+        }
+
+        for (const ep of endpoints) {
+          try {
+            const certInfo = await new Promise((resolve, reject) => {
+              const req = https.default.request(
+                { host: ep.host, port: ep.port, method: 'HEAD', path: '/', rejectUnauthorized: false, timeout: 8000 },
+                (res) => {
+                  const cert = res.socket.getPeerCertificate();
+                  if (!cert || !cert.valid_to) {
+                    resolve({ error: 'No certificate returned' });
+                    return;
+                  }
+                  const expiryDate = new Date(cert.valid_to);
+                  const now = new Date();
+                  const daysUntilExpiry = Math.floor((expiryDate - now) / (1000 * 60 * 60 * 24));
+                  resolve({
+                    subject: cert.subject?.CN || cert.subject?.O || 'unknown',
+                    issuer: cert.issuer?.O || cert.issuer?.CN || 'unknown',
+                    valid_from: cert.valid_from,
+                    valid_to: cert.valid_to,
+                    days_until_expiry: daysUntilExpiry,
+                    serial: cert.serialNumber,
+                    fingerprint: cert.fingerprint256?.substring(0, 20) + '...',
+                    status: daysUntilExpiry > 30 ? 'healthy' : daysUntilExpiry > 7 ? 'warning' : daysUntilExpiry > 0 ? 'critical' : 'expired'
+                  });
+                  res.destroy();
+                }
+              );
+              req.on('error', (e) => resolve({ error: e.message }));
+              req.on('timeout', () => { req.destroy(); resolve({ error: 'Connection timed out' }); });
+              req.end();
+            });
+            results[ep.name] = { host: ep.host, ...certInfo };
+          } catch (e) { results[ep.name] = { host: ep.host, error: e.message }; }
+        }
+
+        // AWS ACM certificate status (if AWS CLI available)
+        try {
+          const { execSync } = await import('child_process');
+          const acmCert = execSync(
+            'aws acm describe-certificate --certificate-arn arn:aws:acm:us-east-1:634419072974:certificate/adfc4d01-f688-45a2-a313-24cb4601f8e1 --region us-east-1 --query "Certificate.{Status:Status,NotAfter:NotAfter,DomainName:DomainName,RenewalSummary:RenewalSummary}" --output json 2>/dev/null',
+            { encoding: 'utf8', timeout: 10000 }
+          );
+          const parsed = JSON.parse(acmCert);
+          if (parsed.NotAfter) {
+            const daysLeft = Math.floor((new Date(parsed.NotAfter) - new Date()) / (1000 * 60 * 60 * 24));
+            parsed.days_until_expiry = daysLeft;
+            parsed.status = daysLeft > 30 ? 'healthy' : daysLeft > 7 ? 'warning' : 'critical';
+          }
+          results.aws_acm = parsed;
+        } catch (_) { results.aws_acm = { note: 'AWS CLI not available or no permission' }; }
+
+        return { ok: true, certificates: results, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_setup_checklist': {
+    description: 'Return a component-level setup completion checklist: database connectivity, SwitchBot sensor pairing, Square payment integration, TLS certificates, sync service, E.V.I.E. availability, credential vault, EB environment health, and feature flags. Each component shows pass/fail/unknown with detail. Use when diagnosing onboarding issues or verifying platform setup.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async () => {
+      try {
+        const checklist = {};
+
+        // 1. Database
+        if (isDatabaseAvailable()) {
+          const dbStart = Date.now();
+          try {
+            await dbQuery('SELECT 1');
+            const tables = await dbQuery(
+              `SELECT COUNT(*) AS count FROM information_schema.tables WHERE table_schema = 'public'`
+            );
+            checklist.database = { status: 'pass', latency_ms: Date.now() - dbStart, tables: parseInt(tables.rows[0]?.count || 0) };
+          } catch (e) { checklist.database = { status: 'fail', error: e.message }; }
+        } else {
+          checklist.database = { status: 'fail', error: 'Database not available' };
+        }
+
+        // 2. Light Engine reachability
+        const farmUrl = await _getLeUrl();
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/health`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            checklist.light_engine = { status: r.ok ? 'pass' : 'fail', http_status: r.status, uptime: body.uptime, url: farmUrl };
+          } catch (e) { checklist.light_engine = { status: 'fail', error: e.message, url: farmUrl }; }
+        } else {
+          checklist.light_engine = { status: 'fail', error: 'No FARM_EDGE_URL configured' };
+        }
+
+        // 3. SwitchBot sensors
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/switchbot/devices`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            const devices = body.devices || body.body?.deviceList || [];
+            checklist.switchbot_sensors = {
+              status: devices.length > 0 ? 'pass' : 'fail',
+              device_count: devices.length,
+              note: devices.length === 0 ? 'No SwitchBot devices found -- check SWITCHBOT_TOKEN and SWITCHBOT_SECRET env vars' : undefined
+            };
+          } catch (e) { checklist.switchbot_sensors = { status: 'unknown', error: e.message }; }
+        } else {
+          checklist.switchbot_sensors = { status: 'unknown', note: 'Cannot check -- LE not reachable' };
+        }
+
+        // 4. Square integration
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/api/farm/square/status`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            checklist.square_integration = {
+              status: (body.connected || body.authorized) ? 'pass' : 'fail',
+              detail: body
+            };
+          } catch (e) { checklist.square_integration = { status: 'unknown', error: e.message }; }
+        } else {
+          checklist.square_integration = { status: 'unknown', note: 'Cannot check -- LE not reachable' };
+        }
+
+        // 5. Sync service
+        if (isDatabaseAvailable()) {
+          try {
+            const sync = await dbQuery(
+              `SELECT COUNT(*) AS count, MAX(updated_at) AS last_sync,
+                      EXTRACT(EPOCH FROM (NOW() - MAX(updated_at)))::int AS seconds_since
+               FROM farm_data`
+            );
+            const row = sync.rows[0];
+            checklist.sync_service = {
+              status: row.count > 0 && row.seconds_since < 300 ? 'pass' : row.count > 0 ? 'degraded' : 'fail',
+              records: parseInt(row.count),
+              last_sync: row.last_sync,
+              seconds_since: row.seconds_since
+            };
+          } catch (e) { checklist.sync_service = { status: 'unknown', error: e.message }; }
+        }
+
+        // 6. E.V.I.E. availability
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/api/assistant/status`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            checklist.evie = { status: r.ok ? 'pass' : 'degraded', http_status: r.status };
+          } catch (e) {
+            checklist.evie = { status: 'unknown', error: e.message };
+          }
+        }
+
+        // 7. Credential vault
+        if (farmUrl) {
+          try {
+            const r = await fetch(`${farmUrl}/api/credentials`, { headers: _leHeaders(), signal: AbortSignal.timeout(5000) });
+            const body = await r.json().catch(() => ({}));
+            const creds = body.credentials || body;
+            const missing = [];
+            const required = ['SWITCHBOT_TOKEN', 'SWITCHBOT_SECRET', 'SQUARE_ACCESS_TOKEN'];
+            if (Array.isArray(creds)) {
+              required.forEach(name => {
+                const found = creds.find(c => c.key === name || c.name === name);
+                if (!found || !found.has_value) missing.push(name);
+              });
+            }
+            checklist.credentials = {
+              status: missing.length === 0 ? 'pass' : 'fail',
+              missing: missing.length > 0 ? missing : undefined,
+              total_credentials: Array.isArray(creds) ? creds.length : 'unknown'
+            };
+          } catch (e) { checklist.credentials = { status: 'unknown', error: e.message }; }
+        }
+
+        // 8. Essential env vars on Central
+        const requiredEnv = ['DATABASE_URL', 'JWT_SECRET', 'FARM_EDGE_URL', 'GREENREACH_API_KEY'];
+        const envStatus = {};
+        requiredEnv.forEach(v => { envStatus[v] = !!process.env[v]; });
+        checklist.central_env_vars = {
+          status: Object.values(envStatus).every(Boolean) ? 'pass' : 'fail',
+          vars: envStatus
+        };
+
+        // Summary
+        const statuses = Object.values(checklist).map(c => c.status);
+        checklist._summary = {
+          total: statuses.length,
+          pass: statuses.filter(s => s === 'pass').length,
+          fail: statuses.filter(s => s === 'fail').length,
+          degraded: statuses.filter(s => s === 'degraded').length,
+          unknown: statuses.filter(s => s === 'unknown').length
+        };
+
+        return { ok: true, checklist, checked_at: new Date().toISOString() };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
   // -- Security Workbook (F.A.Y.E. read-write) --
 
   'write_security_workbook': {
