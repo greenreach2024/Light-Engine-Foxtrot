@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Processing Setup</title>
+  <style>
+    :root {
+      --bg-1: #f4f7f2;
+      --bg-2: #e6efe1;
+      --panel: #ffffff;
+      --text: #203020;
+      --muted: #556655;
+      --brand: #2e7d32;
+      --brand-2: #245f27;
+      --border: #d5e2d1;
+      --ok-bg: #ecfdf0;
+      --ok-border: #86efac;
+      --warn-bg: #fffbeb;
+      --warn-border: #fcd34d;
+      --err-bg: #fef2f2;
+      --err-border: #fecaca;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+      padding: 28px 16px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 20px 50px rgba(32, 48, 32, 0.12);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 28px 28px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(130deg, #f9fcf7, #f0f8ec);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.5rem, 2.5vw, 2.1rem);
+      line-height: 1.2;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .content {
+      padding: 24px 28px 30px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+
+    .meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      font-size: 0.93rem;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid #c9d8c4;
+      border-radius: 10px;
+      padding: 11px 12px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    button,
+    .btn-link {
+      border: 0;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 0.93rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--brand-2); }
+
+    .btn-secondary {
+      background: #eef4ea;
+      color: #2b422a;
+      border: 1px solid #d7e6d3;
+    }
+
+    .status {
+      margin-top: 14px;
+      border-radius: 10px;
+      padding: 12px 13px;
+      font-size: 0.92rem;
+      line-height: 1.45;
+      display: none;
+    }
+
+    .status.warn {
+      display: block;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: #92400e;
+    }
+
+    .status.ok {
+      display: block;
+      background: var(--ok-bg);
+      border: 1px solid var(--ok-border);
+      color: #14532d;
+    }
+
+    .status.error {
+      display: block;
+      background: var(--err-bg);
+      border: 1px solid var(--err-border);
+      color: #7f1d1d;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin-top: 10px;
+    }
+
+    .launch {
+      margin-top: 12px;
+      border: 1px solid #d7e6d3;
+      border-radius: 10px;
+      background: #f7fbf5;
+      padding: 12px;
+      display: none;
+    }
+
+    .launch p {
+      margin: 0 0 10px;
+      font-size: 0.9rem;
+      color: #2f4a2f;
+    }
+
+    .launch-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .debug {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f9fcf8;
+      padding: 10px;
+      max-height: 220px;
+      overflow: auto;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #2f3d2f;
+      white-space: pre-wrap;
+      display: none;
+    }
+
+    @media (max-width: 680px) {
+      .hero,
+      .content { padding: 18px; }
+      .actions { flex-direction: column; }
+      button,
+      .btn-link { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Standalone Payment Processing Setup</h1>
+      <p>Connect your farm Square account on this page, outside the dashboard wizard flow.</p>
+    </section>
+
+    <section class="content">
+      <div class="grid">
+        <div class="card">
+          <h2>Farm Information</h2>
+          <p class="meta" id="farmMeta">Farm ID will be auto-detected from your active session.</p>
+
+          <label for="farmName">Farm Name</label>
+          <input id="farmName" type="text" placeholder="The Notable Sprout" autocomplete="organization">
+
+          <div class="actions">
+            <button id="startBtn" class="btn-primary" type="button">Connect with Square</button>
+            <button id="statusBtn" class="btn-secondary" type="button">Check Connection Status</button>
+            <a id="returnLink" class="btn-link btn-secondary" href="/LE-dashboard.html">Return to Dashboard</a>
+          </div>
+
+          <div id="statusBox" class="status"></div>
+          <div id="authLaunch" class="launch"></div>
+          <div class="small">After Square authorization, this page will auto-detect connection and show the saved merchant/location.</div>
+          <div id="debugLog" class="debug"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var poller = null;
+      var pollAttempts = 0;
+      var maxAttempts = 72; // 6 minutes
+      var DEFAULT_FARM_ID = 'FARM-MLTP9LVH-B0B85039';
+
+      var farmMetaEl = document.getElementById('farmMeta');
+      var farmNameEl = document.getElementById('farmName');
+      var statusBox = document.getElementById('statusBox');
+      var authLaunchEl = document.getElementById('authLaunch');
+      var debugLog = document.getElementById('debugLog');
+      var returnLink = document.getElementById('returnLink');
+
+      function log(msg) {
+        var line = '[' + new Date().toISOString() + '] ' + msg;
+        console.log('[PaymentSetup]', msg);
+        if (debugLog) {
+          debugLog.style.display = 'block';
+          debugLog.textContent += line + '\n';
+          debugLog.scrollTop = debugLog.scrollHeight;
+        }
+      }
+
+      function getParam(name) {
+        var params = new URLSearchParams(window.location.search);
+        return params.get(name) || '';
+      }
+
+      function getFarmId() {
+        var raw = getParam('farmId')
+          || sessionStorage.getItem('farm_id')
+          || sessionStorage.getItem('farmId')
+          || localStorage.getItem('farm_id')
+          || localStorage.getItem('farmId')
+          || DEFAULT_FARM_ID;
+
+        var normalized = String(raw || '').trim().replace(/[^A-Za-z0-9_-]/g, '');
+        if (!normalized) return DEFAULT_FARM_ID;
+        if (normalized !== String(raw || '').trim()) {
+          log('Farm ID normalized from "' + String(raw || '') + '" to "' + normalized + '"');
+        }
+        return normalized;
+      }
+
+      function getFarmName() {
+        return getParam('farmName')
+          || localStorage.getItem('payment_setup_farm_name')
+          || '';
+      }
+
+      function setStatus(type, text) {
+        statusBox.className = 'status ' + type;
+        statusBox.textContent = text;
+      }
+
+      function clearLaunchOptions() {
+        if (!authLaunchEl) return;
+        authLaunchEl.style.display = 'none';
+        authLaunchEl.textContent = '';
+      }
+
+      function showLaunchOptions(authUrl) {
+        if (!authLaunchEl) return;
+        authLaunchEl.textContent = '';
+
+        var p = document.createElement('p');
+        p.textContent = 'Authorization URL is ready. Choose one option:';
+        authLaunchEl.appendChild(p);
+
+        var div = document.createElement('div');
+        div.className = 'launch-actions';
+
+        var newTabLink = document.createElement('a');
+        newTabLink.id = 'authorizeNewTab';
+        newTabLink.className = 'btn-link btn-primary';
+        newTabLink.href = authUrl;
+        newTabLink.target = '_blank';
+        newTabLink.rel = 'noopener';
+        newTabLink.textContent = 'Authorize in New Tab';
+        div.appendChild(newTabLink);
+
+        var sameTabLink = document.createElement('a');
+        sameTabLink.id = 'authorizeThisTab';
+        sameTabLink.className = 'btn-link btn-secondary';
+        sameTabLink.href = authUrl;
+        sameTabLink.textContent = 'Authorize in This Tab';
+        div.appendChild(sameTabLink);
+
+        authLaunchEl.appendChild(div);
+        authLaunchEl.style.display = 'block';
+
+        if (newTabLink) {
+          newTabLink.addEventListener('click', function () {
+            log('User launched Square authorization in new tab');
+            setStatus('warn', 'Square tab opened. Complete authorization there, then return to this page.');
+            startPollingForConnection();
+          });
+        }
+
+        if (sameTabLink) {
+          sameTabLink.addEventListener('click', function () {
+            log('User launched Square authorization in this tab');
+          });
+        }
+      }
+
+      function stopPolling() {
+        if (poller) {
+          clearInterval(poller);
+          poller = null;
+        }
+      }
+
+      function handleConnected(data) {
+        stopPolling();
+        clearLaunchOptions();
+        var merchant = (data && (data.merchantId || data.merchantName)) || 'Connected merchant';
+        var location = (data && (data.locationName || data.locationId)) || 'Primary location';
+        setStatus('ok', 'Square connected. Merchant: ' + merchant + '. Location: ' + location + '.');
+        log('Connection confirmed. Merchant=' + merchant + ', location=' + location);
+      }
+
+      async function checkStatus(silent) {
+        var farmId = getFarmId();
+        var statusUrl = '/api/farm/square/status?farmId=' + encodeURIComponent(farmId);
+        try {
+          var res;
+          try {
+            res = await fetch(statusUrl, {
+              headers: { 'X-Farm-ID': farmId }
+            });
+          } catch (headerErr) {
+            log('Status fetch with header failed, retrying without header: ' + headerErr.message);
+            res = await fetch(statusUrl);
+          }
+
+          var payload;
+          try {
+            payload = await res.json();
+          } catch (parseErr) {
+            throw new Error('Status response was not valid JSON');
+          }
+          if (!res.ok || !payload.ok) {
+            throw new Error(payload.error || 'Status request failed');
+          }
+
+          if (payload.connected) {
+            handleConnected(payload.data || {});
+            return true;
+          }
+
+          if (!silent) {
+            setStatus('warn', 'Square not connected yet for farm ' + farmId + '.');
+          }
+          return false;
+        } catch (err) {
+          if (!silent) {
+            setStatus('error', 'Status check failed: ' + err.message);
+          }
+          log('Status error: ' + err.message + ' (farmId=' + farmId + ', url=' + statusUrl + ')');
+          return false;
+        }
+      }
+
+      function startPollingForConnection() {
+        stopPolling();
+        pollAttempts = 0;
+        poller = setInterval(async function () {
+          pollAttempts += 1;
+
+          try {
+            var signal = localStorage.getItem('square_connected_signal');
+            if (signal) {
+              localStorage.removeItem('square_connected_signal');
+              var signalData = JSON.parse(signal);
+              log('Detected localStorage callback signal');
+              handleConnected(signalData || {});
+              return;
+            }
+          } catch (e) {
+            log('Signal parse error: ' + e.message);
+          }
+
+          var isConnected = await checkStatus(true);
+          if (isConnected) return;
+
+          if (pollAttempts >= maxAttempts) {
+            stopPolling();
+            setStatus('warn', 'Timed out waiting for Square callback. Click Check Connection Status to verify manually.');
+            log('Polling timed out');
+          }
+        }, 5000);
+      }
+
+      async function startAuthorization() {
+        var farmId = getFarmId();
+        var farmName = (farmNameEl.value || '').trim();
+
+        if (!farmName) {
+          setStatus('error', 'Farm name is required.');
+          farmNameEl.focus();
+          return;
+        }
+
+        localStorage.setItem('payment_setup_farm_name', farmName);
+
+        try {
+          clearLaunchOptions();
+          setStatus('warn', 'Requesting Square authorization URL...');
+          log('Starting authorization for farmId=' + farmId + ', farmName=' + farmName);
+
+          var res = await fetch('/api/farm/square/authorize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Farm-ID': farmId },
+            body: JSON.stringify({ farmId: farmId, farmName: farmName })
+          });
+          var payload = await res.json();
+
+          if (!res.ok || !payload.ok || !payload.data || !payload.data.authorizationUrl) {
+            throw new Error((payload && payload.error) || 'Failed to generate authorization URL');
+          }
+
+          var authUrl = payload.data.authorizationUrl;
+          log('Authorization URL generated');
+          setStatus('warn', 'Authorization URL ready. Click Authorize in New Tab below.');
+          showLaunchOptions(authUrl);
+          startPollingForConnection();
+          log('Started connection polling immediately after URL generation');
+
+          // Best-effort auto-open. If blocked, explicit links remain available.
+          var opened = window.open(authUrl, '_blank', 'noopener');
+          if (opened) {
+            setStatus('warn', 'Square tab opened. Complete authorization there, then return here.');
+            log('Authorization tab auto-opened');
+          } else {
+            log('Popup was blocked; waiting for user to click explicit authorize link');
+          }
+        } catch (err) {
+          setStatus('error', 'Authorization start failed: ' + err.message);
+          log('Authorization error: ' + err.message);
+        }
+      }
+
+      window.addEventListener('storage', function (e) {
+        if (e.key !== 'square_connected_signal' || !e.newValue) return;
+        try {
+          var data = JSON.parse(e.newValue);
+          localStorage.removeItem('square_connected_signal');
+          log('Received storage event from callback tab');
+          handleConnected(data || {});
+        } catch (err) {
+          log('Storage event parse error: ' + err.message);
+        }
+      });
+
+      window.addEventListener('focus', function () {
+        if (!poller) return;
+        log('Window regained focus; forcing immediate status check');
+        checkStatus(true);
+      });
+
+      document.addEventListener('visibilitychange', function () {
+        if (!poller) return;
+        if (document.visibilityState === 'visible') {
+          log('Tab became visible; forcing immediate status check');
+          checkStatus(true);
+        }
+      });
+
+      document.getElementById('startBtn').addEventListener('click', startAuthorization);
+      document.getElementById('statusBtn').addEventListener('click', function () { checkStatus(false); });
+
+      var farmId = getFarmId();
+      var farmName = getFarmName();
+      farmNameEl.value = farmName;
+      farmMetaEl.textContent = 'Farm ID: ' + farmId;
+
+      var returnUrl = getParam('returnUrl');
+      if (returnUrl && returnUrl.charAt(0) === '/' && returnUrl.charAt(1) !== '/') {
+        returnLink.href = returnUrl;
+      }
+
+      log('Standalone payment setup initialized for farmId=' + farmId);
+      checkStatus(false);
+    })();
+  </script>
+</body>
+</html>
