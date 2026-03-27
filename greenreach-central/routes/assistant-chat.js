@@ -1875,7 +1875,7 @@ async function executeExtendedTool(toolName, params, farmId) {
 
     case 'get_pricing_info': {
       try {
-        const pricing = await getCropPricing();
+        const pricing = await getCropPricing(farmId);
         return { ok: true, crops: pricing, count: pricing.length };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -1886,7 +1886,7 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const pool = getDatabase();
         const marketData = await getMarketDataAsync(pool);
-        const cropPricing = await getCropPricing();
+        const cropPricing = await getCropPricing(farmId);
 
         let currentAssignments = [];
         if (isDatabaseAvailable()) {
@@ -1966,7 +1966,7 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const pool = getDatabase();
         const marketData = await getMarketDataAsync(pool);
-        const cropPricing = await getCropPricing();
+        const cropPricing = await getCropPricing(farmId);
 
         let aiAnalyses = [];
         let demandSignals = {};
@@ -2172,7 +2172,7 @@ async function executeExtendedTool(toolName, params, farmId) {
       try {
         const pool = getDatabase();
         const marketData = await getMarketDataAsync(pool);
-        const cropPricing = await getCropPricing();
+        const cropPricing = await getCropPricing(farmId);
         let aiAnalyses = [];
         try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
         const aiMap = {};
@@ -2359,7 +2359,7 @@ async function executeExtendedTool(toolName, params, farmId) {
 
         // 4. Get recommendations (reuse planning logic)
         const marketData = await getMarketDataAsync(pool);
-        const cropPricing = await getCropPricing();
+        const cropPricing = await getCropPricing(farmId);
         let aiAnalyses = [];
         try { aiAnalyses = pool ? await getLatestAnalyses(pool) : []; } catch { /* ok */ }
         const aiMap = {};
@@ -2724,7 +2724,7 @@ async function executeExtendedTool(toolName, params, farmId) {
           } catch { /* ok */ }
 
           try {
-            const pricing = await getCropPricing();
+            const pricing = await getCropPricing(farmId);
             sections.pricing = { crops: pricing.slice(0, 10) };
           } catch { /* ok */ }
         }

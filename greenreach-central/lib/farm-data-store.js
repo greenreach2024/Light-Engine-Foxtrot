@@ -65,6 +65,7 @@ const TYPE_TO_FILE = {
   procurement_suppliers: 'procurement-suppliers.json',
   procurement_orders:    'procurement-orders.json',
   nutrient_dashboard:    'nutrient-dashboard.json',
+  farm_settings:     'farm-settings.json',
 };
 
 // Default empty values per type (prevent frontend errors)
@@ -87,6 +88,7 @@ const DEFAULTS = {
   procurement_suppliers: { suppliers: [] },
   procurement_orders:    { orders: [] },
   nutrient_dashboard:    {},
+  farm_settings:     {},
 };
 
 /**

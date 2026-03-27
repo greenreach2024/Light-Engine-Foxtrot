@@ -168,6 +168,11 @@ export function farmDataMiddleware(inMemoryStore) {
     if (!match) return next();
 
     const fileName = match[1];
+
+    // farm.json is handled by the dedicated merge route (farm-json-merge.js)
+    // which merges DB data with flat file data for complete farm profiles.
+    if (fileName === 'farm.json') return next();
+
     const dataType = FILE_TO_DATA_TYPE[fileName];
 
     // If we don't map this file, fall through to static serving

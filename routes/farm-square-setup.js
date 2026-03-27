@@ -53,7 +53,10 @@ const IS_PROD_LIKE = process.env.NODE_ENV === 'production'
 if (IS_PROD_LIKE && !process.env.TOKEN_ENCRYPTION_KEY) {
   console.error('[farm-square] TOKEN_ENCRYPTION_KEY is required in production');
 }
-const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY || crypto.randomBytes(32);
+const RAW_ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY || null;
+const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY
+  ? (RAW_ENCRYPTION_KEY.length === 64 ? Buffer.from(RAW_ENCRYPTION_KEY, 'hex') : Buffer.from(RAW_ENCRYPTION_KEY).subarray(0, 32))
+  : crypto.randomBytes(32);
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
 function escapeHtml(str) {
@@ -88,11 +91,50 @@ function decryptToken(encryptedData) {
   return decrypted;
 }
 
+function getStateSigningKey() {
+  const candidate = process.env.SQUARE_APPLICATION_SECRET
+    || process.env.TOKEN_ENCRYPTION_KEY
+    || 'farm-square-state-dev-key';
+  return String(candidate);
+}
+
+function createSignedState(stateData) {
+  const payload = Buffer.from(JSON.stringify(stateData), 'utf8').toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', getStateSigningKey())
+    .update(payload)
+    .digest('base64url');
+  return payload + '.' + signature;
+}
+
+function verifySignedState(stateToken) {
+  if (!stateToken || typeof stateToken !== 'string' || !stateToken.includes('.')) {
+    return null;
+  }
+
+  const [payload, signature] = stateToken.split('.');
+  if (!payload || !signature) return null;
+
+  const expected = crypto
+    .createHmac('sha256', getStateSigningKey())
+    .update(payload)
+    .digest('base64url');
+
+  if (signature !== expected) return null;
+
+  const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  if (!parsed || typeof parsed !== 'object') return null;
+  if (!parsed.farm_id || !parsed.redirect_uri || !parsed.timestamp) return null;
+  if ((Date.now() - Number(parsed.timestamp)) > 600000) return null;
+  return parsed;
+}
+
 // ---------------------------------------------------------------------------
 // Persistent storage (flat-file in data/ -- encrypted tokens)
 // ---------------------------------------------------------------------------
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TOKENS_FILE = path.join(DATA_DIR, 'farm-square-tokens.json');
+const OAUTH_STATES_FILE = path.join(DATA_DIR, 'farm-square-oauth-states.json');
 
 const farmSquareAccounts = new Map();
 const oauthStates = new Map();
@@ -126,7 +168,54 @@ function saveTokensToDisk() {
   }
 }
 
+function cleanupExpiredOauthStates() {
+  const tenMinutesAgo = Date.now() - 600000;
+  let removed = 0;
+  for (const [token, data] of oauthStates.entries()) {
+    if (!data || data.timestamp < tenMinutesAgo) {
+      oauthStates.delete(token);
+      removed += 1;
+    }
+  }
+  if (removed > 0) {
+    saveOauthStatesToDisk();
+  }
+  return removed;
+}
+
+function loadOauthStatesFromDisk() {
+  try {
+    if (!fs.existsSync(OAUTH_STATES_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(OAUTH_STATES_FILE, 'utf8'));
+    if (!raw || typeof raw !== 'object') return;
+
+    for (const [stateToken, stateData] of Object.entries(raw)) {
+      if (!stateData || typeof stateData !== 'object') continue;
+      oauthStates.set(stateToken, stateData);
+    }
+
+    const removed = cleanupExpiredOauthStates();
+    console.log('[farm-square] Loaded ' + oauthStates.size + ' oauth state token(s) from disk (expired removed: ' + removed + ')');
+  } catch (err) {
+    console.warn('[farm-square] Failed to load oauth states from disk:', err.message);
+  }
+}
+
+function saveOauthStatesToDisk() {
+  try {
+    const obj = {};
+    for (const [stateToken, stateData] of oauthStates.entries()) {
+      obj[stateToken] = stateData;
+    }
+    fs.mkdirSync(path.dirname(OAUTH_STATES_FILE), { recursive: true });
+    fs.writeFileSync(OAUTH_STATES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[farm-square] Failed to save oauth states to disk:', err.message);
+  }
+}
+
 loadTokensFromDisk();
+loadOauthStatesFromDisk();
 
 // ---------------------------------------------------------------------------
 // Helper: extract farm ID from request
@@ -197,21 +286,21 @@ router.post('/authorize', async (req, res) => {
       || req.protocol + '://' + req.get('host') + '/api/farm/square/callback';
 
     // Generate cryptographically secure state token (CSRF protection)
-    const stateToken = crypto.randomBytes(32).toString('hex');
-    oauthStates.set(stateToken, {
+    const statePayload = {
       farm_id: farmId,
       farm_name: farmName,
       redirect_uri: redirectUri,
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+      nonce: crypto.randomBytes(16).toString('hex')
+    };
+    const stateToken = createSignedState(statePayload);
+
+    // Keep legacy map-based state as fallback for old flow compatibility.
+    oauthStates.set(stateToken, statePayload);
+    saveOauthStatesToDisk();
 
     // Clean up expired state tokens (> 10 minutes)
-    const tenMinutesAgo = Date.now() - 600000;
-    for (const [token, data] of oauthStates.entries()) {
-      if (data.timestamp < tenMinutesAgo) {
-        oauthStates.delete(token);
-      }
-    }
+    cleanupExpiredOauthStates();
 
     // Build Square OAuth URL
     const baseUrl = SQUARE_ENVIRONMENT === 'production'
@@ -246,6 +335,8 @@ router.post('/authorize', async (req, res) => {
  */
 router.get('/callback', async (req, res) => {
   try {
+    console.log('[farm-square] Callback hit. Query params:', JSON.stringify(req.query));
+    console.log('[farm-square] Callback raw URL:', req.originalUrl);
     const { code, state, error: sqError } = req.query;
 
     if (sqError) {
@@ -265,8 +356,13 @@ router.get('/callback', async (req, res) => {
     }
 
     // Validate state token (CSRF protection)
-    const stateData = oauthStates.get(state);
+    let stateData = verifySignedState(state);
     if (!stateData) {
+      stateData = oauthStates.get(state) || null;
+    }
+
+    if (!stateData) {
+      console.warn('[farm-square] Callback rejected: invalid/expired state token. State prefix=' + String(state).slice(0, 12));
       return res.status(400).send(callbackHtml(
         'Invalid Request',
         '<p>Invalid or expired state token. Please try again.</p>',
@@ -275,27 +371,51 @@ router.get('/callback', async (req, res) => {
     }
 
     const { farm_id, farm_name, redirect_uri } = stateData;
-    oauthStates.delete(state); // One-time use
+    oauthStates.delete(state); // One-time use for legacy fallback map
+    saveOauthStatesToDisk();
 
-    // Exchange authorization code for tokens via Square SDK
-    const squareClient = new SquareClient({
-      environment: SQUARE_ENVIRONMENT,
-      accessToken: ''
-    });
+    // Exchange authorization code for tokens via direct HTTP (bypasses SDK v37 issues)
+    const tokenBaseUrl = SQUARE_ENVIRONMENT === 'production'
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com';
 
-    const tokenResponse = await squareClient.oAuthApi.obtainToken({
-      clientId: SQUARE_APPLICATION_ID,
-      clientSecret: SQUARE_APPLICATION_SECRET,
+    const tokenBody = {
+      client_id: SQUARE_APPLICATION_ID,
+      client_secret: SQUARE_APPLICATION_SECRET,
       code: code,
-      grantType: 'authorization_code',
-      redirectUri: redirect_uri
+      grant_type: 'authorization_code',
+      redirect_uri: redirect_uri
+    };
+
+    console.log('[farm-square] Token exchange request:', JSON.stringify({
+      url: tokenBaseUrl + '/oauth2/token',
+      client_id: SQUARE_APPLICATION_ID,
+      code_prefix: String(code).slice(0, 8) + '...',
+      code_length: String(code).length,
+      grant_type: 'authorization_code',
+      redirect_uri: redirect_uri,
+      has_secret: !!SQUARE_APPLICATION_SECRET,
+      secret_prefix: String(SQUARE_APPLICATION_SECRET).slice(0, 8) + '...'
+    }));
+
+    const tokenFetchRes = await fetch(tokenBaseUrl + '/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
+      body: JSON.stringify(tokenBody)
     });
 
-    const tokenResult = tokenResponse.result;
-    const accessToken = tokenResult.accessToken;
-    const refreshToken = tokenResult.refreshToken;
-    const expiresAt = tokenResult.expiresAt;
-    const merchantId = tokenResult.merchantId;
+    const tokenJson = await tokenFetchRes.json();
+    console.log('[farm-square] Token exchange response: status=' + tokenFetchRes.status + ' body=' + JSON.stringify(tokenJson));
+
+    if (!tokenFetchRes.ok || tokenJson.errors) {
+      const errDetail = (tokenJson.errors && tokenJson.errors[0] && tokenJson.errors[0].detail) || 'Token exchange failed';
+      throw new Error('Square token exchange ' + tokenFetchRes.status + ': ' + errDetail);
+    }
+
+    const accessToken = tokenJson.access_token;
+    const refreshToken = tokenJson.refresh_token;
+    const expiresAt = tokenJson.expires_at;
+    const merchantId = tokenJson.merchant_id;
 
     // Fetch default location
     const authClient = new SquareClient({
@@ -551,7 +671,7 @@ function callbackHtml(title, bodyContent, success, farmId, merchantData) {
     + '</style></head><body>'
     + '<h1>' + escapeHtml(title) + '</h1>'
     + bodyContent
-    + '<a href="/">Return to Dashboard</a>'
+    + '<a href="/LE-dashboard.html' + (farmId ? '?farmId=' + encodeURIComponent(farmId) : '') + '">Return to Dashboard</a>'
     + (success && farmId
       ? '<script>'
         + 'var signalData={type:"square-connected"'

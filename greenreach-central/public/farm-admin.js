@@ -3103,40 +3103,40 @@ function checkForScheduledPriceUpdates() {
 // Pricing matches crop-pricing.json - weight-based model ($/lb)
 const cropGrowthParams = {
     // Lettuce varieties - 28-35 day cycle, priced per lb
-    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
-    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 5.00, yieldFactor: 0.92 },
+    'Butterhead Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Buttercrunch Lettuce': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
+    'Bibb Butterhead': { daysToHarvest: 32, retailPricePerLb: 23.52, yieldFactor: 0.92 },
     'Breen Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
     'Truchas Pelleted Organic': { daysToHarvest: 55, retailPricePerLb: 23.52, yieldFactor: 0.90 },
     'Seaside F1 Spinach (baby leaf)': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
-    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
-    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 5.00, yieldFactor: 0.91 },
+    'Red Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Oak Leaf Lettuce': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.91 },
     
     // Kale varieties - 35-42 day cycle, priced per lb
-    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 6.50, yieldFactor: 0.89 },
-    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 6.50, yieldFactor: 0.92 },
+    'Curly Kale': { daysToHarvest: 38, retailPricePerLb: 23.52, yieldFactor: 0.89 },
+    'Baby Kale': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.92 },
     
     // Asian Greens - priced per lb
-    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 5.50, yieldFactor: 0.90 },
-    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 6.00, yieldFactor: 0.91 },
+    'Mei Qing Pak Choi': { daysToHarvest: 30, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Tatsoi': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.91 },
     
     // Specialty Greens - priced per lb
-    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 8.00, yieldFactor: 0.87 },
-    'Watercress': { daysToHarvest: 25, retailPricePerLb: 7.00, yieldFactor: 0.90 },
+    'Frisée Endive': { daysToHarvest: 35, retailPricePerLb: 25.12, yieldFactor: 0.87 },
+    'Watercress': { daysToHarvest: 25, retailPricePerLb: 25.12, yieldFactor: 0.90 },
     
     // Arugula varieties - 21-28 day cycle, priced per lb
-    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 6.75, yieldFactor: 0.93 },
-    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.91 },
-    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 6.75, yieldFactor: 0.89 },
-    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
-    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 6.75, yieldFactor: 0.90 },
+    'Baby Arugula': { daysToHarvest: 21, retailPricePerLb: 23.52, yieldFactor: 0.93 },
+    'Cultivated Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.91 },
+    'Wild Arugula': { daysToHarvest: 28, retailPricePerLb: 23.52, yieldFactor: 0.89 },
+    'Wasabi Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.90 },
+    'Red Arugula': { daysToHarvest: 24, retailPricePerLb: 23.52, yieldFactor: 0.90 },
     
-    // Basil varieties - 21-28 day cycle, priced per lb (~$114/lb for premium herbs)
-    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.88 },
-    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 114.72, yieldFactor: 0.87 },
-    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 114.72, yieldFactor: 0.86 }
+    // Basil varieties - 21-28 day cycle, priced per lb (CAD, from crop-registry)
+    'Genovese Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
+    'Thai Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.88 },
+    'Purple Basil': { daysToHarvest: 25, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Lemon Basil': { daysToHarvest: 24, retailPricePerLb: 43.20, yieldFactor: 0.87 },
+    'Holy Basil': { daysToHarvest: 26, retailPricePerLb: 43.20, yieldFactor: 0.86 }
 };
 
 // Global crop value data
@@ -3164,7 +3164,10 @@ function calculateTrayValue(crop, plantCount, daysPostSeed) {
     if (!params) return 0;
     
     const growthPercent = calculateGrowthPercentage(crop, daysPostSeed) / 100;
-    const retailPricePerLb = params.retailPricePerLb;
+    // Prefer DB pricing (from pricingData loaded via API) over hardcoded params
+    const dbEntry = (typeof pricingData !== 'undefined' && Array.isArray(pricingData))
+        ? pricingData.find(p => p.crop === crop) : null;
+    const retailPricePerLb = (dbEntry && dbEntry.retail > 0) ? dbEntry.retail : params.retailPricePerLb;
     const yieldFactor = params.yieldFactor;
     
     // Average weight per plant (in lbs) - conservative estimate
@@ -3476,9 +3479,9 @@ async function renderCropValue() {
     Object.entries(data.cropSummary).forEach(([crop, summary]) => {
         const avgDays = summary.totalDays / summary.trays;
         const percentOfTotal = (summary.value / data.totalValue * 100).toFixed(1);
-        const params = cropGrowthParams[crop] || { retailPricePerLb: 0 };
+        const retailPerLb = summary.retailPricePerLb || (cropGrowthParams[crop] || {}).retailPricePerLb || 0;
         
-        const pricePerOz = (params.retailPricePerLb || 0) / 16;
+        const pricePerOz = retailPerLb / 16;
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${crop}</td>
@@ -6660,7 +6663,7 @@ async function completeSetup() {
             // Also POST to /farm endpoint for index.html compatibility
             await fetch('/farm', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.token}` },
                 body: JSON.stringify(farmData)
             });
             
@@ -6668,7 +6671,7 @@ async function completeSetup() {
             if (setupData.rooms && setupData.rooms.length > 0) {
                 await fetch('/rooms', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession.token}` },
                     body: JSON.stringify(setupData.rooms)
                 });
             }

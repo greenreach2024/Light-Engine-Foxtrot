@@ -1,21 +1,37 @@
 {
-  "version": "2026-03-26-v8",
-  "farmId": "light-engine-demo",
-  "lastUpdated": "2026-03-26T14:10:31.911Z",
   "crops": [
     {
-      "crop": "Mei Qing Pak Choi",
-      "unit": "lb",
+      "crop": "Albion",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "greenreach-central"
+      "ws3Discount": 35
     },
     {
-      "crop": "Lacinato Kale",
+      "crop": "Alkindus Pelleted Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Amaze",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Astro Arugula",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -23,7 +39,17 @@
       "ws2Discount": 25,
       "ws3Discount": 35,
       "currency": "CAD",
-      "pricingSource": "greenreach-central"
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Better Boy",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
     },
     {
       "crop": "Bibb Butterhead",
@@ -37,18 +63,17 @@
       "pricingSource": "greenreach-central"
     },
     {
-      "crop": "Frisée Endive",
+      "crop": "Brandywine",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
       "unit": "lb",
-      "retailPrice": 25.12,
-      "wholesalePrice": 17.58,
+      "category": "Greens",
       "ws1Discount": 15,
       "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "greenreach-central"
+      "ws3Discount": 35
     },
     {
-      "crop": "Red Russian Kale",
+      "crop": "Breen Pelleted Organic",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -57,6 +82,26 @@
       "ws3Discount": 35,
       "currency": "CAD",
       "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Brentwood Eazyleaf Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Burgandy Eazyleaf Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
     },
     {
       "crop": "Buttercrunch Lettuce",
@@ -70,7 +115,774 @@
       "pricingSource": "greenreach-central"
     },
     {
+      "crop": "Celebrity",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Chandler",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Chervil",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Common Thyme",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Dill Bouquet",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Eazyleaf Blend Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Escarole Batavian",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Eversweet",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Fort Laramie",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "French Tarragon",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Fris\u00e9e Endive",
+      "unit": "lb",
+      "retailPrice": 25.12,
+      "wholesalePrice": 17.58,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Genovese Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Greek Oregano",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Hampton Eazyleaf Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Heatmaster F1",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Ilema Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Italian Parsley",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Jewel",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "KX-1 Kale (baby leaf)",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Kentucky Colonel Spearmint",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Komatsuna Mustard Spinach",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Lemon Balm",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Little Gem",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Lovage",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Magenta Sunset Swiss Chard",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Mara de Bois",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Marjoram",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Mei Qing Pak Choi",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Microgreen Arugula",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Basil",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Beet",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Broccoli Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Kale",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Kohlrabi",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Pac Choi",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Pea Shoots",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Radish Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Sunflower Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Microgreen Swiss Chard",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Mizuna Mustard Greens",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Monterey",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Newham Pelleted Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Ozark Beauty",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Rosemary",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sage",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Salad Bowl Oakleaf",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "San Marzano-",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Seascape",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Seaside F1 Spinach (baby leaf)",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Sequoia",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sorrel",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Spretnak Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Adzuki Bean Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Alfalfa Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Barley Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Bean Salad Mix Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Broccoli Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Brown Mustard Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Go Go Mix Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Gourmet Mix Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Green Hunter Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Green Lentils Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Green Peas Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Mung Bean Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Radish Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Red Clover Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Salad Mix Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Sandwich Booster Mix Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Wheatgrass Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sprout Yellow Mustard Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Sun Gold",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
       "crop": "Tatsoi",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Thai Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Tribute",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Tristar",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Tropicana Pelleted Organic",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "unit": "lb",
+      "category": "Greens",
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35
+    },
+    {
+      "crop": "Truchas Pelleted Organic",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -92,7 +904,7 @@
       "pricingSource": "greenreach-central"
     },
     {
-      "crop": "Salad Bowl Oakleaf",
+      "crop": "Red Arugula",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -103,7 +915,51 @@
       "pricingSource": "crop-registry"
     },
     {
-      "crop": "Astro Arugula",
+      "crop": "Wild Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Red Russian Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
+    },
+    {
+      "crop": "Holy Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Red Leaf Lettuce",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Arugula",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -125,7 +981,7 @@
       "pricingSource": "crop-registry"
     },
     {
-      "crop": "Red Leaf Lettuce",
+      "crop": "Cultivated Arugula",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -134,20 +990,64 @@
       "ws3Discount": 35,
       "currency": "CAD",
       "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Purple Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Basil",
+      "unit": "lb",
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Wasabi Arugula",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "crop-registry"
+    },
+    {
+      "crop": "Lacinato Kale",
+      "unit": "lb",
+      "retailPrice": 23.52,
+      "wholesalePrice": 16.46,
+      "ws1Discount": 15,
+      "ws2Discount": 25,
+      "ws3Discount": 35,
+      "currency": "CAD",
+      "pricingSource": "greenreach-central"
     },
     {
       "crop": "Oak Leaf Lettuce",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Curly Kale",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -180,13 +1080,13 @@
       "pricingSource": "crop-registry"
     },
     {
-      "crop": "Kale",
+      "crop": "Lemon Basil",
       "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
+      "retailPrice": 43.2,
+      "wholesalePrice": 30.24,
+      "ws1Discount": 12,
+      "ws2Discount": 20,
+      "ws3Discount": 30,
       "currency": "CAD",
       "pricingSource": "crop-registry"
     },
@@ -202,7 +1102,7 @@
       "pricingSource": "crop-registry"
     },
     {
-      "crop": "Cultivated Arugula",
+      "crop": "Curly Kale",
       "unit": "lb",
       "retailPrice": 23.52,
       "wholesalePrice": 16.46,
@@ -211,149 +1111,9 @@
       "ws3Discount": 35,
       "currency": "CAD",
       "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Wild Arugula",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Wasabi Arugula",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Red Arugula",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Arugula",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Genovese Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Thai Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Purple Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Lemon Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Holy Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Basil",
-      "unit": "lb",
-      "retailPrice": 43.2,
-      "wholesalePrice": 30.24,
-      "ws1Discount": 12,
-      "ws2Discount": 20,
-      "ws3Discount": 30,
-      "currency": "CAD",
-      "pricingSource": "crop-registry"
-    },
-    {
-      "crop": "Breen Pelleted Organic",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "greenreach-central"
-    },
-    {
-      "crop": "Truchas Pelleted Organic",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "greenreach-central"
-    },
-    {
-      "crop": "Seaside F1 Spinach (baby leaf)",
-      "unit": "lb",
-      "retailPrice": 23.52,
-      "wholesalePrice": 16.46,
-      "ws1Discount": 15,
-      "ws2Discount": 25,
-      "ws3Discount": 35,
-      "currency": "CAD",
-      "pricingSource": "greenreach-central"
     }
-  ]
+  ],
+  "currency": "CAD",
+  "lastUpdated": "2026-03-27",
+  "source": "crop-registry + crop-pricing flat file"
 }

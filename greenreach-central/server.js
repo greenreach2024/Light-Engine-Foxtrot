@@ -87,6 +87,7 @@ import adminOpsAgentRouter from './routes/admin-ops-agent.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 import adminPricingRoutes from './routes/admin-pricing.js';
+import mountFarmJsonRoute from "./routes/farm-json-merge.js";
 let grantWizardRoutes, startGrantProgramSync, seedGrantPrograms, cleanupExpiredApplications;
 if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
   const gwMod = await import('./routes/grant-wizard.js');
@@ -435,6 +436,9 @@ app.post('/data/room-map-:roomId.json', async (req, res) => {
   }
 });
 
+// ── Farm Profile: merge DB data on top of static farm.json ─────────────────
+mountFarmJsonRoute(app, { farmStore, logger });
+
 // ── Farm Settings: persist display prefs, notifications, system config ──────
 app.post('/data/farm-settings.json', async (req, res) => {
   const fid = farmStore.farmIdFromReq(req);
@@ -462,6 +466,108 @@ app.get('/data/farm-settings.json', async (req, res) => {
   } catch (err) {
     logger.error('[Farm Settings] Load failed:', err.message);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── One-time DB seed: bootstrap farm_profile + rooms from flat file ─────────
+// Call POST /api/admin/seed-farm after deploy to ensure DB has all profile data.
+// Idempotent: skips if farm_profile already has meaningful data in DB.
+app.post("/api/admin/seed-farm", async (req, res) => {
+  const fid = process.env.FARM_ID;
+  if (!fid) return res.status(400).json({ error: "No FARM_ID configured" });
+  try {
+    const existing = await farmStore.get(fid, "farm_profile");
+    const hasCompleteProfile = existing && typeof existing === "object"
+      && existing.contact && existing.contact.name
+      && existing.setup_completed;
+    if (hasCompleteProfile) {
+      return res.json({ success: true, message: "Profile already exists in DB", seeded: false });
+    }
+    const flatPath = path.join(__dirname, "public", "data", "farm.json");
+    let base = {};
+    try { base = JSON.parse(fs.readFileSync(flatPath, "utf8")); } catch (_) {}
+    if (!base.farmId) return res.status(400).json({ error: "Flat file has no farmId" });
+    const seedProfile = {
+      farmId: base.farmId,
+      name: base.farmName || base.name,
+      farmName: base.farmName || base.name,
+      contact: base.contact || {},
+      location: {
+        address: base.address || "",
+        city: base.city || "",
+        state: base.state || "",
+        postalCode: base.postalCode || "",
+        timezone: base.timezone || "America/New_York",
+        latitude: base.coordinates?.lat || null,
+        longitude: base.coordinates?.lng || null
+      },
+      coordinates: base.coordinates || {},
+      certifications: base.certifications || {},
+      tax: base.tax || {},
+      dedicated_crops: base.dedicated_crops || [],
+      status: "active",
+      setup_completed: true,
+      setup_completed_at: base.setup_completed_at || new Date().toISOString()
+    };
+    await farmStore.set(fid, "farm_profile", seedProfile);
+    if (base.rooms && Array.isArray(base.rooms) && base.rooms.length > 0) {
+      await farmStore.set(fid, "rooms", base.rooms);
+    }
+    try {
+      const { query: dbQuery } = await import("./config/database.js");
+      // Update farms table with contact info + setup_completed flag
+      const contact = seedProfile.contact || {};
+      const loc = seedProfile.location || {};
+      await dbQuery(
+        `UPDATE farms SET
+          setup_completed = true,
+          setup_completed_at = COALESCE(setup_completed_at, NOW()),
+          contact_name = COALESCE($2, contact_name),
+          email = COALESCE($3, email),
+          contact_phone = COALESCE($4, contact_phone),
+          location = COALESCE($5, location)
+        WHERE farm_id = $1`,
+        [fid, contact.name || null, contact.email || null, contact.phone || null,
+         JSON.stringify({ address: loc.address, city: loc.city, state: loc.state, postalCode: loc.postalCode })]
+      );
+    } catch (dbErr) {
+      logger.warn("[Seed] farms table update failed (non-fatal):", dbErr.message);
+    }
+    logger.info("[Seed] Farm profile seeded for " + fid);
+    return res.json({ success: true, message: "Farm profile seeded from flat file", seeded: true, farmId: fid });
+  } catch (err) {
+    logger.error("[Seed] Failed:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+// Seed crop pricing from flat file into DB
+app.post("/api/admin/seed-pricing", async (req, res) => {
+  const fid = process.env.FARM_ID;
+  if (!fid) return res.status(400).json({ error: "No FARM_ID configured" });
+  try {
+    // Check if DB already has pricing (skip unless force=true)
+    const forceReseed = req.body && req.body.force === true;
+    if (!forceReseed) {
+      const existing = await farmStore.get(fid, "crop_pricing");
+      if (existing && existing.crops && existing.crops.length > 0) {
+        return res.json({ success: true, message: "Crop pricing already in DB", seeded: false, count: existing.crops.length });
+      }
+    }
+    // Load from flat file
+    const flatPath = path.join(__dirname, "public", "data", "crop-pricing.json");
+    let pricingFile = {};
+    try { pricingFile = JSON.parse(fs.readFileSync(flatPath, "utf8")); } catch (_) {}
+    if (!pricingFile.crops || !pricingFile.crops.length) {
+      return res.status(400).json({ error: "crop-pricing.json has no crops" });
+    }
+    await farmStore.set(fid, "crop_pricing", { crops: pricingFile.crops, lastUpdated: new Date().toISOString() });
+    logger.info("[Seed] Crop pricing seeded: " + pricingFile.crops.length + " crops for " + fid);
+    return res.json({ success: true, message: "Crop pricing seeded from flat file", seeded: true, count: pricingFile.crops.length });
+  } catch (err) {
+    logger.error("[Seed Pricing] Failed:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -4107,12 +4213,26 @@ app.post('/api/wholesale/dynamic-pricing', async (req, res) => {
       }
     } catch (_) {}
 
-    // 3. Base pricing by crop
+    // 3. Base pricing: prefer DB crop_pricing, fall back to hardcoded
+    let dbCropPrices = {};
+    try {
+      const fid = process.env.FARM_ID || 'default';
+      const cpData = await farmStore.get(fid, 'crop_pricing');
+      if (cpData && cpData.crops) {
+        for (const c of cpData.crops) {
+          if (c.wholesalePrice > 0) {
+            dbCropPrices[c.crop.toLowerCase().replace(/\s+/g, '-')] = c.wholesalePrice;
+            dbCropPrices[c.crop] = c.wholesalePrice;
+          }
+        }
+      }
+    } catch (_) {}
     const basePricing = {
       'genovese-basil': 28, 'basil': 28, 'kale': 18,
       'lettuce': 14, 'arugula': 24, 'spinach': 20,
       'microgreens': 45, 'cilantro': 22, 'mint': 26,
-      'chard': 16, 'bok-choy': 18, 'watercress': 30
+      'chard': 16, 'bok-choy': 18, 'watercress': 30,
+      ...dbCropPrices
     };
 
     // 4. Calculate dynamic prices
