@@ -179,7 +179,6 @@ function initLogin() {
         if (document.getElementById('email')) {
             document.getElementById('email').value = 'info@greenreachgreens.com';
         }
-        document.getElementById('password').value = 'Grow123';
     }
 }
 
