@@ -21,6 +21,7 @@
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import crypto from 'crypto';
+import { verifyEntryOwnership, verifyNotebookOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -84,7 +85,7 @@ router.post('/research/notebooks', async (req, res) => {
   }
 });
 
-router.get('/research/notebooks/:id', async (req, res) => {
+router.get('/research/notebooks/:id', verifyNotebookOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -105,7 +106,7 @@ router.get('/research/notebooks/:id', async (req, res) => {
   }
 });
 
-router.patch('/research/notebooks/:id', async (req, res) => {
+router.patch('/research/notebooks/:id', verifyNotebookOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, status } = req.body;
@@ -137,7 +138,7 @@ router.patch('/research/notebooks/:id', async (req, res) => {
 
 // ─── Entries ──────────────────────────────────────────────────────────
 
-router.get('/research/notebooks/:id/entries', async (req, res) => {
+router.get('/research/notebooks/:id/entries', verifyNotebookOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { entry_type, limit = 100, offset = 0 } = req.query;
@@ -164,7 +165,7 @@ router.get('/research/notebooks/:id/entries', async (req, res) => {
   }
 });
 
-router.post('/research/notebooks/:id/entries', async (req, res) => {
+router.post('/research/notebooks/:id/entries', verifyNotebookOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { entry_type, content, template_id, created_by } = req.body;
@@ -189,7 +190,7 @@ router.post('/research/notebooks/:id/entries', async (req, res) => {
   }
 });
 
-router.patch('/research/entries/:id', async (req, res) => {
+router.patch('/research/entries/:id', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -226,7 +227,7 @@ router.patch('/research/entries/:id', async (req, res) => {
 });
 
 // ─── Lock Entry ───────────────────────────────────────────────────────
-router.post('/research/entries/:id/lock', async (req, res) => {
+router.post('/research/entries/:id/lock', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { locked_by } = req.body;
@@ -248,12 +249,17 @@ router.post('/research/entries/:id/lock', async (req, res) => {
 });
 
 // ─── Signatures ───────────────────────────────────────────────────────
-router.post('/research/entries/:id/sign', async (req, res) => {
+router.post('/research/entries/:id/sign', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
-    const { signer_id, signature_type } = req.body;
-    if (!signer_id || !signature_type) {
-      return res.status(400).json({ ok: false, error: 'signer_id and signature_type required' });
+    const { signature_type } = req.body;
+    // Derive signer from authenticated user — never trust client-supplied signer_id
+    const signer_id = req.user?.userId;
+    if (!signer_id || signer_id === 'jwt-user') {
+      return res.status(403).json({ ok: false, error: 'Authenticated user identity required for signatures' });
+    }
+    if (!signature_type) {
+      return res.status(400).json({ ok: false, error: 'signature_type required' });
     }
 
     // Generate signature hash from entry content + signer + timestamp
@@ -261,7 +267,7 @@ router.post('/research/entries/:id/sign', async (req, res) => {
     if (entry.rows.length === 0) return res.status(404).json({ ok: false, error: 'Entry not found' });
 
     const signatureHash = crypto.createHash('sha256')
-      .update(JSON.stringify(entry.rows[0].content) + signer_id + new Date().toISOString())
+      .update(JSON.stringify(entry.rows[0].content) + ':' + id + ':' + signer_id + ':' + signature_type + ':' + new Date().toISOString())
       .digest('hex');
 
     const result = await query(`
@@ -282,7 +288,7 @@ router.post('/research/entries/:id/sign', async (req, res) => {
   }
 });
 
-router.get('/research/entries/:id/signatures', async (req, res) => {
+router.get('/research/entries/:id/signatures', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -301,7 +307,7 @@ router.get('/research/entries/:id/signatures', async (req, res) => {
 });
 
 // ─── Attachments ──────────────────────────────────────────────────────
-router.post('/research/entries/:id/attachments', async (req, res) => {
+router.post('/research/entries/:id/attachments', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { file_name, file_type, s3_key, file_size, checksum, uploaded_by } = req.body;
@@ -320,7 +326,7 @@ router.post('/research/entries/:id/attachments', async (req, res) => {
   }
 });
 
-router.get('/research/entries/:id/attachments', async (req, res) => {
+router.get('/research/entries/:id/attachments', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM eln_attachments WHERE entry_id = $1 ORDER BY uploaded_at', [id]);
@@ -332,7 +338,7 @@ router.get('/research/entries/:id/attachments', async (req, res) => {
 });
 
 // ─── Entry Links ──────────────────────────────────────────────────────
-router.post('/research/entries/:id/link', async (req, res) => {
+router.post('/research/entries/:id/link', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { linked_entity_type, linked_entity_id } = req.body;
@@ -353,7 +359,7 @@ router.post('/research/entries/:id/link', async (req, res) => {
   }
 });
 
-router.get('/research/entries/:id/links', async (req, res) => {
+router.get('/research/entries/:id/links', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM eln_links WHERE entry_id = $1 ORDER BY created_at', [id]);
@@ -365,7 +371,7 @@ router.get('/research/entries/:id/links', async (req, res) => {
 });
 
 // ─── Snapshots ────────────────────────────────────────────────────────
-router.post('/research/entries/:id/snapshot', async (req, res) => {
+router.post('/research/entries/:id/snapshot', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { milestone_id } = req.body;
@@ -391,7 +397,7 @@ router.post('/research/entries/:id/snapshot', async (req, res) => {
   }
 });
 
-router.get('/research/entries/:id/snapshots', async (req, res) => {
+router.get('/research/entries/:id/snapshots', verifyEntryOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM eln_snapshots WHERE entry_id = $1 ORDER BY created_at', [id]);

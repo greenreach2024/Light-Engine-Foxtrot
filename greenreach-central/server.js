@@ -112,6 +112,7 @@ if (process.env.ENABLE_GRANT_WIZARD !== 'false') {
 import { errorHandler, initErrorCapture } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { authMiddleware, authOrAdminMiddleware } from './middleware/auth.js';
+import { autoEnforceFeatures } from '../server/middleware/feature-flags.js';
 import { farmDataMiddleware, farmDataWriteMiddleware } from './middleware/farm-data.js';
 
 // Phase 3 — Unified tenant-scoped data access layer
@@ -3283,6 +3284,7 @@ app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop i
 app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
 
 // Research Platform API (feature-gated via ENDPOINT_FEATURES in feature-flags.js)
+app.use(autoEnforceFeatures());
 app.use('/api', authMiddleware, researchStudiesRouter);
 app.use('/api', authMiddleware, researchDataRouter);
 app.use('/api', authMiddleware, researchExportsRouter);

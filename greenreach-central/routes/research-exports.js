@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import crypto from 'crypto';
+import { verifyAlertOwnership, verifyDatasetOwnership, verifyExportOwnership, verifyQualityFlagOwnership, verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -130,7 +131,7 @@ router.get('/research/exports', async (req, res) => {
 });
 
 // ─── GET /research/exports/:id ────────────────────────────────────────
-router.get('/research/exports/:id', async (req, res) => {
+router.get('/research/exports/:id', verifyExportOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM export_packages WHERE id = $1', [id]);
@@ -145,7 +146,7 @@ router.get('/research/exports/:id', async (req, res) => {
 });
 
 // ─── GET /research/datasets/:id/quality-flags ─────────────────────────
-router.get('/research/datasets/:id/quality-flags', async (req, res) => {
+router.get('/research/datasets/:id/quality-flags', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { review_status, flag_type, severity } = req.query;
@@ -172,7 +173,7 @@ router.get('/research/datasets/:id/quality-flags', async (req, res) => {
 });
 
 // ─── POST /research/datasets/:id/quality-flags ────────────────────────
-router.post('/research/datasets/:id/quality-flags', async (req, res) => {
+router.post('/research/datasets/:id/quality-flags', verifyDatasetOwnership, async (req, res) => {
   try {
     const { observation_id, flag_type, severity, description, flagged_by } = req.body;
     if (!observation_id || !flag_type) {
@@ -193,7 +194,7 @@ router.post('/research/datasets/:id/quality-flags', async (req, res) => {
 });
 
 // ─── PATCH /research/quality-flags/:id ────────────────────────────────
-router.patch('/research/quality-flags/:id', async (req, res) => {
+router.patch('/research/quality-flags/:id', verifyQualityFlagOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { review_status, reviewed_by } = req.body;
@@ -217,7 +218,7 @@ router.patch('/research/quality-flags/:id', async (req, res) => {
 });
 
 // ─── GET /research/datasets/:id/qc-reviews ────────────────────────────
-router.get('/research/datasets/:id/qc-reviews', async (req, res) => {
+router.get('/research/datasets/:id/qc-reviews', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -236,7 +237,7 @@ router.get('/research/datasets/:id/qc-reviews', async (req, res) => {
 });
 
 // ─── POST /research/datasets/:id/qc-reviews ───────────────────────────
-router.post('/research/datasets/:id/qc-reviews', async (req, res) => {
+router.post('/research/datasets/:id/qc-reviews', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { reviewer_id, status, completeness_score, notes } = req.body;
@@ -255,7 +256,7 @@ router.post('/research/datasets/:id/qc-reviews', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id/alerts ──────────────────────────────────
-router.get('/research/studies/:id/alerts', async (req, res) => {
+router.get('/research/studies/:id/alerts', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { acknowledged } = req.query;
@@ -277,7 +278,7 @@ router.get('/research/studies/:id/alerts', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/alerts ─────────────────────────────────
-router.post('/research/studies/:id/alerts', async (req, res) => {
+router.post('/research/studies/:id/alerts', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { device_id, alert_type, message, severity } = req.body;
@@ -299,7 +300,7 @@ router.post('/research/studies/:id/alerts', async (req, res) => {
 });
 
 // ─── PATCH /research/alerts/:id/acknowledge ────────────────────────────
-router.patch('/research/alerts/:id/acknowledge', async (req, res) => {
+router.patch('/research/alerts/:id/acknowledge', verifyAlertOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { acknowledged_by } = req.body;

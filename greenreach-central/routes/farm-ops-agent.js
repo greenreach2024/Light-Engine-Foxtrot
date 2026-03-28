@@ -2334,7 +2334,8 @@ export const TOOL_CATALOG = {
     handler: async (params) => {
       try {
         const farmId = params.farm_id || process.env.FARM_ID;
-        const statusFilter = params.status ? `AND s.status = '${params.status.replace(/'/g, "''")}'` : '';
+        const queryParams = [farmId];
+        const statusFilter = params.status ? `AND s.status = $${queryParams.push(params.status)}` : '';
         const result = await dbQuery(`
           SELECT s.id, s.title, s.status, s.objectives, s.created_at,
             u.email as pi_email,
@@ -2343,7 +2344,7 @@ export const TOOL_CATALOG = {
           FROM studies s LEFT JOIN farm_users u ON s.pi_user_id = u.id
           WHERE s.farm_id = $1 ${statusFilter}
           ORDER BY s.updated_at DESC LIMIT 20
-        `, [farmId]);
+        `, queryParams);
         return { ok: true, studies: result.rows, count: result.rows.length };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -2427,15 +2428,18 @@ export const TOOL_CATALOG = {
     handler: async (params) => {
       try {
         const limit = parseInt(params.limit, 10) || 20;
-        const typeFilter = params.entry_type ? `AND e.entry_type = '${params.entry_type.replace(/'/g, "''")}'` : '';
+        const queryParams = [params.notebook_id];
+        const typeFilter = params.entry_type ? `AND e.entry_type = $${queryParams.push(params.entry_type)}` : '';
+        queryParams.push(limit);
+        const limitIdx = queryParams.length;
         const result = await dbQuery(`
           SELECT e.*, u.email as created_by_email,
             (SELECT COUNT(*) FROM eln_signatures es WHERE es.entry_id = e.id) as signature_count,
             (SELECT COUNT(*) FROM eln_attachments ea WHERE ea.entry_id = e.id) as attachment_count
           FROM eln_entries e LEFT JOIN farm_users u ON e.created_by = u.id
           WHERE e.notebook_id = $1 ${typeFilter}
-          ORDER BY e.created_at DESC LIMIT $2
-        `, [params.notebook_id, limit]);
+          ORDER BY e.created_at DESC LIMIT $${limitIdx}
+        `, queryParams);
         return { ok: true, entries: result.rows, count: result.rows.length };
       } catch (err) {
         return { ok: false, error: err.message };
@@ -2450,7 +2454,8 @@ export const TOOL_CATALOG = {
     handler: async (params) => {
       try {
         const farmId = params.farm_id || process.env.FARM_ID;
-        const deviceFilter = params.device_id ? `AND cl.device_id = '${params.device_id.replace(/'/g, "''")}'` : '';
+        const queryParams = [farmId];
+        const deviceFilter = params.device_id ? `AND cl.device_id = $${queryParams.push(params.device_id)}` : '';
         const result = await dbQuery(`
           SELECT cl.device_id, cl.sensor_id, cl.calibration_type, cl.offset_value,
             cl.calibrated_at, cl.next_due,
@@ -2458,7 +2463,7 @@ export const TOOL_CATALOG = {
           FROM calibration_logs cl
           WHERE cl.farm_id = $1 AND cl.status = 'current' ${deviceFilter}
           ORDER BY cl.next_due ASC NULLS LAST
-        `, [farmId]);
+        `, queryParams);
         const overdue = result.rows.filter(r => r.overdue);
         return { ok: true, calibrations: result.rows, overdue_count: overdue.length, overdue };
       } catch (err) {
@@ -2533,7 +2538,8 @@ export const TOOL_CATALOG = {
     handler: async (params) => {
       try {
         const farmId = params.farm_id || process.env.FARM_ID;
-        const busFilter = params.bus_type ? `AND sl.entity_type = '${params.bus_type.replace(/'/g, "''")}'` : '';
+        const busParams = [];
+        const busFilter = params.bus_type ? `AND sl.entity_type = $${busParams.push(params.bus_type)}` : '';
         const result = await dbQuery(`
           SELECT sl.entity_id as address, sl.entity_type as bus_type,
             d.device_id, d.name as device_name, d.device_type, d.status
@@ -2541,7 +2547,7 @@ export const TOOL_CATALOG = {
           LEFT JOIN devices d ON d.device_id = sl.entity_id
           WHERE sl.study_id IS NULL AND sl.linked_by IS NULL ${busFilter}
           ORDER BY sl.entity_type, sl.entity_id
-        `, []);
+        `, busParams);
         // Fallback: query devices table directly for bus mappings
         const devices = await dbQuery(`
           SELECT device_id, name, device_type, status, metadata

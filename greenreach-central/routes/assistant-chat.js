@@ -3838,7 +3838,7 @@ router.post('/chat', async (req, res) => {
   }
 
   const sanitizedMessage = message.trim().slice(0, 2000);
-  const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+  const farmId = req.farmId || farm_id || 'demo-farm';
 
   if (!checkRateLimit(farmId)) {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait a moment before sending another.' });
@@ -4113,7 +4113,7 @@ router.post('/chat', async (req, res) => {
 
 router.get('/state', async (req, res) => {
   try {
-    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
 
     // Rooms + environment readings
     const roomsRaw = readJSON('rooms.json', {});
@@ -4344,7 +4344,7 @@ router.post('/chat/stream', async (req, res) => {
   }
 
   const sanitizedMessage = message.trim().slice(0, 2000);
-  const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+  const farmId = req.farmId || farm_id || 'demo-farm';
 
   if (!checkRateLimit(farmId)) {
     return res.status(429).json({ ok: false, error: 'Too many messages — please wait.' });
@@ -4574,7 +4574,7 @@ const briefingCache = new Map();
 const BRIEFING_TTL_MS = 4 * 60 * 60 * 1000;
 
 router.get('/morning-briefing', async (req, res) => {
-  const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+  const farmId = req.farmId || req.query.farm_id || 'demo-farm';
   const cacheKey = `${farmId}:${new Date().toISOString().slice(0, 10)}`;
 
   // Return cached briefing if fresh
@@ -4683,7 +4683,7 @@ router.get('/morning-briefing', async (req, res) => {
  * Light polling endpoint — frontend calls every 5 min.
  */
 router.get('/nudges', async (req, res) => {
-  const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+  const farmId = req.farmId || req.query.farm_id || 'demo-farm';
   const nudges = [];
 
   try {
@@ -4809,7 +4809,7 @@ function getFeedbackSummary(farmId) {
 // GET /api/assistant/memory?farm_id=... — return all memory for a farm
 router.get('/memory', async (req, res) => {
   try {
-    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
     const mem = await getUserMemory(farmId);
     return res.json({ ok: true, memory: mem, count: Object.keys(mem).length });
   } catch (err) {
@@ -4825,7 +4825,7 @@ router.post('/memory', async (req, res) => {
     if (!key || !value) {
       return res.status(400).json({ ok: false, error: 'key and value are required' });
     }
-    const farmId = farm_id || req.session?.farm_id || 'demo-farm';
+    const farmId = req.farmId || farm_id || 'demo-farm';
     const saved = await saveUserMemory(farmId, key, value);
     return res.json({ ok: saved, key, value });
   } catch (err) {
@@ -4842,7 +4842,7 @@ router.post('/memory', async (req, res) => {
  */
 router.get('/engagement-report', async (req, res) => {
   try {
-    const farmId = req.query.farm_id || req.session?.farm_id || 'demo-farm';
+    const farmId = req.farmId || req.query.farm_id || 'demo-farm';
     const periodParam = req.query.period || 'current';
 
     if (!isDatabaseAvailable()) {

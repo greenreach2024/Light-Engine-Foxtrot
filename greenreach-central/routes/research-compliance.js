@@ -16,6 +16,7 @@
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { verifyBudgetItemOwnership, verifyBudgetOwnership, verifyProfileOwnership, verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.use(checkDb);
 
 // ─── Data Management Plans ────────────────────────────────────────────
 
-router.get('/research/studies/:id/dmp', async (req, res) => {
+router.get('/research/studies/:id/dmp', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM data_management_plans WHERE study_id = $1 ORDER BY updated_at DESC', [id]);
@@ -41,7 +42,7 @@ router.get('/research/studies/:id/dmp', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/dmp', async (req, res) => {
+router.post('/research/studies/:id/dmp', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { template_type, sections } = req.body;
@@ -61,7 +62,7 @@ router.post('/research/studies/:id/dmp', async (req, res) => {
 
 // ─── Retention Policies ───────────────────────────────────────────────
 
-router.get('/research/studies/:id/retention', async (req, res) => {
+router.get('/research/studies/:id/retention', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM retention_policies WHERE study_id = $1', [id]);
@@ -72,7 +73,7 @@ router.get('/research/studies/:id/retention', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/retention', async (req, res) => {
+router.post('/research/studies/:id/retention', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { retention_period_years, archival_location, embargo_until, sharing_level, auto_delete_after } = req.body;
@@ -93,7 +94,7 @@ router.post('/research/studies/:id/retention', async (req, res) => {
 
 // ─── Grant Budgets ────────────────────────────────────────────────────
 
-router.get('/research/studies/:id/budgets', async (req, res) => {
+router.get('/research/studies/:id/budgets', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -114,7 +115,7 @@ router.get('/research/studies/:id/budgets', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/budgets', async (req, res) => {
+router.post('/research/studies/:id/budgets', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { budget_name, grant_application_id, award_period_start, award_period_end, total_amount, indirect_rate } = req.body;
@@ -136,7 +137,7 @@ router.post('/research/studies/:id/budgets', async (req, res) => {
   }
 });
 
-router.get('/research/budgets/:id', async (req, res) => {
+router.get('/research/budgets/:id', verifyBudgetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const budget = await query('SELECT * FROM grant_budgets WHERE id = $1', [id]);
@@ -171,7 +172,7 @@ router.get('/research/budgets/:id', async (req, res) => {
   }
 });
 
-router.post('/research/budgets/:id/line-items', async (req, res) => {
+router.post('/research/budgets/:id/line-items', verifyBudgetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { category, description, planned_amount, actual_amount, cost_centre, experiment_phase } = req.body;
@@ -193,7 +194,7 @@ router.post('/research/budgets/:id/line-items', async (req, res) => {
   }
 });
 
-router.patch('/research/budget-items/:id', async (req, res) => {
+router.patch('/research/budget-items/:id', verifyBudgetItemOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['planned_amount', 'actual_amount', 'description', 'cost_centre', 'experiment_phase', 'invoiced'];
@@ -272,7 +273,7 @@ router.post('/research/profiles', async (req, res) => {
   }
 });
 
-router.patch('/research/profiles/:id', async (req, res) => {
+router.patch('/research/profiles/:id', verifyProfileOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['orcid_id', 'institution', 'department', 'role_title', 'affiliation_type', 'bio'];
@@ -360,7 +361,7 @@ router.post('/research/citations', async (req, res) => {
 
 // ─── Project Closeout ─────────────────────────────────────────────────
 
-router.get('/research/studies/:id/closeout', async (req, res) => {
+router.get('/research/studies/:id/closeout', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query('SELECT * FROM project_closeouts WHERE study_id = $1', [id]);
@@ -371,7 +372,7 @@ router.get('/research/studies/:id/closeout', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/closeout', async (req, res) => {
+router.post('/research/studies/:id/closeout', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { checklist, status, completed_by } = req.body;

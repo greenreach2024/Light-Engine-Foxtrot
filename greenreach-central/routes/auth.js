@@ -176,15 +176,23 @@ router.post('/login', async (req, res) => {
         });
       }
 
-      // Verify password
+      // Verify password — try bcrypt hash first, then ADMIN_PASSWORD fallback
       const passwordMatch = await bcrypt.compare(password, user.password_hash);
       
       if (!passwordMatch) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication failed',
-          message: 'Invalid email or password'
-        });
+        // Bcrypt failed — try ADMIN_PASSWORD fallback before rejecting.
+        // This handles the case where a DB user exists but the operator
+        // is using the environment-level admin password (e.g. login page
+        // has no email field and finds the DB admin by farm_id + role).
+        const adminPassword = process.env.ADMIN_PASSWORD;
+        if (!adminPassword || password !== adminPassword) {
+          return res.status(401).json({
+            success: false,
+            error: 'Authentication failed',
+            message: 'Invalid email or password'
+          });
+        }
+        console.log(`[Auth] ADMIN_PASSWORD fallback matched for DB user ${user.email} on farm ${user.farm_id}`);
       }
 
     } else {

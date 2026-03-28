@@ -144,6 +144,10 @@ function getJwtSecret() {
 const JWT_SECRET = getJwtSecret();
 
 async function resolveFarmId(req) {
+  // 1. Prefer req.farmId set by global auth middleware (JWT-derived, most trusted)
+  if (req.farmId && req.farmId !== 'ADMIN') return req.farmId;
+
+  // 2. Explicit JWT verification fallback (in case global middleware missed it)
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
@@ -168,29 +172,18 @@ async function resolveFarmId(req) {
     } catch (_) { /* fall through */ }
   }
 
-  // Canonicalize non-admin farm IDs so manual writes land on the real farm row
-  // used by wholesale/catalog and other cross-page queries.
+  // Canonicalize non-admin farm IDs — verify the farm exists in the DB
   if (farmId && farmId !== 'ADMIN' && await isDatabaseAvailable()) {
     try {
       const exact = await query('SELECT farm_id FROM farms WHERE farm_id = $1 LIMIT 1', [farmId]);
       if (exact.rows.length > 0) return exact.rows[0].farm_id;
 
-      const userFarmId = req.user?.farmId;
-      if (userFarmId && userFarmId !== 'ADMIN') {
-        const fromUser = await query('SELECT farm_id FROM farms WHERE farm_id = $1 LIMIT 1', [userFarmId]);
-        if (fromUser.rows.length > 0) return fromUser.rows[0].farm_id;
-      }
-
-      const fallback = await query(`
-        SELECT farm_id
-        FROM farms
-        WHERE status = 'active'
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-        LIMIT 1
-      `);
-      if (fallback.rows.length > 0) return fallback.rows[0].farm_id;
+      // Farm ID not found — do NOT fall back to another farm.
+      // Return null so callers can reject the request.
+      console.warn(`[Inventory] Farm ID ${farmId} not found in farms table, rejecting`);
+      return null;
     } catch (_) {
-      // Preserve previous behavior if farms table lookup fails.
+      // DB lookup failed — return the raw farmId without validation
     }
   }
 

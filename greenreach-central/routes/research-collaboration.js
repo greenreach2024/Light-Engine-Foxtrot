@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import crypto from 'crypto';
+import { verifyCollaboratorOwnership, verifyCommentOwnership, verifyOnboardingOwnership, verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.use(checkDb);
 
 // ─── Collaborators ────────────────────────────────────────────────────
 
-router.get('/research/studies/:id/collaborators', async (req, res) => {
+router.get('/research/studies/:id/collaborators', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -49,7 +50,7 @@ router.get('/research/studies/:id/collaborators', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/collaborators', async (req, res) => {
+router.post('/research/studies/:id/collaborators', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { user_id, email, role, permissions, invited_by, expires_at } = req.body;
@@ -71,7 +72,7 @@ router.post('/research/studies/:id/collaborators', async (req, res) => {
   }
 });
 
-router.patch('/research/collaborators/:id', async (req, res) => {
+router.patch('/research/collaborators/:id', verifyCollaboratorOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { role, permissions, accepted_at, expires_at } = req.body;
@@ -103,7 +104,7 @@ router.patch('/research/collaborators/:id', async (req, res) => {
   }
 });
 
-router.delete('/research/collaborators/:id', async (req, res) => {
+router.delete('/research/collaborators/:id', verifyCollaboratorOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     await query('DELETE FROM study_collaborators WHERE id = $1', [id]);
@@ -116,7 +117,7 @@ router.delete('/research/collaborators/:id', async (req, res) => {
 
 // ─── Review Comments ──────────────────────────────────────────────────
 
-router.get('/research/studies/:id/comments', async (req, res) => {
+router.get('/research/studies/:id/comments', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { entity_type, entity_id, status } = req.query;
@@ -141,7 +142,7 @@ router.get('/research/studies/:id/comments', async (req, res) => {
   }
 });
 
-router.post('/research/studies/:id/comments', async (req, res) => {
+router.post('/research/studies/:id/comments', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { entity_type, entity_id, comment_text, commenter_id } = req.body;
@@ -162,7 +163,7 @@ router.post('/research/studies/:id/comments', async (req, res) => {
   }
 });
 
-router.patch('/research/comments/:id', async (req, res) => {
+router.patch('/research/comments/:id', verifyCommentOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -184,7 +185,7 @@ router.patch('/research/comments/:id', async (req, res) => {
 
 // ─── Share Links ──────────────────────────────────────────────────────
 
-router.post('/research/studies/:id/share', async (req, res) => {
+router.post('/research/studies/:id/share', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { scope, entity_id, access_level, expires_at, max_downloads, created_by } = req.body;
@@ -292,7 +293,7 @@ router.post('/research/onboarding', async (req, res) => {
   }
 });
 
-router.patch('/research/onboarding/:id', async (req, res) => {
+router.patch('/research/onboarding/:id', verifyOnboardingOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { checklist, progress_pct } = req.body;

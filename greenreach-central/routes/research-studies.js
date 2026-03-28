@@ -21,6 +21,7 @@
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { verifyMilestoneOwnership, verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.post('/research/studies', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id ────────────────────────────────────────
-router.get('/research/studies/:id', async (req, res) => {
+router.get('/research/studies/:id', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const farmId = req.farmId || req.query.farm_id;
@@ -122,7 +123,7 @@ router.get('/research/studies/:id', async (req, res) => {
 });
 
 // ─── PATCH /research/studies/:id ──────────────────────────────────────
-router.patch('/research/studies/:id', async (req, res) => {
+router.patch('/research/studies/:id', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const farmId = req.farmId || req.body.farm_id;
@@ -165,7 +166,7 @@ router.patch('/research/studies/:id', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id/protocols ──────────────────────────────
-router.get('/research/studies/:id/protocols', async (req, res) => {
+router.get('/research/studies/:id/protocols', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -184,7 +185,7 @@ router.get('/research/studies/:id/protocols', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/protocols ─────────────────────────────
-router.post('/research/studies/:id/protocols', async (req, res) => {
+router.post('/research/studies/:id/protocols', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, content, treatment_factors } = req.body;
@@ -217,7 +218,7 @@ router.post('/research/studies/:id/protocols', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id/treatments ─────────────────────────────
-router.get('/research/studies/:id/treatments', async (req, res) => {
+router.get('/research/studies/:id/treatments', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { protocol_id } = req.query;
@@ -244,7 +245,7 @@ router.get('/research/studies/:id/treatments', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/treatments ────────────────────────────
-router.post('/research/studies/:id/treatments', async (req, res) => {
+router.post('/research/studies/:id/treatments', verifyStudyOwnership, async (req, res) => {
   try {
     const { protocol_id, group_name, factor_definitions, control_group, replicate_count } = req.body;
     if (!protocol_id || !group_name) {
@@ -266,7 +267,7 @@ router.post('/research/studies/:id/treatments', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/link ──────────────────────────────────
-router.post('/research/studies/:id/link', async (req, res) => {
+router.post('/research/studies/:id/link', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { entity_type, entity_id, linked_by } = req.body;
@@ -289,7 +290,7 @@ router.post('/research/studies/:id/link', async (req, res) => {
 });
 
 // ─── DELETE /research/studies/:id/link/:linkId ────────────────────────
-router.delete('/research/studies/:id/link/:linkId', async (req, res) => {
+router.delete('/research/studies/:id/link/:linkId', verifyStudyOwnership, async (req, res) => {
   try {
     const { id, linkId } = req.params;
     await query('DELETE FROM study_links WHERE id = $1 AND study_id = $2', [linkId, id]);
@@ -301,7 +302,7 @@ router.delete('/research/studies/:id/link/:linkId', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id/timeline ───────────────────────────────
-router.get('/research/studies/:id/timeline', async (req, res) => {
+router.get('/research/studies/:id/timeline', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const milestones = await query(`
@@ -318,7 +319,7 @@ router.get('/research/studies/:id/timeline', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/milestones ────────────────────────────
-router.post('/research/studies/:id/milestones', async (req, res) => {
+router.post('/research/studies/:id/milestones', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { milestone_type, planned_date, notes } = req.body;
@@ -340,7 +341,7 @@ router.post('/research/studies/:id/milestones', async (req, res) => {
 });
 
 // ─── PATCH /research/milestones/:id ───────────────────────────────────
-router.patch('/research/milestones/:id', async (req, res) => {
+router.patch('/research/milestones/:id', verifyMilestoneOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, actual_date, notes } = req.body;
@@ -373,7 +374,7 @@ router.patch('/research/milestones/:id', async (req, res) => {
 });
 
 // ─── GET /research/studies/:id/deviations ─────────────────────────────
-router.get('/research/studies/:id/deviations', async (req, res) => {
+router.get('/research/studies/:id/deviations', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -393,7 +394,7 @@ router.get('/research/studies/:id/deviations', async (req, res) => {
 });
 
 // ─── POST /research/studies/:id/deviations ────────────────────────────
-router.post('/research/studies/:id/deviations', async (req, res) => {
+router.post('/research/studies/:id/deviations', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { description, deviation_type, impact_assessment, protocol_version_id, recorded_by } = req.body;

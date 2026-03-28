@@ -18,6 +18,7 @@
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { verifyDatasetOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.post('/research/datasets', async (req, res) => {
 });
 
 // ─── GET /research/datasets/:id ───────────────────────────────────────
-router.get('/research/datasets/:id', async (req, res) => {
+router.get('/research/datasets/:id', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
@@ -112,7 +113,7 @@ router.get('/research/datasets/:id', async (req, res) => {
 });
 
 // ─── PATCH /research/datasets/:id ─────────────────────────────────────
-router.patch('/research/datasets/:id', async (req, res) => {
+router.patch('/research/datasets/:id', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, name, description, variable_definitions, unit_normalization } = req.body;
@@ -156,7 +157,7 @@ router.patch('/research/datasets/:id', async (req, res) => {
 });
 
 // ─── POST /research/datasets/:id/observations ────────────────────────
-router.post('/research/datasets/:id/observations', async (req, res) => {
+router.post('/research/datasets/:id/observations', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { observations } = req.body;
@@ -172,25 +173,29 @@ router.post('/research/datasets/:id/observations', async (req, res) => {
     }
 
     let ingested = 0;
+    const insertedIds = [];
     for (const obs of observations) {
       if (!obs.variable_name || !obs.observed_at) continue;
-      await query(`
+      const insertResult = await query(`
         INSERT INTO research_observations
           (dataset_id, observation_type, device_id, sensor_id, sample_id, variable_name, raw_value, cleaned_value, unit, observed_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id
       `, [id, obs.observation_type || 'manual', obs.device_id || null,
           obs.sensor_id || null, obs.sample_id || null, obs.variable_name,
           obs.raw_value ?? null, obs.cleaned_value ?? null, obs.unit || null, obs.observed_at]);
+      if (obs.observation_type === 'sensor' && obs.device_id && insertResult.rows[0]) {
+        insertedIds.push({ obsId: insertResult.rows[0].id, obs });
+      }
       ingested++;
     }
 
-    // Record provenance for sensor observations
-    const sensorObs = observations.filter(o => o.observation_type === 'sensor' && o.device_id);
-    for (const obs of sensorObs) {
+    // Record provenance for sensor observations using the actual returned IDs
+    for (const { obsId, obs } of insertedIds) {
       await query(`
         INSERT INTO provenance_records (entity_type, entity_id, source_type, source_id, source_metadata)
-        VALUES ('observation', currval('research_observations_id_seq'), 'sensor', $1, $2)
-      `, [obs.device_id, JSON.stringify({ sensor_id: obs.sensor_id, device_id: obs.device_id })]);
+        VALUES ('observation', $1::text, 'sensor', $2, $3)
+      `, [obsId, obs.device_id, JSON.stringify({ sensor_id: obs.sensor_id, device_id: obs.device_id })]);
     }
 
     res.status(201).json({ ok: true, ingested });
@@ -201,7 +206,7 @@ router.post('/research/datasets/:id/observations', async (req, res) => {
 });
 
 // ─── GET /research/datasets/:id/observations ─────────────────────────
-router.get('/research/datasets/:id/observations', async (req, res) => {
+router.get('/research/datasets/:id/observations', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const { variable_name, observation_type, device_id, from, to, limit = 1000, offset = 0 } = req.query;
@@ -229,7 +234,7 @@ router.get('/research/datasets/:id/observations', async (req, res) => {
 });
 
 // ─── GET /research/datasets/:id/provenance ────────────────────────────
-router.get('/research/datasets/:id/provenance', async (req, res) => {
+router.get('/research/datasets/:id/provenance', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(`
