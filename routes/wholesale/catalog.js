@@ -126,6 +126,11 @@ router.get('/', async (req, res) => {
             total_available: 0,
             min_price: Infinity,
             max_price: 0,
+            description: row.description || null,
+            thumbnail_url: row.thumbnail_url || null,
+            is_taxable: row.is_taxable !== false,
+            is_custom: row.is_custom || false,
+            id: row.id || null,
             farms: []
           };
         }

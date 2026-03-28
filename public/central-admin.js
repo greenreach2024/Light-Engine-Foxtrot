@@ -1330,6 +1330,13 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
+                    title: 'Network',
+                    items: [
+                        { label: 'Network Dashboard', view: 'network' },
+                        { label: 'Grower Network', view: 'grower-mgmt' }
+                    ]
+                },
+                {
                     title: 'AI Governance',
                     items: [
                         { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
@@ -4895,7 +4902,8 @@ function renderRecipesTable(recipes) {
         return `
             <tr>
                 <td>
-                    <strong>${recipe.name || 'Unknown'}</strong>
+                    <strong class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name || 'Unknown'}</strong>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;max-width:320px;line-height:1.3;">${recipe.description}</div>` : ''}
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${groupsTrays} · ${dayRange} · ${remainingRange}</div>
                 </td>
                 <td>
@@ -4920,34 +4928,38 @@ function renderRecipesTable(recipes) {
 function viewRecipeDetails(recipeId) {
     const recipe = recipesData.find(r => r.recipe_id === recipeId || r.id === recipeId);
     if (!recipe) {
-        alert('Recipe not found');
+        showRecipeModal('Recipe Not Found', '<p>Could not find this recipe.</p>');
         return;
     }
 
     const dayRange = recipe.currentDayMin != null
         ? `${recipe.currentDayMin}${recipe.currentDayMax && recipe.currentDayMax !== recipe.currentDayMin ? `-${recipe.currentDayMax}` : ''}`
-        : '—';
+        : '---';
     const remainingRange = recipe.daysRemainingMin != null
         ? `${recipe.daysRemainingMin}${recipe.daysRemainingMax && recipe.daysRemainingMax !== recipe.daysRemainingMin ? `-${recipe.daysRemainingMax}` : ''}`
-        : '—';
+        : '---';
     const seedRange = recipe.seedDateMin
-        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` → ${recipe.seedDateMax}` : ''}`
-        : '—';
+        ? `${recipe.seedDateMin}${recipe.seedDateMax && recipe.seedDateMax !== recipe.seedDateMin ? ` to ${recipe.seedDateMax}` : ''}`
+        : '---';
 
-    const details = `
-Recipe: ${recipe.name}
-Category: ${recipe.category || recipe.cropType || 'Unknown'}
-Cycle Duration: ${recipe.totalDays ?? recipe.total_days ?? '—'} days
-Stages: ${recipe.scheduleLength ?? recipe.schedule_length ?? '—'}
-Active Groups: ${recipe.activeGroups || 0}
-Active Trays: ${recipe.activeTrays || 0}
-Seed Date Range: ${seedRange}
-Current Day: ${dayRange}
-Days to Harvest: ${remainingRange}
-Description: ${recipe.description || 'No description'}
-    `.trim();
-    
-    alert(details);
+    const catColor = getCategoryColor(recipe.category);
+    let html = `
+        <div style="margin-bottom:16px;">
+            <span style="background:${catColor};color:#fff;padding:4px 10px;border-radius:4px;font-size:0.85rem;">${recipe.category || 'Uncategorized'}</span>
+        </div>
+        ${recipe.description ? `<p style="color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">${recipe.description}</p>` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Cycle Duration</td><td style="padding:6px 0;font-weight:500;">${recipe.totalDays ?? recipe.total_days ?? '---'} days</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Stages</td><td style="padding:6px 0;font-weight:500;">${recipe.scheduleLength ?? recipe.schedule_length ?? '---'}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Active Groups</td><td style="padding:6px 0;font-weight:500;">${recipe.activeGroups || 0}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Active Trays</td><td style="padding:6px 0;font-weight:500;">${recipe.activeTrays || 0}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Seed Date Range</td><td style="padding:6px 0;font-weight:500;">${seedRange}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Current Day</td><td style="padding:6px 0;font-weight:500;">${dayRange}</td></tr>
+            <tr><td style="padding:6px 0;color:var(--text-secondary);">Days to Harvest</td><td style="padding:6px 0;font-weight:500;">${remainingRange}</td></tr>
+        </table>
+    `;
+
+    showRecipeModal(recipe.name, html);
 }
 
 // ── Farm-level Recipe Library (read-only) + Recipe Requests ──
@@ -5026,8 +5038,8 @@ function renderFarmRecipeLibrary(recipes, activeNames) {
         return `
             <tr>
                 <td>
-                    <div style="font-weight:500;">${recipe.name}</div>
-                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;">${recipe.description}</div>` : ''}
+                    <div style="font-weight:500;" class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name}</div>
+                    ${recipe.description ? `<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px;max-width:360px;line-height:1.3;">${recipe.description}</div>` : ''}
                 </td>
                 <td><span style="background:${getCategoryColor(recipe.category)};color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8rem;">${recipe.category || 'Other'}</span></td>
                 <td>${stages}</td>
@@ -5064,26 +5076,57 @@ async function showRecipeLibraryDetail(recipeId) {
         const recipe = data.recipe || {};
         const schedule = normalizeRecipeSchedule(recipe);
 
-        let info = `Recipe: ${recipe.name}\nCategory: ${recipe.category || 'Unknown'}\nTotal Days: ${schedule.length}\nDescription: ${recipe.description || 'N/A'}\n\n`;
+        // Also get description from the library cache
+        const libEntry = _farmRecipeLibrary.find(r => r.id === recipeId || r.name === recipeId);
+        const description = libEntry?.description || recipe.description || '';
+
+        const catColor = getCategoryColor(recipe.category || libEntry?.category || 'Other');
+        let html = `
+            <div style="margin-bottom:12px;">
+                <span style="background:${catColor};color:#fff;padding:4px 10px;border-radius:4px;font-size:0.85rem;">${recipe.category || libEntry?.category || 'Unknown'}</span>
+                <span style="margin-left:12px;color:var(--text-secondary);font-size:0.9rem;">${schedule.length} days total</span>
+            </div>
+            ${description ? `<p style="color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">${description}</p>` : ''}
+        `;
+
         if (schedule.length > 0) {
-            info += 'Day | Stage | Temp(°C) | PPFD | DLI | VPD\n';
-            info += '─'.repeat(50) + '\n';
-            const step = Math.max(1, Math.floor(schedule.length / 15));
+            html += `<div style="max-height:400px;overflow-y:auto;margin-top:8px;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                    <thead>
+                        <tr style="border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);">
+                            <th style="padding:6px 4px;text-align:left;">Day</th>
+                            <th style="padding:6px 4px;text-align:left;">Stage</th>
+                            <th style="padding:6px 4px;text-align:right;">Temp (C)</th>
+                            <th style="padding:6px 4px;text-align:right;">PPFD</th>
+                            <th style="padding:6px 4px;text-align:right;">DLI</th>
+                            <th style="padding:6px 4px;text-align:right;">VPD</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            const step = Math.max(1, Math.floor(schedule.length / 20));
             for (let i = 0; i < schedule.length; i += step) {
                 const d = schedule[i];
-                const day = d.day || i+1;
-                const stage = (d.stage || '').substring(0, 12);
-                const temp = (d.temperature || d.tempC || '—');
-                const ppfd = (d.ppfd || d.ppfd_target || '—');
-                const dli = (d.dli || d.dli_target || '—');
-                const vpd = (d.vpd || d.vpd_target || '—');
-                info += `${String(day).padStart(3)} | ${stage.padEnd(12)} | ${String(temp).padStart(6)} | ${String(ppfd).padStart(5)} | ${String(dli).padStart(4)} | ${vpd}\n`;
+                const day = d.day || i + 1;
+                const stage = (d.stage || d.growth_stage || '').substring(0, 16);
+                const temp = d.temperature || d.tempC || d.afternoon_temp || '---';
+                const ppfd = d.ppfd || d.ppfd_target || '---';
+                const dli = d.dli || d.dli_target || '---';
+                const vpd = d.vpd || d.vpd_target || '---';
+                html += `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 4px;">${day}</td>
+                    <td style="padding:5px 4px;">${stage}</td>
+                    <td style="padding:5px 4px;text-align:right;">${temp}</td>
+                    <td style="padding:5px 4px;text-align:right;">${ppfd}</td>
+                    <td style="padding:5px 4px;text-align:right;">${dli}</td>
+                    <td style="padding:5px 4px;text-align:right;">${vpd}</td>
+                </tr>`;
             }
-            if (step > 1) info += `\n(Showing every ${step} days — ${schedule.length} days total)`;
+            html += `</tbody></table></div>`;
+            if (step > 1) html += `<p style="color:var(--text-secondary);font-size:0.8rem;margin-top:8px;">Showing every ${step} days of ${schedule.length} total</p>`;
         }
-        alert(info);
+        showRecipeModal(recipe.name || recipeId, html);
     } catch (err) {
-        alert('Error loading recipe: ' + err.message);
+        showRecipeModal('Error', `<p style="color:var(--accent-red);">Error loading recipe: ${err.message}</p>`);
     }
 }
 
@@ -5447,6 +5490,16 @@ async function navigate(view, element) {
             if (INFO_CARDS['energy']) {
                 showInfoCard(createInfoCard(INFO_CARDS['energy'].title, INFO_CARDS['energy'].subtitle, INFO_CARDS['energy'].sections));
             }
+            break;
+            
+        case 'network':
+            document.getElementById('network-view').style.display = 'block';
+            await loadNetworkDashboard();
+            break;
+            
+        case 'grower-mgmt':
+            document.getElementById('grower-mgmt-view').style.display = 'block';
+            await loadGrowerManagement();
             break;
             
         case 'yield':
@@ -7471,10 +7524,14 @@ function filterAlerts() {
  */
 async function acknowledgeAlert(alertId) {
     try {
-        // TODO: Implement POST /api/admin/alerts/:id/acknowledge
-        console.log('[Alerts] Acknowledging alert:', alertId);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/acknowledge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
         showToast('Alert acknowledged', 'success');
-        await loadAlertsView(); // Reload to show updated state
+        await loadAlertsView();
     } catch (error) {
         console.error('[Alerts] Error acknowledging alert:', error);
         showToast('Failed to acknowledge alert', 'error');
@@ -7486,10 +7543,14 @@ async function acknowledgeAlert(alertId) {
  */
 async function resolveAlert(alertId) {
     try {
-        // TODO: Implement POST /api/admin/alerts/:id/resolve
-        console.log('[Alerts] Resolving alert:', alertId);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to resolve alert');
         showToast('Alert resolved', 'success');
-        await loadAlertsView(); // Reload to show updated state
+        await loadAlertsView();
     } catch (error) {
         console.error('[Alerts] Error resolving alert:', error);
         showToast('Failed to resolve alert', 'error');
@@ -8335,13 +8396,20 @@ const recipeFieldMap = new Map([
     ['ppfd target (umol m2 s)', 'ppfd'],
     ['ppfd target (umol m 2 s)', 'ppfd'],
     ['ppfd target', 'ppfd'],
+    ['ppfd umol m2 s', 'ppfd'],
+    ['ppfd', 'ppfd'],
     ['vpd target kpa', 'vpd_target'],
     ['vpd target', 'vpd_target'],
+    ['vpd kpa', 'vpd_target'],
+    ['vpd', 'vpd_target'],
     ['max humidity', 'max_humidity'],
     ['ec target ds m', 'ec'],
     ['ec target', 'ec'],
+    ['ec ms cm', 'ec'],
     ['ph target', 'ph'],
-    ['ph', 'ph']
+    ['ph', 'ph'],
+    ['veg', 'veg'],
+    ['fruit', 'fruit']
 ]);
 
 function isRecipeResponseOk(data) {
@@ -8476,7 +8544,7 @@ function renderRecipesTableDetailed(recipes) {
         return `
             <tr>
                 <td>
-                    <div style="font-weight: 500;">${recipe.name}</div>
+                    <div style="font-weight: 500;" class="recipe-name-hover" data-desc="${(recipe.description || '').replace(/"/g, '&quot;')}">${recipe.name}</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">${recipe.description || ''}</div>
                 </td>
                 <td>
@@ -8561,11 +8629,82 @@ function updateRecipeStats(recipes) {
 /**
  * Get category color
  */
+// -- Recipe Modal + Hover Tooltip --
+
+/**
+ * Show a styled modal popup for recipe details (replaces alert())
+ */
+function showRecipeModal(title, contentHtml) {
+    // Remove existing modal if any
+    const existing = document.getElementById('recipe-detail-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'recipe-detail-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+    overlay.innerHTML = `
+        <div style="background:var(--bg, #fff);border:1px solid var(--border, #e5e7eb);border-radius:12px;max-width:640px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="margin:0;font-size:1.2rem;">${title}</h3>
+                <button onclick="document.getElementById('recipe-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;line-height:1;">&times;</button>
+            </div>
+            <div>${contentHtml}</div>
+        </div>
+    `;
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+}
+
+/**
+ * Initialize recipe name hover tooltips
+ */
+(function initRecipeTooltips() {
+    // Inject tooltip CSS once
+    if (!document.getElementById('recipe-tooltip-style')) {
+        const style = document.createElement('style');
+        style.id = 'recipe-tooltip-style';
+        style.textContent = `
+            .recipe-name-hover {
+                position: relative;
+                cursor: default;
+            }
+            .recipe-name-hover[data-desc]:not([data-desc=""]):hover::after {
+                content: attr(data-desc);
+                position: absolute;
+                left: 0;
+                top: 100%;
+                z-index: 9999;
+                background: var(--bg, #1f2937);
+                color: var(--text, #f3f4f6);
+                border: 1px solid var(--border, #374151);
+                border-radius: 8px;
+                padding: 10px 14px;
+                font-size: 0.82rem;
+                font-weight: 400;
+                line-height: 1.45;
+                max-width: 340px;
+                white-space: normal;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+})();
+
+
 function getCategoryColor(category) {
     const colors = {
         'Leafy Greens': '#10b981',
         'Herbs': '#8b5cf6',
+        'Microgreens': '#06b6d4',
+        'Sprouts': '#14b8a6',
+        'Tomatoes': '#ef4444',
+        'Berries': '#ec4899',
         'Fruiting Crops': '#f59e0b',
+        'Vegetables': '#f97316',
         'Other': '#6b7280'
     };
     return colors[category] || colors['Other'];
@@ -10384,33 +10523,40 @@ function renderProductCatalog(products) {
         return;
     }
     tbody.innerHTML = products.map(p => {
-        const sku = p.sku_id || p.sku || p.product_id || '—';
-        const name = p.product_name || p.name || p.crop || '—';
-        const category = p.category || p.type || '—';
-        const type = p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const sku = p.sku_id || p.sku || p.product_id || '\u2014';
+        const name = p.product_name || p.name || p.crop || '\u2014';
+        const category = p.category || p.type || '\u2014';
+        const isCustom = p.is_custom || false;
+        const type = isCustom ? 'Custom' : p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const typeColor = isCustom ? 'color: var(--accent-green); font-weight: 600;' : '';
         const unit = p.unit || 'lb';
         const finalPrice = p.final_wholesale_price || p.wholesale_price || p.price_per_unit || p.price || null;
         const basePrice = p.base_wholesale_price || null;
         const discountRate = p.buyer_discount_rate || 0;
-        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '—';
+        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '\u2014';
         const baseStr = typeof basePrice === 'number' ? '$' + basePrice.toFixed(2) : '';
         const discountStr = discountRate > 0 ? (discountRate * 100).toFixed(1) + '% off' : '';
         const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
         const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
+        const deleteBtn = isCustom
+            ? ` <button class="btn" onclick="deleteProduct('${sku}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444;">Delete</button>`
+            : '';
         return `<tr>
             <td style="font-family: monospace; font-size: 12px;">${sku}</td>
-            <td><strong>${name}</strong></td>
+            <td><strong>${name}</strong>${p.description ? '<div style="font-size:11px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + p.description + '</div>' : ''}</td>
             <td>${category}</td>
-            <td>${type}</td>
+            <td style="${typeColor}">${type}</td>
             <td>${unit}</td>
             <td>${priceStr}${baseStr ? '<div style="font-size:11px;color:var(--text-secondary);">base: ' + baseStr + '</div>' : ''}${discountStr ? '<div style="font-size:11px;color:var(--accent-green);">' + discountStr + '</div>' : ''}</td>
             <td style="color: ${statusColor};">${status}</td>
             <td>
-                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>${deleteBtn}
             </td>
         </tr>`;
     }).join('');
 }
+
+
 
 function renderCostSurveys(surveys) {
     const tbody = document.getElementById('cost-surveys-tbody');
@@ -10433,7 +10579,7 @@ async function submitWholesalePrice(event) {
     event.preventDefault();
     const crop = document.getElementById('price-crop').value;
     const floor_price = parseFloat(document.getElementById('price-amount').value) || 0;
-    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.65;
+    const sku_factor = parseFloat(document.getElementById('price-sku-factor')?.value) || 0.75;
     const tier = document.getElementById('price-tier').value;
     const reasoning = document.getElementById('price-reasoning').value;
     
@@ -10553,7 +10699,7 @@ function syncPricingRow(input, from) {
     }
     // Auto-compute wholesale using the formula: wholesale = retail * sku_factor
     if (retailPerLb > 0) {
-        const skuFactor = 0.65;
+        const skuFactor = 0.75;
         const wholesale = Math.round(retailPerLb * skuFactor * 100) / 100;
         const wField = tr.querySelector('.sc-wlb');
         if (wField) wField.value = wholesale.toFixed(2);
@@ -10685,7 +10831,8 @@ async function cancelPriceOffer(offerId) {
     }
 }
 
-function showAddProductModal() {
+function showAddProductModal(editData) {
+    const isEdit = !!editData;
     let modal = document.getElementById('product-add-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -10693,66 +10840,88 @@ function showAddProductModal() {
         modal.className = 'modal';
         document.body.appendChild(modal);
     }
+
+    const categories = ['Vegetables', 'Greens', 'Herbs', 'Fruits', 'Microgreens', 'Value-Added', 'Bundle', 'Custom'];
+    const units = ['lb', 'head', 'pint', 'bunch', 'jar', 'unit', 'bag', 'oz'];
+    const catOptions = categories.map(c =>
+        `<option value="${c}" ${editData && editData.category === c ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    const unitOptions = units.map(u =>
+        `<option value="${u}" ${editData && editData.unit === u ? 'selected' : ''}>${u}</option>`
+    ).join('');
+
+    const isTaxable = editData ? (editData.is_taxable !== false) : true;
+    const isWholesale = editData ? (editData.available_for_wholesale !== false) : true;
+
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h2>Add New Product</h2>
+                <h2>${isEdit ? 'Edit Product' : 'Add Custom Product'}</h2>
                 <button class="modal-close" onclick="closeAddProductModal()">&times;</button>
             </div>
             <div class="modal-body">
+                ${isEdit ? '<p style="color: var(--text-secondary); margin-bottom: 12px; font-family: monospace; font-size: 12px;">SKU: ' + (editData.sku_id || '') + '</p>' : ''}
                 <div style="display: grid; gap: 12px;">
-                    <label style="color: var(--text-secondary); font-size: 13px;">Crop Name
-                        <input type="text" id="add-product-name" placeholder="e.g. Spring Salad Mix"
+                    <label style="color: var(--text-secondary); font-size: 13px;">Product Name *
+                        <input type="text" id="cpf-name" value="${editData ? (editData.product_name || editData.name || '') : ''}" placeholder="e.g. Heirloom Tomato Mix"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
                     </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Oz ($)
-                        <input type="number" id="add-retail-oz" step="0.01" min="0"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
-                            oninput="syncAddPrices('oz')">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label style="color: var(--text-secondary); font-size: 13px;">Category
+                            <select id="cpf-category"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                                ${catOptions}
+                            </select>
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Unit
+                            <select id="cpf-unit"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                                ${unitOptions}
+                            </select>
+                        </label>
+                    </div>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Description
+                        <textarea id="cpf-description" rows="3" placeholder="Brief product description for wholesale catalog"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; resize: vertical;">${editData ? (editData.description || '') : ''}</textarea>
                     </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Lb ($)
-                        <input type="number" id="add-retail-lb" step="0.01" min="0"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
-                            oninput="syncAddPrices('lb')">
-                    </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price per Lb ($)
-                        <input type="number" id="add-wholesale-lb" step="0.01" min="0"
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <label style="color: var(--text-secondary); font-size: 13px;">Retail Price ($)
+                            <input type="number" id="cpf-retail-price" step="0.01" min="0" value="${editData ? (editData.retail_price || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price ($)
+                            <input type="number" id="cpf-wholesale-price" step="0.01" min="0" value="${editData ? (editData.wholesale_price || editData.price_per_unit || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Quantity
+                            <input type="number" id="cpf-quantity" step="0.01" min="0" value="${editData ? (editData.quantity_available || editData.available || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer;">
+                            <input type="checkbox" id="cpf-taxable" ${isTaxable ? 'checked' : ''} style="width: 16px; height: 16px;">
+                            Taxable
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer;">
+                            <input type="checkbox" id="cpf-wholesale" ${isWholesale ? 'checked' : ''} style="width: 16px; height: 16px;">
+                            Available for Wholesale
+                        </label>
+                    </div>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Thumbnail Image
+                        <input type="file" id="cpf-thumbnail" accept="image/*"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
-                    </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Category
-                        <select id="add-product-category"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
-                            <option value="Leafy Greens">Leafy Greens</option>
-                            <option value="Herbs">Herbs</option>
-                            <option value="Microgreens">Microgreens</option>
-                            <option value="Mix" selected>Mix</option>
-                            <option value="Bundle">Bundle</option>
-                        </select>
+                        ${editData && editData.thumbnail_url ? '<div style="margin-top: 6px;"><img src="' + editData.thumbnail_url + '" style="max-height: 60px; border-radius: 4px;" alt="Current thumbnail"></div>' : ''}
                     </label>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
                     <button class="btn" onclick="closeAddProductModal()" style="padding: 8px 16px;">Cancel</button>
-                    <button class="btn" onclick="saveNewProduct()"
-                        style="padding: 8px 16px; background: var(--accent-green); color: white;">Add Product</button>
+                    <button class="btn" id="cpf-save-btn" onclick="saveCustomProduct(${isEdit ? "'" + (editData.id || '') + "'" : 'null'})"
+                        style="padding: 8px 16px; background: var(--accent-green); color: white;">${isEdit ? 'Save Changes' : 'Add Product'}</button>
                 </div>
             </div>
         </div>`;
     modal.style.display = 'flex';
-}
-
-function syncAddPrices(source) {
-    const ozInput = document.getElementById('add-retail-oz');
-    const lbInput = document.getElementById('add-retail-lb');
-    const wsInput = document.getElementById('add-wholesale-lb');
-    if (source === 'oz' && ozInput.value) {
-        const ozVal = parseFloat(ozInput.value);
-        lbInput.value = (ozVal * 16).toFixed(2);
-        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
-    } else if (source === 'lb' && lbInput.value) {
-        const lbVal = parseFloat(lbInput.value);
-        ozInput.value = (lbVal / 16).toFixed(2);
-        wsInput.value = (lbVal * 0.65).toFixed(2);
-    }
 }
 
 function closeAddProductModal() {
@@ -10760,50 +10929,87 @@ function closeAddProductModal() {
     if (modal) modal.style.display = 'none';
 }
 
-async function saveNewProduct() {
-    const name = document.getElementById('add-product-name').value.trim();
-    const retailOz = parseFloat(document.getElementById('add-retail-oz').value);
-    const retailLb = parseFloat(document.getElementById('add-retail-lb').value);
-    const wholesaleLb = parseFloat(document.getElementById('add-wholesale-lb').value);
+async function saveCustomProduct(productId) {
+    const name = document.getElementById('cpf-name').value.trim();
+    const category = document.getElementById('cpf-category').value;
+    const description = document.getElementById('cpf-description').value.trim();
+    const retailPrice = parseFloat(document.getElementById('cpf-retail-price').value) || 0;
+    const wholesalePrice = parseFloat(document.getElementById('cpf-wholesale-price').value) || 0;
+    const quantity = parseFloat(document.getElementById('cpf-quantity').value) || 0;
+    const unit = document.getElementById('cpf-unit').value;
+    const isTaxable = document.getElementById('cpf-taxable').checked;
+    const isWholesale = document.getElementById('cpf-wholesale').checked;
+    const thumbnailFile = document.getElementById('cpf-thumbnail').files[0] || null;
 
     if (!name) {
-        alert('Crop name is required.');
+        showToast('Product name is required.', 'warning');
         return;
     }
-    if (!retailLb || retailLb <= 0) {
-        alert('Retail price per lb is required and must be greater than zero.');
+    if (retailPrice <= 0 && wholesalePrice <= 0) {
+        showToast('At least one price (retail or wholesale) is required.', 'warning');
         return;
     }
+
+    const saveBtn = document.getElementById('cpf-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
 
     try {
-        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                updates: [{
-                    crop: name,
-                    retailPerOz: retailOz || retailLb / 16,
-                    retailPerLb: retailLb,
-                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
-                    tier: 'manual',
-                    reasoning: 'New product added from catalog'
-                }],
-                pushToFarms: true,
-                reasoning: 'New product: ' + name
-            })
-        });
+        const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+        const payload = {
+            product_name: name,
+            category,
+            description,
+            retail_price: retailPrice,
+            wholesale_price: wholesalePrice,
+            quantity_available: quantity,
+            unit,
+            is_taxable: isTaxable,
+            available_for_wholesale: isWholesale
+        };
 
-        const data = res.ok ? await res.json() : null;
-        if (data && data.success) {
-            closeAddProductModal();
-            await loadPricingManagement();
-            await loadCurrentPricesIntoScanner();
-        } else {
-            alert('Failed to add product: ' + (data?.error || 'Unknown error'));
+        const isEdit = !!productId;
+        const url = isEdit
+            ? `${API_BASE}/api/farm/products/${productId}`
+            : `${API_BASE}/api/farm/products`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const res = await authenticatedFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = res && res.ok ? await res.json() : null;
+
+        if (!data || !data.success) {
+            throw new Error(data?.error || 'Failed to save product');
         }
+
+        const savedProduct = data.product || data.data || {};
+        const savedId = savedProduct.id || productId;
+
+        // Upload thumbnail if selected
+        if (thumbnailFile && savedId) {
+            const formData = new FormData();
+            formData.append('thumbnail', thumbnailFile);
+            try {
+                await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (imgErr) {
+                console.error('[Custom Product] Image upload error:', imgErr);
+                showToast('Product saved but image upload failed.', 'warning');
+            }
+        }
+
+        closeAddProductModal();
+        showToast(isEdit ? 'Product updated.' : 'Product added.', 'success');
+        await loadPricingManagement();
     } catch (err) {
-        console.error('[Add Product] Save error:', err);
-        alert('Failed to add product. Check console for details.');
+        console.error('[Custom Product] Save error:', err);
+        showToast('Failed to save product: ' + err.message, 'error');
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = productId ? 'Save Changes' : 'Add Product'; }
     }
 }
 
@@ -10811,13 +11017,35 @@ function editProduct(sku) {
     const product = _catalogProductsCache.find(p =>
         (p.sku_id || p.sku || p.product_id) === sku
     );
-    const name = product ? (product.product_name || product.name || product.crop || sku) : sku;
-    const unit = product ? (product.unit || 'lb') : 'lb';
-    const currentPrice = product
-        ? (product.final_wholesale_price || product.wholesale_price || product.price_per_unit || product.price || '')
-        : '';
+    if (!product) {
+        showToast('Product not found in catalog.', 'warning');
+        return;
+    }
 
-    // Look up scanner row with matching crop name for current retail prices
+    // For custom products, open the full custom product form
+    if (product.is_custom) {
+        showAddProductModal({
+            id: product.id,
+            sku_id: product.sku_id || product.sku || sku,
+            product_name: product.product_name || product.name || product.crop,
+            category: product.category,
+            description: product.description || '',
+            retail_price: product.retail_price,
+            wholesale_price: product.final_wholesale_price || product.wholesale_price || product.price_per_unit,
+            quantity_available: product.qty_available || product.available || product.quantity_available,
+            unit: product.unit || 'lb',
+            is_taxable: product.is_taxable !== false,
+            available_for_wholesale: product.available_for_wholesale !== false,
+            thumbnail_url: product.thumbnail_url || ''
+        });
+        return;
+    }
+
+    // For auto/hybrid products, open the pricing-only edit modal
+    const name = product.product_name || product.name || product.crop || sku;
+    const unit = product.unit || 'lb';
+    const currentPrice = product.final_wholesale_price || product.wholesale_price || product.price_per_unit || product.price || '';
+
     let currentRetailOz = '';
     let currentRetailLb = '';
     let currentWholesaleLb = currentPrice ? Number(currentPrice).toFixed(2) : '';
@@ -10901,7 +11129,7 @@ async function saveProductEdit(sku, cropName) {
     const wholesaleLb = parseFloat(document.getElementById('edit-wholesale-lb').value);
 
     if (!retailLb || retailLb <= 0) {
-        alert('Retail price per lb is required and must be greater than zero.');
+        showToast('Retail price per lb is required and must be greater than zero.', 'warning');
         return;
     }
 
@@ -10914,7 +11142,7 @@ async function saveProductEdit(sku, cropName) {
                     crop: cropName,
                     retailPerOz: retailOz || retailLb / 16,
                     retailPerLb: retailLb,
-                    wholesalePerLb: wholesaleLb || retailLb * 0.65,
+                    wholesalePerLb: wholesaleLb || retailLb * 0.75,
                     tier: 'manual',
                     reasoning: 'Manual edit from product catalog'
                 }],
@@ -10926,20 +11154,47 @@ async function saveProductEdit(sku, cropName) {
         const data = res.ok ? await res.json() : null;
         if (data && data.success) {
             closeProductEditModal();
+            showToast('Product pricing updated.', 'success');
             await loadPricingManagement();
             await loadCurrentPricesIntoScanner();
         } else {
-            alert('Failed to save: ' + (data?.error || 'Unknown error'));
+            showToast('Failed to save: ' + (data?.error || 'Unknown error'), 'error');
         }
     } catch (err) {
         console.error('[Product Edit] Save error:', err);
-        alert('Failed to save product price. Check console for details.');
+        showToast('Failed to save product price. Check console for details.', 'error');
     }
 }
 
-// ==============================================================================
-// Delivery Management
-// ==============================================================================
+async function deleteProduct(sku) {
+    const product = _catalogProductsCache.find(p =>
+        (p.sku_id || p.sku || p.product_id) === sku
+    );
+    if (!product || !product.is_custom) {
+        showToast('Only custom products can be deleted from the catalog.', 'warning');
+        return;
+    }
+    const name = product.product_name || product.name || product.crop || sku;
+    if (!confirm('Delete product "' + name + '"?\n\nThis will mark the product as inactive and remove it from the catalog.')) {
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/farm/products/${product.id}`, {
+            method: 'DELETE'
+        });
+        const data = res && res.ok ? await res.json() : null;
+        if (!data || !data.success) {
+            throw new Error(data?.error || 'Failed to delete product');
+        }
+        showToast('Product "' + name + '" removed from catalog.', 'success');
+        await loadPricingManagement();
+    } catch (err) {
+        console.error('[Custom Product] Delete error:', err);
+        showToast('Failed to delete product: ' + err.message, 'error');
+    }
+}
+
 
 async function loadDeliveryManagement() {
     try {

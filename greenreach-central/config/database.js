@@ -524,6 +524,12 @@ async function runMigrations(client) {
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS sold_quantity_lbs DECIMAL(10,2) DEFAULT 0;
       ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS lot_code VARCHAR(255);
 
+      -- Migration 026: custom product fields (description, thumbnail, tax, custom flag)
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(500);
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS is_taxable BOOLEAN DEFAULT TRUE;
+      ALTER TABLE farm_inventory ADD COLUMN IF NOT EXISTS is_custom BOOLEAN DEFAULT FALSE;
+
       UPDATE farm_inventory
          SET product_id = COALESCE(product_id, sku)
        WHERE product_id IS NULL;
@@ -537,6 +543,7 @@ async function runMigrations(client) {
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_sku ON farm_inventory(sku);
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_last_updated ON farm_inventory(last_updated DESC);
       CREATE INDEX IF NOT EXISTS idx_farm_inventory_source ON farm_inventory(inventory_source);
+      CREATE INDEX IF NOT EXISTS idx_farm_inventory_custom ON farm_inventory(is_custom) WHERE is_custom = TRUE;
 
       -- Required for ON CONFLICT (farm_id, product_id) UPSERT in sync + manual routes
       -- Deduplicate before creating unique index (keep row with highest id)

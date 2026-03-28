@@ -93,7 +93,7 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
         quantity = EXCLUDED.quantity,
         quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0) - COALESCE(farm_inventory.sold_quantity_lbs, 0),
         last_updated = NOW()
-      WHERE farm_inventory.inventory_source != 'manual'`,
+      WHERE farm_inventory.inventory_source NOT IN ('manual', 'custom') AND COALESCE(farm_inventory.is_custom, FALSE) = FALSE`,
       [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs]
     );
     updated++;
@@ -461,6 +461,7 @@ router.post('/:farmId/sync', async (req, res) => {
           variety = COALESCE(EXCLUDED.variety, farm_inventory.variety),
           synced_at = NOW(),
           last_updated = NOW()
+        WHERE COALESCE(farm_inventory.is_custom, FALSE) = FALSE
         `,
         [
           farmId,

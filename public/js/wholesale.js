@@ -1,8 +1,39 @@
 (() => {
   'use strict';
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value);
+  }
+
+  function safeUrl(value) {
+    if (!value) return '#';
+    try {
+      const parsed = new URL(String(value), window.location.origin);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      return '#';
+    }
+    return '#';
+  }
+
+  function safeClassToken(value) {
+    return String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'unknown';
+  }
+
   const STORAGE_TOKEN = 'greenreach_wholesale_token';
   const STORAGE_BUYER = 'greenreach_wholesale_buyer';
+  const STORAGE_CART = 'greenreach_wholesale_cart';
 
   const app = {
     catalog: [],
@@ -46,6 +77,9 @@
     },
 
     async init() {
+      // Restore cart from localStorage
+      this.loadCart();
+
       const params = new URLSearchParams(window.location.search);
       // Prefer live/network mode by default; demo mode is opt-in.
       if (params.get('demo') === '1') this.demoMode = true;
@@ -769,22 +803,24 @@
         .map(
           (sku) => `
           <div class="sku-card">
+            ${sku.thumbnail_url ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" /></div>` : ''}
             <div class="sku-header">
-              <div class="sku-name">${sku.product_name}</div>
+              <div class="sku-name">${escapeHtml(sku.product_name)}</div>
               ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
             </div>
+            ${sku.description ? `<div class="sku-description">${escapeHtml(sku.description)}</div>` : ''}
             <div class="sku-meta">
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Size:</span>
-                <span>${sku.size || 'N/A'}</span>
+                <span>${escapeHtml(sku.size || 'N/A')}</span>
               </div>
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Unit:</span>
-                <span>${sku.unit}</span>
+                <span>${escapeHtml(sku.unit)}</span>
               </div>
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Price:</span>
-                <span>$${Number(sku.price_per_unit).toFixed(2)}/${sku.unit}</span>
+                <span>$${Number(sku.price_per_unit).toFixed(2)}/${escapeHtml(sku.unit)}</span>
               </div>
               ${Number(sku.base_wholesale_price || 0) > 0 ? `
               <div class="sku-meta-row">
@@ -798,14 +834,14 @@
               </div>` : ''}
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Available:</span>
-                <span>${sku.total_qty_available} ${sku.qty_unit || sku.unit}${sku.total_qty_available !== 1 ? 's' : ''}</span>
+                <span>${sku.total_qty_available} ${escapeHtml(sku.qty_unit || sku.unit)}${sku.total_qty_available !== 1 ? 's' : ''}</span>
               </div>
             </div>
             <div class="sku-farms">
               ${(sku.farms || []).map((f) => `
                 <div class="farm-tag-container">
-                  <span class="farm-tag">${f.farm_name}</span>
-                  <span class="farm-qty">${f.qty_available} ${sku.qty_unit || sku.unit}</span>
+                  <span class="farm-tag">${escapeHtml(f.farm_name)}</span>
+                  <span class="farm-qty">${f.qty_available} ${escapeHtml(sku.qty_unit || sku.unit)}</span>
                   <div class="farm-badges">
                     ${this.getFarmCertificationBadges(f.farm_id)}
                     ${this.getFarmQualityBadge(f.farm_id)}
@@ -816,8 +852,8 @@
               `).join('')}
             </div>
             <div class="sku-actions">
-              <input type="number" id="qty-${sku.sku_id}" min="0.1" step="0.1" max="${sku.total_qty_available}" value="1" />
-              <button data-action="add-to-cart" data-skuid="${sku.sku_id}">Add to Cart</button>
+              <input type="number" id="qty-${escapeAttr(sku.sku_id)}" min="0.1" step="0.1" max="${Number(sku.total_qty_available) || 0}" value="1" />
+              <button data-action="add-to-cart" data-skuid="${escapeAttr(sku.sku_id)}">Add to Cart</button>
             </div>
           </div>
         `
@@ -844,6 +880,22 @@
       console.log(`[Wholesale] ${this.farms.length} active farms:`, this.farms.map(f => f.farm_name).join(', '));
     },
 
+    saveCart() {
+      try {
+        localStorage.setItem(STORAGE_CART, JSON.stringify(this.cart));
+      } catch (e) { /* localStorage full or unavailable */ }
+    },
+
+    loadCart() {
+      try {
+        const saved = localStorage.getItem(STORAGE_CART);
+        if (saved) {
+          this.cart = JSON.parse(saved);
+          this.renderCart();
+        }
+      } catch (e) { /* corrupt data, start fresh */ }
+    },
+
     addToCart(skuId) {
       const sku = this.catalog.find((s) => s.sku_id === skuId);
       if (!sku) return;
@@ -867,6 +919,7 @@
       }
 
       this.renderCart();
+      this.saveCart();
       this.showToast(`Added ${sku.product_name} to cart`, 'success');
       if (qtyInput) qtyInput.value = '1';
       
@@ -893,6 +946,7 @@
     removeFromCart(skuId) {
       this.cart = this.cart.filter((item) => item.sku_id !== skuId);
       this.renderCart();
+      this.saveCart();
       this.showToast('Removed from cart', 'info');
     },
 
@@ -908,6 +962,7 @@
         this.showToast('Maximum quantity reached', 'info');
       } else {
         this.renderCart();
+        this.saveCart();
       }
     },
 
@@ -937,16 +992,16 @@
           (item) => `
           <div class="cart-item">
             <div class="cart-item-header">
-              <div class="cart-item-name">${item.product_name}</div>
-              <button class="cart-item-remove" data-action="remove-from-cart" data-skuid="${item.sku_id}">&times;</button>
+              <div class="cart-item-name">${escapeHtml(item.product_name)}</div>
+              <button class="cart-item-remove" data-action="remove-from-cart" data-skuid="${escapeAttr(item.sku_id)}">&times;</button>
             </div>
-            <div class="cart-item-meta">${item.size || ''} ${item.unit}</div>
-            <div class="cart-item-meta">$${Number(item.price_per_unit).toFixed(2)} per ${item.unit}</div>
+            <div class="cart-item-meta">${escapeHtml(item.size || '')} ${escapeHtml(item.unit)}</div>
+            <div class="cart-item-meta">$${Number(item.price_per_unit).toFixed(2)} per ${escapeHtml(item.unit)}</div>
             <div class="cart-item-actions">
               <div class="cart-item-qty">
-                <button data-action="cart-qty" data-skuid="${item.sku_id}" data-delta="-0.5">-</button>
+                <button data-action="cart-qty" data-skuid="${escapeAttr(item.sku_id)}" data-delta="-0.5">-</button>
                 <span>${item.quantity}</span>
-                <button data-action="cart-qty" data-skuid="${item.sku_id}" data-delta="0.5">+</button>
+                <button data-action="cart-qty" data-skuid="${escapeAttr(item.sku_id)}" data-delta="0.5">+</button>
               </div>
               <div class="cart-item-price">$${(Number(item.price_per_unit) * Number(item.quantity)).toFixed(2)}</div>
             </div>
@@ -1065,7 +1120,7 @@
           return;
         }
 
-        previewContainer.innerHTML = `<p>Error: ${json?.message || 'Unable to allocate order'}</p>`;
+        previewContainer.innerHTML = `<p>Error: ${escapeHtml(json?.message || 'Unable to allocate order')}</p>`;
       } catch (error) {
         console.error('Allocation preview error:', error);
         previewContainer.innerHTML = '<p>Failed to load allocation preview</p>';
@@ -1077,13 +1132,13 @@
       const cadence = allocation.recurrence?.cadence || this.getRecurrence().cadence;
 
       container.innerHTML = `
-        <p style="margin-bottom: 0.75rem; color: var(--text-secondary);">Fulfillment cadence: <strong>${cadence.replace('_', ' ')}</strong></p>
+        <p style="margin-bottom: 0.75rem; color: var(--text-secondary);">Fulfillment cadence: <strong>${escapeHtml(cadence.replace('_', ' '))}</strong></p>
         ${(allocation.farm_sub_orders || [])
           .map(
             (subOrder) => `
           <div class="allocation-farm">
             <div class="allocation-farm-header">
-              <div class="allocation-farm-name">${subOrder.farm_name}</div>
+              <div class="allocation-farm-name">${escapeHtml(subOrder.farm_name)}</div>
               <div class="allocation-farm-total">$${Number(subOrder.subtotal).toFixed(2)}</div>
             </div>
             <div class="allocation-items">
@@ -1091,7 +1146,7 @@
                 .map(
                   (item) => `
                 <div class="allocation-item">
-                  ${item.quantity} ${item.unit} × ${item.product_name} @ $${Number(item.price_per_unit).toFixed(2)}/${item.unit}
+                  ${item.quantity} ${escapeHtml(item.unit)} × ${escapeHtml(item.product_name)} @ $${Number(item.price_per_unit).toFixed(2)}/${escapeHtml(item.unit)}
                 </div>
               `
                 )
@@ -1251,8 +1306,8 @@
           return `
           <div class="order-card">
             <div class="order-header">
-              <div class="order-id">Order #${order.master_order_id.substring(0, 8)}</div>
-              <div class="order-status ${order.status}">${order.status}</div>
+              <div class="order-id">Order #${escapeHtml(String(order.master_order_id || '').substring(0, 8))}</div>
+              <div class="order-status ${safeClassToken(order.status)}">${escapeHtml(order.status)}</div>
             </div>
             
             <div class="order-meta">
@@ -1270,12 +1325,12 @@
               </div>
               <div class="order-meta-item">
                 <div class="order-meta-label">Fulfillment</div>
-                <div class="order-meta-value">${(order.recurrence?.cadence || 'one_time').replace('_', ' ')}</div>
+                <div class="order-meta-value">${escapeHtml((order.recurrence?.cadence || 'one_time').replace('_', ' '))}</div>
               </div>
               ${order.delivery_address ? `
               <div class="order-meta-item">
                 <div class="order-meta-label">Delivery Address</div>
-                <div class="order-meta-value">${order.delivery_address.street}, ${order.delivery_address.city} ${order.delivery_address.province || ''} ${order.delivery_address.postalCode || order.delivery_address.zip || ''}</div>
+                <div class="order-meta-value">${escapeHtml(order.delivery_address.street)}, ${escapeHtml(order.delivery_address.city)} ${escapeHtml(order.delivery_address.province || '')} ${escapeHtml(order.delivery_address.postalCode || order.delivery_address.zip || '')}</div>
               </div>
               ` : ''}
             </div>
@@ -1286,10 +1341,10 @@
               ${allItems.map((item) => `
                 <div class="order-item">
                   <div>
-                    <div class="order-item-name">${item.product_name}</div>
+                    <div class="order-item-name">${escapeHtml(item.product_name)}</div>
                     <div class="order-item-details">
-                      ${item.quantity} ${item.unit} × $${Number(item.price_per_unit).toFixed(2)}
-                      ${item.size ? ` • ${item.size}` : ''}
+                      ${item.quantity} ${escapeHtml(item.unit)} × $${Number(item.price_per_unit).toFixed(2)}
+                      ${item.size ? ` • ${escapeHtml(item.size)}` : ''}
                     </div>
                   </div>
                   <div class="order-item-price">$${(Number(item.quantity) * Number(item.price_per_unit)).toFixed(2)}</div>
@@ -1304,18 +1359,19 @@
                 .map((subOrder) => `
                 <div class="order-farm-item">
                   <div style="flex: 1;">
-                    <div class="order-farm-name">${subOrder.farm_name || 'Farm'}</div>
+                    <div class="order-farm-name">${escapeHtml(subOrder.farm_name || 'Farm')}</div>
                     <div class="order-farm-status">
-                      ${(subOrder.items || []).length} item(s) • Status: ${subOrder.status || 'pending'}
+                      ${(subOrder.items || []).length} item(s) • Status: ${escapeHtml(subOrder.status || 'pending')}
                     </div>
                     ${subOrder.tracking_number ? `
                     <div class="order-farm-tracking">
                       <div class="order-farm-tracking-label">Tracking Number</div>
                       <div class="order-farm-tracking-number">
-                        ${subOrder.tracking_number}
+                        ${escapeHtml(subOrder.tracking_number)}
                         ${subOrder.tracking_carrier ? `
-                        <a href="${this.getTrackingUrl(subOrder.tracking_carrier, subOrder.tracking_number)}" 
+                        <a href="${safeUrl(this.getTrackingUrl(subOrder.tracking_carrier, subOrder.tracking_number))}" 
                            target="_blank" 
+                           rel="noopener noreferrer"
                            class="order-farm-tracking-link">
                           Track Package →
                         </a>
@@ -1330,14 +1386,14 @@
             </div>
 
             <div class="order-actions">
-              <button class="order-action-btn" data-action="view-invoice" data-orderid="${order.master_order_id}">
+              <button class="order-action-btn" data-action="view-invoice" data-orderid="${escapeAttr(order.master_order_id)}">
                  Download Invoice
               </button>
-              <button class="order-action-btn" data-action="reorder" data-orderid="${order.master_order_id}">
+              <button class="order-action-btn" data-action="reorder" data-orderid="${escapeAttr(order.master_order_id)}">
                 Reorder
               </button>
               ${order.status === 'pending' || order.status === 'confirmed' ? `
-              <button class="order-action-btn" data-action="contact-farm" data-orderid="${order.master_order_id}">
+              <button class="order-action-btn" data-action="contact-farm" data-orderid="${escapeAttr(order.master_order_id)}">
                  Contact Farms
               </button>
               ` : ''}
@@ -1349,34 +1405,38 @@
     },
 
     getTrackingUrl(carrier, trackingNumber) {
+      const encodedTrackingNumber = encodeURIComponent(String(trackingNumber || ''));
       const carriers = {
-        usps: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`,
-        ups: `https://www.ups.com/track?tracknum=${trackingNumber}`,
-        fedex: `https://www.fedex.com/fedextrack/?tracknumbers=${trackingNumber}`,
-        dhl: `https://www.dhl.com/en/express/tracking.html?AWB=${trackingNumber}`
+        usps: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodedTrackingNumber}`,
+        ups: `https://www.ups.com/track?tracknum=${encodedTrackingNumber}`,
+        fedex: `https://www.fedex.com/fedextrack/?tracknumbers=${encodedTrackingNumber}`,
+        dhl: `https://www.dhl.com/en/express/tracking.html?AWB=${encodedTrackingNumber}`
       };
-      return carriers[carrier.toLowerCase()] || '#';
+      return carriers[String(carrier || '').toLowerCase()] || '#';
     },
 
     async downloadInvoice(orderId) {
       try {
         this.showLoading('Generating invoice...');
-        
-        const { response, json } = await this.apiFetch(`/api/wholesale/orders/${orderId}/invoice`);
-        
-        if (response.ok && json?.status === 'ok') {
-          // Create downloadable file from invoice data
-          const invoiceData = json.data;
-          const blob = new Blob([JSON.stringify(invoiceData, null, 2)], { type: 'application/json' });
+
+        const headers = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+        // Fetch HTML invoice from server
+        const response = await fetch(`/api/wholesale/orders/${orderId}/invoice`, { headers });
+
+        if (response.ok) {
+          const html = await response.text();
+          const blob = new Blob([html], { type: 'text/html' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `invoice-${orderId.substring(0, 8)}.json`;
+          a.download = `invoice-${orderId.substring(0, 12)}.html`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          
+
           this.hideLoading();
           this.showToast('Invoice downloaded', 'success');
         } else {
@@ -1499,15 +1559,19 @@
 
         this.networkFarms = data.data?.farms || [];
 
-        const opts = ['<option value="">Select a farm...</option>']
-          .concat(
-            this.networkFarms
-              .filter((f) => f?.status !== 'inactive')
-              .map((f) => `<option value="${String(f.farm_id)}">${String(f.farm_name || f.farm_id)}</option>`)
-          )
-          .join('');
-
-        select.innerHTML = opts;
+        select.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a farm...';
+        select.appendChild(defaultOption);
+        this.networkFarms
+          .filter((f) => f?.status !== 'inactive')
+          .forEach((f) => {
+            const option = document.createElement('option');
+            option.value = String(f.farm_id || '');
+            option.textContent = String(f.farm_name || f.farm_id || 'Farm');
+            select.appendChild(option);
+          });
       } catch (error) {
         console.warn('Failed to load network farms:', error);
         select.innerHTML = '<option value="">Farms unavailable</option>';
@@ -1738,19 +1802,19 @@
           return `
             <div class="price-alert ${alertClass}">
               <div class="price-alert-header">
-                <span class="price-alert-product">${alert.product}</span>
-                <span class="price-change" style="${changeColor}">${alert.change}</span>
+                  <span class="price-alert-product">${escapeHtml(alert.product)}</span>
+                  <span class="price-change" style="${escapeAttr(changeColor)}">${escapeHtml(alert.change)}</span>
               </div>
               <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                $${alert.previousPrice.toFixed(2)} → $${alert.currentPrice.toFixed(2)} ${alert.priceUnit}
+                  $${Number(alert.previousPrice || 0).toFixed(2)} → $${Number(alert.currentPrice || 0).toFixed(2)} ${escapeHtml(alert.priceUnit)}
               </div>
               <div class="price-alert-summary">
-                ${alert.summary}
+                  ${escapeHtml(alert.summary)}
               </div>
               <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-                <strong>Data Sources:</strong> ${alert.retailers.join(', ')} (${alert.dataPoints} retailers monitored)<br/>
-                <strong>Last Updated:</strong> ${alert.lastUpdated} • <strong>Confidence:</strong> ${alert.confidence}
-                ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${a.url}" target="_blank" style="color: var(--primary);">${a.title} (${a.source})</a>`).join(', ')}` : ''}
+                  <strong>Data Sources:</strong> ${escapeHtml((alert.retailers || []).join(', '))} (${Number(alert.dataPoints || 0)} retailers monitored)<br/>
+                  <strong>Last Updated:</strong> ${escapeHtml(alert.lastUpdated)} • <strong>Confidence:</strong> ${escapeHtml(alert.confidence)}
+                  ${alert.articles && alert.articles.length > 0 ? `<br/><strong>News References:</strong> ${alert.articles.map(a => `<a href="${safeUrl(a.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">${escapeHtml(a.title)} (${escapeHtml(a.source)})</a>`).join(', ')}` : ''}
               </div>
             </div>
           `;
@@ -2154,7 +2218,7 @@
         <div style="padding: 0.75rem; border-bottom: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <strong>${farm.farm_name}</strong>
+              <strong>${escapeHtml(farm.farm_name)}</strong>
               <div style="font-size: 0.85rem; color: var(--text-secondary);">
                 ${farm.orders.length} order${farm.orders.length !== 1 ? 's' : ''}
               </div>

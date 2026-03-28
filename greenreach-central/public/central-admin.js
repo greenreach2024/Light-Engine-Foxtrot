@@ -10523,33 +10523,40 @@ function renderProductCatalog(products) {
         return;
     }
     tbody.innerHTML = products.map(p => {
-        const sku = p.sku_id || p.sku || p.product_id || '—';
-        const name = p.product_name || p.name || p.crop || '—';
-        const category = p.category || p.type || '—';
-        const type = p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const sku = p.sku_id || p.sku || p.product_id || '\u2014';
+        const name = p.product_name || p.name || p.crop || '\u2014';
+        const category = p.category || p.type || '\u2014';
+        const isCustom = p.is_custom || false;
+        const type = isCustom ? 'Custom' : p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
+        const typeColor = isCustom ? 'color: var(--accent-green); font-weight: 600;' : '';
         const unit = p.unit || 'lb';
         const finalPrice = p.final_wholesale_price || p.wholesale_price || p.price_per_unit || p.price || null;
         const basePrice = p.base_wholesale_price || null;
         const discountRate = p.buyer_discount_rate || 0;
-        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '—';
+        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '\u2014';
         const baseStr = typeof basePrice === 'number' ? '$' + basePrice.toFixed(2) : '';
         const discountStr = discountRate > 0 ? (discountRate * 100).toFixed(1) + '% off' : '';
         const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
         const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
+        const deleteBtn = isCustom
+            ? ` <button class="btn" onclick="deleteProduct('${sku}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444;">Delete</button>`
+            : '';
         return `<tr>
             <td style="font-family: monospace; font-size: 12px;">${sku}</td>
-            <td><strong>${name}</strong></td>
+            <td><strong>${name}</strong>${p.description ? '<div style="font-size:11px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + p.description + '</div>' : ''}</td>
             <td>${category}</td>
-            <td>${type}</td>
+            <td style="${typeColor}">${type}</td>
             <td>${unit}</td>
             <td>${priceStr}${baseStr ? '<div style="font-size:11px;color:var(--text-secondary);">base: ' + baseStr + '</div>' : ''}${discountStr ? '<div style="font-size:11px;color:var(--accent-green);">' + discountStr + '</div>' : ''}</td>
             <td style="color: ${statusColor};">${status}</td>
             <td>
-                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>${deleteBtn}
             </td>
         </tr>`;
     }).join('');
 }
+
+
 
 function renderCostSurveys(surveys) {
     const tbody = document.getElementById('cost-surveys-tbody');
@@ -10824,7 +10831,8 @@ async function cancelPriceOffer(offerId) {
     }
 }
 
-function showAddProductModal() {
+function showAddProductModal(editData) {
+    const isEdit = !!editData;
     let modal = document.getElementById('product-add-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -10832,66 +10840,88 @@ function showAddProductModal() {
         modal.className = 'modal';
         document.body.appendChild(modal);
     }
+
+    const categories = ['Vegetables', 'Greens', 'Herbs', 'Fruits', 'Microgreens', 'Value-Added', 'Bundle', 'Custom'];
+    const units = ['lb', 'head', 'pint', 'bunch', 'jar', 'unit', 'bag', 'oz'];
+    const catOptions = categories.map(c =>
+        `<option value="${c}" ${editData && editData.category === c ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    const unitOptions = units.map(u =>
+        `<option value="${u}" ${editData && editData.unit === u ? 'selected' : ''}>${u}</option>`
+    ).join('');
+
+    const isTaxable = editData ? (editData.is_taxable !== false) : true;
+    const isWholesale = editData ? (editData.available_for_wholesale !== false) : true;
+
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h2>Add New Product</h2>
+                <h2>${isEdit ? 'Edit Product' : 'Add Custom Product'}</h2>
                 <button class="modal-close" onclick="closeAddProductModal()">&times;</button>
             </div>
             <div class="modal-body">
+                ${isEdit ? '<p style="color: var(--text-secondary); margin-bottom: 12px; font-family: monospace; font-size: 12px;">SKU: ' + (editData.sku_id || '') + '</p>' : ''}
                 <div style="display: grid; gap: 12px;">
-                    <label style="color: var(--text-secondary); font-size: 13px;">Crop Name
-                        <input type="text" id="add-product-name" placeholder="e.g. Spring Salad Mix"
+                    <label style="color: var(--text-secondary); font-size: 13px;">Product Name *
+                        <input type="text" id="cpf-name" value="${editData ? (editData.product_name || editData.name || '') : ''}" placeholder="e.g. Heirloom Tomato Mix"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
                     </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Oz ($)
-                        <input type="number" id="add-retail-oz" step="0.01" min="0"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
-                            oninput="syncAddPrices('oz')">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label style="color: var(--text-secondary); font-size: 13px;">Category
+                            <select id="cpf-category"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                                ${catOptions}
+                            </select>
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Unit
+                            <select id="cpf-unit"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                                ${unitOptions}
+                            </select>
+                        </label>
+                    </div>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Description
+                        <textarea id="cpf-description" rows="3" placeholder="Brief product description for wholesale catalog"
+                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; resize: vertical;">${editData ? (editData.description || '') : ''}</textarea>
                     </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Retail Price per Lb ($)
-                        <input type="number" id="add-retail-lb" step="0.01" min="0"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;"
-                            oninput="syncAddPrices('lb')">
-                    </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price per Lb ($)
-                        <input type="number" id="add-wholesale-lb" step="0.01" min="0"
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <label style="color: var(--text-secondary); font-size: 13px;">Retail Price ($)
+                            <input type="number" id="cpf-retail-price" step="0.01" min="0" value="${editData ? (editData.retail_price || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Wholesale Price ($)
+                            <input type="number" id="cpf-wholesale-price" step="0.01" min="0" value="${editData ? (editData.wholesale_price || editData.price_per_unit || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                        <label style="color: var(--text-secondary); font-size: 13px;">Quantity
+                            <input type="number" id="cpf-quantity" step="0.01" min="0" value="${editData ? (editData.quantity_available || editData.available || '') : ''}"
+                                style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
+                        </label>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer;">
+                            <input type="checkbox" id="cpf-taxable" ${isTaxable ? 'checked' : ''} style="width: 16px; height: 16px;">
+                            Taxable
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer;">
+                            <input type="checkbox" id="cpf-wholesale" ${isWholesale ? 'checked' : ''} style="width: 16px; height: 16px;">
+                            Available for Wholesale
+                        </label>
+                    </div>
+                    <label style="color: var(--text-secondary); font-size: 13px;">Thumbnail Image
+                        <input type="file" id="cpf-thumbnail" accept="image/*"
                             style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
-                    </label>
-                    <label style="color: var(--text-secondary); font-size: 13px;">Category
-                        <select id="add-product-category"
-                            style="width: 100%; padding: 8px; margin-top: 4px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;">
-                            <option value="Leafy Greens">Leafy Greens</option>
-                            <option value="Herbs">Herbs</option>
-                            <option value="Microgreens">Microgreens</option>
-                            <option value="Mix" selected>Mix</option>
-                            <option value="Bundle">Bundle</option>
-                        </select>
+                        ${editData && editData.thumbnail_url ? '<div style="margin-top: 6px;"><img src="' + editData.thumbnail_url + '" style="max-height: 60px; border-radius: 4px;" alt="Current thumbnail"></div>' : ''}
                     </label>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
                     <button class="btn" onclick="closeAddProductModal()" style="padding: 8px 16px;">Cancel</button>
-                    <button class="btn" onclick="saveNewProduct()"
-                        style="padding: 8px 16px; background: var(--accent-green); color: white;">Add Product</button>
+                    <button class="btn" id="cpf-save-btn" onclick="saveCustomProduct(${isEdit ? "'" + (editData.id || '') + "'" : 'null'})"
+                        style="padding: 8px 16px; background: var(--accent-green); color: white;">${isEdit ? 'Save Changes' : 'Add Product'}</button>
                 </div>
             </div>
         </div>`;
     modal.style.display = 'flex';
-}
-
-function syncAddPrices(source) {
-    const ozInput = document.getElementById('add-retail-oz');
-    const lbInput = document.getElementById('add-retail-lb');
-    const wsInput = document.getElementById('add-wholesale-lb');
-    if (source === 'oz' && ozInput.value) {
-        const ozVal = parseFloat(ozInput.value);
-        lbInput.value = (ozVal * 16).toFixed(2);
-        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
-    } else if (source === 'lb' && lbInput.value) {
-        const lbVal = parseFloat(lbInput.value);
-        ozInput.value = (lbVal / 16).toFixed(2);
-        wsInput.value = (lbVal * 0.65).toFixed(2);
-    }
 }
 
 function closeAddProductModal() {
@@ -10899,50 +10929,87 @@ function closeAddProductModal() {
     if (modal) modal.style.display = 'none';
 }
 
-async function saveNewProduct() {
-    const name = document.getElementById('add-product-name').value.trim();
-    const retailOz = parseFloat(document.getElementById('add-retail-oz').value);
-    const retailLb = parseFloat(document.getElementById('add-retail-lb').value);
-    const wholesaleLb = parseFloat(document.getElementById('add-wholesale-lb').value);
+async function saveCustomProduct(productId) {
+    const name = document.getElementById('cpf-name').value.trim();
+    const category = document.getElementById('cpf-category').value;
+    const description = document.getElementById('cpf-description').value.trim();
+    const retailPrice = parseFloat(document.getElementById('cpf-retail-price').value) || 0;
+    const wholesalePrice = parseFloat(document.getElementById('cpf-wholesale-price').value) || 0;
+    const quantity = parseFloat(document.getElementById('cpf-quantity').value) || 0;
+    const unit = document.getElementById('cpf-unit').value;
+    const isTaxable = document.getElementById('cpf-taxable').checked;
+    const isWholesale = document.getElementById('cpf-wholesale').checked;
+    const thumbnailFile = document.getElementById('cpf-thumbnail').files[0] || null;
 
     if (!name) {
-        alert('Crop name is required.');
+        showToast('Product name is required.', 'warning');
         return;
     }
-    if (!retailLb || retailLb <= 0) {
-        alert('Retail price per lb is required and must be greater than zero.');
+    if (retailPrice <= 0 && wholesalePrice <= 0) {
+        showToast('At least one price (retail or wholesale) is required.', 'warning');
         return;
     }
+
+    const saveBtn = document.getElementById('cpf-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
 
     try {
-        const res = await authenticatedFetch(`${API_BASE}/api/admin/pricing/batch-update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                updates: [{
-                    crop: name,
-                    retailPerOz: retailOz || retailLb / 16,
-                    retailPerLb: retailLb,
-                    wholesalePerLb: wholesaleLb || retailLb * 0.75,
-                    tier: 'manual',
-                    reasoning: 'New product added from catalog'
-                }],
-                pushToFarms: true,
-                reasoning: 'New product: ' + name
-            })
-        });
+        const farmId = currentFarmId || farmsData.find(f => f.farmId)?.farmId || farmsData.find(f => f.farm_id)?.farm_id;
+        const payload = {
+            product_name: name,
+            category,
+            description,
+            retail_price: retailPrice,
+            wholesale_price: wholesalePrice,
+            quantity_available: quantity,
+            unit,
+            is_taxable: isTaxable,
+            available_for_wholesale: isWholesale
+        };
 
-        const data = res.ok ? await res.json() : null;
-        if (data && data.success) {
-            closeAddProductModal();
-            await loadPricingManagement();
-            await loadCurrentPricesIntoScanner();
-        } else {
-            alert('Failed to add product: ' + (data?.error || 'Unknown error'));
+        const isEdit = !!productId;
+        const url = isEdit
+            ? `${API_BASE}/api/farm/products/${productId}`
+            : `${API_BASE}/api/farm/products`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const res = await authenticatedFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = res && res.ok ? await res.json() : null;
+
+        if (!data || !data.success) {
+            throw new Error(data?.error || 'Failed to save product');
         }
+
+        const savedProduct = data.product || data.data || {};
+        const savedId = savedProduct.id || productId;
+
+        // Upload thumbnail if selected
+        if (thumbnailFile && savedId) {
+            const formData = new FormData();
+            formData.append('thumbnail', thumbnailFile);
+            try {
+                await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (imgErr) {
+                console.error('[Custom Product] Image upload error:', imgErr);
+                showToast('Product saved but image upload failed.', 'warning');
+            }
+        }
+
+        closeAddProductModal();
+        showToast(isEdit ? 'Product updated.' : 'Product added.', 'success');
+        await loadPricingManagement();
     } catch (err) {
-        console.error('[Add Product] Save error:', err);
-        alert('Failed to add product. Check console for details.');
+        console.error('[Custom Product] Save error:', err);
+        showToast('Failed to save product: ' + err.message, 'error');
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = productId ? 'Save Changes' : 'Add Product'; }
     }
 }
 
@@ -10950,13 +11017,35 @@ function editProduct(sku) {
     const product = _catalogProductsCache.find(p =>
         (p.sku_id || p.sku || p.product_id) === sku
     );
-    const name = product ? (product.product_name || product.name || product.crop || sku) : sku;
-    const unit = product ? (product.unit || 'lb') : 'lb';
-    const currentPrice = product
-        ? (product.final_wholesale_price || product.wholesale_price || product.price_per_unit || product.price || '')
-        : '';
+    if (!product) {
+        showToast('Product not found in catalog.', 'warning');
+        return;
+    }
 
-    // Look up scanner row with matching crop name for current retail prices
+    // For custom products, open the full custom product form
+    if (product.is_custom) {
+        showAddProductModal({
+            id: product.id,
+            sku_id: product.sku_id || product.sku || sku,
+            product_name: product.product_name || product.name || product.crop,
+            category: product.category,
+            description: product.description || '',
+            retail_price: product.retail_price,
+            wholesale_price: product.final_wholesale_price || product.wholesale_price || product.price_per_unit,
+            quantity_available: product.qty_available || product.available || product.quantity_available,
+            unit: product.unit || 'lb',
+            is_taxable: product.is_taxable !== false,
+            available_for_wholesale: product.available_for_wholesale !== false,
+            thumbnail_url: product.thumbnail_url || ''
+        });
+        return;
+    }
+
+    // For auto/hybrid products, open the pricing-only edit modal
+    const name = product.product_name || product.name || product.crop || sku;
+    const unit = product.unit || 'lb';
+    const currentPrice = product.final_wholesale_price || product.wholesale_price || product.price_per_unit || product.price || '';
+
     let currentRetailOz = '';
     let currentRetailLb = '';
     let currentWholesaleLb = currentPrice ? Number(currentPrice).toFixed(2) : '';
@@ -11040,7 +11129,7 @@ async function saveProductEdit(sku, cropName) {
     const wholesaleLb = parseFloat(document.getElementById('edit-wholesale-lb').value);
 
     if (!retailLb || retailLb <= 0) {
-        alert('Retail price per lb is required and must be greater than zero.');
+        showToast('Retail price per lb is required and must be greater than zero.', 'warning');
         return;
     }
 
@@ -11065,20 +11154,47 @@ async function saveProductEdit(sku, cropName) {
         const data = res.ok ? await res.json() : null;
         if (data && data.success) {
             closeProductEditModal();
+            showToast('Product pricing updated.', 'success');
             await loadPricingManagement();
             await loadCurrentPricesIntoScanner();
         } else {
-            alert('Failed to save: ' + (data?.error || 'Unknown error'));
+            showToast('Failed to save: ' + (data?.error || 'Unknown error'), 'error');
         }
     } catch (err) {
         console.error('[Product Edit] Save error:', err);
-        alert('Failed to save product price. Check console for details.');
+        showToast('Failed to save product price. Check console for details.', 'error');
     }
 }
 
-// ==============================================================================
-// Delivery Management
-// ==============================================================================
+async function deleteProduct(sku) {
+    const product = _catalogProductsCache.find(p =>
+        (p.sku_id || p.sku || p.product_id) === sku
+    );
+    if (!product || !product.is_custom) {
+        showToast('Only custom products can be deleted from the catalog.', 'warning');
+        return;
+    }
+    const name = product.product_name || product.name || product.crop || sku;
+    if (!confirm('Delete product "' + name + '"?\n\nThis will mark the product as inactive and remove it from the catalog.')) {
+        return;
+    }
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/farm/products/${product.id}`, {
+            method: 'DELETE'
+        });
+        const data = res && res.ok ? await res.json() : null;
+        if (!data || !data.success) {
+            throw new Error(data?.error || 'Failed to delete product');
+        }
+        showToast('Product "' + name + '" removed from catalog.', 'success');
+        await loadPricingManagement();
+    } catch (err) {
+        console.error('[Custom Product] Delete error:', err);
+        showToast('Failed to delete product: ' + err.message, 'error');
+    }
+}
+
 
 async function loadDeliveryManagement() {
     try {

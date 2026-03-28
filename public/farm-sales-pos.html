@@ -244,6 +244,23 @@
       font-size: 0.8rem;
       margin-top: 0.25rem;
     }
+
+    .product-thumb {
+      width: 100%;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+
+    .product-desc {
+      font-size: 0.75rem;
+      color: var(--text-light);
+      margin-top: 0.25rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     
     .cart {
       background: var(--card);
@@ -1193,9 +1210,11 @@
         const grid = document.getElementById('product-grid');
         grid.innerHTML = inventory.map(product => `
           <div class="product-card" onclick="addToCart('${product.sku_id}')">
+            ${product.thumbnail_url ? `<img src="${product.thumbnail_url}" alt="${product.name}" class="product-thumb" loading="lazy" />` : ''}
             <h3>${product.name}</h3>
-            <div class="price">$${product.retail_price.toFixed(2)}</div>
+            <div class="price">$${Number(product.retail_price).toFixed(2)}</div>
             <div class="stock">${product.available} ${product.unit} available</div>
+            ${product.description ? `<div class="product-desc">${product.description}</div>` : ''}
           </div>
         `).join('');
         

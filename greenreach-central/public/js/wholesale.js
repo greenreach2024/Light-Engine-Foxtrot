@@ -803,10 +803,12 @@
         .map(
           (sku) => `
           <div class="sku-card">
+            ${sku.thumbnail_url ? `<div class="sku-thumbnail"><img src="${escapeAttr(sku.thumbnail_url)}" alt="${escapeAttr(sku.product_name)}" loading="lazy" /></div>` : ''}
             <div class="sku-header">
               <div class="sku-name">${escapeHtml(sku.product_name)}</div>
               ${sku.organic ? '<span class="sku-badge">Organic</span>' : ''}
             </div>
+            ${sku.description ? `<div class="sku-description">${escapeHtml(sku.description)}</div>` : ''}
             <div class="sku-meta">
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Size:</span>

@@ -70,6 +70,7 @@ import lotSystemRoutes, { startLotExpiryScheduler } from './routes/lot-system.js
 // Phase 2 — Cloud SaaS API gap routes
 import farmUsersRouter, { userRouter, deviceTokenRouter } from './routes/farm-users.js';
 import farmSalesRouter from './routes/farm-sales.js';
+import customProductsRouter from './routes/custom-products.js';
 import networkGrowersRouter from './routes/network-growers.js';
 import experimentRecordsRouter, { startBenchmarkScheduler } from './routes/experiment-records.js';
 import { runYieldRegression } from './jobs/yield-regression.js';
@@ -3670,6 +3671,7 @@ app.use('/api/users', authMiddleware, farmUsersRouter);     // Farm-scoped user 
 app.use('/api/user', authMiddleware, userRouter);            // /api/user/change-password
 app.use('/api/auth', deviceTokenRouter);                     // /api/auth/generate-device-token
 app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
+app.use('/api', customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD + image upload
 app.use('/api', authMiddleware, networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
 app.use('/api', authMiddleware, experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
 app.use('/api/wholesale', authMiddleware, wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events
