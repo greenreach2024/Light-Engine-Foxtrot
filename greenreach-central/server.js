@@ -43,6 +43,7 @@ import squareOAuthProxyRoutes from './routes/square-oauth-proxy.js';
 // NOTE: farm-stripe-setup.js lives at root level and can't resolve express
 // from greenreach-central/node_modules. Stripe setup should proxy to farm server.
 import adminRoutes from './routes/admin.js';
+import adminAuthRoutes from './routes/admin-auth.js';
 import driverApplicationsRoutes from './routes/driver-applications.js';
 import campaignRoutes from './routes/campaign.js';
 import { adminAuthMiddleware, requireAdminRole } from './middleware/adminAuth.js';
@@ -3228,6 +3229,7 @@ app.post('/api/farm/auth/login', (req, res, next) => {
 
 // API routes
 app.use('/api/auth', authRoutes); // Farm authentication
+app.use('/api/admin/auth', adminAuthRoutes); // Central admin authentication
 // Farm Square payment setup routes (proxied to LE)
 app.get('/api/farm/square/status', (req, res) => edgeProxy(req, res, '/api/farm/square/status'));
 app.post('/api/farm/square/authorize', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/authorize', 'POST', req.body));
@@ -3283,12 +3285,21 @@ app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop i
 app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
 
 // Research Platform API (feature-gated via ENDPOINT_FEATURES in feature-flags.js)
-app.use('/api', authMiddleware, researchStudiesRouter);
-app.use('/api', authMiddleware, researchDataRouter);
-app.use('/api', authMiddleware, researchExportsRouter);
-app.use('/api', authMiddleware, researchComplianceRouter);
-app.use('/api', authMiddleware, researchElnRouter);
-app.use('/api', authMiddleware, researchCollaborationRouter);
+// Guard only /api/research/* traffic here; avoid intercepting unrelated /api routes
+// such as /api/admin/auth/login before their dedicated routers run.
+const researchAuthGuard = (req, res, next) => {
+  if (req.path.startsWith('/research/')) {
+    return authMiddleware(req, res, next);
+  }
+  return next();
+};
+
+app.use('/api', researchAuthGuard, researchStudiesRouter);
+app.use('/api', researchAuthGuard, researchDataRouter);
+app.use('/api', researchAuthGuard, researchExportsRouter);
+app.use('/api', researchAuthGuard, researchComplianceRouter);
+app.use('/api', researchAuthGuard, researchElnRouter);
+app.use('/api', researchAuthGuard, researchCollaborationRouter);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
