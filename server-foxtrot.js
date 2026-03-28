@@ -19877,9 +19877,11 @@ function getCropStageAtDay(planId, daysOld) {
 // Manual inventory + custom products proxy -- forwards DB-backed endpoints
 // to Central (LE handles /current, /forecast locally from groups.json)
 // ═══════════════════════════════════════════════════════════════════════════
+const _centralUrl = () => process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
+
 app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
-  target: getCentralApiTarget(),
-  router: () => getCentralApiTarget(),
+  target: _centralUrl(),
+  router: () => _centralUrl(),
   changeOrigin: true,
   xfwd: true,
   logLevel: 'debug',
@@ -19889,7 +19891,7 @@ app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
   pathRewrite: (p) => (p.startsWith('/api/inventory/manual') ? p : `/api/inventory/manual${p}`),
   onProxyReq(proxyReq, req) {
     const outgoingPath = req.originalUrl;
-    console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${getCentralApiTarget()}${outgoingPath}`);
+    console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${_centralUrl()}${outgoingPath}`);
   },
   onProxyRes(proxyRes, req) {
     const origin = req.headers?.origin;
@@ -19912,7 +19914,7 @@ app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
 app.get('/api/inventory/:farmId', (req, res, next) => {
   const { farmId } = req.params;
   if (!farmId || !farmId.startsWith('FARM-')) return next();
-  const target = getCentralApiTarget();
+  const target = _centralUrl();
   const url = `${target}/api/inventory/${encodeURIComponent(farmId)}`;
   console.log(`[-> inventory/:farmId] GET ${req.originalUrl} -> ${url}`);
 
@@ -19935,8 +19937,8 @@ app.get('/api/inventory/:farmId', (req, res, next) => {
 
 // Custom farm products proxy -- forwards to Central for DB-backed CRUD + image upload
 app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
-  target: getCentralApiTarget(),
-  router: () => getCentralApiTarget(),
+  target: _centralUrl(),
+  router: () => _centralUrl(),
   changeOrigin: true,
   xfwd: true,
   logLevel: 'debug',
@@ -19945,7 +19947,7 @@ app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
   agent: keepAliveHttpsAgent,
   pathRewrite: (p) => (p.startsWith('/api/farm/products') ? p : `/api/farm/products${p}`),
   onProxyReq(proxyReq, req) {
-    console.log(`[-> farm/products] ${req.method} ${req.originalUrl} -> ${getCentralApiTarget()}${req.originalUrl}`);
+    console.log(`[-> farm/products] ${req.method} ${req.originalUrl} -> ${_centralUrl()}${req.originalUrl}`);
   },
   onProxyRes(proxyRes, req) {
     const origin = req.headers?.origin;
