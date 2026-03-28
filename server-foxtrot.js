@@ -17812,6 +17812,75 @@ app.get('/api/admin/alerts', adminAuthMiddleware, asyncHandler(async (req, res) 
 }));
 
 /**
+ * POST /api/admin/alerts/:alertId/acknowledge
+ * Mark an alert as acknowledged
+ * PROTECTED: Requires admin authentication
+ */
+app.post('/api/admin/alerts/:alertId/acknowledge', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  const { alertId } = req.params;
+  console.log(`[admin] POST /api/admin/alerts/${alertId}/acknowledge`);
+
+  try {
+    // For notification-based alerts, mark the notification as read
+    if (alertId.startsWith('notif-')) {
+      const notifId = alertId.replace('notif-', '');
+      await notificationsDB.update({ _id: notifId }, { $set: { read: true, acknowledged_at: new Date().toISOString() } });
+    }
+
+    // For loss-event alerts, mark as acknowledged in metadata
+    if (alertId.startsWith('loss-')) {
+      const lossId = alertId.replace('loss-', '');
+      await trayLossEventsDB.update({ _id: lossId }, { $set: { acknowledged: true, acknowledged_at: new Date().toISOString() } });
+    }
+
+    // Environmental alerts are ephemeral (generated from live readings), so acknowledgment is session-only
+    res.json({
+      success: true,
+      alertId,
+      action: 'acknowledged',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`[admin] Error acknowledging alert ${alertId}:`, error.message);
+    res.status(500).json({ success: false, error: 'Failed to acknowledge alert' });
+  }
+}));
+
+/**
+ * POST /api/admin/alerts/:alertId/resolve
+ * Mark an alert as resolved
+ * PROTECTED: Requires admin authentication
+ */
+app.post('/api/admin/alerts/:alertId/resolve', adminAuthMiddleware, asyncHandler(async (req, res) => {
+  const { alertId } = req.params;
+  console.log(`[admin] POST /api/admin/alerts/${alertId}/resolve`);
+
+  try {
+    // For notification-based alerts, mark as read and resolved
+    if (alertId.startsWith('notif-')) {
+      const notifId = alertId.replace('notif-', '');
+      await notificationsDB.update({ _id: notifId }, { $set: { read: true, resolved: true, resolved_at: new Date().toISOString() } });
+    }
+
+    // For loss-event alerts, mark as resolved
+    if (alertId.startsWith('loss-')) {
+      const lossId = alertId.replace('loss-', '');
+      await trayLossEventsDB.update({ _id: lossId }, { $set: { resolved: true, resolved_at: new Date().toISOString() } });
+    }
+
+    res.json({
+      success: true,
+      alertId,
+      action: 'resolved',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`[admin] Error resolving alert ${alertId}:`, error.message);
+    res.status(500).json({ success: false, error: 'Failed to resolve alert' });
+  }
+}));
+
+/**
  * GET /api/admin/harvest/forecast
  * Returns platform-wide harvest forecast data
  * PROTECTED: Requires admin authentication
