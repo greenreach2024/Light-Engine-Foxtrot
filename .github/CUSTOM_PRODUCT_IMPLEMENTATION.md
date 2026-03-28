@@ -1,7 +1,7 @@
 # Custom Farm Product Entry -- Implementation Plan
 
 **Reference**: `.github/CUSTOM_PRODUCT_FEATURE.md`
-**Date**: March 28, 2026
+**Date**: March 28, 2026 (Deployed)
 **Status**: Phases 1-7 complete. Phase 8 (deploy) pending.
 
 ---
@@ -144,7 +144,7 @@ ORDER BY category, product_name
 
 ---
 
-## Phase 8: Testing and Deployment
+## Phase 8: Testing and Deployment -- COMPLETE
 
 ### Task 8.1 -- Local verification
 - Create custom product via API
@@ -172,6 +172,21 @@ cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot && /Users/petergilbert/Libra
 - Verify commission applies on mock checkout
 
 ---
+
+
+---
+
+## Deployment Results
+
+**Commit**: `ae184bbe` -- "feat: Custom farm product entry - full CRUD, wholesale, POS, admin UI"
+**Files Changed**: 18 files, 1728 insertions, 303 deletions
+
+| Environment | Status | Timestamp (UTC) |
+|-------------|--------|-----------------|
+| Central (`greenreach-central-prod-v4`) | Deployed successfully, Health: Green | 2026-03-28 14:45:34 |
+| LE (`light-engine-foxtrot-prod-v3`) | Deployed successfully, instance recovered | 2026-03-28 14:51:16 |
+
+**DB Migration**: Migration 026 runs on Central startup (ALTER TABLE IF NOT EXISTS -- idempotent).
 
 ## Dependency Graph
 
