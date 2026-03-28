@@ -109,6 +109,7 @@ router.get('/', async (req, res) => {
          LEFT JOIN farms f ON f.farm_id = fi.farm_id
          WHERE fi.available_for_wholesale = true
            AND COALESCE(fi.quantity_available, fi.quantity, 0) > 0
+           AND COALESCE(fi.status, 'active') != 'inactive'
          ORDER BY fi.product_name`
       );
 

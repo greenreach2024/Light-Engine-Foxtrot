@@ -34,8 +34,9 @@ function getFarmId(req) {
 // ── Helper: generate unique SKU ──
 function generateCustomSku(farmId) {
   const farmShort = (farmId || 'FARM').replace(/^FARM-/, '').substring(0, 8);
+  const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
   const hex = Date.now().toString(16).toUpperCase();
-  return `CUSTOM-${farmShort}-${hex}`;
+  return `CUSTOM-${farmShort}-${rand}-${hex}`;
 }
 
 // ── Helper: validate required fields ──
@@ -113,7 +114,7 @@ router.get('/farm/products/:productId', async (req, res) => {
               available_for_wholesale, inventory_source, status,
               lot_code, created_at, updated_at
        FROM farm_inventory
-       WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE`,
+       WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE AND status != 'inactive'`,
       [farmId, req.params.productId]
     );
 
@@ -207,7 +208,7 @@ router.put('/farm/products/:productId', async (req, res) => {
 
     // Verify product exists and is custom
     const { rows: existing } = await query(
-      'SELECT id FROM farm_inventory WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE',
+      `SELECT id FROM farm_inventory WHERE farm_id = $1 AND id = $2 AND is_custom = TRUE AND status != 'inactive'`,
       [farmId, req.params.productId]
     );
     if (existing.length === 0) {

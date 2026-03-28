@@ -118,7 +118,7 @@ router.get('/:farmId', async (req, res) => {
     const { farmId } = req.params;
     const result = await db.query(
       "SELECT *, COALESCE(auto_quantity_lbs, 0) + COALESCE(manual_quantity_lbs, 0) AS available_lbs " +
-      "FROM farm_inventory WHERE farm_id = $1 ORDER BY product_name",
+      "FROM farm_inventory WHERE farm_id = $1 AND COALESCE(status, 'active') != 'inactive' ORDER BY product_name",
       [farmId]
     );
 

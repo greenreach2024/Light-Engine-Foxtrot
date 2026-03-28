@@ -1,11 +1,17 @@
-# mDNS Discovery for Edge Devices
+# mDNS Discovery (Local-LAN Optional)
 
-This feature enables automatic discovery of Light Engine edge devices on the local network using mDNS (Multicast DNS) / Bonjour.
+This document describes optional local-LAN discovery of Light Engine instances using mDNS (Multicast DNS) / Bonjour.
+
+## Production Position (Cloud-Only Farm)
+
+- Primary production routing does not depend on mDNS.
+- The canonical production path is Central to LE-EB using configured farm URLs and `FARM_EDGE_URL`-style routing.
+- Use mDNS for local development, LAN troubleshooting, and non-production discovery workflows.
 
 ## Features
 
-- **Automatic Service Advertisement**: Edge devices broadcast themselves as `light-engine.local`
-- **Device Discovery**: Find all Light Engine instances on the local network
+- **Automatic Service Advertisement**: Local instances broadcast themselves as `light-engine.local`
+- **Device Discovery**: Find Light Engine instances on the same local network
 - **Zero Configuration**: No manual IP address entry required
 - **Cross-Platform**: Works on macOS, Linux, and Windows
 
@@ -19,9 +25,9 @@ npm install bonjour-service
 
 ## Usage
 
-### For Edge Devices (Server-Side)
+### For Local-LAN Instances (Server-Side)
 
-Edge devices automatically advertise themselves when the server starts:
+Instances configured for mDNS advertise themselves when the server starts:
 
 ```javascript
 // Automatically initialized in server-foxtrot.js
@@ -191,7 +197,7 @@ browser.destroy();
 - mDNS only works on local networks (not routable over internet)
 - No authentication on discovery (anyone on network can see services)
 - Use HTTPS and authentication for actual API access
-- Consider disabling mDNS in production cloud deployments (edge only)
+- Keep mDNS disabled by default in cloud production deployments unless there is a clear operational need
 
 ## Disable mDNS
 

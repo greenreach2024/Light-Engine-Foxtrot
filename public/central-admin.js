@@ -10519,38 +10519,44 @@ function renderProductCatalog(products) {
     _catalogProductsCache = products || [];
     const tbody = document.getElementById('product-catalog-tbody');
     if (!products || products.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">No products in catalog. Products are populated from farm inventories across the network.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">No products in catalog. Products are populated from farm inventories across the network.</td></tr>';
         return;
     }
     tbody.innerHTML = products.map(p => {
-        const sku = p.sku_id || p.sku || p.product_id || '\u2014';
-        const name = p.product_name || p.name || p.crop || '\u2014';
-        const category = p.category || p.type || '\u2014';
-        const isCustom = p.is_custom || false;
+        const sku = p.sku_id || p.sku || p.product_id || '—';
+        const name = p.product_name || p.name || p.crop || '—';
+        const category = p.category || p.type || '—';
+        const isCustom = p.is_custom === true;
         const type = isCustom ? 'Custom' : p.is_mix ? 'Mix' : p.is_bundle ? 'Bundle' : 'Single';
-        const typeColor = isCustom ? 'color: var(--accent-green); font-weight: 600;' : '';
-        const unit = p.unit || 'lb';
-        const finalPrice = p.final_wholesale_price || p.wholesale_price || p.price_per_unit || p.price || null;
-        const basePrice = p.base_wholesale_price || null;
-        const discountRate = p.buyer_discount_rate || 0;
-        const priceStr = typeof finalPrice === 'number' ? '$' + finalPrice.toFixed(2) + '/' + unit : '\u2014';
-        const baseStr = typeof basePrice === 'number' ? '$' + basePrice.toFixed(2) : '';
-        const discountStr = discountRate > 0 ? (discountRate * 100).toFixed(1) + '% off' : '';
-        const status = (p.qty_available || p.available || 0) > 0 ? 'In Stock' : 'Out of Stock';
+        const typeBadge = isCustom
+          ? '<span style="padding:2px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:var(--accent-green);font-size:11px;font-weight:600;">Custom</span>'
+          : `<span style="font-size:12px;">${type}</span>`;
+        const unit = p.unit || p.price_unit || 'oz';
+        const finalPrice = p.final_wholesale_price ?? p.wholesale_price ?? p.price_per_unit ?? p.price;
+        const basePrice = p.base_wholesale_price;
+        const discountRate = Number(p.buyer_discount_rate || 0);
+        const priceStr = Number.isFinite(Number(finalPrice)) ? `$${Number(finalPrice).toFixed(2)}/${unit}` : '—';
+        const baseStr = Number.isFinite(Number(basePrice)) ? `Base: $${Number(basePrice).toFixed(2)}` : '';
+        const discountStr = discountRate > 0 ? ` | Buyer discount: ${(discountRate * 100).toFixed(1)}%` : '';
+        const qty = p.qty_available || p.available || p.quantity_available || p.total_available || 0;
+        const status = qty > 0 ? 'In Stock' : 'Out of Stock';
         const statusColor = status === 'In Stock' ? 'var(--accent-green)' : '#ef4444';
+        const desc = p.description ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.description)}</div>` : '';
         const deleteBtn = isCustom
-            ? ` <button class="btn" onclick="deleteProduct('${sku}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444;">Delete</button>`
-            : '';
+          ? `<button class="btn" onclick="deleteProduct('${p.id || ''}')" style="padding: 4px 10px; font-size: 12px; color: #ef4444; border-color: #ef4444; margin-left: 4px;">Delete</button>`
+          : '';
+        const editArg = isCustom ? p.id : sku;
         return `<tr>
-            <td style="font-family: monospace; font-size: 12px;">${sku}</td>
-            <td><strong>${name}</strong>${p.description ? '<div style="font-size:11px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + p.description + '</div>' : ''}</td>
-            <td>${category}</td>
-            <td style="${typeColor}">${type}</td>
+            <td style="font-family: monospace; font-size: 12px;">${escapeHtml(sku)}</td>
+            <td><strong>${escapeHtml(name)}</strong>${desc}</td>
+            <td>${escapeHtml(category)}</td>
+            <td>${typeBadge}</td>
             <td>${unit}</td>
-            <td>${priceStr}${baseStr ? '<div style="font-size:11px;color:var(--text-secondary);">base: ' + baseStr + '</div>' : ''}${discountStr ? '<div style="font-size:11px;color:var(--accent-green);">' + discountStr + '</div>' : ''}</td>
+            <td>${priceStr}${baseStr || discountStr ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${baseStr}${discountStr}</div>` : ''}</td>
             <td style="color: ${statusColor};">${status}</td>
             <td>
-                <button class="btn" onclick="editProduct('${sku}')" style="padding: 4px 10px; font-size: 12px;">Edit</button>${deleteBtn}
+                <button class="btn" onclick="editProduct('${editArg}', ${isCustom})" style="padding: 4px 10px; font-size: 12px;">Edit</button>
+                ${deleteBtn}
             </td>
         </tr>`;
     }).join('');
@@ -11015,7 +11021,7 @@ async function saveCustomProduct(productId) {
 
 function editProduct(sku) {
     const product = _catalogProductsCache.find(p =>
-        (p.sku_id || p.sku || p.product_id) === sku
+        (p.sku_id || p.sku || p.product_id) === sku || (p.id && String(p.id) === String(sku))
     );
     if (!product) {
         showToast('Product not found in catalog.', 'warning');
@@ -11168,7 +11174,7 @@ async function saveProductEdit(sku, cropName) {
 
 async function deleteProduct(sku) {
     const product = _catalogProductsCache.find(p =>
-        (p.sku_id || p.sku || p.product_id) === sku
+        (p.sku_id || p.sku || p.product_id) === sku || (p.id && String(p.id) === String(sku))
     );
     if (!product || !product.is_custom) {
         showToast('Only custom products can be deleted from the catalog.', 'warning');

@@ -3,6 +3,13 @@
 > **Last updated:** 2026-03-09 (session 5 — farm-summary /env stale data fix, Central proxy for live sensor readings)  
 > **Files involved:** `app.foxtrot.js`, `server-foxtrot.js`, `LE-dashboard.html`, `LE-farm-admin.html`, `farm-admin.js`, `js/iot-manager.js`, `LE-switchbot.html`, `greenreach-central/server.js`, `farm-summary.html`, `routes/farm-ops-agent.js`, `greenreach-central/routes/env-proxy.js`
 
+## Canonical Production Context (Read First)
+
+- The farm is cloud-only. LE-EB is the farm runtime.
+- User traffic is Central-first (`greenreachgreens.com`), with Central routing/proxying to LE where needed.
+- Function names such as `resolveEdgeUrlForProxy()` use legacy terminology; they refer to the cloud-hosted LE farm runtime.
+- Historical change-log sections below preserve incident chronology. Prefer `.github/CLOUD_ARCHITECTURE.md` and `.github/COMPLETE_SYSTEM_MAP.md` when there is any wording conflict.
+
 ---
 
 ## Change Log (2026-03-09)
@@ -518,7 +525,7 @@ createDeviceEntryElement(device)        [L2430]
 | GET | `/switchbot/devices` | L8625 | No | SwitchBot device list |
 | GET | `/api/switchbot/devices` | L8730 | No | SwitchBot devices (API wrapper) |
 | GET | `/api/switchbot/devices/:id/status` | L8810 | No | SwitchBot device status |
-| POST | `/api/switchbot/devices/:id/commands` | L8846 | Edge required | SwitchBot control command |
+| POST | `/api/switchbot/devices/:id/commands` | L8846 | Farm runtime access required | SwitchBot control command |
 | GET | `/data/switchbot-devices.json` | static | No | Read SwitchBot cache (file) |
 | GET | `/data/rooms.json` | static | No | Read rooms/zones |
 | GET | `/api/rooms` | varies | No | DB-backed rooms |

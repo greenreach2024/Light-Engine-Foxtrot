@@ -1,8 +1,10 @@
 # GreenReach Light Engine — Data Mapping Document
 
-> **Last Updated:** 2026-03-01  
+> **Last Updated:** 2026-03-28  
 > **Purpose:** Canonical reference for all data storage locations, API endpoints, and data flow paths.  
 > **Rule:** Always consult this document before debugging data issues. See `.github/copilot-instructions.md` for enforcement.
+
+> **Architecture Alignment (2026-03-28):** The farm is cloud-only. LE-EB is the farm runtime. Terms such as "edge" in older sections are legacy naming and should be interpreted as "cloud-hosted farm runtime" unless explicitly marked as historical context.
 
 ---
 
@@ -10,12 +12,12 @@
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [PostgreSQL Database Tables — Central Cloud](#2-postgresql-database-tables--central-cloud)
-3. [PostgreSQL Database Tables — Foxtrot Edge](#3-postgresql-database-tables--foxtrot-edge)
+3. [PostgreSQL Database Tables — Foxtrot Farm Runtime](#3-postgresql-database-tables--foxtrot-farm-runtime)
 4. [farmStore — Key-Value Store (farm_data table)](#4-farmstore--key-value-store-farm_data-table)
-5. [NeDB Stores — Foxtrot Edge](#5-nedb-stores--foxtrot-edge)
+5. [NeDB Stores — Foxtrot Farm Runtime](#5-nedb-stores--foxtrot-farm-runtime)
 6. [JSON Data Files](#6-json-data-files)
 7. [API Endpoint → Storage Mapping](#7-api-endpoint--storage-mapping)
-8. [Data Sync Flow (Edge ↔ Cloud)](#8-data-sync-flow-edge--cloud)
+8. [Data Sync Flow (Farm Runtime ↔ Central)](#8-data-sync-flow-farm-runtime--central)
 9. [Authentication Data Flow](#9-authentication-data-flow)
 10. [Key Data Resolution Chains](#10-key-data-resolution-chains)
 11. [Common Debugging Scenarios](#11-common-debugging-scenarios)
@@ -27,7 +29,7 @@
 
 ```
 ┌─────────────────────────┐                              ┌──────────────────────────┐
-│  FOXTROT (Edge Server)  │     POST /api/sync/*          │  CENTRAL (Cloud Server)  │
+│  FOXTROT (Farm Runtime) │     POST /api/sync/*          │  CENTRAL (Cloud Server)  │
 │  light-engine-foxtrot   │  ────────────────────────►   │  greenreach-central      │
 │  foxtrot.greenreachgreens│  API Key auth (X-API-Key)    │  greenreachgreens.com    │
 │                         │                              │                          │
@@ -105,14 +107,14 @@ Schema defined in: `greenreach-central/config/database.js`
 
 ---
 
-## 3. PostgreSQL Database Tables — Foxtrot Edge
+## 3. PostgreSQL Database Tables — Foxtrot Farm Runtime
 
 Schema defined in: `lib/database.js`
 
 | Table | Primary Key | Purpose |
 |-------|------------|---------|
 | **farms** | farm_id | Local farm registry |
-| **users** | farm_id + email | Edge user accounts (separate from Central farm_users) |
+| **users** | farm_id + email | Farm runtime user accounts (separate from Central farm_users) |
 | **farm_inventory** | farm_id + sku_id | Local inventory with reservation tracking |
 | **wholesale_reservations** | order_id | Active checkout holds (TTL-based) |
 | **wholesale_deductions** | order_id + sku_id | Confirmed inventory deductions |
@@ -121,7 +123,7 @@ Schema defined in: `lib/database.js`
 | **qa_standards** | checkpoint_type | QA criteria definitions |
 | **qa_photos** | checkpoint_id | QA photo evidence |
 | **farm_metadata** | farm_id | Dashboard analytics cache |
-| **admin_users** | email | Edge admin accounts |
+| **admin_users** | email | Farm runtime admin accounts |
 | **farm_delivery_settings/windows/zones** | Same as Central | Local delivery config |
 
 ---
@@ -166,7 +168,7 @@ Schema defined in: `lib/database.js`
 
 ---
 
-## 5. NeDB Stores — Foxtrot Edge
+## 5. NeDB Stores — Foxtrot Farm Runtime
 
 ### Core NeDB Stores (`server-foxtrot.js`)
 
@@ -220,8 +222,8 @@ Static files served to frontend, **overridden by farmStore** via middleware when
 
 `farm.json`, `groups.json`, `rooms.json`, `lighting-recipes.json`, `crop-registry.json`, `env.json`, `iot-devices.json`, `schedules.json`, `configuration.json`, `room-map.json`, `crop-pricing.json`, `tray-formats.json`, `wholesale-products.json`
 
-### Foxtrot Edge (`public/data/`)
-Same set as Central plus edge-specific:
+### Foxtrot Farm Runtime (`public/data/`)
+Same set as Central plus farm-runtime-specific:
 
 `harvest-log.json`, `lights-catalog.json`, `nutrient-profiles.json`, `field-mappings.json`, `rooms-metadata.json`, `benchmark-seed.json`, `demand-succession-suggestions.json`, `procurement-catalog.json`, `network-recipe-modifiers.json`, `market-intelligence-cache.json`, `ai-recommendations.json`
 
@@ -257,7 +259,7 @@ Same set as Central plus edge-specific:
 | `/data/groups.json` | GET | farmStore(`groups`) via pre-serve middleware | Overrides static file |
 | `/data/room-map.json` | GET | farmStore(`room_map`) | Overrides static file |
 
-### Sync Endpoints (Edge → Cloud)
+### Sync Endpoints (Farm Runtime → Central)
 
 | Endpoint | Method | Writes To | data_type |
 |----------|--------|-----------|-----------|
@@ -298,9 +300,9 @@ Same set as Central plus edge-specific:
 
 ---
 
-## 8. Data Sync Flow (Edge ↔ Cloud)
+## 8. Data Sync Flow (Farm Runtime ↔ Central)
 
-### Push Flow (Edge → Central)
+### Push Flow (Farm Runtime → Central)
 ```
 Foxtrot server-foxtrot.js
   │ Reads: JSON files (groups.json, rooms.json, etc.)
@@ -314,7 +316,7 @@ Foxtrot server-foxtrot.js
        └─ 4. Write flat file backup: public/data/{type}.json
 ```
 
-### Pull Flow (Central → Edge)
+### Pull Flow (Central → Farm Runtime)
 ```
 Foxtrot requests data from Central:
   └─► GET /api/sync/:farmId/{data_type}
@@ -410,7 +412,7 @@ requireBuyerAuth middleware:
 6. Dashboard loads → GET /api/recipes → farmStore or lighting-recipes.json
 ```
 
-### When Edge syncs to Central:
+### When Farm Runtime syncs to Central:
 ```
 1. Foxtrot reads local JSON files (groups.json, rooms.json, etc.)
 2. POST /api/sync/groups with X-API-Key header
@@ -447,7 +449,7 @@ requireBuyerAuth middleware:
 ### "Farm data not loading (rooms, groups, recipes)"
 1. Check farm JWT is valid (not expired, correct farm_id)
 2. Verify farmStore has data: `GET /api/admin/farms/:farmId/rooms` and `/groups`
-3. Check if Edge has synced recently: `GET /api/admin/farms/:farmId` → last_heartbeat
+3. Check if farm runtime has synced recently: `GET /api/admin/farms/:farmId` → last_heartbeat
 4. Verify static fallback files exist: `GET /data/rooms.json`, `/data/groups.json`
 
 ### "Admin dashboard returns 401"
@@ -459,7 +461,7 @@ requireBuyerAuth middleware:
 ### "Wholesale catalog empty"
 1. Check farm_inventory table has entries for active farms
 2. Verify farm status = 'active' in farms table
-3. Check if Edge inventory sync has run: farm_data WHERE data_type='inventory'
+3. Check if farm runtime inventory sync has run: farm_data WHERE data_type='inventory'
 
 ---
 
