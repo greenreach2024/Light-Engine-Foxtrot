@@ -7524,10 +7524,14 @@ function filterAlerts() {
  */
 async function acknowledgeAlert(alertId) {
     try {
-        // TODO: Implement POST /api/admin/alerts/:id/acknowledge
-        console.log('[Alerts] Acknowledging alert:', alertId);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/acknowledge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
         showToast('Alert acknowledged', 'success');
-        await loadAlertsView(); // Reload to show updated state
+        await loadAlertsView();
     } catch (error) {
         console.error('[Alerts] Error acknowledging alert:', error);
         showToast('Failed to acknowledge alert', 'error');
@@ -7539,10 +7543,14 @@ async function acknowledgeAlert(alertId) {
  */
 async function resolveAlert(alertId) {
     try {
-        // TODO: Implement POST /api/admin/alerts/:id/resolve
-        console.log('[Alerts] Resolving alert:', alertId);
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to resolve alert');
         showToast('Alert resolved', 'success');
-        await loadAlertsView(); // Reload to show updated state
+        await loadAlertsView();
     } catch (error) {
         console.error('[Alerts] Error resolving alert:', error);
         showToast('Failed to resolve alert', 'error');

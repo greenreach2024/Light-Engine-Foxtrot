@@ -1323,14 +1323,14 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'read_skill_file',
-      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping), social-media-marketing (social media strategy, content planning, platform selection, influencer partnerships, AI content guidelines), device-setup-onboarding (IoT device discovery, sensor pairing, BLE setup, onboarding workflows, permissions, accessibility-adaptive setup). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, or any domain covered by a skill.',
+      description: 'Read an E.V.I.E. skill reference document. Skills contain peer-reviewed research, design principles, and operational frameworks for specific domains. Available skills: environmental-management-control (heat/humidity transport, fan effects, humidifier/dehumidifier strategy, HVAC layout, climate zoning, outdoor influences, light spectrum and transpiration, PPFD and gas exchange, LED vs HPS heat balance, canopy microclimate), security (cybersecurity for farm systems), label-document-generation (produce labels and food safety docs), lot-code-traceability (lot tracking and SFCR compliance), record-keeping-audit-trail (farm record keeping), social-media-marketing (social media strategy, content planning, platform selection, influencer partnerships, AI content guidelines), device-setup-onboarding (IoT device discovery, sensor pairing, BLE setup, onboarding workflows, permissions, accessibility-adaptive setup), ai-vision-rules (AI Vision task list, autonomous operations rules, phase completion tracking). Use this tool BEFORE answering questions about environmental management, lighting effects on climate, equipment placement, sensor interpretation, AI Vision tasks, or any domain covered by a skill.',
       parameters: {
         type: 'object',
         properties: {
           skill_name: {
             type: 'string',
-            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail, social-media-marketing, device-setup-onboarding',
-            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail', 'social-media-marketing', 'device-setup-onboarding']
+            description: 'The skill file name without extension. One of: environmental-management-control, security, label-document-generation, lot-code-traceability, record-keeping-audit-trail, social-media-marketing, device-setup-onboarding, ai-vision-rules',
+            enum: ['environmental-management-control', 'security', 'label-document-generation', 'lot-code-traceability', 'record-keeping-audit-trail', 'social-media-marketing', 'device-setup-onboarding', 'ai-vision-rules']
           }
         },
         required: ['skill_name']

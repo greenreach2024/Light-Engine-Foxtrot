@@ -14,6 +14,9 @@ logs/
 !.github/CLOUD_ARCHITECTURE.md
 !.github/SENSOR_DATA_PIPELINE.md
 .env
+*.pem
+*.key
+*.crt
 # data/  # Allow data/recipes-v2 to be deployed (recipes CSV files)
 test-api.sh
 execute

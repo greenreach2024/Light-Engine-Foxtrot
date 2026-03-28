@@ -2600,6 +2600,76 @@ router.get('/alerts', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/alerts/:id/acknowledge
+ * Mark an alert as acknowledged by the current admin user.
+ */
+router.post('/alerts/:id/acknowledge', async (req, res) => {
+    try {
+        const alertId = parseInt(req.params.id);
+        if (isNaN(alertId)) {
+            return res.status(400).json({ success: false, error: 'Invalid alert ID' });
+        }
+
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const adminUser = req.adminUser?.email || req.adminUser?.username || 'admin';
+
+        const result = await query(
+            `UPDATE farm_alerts
+             SET acknowledged = true, acknowledged_by = $1, acknowledged_at = NOW()
+             WHERE id = $2 AND acknowledged = false
+             RETURNING id`,
+            [adminUser, alertId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Alert not found or already acknowledged' });
+        }
+
+        res.json({ success: true, message: 'Alert acknowledged', alert_id: alertId });
+    } catch (error) {
+        console.error('[Admin API] Error acknowledging alert:', error);
+        res.status(500).json({ success: false, error: 'Failed to acknowledge alert' });
+    }
+});
+
+/**
+ * POST /api/admin/alerts/:id/resolve
+ * Mark an alert as resolved.
+ */
+router.post('/alerts/:id/resolve', async (req, res) => {
+    try {
+        const alertId = parseInt(req.params.id);
+        if (isNaN(alertId)) {
+            return res.status(400).json({ success: false, error: 'Invalid alert ID' });
+        }
+
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const result = await query(
+            `UPDATE farm_alerts
+             SET resolved = true, resolved_at = NOW()
+             WHERE id = $1 AND resolved = false
+             RETURNING id`,
+            [alertId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Alert not found or already resolved' });
+        }
+
+        res.json({ success: true, message: 'Alert resolved', alert_id: alertId });
+    } catch (error) {
+        console.error('[Admin API] Error resolving alert:', error);
+        res.status(500).json({ success: false, error: 'Failed to resolve alert' });
+    }
+});
+
+/**
  * GET /api/admin/farms/:farmId/config
  * Get farm configuration settings
  */

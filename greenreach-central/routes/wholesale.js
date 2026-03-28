@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { isDatabaseAvailable, query } from '../config/database.js';
@@ -112,7 +113,7 @@ function getWholesaleJwtSecret() {
   if (secret) return secret;
 
   // Dev-only fallback; production should set a real secret.
-  if (process.env.NODE_ENV !== 'production') return 'dev-greenreach-wholesale-secret';
+  if (process.env.NODE_ENV !== 'production') return crypto.randomBytes(32).toString('hex');
   return null;
 }
 

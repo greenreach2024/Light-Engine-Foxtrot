@@ -13023,7 +13023,7 @@ function requireBuyerAuth(req, res, next) {
     return res.status(401).json({ status: 'error', message: 'Missing bearer token' });
   }
 
-  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || 'dev-greenreach-wholesale-secret';
+  const secret = process.env.WHOLESALE_JWT_SECRET || process.env.JWT_SECRET || JWT_SECRET_KEY;
   if (!secret) {
     return res.status(500).json({ status: 'error', message: 'Wholesale auth not configured' });
   }

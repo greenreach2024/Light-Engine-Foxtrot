@@ -578,6 +578,38 @@ router.get('/:farmId/groups', async (req, res) => {
 });
 
 /**
+ * GET /api/farms/available
+ * List available farms for farm selector UI (POS, embedded pages).
+ * Returns active farms from database. No auth required so the POS
+ * farm-selector fallback works on both Central and LE hosts.
+ */
+router.get('/available', async (req, res) => {
+  try {
+    if (!isDatabaseAvailable()) {
+      return res.json({ ok: true, source: 'none', farms: [], message: 'Database not available' });
+    }
+
+    const result = await query(
+      "SELECT farm_id, name, farm_slug FROM farms WHERE status = $1 OR status IS NULL ORDER BY name",
+      ['active']
+    );
+
+    return res.json({
+      ok: true,
+      source: 'database',
+      farms: result.rows.map(f => ({
+        farm_id: f.farm_id,
+        name: f.name,
+        slug: f.farm_slug || f.farm_id
+      }))
+    });
+  } catch (error) {
+    logger.error('[farms/available] Error:', error);
+    res.status(500).json({ ok: false, error: 'Failed to list farms' });
+  }
+});
+
+/**
  * GET /api/farms/:farmId
  * Get farm details
  */

@@ -93,7 +93,11 @@ import { getDatabase } from '../config/database.js';
 import { trackAiUsage, estimateChatCost } from '../lib/ai-usage-tracker.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+const IS_PRODUCTION_GW = process.env.NODE_ENV === 'production' || String(process.env.DEPLOYMENT_MODE || '').toLowerCase() === 'cloud';
+if (IS_PRODUCTION_GW && !process.env.JWT_SECRET) {
+  logger.error('[Grant Wizard] FATAL: JWT_SECRET environment variable is required in production');
+}
+const JWT_SECRET = process.env.JWT_SECRET || (IS_PRODUCTION_GW ? null : 'grant-dev-' + Date.now());
 const RETENTION_MONTHS = 6; // 6 months from last sign-in, not from creation
 
 // Initialize OpenAI for AI drafting (grant-specific key takes priority)

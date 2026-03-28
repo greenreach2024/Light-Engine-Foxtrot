@@ -1642,6 +1642,21 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Strict rate limiter for authentication endpoints (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { success: false, error: 'Too many login attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/farm/auth/login', authLimiter);
+app.use('/api/farm-auth/login', authLimiter);
+app.use('/api/admin/auth/login', authLimiter);
+app.use('/api/wholesale/auth', authLimiter);
+app.use('/api/producer/auth', authLimiter);
+
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
   res.json({

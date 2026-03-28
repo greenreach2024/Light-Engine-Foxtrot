@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "description": "Light Engine Foxtrot single-server app",
   "main": "server-foxtrot.js",
   "scripts": {
