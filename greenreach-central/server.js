@@ -3260,6 +3260,7 @@ app.post('/api/farm/square/settings', express.json(), (req, res) => edgeProxy(re
 app.post('/api/farm/square/disconnect', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/disconnect', 'POST', req.body));
 app.post('/api/farm/square/test-payment', express.json(), (req, res) => edgeProxy(req, res, '/api/farm/square/test-payment', 'POST', req.body));
 
+app.use('/api', customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD (MUST precede /api/farm auth)
 app.use('/api/farms', authOrAdminMiddleware, farmRoutes);
 app.use('/api/farm', authOrAdminMiddleware, farmRoutes); // Singular route for profile endpoint
 app.use('/api/setup-wizard', authMiddleware, setupWizardRoutes); // First-time farm setup wizard
@@ -3698,7 +3699,6 @@ app.use('/api/users', authMiddleware, farmUsersRouter);     // Farm-scoped user 
 app.use('/api/user', authMiddleware, userRouter);            // /api/user/change-password
 app.use('/api/auth', deviceTokenRouter);                     // /api/auth/generate-device-token
 app.use('/api', farmSalesRouter);                            // /api/config/app, /api/farm-sales/*, /api/farm-auth/*, /api/demo/*
-app.use('/api', customProductsRouter);                       // /api/farm/products/* -- Custom product CRUD + image upload
 app.use('/api', authMiddleware, networkGrowersRouter);                       // /api/network/*, /api/growers/*, /api/contracts/*, /api/farms/list
 app.use('/api', authMiddleware, experimentRecordsRouter);                    // /api/sync/experiment-records, /api/experiment-records, /api/crop-benchmarks
 app.use('/api/wholesale', authMiddleware, wholesaleFulfillmentRouter);       // /api/wholesale/order-statuses, tracking, events

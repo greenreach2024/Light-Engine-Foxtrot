@@ -675,10 +675,10 @@
       <div id="customView" class="inventory-view">
         <div class="manual-inv-panel">
           <p style="color:#94a3b8; margin-bottom:1rem;">Create custom products for your farm inventory. Custom products support image uploads, wholesale catalog integration, and POS visibility.</p>
-          <form id="customProductForm" class="manual-inv-form" onsubmit="return false;" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
-            <div><label>Product Name *</label><input id="cp-name" placeholder="e.g. Farm Gift Box" required></div>
+          <form id="customProductForm" class="manual-inv-form" onsubmit="return false;" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 20px;">
+            <div><label>Product Name *</label><input id="cp-name" placeholder="e.g. Farm Gift Box" required style="width:100%;"></div>
             <div><label>Category</label>
-              <select id="cp-category">
+              <select id="cp-category" style="width:100%;">
                 <option value="Custom">Custom</option>
                 <option>Leafy Greens</option>
                 <option>Herbs</option>
@@ -694,19 +694,28 @@
             <div><label>Wholesale Price ($)</label><input id="cp-wholesale" type="number" step="0.01" min="0" placeholder="0.00"></div>
             <div><label>Quantity</label><input id="cp-qty" type="number" step="0.01" min="0" placeholder="0" value="0"></div>
             <div><label>Unit</label>
-              <select id="cp-unit">
+              <select id="cp-unit" style="width:100%;">
                 <option value="unit">Each</option>
+                <option value="oz">Ounce (oz)</option>
                 <option value="lb">Pound (lb)</option>
-                <option value="pint">Pint</option>
                 <option value="bunch">Bunch</option>
+                <option value="head">Head</option>
+                <option value="pint">Pint</option>
+                <option value="half-pint">Half Pint</option>
+                <option value="quart">Quart</option>
+                <option value="bag">Bag</option>
+                <option value="clamshell">Clamshell</option>
+                <option value="flat">Flat</option>
+                <option value="dozen">Dozen</option>
+                <option value="case">Case</option>
               </select>
             </div>
-            <div style="display:flex;flex-direction:column;gap:6px;padding-top:1.2rem;">
-              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;"><input type="checkbox" id="cp-taxable" checked style="width:16px;height:16px;"> Taxable</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;"><input type="checkbox" id="cp-wholesale-flag" checked style="width:16px;height:16px;"> Available for wholesale</label>
+            <div style="display:flex;flex-direction:column;gap:8px;justify-content:center;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;"><input type="checkbox" id="cp-taxable" checked style="width:18px;height:18px;accent-color:#22c55e;"> Taxable</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;"><input type="checkbox" id="cp-wholesale-flag" checked style="width:18px;height:18px;accent-color:#22c55e;"> Available for wholesale</label>
             </div>
-            <div><label>Description</label><textarea id="cp-desc" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.9rem;resize:vertical;" placeholder="Optional product description"></textarea></div>
-            <div style="padding-top:1.2rem;"><button class="btn-add" onclick="submitCustomProduct()">+ Create Product</button></div>
+            <div style="grid-column: 1 / -1;"><label>Description</label><textarea id="cp-desc" rows="5" style="width:100%;padding:10px 12px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.9rem;resize:vertical;min-height:120px;" placeholder="Optional product description -- ingredients, sizing, special notes, etc."></textarea></div>
+            <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;"><button class="btn-add" onclick="submitCustomProduct()" style="padding:10px 28px;font-size:1rem;">+ Create Product</button></div>
           </form>
           <table class="manual-tbl" style="margin-top:1.5rem;">
             <thead><tr>
