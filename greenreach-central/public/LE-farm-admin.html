@@ -3,27 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- DEBUG: LE-farm-admin.html - Built 2026-02-08 14:45 - Commit fea5f47 -->
     <title>Farm Admin - Light Engine</title>
-    <script>
-      // DEBUG: Version tracking and authentication status
-      const PAGE_VERSION = {
-        file: 'LE-farm-admin.html',
-        loaded: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        url: window.location.href,
-        hasToken: !!(localStorage.getItem('token') || sessionStorage.getItem('token')),
-        tokenPreview: (localStorage.getItem('token') || sessionStorage.getItem('token') || '').substring(0, 20)
-      };
-      console.debug('🔍 PAGE LOAD DEBUG:', PAGE_VERSION);
-      console.debug('🔍 Cache headers:', document.lastModified);
-      if (!PAGE_VERSION.hasToken) {
-        console.warn('⚠️  NO AUTH TOKEN FOUND - You may need to log in at: ' + window.location.origin + '/farm-admin-login.html');
-      } else {
-        console.log('✅ Auth token present:', PAGE_VERSION.tokenPreview + '...');
-      }
-      window.__PAGE_VERSION__ = PAGE_VERSION;
-    </script>
     <script src="./js/console-guard.js"></script>
     <link rel="stylesheet" href="/styles/styles.charlie.css?v=2025-12-10-01">
     <link rel="stylesheet" href="/styles/nav-color-palette.css">
@@ -1356,6 +1336,18 @@
                 </div>
 
                 <div class="nav-section">
+                    <div class="nav-section-title">Research</div>
+                    <a href="#iframe-view" class="nav-item" data-section="iframe-view" data-url="/views/research-workspace.html" data-help-title="Research Workspace" data-help="Run studies, manage datasets, maintain electronic lab notebooks, and coordinate collaborators. Requires research-tier subscription.">
+                        <span class="nav-item-icon">&#x1F52C;</span>
+                        Research Workspace
+                    </a>
+                    <a href="/research-subscription.html" class="nav-item" data-help-title="Research Overview" data-help="View available research platform features including study design, data management, compliance, and collaboration tools.">
+                        <span class="nav-item-icon">&#x25A0;</span>
+                        Research Overview
+                    </a>
+                </div>
+
+                <div class="nav-section">
                     <div class="nav-section-title">Intelligence</div>
                     <a href="/evie-core.html" class="nav-item" data-help-title="E.V.I.E. Core" data-help="Open the E.V.I.E. farm intelligence dashboard. Monitor farm health, get AI recommendations, and interact with your farm intelligence layer.">
                         <span class="nav-item-icon">■</span>
@@ -1428,7 +1420,7 @@
                 <div class="card">
                     <h2>Quick Actions</h2>
                     <div class="quick-actions">
-                        <a href="/views/farm-summary.html" class="action-card" data-help-title="View Farm" data-help="Opens the Farm Summary dashboard where you can monitor all growing zones, environmental conditions, and active alerts. This is your real-time operations view.">
+                        <a href="#iframe-view" class="action-card" data-section="iframe-view" data-url="/views/farm-summary.html" data-help-title="View Farm" data-help="Opens the Farm Summary dashboard where you can monitor all growing zones, environmental conditions, and active alerts. This is your real-time operations view.">
                             <div class="action-icon">FS</div>
                             <div class="action-title">View Farm</div>
                             <div class="action-desc">Monitor zones, groups & growth</div>
@@ -2896,7 +2888,7 @@
                     <div class="header-actions">
                         <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 14px;">
                             <input type="checkbox" id="unitToggle" onchange="togglePricingUnit()" style="width: 16px; height: 16px;">
-                            <span>Show per 25g (default: per oz)</span>
+                            <span>Show per 100g (default: per lb)</span>
                         </label>
                         <button class="btn" onclick="openAIPricingAssistant()" style="background: linear-gradient(135deg, var(--accent-purple) 0%, #6d28d9 100%); color: white; border: none;">
                             AI Pricing Assistant
@@ -2912,7 +2904,7 @@
                 <div class="card">
                     <h2>Crop Pricing</h2>
                     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                        Set retail pricing and wholesale discount tiers. Weight-based crops auto-convert between oz and 25g, while pint and each pricing stays fixed.
+                        Set retail pricing and wholesale discount tiers. Weight-based crops auto-convert between lb and 100g, while pint and each pricing stays fixed.
                     </p>
                     
                     <div class="table-container">
@@ -2920,7 +2912,7 @@
                             <thead>
                                 <tr>
                                     <th>Crop</th>
-                                    <th>Retail <span id="unit-retail">($/oz)</span></th>
+                                    <th>Retail <span id="unit-retail">($/lb)</span></th>
                                     <th>Floor<br>Price</th>
                                     <th>SKU<br>Factor</th>
                                     <th>Formula<br>WS Price</th>

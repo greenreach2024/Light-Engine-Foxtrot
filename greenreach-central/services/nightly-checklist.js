@@ -167,8 +167,8 @@ async function buildFayeBusinessBrief() {
     // Farm network health
     const farmStats = await query(`
       SELECT COUNT(*) AS total_farms,
-             COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '15 minutes') AS online,
-             COUNT(*) FILTER (WHERE last_seen_at < NOW() - INTERVAL '1 hour') AS stale
+             COUNT(*) FILTER (WHERE COALESCE(last_seen_at, "timestamp") > NOW() - INTERVAL '15 minutes') AS online,
+             COUNT(*) FILTER (WHERE COALESCE(last_seen_at, "timestamp") < NOW() - INTERVAL '1 hour') AS stale
       FROM farm_heartbeats
     `).catch(() => ({ rows: [{}] }));
     brief.sections.farm_health = farmStats.rows[0] || {};

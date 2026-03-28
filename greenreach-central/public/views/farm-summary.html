@@ -1604,7 +1604,7 @@
       border-bottom: 1px solid rgba(34, 197, 94, 0.3);
     }
   </style>
-  <link rel="stylesheet" href="/styles/farm-assistant.css">
+  <!-- farm-assistant.css removed -- superseded by EVIE (evie-presence.js) -->
 </head>
 <body class="le-theme">
   <div class="header">
@@ -3937,10 +3937,12 @@
               <!-- Groups within this zone -->
               ${zoneGroups.length > 0 ? `
                 <div style="margin-top: 16px;">
-                  <div style="font-weight: 600; font-size: 0.9rem; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Growing Groups (${zoneGroups.length})
+                  <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-arrow').textContent = this.nextElementSibling.style.display === 'none' ? '\\u25B6' : '\\u25BC';" style="font-weight: 600; font-size: 0.9rem; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none;">
+                    <span class="toggle-arrow" style="margin-right: 6px;">&#9654;</span>Growing Groups (${zoneGroups.length})
                   </div>
-                  ${groupsHtml}
+                  <div style="display: none;">
+                    ${groupsHtml}
+                  </div>
                 </div>
               ` : `
                 <div style="margin-top: 16px; padding: 20px; background: #f8fafc; border-radius: 8px; text-align: center; color: #64748b; font-style: italic;">
@@ -8445,7 +8447,7 @@
       }, 500);
     });
   </script>
-  <script src="/js/farm-assistant.js?v=20260319b"></script>
+  <!-- farm-assistant.js removed -- superseded by EVIE -->
   
   <!-- Harvest Predictions AI Component (P3) -->
   <script src="/harvest-predictions.js?v=20260222"></script>

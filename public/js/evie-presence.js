@@ -39,6 +39,32 @@
       : { 'Content-Type': 'application/json' };
   }
 
+  function getFarmScopeKey() {
+    var farmId = localStorage.getItem('farm_id') || sessionStorage.getItem('farm_id')
+      || localStorage.getItem('farmId') || sessionStorage.getItem('farmId')
+      || 'default';
+    return 'evie_presence_conversation_id:' + farmId;
+  }
+
+  function loadConversationId() {
+    try {
+      return localStorage.getItem(getFarmScopeKey()) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveConversationId(id) {
+    if (!id) return;
+    try {
+      localStorage.setItem(getFarmScopeKey(), id);
+    } catch (_) {
+      // best-effort persistence
+    }
+  }
+
+  conversationId = loadConversationId();
+
   // ── DOM Construction ─────────────────────────────────────────
 
   function buildOrb(sizeClass) {
@@ -319,6 +345,7 @@
       var data = await resp.json();
       if (data.ok !== false && data.reply) {
         conversationId = data.conversation_id || conversationId;
+        saveConversationId(conversationId);
         if (data.tool_calls && data.tool_calls.length > 0) {
           var interAgentTools = ['escalate_to_faye', 'reply_to_faye', 'get_faye_directives'];
           data.tool_calls.forEach(function (t) {

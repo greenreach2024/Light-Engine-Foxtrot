@@ -713,3 +713,45 @@ The farm inventory dashboard (`greenreach-central/public/views/farm-inventory.ht
 - `farm_data.updated_at` advances for telemetry row
 
 **Lesson:** When key migration leaves fallback entries in non-active state, any DB key drift can deadlock sync auth. Heartbeat should reconcile `farms.api_key` from authenticated requests to avoid manual DB intervention.
+
+### 2026-03-28: EVIE/FAYE Chat Memory Lost After UI Reload
+
+**Problem:** EVIE and FAYE appeared to "forget" chat context after page refresh even though backend conversation tables were active.
+
+**Root Cause:** Presence frontends initialized `conversationId` in memory only (`null` on reload) and did not restore it from browser storage. Backend memory persisted by `(farm_id/admin_id, conversation_id)`, so missing `conversation_id` from the client caused a new conversation chain each reload.
+
+**Fix Applied:**
+1. Added scoped browser persistence for conversation IDs:
+  - `public/js/evie-presence.js` and root mirror `../public/js/evie-presence.js`: `evie_presence_conversation_id:<farmId>`
+  - `public/js/faye-presence.js`: `faye_presence_conversation_id:<admin_email>`
+2. On successful chat response, scripts now save returned `conversation_id` and reuse it on subsequent requests.
+
+**Data Path:** Presence UI localStorage key -> `POST /api/assistant/chat` or `POST /api/admin/assistant/chat` with `conversation_id` -> conversation table upsert/read (`conversation_history` or `admin_assistant_conversations`)
+
+**Verification Snapshot:**
+- Send message in EVIE/FAYE presence panel, refresh page, send follow-up.
+- Follow-up request continues prior conversation thread instead of starting a new UUID thread.
+
+**Lesson:** Persistent backend memory requires client-side conversation key continuity. UI reload-safe conversation ID storage is mandatory for perceived memory.
+
+### 2026-03-28: Security Audit Failed on Missing `farm_heartbeats.last_seen_at`
+
+**Problem:** Security audit routines failed with missing-column errors (`last_seen_at`) and could not complete stale-connection checks.
+
+**Root Cause:** Legacy `farm_heartbeats` schema only guaranteed `timestamp`, `cpu_usage`, `memory_usage`, `disk_usage`. Security tooling later assumed compatibility columns (`last_seen_at`, `farm_name`, percent fields) existed.
+
+**Fix Applied:**
+1. Added migration 048 in `config/database.js`:
+  - Adds `last_seen_at`, `farm_name`, `cpu_percent`, `memory_percent`, `disk_percent`, `uptime_seconds`, `node_version`
+  - Backfills from existing columns (`timestamp` and usage fields)
+  - Adds index on `last_seen_at`
+2. Updated heartbeat write path (`routes/farms.js`) to populate compatibility columns on insert.
+3. Hardened `run_security_audit` stale heartbeat query to use `COALESCE(last_seen_at, timestamp)`.
+
+**Data Path:** `POST /api/farms/:farmId/heartbeat` -> `farm_heartbeats` insert (compatibility fields) -> `run_security_audit` / freshness checks -> stale-connection findings
+
+**Verification Snapshot:**
+- `run_security_audit` executes without missing-column failure.
+- Stale connection checks return finding objects instead of query errors.
+
+**Lesson:** Security analytics must include explicit schema compatibility migrations whenever they depend on new telemetry fields.

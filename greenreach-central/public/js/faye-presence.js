@@ -34,6 +34,30 @@
       : { 'Content-Type': 'application/json' };
   }
 
+  function getAdminScopeKey() {
+    var adminId = localStorage.getItem('admin_email') || sessionStorage.getItem('admin_email') || 'default';
+    return 'faye_presence_conversation_id:' + adminId;
+  }
+
+  function loadConversationId() {
+    try {
+      return localStorage.getItem(getAdminScopeKey()) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveConversationId(id) {
+    if (!id) return;
+    try {
+      localStorage.setItem(getAdminScopeKey(), id);
+    } catch (_) {
+      // best-effort persistence
+    }
+  }
+
+  conversationId = loadConversationId();
+
   // -- Text Utilities -----------------------------------------------
   function esc(s) {
     if (!s) return '';
@@ -394,6 +418,7 @@
 
       if (data.ok !== false) {
         conversationId = data.conversation_id;
+        saveConversationId(conversationId);
 
         // Tool badges
         if (data.tool_calls && data.tool_calls.length > 0) {

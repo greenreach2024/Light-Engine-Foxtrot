@@ -19873,6 +19873,97 @@ function getCropStageAtDay(planId, daysOld) {
   return 'Seedling';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Manual inventory + custom products proxy -- forwards DB-backed endpoints
+// to Central (LE handles /current, /forecast locally from groups.json)
+// ═══════════════════════════════════════════════════════════════════════════
+app.use('/api/inventory/manual', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 8000,
+  proxyTimeout: 8000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (p) => (p.startsWith('/api/inventory/manual') ? p : `/api/inventory/manual${p}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.originalUrl;
+    console.log(`[-> inventory/manual] ${req.method} ${outgoingPath} -> ${getCentralApiTarget()}${outgoingPath}`);
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/inventory/manual] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-inventory', detail: String(err) }));
+  }
+}));
+
+// Farm-specific inventory list proxy (GET /api/inventory/FARM-xxxxx)
+app.get('/api/inventory/:farmId', (req, res, next) => {
+  const { farmId } = req.params;
+  if (!farmId || !farmId.startsWith('FARM-')) return next();
+  const target = getCentralApiTarget();
+  const url = `${target}/api/inventory/${encodeURIComponent(farmId)}`;
+  console.log(`[-> inventory/:farmId] GET ${req.originalUrl} -> ${url}`);
+
+  const headers = {};
+  if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
+  if (req.headers['x-farm-id']) headers['x-farm-id'] = req.headers['x-farm-id'];
+
+  fetch(url, { headers })
+    .then(async (upstream) => {
+      const body = await upstream.text();
+      res.status(upstream.status)
+        .set('Content-Type', upstream.headers.get('content-type') || 'application/json')
+        .send(body);
+    })
+    .catch(err => {
+      console.warn('[proxy:inventory/:farmId] error:', err?.message || err);
+      res.status(502).json({ error: 'proxy_error', target: 'central-inventory', detail: String(err) });
+    });
+});
+
+// Custom farm products proxy -- forwards to Central for DB-backed CRUD + image upload
+app.use('/api/farm/products', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (p) => (p.startsWith('/api/farm/products') ? p : `/api/farm/products${p}`),
+  onProxyReq(proxyReq, req) {
+    console.log(`[-> farm/products] ${req.method} ${req.originalUrl} -> ${getCentralApiTarget()}${req.originalUrl}`);
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+    proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, x-farm-id';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/farm/products] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-products', detail: String(err) }));
+  }
+}));
+
 /**
  * GET /api/inventory/current
  * Returns current inventory summary with detailed tray data
@@ -22820,6 +22911,58 @@ app.use('/api/accounting', proxyCorsMiddleware, createProxyMiddleware({
   }
 }));
 
+// Research platform API proxy -- forwards /api/research/* to Central
+app.use('/api/research', proxyCorsMiddleware, createProxyMiddleware({
+  target: getCentralApiTarget(),
+  router: () => getCentralApiTarget(),
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'debug',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/research') ? path : `/api/research${path}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.url.startsWith('/api/research') ? req.url : `/api/research${req.url}`;
+    console.log(`[-> research] ${req.method} ${req.originalUrl} -> ${getCentralApiTarget()}${outgoingPath}`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    if (req.headers['x-farm-id']) {
+      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+      const existingVary = proxyRes.headers['vary'];
+      if (existingVary) {
+        const varyParts = String(existingVary).split(/,\s*/);
+        if (!varyParts.includes('Origin')) {
+          proxyRes.headers['vary'] = `${existingVary}, Origin`;
+        }
+      } else {
+        proxyRes.headers['vary'] = 'Origin';
+      }
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    const requestedHeaders = req.headers?.['access-control-request-headers'];
+    if (requestedHeaders && typeof requestedHeaders === 'string') {
+      proxyRes.headers['access-control-allow-headers'] = requestedHeaders;
+    } else if (!proxyRes.headers['access-control-allow-headers']) {
+      proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/research] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-research', detail: String(err) }));
+  }
+}));
+
 
 // Circuit-breaker short-circuit when controller is unhealthy  
 app.use('/api', (req, res, next) => {
@@ -22876,12 +23019,14 @@ if (!isControllerDisabled) {
         '/farm/auth/',
         '/farm-sales/',
         '/accounting/',
+        '/research/',      // Research platform - proxied to Central
         '/api/accounting/',
         '/wholesale/',
         '/market-intelligence',
         '/rooms',
         '/groups',
         '/farm/info',
+        '/farm/products',  // Custom products - proxied to Central
         '/bus-mappings',
         '/succession',     // P4: Succession planner endpoints
         '/devices/scan',   // P1: Device scanner endpoint

@@ -1677,7 +1677,7 @@ export const ADMIN_TOOL_CATALOG = {
           // 3. Stale farm connections (potential security issue)
           const staleFarms = await dbQuery(
             `SELECT COUNT(*) AS cnt FROM farm_heartbeats
-             WHERE last_seen_at < NOW() - INTERVAL '24 hours'`
+             WHERE COALESCE(last_seen_at, "timestamp") < NOW() - INTERVAL '24 hours'`
           );
           const staleCount = Number(staleFarms.rows[0]?.cnt || 0);
           if (staleCount > 0) {
@@ -1706,6 +1706,48 @@ export const ADMIN_TOOL_CATALOG = {
             findings.push({ category: 'shadow_validation', severity: shadowStats.accuracy < 0.8 ? 'medium' : 'info', detail: `Shadow mode accuracy: ${acc}% over ${shadowStats.total} decisions (${days}d)` });
             if (shadowStats.accuracy < 0.8) riskScore += 2;
           }
+
+          // 7. Statistical auth anomaly check (recent 24h vs baseline)
+          const authRecent = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM admin_alerts
+             WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%login%' OR title ILIKE '%denied%')
+               AND created_at > NOW() - INTERVAL '24 hours'`
+          );
+          const authBaseline = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM admin_alerts
+             WHERE (domain = 'auth' OR title ILIKE '%auth%' OR title ILIKE '%login%' OR title ILIKE '%denied%')
+               AND created_at > NOW() - INTERVAL '7 days'`
+          );
+          const recentAuth = Number(authRecent.rows[0]?.cnt || 0);
+          const baselineDailyAuth = Number(authBaseline.rows[0]?.cnt || 0) / 7;
+          if (recentAuth > Math.max(3, baselineDailyAuth * 2.5)) {
+            findings.push({
+              category: 'auth_anomaly',
+              severity: recentAuth > Math.max(6, baselineDailyAuth * 4) ? 'high' : 'medium',
+              detail: `${recentAuth} auth-related alerts in last 24h vs ${baselineDailyAuth.toFixed(1)} daily baseline`
+            });
+            riskScore += recentAuth > Math.max(6, baselineDailyAuth * 4) ? 3 : 2;
+          }
+
+          // 8. Insider-threat heuristic (off-hours admin action concentration)
+          const offHoursActions = await dbQuery(
+            `SELECT COUNT(*) AS cnt FROM faye_decision_log
+             WHERE created_at > NOW() - ($1 || ' days')::interval
+               AND EXTRACT(HOUR FROM created_at) IN (22, 23, 0, 1, 2, 3, 4, 5)`,
+            [days]
+          );
+          const offHoursCount = Number(offHoursActions.rows[0]?.cnt || 0);
+          if (actionCount > 0) {
+            const offHoursPct = (offHoursCount / actionCount) * 100;
+            if (offHoursCount >= 5 && offHoursPct >= 30) {
+              findings.push({
+                category: 'insider_risk_signal',
+                severity: offHoursPct >= 50 ? 'high' : 'medium',
+                detail: `${offHoursCount} off-hours admin actions (${offHoursPct.toFixed(1)}% of actions in ${days}d)`
+              });
+              riskScore += offHoursPct >= 50 ? 3 : 1;
+            }
+          }
         }
 
         const maxRisk = 20;
@@ -1717,6 +1759,14 @@ export const ADMIN_TOOL_CATALOG = {
           period_days: days,
           risk_level: riskLevel,
           risk_score: riskScore,
+          explainability: {
+            methodology: 'rule-plus-baseline scoring over auth alerts, unresolved criticals, heartbeat freshness, action patterns, and shadow validation',
+            data_sources: ['admin_alerts', 'farm_heartbeats', 'faye_decision_log', 'faye-policy shadow stats'],
+            confidence_notes: [
+              'Heartbeat and critical-alert findings are high confidence operational signals.',
+              'Behavioral and anomaly findings are advisory and should be correlated with deployment and maintenance windows.'
+            ]
+          },
           finding_count: findings.length,
           findings
         };
@@ -3059,10 +3109,36 @@ export const ADMIN_TOOL_CATALOG = {
 
         const limit = Math.min(parseInt(params.limit, 10) || 20, 50);
         const results = {};
+        const candidateRoots = Array.from(new Set([leRoot, process.cwd(), '/var/app/current']));
+
+        let repoRoot = null;
+        for (const candidate of candidateRoots) {
+          try {
+            const inside = execSync(`git -C "${candidate}" rev-parse --is-inside-work-tree`, { encoding: 'utf8', timeout: 3000 }).trim();
+            if (inside === 'true') {
+              repoRoot = candidate;
+              break;
+            }
+          } catch {
+            // try next candidate
+          }
+        }
+
+        if (!repoRoot) {
+          results.repository_access = {
+            ok: false,
+            reason: 'git metadata not available in current runtime',
+            checked_paths: candidateRoots,
+            note: 'This is expected in some deployment bundles. Use CI artifacts or external SCM integrations for commit history.'
+          };
+        } else {
+          results.repository_access = { ok: true, repo_root: repoRoot };
+        }
 
         // Recent git commits
         try {
-          let gitCmd = `git -C "${leRoot}" log --oneline --no-decorate -n ${limit}`;
+          if (!repoRoot) throw new Error('git repository unavailable');
+          let gitCmd = `git -C "${repoRoot}" log --oneline --no-decorate -n ${limit}`;
           if (params.path_filter) {
             // Sanitize path filter - only allow safe characters
             const safePath = params.path_filter.replace(/[^a-zA-Z0-9_.\/\-*]/g, '');
@@ -3079,7 +3155,8 @@ export const ADMIN_TOOL_CATALOG = {
 
         // Files changed in last commit
         try {
-          const diff = execSync(`git -C "${leRoot}" diff --name-only HEAD~1`, { encoding: 'utf8', timeout: 5000 });
+          if (!repoRoot) throw new Error('git repository unavailable');
+          const diff = execSync(`git -C "${repoRoot}" diff --name-only HEAD~1`, { encoding: 'utf8', timeout: 5000 });
           results.last_commit_files = diff.trim().split('\n');
         } catch (e) {
           results.last_commit_files = { error: e.message };
@@ -3087,8 +3164,9 @@ export const ADMIN_TOOL_CATALOG = {
 
         // Current branch and status
         try {
-          const branch = execSync(`git -C "${leRoot}" branch --show-current`, { encoding: 'utf8', timeout: 3000 }).trim();
-          const status = execSync(`git -C "${leRoot}" status --short`, { encoding: 'utf8', timeout: 3000 }).trim();
+          if (!repoRoot) throw new Error('git repository unavailable');
+          const branch = execSync(`git -C "${repoRoot}" branch --show-current`, { encoding: 'utf8', timeout: 3000 }).trim();
+          const status = execSync(`git -C "${repoRoot}" status --short`, { encoding: 'utf8', timeout: 3000 }).trim();
           results.git_state = { branch, uncommitted_changes: status || '(clean)' };
         } catch (e) {
           results.git_state = { error: e.message };

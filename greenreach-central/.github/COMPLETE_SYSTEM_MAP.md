@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.5.0
-**Date**: March 27, 2026
-**Last Updated**: March 27, 2026 -- v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
+**Version**: 1.6.0
+**Date**: March 28, 2026
+**Last Updated**: March 28, 2026 -- v1.6.0: Security audit schema compatibility (farm_heartbeats last_seen_at + compatibility columns), run_security_audit anomaly/explainability expansion, EVIE/FAYE chat memory persistence restored in presence UIs, recent-changes repository diagnostics hardening
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 

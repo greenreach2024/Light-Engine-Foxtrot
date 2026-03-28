@@ -631,7 +631,8 @@
         <button class="view-tab active" onclick="switchView('location', event)">By Location</button>
         <button class="view-tab" onclick="switchView('crop', event)">By Crop</button>
         <button class="view-tab" onclick="switchView('harvest', event)">By Harvest Time</button>
-        <button class="view-tab" onclick="switchView('manual', event)">📦 Manual Entry</button>
+        <button class="view-tab" onclick="switchView('manual', event)">Manual Entry</button>
+        <button class="view-tab" onclick="switchView('custom', event)">Custom Products</button>
       </div>
       <div id="locationView" class="inventory-view active">
         <!-- Dynamic location tree -->
@@ -667,6 +668,51 @@
               <th>Product</th><th>Auto (lbs)</th><th>Manual (lbs)</th><th>Total</th><th>Retail</th><th>Wholesale</th><th>Source</th><th>Actions</th>
             </tr></thead>
             <tbody id="manualTbody"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading inventory…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Custom Products View -->
+      <div id="customView" class="inventory-view">
+        <div class="manual-inv-panel">
+          <p style="color:#94a3b8; margin-bottom:1rem;">Create custom products for your farm inventory. Custom products support image uploads, wholesale catalog integration, and POS visibility.</p>
+          <form id="customProductForm" class="manual-inv-form" onsubmit="return false;" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+            <div><label>Product Name *</label><input id="cp-name" placeholder="e.g. Farm Gift Box" required></div>
+            <div><label>Category</label>
+              <select id="cp-category">
+                <option value="Custom">Custom</option>
+                <option>Leafy Greens</option>
+                <option>Herbs</option>
+                <option>Microgreens</option>
+                <option>Vegetables</option>
+                <option>Fruit</option>
+                <option>Flowers</option>
+                <option>Value Added</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div><label>Retail Price ($)</label><input id="cp-retail" type="number" step="0.01" min="0" placeholder="0.00"></div>
+            <div><label>Wholesale Price ($)</label><input id="cp-wholesale" type="number" step="0.01" min="0" placeholder="0.00"></div>
+            <div><label>Quantity</label><input id="cp-qty" type="number" step="0.01" min="0" placeholder="0" value="0"></div>
+            <div><label>Unit</label>
+              <select id="cp-unit">
+                <option value="unit">Each</option>
+                <option value="lb">Pound (lb)</option>
+                <option value="pint">Pint</option>
+                <option value="bunch">Bunch</option>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;padding-top:1.2rem;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;"><input type="checkbox" id="cp-taxable" checked style="width:16px;height:16px;"> Taxable</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;"><input type="checkbox" id="cp-wholesale-flag" checked style="width:16px;height:16px;"> Available for wholesale</label>
+            </div>
+            <div><label>Description</label><textarea id="cp-desc" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.9rem;resize:vertical;" placeholder="Optional product description"></textarea></div>
+            <div style="padding-top:1.2rem;"><button class="btn-add" onclick="submitCustomProduct()">+ Create Product</button></div>
+          </form>
+          <table class="manual-tbl" style="margin-top:1.5rem;">
+            <thead><tr>
+              <th>Image</th><th>Product</th><th>Category</th><th>Qty</th><th>Retail</th><th>Wholesale</th><th>Taxable</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="customTbody"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading custom products...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -956,16 +1002,28 @@
         }
 
         console.log('[loadInventory] Rendering...');
-        renderSummaryCards(enrichedCurrent, uniqueCrops.size);
-        renderForecast(enrichedForecast);
-        renderInventoryByLocation(enrichedCurrent, groupsData, enrichedForecast, roomIdToName);
-        renderInventoryByCrop(enrichedCurrent, groupsData, enrichedForecast);
-        renderInventoryByHarvest(enrichedCurrent, groupsData, enrichedForecast, roomIdToName);
+        const renderSteps = [
+          ['SummaryCards', () => renderSummaryCards(enrichedCurrent, uniqueCrops.size)],
+          ['Forecast', () => renderForecast(enrichedForecast)],
+          ['ByLocation', () => renderInventoryByLocation(enrichedCurrent, groupsData, enrichedForecast, roomIdToName)],
+          ['ByCrop', () => renderInventoryByCrop(enrichedCurrent, groupsData, enrichedForecast)],
+          ['ByHarvest', () => renderInventoryByHarvest(enrichedCurrent, groupsData, enrichedForecast, roomIdToName)]
+        ];
+        let renderErrors = 0;
+        for (const [name, fn] of renderSteps) {
+          try { fn(); } catch (renderErr) {
+            renderErrors++;
+            console.error(`[loadInventory] Render ${name} failed:`, renderErr);
+          }
+        }
+        if (renderErrors > 0) {
+          console.warn(`[loadInventory] ${renderErrors} render step(s) failed but page partially loaded`);
+        }
         console.log('[loadInventory] Rendering complete!');
       } catch (error) {
         console.error('[loadInventory] Error:', error);
         console.error('[loadInventory] Error stack:', error.stack);
-        showError('Failed to load inventory data. Please try again.');
+        showError('Failed to load inventory data. Check the browser console for details.');
       } finally {
         hideLoading();
       }
@@ -1845,6 +1903,132 @@
     window.closeEditModal = closeEditModal;
     window.saveEdit = saveEdit;
 
+    // Custom Products CRUD
+    async function loadCustomProducts() {
+      var tbody = document.getElementById('customTbody');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading custom products...</td></tr>';
+      try {
+        var resp = await fetchWithFarmAuth(API_BASE + '/api/farm/products');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Unknown error');
+        renderCustomProducts(data.products || []);
+      } catch (err) {
+        console.error('[CustomProducts] Load error:', err.message);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;">Failed to load custom products: ' + escHtml(err.message) + '</td></tr>';
+      }
+    }
+
+    function renderCustomProducts(products) {
+      var tbody = document.getElementById('customTbody');
+      if (!products.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">No custom products yet. Use the form above to create one.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(function(p) {
+        var imgCell = p.thumbnail_url
+          ? '<img src="' + escHtml(p.thumbnail_url) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="triggerImageUpload(' + p.id + ')">'
+          : '<div onclick="triggerImageUpload(' + p.id + ')" style="width:48px;height:48px;border:1px dashed #475569;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;font-size:0.7rem;">+ IMG</div>';
+        var retail = p.retail_price != null ? ('$' + Number(p.retail_price).toFixed(2)) : '--';
+        var wholesale = p.wholesale_price != null ? ('$' + Number(p.wholesale_price).toFixed(2)) : '--';
+        var taxBadge = p.is_taxable ? '<span style="color:#22c55e;">Yes</span>' : '<span style="color:#64748b;">No</span>';
+        var safeName = escHtml(p.product_name || '').replace(/'/g, "\\'");
+        return '<tr>'
+          + '<td>' + imgCell + '</td>'
+          + '<td>' + escHtml(p.product_name) + (p.sku ? '<br><span style="font-size:0.75rem;color:#64748b;">' + escHtml(p.sku) + '</span>' : '') + '</td>'
+          + '<td>' + escHtml(p.category || '--') + '</td>'
+          + '<td>' + (p.quantity_available != null ? Number(p.quantity_available) : 0) + ' ' + escHtml(p.unit || '') + '</td>'
+          + '<td>' + retail + '</td>'
+          + '<td>' + wholesale + '</td>'
+          + '<td>' + taxBadge + '</td>'
+          + '<td>'
+          + '<button onclick="triggerImageUpload(' + p.id + ')" style="background:none;border:1px solid #334155;color:#94a3b8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;margin-right:4px;" title="Upload image">IMG</button>'
+          + '<button onclick="deleteCustomProduct(' + p.id + ', \'' + safeName + '\')" style="background:none;border:1px solid #7f1d1d;color:#ef4444;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;" title="Delete product">DEL</button>'
+          + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    async function submitCustomProduct() {
+      var nameEl = document.getElementById('cp-name');
+      var pname = nameEl.value.trim();
+      if (!pname) { nameEl.focus(); return alert('Product name is required.'); }
+
+      var body = {
+        product_name: pname,
+        category: document.getElementById('cp-category').value,
+        retail_price: parseFloat(document.getElementById('cp-retail').value) || null,
+        wholesale_price: parseFloat(document.getElementById('cp-wholesale').value) || null,
+        quantity_available: parseFloat(document.getElementById('cp-qty').value) || 0,
+        unit: document.getElementById('cp-unit').value,
+        is_taxable: document.getElementById('cp-taxable').checked,
+        available_for_wholesale: document.getElementById('cp-wholesale-flag').checked,
+        description: document.getElementById('cp-desc').value.trim() || null,
+      };
+
+      try {
+        var resp = await fetchWithFarmAuth(API_BASE + '/api/farm/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.errors ? data.errors.join(', ') : (data.error || 'Create failed'));
+        document.getElementById('customProductForm').reset();
+        document.getElementById('cp-taxable').checked = true;
+        document.getElementById('cp-wholesale-flag').checked = true;
+        document.getElementById('cp-qty').value = '0';
+        await loadCustomProducts();
+      } catch (err) {
+        console.error('[CustomProducts] Create error:', err.message);
+        alert('Failed to create product: ' + err.message);
+      }
+    }
+
+    async function deleteCustomProduct(id, pname) {
+      if (!confirm('Deactivate custom product "' + pname + '"? This can be reversed.')) return;
+      try {
+        var resp = await fetchWithFarmAuth(API_BASE + '/api/farm/products/' + id, { method: 'DELETE' });
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+        await loadCustomProducts();
+      } catch (err) {
+        console.error('[CustomProducts] Delete error:', err.message);
+        alert('Failed to delete product: ' + err.message);
+      }
+    }
+
+    function triggerImageUpload(productId) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.onchange = async function() {
+        var file = input.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) return alert('Image must be under 2MB.');
+        var fd = new FormData();
+        fd.append('image', file);
+        try {
+          var resp = await fetchWithFarmAuth(API_BASE + '/api/farm/products/' + productId + '/image', {
+            method: 'POST',
+            body: fd,
+          });
+          var data = await resp.json();
+          if (!data.success) throw new Error(data.error || 'Upload failed');
+          await loadCustomProducts();
+        } catch (err) {
+          console.error('[CustomProducts] Image upload error:', err.message);
+          alert('Failed to upload image: ' + err.message);
+        }
+      };
+      input.click();
+    }
+
+    window.submitCustomProduct = submitCustomProduct;
+    window.deleteCustomProduct = deleteCustomProduct;
+    window.triggerImageUpload = triggerImageUpload;
+
     // Seed product name datalist from crop registry
     let _cropCategories = {};
     async function loadCropNames() {
@@ -1881,6 +2065,7 @@
     loadCropNames();
     loadInventory();
     loadManualInventory();
+    loadCustomProducts();
 
     // ESC key handler
     document.addEventListener('keydown', (e) => {

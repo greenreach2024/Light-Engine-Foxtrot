@@ -161,11 +161,31 @@ router.post('/:farmId/heartbeat', async (req, res, next) => {
         [farmId, metadata?.name || farmId, contactName, 'active', now, jwtSecret, apiKey, apiSecret, planType, heartbeatApiUrl, JSON.stringify(metadata || {})]
       );
       
-      // Store heartbeat
+      // Store heartbeat with compatibility fields used by security and monitoring tools
       await query(
-        `INSERT INTO farm_heartbeats (farm_id, cpu_usage, memory_usage, disk_usage, metadata, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [farmId, cpu_usage, memory_usage, disk_usage, JSON.stringify(metadata || {}), now]
+        `INSERT INTO farm_heartbeats (
+           farm_id, farm_name,
+           cpu_usage, memory_usage, disk_usage,
+           cpu_percent, memory_percent, disk_percent,
+           uptime_seconds, node_version,
+           metadata, last_seen_at, timestamp
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          farmId,
+          metadata?.farm_name || metadata?.name || farmId,
+          cpu_usage,
+          memory_usage,
+          disk_usage,
+          cpu_usage,
+          memory_usage,
+          disk_usage,
+          Number.isFinite(metadata?.uptime_seconds) ? metadata.uptime_seconds : null,
+          metadata?.node_version || null,
+          JSON.stringify(metadata || {}),
+          now,
+          now
+        ]
       );
     } else {
       logger.warn(`[Heartbeat] Database unavailable, storing in-memory only for farm ${farmId}`);

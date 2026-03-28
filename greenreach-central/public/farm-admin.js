@@ -1238,7 +1238,7 @@ function formatTime(timestamp) {
 
 // Pricing data structure
 let pricingData = [];
-let isPerGram = false; // false = per lb, true = per 100g
+let isPerGram = false; // false = per lb (default), true = per 100g
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
@@ -1469,7 +1469,7 @@ function exportPricingCSV() {
 }
 
 /**
- * Convert price between oz and 25g
+ * Convert price between lb and 100g
  */
 function convertPrice(price, toGram = false) {
     if (toGram) {

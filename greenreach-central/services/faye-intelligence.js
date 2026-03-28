@@ -107,9 +107,9 @@ async function checkFarmHeartbeats() {
   try {
     const stale = await query(`
       SELECT farm_id, farm_name,
-             EXTRACT(EPOCH FROM (NOW() - last_seen_at)) / 60 AS minutes_stale
+             EXTRACT(EPOCH FROM (NOW() - COALESCE(last_seen_at, "timestamp"))) / 60 AS minutes_stale
       FROM farm_heartbeats
-      WHERE last_seen_at < NOW() - INTERVAL '30 minutes'
+      WHERE COALESCE(last_seen_at, "timestamp") < NOW() - INTERVAL '30 minutes'
     `);
 
     for (const farm of stale.rows) {
@@ -354,7 +354,7 @@ async function sendDailyBriefing() {
         WHERE s.source_key LIKE 'wholesale_%' AND t.txn_date::date = CURRENT_DATE - 1
       `),
       query(`SELECT COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '15 minutes') AS online
+                COUNT(*) FILTER (WHERE COALESCE(last_seen_at, "timestamp") > NOW() - INTERVAL '15 minutes') AS online
              FROM farm_heartbeats`)
     ]);
 

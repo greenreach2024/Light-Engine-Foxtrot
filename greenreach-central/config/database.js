@@ -3059,6 +3059,44 @@ async function runMigrations(client) {
     logger.warn('Migration 047 warning:', err.message);
   }
 
+  // ─── Migration 048: farm_heartbeats compatibility columns for security tooling ───
+  try {
+    await pool.query(`
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS farm_name VARCHAR(255);
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS cpu_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS memory_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS disk_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS uptime_seconds BIGINT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS node_version VARCHAR(64);
+
+      UPDATE farm_heartbeats
+         SET last_seen_at = COALESCE(last_seen_at, "timestamp", NOW())
+       WHERE last_seen_at IS NULL;
+
+      UPDATE farm_heartbeats
+         SET cpu_percent = COALESCE(cpu_percent, cpu_usage),
+             memory_percent = COALESCE(memory_percent, memory_usage),
+             disk_percent = COALESCE(disk_percent, disk_usage)
+       WHERE cpu_percent IS NULL OR memory_percent IS NULL OR disk_percent IS NULL;
+
+      UPDATE farm_heartbeats h
+         SET farm_name = COALESCE(h.farm_name, f.name, h.farm_id)
+        FROM farms f
+       WHERE h.farm_id = f.farm_id
+         AND (h.farm_name IS NULL OR h.farm_name = '');
+
+      UPDATE farm_heartbeats
+         SET farm_name = COALESCE(NULLIF(farm_name, ''), farm_id)
+       WHERE farm_name IS NULL OR farm_name = '';
+
+      CREATE INDEX IF NOT EXISTS idx_heartbeats_last_seen_at ON farm_heartbeats(last_seen_at DESC);
+    `);
+    logger.info('farm_heartbeats compatibility columns ready (migration 048)');
+  } catch (err) {
+    logger.warn('Migration 048 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 
