@@ -290,9 +290,15 @@ router.post('/execute', async (req, res) => {
         // Generate idempotency key
         const idempotencyKey = `${masterOrderId}_${subOrderId}_${paymentAttempt}`;
 
-        // TODO: Get farm's payment provider credentials from database
-        // Determine payment provider from farm config or request
-        const farmPaymentProvider = req.body.payment_provider || subOrder.payment_provider || 'square';
+        // Query farm payment provider preference from DB
+        let dbFarmProvider = null;
+        try {
+          const farmRow = await query('SELECT payment_provider FROM farms WHERE farm_id = $1', [subOrder.farm_id]);
+          if (farmRow.rows && farmRow.rows.length > 0 && farmRow.rows[0].payment_provider) {
+            dbFarmProvider = farmRow.rows[0].payment_provider;
+          }
+        } catch (_dbErr) { /* DB unavailable, fall through to defaults */ }
+        const farmPaymentProvider = req.body.payment_provider || dbFarmProvider || subOrder.payment_provider || 'square';
         
         let providerConfig;
         if (farmPaymentProvider === 'stripe') {

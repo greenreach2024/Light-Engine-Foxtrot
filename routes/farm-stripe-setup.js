@@ -53,6 +53,44 @@ const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
 const STRIPE_CONNECT_CLIENT_ID = process.env.STRIPE_CONNECT_CLIENT_ID;
 const STRIPE_REDIRECT_URI = process.env.STRIPE_REDIRECT_URI || 'http://localhost:8091/api/farm/stripe/callback';
 
+// ---------------------------------------------------------------------------
+// Encryption (AES-256-GCM) -- mirrors farm-square-setup.js pattern
+// ---------------------------------------------------------------------------
+const IS_PROD_LIKE = process.env.NODE_ENV === 'production'
+  || process.env.DEPLOYMENT_MODE === 'edge'
+  || process.env.DEPLOYMENT_MODE === 'cloud';
+
+if (IS_PROD_LIKE && !process.env.TOKEN_ENCRYPTION_KEY) {
+  console.error('[farm-stripe] TOKEN_ENCRYPTION_KEY is required in production');
+}
+const RAW_ENCRYPTION_KEY_STRIPE = process.env.TOKEN_ENCRYPTION_KEY || null;
+const ENCRYPTION_KEY_STRIPE = RAW_ENCRYPTION_KEY_STRIPE
+  ? (RAW_ENCRYPTION_KEY_STRIPE.length === 64 ? Buffer.from(RAW_ENCRYPTION_KEY_STRIPE, 'hex') : Buffer.from(RAW_ENCRYPTION_KEY_STRIPE).subarray(0, 32))
+  : crypto.randomBytes(32);
+const ENCRYPTION_ALGORITHM_STRIPE = 'aes-256-gcm';
+
+function encryptToken(token) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM_STRIPE, ENCRYPTION_KEY_STRIPE, iv);
+  let encrypted = cipher.update(token, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return { encrypted, iv: iv.toString('hex'), authTag: authTag.toString('hex') };
+}
+
+function decryptToken(encryptedData) {
+  if (!encryptedData || !encryptedData.iv) return null;
+  const decipher = crypto.createDecipheriv(
+    ENCRYPTION_ALGORITHM_STRIPE,
+    ENCRYPTION_KEY_STRIPE,
+    Buffer.from(encryptedData.iv, 'hex')
+  );
+  decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+  let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
 // Lazy-load Stripe SDK only when secret key is configured
 let stripe = null;
 async function getStripe() {
@@ -242,8 +280,8 @@ router.get('/callback', async (req, res) => {
 
         accountData = {
           accountId: response.stripe_user_id,
-          accessToken: '[encrypted]', // In production, encrypt before storing
-          refreshToken: response.refresh_token ? '[encrypted]' : null,
+          accessToken: encryptToken(response.access_token),
+          refreshToken: response.refresh_token ? encryptToken(response.refresh_token) : null,
           businessName: account.business_profile?.name || farm_name,
           chargesEnabled: account.charges_enabled,
           payoutsEnabled: account.payouts_enabled,
@@ -433,7 +471,7 @@ router.post('/test-payment', async (req, res) => {
         const stripeInstance = new Stripe(STRIPE_SECRET_KEY);
         const intent = await stripeInstance.paymentIntents.create({
           amount: Math.round((amount || 10.00) * 100),
-          currency: 'usd',
+          currency: (process.env.PAYMENT_CURRENCY || 'CAD').toLowerCase(),
           metadata: { farm_id: farmId, test: 'true' },
           // Use test payment method that auto-succeeds
           payment_method: 'pm_card_visa',

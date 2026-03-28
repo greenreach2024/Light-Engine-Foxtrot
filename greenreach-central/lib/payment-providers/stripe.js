@@ -62,7 +62,7 @@ export class StripePaymentProvider extends PaymentProvider {
       // Build PaymentIntent parameters
       const intentParams = {
         amount: amountMoney.amount, // Stripe uses integer cents natively
-        currency: (amountMoney.currency || 'USD').toLowerCase(),
+        currency: (amountMoney.currency || 'CAD').toLowerCase(),
         metadata: {
           farm_sub_order_id: farmSubOrderId,
           farm_id: farmMerchantId,
