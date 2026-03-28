@@ -690,3 +690,26 @@ The farm inventory dashboard (`greenreach-central/public/views/farm-inventory.ht
 **Data Path:** Custom Product CRUD -> Wholesale Catalog -> Order Allocation -> Invoice -> Payment -> Admin UI -> Farm Inventory Dashboard
 
 **Lesson:** Custom products share `farm_inventory` table with auto/manual entries. All queries must filter by `status != 'inactive'` to exclude soft-deleted custom products. Tax calculation must be per-item based on `is_taxable` flag, not blanket subtotal.
+
+### 2026-03-28: Farm Sync Rejected With Invalid API Key (FARM-MLTP9LVH-B0B85039)
+
+**Problem:** FAYE reported farm sync failure. Central rejected both `/api/sync/heartbeat` and `/api/sync/telemetry` with `Invalid API key` for `FARM-MLTP9LVH-B0B85039`.
+
+**Root Cause:** API key drift between LE runtime key (`config/edge-config.json`) and Central DB (`farms.api_key`) combined with strict fallback gating in `public/data/farm-api-keys.json` (`status: migrated`, `api_key: MOVED_TO_DATABASE`). This prevented fallback auth during key drift.
+
+**Fix Applied:**
+1. Updated fallback key entry in `public/data/farm-api-keys.json` for `FARM-MLTP9LVH-B0B85039` to the active LE key and set `status: active`.
+2. Updated sync reconciliation in `routes/sync.js` for `/api/sync/heartbeat` and `/api/sync/health` UPSERT logic:
+  - from `api_key = COALESCE(farms.api_key, EXCLUDED.api_key)`
+  - to `api_key = EXCLUDED.api_key`
+3. Deployed Central (`greenreach-central-prod-v4`) so the next valid heartbeat can self-heal `farms.api_key` and restore steady-state auth.
+
+**Data Path:** LE runtime -> `POST /api/sync/heartbeat` (`X-Farm-ID`, `X-API-Key`) -> `authenticateFarm` (`isValidFarmApiKey`) -> `farms` UPSERT (`api_key` reconciliation) -> telemetry ingest (`farm_data` `data_type='telemetry'`)
+
+**Verification Snapshot:**
+- `POST /api/sync/heartbeat` with farm key returns `success: true`
+- `POST /api/sync/telemetry` with farm key returns `success: true`
+- `farms.last_heartbeat` advances for `FARM-MLTP9LVH-B0B85039`
+- `farm_data.updated_at` advances for telemetry row
+
+**Lesson:** When key migration leaves fallback entries in non-active state, any DB key drift can deadlock sync auth. Heartbeat should reconcile `farms.api_key` from authenticated requests to avoid manual DB intervention.
