@@ -810,8 +810,8 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 | Page | Purpose |
 |------|---------|
-| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators) |
-| research-subscription.html | Research tier subscription and usage model details |
+| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators). Embedded in LE-farm-admin via iframe. E.V.I.E. enabled. Located in views/ |
+| research-subscription.html | Research tier overview and feature summary. Embedded in LE-farm-admin via iframe. E.V.I.E. enabled |
 | setup-wizard.html | New farm setup wizard |
 | grant-wizard.html | Grant application wizard (FREE) |
 | delivery.html | Delivery management |
@@ -891,6 +891,8 @@ Files that MUST exist in both `greenreach-central/public/` and root `public/`:
 | evie-presence.js | E.V.I.E. ambient intelligence |
 | farm-admin.js | Main admin navigation and section handler |
 | auth-guard.js | Client-side JWT validation and redirect |
+| research-workspace.html | Research dashboard -- embedded in LE-farm-admin iframe |
+| research-subscription.html | Research tier overview -- embedded in LE-farm-admin iframe |
 
 **Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The `.ebignore` excludes `greenreach-central/public/` from LE deploy, so root `public/` is the only source for LE-EB.
 
