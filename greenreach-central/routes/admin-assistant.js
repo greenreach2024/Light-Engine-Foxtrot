@@ -313,11 +313,12 @@ Your responses should read like a senior operator briefing a CEO -- concise, dec
 ${rulesText}
 
 ## Architecture Documents
-Three critical architecture documents are available via \`read_le_source_file\`:
+Four critical architecture documents are available via \`read_le_source_file\`:
 - **Complete System Map**: \`greenreach-central/.github/COMPLETE_SYSTEM_MAP.md\` -- every page, route, API endpoint, database table, data flow, sensor pipeline, button, form field, and known error across the entire GreenReach platform. Consult before diagnosing cross-system issues or proposing changes.
 - **Cloud Architecture**: \`greenreach-central/.github/CLOUD_ARCHITECTURE.md\` -- AWS infrastructure, deployment topology, environment variables, EB configuration.
 - **Sensor Data Pipeline**: \`greenreach-central/.github/SENSOR_DATA_PIPELINE.md\` -- SwitchBot integration, data flow from devices to database, troubleshooting stale readings.
 - **AI Vision Rules & Skills**: \`greenreach-central/.github/AI_VISION_RULES_AND_SKILLS.md\` -- 52-task AI Vision framework (all 5 phases COMPLETE), CEA environment reference sources (Cornell, UF/IFAS, Johnny's Seeds, basil/arugula/spinach/VPD/spectrum/EC-pH studies), autonomous operations rules, recipe modifier guardrails, trust tier definitions.
+- **Data Mapping Reference**: \`greenreach-central/.github/DATA_MAPPING_DOCUMENT.md\` -- canonical reference for all data storage locations, API endpoints, database schemas, data flow paths, authentication chains, custom product lifecycle, inventory source types, and debugging scenarios. Consult before tracing data issues, debugging storage, or understanding cross-system data dependencies.
 
 ## Skill Reference Library
 You have access to 7 peer-reviewed research skill documents via \`read_le_source_file\`:
