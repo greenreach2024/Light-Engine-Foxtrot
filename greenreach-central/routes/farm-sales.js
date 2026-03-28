@@ -450,7 +450,29 @@ router.get('/farm-sales/inventory', authMiddleware, async (req, res) => {
     if (isDatabaseAvailable() && farmId) {
       try {
         const result = await query(
-          'SELECT * FROM farm_inventory WHERE farm_id = $1 ORDER BY sku',
+          `SELECT
+            COALESCE(sku, product_id) AS sku_id,
+            product_name AS name,
+            COALESCE(retail_price, wholesale_price, price, 0) AS retail_price,
+            COALESCE(quantity_available, 0) AS available,
+            0 AS reserved,
+            COALESCE(unit, 'unit') AS unit,
+            COALESCE(category, 'Uncategorized') AS category,
+            COALESCE(is_taxable, true) AS is_taxable,
+            lot_code,
+            description,
+            thumbnail_url,
+            inventory_source,
+            auto_quantity_lbs,
+            manual_quantity_lbs,
+            wholesale_price,
+            sold_quantity_lbs,
+            is_custom
+          FROM farm_inventory
+          WHERE farm_id = $1
+            AND COALESCE(status, 'active') != 'inactive'
+            AND COALESCE(quantity_available, 0) > 0
+          ORDER BY category, product_name`,
           [farmId]
         );
         if (result.rows.length) inventory = result.rows;

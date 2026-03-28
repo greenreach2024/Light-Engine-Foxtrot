@@ -815,7 +815,9 @@ router.delete('/manual/:productId', async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    if (check.rows[0].inventory_source === 'hybrid' || Number(check.rows[0].auto_quantity_lbs) > 0) {
+    const forceDelete = req.query.force === 'true';
+
+    if (!forceDelete && (check.rows[0].inventory_source === 'hybrid' || Number(check.rows[0].auto_quantity_lbs) > 0)) {
       // Has auto data — zero out manual, revert to auto-only
       await query(
         `UPDATE farm_inventory SET
@@ -829,7 +831,7 @@ router.delete('/manual/:productId', async (req, res) => {
       return res.json({ success: true, action: 'cleared_manual', product_id: productId });
     }
 
-    // Pure manual — safe to delete
+    // Force delete or pure manual — delete the row entirely
     await query('DELETE FROM farm_inventory WHERE farm_id = $1 AND product_id = $2', [farmId, productId]);
     res.json({ success: true, action: 'deleted', product_id: productId });
   } catch (error) {

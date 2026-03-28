@@ -30,7 +30,7 @@
       // Ensure visibility with high z-index and explicit styles
       toggleBtn.style.cssText = `
           position: fixed;
-          bottom: 90px;
+          bottom: 100px;
           right: 20px;
           z-index: 99999;
           width: 44px;

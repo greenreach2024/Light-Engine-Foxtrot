@@ -664,7 +664,7 @@
           </form>
           <table class="manual-tbl">
             <thead><tr>
-              <th>Product</th><th>Auto (lbs)</th><th>Manual (lbs)</th><th>Total</th><th>Retail</th><th>Wholesale</th><th>Source</th><th></th>
+              <th>Product</th><th>Auto (lbs)</th><th>Manual (lbs)</th><th>Total</th><th>Retail</th><th>Wholesale</th><th>Source</th><th>Actions</th>
             </tr></thead>
             <tbody id="manualTbody"><tr><td colspan="8" style="text-align:center;color:#64748b;padding:2rem;">Loading inventory…</td></tr></tbody>
           </table>
@@ -1689,6 +1689,17 @@
         const retail = Number(p.retail_price || p.price || 0).toFixed(2);
         const wholesale = Number(p.wholesale_price || p.price || 0).toFixed(2);
         const src = p.is_custom ? 'custom' : (p.inventory_source || 'auto');
+        const pid = escAttr(p.product_id);
+        const actions = [];
+        // Edit button for all items
+        actions.push(`<button class="btn-sm" onclick="openEditModal('${pid}', ${manualLbs}, ${retail}, ${wholesale})" style="background:#3b82f6;color:#fff;margin-right:4px;">Edit</button>`);
+        // Remove: soft-remove for hybrid/auto, or force-remove option
+        if (src === 'manual' || src === 'hybrid') {
+          actions.push(`<button class="btn-sm danger" onclick="deleteManualItem('${pid}')">Remove</button>`);
+        }
+        if (src === 'auto' || src === 'hybrid') {
+          actions.push(`<button class="btn-sm" onclick="forceDeleteItem('${pid}', '${escAttr(p.product_name)}')" style="background:#991b1b;color:#fff;font-size:0.7rem;margin-top:2px;" title="Permanently remove this item from inventory">Force Remove</button>`);
+        }
         return `<tr>
           <td style="font-weight:600;">${escHtml(p.product_name)}</td>
           <td>${autoLbs}</td>
@@ -1697,7 +1708,7 @@
           <td>$${retail}</td>
           <td>$${wholesale}</td>
           <td><span class="source-badge ${src}">${src}</span></td>
-          <td>${src === 'manual' || src === 'hybrid' ? `<button class="btn-sm danger" onclick="deleteManualItem('${escAttr(p.product_id)}')">Remove</button>` : ''}</td>
+          <td style="white-space:nowrap;">${actions.join('')}</td>
         </tr>`;
       }).join('');
     }
@@ -1739,7 +1750,7 @@
     }
 
     async function deleteManualItem(productId) {
-      if (!confirm('Remove this manual inventory entry?')) return;
+      if (!confirm('Remove the manual portion of this inventory entry?')) return;
       try {
         const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/manual/${encodeURIComponent(productId)}`, { method: 'DELETE' });
         if (!resp.ok) throw new Error('Delete failed');
@@ -1750,9 +1761,89 @@
       }
     }
 
+    async function forceDeleteItem(productId, productName) {
+      if (!confirm(`Permanently remove "${productName}" from inventory? This removes both auto-calculated and manual quantities. The item will reappear if auto-sync recalculates it from active planting groups.`)) return;
+      try {
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/manual/${encodeURIComponent(productId)}?force=true`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Force delete failed');
+        await loadManualInventory();
+      } catch (err) {
+        console.error('[ManualInv] Force delete error:', err);
+        alert('Failed to force-remove item.');
+      }
+    }
+
+    function openEditModal(productId, currentManualLbs, currentRetail, currentWholesale) {
+      // Remove existing modal if any
+      const existing = document.getElementById('inv-edit-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'inv-edit-modal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML = `
+        <div style="background:#1e293b;border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:24px;width:340px;max-width:90vw;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+          <h3 style="margin:0 0 16px;color:#e2e8f0;font-size:1.1rem;">Edit Inventory</h3>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Manual Quantity (lbs)</label>
+            <input id="edit-manual-lbs" type="number" step="0.01" min="0" value="${currentManualLbs}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Retail Price ($/lb)</label>
+            <input id="edit-retail" type="number" step="0.01" min="0" value="${currentRetail}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;color:#94a3b8;font-size:0.85rem;margin-bottom:4px;">Wholesale Price ($/lb)</label>
+            <input id="edit-wholesale" type="number" step="0.01" min="0" value="${currentWholesale}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:0.95rem;" />
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button onclick="closeEditModal()" style="padding:8px 16px;border-radius:6px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;">Cancel</button>
+            <button onclick="saveEdit('${productId}')" style="padding:8px 16px;border-radius:6px;border:none;background:#3b82f6;color:#fff;cursor:pointer;font-weight:600;">Save</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeEditModal(); });
+      document.getElementById('edit-manual-lbs').focus();
+    }
+
+    function closeEditModal() {
+      const modal = document.getElementById('inv-edit-modal');
+      if (modal) modal.remove();
+    }
+
+    async function saveEdit(productId) {
+      const manualLbs = parseFloat(document.getElementById('edit-manual-lbs').value);
+      const retail = parseFloat(document.getElementById('edit-retail').value);
+      const wholesale = parseFloat(document.getElementById('edit-wholesale').value);
+
+      if (isNaN(manualLbs) || manualLbs < 0) { alert('Valid manual quantity is required.'); return; }
+
+      try {
+        const resp = await fetchWithFarmAuth(`${API_BASE}/api/inventory/manual/${encodeURIComponent(productId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity_lbs: manualLbs,
+            retail_price: isNaN(retail) ? undefined : retail,
+            wholesale_price: isNaN(wholesale) ? undefined : wholesale
+          })
+        });
+        if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error || 'Update failed'); }
+        closeEditModal();
+        await loadManualInventory();
+      } catch (err) {
+        console.error('[ManualInv] Edit error:', err);
+        alert('Failed to save changes: ' + err.message);
+      }
+    }
+
     // Expose to global scope for onclick handlers
     window.submitManualEntry = submitManualEntry;
     window.deleteManualItem = deleteManualItem;
+    window.forceDeleteItem = forceDeleteItem;
+    window.openEditModal = openEditModal;
+    window.closeEditModal = closeEditModal;
+    window.saveEdit = saveEdit;
 
     // Seed product name datalist from crop registry
     let _cropCategories = {};
