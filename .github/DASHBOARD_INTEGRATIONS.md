@@ -1,7 +1,7 @@
 # Dashboard Integration Registry
 
-**Version**: 1.0.0  
-**Date**: February 1, 2026  
+**Version**: 1.1.0  
+**Date**: March 28, 2026  
 **Purpose**: Track which AI/ML components are integrated into which dashboards to prevent duplicate work
 
 ---
@@ -155,20 +155,18 @@
 
 ---
 
-### P5: Dynamic Pricing 🔜 Planned
+### P5: Dynamic Pricing In Progress
 
-**Status**: Not implemented yet
+**Status**: Partially implemented (Crop/Product Pricing AI live)
 
-**Proposed Dashboards**:
-- 🔜 **Wholesale Catalog** (dynamic pricing display)
-- 🔜 **Central Admin** (pricing analytics dashboard)
-- 🔜 **Farm Summary** (price optimization suggestions)
+**Current Integrations**:
+- Crop/Product pricing workflows use `routes/crop-pricing.js` with market intelligence + GPT-driven recommendations.
+- Wholesale price derivation is implemented: `max(floor_price, retail * sku_factor)` with sku_factor bounds.
 
-**Proposed API**:
-- `GET /api/pricing/dynamic/:skuId` (get dynamic price)
-- `POST /api/pricing/optimize` (calculate optimal price)
-
-**Implementation Priority**: After P4
+**Remaining Integrations**:
+- Wholesale catalog dynamic price display by SKU
+- Central admin pricing analytics dashboard
+- Farm summary optimization suggestions
 
 ---
 
@@ -187,19 +185,17 @@
 
 ---
 
-### P7: Voice Interface 🔜 Planned
+### P7: Voice Interface Complete (Phase 5)
 
-**Status**: Not implemented yet
+**Status**: Implemented in Activity Hub and assistant workflows
 
-**Proposed Dashboards**:
-- 🔜 **Farm Summary** (voice commands for navigation)
-- 🔜 **Activity Hub** (hands-free task logging)
-- 🔜 **Harvest Dashboard** (voice-driven harvest entry)
+**Current Integrations**:
+- Voice-first Activity Hub (Web Speech API + TTS)
+- Farm assistant voice interaction in admin dashboards
 
-**Proposed API**:
-- Web Speech API (browser-native, no backend)
-
-**Implementation Priority**: After core features (P4, P5, P6)
+**Notes**:
+- Browser-native speech stack is in use (no dedicated backend speech service required)
+- Additional dashboard-level voice controls can still be layered on top of the current implementation
 
 ---
 

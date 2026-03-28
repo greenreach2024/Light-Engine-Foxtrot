@@ -1110,6 +1110,24 @@ const GPT_TOOLS = [
       }
     }
   },
+  {
+    type: 'function',
+    function: {
+      name: 'submit_feature_request',
+      description: 'Create a formal feature request when the grower asks for functionality that does not exist yet (for example a new graph/report/view). Sends the request to F.A.Y.E. and tags it for weekly product review.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Short feature title (e.g. "Inventory trend graph by crop")' },
+          request: { type: 'string', description: 'Detailed description of what the grower wants and why it matters.' },
+          context_page: { type: 'string', description: 'Where this was requested (dashboard page/workflow), if known.' },
+          farm_id: { type: 'string', description: 'Related farm_id (defaults to current farm).' },
+          priority: { type: 'string', description: 'low, normal, high. Default normal.' }
+        },
+        required: ['title', 'request']
+      }
+    }
+  },
   // --- Operations Command Tools ---
   {
     type: 'function',
@@ -1750,6 +1768,8 @@ INTER-AGENT COMMUNICATION:
 - Use escalate_to_faye when a grower request has business implications you cannot handle (pricing disputes, refund requests, order modifications, cross-farm issues).
 - Use get_faye_directives at the start of each conversation to check for standing directives or responses from F.A.Y.E.
 - Use reply_to_faye to send observations, status updates, or responses back to F.A.Y.E.
+- When a grower requests a feature that does not exist yet (for example "show me an inventory trend graph"), acknowledge it positively and call submit_feature_request so F.A.Y.E. can include it in the weekly product-review todo queue.
+- Preferred acknowledgement wording for missing features: "This is a good idea. I will request this feature." Then call submit_feature_request with the grower request details.
 - If F.A.Y.E. sends a directive, follow it unless it conflicts with a hard safety boundary.
 
 INTER-AGENT COMMUNICATION TONE:
@@ -2974,6 +2994,56 @@ async function executeExtendedTool(toolName, params, farmId) {
         return result
           ? { ok: true, message: `Message sent to F.A.Y.E.: "${params.subject}"`, message_id: result.id }
           : { ok: false, error: 'Failed to send message to F.A.Y.E.' };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    case 'submit_feature_request': {
+      try {
+        const { sendAgentMessage } = await import('../services/faye-learning.js');
+        const requestTitle = String(params.title || '').trim();
+        const requestBody = String(params.request || '').trim();
+        if (!requestTitle || !requestBody) {
+          return { ok: false, error: 'title and request are required' };
+        }
+
+        const requestFarmId = params.farm_id || farmId;
+        const context = {
+          farm_id: requestFarmId,
+          request_type: 'feature_request',
+          review_cycle: 'weekly',
+          context_page: params.context_page || null
+        };
+
+        const formattedBody = [
+          `Feature Request: ${requestTitle}`,
+          `Requested by farm: ${requestFarmId || 'unknown'}`,
+          params.context_page ? `Context page/workflow: ${params.context_page}` : null,
+          '',
+          requestBody
+        ].filter(Boolean).join('\n');
+
+        const result = await sendAgentMessage(
+          'evie',
+          'faye',
+          'escalation',
+          `Feature Request: ${requestTitle}`.slice(0, 200),
+          formattedBody.slice(0, 2000),
+          context,
+          ['low', 'normal', 'high', 'critical'].includes(params.priority) ? params.priority : 'normal'
+        );
+
+        if (!result) {
+          return { ok: false, error: 'Failed to submit feature request to F.A.Y.E.' };
+        }
+
+        return {
+          ok: true,
+          message: 'Feature request captured and sent to F.A.Y.E. for weekly review.',
+          request_id: result.id,
+          review_cycle: 'weekly'
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }

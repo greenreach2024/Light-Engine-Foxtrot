@@ -21,6 +21,48 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
 
+### Recent Fixes (Mar 28, 2026)
+
+8. **Security Hardening -- Research Platform + Core Routes (9 patches)**
+   - C2 FIX: Multi-tenant data isolation -- NEW middleware `greenreach-central/middleware/research-tenant.js` (14 ownership verification functions injected into 62 sub-resource endpoints across 6 research route files). Every sub-resource endpoint now verifies parent entity belongs to requesting farm.
+   - C3 FIX: SQL injection in EVIE tools -- 4 string-interpolated queries in `greenreach-central/routes/farm-ops-agent.js` replaced with parameterized queries (get_my_studies, get_eln_entries, get_calibration_status, get_bus_mappings).
+   - C4 FIX: ELN signature spoofing -- `POST /api/research/entries/:id/sign` in `research-eln.js` now derives signer_id from authenticated session (req.userId) instead of accepting it from request body.
+   - C5 FIX: currval() race condition -- research-data.js observation+provenance INSERT now uses RETURNING id pattern instead of currval().
+   - x-farm-id header validation hardened in `greenreach-central/server.js` (format regex check).
+   - EVIE tenant binding: `greenreach-central/routes/assistant-chat.js` -- 8 farmId resolution patterns fixed to use req.farmId from auth middleware first.
+   - Inventory farm resolver rewritten in `greenreach-central/routes/inventory.js`.
+   - C1 NOTE: autoEnforceFeatures() import into Central ATTEMPTED then REVERTED -- Central cannot import from ../server/middleware/ (path outside deploy bundle). Needs Central-local implementation.
+
+9. **Auth fallback for farm login**
+   - File: `greenreach-central/routes/auth.js`
+   - Login now falls back to ADMIN_PASSWORD env var comparison (bcrypt) when stored password_hash does not match. Prevents lockout when DB hash is stale.
+
+10. **UI fixes: EVIE orb/help/mute overlap, POS inventory, inventory edit/delete**
+    - EVIE floating elements spaced vertically: orb 20px, help button 100px, voice FAB 160px
+    - POS inventory endpoint (`farm-sales.js` line ~444) fixed from SELECT * to aliased SELECT with proper field names (name, retail_price, available)
+    - Farm inventory page: Edit button with modal for qty/retail/wholesale pricing
+    - Force-delete endpoint: DELETE with ?force=true bypasses auto/hybrid guard for permanent removal
+
+11. **Custom Farm Product Entry (full feature)**
+    - NEW route file: `greenreach-central/routes/custom-products.js` mounted at `/api/farm/products`
+    - 4 new farm_inventory columns: description, thumbnail_url, is_taxable, is_custom
+    - Full CRUD + image upload (multer), wholesale catalog integration, POS integration
+    - Auto-sync protection: custom products (is_custom=TRUE) skipped by recalculateAutoInventoryFromGroups()
+    - See `.github/CUSTOM_PRODUCT_FEATURE.md` and `.github/CUSTOM_PRODUCT_IMPLEMENTATION.md`
+
+12. **Usage billing policy update (Subscription + $15 tranches)**
+   - File: `greenreach-central/routes/billing.js`
+   - Data and AI usage are now surfaced as per-farm $15 tranche estimates.
+   - Data tranche model includes 85% margin target (`DATA_MARGIN_TARGET=0.85`) using measured storage usage and configurable cost basis.
+   - `/api/billing/usage/:farmId` now returns `usage_billing_estimate` with data/ai tranche counts and total usage charge.
+
+13. **EVIE -> FAYE feature-request pipeline**
+   - File: `greenreach-central/routes/assistant-chat.js`
+   - New EVIE tool: `submit_feature_request` for missing-feature asks (e.g. inventory trend graph).
+   - Requests are sent to FAYE with `context.request_type = feature_request` and `review_cycle = weekly`.
+   - File: `greenreach-central/routes/admin-ops-agent.js`
+   - New FAYE tool: `get_weekly_feature_request_todo` to build weekly review queue from EVIE-submitted feature requests.
+
 ### Recent Fixes (Mar 27, 2026)
 
 5. **POS iframe auto-login from LE-farm-admin**
@@ -127,6 +169,10 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 
 **Landing Page**: Third product card (amber #f59e0b border) added to `greenreach-central/public/landing-main.html`.
 
+
+**Security Remediation (Mar 28, 2026)**: Audit score improved from 58/100 to ~82/100. Critical findings C2-C5 remediated (see Recent Fixes Mar 28 above). C1 (feature gate enforcement on Central) remains open -- requires Central-local middleware implementation. See `.github/RESEARCH_PLATFORM_AUDIT.md` for full details.
+
+**Tenant Isolation Middleware**: NEW file `greenreach-central/middleware/research-tenant.js` provides 14 ownership verification functions. Applied to all 62 sub-resource endpoints across 6 research route files. Pattern: verify parent entity belongs to req.farmId before allowing sub-resource access.
 ### DO NOT (Architecture Rules)
 
 - DO NOT assume any physical device exists (no Pi, no edge box, no local server)

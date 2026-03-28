@@ -483,14 +483,18 @@ async function loadDashboardData() {
         // Fetch inventory data from /api/inventory/current (includes tray/plant counts)
         let inventoryData = null;
         try {
+            const farmHeader = currentSession?.farmId || sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId');
             const inventoryResponse = await fetch(`${API_BASE}/api/inventory/current`, {
                 headers: {
-                    'Authorization': `Bearer ${currentSession.token}`
+                    'Authorization': `Bearer ${currentSession.token}`,
+                    ...(farmHeader ? { 'x-farm-id': farmHeader } : {})
                 }
             });
             if (inventoryResponse.ok) {
-                inventoryData = await inventoryResponse.json();
-                console.log(` Loaded inventory: ${inventoryData.activeTrays} trays, ${inventoryData.totalPlants} plants`);
+                const inventoryRaw = await inventoryResponse.json();
+                // /api/inventory/current returns { status, dataAvailable, data: { activeTrays, totalPlants, byFarm } }
+                inventoryData = inventoryRaw?.data || inventoryRaw;
+                console.log(` Loaded inventory: ${inventoryData?.activeTrays || 0} trays, ${inventoryData?.totalPlants || 0} plants`);
             } else {
                 console.warn(` /api/inventory/current returned ${inventoryResponse.status}`);
             }

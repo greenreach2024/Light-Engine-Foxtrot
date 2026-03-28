@@ -62,7 +62,7 @@
 lsof -ti tcp:8091 -sTCP:LISTEN | xargs kill -TERM 2>/dev/null || true
 
 # Start server
-cd /Users/petergilbert/Light-Engine-Foxtrot
+cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot
 node server-foxtrot.js &
 
 # Wait for startup

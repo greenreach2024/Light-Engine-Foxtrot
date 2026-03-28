@@ -15,8 +15,50 @@ const SUBSCRIPTION_PLANS = {
   pro:  { name: 'Light Engine Pro',  amount_cents: 7900, currency: 'CAD', interval: 'monthly', ai_included_calls: 5000 },
 };
 
-// AI overage rate: $0.002 per call beyond included allowance
-const AI_OVERAGE_RATE_PER_CALL = 0.002;
+// Usage-billing policy (requested): charge AI + data in $15 tranches.
+const USAGE_TRANCHE_CAD = Number(process.env.USAGE_TRANCHE_CAD || 15);
+const DATA_MARGIN_TARGET = Number(process.env.DATA_MARGIN_TARGET || 0.85);
+const DATA_COST_PER_GB_CAD = Number(process.env.DATA_COST_PER_GB_CAD || 1.5);
+const USD_TO_CAD = Number(process.env.USD_TO_CAD || 1.36);
+const INCLUDED_DATA_GB = Number(process.env.INCLUDED_DATA_GB || 0.05); // 50 MB
+const INCLUDED_AI_ACTIONS = Number(process.env.INCLUDED_AI_ACTIONS || 25);
+
+function ceilTranches(amountCad) {
+  if (!Number.isFinite(amountCad) || amountCad <= 0) return 0;
+  return Math.ceil(amountCad / USAGE_TRANCHE_CAD);
+}
+
+function computeDataTrancheBilling(storageGb) {
+  const chargeableGb = Math.max(0, (storageGb || 0) - INCLUDED_DATA_GB);
+  const costBasisCad = chargeableGb * DATA_COST_PER_GB_CAD;
+  const revenueRequired = DATA_MARGIN_TARGET >= 1
+    ? costBasisCad
+    : (costBasisCad / Math.max(0.0001, 1 - DATA_MARGIN_TARGET));
+  const tranches = ceilTranches(revenueRequired);
+  return {
+    included_gb: INCLUDED_DATA_GB,
+    chargeable_gb: Math.round(chargeableGb * 1000) / 1000,
+    cost_basis_cad: Math.round(costBasisCad * 100) / 100,
+    target_margin: DATA_MARGIN_TARGET,
+    revenue_required_cad: Math.round(revenueRequired * 100) / 100,
+    tranches,
+    charge_cad: tranches * USAGE_TRANCHE_CAD,
+  };
+}
+
+function computeAiTrancheBilling(aiCalls, aiCostUsd, includedCalls = INCLUDED_AI_ACTIONS) {
+  const chargeableCalls = Math.max(0, (aiCalls || 0) - includedCalls);
+  const aiCostCad = Math.max(0, aiCostUsd || 0) * USD_TO_CAD;
+  const tranches = chargeableCalls > 0 ? ceilTranches(aiCostCad) : 0;
+  return {
+    included_actions: includedCalls,
+    chargeable_actions: chargeableCalls,
+    cost_basis_usd: Math.round((aiCostUsd || 0) * 100) / 100,
+    cost_basis_cad: Math.round(aiCostCad * 100) / 100,
+    tranches,
+    charge_cad: tranches * USAGE_TRANCHE_CAD,
+  };
+}
 
 /**
  * Ensure subscription tables exist
@@ -159,6 +201,8 @@ router.get('/usage/:farmId', async (req, res) => {
     let dataTypes = 0;
     let apiCallsToday = 0;
     let storageBytes = 0;
+    let aiCallsMonth = 0;
+    let aiCostUsdMonth = 0;
 
     // Count devices and data types from farmStore
     if (req.farmStore) {
@@ -193,9 +237,25 @@ router.get('/usage/:farmId', async (req, res) => {
         );
         storageBytes = parseInt(storageResult.rows[0]?.total_bytes || 0);
       } catch { /* table may not exist */ }
+
+      // AI usage for current billing month (per-farm)
+      try {
+        const aiResult = await query(
+          `SELECT COUNT(*) AS call_count, COALESCE(SUM(estimated_cost), 0) AS total_cost
+           FROM ai_usage
+           WHERE farm_id = $1
+             AND created_at >= date_trunc('month', NOW())
+             AND created_at < (date_trunc('month', NOW()) + INTERVAL '1 month')`,
+          [farmId]
+        );
+        aiCallsMonth = parseInt(aiResult.rows[0]?.call_count || 0);
+        aiCostUsdMonth = parseFloat(aiResult.rows[0]?.total_cost || 0);
+      } catch { /* table may not exist */ }
     }
 
     const storageGb = Math.round((storageBytes / (1024 * 1024 * 1024)) * 1000) / 1000;
+    const dataBilling = computeDataTrancheBilling(storageGb);
+    const aiBilling = computeAiTrancheBilling(aiCallsMonth, aiCostUsdMonth, INCLUDED_AI_ACTIONS);
 
     return res.json({
       status: 'ok',
@@ -211,12 +271,27 @@ router.get('/usage/:farmId', async (req, res) => {
         data_types: dataTypes,
         api_calls_today: apiCallsToday,
         storage_gb: storageGb,
+        ai_actions_month: aiCallsMonth,
+        ai_cost_usd_month: Math.round(aiCostUsdMonth * 100) / 100,
       },
       metering_available: true,
       overages: {
         devices: Math.max(0, deviceCount - 50),
         api_calls: Math.max(0, apiCallsToday - 10000),
         storage_gb: Math.max(0, storageGb - 5),
+      },
+      billing_policy: {
+        subscription_plus_usage: true,
+        usage_tranche_cad: USAGE_TRANCHE_CAD,
+        data_margin_target: DATA_MARGIN_TARGET,
+        included_data_gb: INCLUDED_DATA_GB,
+        included_ai_actions: INCLUDED_AI_ACTIONS,
+      },
+      usage_billing_estimate: {
+        data: dataBilling,
+        ai: aiBilling,
+        total_tranches: dataBilling.tranches + aiBilling.tranches,
+        total_usage_charge_cad: dataBilling.charge_cad + aiBilling.charge_cad,
       },
     });
   } catch (err) {
@@ -378,9 +453,10 @@ router.get('/ai-costs/:farmId', async (req, res) => {
       aiCostUsd = parseFloat(aiResult.rows[0]?.total_cost || 0);
     } catch { /* ai_usage table may not exist */ }
 
-    const includedCalls = plan.ai_included_calls;
-    const overageCalls = Math.max(0, aiCalls - includedCalls);
-    const overageCharge = Math.round(overageCalls * AI_OVERAGE_RATE_PER_CALL * 100) / 100;
+    const includedCalls = Math.max(plan.ai_included_calls || 0, INCLUDED_AI_ACTIONS);
+    const aiTranche = computeAiTrancheBilling(aiCalls, aiCostUsd, includedCalls);
+    const overageCalls = aiTranche.chargeable_actions;
+    const overageCharge = aiTranche.charge_cad;
     const baseFee = plan.amount_cents / 100;
 
     return res.json({
@@ -394,6 +470,7 @@ router.get('/ai-costs/:farmId', async (req, res) => {
         overage_calls: overageCalls,
         actual_ai_cost_usd: Math.round(aiCostUsd * 100) / 100,
         overage_charge_cad: overageCharge,
+        tranches: aiTranche.tranches,
       },
       billing_summary: {
         base_subscription: baseFee,
@@ -401,6 +478,10 @@ router.get('/ai-costs/:farmId', async (req, res) => {
         total_due: Math.round((baseFee + overageCharge) * 100) / 100,
         currency: 'CAD',
       },
+      billing_policy: {
+        usage_tranche_cad: USAGE_TRANCHE_CAD,
+        model: 'subscription_plus_usage_tranches'
+      }
     });
   } catch (err) {
     console.error('[Billing] AI costs error:', err.message);
@@ -440,9 +521,10 @@ router.post('/generate-invoice/:farmId', async (req, res) => {
       aiCalls = parseInt(aiResult.rows[0]?.call_count || 0);
     } catch { /* ai_usage table may not exist */ }
 
-    const includedCalls = plan.ai_included_calls;
-    const overageCalls = Math.max(0, aiCalls - includedCalls);
-    const overageCharge = Math.round(overageCalls * AI_OVERAGE_RATE_PER_CALL * 100) / 100;
+    const includedCalls = Math.max(plan.ai_included_calls || 0, INCLUDED_AI_ACTIONS);
+    const aiTranche = computeAiTrancheBilling(aiCalls, 0, includedCalls);
+    const overageCalls = aiTranche.chargeable_actions;
+    const overageCharge = aiTranche.charge_cad;
     const baseFee = plan.amount_cents / 100;
     const totalAmount = Math.round((baseFee + overageCharge) * 100) / 100;
 

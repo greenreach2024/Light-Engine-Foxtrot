@@ -11,16 +11,18 @@
 
 The Research Platform is **structurally complete** -- 30 tables, 84 endpoints, 14 AI tools, feature flag tier, UI workspace, and landing page card are all deployed and running. However, the audit uncovered **significant security and data isolation gaps** that must be remediated before the research tier is activated for external users.
 
-**Overall Score: 58/100 (Not Ready for Multi-Tenant Use)**
+**Overall Score: 82/100 (Security Remediation In Progress)**
+
+**Update (Mar 28, 2026)**: Critical findings C2-C5 have been remediated in production. C1 remains open.
 
 | Area | Score | Status |
 |------|-------|--------|
 | Infrastructure & Deployment | 95/100 | PASS |
 | Feature Flag Definitions | 90/100 | PASS |
-| Feature Gate Enforcement | 20/100 | FAIL |
+| Feature Gate Enforcement | 20/100 | OPEN (C1) |
 | Database Schema | 65/100 | NEEDS WORK |
-| API Route Security | 30/100 | FAIL |
-| AI Tool Security | 50/100 | FAIL |
+| API Route Security | 85/100 | REMEDIATED (C2) |
+| AI Tool Security | 90/100 | REMEDIATED (C3,C4) |
 | UI Completeness | 60/100 | NEEDS WORK |
 | Documentation | 85/100 | PASS |
 
@@ -28,7 +30,7 @@ The Research Platform is **structurally complete** -- 30 tables, 84 endpoints, 1
 
 ## CRITICAL Findings (Must Fix Before Activation)
 
-### C1. Feature Gate NOT Enforced on Central
+### C1. Feature Gate NOT Enforced on Central -- OPEN
 
 **Severity**: CRITICAL
 **Impact**: Any authenticated user can access research endpoints regardless of tier
@@ -41,7 +43,9 @@ The `autoEnforceFeatures()` middleware is imported and applied only in `server-f
 
 ---
 
-### C2. Multi-Tenant Data Isolation Gaps (62 of 84 Endpoints)
+### C2. Multi-Tenant Data Isolation Gaps (62 of 84 Endpoints) -- REMEDIATED
+
+**Status**: Fixed on Mar 28, 2026 via `greenreach-central/middleware/research-tenant.js` and route-level ownership checks.
 
 **Severity**: CRITICAL
 **Impact**: Cross-farm data access possible on most sub-resource endpoints
@@ -67,7 +71,9 @@ if (study.rows.length === 0) return res.status(404).json({ ok: false, error: 'St
 
 ---
 
-### C3. SQL Injection in EVIE Tools (4 Instances)
+### C3. SQL Injection in EVIE Tools (4 Instances) -- REMEDIATED
+
+**Status**: Fixed on Mar 28, 2026 in `greenreach-central/routes/farm-ops-agent.js` with parameterized queries.
 
 **Severity**: CRITICAL
 **Impact**: AI tool parameters can inject arbitrary SQL
@@ -96,7 +102,9 @@ if (params.status) values.push(params.status);
 
 ---
 
-### C4. PI Signature Spoofing in ELN
+### C4. PI Signature Spoofing in ELN -- REMEDIATED
+
+**Status**: Fixed on Mar 28, 2026 in `greenreach-central/routes/research-eln.js` by deriving signer identity from authenticated session.
 
 **Severity**: CRITICAL
 **Impact**: Any user can sign entries as another user, including PI approval that auto-locks entries
@@ -118,7 +126,9 @@ A user can:
 
 ---
 
-### C5. currval() Race Condition in Observation Provenance
+### C5. currval() Race Condition in Observation Provenance -- REMEDIATED
+
+**Status**: Fixed on Mar 28, 2026 in `greenreach-central/routes/research-data.js` using `RETURNING id`.
 
 **Severity**: CRITICAL
 **Impact**: Provenance records linked to wrong observations under concurrent requests
@@ -362,8 +372,24 @@ For 100 studies this executes 100 additional queries. Use `LEFT JOIN ... GROUP B
 
 ## Recommendations
 
-1. **Do NOT activate the research tier** (set DEPLOYMENT_MODE=research) until Phase 1 security fixes are deployed.
-2. **The platform is safe in its current state** because no farm has the research tier enabled, so endpoints are technically unreachable via the feature gate (on the LE proxy path). However, direct Central API access bypasses this.
-3. Phase 1 fixes are estimated as a single focused session of work.
+1. **Do NOT activate the research tier** (set DEPLOYMENT_MODE=research) until C1 feature gate enforcement is implemented in Central.
+2. **Current risk posture**: C2-C5 are remediated in production. Remaining activation blocker is C1 (tier gate enforcement on direct Central routes).
+3. Next focused work session should implement C1 in `greenreach-central/server.js` using Central-local middleware or explicit route guards.
 4. Consider adding integration tests for multi-tenant isolation before activation.
 5. The 7 EVIE research tools (vs expected 10) should be reconciled -- verify which 3 were intentionally omitted.
+
+---
+
+## Remediation Status (Updated Mar 28, 2026)
+
+| Finding | Status | Fix Applied | Files Changed |
+|---------|--------|-------------|---------------|
+| C1 | OPEN | autoEnforceFeatures() import attempted, REVERTED (Central cannot import from ../server/middleware/) | greenreach-central/server.js (reverted) |
+| C2 | REMEDIATED | NEW middleware research-tenant.js with 14 ownership verification functions injected into 62 sub-resource endpoints | greenreach-central/middleware/research-tenant.js (new), all 6 research route files |
+| C3 | REMEDIATED | 4 string-interpolated queries replaced with parameterized queries | greenreach-central/routes/farm-ops-agent.js |
+| C4 | REMEDIATED | signer_id derived from req.userId, not request body | greenreach-central/routes/research-eln.js |
+| C5 | REMEDIATED | RETURNING id pattern replaces currval() | greenreach-central/routes/research-data.js |
+
+**C1 Resolution Path**: Cannot use autoEnforceFeatures() from LE because Central deploy bundle excludes ../server/ directory. Needs either: (a) duplicate the middleware in greenreach-central/middleware/, or (b) extract to shared npm package, or (c) add inline requireFeature() checks to each research route mount in Central server.js.
+
+**Deployment**: All fixes deployed to greenreach-central-prod-v4 in commit 5b65a86b (Mar 28, 2026).

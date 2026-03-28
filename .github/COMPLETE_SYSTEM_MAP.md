@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.5.0
-**Date**: March 27, 2026
-**Last Updated**: March 27, 2026 -- v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
+**Version**: 1.6.0
+**Date**: March 28, 2026
+**Last Updated**: March 28, 2026 -- v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). Previous: v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -50,7 +50,7 @@
 |                           |  |                           |
 | PostgreSQL (RDS)          |  | EnvStore (in-memory)      |
 | farmStore (in-memory)     |  | env-state.json (file)     |
-| 45+ database tables       |  | NeDB / SQLite             |
+| 70+ database tables       |  | NeDB / SQLite             |
 |                           |  |                           |
 | F.A.Y.E. (admin AI)      |  | E.V.I.E. (farm AI)       |
 | Admin dashboard           |  | Farm dashboard             |
@@ -624,6 +624,8 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/market-intelligence | routes/market-intelligence.js | North American market data |
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
+| /api/farm/products | routes/custom-products.js | Custom farm product CRUD + image upload |
+| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration) |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
 | /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
@@ -808,6 +810,8 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 | Page | Purpose |
 |------|---------|
+| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators) |
+| research-subscription.html | Research tier subscription and usage model details |
 | setup-wizard.html | New farm setup wizard |
 | grant-wizard.html | Grant application wizard (FREE) |
 | delivery.html | Delivery management |
@@ -2537,6 +2541,6 @@ The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. T
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.5.0
-**Generated**: March 27, 2026
+**Document Version**: 1.6.0
+**Generated**: March 28, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

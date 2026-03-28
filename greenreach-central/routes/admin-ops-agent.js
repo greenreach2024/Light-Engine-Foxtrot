@@ -2332,6 +2332,88 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+  // ── Weekly Feature Request Queue (EVIE -> FAYE) ───────────────
+
+  'get_weekly_feature_request_todo': {
+    description: 'Build a weekly todo queue of grower feature requests submitted by E.V.I.E. Includes request title, farm, priority, age, and request text so F.A.Y.E. can review once per week.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'status', 'limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+
+        const days = Math.max(1, Math.min(parseInt(params.days, 10) || 7, 30));
+        const limit = Math.max(1, Math.min(parseInt(params.limit, 10) || 200, 500));
+        const statusFilter = String(params.status || 'all').toLowerCase();
+
+        let sql = `
+          SELECT
+            id,
+            sender,
+            recipient,
+            message_type,
+            subject,
+            body,
+            priority,
+            status,
+            context,
+            created_at
+          FROM agent_messages
+          WHERE recipient = 'faye'
+            AND sender = 'evie'
+            AND message_type = 'escalation'
+            AND COALESCE(context->>'request_type', '') = 'feature_request'
+            AND created_at >= NOW() - ($1 || ' days')::interval
+        `;
+        const values = [days];
+
+        if (statusFilter === 'unread' || statusFilter === 'read') {
+          sql += ` AND status = $2`;
+          values.push(statusFilter);
+        }
+
+        sql += ` ORDER BY
+          CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+          created_at DESC
+          LIMIT $${values.length + 1}`;
+        values.push(limit);
+
+        const result = await dbQuery(sql, values);
+        const rows = result.rows || [];
+
+        const todo_items = rows.map((r) => ({
+          id: r.id,
+          title: r.subject,
+          farm_id: r.context?.farm_id || null,
+          priority: r.priority || 'normal',
+          status: r.status || 'unread',
+          created_at: r.created_at,
+          age_days: Math.max(0, Math.floor((Date.now() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24))),
+          context_page: r.context?.context_page || null,
+          body: r.body
+        }));
+
+        const byPriority = {
+          critical: todo_items.filter(i => i.priority === 'critical').length,
+          high: todo_items.filter(i => i.priority === 'high').length,
+          normal: todo_items.filter(i => i.priority === 'normal').length,
+          low: todo_items.filter(i => i.priority === 'low').length
+        };
+
+        return {
+          ok: true,
+          window_days: days,
+          total_requests: todo_items.length,
+          by_priority: byPriority,
+          todo_items
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
   // ── Webhook Alert Dispatch ────────────────────────────────────
 
   'get_webhook_config': {

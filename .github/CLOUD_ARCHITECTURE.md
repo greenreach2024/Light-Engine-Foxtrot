@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 1.1.0
-**Date**: March 23, 2026
+**Version**: 1.2.0
+**Date**: March 28, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -138,6 +138,11 @@ The monorepo contains two independently deployed applications:
 - **Dashboard**: `greenreach-central/public/views/farm-summary.html`
 - **Central Admin UI**: `greenreach-central/public/central-admin.js` (farm detail, devices table)
 - **Deployed via**: `eb deploy` from `greenreach-central/`
+
+**Import Boundary Rule (Critical)**:
+- Central deploy bundle does NOT include `../server/` from repo root.
+- `greenreach-central/server.js` must only import files inside `greenreach-central/`.
+- Attempting to import LE middleware (for example `../server/middleware/feature-flags`) will crash Central at runtime.
 
 ### Central Devices Status Contract
 

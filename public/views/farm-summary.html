@@ -3773,6 +3773,28 @@
                 `;
               }
 
+              if (!harvestInfo) {
+                const missingPlan = !(group.plan || group.planId || group.planConfig?.preview?.planId);
+                const groupCropLabel = group.crop || group.variety || '';
+                const statusText = missingPlan ? 'No plan assigned' : 'Group details unavailable';
+
+                harvestInfo = `
+                  <div class="group-harvest-info">
+                    <div class="harvest-countdown" style="border-left-color: #64748b;">
+                      <div class="harvest-details">
+                        <div class="harvest-label">
+                          ${group.name || group.id || 'Group'}
+                          ${groupCropLabel ? `<span class="crop-badge">${groupCropLabel}</span>` : ''}
+                        </div>
+                        <div class="harvest-status" style="color: #64748b;">
+                          ${statusText}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }
+
               if (harvestInfo) {
                 groupsHtml += harvestInfo;
               }
