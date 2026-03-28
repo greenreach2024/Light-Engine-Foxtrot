@@ -10,6 +10,12 @@ import logger from '../utils/logger.js';
 const { Pool } = pg;
 
 let pool = null;
+
+// SSL rejectUnauthorized: respect DB_SSL_REJECT_UNAUTHORIZED env var override.
+// Defaults to true in production, false otherwise.
+const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== undefined
+  ? process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false"
+  : process.env.NODE_ENV === "production";
 let db = null;
 
 /**
@@ -30,7 +36,7 @@ export async function initDatabase() {
     logger.info('Using DATABASE_URL connection string');
     poolConfig = {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DB_SSL !== 'false' ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+      ssl: process.env.DB_SSL !== 'false' ? { rejectUnauthorized: sslRejectUnauthorized } : false,
       max: parseInt(process.env.DB_POOL_MAX) || 20,
       idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,
@@ -43,7 +49,7 @@ export async function initDatabase() {
       database: process.env.RDS_DB_NAME || process.env.DB_NAME || 'greenreach_central',
       user: process.env.RDS_USERNAME || process.env.DB_USER || 'postgres',
       password: process.env.RDS_PASSWORD || process.env.DB_PASSWORD,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: sslRejectUnauthorized } : false,
       max: parseInt(process.env.DB_POOL_MAX) || 20,
       idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
       connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT) || 10000,

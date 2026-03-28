@@ -178,32 +178,6 @@ router.post('/register', async (req, res) => {
     });
   }
 });
-
-/**
- * GET /api/farms/:farmId
- * 
- * Get farm information (requires authentication)
- */
-router.get('/:farmId', (req, res) => {
-  const { farmId } = req.params;
-  const farm = registeredFarms.get(farmId);
-
-  if (!farm) {
-    return res.status(404).json({ error: 'Farm not found' });
-  }
-
-  // Don't expose credentials in GET requests
-  const { credentials, ...farmInfo } = farm;
-
-  res.json({
-    success: true,
-    farm: {
-      ...farmInfo,
-      has_credentials: true
-    }
-  });
-});
-
 /**
  * POST /api/farms/verify-id
  * Verify if a Farm ID is valid and active
@@ -476,6 +450,32 @@ router.get('/by-slug/:slug', async (req, res) => {
       message: error.message
     });
   }
+});
+
+
+/**
+ * GET /api/farms/:farmId
+ * 
+ * Get farm information (requires authentication)
+ */
+router.get('/:farmId', (req, res) => {
+  const { farmId } = req.params;
+  const farm = registeredFarms.get(farmId);
+
+  if (!farm) {
+    return res.status(404).json({ error: 'Farm not found' });
+  }
+
+  // Don't expose credentials in GET requests
+  const { credentials, ...farmInfo } = farm;
+
+  res.json({
+    success: true,
+    farm: {
+      ...farmInfo,
+      has_credentials: true
+    }
+  });
 });
 
 // Initialize with a test registration code for development
