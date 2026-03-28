@@ -119,7 +119,7 @@
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'evie-intel-close';
-  closeBtn.textContent = '\u00D7';
+  closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   closeBtn.addEventListener('click', function () { togglePanel(false); });
 
   panelHeader.appendChild(panelOrb);
@@ -136,11 +136,17 @@
     { key: 'converse', label: 'Chat' },
     { key: 'learn',   label: 'Farm' }
   ];
+  var modeIcons = {
+    observe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    advise: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>',
+    converse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    learn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
+  };
   modes.forEach(function (m) {
     var btn = document.createElement('button');
     btn.className = 'evie-mode-tab' + (m.key === activeMode ? ' active' : '');
     btn.dataset.mode = m.key;
-    btn.textContent = m.label;
+    btn.innerHTML = '<span class="evie-mode-tab-icon">' + (modeIcons[m.key] || '') + '</span>' + m.label;
     btn.addEventListener('click', function () { switchMode(m.key); });
     tabBar.appendChild(btn);
   });
@@ -198,7 +204,7 @@
     '<div class="evie-conv-messages" id="evie-conv-messages"></div>' +
     '<div class="evie-conv-input-row">' +
     '  <input class="evie-conv-input" id="evie-conv-input" placeholder="Ask E.V.I.E. about your farm..." />' +
-    '  <button class="evie-conv-send" id="evie-conv-send">&#8593;</button>' +
+    '  <button class="evie-conv-send" id="evie-conv-send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>' +
     '</div>';
 
   // --- Learn Mode (Farm Profile) ---

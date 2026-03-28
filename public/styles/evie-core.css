@@ -392,11 +392,12 @@
 .evie-intel-panel {
   position: fixed;
   top: 0; right: 0;
-  width: 400px;
+  width: 580px;
   height: 100vh;
-  background: var(--evie-bg-panel);
-  border-left: 1px solid var(--evie-border);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+  background: rgba(18, 29, 46, 0.88);
+  border-left: 1px solid rgba(16, 185, 129, 0.1);
+  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px) saturate(180%);
   z-index: 99998;
   display: flex;
   flex-direction: column;
@@ -412,9 +413,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--evie-border);
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.1);
   flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .evie-intel-header-text {
@@ -433,11 +435,11 @@
 }
 
 .evie-intel-close {
-  background: none;
-  border: 1px solid var(--evie-border);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--evie-text-secondary);
-  width: 32px; height: 32px;
-  border-radius: 8px;
+  width: 36px; height: 36px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -454,32 +456,39 @@
 
 .evie-mode-tabs {
   display: flex;
-  padding: 0 20px;
+  padding: 8px 16px;
+  gap: 6px;
   border-bottom: 1px solid var(--evie-border);
   flex-shrink: 0;
 }
 
 .evie-mode-tab {
   flex: 1;
-  padding: 10px 0;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--evie-text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  transition: color 0.2s, border-color 0.2s;
+  letter-spacing: 0.5px;
+  transition: all 0.25s ease;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 .evie-mode-tab:hover {
   color: var(--evie-text-secondary);
+  background: rgba(255, 255, 255, 0.06);
 }
 .evie-mode-tab.active {
   color: var(--evie-text-accent);
-  border-bottom-color: var(--evie-vitality);
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.2);
 }
 
 /* -- Panel Body -------------------------------------------------------- */
@@ -522,16 +531,19 @@
 /* -- Signal Cards ------------------------------------------------------ */
 
 .evie-signal-card {
-  background: var(--evie-bg-card);
-  border: 1px solid var(--evie-border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: rgba(24, 37, 53, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px 14px;
   margin-bottom: 8px;
   border-left: 3px solid var(--evie-vitality);
-  transition: background 0.2s;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
 }
 .evie-signal-card:hover {
-  background: var(--evie-bg-card-hover);
+  background: rgba(30, 48, 68, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(-2px);
 }
 .evie-signal-card.signal-high,
 .evie-signal-card.signal-critical {
@@ -606,11 +618,16 @@
 .evie-stat {
   flex: 1;
   min-width: 80px;
-  background: var(--evie-bg-card);
-  border: 1px solid var(--evie-border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: rgba(24, 37, 53, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px 14px;
   text-align: center;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.25s ease;
+}
+.evie-stat:hover {
+  border-color: rgba(16, 185, 129, 0.2);
 }
 .evie-stat-value {
   font-size: 22px;
@@ -643,18 +660,28 @@
 }
 
 .evie-conv-msg {
-  padding: 8px 0;
+  padding: 10px 14px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--evie-text);
+  border-radius: 10px;
+  margin-bottom: 6px;
 }
 .evie-conv-msg.user {
   color: var(--evie-sensing);
+  background: rgba(6, 182, 212, 0.08);
+}
+.evie-conv-msg.assistant {
+  background: rgba(24, 37, 53, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 .evie-conv-msg.system {
   color: var(--evie-text-muted);
   font-style: italic;
   font-size: 12px;
+  background: none;
+  text-align: center;
+  padding: 6px 0;
 }
 
 .evie-conv-input-row {
@@ -667,14 +694,15 @@
 
 .evie-conv-input {
   flex: 1;
-  background: var(--evie-bg-input);
-  border: 1px solid var(--evie-border);
-  border-radius: 8px;
-  padding: 10px 14px;
+  background: rgba(26, 42, 61, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
   color: var(--evie-text);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
 }
 .evie-conv-input:focus {
   border-color: var(--evie-border-active);
@@ -684,20 +712,25 @@
 }
 
 .evie-conv-send {
-  background: var(--evie-vitality);
+  background: linear-gradient(135deg, var(--evie-vitality), #059669);
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   color: #fff;
-  width: 38px;
+  width: 48px;
+  min-width: 48px;
   cursor: pointer;
   font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.2s;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
 }
-.evie-conv-send:hover { opacity: 0.85; }
-.evie-conv-send:disabled { opacity: 0.4; cursor: default; }
+.evie-conv-send:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+}
+.evie-conv-send:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
 
 /* ======================================================================
    E.V.I.E. CORE PAGE -- Dedicated Farm Intelligence Screen
@@ -809,6 +842,73 @@
   color: var(--evie-text-muted);
   font-size: 13px;
   font-style: italic;
+}
+
+
+/* -- Mode Tab Icons ---------------------------------------------------- */
+
+.evie-mode-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 0.25s;
+}
+.evie-mode-tab.active .evie-mode-tab-icon {
+  opacity: 1;
+}
+.evie-mode-tab-icon svg {
+  display: block;
+}
+
+/* -- Panel Grid Overlay ----------------------------------------------- */
+
+.evie-intel-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(16, 185, 129, 0.025) 59px, rgba(16, 185, 129, 0.025) 60px),
+    repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(16, 185, 129, 0.025) 59px, rgba(16, 185, 129, 0.025) 60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.evie-intel-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* -- Enhanced Scrollbar ------------------------------------------------ */
+
+.evie-intel-body::-webkit-scrollbar {
+  width: 4px;
+}
+.evie-intel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.evie-intel-body::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 2px;
+}
+.evie-intel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.35);
+}
+
+/* -- Section Header Icon ---------------------------------------------- */
+
+.evie-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: rgba(16, 185, 129, 0.1);
+  flex-shrink: 0;
+}
+.evie-section-icon svg {
+  display: block;
 }
 
 /* ======================================================================

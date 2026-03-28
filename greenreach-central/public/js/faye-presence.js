@@ -144,15 +144,15 @@
     '    <div class="faye-intel-title">F.A.Y.E.</div>',
     '    <div class="faye-intel-subtitle" id="faye-panel-subtitle">Observing operations</div>',
     '  </div>',
-    '  <button class="faye-intel-close" id="faye-panel-close" title="Close">&times;</button>',
+    '  <button class="faye-intel-close" id="faye-panel-close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>',
     '</div>',
     '<div class="faye-mode-tabs" id="faye-mode-tabs">',
-    '  <button class="faye-mode-tab active" data-mode="observe">Observe</button>',
-    '  <button class="faye-mode-tab" data-mode="advise">Advise</button>',
-    '  <button class="faye-mode-tab" data-mode="act">Act</button>',
-    '  <button class="faye-mode-tab" data-mode="explain">Explain</button>',
-    '  <button class="faye-mode-tab" data-mode="learn">Learn</button>',
-    '  <button class="faye-mode-tab" data-mode="escalate">Escalate</button>',
+    '  <button class="faye-mode-tab active" data-mode="observe"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>Observe</button>',
+    '  <button class="faye-mode-tab" data-mode="advise"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg></span>Advise</button>',
+    '  <button class="faye-mode-tab" data-mode="act"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>Act</button>',
+    '  <button class="faye-mode-tab" data-mode="explain"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>Explain</button>',
+    '  <button class="faye-mode-tab" data-mode="learn"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>Learn</button>',
+    '  <button class="faye-mode-tab" data-mode="escalate"><span class="faye-mode-tab-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>Escalate</button>',
     '</div>',
     '',
     '<!-- Observe Mode -->',
@@ -252,7 +252,7 @@
     '<div class="faye-intel-footer">',
     '  <div class="faye-intel-chat-input">',
     '    <textarea id="faye-panel-input" rows="1" placeholder="Ask F.A.Y.E. anything..."></textarea>',
-    '    <button class="faye-intel-send" id="faye-panel-send" title="Send">&#9654;</button>',
+    '    <button class="faye-intel-send" id="faye-panel-send" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>',
     '  </div>',
     '</div>'
   ].join('\n');
@@ -480,22 +480,20 @@
 
     var bar = document.createElement('div');
     bar.id = 'faye-confirm-row';
-    bar.style.cssText = 'display:flex;gap:8px;padding:4px 8px;align-self:flex-start;align-items:center';
+    bar.className = 'faye-confirm-row';
 
     var label = document.createElement('span');
-    label.className = 'faye-action-approval requires-approval';
+    label.className = 'faye-confirm-label ' + (pending.tier === 'admin' ? 'critical' : 'approval');
     label.textContent = pending.tier === 'admin' ? 'CRITICAL' : 'Approval needed';
 
     var yesBtn = document.createElement('button');
-    yesBtn.className = 'faye-mode-tab';
-    yesBtn.style.cssText = 'background:rgba(16,185,129,0.2);color:#6ee7b7;cursor:pointer';
-    yesBtn.textContent = 'Confirm';
+    yesBtn.className = 'faye-confirm-btn confirm';
+    yesBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> Approve';
     yesBtn.addEventListener('click', function () { bar.remove(); sendChat('yes'); });
 
     var noBtn = document.createElement('button');
-    noBtn.className = 'faye-mode-tab';
-    noBtn.style.cssText = 'cursor:pointer';
-    noBtn.textContent = 'Cancel';
+    noBtn.className = 'faye-confirm-btn cancel';
+    noBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Decline';
     noBtn.addEventListener('click', function () { bar.remove(); sendChat('cancel'); });
 
     bar.appendChild(label);
