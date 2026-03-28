@@ -3490,6 +3490,151 @@ export const ADMIN_TOOL_CATALOG = {
         return { ok: true, message: `Appended to security workbook (${section})`, timestamp };
       } catch (err) { return { ok: false, error: err.message }; }
     }
+  },
+
+
+  // ─── Research Platform Admin Tools (F.A.Y.E.) ──────────────────────
+  'get_research_dashboard': {
+    description: 'Get an overview of all research studies, active datasets, and recent activity across the farm. Admin-level summary.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const studies = await dbQuery(`
+          SELECT status, COUNT(*) as count FROM studies WHERE farm_id = $1 GROUP BY status
+        `, [farmId]);
+        const datasets = await dbQuery(`
+          SELECT rd.status, COUNT(*) as count FROM research_datasets rd
+          JOIN studies s ON rd.study_id = s.id WHERE s.farm_id = $1
+          GROUP BY rd.status
+        `, [farmId]);
+        const recentObs = await dbQuery(`
+          SELECT COUNT(*) as count FROM research_observations ro
+          JOIN research_datasets rd ON ro.dataset_id = rd.id
+          JOIN studies s ON rd.study_id = s.id
+          WHERE s.farm_id = $1 AND ro.observed_at > NOW() - INTERVAL '7 days'
+        `, [farmId]);
+        const alerts = await dbQuery(`
+          SELECT sa.alert_type, sa.severity, COUNT(*) as count FROM study_alerts sa
+          JOIN studies s ON sa.study_id = s.id
+          WHERE s.farm_id = $1 AND sa.resolved_at IS NULL
+          GROUP BY sa.alert_type, sa.severity
+        `, [farmId]);
+        return {
+          ok: true,
+          study_summary: studies.rows,
+          dataset_summary: datasets.rows,
+          observations_last_7d: parseInt(recentObs.rows[0]?.count || '0', 10),
+          active_alerts: alerts.rows
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_study_compliance_status': {
+    description: 'Check compliance status for a study: DMP status, retention policies, overdue milestones, unsigned ELN entries, and budget variance.',
+    category: 'read',
+    required: ['study_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const dmp = await dbQuery(
+          'SELECT id, plan_name, status, updated_at FROM data_management_plans WHERE study_id = $1',
+          [params.study_id]
+        );
+        const overdueMs = await dbQuery(
+          `SELECT COUNT(*) as count FROM trial_milestones
+           WHERE study_id = $1 AND status != 'completed' AND planned_date < NOW()`,
+          [params.study_id]
+        );
+        const unsignedEln = await dbQuery(`
+          SELECT COUNT(*) as count FROM eln_entries ee
+          JOIN eln_notebooks en ON ee.notebook_id = en.id
+          WHERE en.study_id = $1 AND ee.id NOT IN (SELECT entry_id FROM eln_signatures)
+        `, [params.study_id]);
+        const budgetVar = await dbQuery(`
+          SELECT gb.grant_name,
+            COALESCE(SUM(bli.planned_amount), 0) as total_planned,
+            COALESCE(SUM(bli.actual_amount), 0) as total_actual,
+            COALESCE(SUM(bli.actual_amount), 0) - COALESCE(SUM(bli.planned_amount), 0) as variance
+          FROM grant_budgets gb
+          LEFT JOIN budget_line_items bli ON bli.budget_id = gb.id
+          WHERE gb.study_id = $1 GROUP BY gb.id, gb.grant_name
+        `, [params.study_id]);
+        const deviations = await dbQuery(
+          'SELECT COUNT(*) as count FROM protocol_deviations WHERE study_id = $1',
+          [params.study_id]
+        );
+        return {
+          ok: true,
+          dmp: dmp.rows,
+          overdue_milestones: parseInt(overdueMs.rows[0]?.count || '0', 10),
+          unsigned_eln_entries: parseInt(unsignedEln.rows[0]?.count || '0', 10),
+          budget_variance: budgetVar.rows,
+          protocol_deviations: parseInt(deviations.rows[0]?.count || '0', 10)
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_research_audit_log': {
+    description: 'Get recent provenance/audit records for research data. Shows who changed what, when, and why.',
+    category: 'read',
+    required: [],
+    optional: ['study_id', 'limit'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const limit = parseInt(params.limit, 10) || 50;
+        let sql, sqlParams;
+        if (params.study_id) {
+          sql = `SELECT pr.*, u.email as actor_email FROM provenance_records pr
+                 LEFT JOIN farm_users u ON pr.actor_id = u.id
+                 WHERE pr.entity_type IN ('observation','dataset','eln_entry','study','calibration')
+                 AND pr.farm_id = $1 ORDER BY pr.recorded_at DESC LIMIT $2`;
+          sqlParams = [farmId, limit];
+        } else {
+          sql = `SELECT pr.*, u.email as actor_email FROM provenance_records pr
+                 LEFT JOIN farm_users u ON pr.actor_id = u.id
+                 WHERE pr.farm_id = $1 ORDER BY pr.recorded_at DESC LIMIT $2`;
+          sqlParams = [farmId, limit];
+        }
+        const result = await dbQuery(sql, sqlParams);
+        return { ok: true, audit_records: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'manage_study_collaborators': {
+    description: 'View or manage external collaborators for a study. Lists current collaborators with their roles',
+    category: 'read',
+    required: ['study_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const collabs = await dbQuery(`
+          SELECT sc.*, u.email FROM study_collaborators sc
+          LEFT JOIN farm_users u ON sc.user_id = u.id
+          WHERE sc.study_id = $1 ORDER BY sc.role, sc.added_at
+        `, [params.study_id]);
+        const links = await dbQuery(`
+          SELECT id, token_hash, permission, expires_at, max_downloads, download_count, revoked
+          FROM share_links WHERE study_id = $1 ORDER BY created_at DESC LIMIT 10
+        `, [params.study_id]);
+        return {
+          ok: true,
+          collaborators: collabs.rows,
+          active_share_links: links.rows.filter(l => !l.revoked && (!l.expires_at || new Date(l.expires_at) > new Date()))
+        };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
   }
 
 };

@@ -96,6 +96,37 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 
 **Key files**: `.github/AI_VISION_RULES_AND_SKILLS.md` (full task list), `greenreach-central/routes/network-growers.js` (18 network routes), `greenreach-central/routes/experiment-records.js` (benchmarks + env benchmarks), `greenreach-central/services/ai-recommendations-pusher.js` (30-min push cycle), `greenreach-central/jobs/anomaly-correlation.js` (weekly cross-farm anomaly detection), `greenreach-central/jobs/supply-demand-balancer.js` (risk alerts + adaptive loss alerts), `greenreach-central/jobs/production-planner.js` (weekly seeding plans), `greenreach-central/routes/market-intelligence.js` (10 market data routes), `lib/recipe-modifier.js` (autonomous recipe engine + guardrails), `lib/harvest-predictor.js` (readiness scoring)
 
+
+### Research Platform (Added Session 2026-03-28)
+
+**Tier**: `research` in feature-flags.js (includes all `full` tier features plus research-specific).
+
+**30 new tables** across migrations 042-047:
+- 042: studies, study_protocols, treatment_groups, study_links, trial_milestones, protocol_deviations
+- 043: research_datasets, research_observations, data_transformations, provenance_records, calibration_logs, device_maintenance
+- 044: export_packages, data_quality_flags, qc_reviews, study_alerts
+- 045: data_management_plans, retention_policies, grant_budgets, budget_line_items, researcher_profiles, citation_records, project_closeouts
+- 046: eln_notebooks, eln_templates, eln_entries, eln_attachments, eln_links, eln_signatures, eln_snapshots
+- 047: study_collaborators, review_comments, share_links, onboarding_checklists
+
+**6 route files** in `greenreach-central/routes/`:
+- `research-studies.js` -- Study design, protocols, treatment groups, milestones, deviations
+- `research-data.js` -- Datasets, observations, provenance, calibrations, maintenance
+- `research-exports.js` -- Export packages, quality flags, QC reviews, alerts
+- `research-compliance.js` -- DMPs, retention, budgets, profiles, citations, closeouts
+- `research-eln.js` -- Electronic lab notebook: notebooks, entries, attachments, signatures, snapshots, templates
+- `research-collaboration.js` -- Collaborators, review comments, share links, onboarding checklists
+
+**AI Integration**:
+- EVIE (farm-ops-agent.js): 10 research tools + 3 scanning integration tools (get_my_studies, get_study_timeline, record_observation, get_dataset_summary, get_eln_entries, get_calibration_status, get_study_budget, scan_bus_channels, get_bus_mappings, save_bus_mapping)
+- FAYE (admin-ops-agent.js): 4 admin tools (get_research_dashboard, get_study_compliance_status, get_research_audit_log, manage_study_collaborators)
+
+**Feature Gating**: ENDPOINT_FEATURES maps `/api/research` to `research_workspace`. All 6 route files are mounted at `/api` with authMiddleware in server.js.
+
+**UI**: `greenreach-central/public/views/research-workspace.html` -- Research dashboard with studies, datasets, notebooks, compliance, and collaborator tabs.
+
+**Landing Page**: Third product card (amber #f59e0b border) added to `greenreach-central/public/landing-main.html`.
+
 ### DO NOT (Architecture Rules)
 
 - DO NOT assume any physical device exists (no Pi, no edge box, no local server)

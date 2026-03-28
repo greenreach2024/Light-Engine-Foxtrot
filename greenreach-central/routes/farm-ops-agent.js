@@ -2323,7 +2323,268 @@ export const TOOL_CATALOG = {
       analysis.sort((a, b) => b.margin_pct - a.margin_pct);
       return { ok: true, analysis, count: analysis.length };
     }
+  },
+
+  // ─── Research Platform Tools (E.V.I.E.) ─────────────────────────────
+  'get_my_studies': {
+    description: 'List all research studies for the current farm. Returns study titles, status, PI, protocol count, and linked entity count.',
+    category: 'read',
+    required: [],
+    optional: ['status'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const statusFilter = params.status ? `AND s.status = '${params.status.replace(/'/g, "''")}'` : '';
+        const result = await dbQuery(`
+          SELECT s.id, s.title, s.status, s.objectives, s.created_at,
+            u.email as pi_email,
+            (SELECT COUNT(*) FROM study_protocols sp WHERE sp.study_id = s.id) as protocol_count,
+            (SELECT COUNT(*) FROM study_links sl WHERE sl.study_id = s.id) as linked_entities
+          FROM studies s LEFT JOIN farm_users u ON s.pi_user_id = u.id
+          WHERE s.farm_id = $1 ${statusFilter}
+          ORDER BY s.updated_at DESC LIMIT 20
+        `, [farmId]);
+        return { ok: true, studies: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_study_timeline': {
+    description: 'Get milestones and timeline for a specific study. Shows planned dates, actual dates, and status of each milestone.',
+    category: 'read',
+    required: ['study_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const milestones = await dbQuery(
+          'SELECT * FROM trial_milestones WHERE study_id = $1 ORDER BY COALESCE(actual_date, planned_date) ASC',
+          [params.study_id]
+        );
+        const deviations = await dbQuery(
+          'SELECT id, deviation_type, description, recorded_at FROM protocol_deviations WHERE study_id = $1 ORDER BY recorded_at DESC LIMIT 10',
+          [params.study_id]
+        );
+        return { ok: true, milestones: milestones.rows, deviations: deviations.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'record_observation': {
+    description: 'Record a manual research observation into a dataset. Provide dataset_id, variable_name, value, and optional unit.',
+    category: 'write',
+    required: ['dataset_id', 'variable_name', 'value'],
+    optional: ['unit', 'sample_id', 'notes'],
+    undoable: false,
+    handler: async (params) => {
+      try {
+        const result = await dbQuery(`
+          INSERT INTO research_observations (dataset_id, observation_type, variable_name, raw_value, unit, sample_id, observed_at)
+          VALUES ($1, 'manual', $2, $3, $4, $5, NOW())
+          RETURNING id, variable_name, raw_value, unit, observed_at
+        `, [params.dataset_id, params.variable_name, params.value, params.unit || null, params.sample_id || null]);
+        return { ok: true, observation: result.rows[0] };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_dataset_summary': {
+    description: 'Get summary statistics for a research dataset including observation counts by variable, date range, and quality flag counts.',
+    category: 'read',
+    required: ['dataset_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const ds = await dbQuery('SELECT * FROM research_datasets WHERE id = $1', [params.dataset_id]);
+        if (ds.rows.length === 0) return { ok: false, error: 'Dataset not found' };
+        const stats = await dbQuery(`
+          SELECT variable_name, COUNT(*) as count,
+            MIN(raw_value) as min_val, MAX(raw_value) as max_val, AVG(raw_value) as avg_val,
+            MIN(observed_at) as first_obs, MAX(observed_at) as last_obs
+          FROM research_observations WHERE dataset_id = $1
+          GROUP BY variable_name ORDER BY variable_name
+        `, [params.dataset_id]);
+        const flags = await dbQuery(`
+          SELECT dqf.flag_type, COUNT(*) as count
+          FROM data_quality_flags dqf
+          JOIN research_observations ro ON dqf.observation_id = ro.id
+          WHERE ro.dataset_id = $1
+          GROUP BY dqf.flag_type
+        `, [params.dataset_id]);
+        return { ok: true, dataset: ds.rows[0], variable_stats: stats.rows, quality_flags: flags.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_eln_entries': {
+    description: 'Get recent electronic lab notebook entries for a notebook. Returns entries with signatures and attachment counts.',
+    category: 'read',
+    required: ['notebook_id'],
+    optional: ['entry_type', 'limit'],
+    handler: async (params) => {
+      try {
+        const limit = parseInt(params.limit, 10) || 20;
+        const typeFilter = params.entry_type ? `AND e.entry_type = '${params.entry_type.replace(/'/g, "''")}'` : '';
+        const result = await dbQuery(`
+          SELECT e.*, u.email as created_by_email,
+            (SELECT COUNT(*) FROM eln_signatures es WHERE es.entry_id = e.id) as signature_count,
+            (SELECT COUNT(*) FROM eln_attachments ea WHERE ea.entry_id = e.id) as attachment_count
+          FROM eln_entries e LEFT JOIN farm_users u ON e.created_by = u.id
+          WHERE e.notebook_id = $1 ${typeFilter}
+          ORDER BY e.created_at DESC LIMIT $2
+        `, [params.notebook_id, limit]);
+        return { ok: true, entries: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_calibration_status': {
+    description: 'Get current calibration status for all devices. Shows overdue calibrations and next due dates.',
+    category: 'read',
+    required: [],
+    optional: ['device_id'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const deviceFilter = params.device_id ? `AND cl.device_id = '${params.device_id.replace(/'/g, "''")}'` : '';
+        const result = await dbQuery(`
+          SELECT cl.device_id, cl.sensor_id, cl.calibration_type, cl.offset_value,
+            cl.calibrated_at, cl.next_due,
+            CASE WHEN cl.next_due < NOW() THEN true ELSE false END as overdue
+          FROM calibration_logs cl
+          WHERE cl.farm_id = $1 AND cl.status = 'current' ${deviceFilter}
+          ORDER BY cl.next_due ASC NULLS LAST
+        `, [farmId]);
+        const overdue = result.rows.filter(r => r.overdue);
+        return { ok: true, calibrations: result.rows, overdue_count: overdue.length, overdue };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_study_budget': {
+    description: 'Get budget status for a study including planned vs actual spending by category.',
+    category: 'read',
+    required: ['study_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const budgets = await dbQuery(`
+          SELECT gb.*, 
+            COALESCE(SUM(bli.planned_amount), 0) as total_planned,
+            COALESCE(SUM(bli.actual_amount), 0) as total_actual
+          FROM grant_budgets gb
+          LEFT JOIN budget_line_items bli ON bli.budget_id = gb.id
+          WHERE gb.study_id = $1
+          GROUP BY gb.id
+        `, [params.study_id]);
+        return { ok: true, budgets: budgets.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  // ─── EVIE Scanning Integration Tools ─────────────────────────────────
+  'scan_bus_channels': {
+    description: 'Scan all bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered devices with addresses, protocols, and suggested types. Use this to begin device onboarding.',
+    category: 'read',
+    required: [],
+    optional: ['bus_type', 'timeout_ms'],
+    handler: async (params) => {
+      try {
+        const busType = params.bus_type || 'all';
+        const timeout = parseInt(params.timeout_ms, 10) || 5000;
+        // Cloud-farm architecture: scan request is proxied to the LE instance
+        const farmUrl = process.env.FARM_API_URL || process.env.LE_API_URL;
+        if (!farmUrl) {
+          return { ok: false, error: 'No farm API URL configured for bus scanning' };
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout + 2000);
+        try {
+          const resp = await fetch(`${farmUrl}/api/devices/scan-bus`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bus_type: busType, timeout_ms: timeout }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          const data = await resp.json();
+          return { ok: true, ...data };
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          return { ok: false, error: `Bus scan failed: ${fetchErr.message}` };
+        }
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_bus_mappings': {
+    description: 'Get current bus-to-device mappings. Shows which physical addresses/channels are mapped to which registered devices.',
+    category: 'read',
+    required: [],
+    optional: ['bus_type'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const busFilter = params.bus_type ? `AND sl.entity_type = '${params.bus_type.replace(/'/g, "''")}'` : '';
+        const result = await dbQuery(`
+          SELECT sl.entity_id as address, sl.entity_type as bus_type,
+            d.device_id, d.name as device_name, d.device_type, d.status
+          FROM study_links sl
+          LEFT JOIN devices d ON d.device_id = sl.entity_id
+          WHERE sl.study_id IS NULL AND sl.linked_by IS NULL ${busFilter}
+          ORDER BY sl.entity_type, sl.entity_id
+        `, []);
+        // Fallback: query devices table directly for bus mappings
+        const devices = await dbQuery(`
+          SELECT device_id, name, device_type, status, metadata
+          FROM devices WHERE farm_id = $1
+          ORDER BY device_type, name
+        `, [farmId]);
+        return { ok: true, mappings: result.rows, registered_devices: devices.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'save_bus_mapping': {
+    description: 'Save a bus channel to device mapping after scanning. Maps a discovered physical address to a registered device ID.',
+    category: 'write',
+    required: ['bus_address', 'device_id', 'bus_type'],
+    optional: ['device_name', 'device_type'],
+    undoable: true,
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        // Register or update the device with bus mapping metadata
+        const metadata = JSON.stringify({
+          bus_type: params.bus_type,
+          bus_address: params.bus_address,
+          mapped_at: new Date().toISOString()
+        });
+        const result = await dbQuery(`
+          INSERT INTO devices (device_id, farm_id, name, device_type, status, metadata)
+          VALUES ($1, $2, $3, $4, 'active', $5)
+          ON CONFLICT (device_id) DO UPDATE SET
+            metadata = jsonb_set(COALESCE(devices.metadata, '{}'), '{bus_mapping}', $5::jsonb),
+            updated_at = NOW()
+          RETURNING *
+        `, [params.device_id, farmId, params.device_name || params.device_id,
+            params.device_type || 'sensor', metadata]);
+        return { ok: true, device: result.rows[0], message: `Mapped ${params.bus_address} (${params.bus_type}) to device ${params.device_id}` };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
   }
+
 };
 
 // Idempotency cache: key → { result, created_at }

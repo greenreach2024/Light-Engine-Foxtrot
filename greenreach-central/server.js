@@ -79,6 +79,14 @@ import wholesaleFulfillmentRouter from './routes/wholesale-fulfillment.js';
 import producerPortalRouter from './routes/producer-portal.js';
 import wholesaleExportsRouter from './routes/wholesale-exports.js';
 import miscStubsRouter from './routes/misc-stubs.js';
+
+// Research Platform routes
+import researchStudiesRouter from './routes/research-studies.js';
+import researchDataRouter from './routes/research-data.js';
+import researchExportsRouter from './routes/research-exports.js';
+import researchComplianceRouter from './routes/research-compliance.js';
+import researchElnRouter from './routes/research-eln.js';
+import researchCollaborationRouter from './routes/research-collaboration.js';
 import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
@@ -3273,6 +3281,14 @@ app.get('/api/inventory/tray-formats', (req, res) => { res.redirect(307, '/api/t
 app.use('/api/inventory', authOrAdminMiddleware, inventoryMgmtRoutes);  // seeds, nutrients, packaging, equipment, supplies
 app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
 app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
+
+// Research Platform API (feature-gated via ENDPOINT_FEATURES in feature-flags.js)
+app.use('/api', authMiddleware, researchStudiesRouter);
+app.use('/api', authMiddleware, researchDataRouter);
+app.use('/api', authMiddleware, researchExportsRouter);
+app.use('/api', authMiddleware, researchComplianceRouter);
+app.use('/api', authMiddleware, researchElnRouter);
+app.use('/api', authMiddleware, researchCollaborationRouter);
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key

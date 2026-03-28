@@ -304,6 +304,73 @@ The codebase contains references to "edge mode," "cloud mode," and mode detectio
 +---------------------------+       +---------------------------+
 ```
 
+
+---
+
+## Research Platform Architecture (Added 2026-03-28)
+
+### Overview
+
+The Research Platform is a gated tier (`research` in feature-flags.js) that adds experiment design, research-grade data management, electronic lab notebooks, compliance tracking, and collaboration tools on top of the existing farm management platform.
+
+### Feature Gating
+
+- **Deployment mode**: `research` added to valid modes in `getDeploymentMode()`
+- **FEATURE_DEFINITIONS**: 6 new features: `research_workspace`, `research_data`, `research_eln`, `research_exports`, `research_compliance`, `research_collaboration`
+- **ENDPOINT_FEATURES**: `/api/research` mapped to `research_workspace`
+- **Access**: `autoEnforceFeatures()` middleware auto-gates all `/api/research/*` endpoints
+
+### Research Platform Tables (30 tables, migrations 042-047)
+
+| Migration | Tables | Purpose |
+|-----------|--------|---------|
+| 042 | studies, study_protocols, treatment_groups, study_links, trial_milestones, protocol_deviations | Study design and protocol management |
+| 043 | research_datasets, research_observations, data_transformations, provenance_records, calibration_logs, device_maintenance | Data model, provenance, calibration |
+| 044 | export_packages, data_quality_flags, qc_reviews, study_alerts | Exports and data quality |
+| 045 | data_management_plans, retention_policies, grant_budgets, budget_line_items, researcher_profiles, citation_records, project_closeouts | Compliance, grants, identity |
+| 046 | eln_notebooks, eln_templates, eln_entries, eln_attachments, eln_links, eln_signatures, eln_snapshots | Electronic lab notebooks |
+| 047 | study_collaborators, review_comments, share_links, onboarding_checklists | Collaboration and review |
+
+### Route Files (Central only, 88+ endpoints)
+
+| Route File | Mount | Endpoints |
+|------------|-------|-----------|
+| research-studies.js | /api/research/studies | 15 endpoints: CRUD studies, protocols, treatments, milestones, deviations, links |
+| research-data.js | /api/research/datasets | 12 endpoints: datasets, observations (BIGSERIAL), provenance, calibrations, maintenance |
+| research-exports.js | /api/research/exports | 12 endpoints: export packages with SHA-256 checksums, quality flags, QC reviews, alerts |
+| research-compliance.js | /api/research/studies/:id/dmps | 16 endpoints: DMPs, retention, budgets with variance, profiles (ORCID), citations, closeouts |
+| research-eln.js | /api/research/notebooks | 20 endpoints: notebooks, entries, attachments, signatures (SHA-256), snapshots, templates |
+| research-collaboration.js | /api/research/studies/:id/collaborators | 13 endpoints: collaborators, review comments, share links (token-based), onboarding checklists |
+
+### Data Flow: Research Observations
+
+```
++-----------------------------------+       +-----------------------------------+
+| Light Engine (LE-EB)              |       | GreenReach Central                |
+|                                   |       |                                   |
+| SwitchBot sensors (30s poll)      |       | POST /api/research/datasets/      |
+|   -> env.json snapshot            | ----> |   :id/observations                |
+|                                   |       |   -> research_observations        |
+| EVIE: record_observation tool     |       |      (BIGSERIAL, provenance)      |
+|   -> manual observation entry     | ----> |   -> provenance_records           |
+|                                   |       |      (auto-recorded)              |
+| EVIE: scan_bus_channels           |       |                                   |
+|   -> device discovery scan        |       | Calibration tracking:             |
+|   -> save_bus_mapping             |       |   calibration_logs (offset, next  |
+|                                   |       |   due, superseded chain)          |
++-----------------------------------+       +-----------------------------------+
+```
+
+### AI Tool Integration
+
+**EVIE (farm-ops-agent.js) -- 10 research + 3 scanning tools:**
+- get_my_studies, get_study_timeline, record_observation, get_dataset_summary
+- get_eln_entries, get_calibration_status, get_study_budget
+- scan_bus_channels, get_bus_mappings, save_bus_mapping
+
+**FAYE (admin-ops-agent.js) -- 4 admin tools:**
+- get_research_dashboard, get_study_compliance_status, get_research_audit_log, manage_study_collaborators
+
 ### Key Tables
 
 | Table | Purpose | Updated |

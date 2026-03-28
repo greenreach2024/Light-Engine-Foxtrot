@@ -394,7 +394,7 @@
 
         .cards-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
             gap: 30px;
             margin-top: 40px;
         }
@@ -448,6 +448,18 @@
         .card-light:hover {
             box-shadow: 0 12px 50px rgba(59, 130, 246, 0.8), 0 0 70px rgba(59, 130, 246, 0.6);
         }
+
+        .card-research {
+            background: white;
+            color: #1d1d1f;
+            border: 3px solid #f59e0b;
+            box-shadow: 0 4px 30px rgba(245, 158, 11, 0.6), 0 0 50px rgba(245, 158, 11, 0.4);
+        }
+
+        .card-research:hover {
+            box-shadow: 0 12px 50px rgba(245, 158, 11, 0.8), 0 0 70px rgba(245, 158, 11, 0.6);
+        }
+
 
         .card-content {
             padding: 70px 40px;
@@ -776,7 +788,7 @@
     </section>
     
     <section class="comparison">
-        <h2>Two ways to farm smarter.</h2>
+        <h2>Three ways to farm smarter.</h2>
         <p class="features-subtitle">Choose the solution that fits your operation — both include all the features you need to succeed.</p>
         
         <div class="cards-container">
@@ -824,6 +836,28 @@
                     
                     <a href="/purchase.html?product=cloud" class="cta-button">Get Started — $29/mo</a>
                     <a href="landing-cloud.html" class="secondary-link">Learn more →</a>
+                </div>
+            </div>
+
+            <!-- Research Platform Card (Amber) -->
+            <div class="product-card card-research">
+                <div class="card-content">
+                    <h1 class="card-main-title">Research</h1>
+                    <span class="card-badge">Research-grade data management, compliance, and collaboration platform</span>
+                    <p class="card-subtitle">Rigorous experiment design, electronic lab notebooks, and publication-ready data exports</p>
+
+                    <ul class="card-features">
+                        <li>Experiment design with study protocols and treatment groups</li>
+                        <li>Research-grade observation tracking with full provenance</li>
+                        <li>Electronic lab notebook with digital signatures</li>
+                        <li>Calibration management and data quality flags</li>
+                        <li>Grant-aware budgeting and compliance tracking</li>
+                        <li>Structured exports (CSV, JSON, DataCite)</li>
+                        <li>External collaborator access with share links</li>
+                        <li>All Cloud features included</li>
+                    </ul>
+
+                    <a href="/purchase.html?product=research" class="cta-button">Get Started -- Research Tier</a>
                 </div>
             </div>
         </div>

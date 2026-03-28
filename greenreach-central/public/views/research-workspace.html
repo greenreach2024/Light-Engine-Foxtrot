@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Workspace -- Light Engine</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --bg-secondary: #334155;
+      --border: #475569;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --accent: #f59e0b;
+      --green: #10b981;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --purple: #8b5cf6;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 2px solid var(--accent);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .header-nav a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      transition: background 0.2s;
+    }
+
+    .header-nav a:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+
+    .card p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .card .meta {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.625rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-active { background: rgba(16,185,129,0.15); color: var(--green); }
+    .badge-draft { background: rgba(245,158,11,0.15); color: var(--accent); }
+    .badge-completed { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .badge-archived { background: rgba(148,163,184,0.15); color: var(--text-secondary); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(71,85,105,0.3);
+      color: var(--text-primary);
+    }
+
+    tr:hover {
+      background: rgba(245,158,11,0.05);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      background: #d97706;
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+
+    .actions-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+
+    .tab {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .alert-banner {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--red);
+    }
+
+    .alert-banner.warning {
+      background: rgba(245,158,11,0.1);
+      border-color: rgba(245,158,11,0.3);
+      color: var(--accent);
+    }
+
+    #loading {
+      text-align: center;
+      padding: 4rem;
+      color: var(--text-secondary);
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Research Workspace</h1>
+    <div class="header-nav">
+      <a href="/LE-farm-admin.html">Farm Admin</a>
+      <a href="/views/farm-inventory.html">Inventory</a>
+      <a href="/LE-dashboard.html">Dashboard</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="loading">Loading research data...</div>
+
+    <div id="app" style="display:none;">
+      <!-- Stats Row -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-studies">--</div>
+          <div class="stat-label">Active Studies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-datasets">--</div>
+          <div class="stat-label">Datasets</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-observations">--</div>
+          <div class="stat-label">Observations (7d)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-notebooks">--</div>
+          <div class="stat-label">ELN Notebooks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-alerts">--</div>
+          <div class="stat-label">Open Alerts</div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div id="alerts-container"></div>
+
+      <!-- Actions -->
+      <div class="actions-bar">
+        <button class="btn btn-primary" onclick="createStudy()">New Study</button>
+        <button class="btn btn-secondary" onclick="createNotebook()">New Notebook</button>
+        <button class="btn btn-secondary" onclick="exportData()">Export Data</button>
+        <button class="btn btn-secondary" onclick="showCalibrations()">Calibrations</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tab active" data-tab="studies">Studies</div>
+        <div class="tab" data-tab="datasets">Datasets</div>
+        <div class="tab" data-tab="notebooks">Lab Notebooks</div>
+        <div class="tab" data-tab="compliance">Compliance</div>
+        <div class="tab" data-tab="collaborators">Collaborators</div>
+      </div>
+
+      <!-- Studies Tab -->
+      <div class="tab-content active" id="tab-studies">
+        <div id="studies-list"></div>
+      </div>
+
+      <!-- Datasets Tab -->
+      <div class="tab-content" id="tab-datasets">
+        <div id="datasets-list"></div>
+      </div>
+
+      <!-- Notebooks Tab -->
+      <div class="tab-content" id="tab-notebooks">
+        <div id="notebooks-list"></div>
+      </div>
+
+      <!-- Compliance Tab -->
+      <div class="tab-content" id="tab-compliance">
+        <div id="compliance-list"></div>
+      </div>
+
+      <!-- Collaborators Tab -->
+      <div class="tab-content" id="tab-collaborators">
+        <div id="collaborators-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    async function apiFetch(path, opts = {}) {
+      const res = await fetch(`${API_BASE}${path}`, { headers, ...opts });
+      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      return res.json();
+    }
+
+    // ── Tab switching ──
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+      });
+    });
+
+    // ── Badge helper ──
+    function statusBadge(status) {
+      const cls = { active: 'badge-active', draft: 'badge-draft', completed: 'badge-completed',
+                     archived: 'badge-archived', locked: 'badge-completed' }[status] || 'badge-draft';
+      return `<span class="badge ${cls}">${status}</span>`;
+    }
+
+    function formatDate(d) {
+      if (!d) return '--';
+      return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // ── Load dashboard ──
+    async function loadDashboard() {
+      try {
+        const [studies, datasets, notebooks, alerts] = await Promise.all([
+          apiFetch('/api/research/studies').catch(() => ({ studies: [] })),
+          apiFetch('/api/research/datasets').catch(() => ({ datasets: [] })),
+          apiFetch('/api/research/notebooks').catch(() => ({ notebooks: [] })),
+          apiFetch('/api/research/alerts?resolved=false').catch(() => ({ alerts: [] }))
+        ]);
+
+        const activeStudies = (studies.studies || []).filter(s => s.status === 'active');
+        document.getElementById('stat-studies').textContent = activeStudies.length;
+        document.getElementById('stat-datasets').textContent = (datasets.datasets || []).length;
+        document.getElementById('stat-notebooks').textContent = (notebooks.notebooks || []).length;
+        document.getElementById('stat-alerts').textContent = (alerts.alerts || []).length;
+
+        // Count 7d observations
+        let obsCount = 0;
+        for (const ds of (datasets.datasets || [])) {
+          obsCount += parseInt(ds.observation_count || 0, 10);
+        }
+        document.getElementById('stat-observations').textContent = obsCount;
+
+        renderStudies(studies.studies || []);
+        renderDatasets(datasets.datasets || []);
+        renderNotebooks(notebooks.notebooks || []);
+        renderAlerts(alerts.alerts || []);
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+      } catch (err) {
+        document.getElementById('loading').innerHTML =
+          `<div class="alert-banner">Failed to load research data: ${err.message}. Check that the Research tier is enabled.</div>`;
+      }
+    }
+
+    function renderStudies(studies) {
+      const el = document.getElementById('studies-list');
+      if (!studies.length) {
+        el.innerHTML = '<div class="empty-state"><h3>No studies yet</h3><p>Create your first research study to get started.</p></div>';
+        return;
+      }
+      el.innerHTML = `<table>
+        <thead><tr><th>Title</th><th>Status</th><th>Protocols</th><th>Created</th></tr></thead>
+        <tbody>${studies.map(s => `<tr>
+          <td><strong>${s.title}</strong></td>
+          <td>${statusBadge(s.status)}</td>
+          <td>${s.protocol_count || 0}</td>
+          <td>${formatDate(s.created_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderDatasets(datasets) {
+      const el = document.getElementById('datasets-list');
+      if (!datasets.length) {
+        el.innerHTML = '<div class="empty-state"><h3>No datasets</h3><p>Create a dataset within a study to begin recording observations.</p></div>';
+        return;
+      }
+      el.innerHTML = `<table>
+        <thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th></tr></thead>
+        <tbody>${datasets.map(d => `<tr>
+          <td>${d.dataset_name}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${d.observation_count || 0}</td>
+          <td>${formatDate(d.created_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderNotebooks(notebooks) {
+      const el = document.getElementById('notebooks-list');
+      if (!notebooks.length) {
+        el.innerHTML = '<div class="empty-state"><h3>No notebooks</h3><p>Create an electronic lab notebook to start documenting experiments.</p></div>';
+        return;
+      }
+      el.innerHTML = `<div class="card-grid">${notebooks.map(n => `<div class="card">
+        <h3>${n.title}</h3>
+        <p>${n.description || 'No description'}</p>
+        <div class="meta">${statusBadge(n.status)} -- Created ${formatDate(n.created_at)}</div>
+      </div>`).join('')}</div>`;
+    }
+
+    function renderAlerts(alerts) {
+      const container = document.getElementById('alerts-container');
+      const unresolved = alerts.filter(a => !a.resolved_at);
+      if (!unresolved.length) { container.innerHTML = ''; return; }
+      container.innerHTML = unresolved.slice(0, 3).map(a =>
+        `<div class="alert-banner ${a.severity === 'warning' ? 'warning' : ''}">${a.alert_type}: ${a.message}</div>`
+      ).join('');
+    }
+
+    // ── Actions ──
+    async function createStudy() {
+      const title = prompt('Study title:');
+      if (!title) return;
+      try {
+        await apiFetch('/api/research/studies', {
+          method: 'POST',
+          body: JSON.stringify({ title, status: 'draft', objectives: '' })
+        });
+        loadDashboard();
+      } catch (err) { alert('Failed to create study: ' + err.message); }
+    }
+
+    async function createNotebook() {
+      const title = prompt('Notebook title:');
+      if (!title) return;
+      const studyId = prompt('Study ID (leave blank for standalone):');
+      try {
+        await apiFetch('/api/research/notebooks', {
+          method: 'POST',
+          body: JSON.stringify({ title, study_id: studyId || null })
+        });
+        loadDashboard();
+      } catch (err) { alert('Failed to create notebook: ' + err.message); }
+    }
+
+    async function exportData() {
+      const studyId = prompt('Study ID to export:');
+      if (!studyId) return;
+      try {
+        const result = await apiFetch('/api/research/exports', {
+          method: 'POST',
+          body: JSON.stringify({ study_id: studyId, export_format: 'json', include_sections: ['observations', 'protocols', 'provenance'] })
+        });
+        alert('Export package created: ' + (result.export_package?.id || 'unknown'));
+      } catch (err) { alert('Export failed: ' + err.message); }
+    }
+
+    function showCalibrations() {
+      window.location.hash = '#calibrations';
+      // Could navigate to a dedicated calibrations view
+      alert('Calibration management is available via E.V.I.E. -- ask "show calibration status"');
+    }
+
+    // Compliance tab loader
+    document.querySelector('[data-tab="compliance"]').addEventListener('click', async () => {
+      const el = document.getElementById('compliance-list');
+      if (el.dataset.loaded) return;
+      try {
+        const studies = await apiFetch('/api/research/studies');
+        if (!studies.studies?.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No compliance data</h3><p>Create a study first.</p></div>';
+          return;
+        }
+        let html = '<div class="card-grid">';
+        for (const s of studies.studies.slice(0, 5)) {
+          const [dmps, budgets] = await Promise.all([
+            apiFetch(`/api/research/studies/${s.id}/dmps`).catch(() => ({ dmps: [] })),
+            apiFetch(`/api/research/studies/${s.id}/budgets`).catch(() => ({ budgets: [] }))
+          ]);
+          html += `<div class="card">
+            <h3>${s.title}</h3>
+            <p>DMPs: ${(dmps.dmps || []).length} | Budgets: ${(budgets.budgets || []).length}</p>
+            <div class="meta">${statusBadge(s.status)}</div>
+          </div>`;
+        }
+        html += '</div>';
+        el.innerHTML = html;
+        el.dataset.loaded = 'true';
+      } catch (err) {
+        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
+      }
+    });
+
+    // Collaborators tab loader
+    document.querySelector('[data-tab="collaborators"]').addEventListener('click', async () => {
+      const el = document.getElementById('collaborators-list');
+      if (el.dataset.loaded) return;
+      try {
+        const studies = await apiFetch('/api/research/studies');
+        if (!studies.studies?.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No collaborators</h3><p>Create a study first.</p></div>';
+          return;
+        }
+        let html = '';
+        for (const s of studies.studies.slice(0, 5)) {
+          const collabs = await apiFetch(`/api/research/studies/${s.id}/collaborators`).catch(() => ({ collaborators: [] }));
+          if ((collabs.collaborators || []).length) {
+            html += `<h3 style="margin: 1rem 0 0.5rem; color: var(--accent);">${s.title}</h3>
+            <table>
+              <thead><tr><th>Email</th><th>Role</th><th>Added</th></tr></thead>
+              <tbody>${(collabs.collaborators || []).map(c => `<tr>
+                <td>${c.email || 'External'}</td>
+                <td>${c.role}</td>
+                <td>${formatDate(c.added_at)}</td>
+              </tr>`).join('')}</tbody>
+            </table>`;
+          }
+        }
+        el.innerHTML = html || '<div class="empty-state"><h3>No collaborators yet</h3><p>Add collaborators to a study to see them here.</p></div>';
+        el.dataset.loaded = 'true';
+      } catch (err) {
+        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
+      }
+    });
+
+    // ── Init ──
+    if (!token) {
+      document.getElementById('loading').innerHTML =
+        '<div class="alert-banner">Not authenticated. <a href="/farm-admin-login.html" style="color:var(--accent);">Log in</a> to access the Research Workspace.</div>';
+    } else {
+      loadDashboard();
+    }
+  </script>
+</body>
+</html>

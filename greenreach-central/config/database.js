@@ -2496,7 +2496,570 @@ async function runMigrations(client) {
     logger.warn('Migration 041 warning:', err.message);
   }
 
-  logger.info('Database migrations completed');
+// ─── Migration 042: Research Platform — Study Design & Protocol Management ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS studies (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        title VARCHAR(500) NOT NULL,
+        pi_user_id UUID REFERENCES farm_users(id),
+        status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','active','paused','completed','archived')),
+        objectives TEXT,
+        hypotheses TEXT,
+        irb_number VARCHAR(100),
+        funding_source VARCHAR(255),
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_studies_farm_id ON studies(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_studies_status ON studies(status);
+      CREATE INDEX IF NOT EXISTS idx_studies_pi ON studies(pi_user_id);
+
+      CREATE TABLE IF NOT EXISTS study_protocols (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL DEFAULT 1,
+        title VARCHAR(500),
+        content JSONB DEFAULT '{}',
+        treatment_factors JSONB DEFAULT '{}',
+        approved_by UUID REFERENCES farm_users(id),
+        approved_at TIMESTAMPTZ,
+        status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','active','superseded')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(study_id, version)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_study_protocols_study ON study_protocols(study_id);
+
+      CREATE TABLE IF NOT EXISTS treatment_groups (
+        id SERIAL PRIMARY KEY,
+        protocol_id INTEGER NOT NULL REFERENCES study_protocols(id) ON DELETE CASCADE,
+        group_name VARCHAR(255) NOT NULL,
+        factor_definitions JSONB DEFAULT '{}',
+        control_group BOOLEAN DEFAULT FALSE,
+        replicate_count INTEGER DEFAULT 1,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_treatment_groups_protocol ON treatment_groups(protocol_id);
+
+      CREATE TABLE IF NOT EXISTS study_links (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('room','device','recipe','lot','group','dataset')),
+        entity_id VARCHAR(255) NOT NULL,
+        linked_at TIMESTAMPTZ DEFAULT NOW(),
+        linked_by UUID REFERENCES farm_users(id),
+        UNIQUE(study_id, entity_type, entity_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_study_links_study ON study_links(study_id);
+      CREATE INDEX IF NOT EXISTS idx_study_links_entity ON study_links(entity_type, entity_id);
+
+      CREATE TABLE IF NOT EXISTS trial_milestones (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        milestone_type VARCHAR(100) NOT NULL,
+        planned_date DATE,
+        actual_date DATE,
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending','completed','skipped','delayed')),
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trial_milestones_study ON trial_milestones(study_id);
+
+      CREATE TABLE IF NOT EXISTS protocol_deviations (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        protocol_version_id INTEGER REFERENCES study_protocols(id),
+        deviation_type VARCHAR(100),
+        description TEXT NOT NULL,
+        impact_assessment TEXT,
+        recorded_by UUID REFERENCES farm_users(id),
+        recorded_at TIMESTAMPTZ DEFAULT NOW(),
+        reviewed_by UUID REFERENCES farm_users(id),
+        reviewed_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_protocol_deviations_study ON protocol_deviations(study_id);
+
+      ALTER TABLE experiment_records ADD COLUMN IF NOT EXISTS study_id INTEGER REFERENCES studies(id);
+      CREATE INDEX IF NOT EXISTS idx_experiment_records_study ON experiment_records(study_id);
+    `);
+    logger.info('Research study design tables ready (migration 042)');
+  } catch (err) {
+    logger.warn('Migration 042 warning:', err.message);
+  }
+
+  // ─── Migration 043: Research Data Model & Provenance ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS research_datasets (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        name VARCHAR(500) NOT NULL,
+        version INTEGER DEFAULT 1,
+        description TEXT,
+        variable_definitions JSONB DEFAULT '[]',
+        unit_normalization JSONB DEFAULT '{}',
+        timezone VARCHAR(50) DEFAULT 'UTC',
+        status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','collecting','locked','published')),
+        created_by UUID REFERENCES farm_users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        locked_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_datasets_study ON research_datasets(study_id);
+      CREATE INDEX IF NOT EXISTS idx_research_datasets_farm ON research_datasets(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_research_datasets_status ON research_datasets(status);
+
+      CREATE TABLE IF NOT EXISTS research_observations (
+        id BIGSERIAL PRIMARY KEY,
+        dataset_id INTEGER NOT NULL REFERENCES research_datasets(id) ON DELETE CASCADE,
+        observation_type VARCHAR(50) NOT NULL CHECK (observation_type IN ('sensor','manual','derived')),
+        device_id VARCHAR(255),
+        sensor_id VARCHAR(255),
+        sample_id VARCHAR(255),
+        variable_name VARCHAR(255) NOT NULL,
+        raw_value NUMERIC,
+        cleaned_value NUMERIC,
+        derived_value NUMERIC,
+        unit VARCHAR(50),
+        observed_at TIMESTAMPTZ NOT NULL,
+        ingested_at TIMESTAMPTZ DEFAULT NOW(),
+        is_immutable BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_obs_dataset ON research_observations(dataset_id);
+      CREATE INDEX IF NOT EXISTS idx_research_obs_observed ON research_observations(observed_at);
+      CREATE INDEX IF NOT EXISTS idx_research_obs_variable ON research_observations(variable_name);
+      CREATE INDEX IF NOT EXISTS idx_research_obs_device ON research_observations(device_id);
+      CREATE INDEX IF NOT EXISTS idx_research_obs_sample ON research_observations(sample_id);
+
+      CREATE TABLE IF NOT EXISTS data_transformations (
+        id SERIAL PRIMARY KEY,
+        dataset_id INTEGER NOT NULL REFERENCES research_datasets(id) ON DELETE CASCADE,
+        input_observation_ids BIGINT[] DEFAULT '{}',
+        output_observation_ids BIGINT[] DEFAULT '{}',
+        transformation_type VARCHAR(50) NOT NULL CHECK (transformation_type IN ('clean','normalize','aggregate','derive','interpolate')),
+        parameters JSONB DEFAULT '{}',
+        applied_by UUID REFERENCES farm_users(id),
+        applied_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_data_transformations_dataset ON data_transformations(dataset_id);
+
+      CREATE TABLE IF NOT EXISTS provenance_records (
+        id SERIAL PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('observation','dataset','export','analysis','transformation')),
+        entity_id BIGINT NOT NULL,
+        source_type VARCHAR(50) NOT NULL CHECK (source_type IN ('sensor','device','recipe','transformation','calibration','manual','import')),
+        source_id VARCHAR(255),
+        source_metadata JSONB DEFAULT '{}',
+        recorded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_provenance_entity ON provenance_records(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_provenance_source ON provenance_records(source_type, source_id);
+
+      CREATE TABLE IF NOT EXISTS calibration_logs (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        device_id VARCHAR(255) NOT NULL,
+        sensor_id VARCHAR(255),
+        calibration_type VARCHAR(100),
+        reference_value NUMERIC,
+        measured_value NUMERIC,
+        offset_value NUMERIC,
+        status VARCHAR(50) DEFAULT 'current' CHECK (status IN ('current','superseded')),
+        calibrated_by UUID REFERENCES farm_users(id),
+        calibrated_at TIMESTAMPTZ DEFAULT NOW(),
+        next_due TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calibration_logs_farm ON calibration_logs(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_calibration_logs_device ON calibration_logs(device_id);
+      CREATE INDEX IF NOT EXISTS idx_calibration_logs_status ON calibration_logs(status);
+
+      CREATE TABLE IF NOT EXISTS device_maintenance (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        device_id VARCHAR(255) NOT NULL,
+        maintenance_type VARCHAR(100) NOT NULL,
+        description TEXT,
+        performed_by UUID REFERENCES farm_users(id),
+        performed_at TIMESTAMPTZ DEFAULT NOW(),
+        next_scheduled TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_device_maintenance_farm ON device_maintenance(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_device_maintenance_device ON device_maintenance(device_id);
+    `);
+    logger.info('Research data model and provenance tables ready (migration 043)');
+  } catch (err) {
+    logger.warn('Migration 043 warning:', err.message);
+  }
+
+  // ─── Migration 044: Research Exports & Data Quality ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS export_packages (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        dataset_id INTEGER REFERENCES research_datasets(id) ON DELETE SET NULL,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        format VARCHAR(50) NOT NULL CHECK (format IN ('csv','parquet','json','notebook')),
+        includes_metadata BOOLEAN DEFAULT TRUE,
+        includes_provenance BOOLEAN DEFAULT FALSE,
+        includes_data_dictionary BOOLEAN DEFAULT TRUE,
+        file_path TEXT,
+        file_size BIGINT,
+        generated_by UUID REFERENCES farm_users(id),
+        generated_at TIMESTAMPTZ DEFAULT NOW(),
+        checksum VARCHAR(128)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_export_packages_study ON export_packages(study_id);
+      CREATE INDEX IF NOT EXISTS idx_export_packages_farm ON export_packages(farm_id);
+
+      CREATE TABLE IF NOT EXISTS data_quality_flags (
+        id SERIAL PRIMARY KEY,
+        observation_id BIGINT NOT NULL REFERENCES research_observations(id) ON DELETE CASCADE,
+        flag_type VARCHAR(50) NOT NULL CHECK (flag_type IN ('missing','outlier','suspect','calibration_drift','gap','range_exceeded')),
+        severity VARCHAR(20) DEFAULT 'warning' CHECK (severity IN ('info','warning','critical')),
+        description TEXT,
+        flagged_by VARCHAR(50) DEFAULT 'system',
+        reviewed_by UUID REFERENCES farm_users(id),
+        review_status VARCHAR(50) DEFAULT 'pending' CHECK (review_status IN ('pending','accepted','dismissed')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        reviewed_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dq_flags_observation ON data_quality_flags(observation_id);
+      CREATE INDEX IF NOT EXISTS idx_dq_flags_status ON data_quality_flags(review_status);
+
+      CREATE TABLE IF NOT EXISTS qc_reviews (
+        id SERIAL PRIMARY KEY,
+        dataset_id INTEGER NOT NULL REFERENCES research_datasets(id) ON DELETE CASCADE,
+        reviewer_id UUID REFERENCES farm_users(id),
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending','approved','requires_changes')),
+        completeness_score NUMERIC(5,2),
+        notes TEXT,
+        reviewed_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_qc_reviews_dataset ON qc_reviews(dataset_id);
+
+      CREATE TABLE IF NOT EXISTS study_alerts (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        device_id VARCHAR(255),
+        alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('offline','calibration_overdue','data_gap','outlier_cluster','completeness_low')),
+        message TEXT NOT NULL,
+        severity VARCHAR(20) DEFAULT 'warning',
+        acknowledged_by UUID REFERENCES farm_users(id),
+        acknowledged_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_study_alerts_study ON study_alerts(study_id);
+      CREATE INDEX IF NOT EXISTS idx_study_alerts_type ON study_alerts(alert_type);
+    `);
+    logger.info('Research exports and data quality tables ready (migration 044)');
+  } catch (err) {
+    logger.warn('Migration 044 warning:', err.message);
+  }
+
+  // ─── Migration 045: Grant/DMP/Compliance & Budgeting ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS data_management_plans (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        template_type VARCHAR(50) DEFAULT 'custom' CHECK (template_type IN ('tri_agency','nih','horizon_europe','custom')),
+        sections JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','submitted','approved')),
+        reviewed_by UUID REFERENCES farm_users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dmp_study ON data_management_plans(study_id);
+
+      CREATE TABLE IF NOT EXISTS retention_policies (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        retention_period_years INTEGER DEFAULT 10,
+        archival_location VARCHAR(255),
+        embargo_until DATE,
+        sharing_level VARCHAR(50) DEFAULT 'private' CHECK (sharing_level IN ('private','team','institution','public')),
+        auto_delete_after DATE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_retention_study ON retention_policies(study_id);
+
+      CREATE TABLE IF NOT EXISTS grant_budgets (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        grant_application_id INTEGER,
+        budget_name VARCHAR(255) NOT NULL,
+        award_period_start DATE,
+        award_period_end DATE,
+        total_amount NUMERIC(12,2) DEFAULT 0,
+        indirect_rate NUMERIC(5,2) DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','active','closed')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_grant_budgets_study ON grant_budgets(study_id);
+
+      CREATE TABLE IF NOT EXISTS budget_line_items (
+        id SERIAL PRIMARY KEY,
+        budget_id INTEGER NOT NULL REFERENCES grant_budgets(id) ON DELETE CASCADE,
+        category VARCHAR(100) NOT NULL CHECK (category IN ('equipment','consumables','personnel','stipend','in_kind','overhead','travel','other')),
+        description TEXT NOT NULL,
+        planned_amount NUMERIC(12,2) DEFAULT 0,
+        actual_amount NUMERIC(12,2) DEFAULT 0,
+        cost_centre VARCHAR(100),
+        experiment_phase VARCHAR(100),
+        invoiced BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_budget_items_budget ON budget_line_items(budget_id);
+      CREATE INDEX IF NOT EXISTS idx_budget_items_category ON budget_line_items(category);
+
+      CREATE TABLE IF NOT EXISTS researcher_profiles (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES farm_users(id),
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        orcid_id VARCHAR(50),
+        institution VARCHAR(255),
+        department VARCHAR(255),
+        role_title VARCHAR(100),
+        affiliation_type VARCHAR(50) CHECK (affiliation_type IN ('pi','postdoc','grad_student','ra','external_collaborator','technician')),
+        bio TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_researcher_profiles_farm ON researcher_profiles(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_researcher_profiles_user ON researcher_profiles(user_id);
+      CREATE INDEX IF NOT EXISTS idx_researcher_profiles_orcid ON researcher_profiles(orcid_id);
+
+      CREATE TABLE IF NOT EXISTS citation_records (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        dataset_id INTEGER REFERENCES research_datasets(id) ON DELETE SET NULL,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        citation_type VARCHAR(50) NOT NULL CHECK (citation_type IN ('dataset','protocol','report','publication')),
+        title VARCHAR(500) NOT NULL,
+        authors JSONB DEFAULT '[]',
+        doi VARCHAR(255),
+        repository VARCHAR(255),
+        version VARCHAR(50),
+        published_at TIMESTAMPTZ,
+        metadata_schema VARCHAR(50) DEFAULT 'datacite' CHECK (metadata_schema IN ('datacite','dublin_core','custom')),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_citation_records_study ON citation_records(study_id);
+      CREATE INDEX IF NOT EXISTS idx_citation_records_farm ON citation_records(farm_id);
+
+      CREATE TABLE IF NOT EXISTS project_closeouts (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        checklist JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'in_progress' CHECK (status IN ('in_progress','complete')),
+        completed_by UUID REFERENCES farm_users(id),
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_project_closeouts_study ON project_closeouts(study_id);
+    `);
+    logger.info('Research compliance and budgeting tables ready (migration 045)');
+  } catch (err) {
+    logger.warn('Migration 045 warning:', err.message);
+  }
+
+  // ─── Migration 046: Electronic Lab Notebook ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS eln_notebooks (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        title VARCHAR(500) NOT NULL,
+        owner_id UUID REFERENCES farm_users(id),
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active','locked','archived')),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_notebooks_farm ON eln_notebooks(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_eln_notebooks_study ON eln_notebooks(study_id);
+
+      CREATE TABLE IF NOT EXISTS eln_templates (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        fields JSONB DEFAULT '[]',
+        created_by UUID REFERENCES farm_users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_templates_farm ON eln_templates(farm_id);
+
+      CREATE TABLE IF NOT EXISTS eln_entries (
+        id SERIAL PRIMARY KEY,
+        notebook_id INTEGER NOT NULL REFERENCES eln_notebooks(id) ON DELETE CASCADE,
+        entry_type VARCHAR(50) DEFAULT 'note' CHECK (entry_type IN ('observation','note','protocol_note','milestone','deviation','measurement')),
+        content JSONB DEFAULT '{}',
+        template_id INTEGER REFERENCES eln_templates(id),
+        created_by UUID REFERENCES farm_users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        locked_at TIMESTAMPTZ,
+        locked_by UUID REFERENCES farm_users(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_entries_notebook ON eln_entries(notebook_id);
+      CREATE INDEX IF NOT EXISTS idx_eln_entries_type ON eln_entries(entry_type);
+      CREATE INDEX IF NOT EXISTS idx_eln_entries_created ON eln_entries(created_at);
+
+      CREATE TABLE IF NOT EXISTS eln_attachments (
+        id SERIAL PRIMARY KEY,
+        entry_id INTEGER NOT NULL REFERENCES eln_entries(id) ON DELETE CASCADE,
+        file_name VARCHAR(500) NOT NULL,
+        file_type VARCHAR(50) CHECK (file_type IN ('image','pdf','spreadsheet','instrument_export','csv','other')),
+        s3_key VARCHAR(1000),
+        file_size BIGINT,
+        checksum VARCHAR(128),
+        uploaded_by UUID REFERENCES farm_users(id),
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_attachments_entry ON eln_attachments(entry_id);
+
+      CREATE TABLE IF NOT EXISTS eln_links (
+        id SERIAL PRIMARY KEY,
+        entry_id INTEGER NOT NULL REFERENCES eln_entries(id) ON DELETE CASCADE,
+        linked_entity_type VARCHAR(50) NOT NULL CHECK (linked_entity_type IN ('study','room','device','dataset','trial','observation','treatment_group')),
+        linked_entity_id VARCHAR(255) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_links_entry ON eln_links(entry_id);
+
+      CREATE TABLE IF NOT EXISTS eln_signatures (
+        id SERIAL PRIMARY KEY,
+        entry_id INTEGER NOT NULL REFERENCES eln_entries(id) ON DELETE CASCADE,
+        signer_id UUID NOT NULL REFERENCES farm_users(id),
+        signature_type VARCHAR(50) NOT NULL CHECK (signature_type IN ('author','witness','pi_approval')),
+        signed_at TIMESTAMPTZ DEFAULT NOW(),
+        signature_hash VARCHAR(128)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_signatures_entry ON eln_signatures(entry_id);
+
+      CREATE TABLE IF NOT EXISTS eln_snapshots (
+        id SERIAL PRIMARY KEY,
+        entry_id INTEGER NOT NULL REFERENCES eln_entries(id) ON DELETE CASCADE,
+        snapshot_content JSONB NOT NULL,
+        snapshot_hash VARCHAR(128),
+        milestone_id INTEGER REFERENCES trial_milestones(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_eln_snapshots_entry ON eln_snapshots(entry_id);
+    `);
+    logger.info('Electronic lab notebook tables ready (migration 046)');
+  } catch (err) {
+    logger.warn('Migration 046 warning:', err.message);
+  }
+
+  // ─── Migration 047: Research Collaboration & Access Control ───
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS study_collaborators (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES farm_users(id),
+        email VARCHAR(255),
+        role VARCHAR(50) NOT NULL CHECK (role IN ('pi','postdoc','grad_student','ra','external_collaborator','reviewer')),
+        permissions JSONB DEFAULT '{"read":true,"write":false,"export":false,"approve":false}',
+        invited_by UUID REFERENCES farm_users(id),
+        accepted_at TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_study_collaborators_study ON study_collaborators(study_id);
+      CREATE INDEX IF NOT EXISTS idx_study_collaborators_user ON study_collaborators(user_id);
+
+      CREATE TABLE IF NOT EXISTS review_comments (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('dataset','entry','protocol','observation','export')),
+        entity_id INTEGER NOT NULL,
+        comment_text TEXT NOT NULL,
+        commenter_id UUID REFERENCES farm_users(id),
+        status VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open','resolved')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        resolved_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_review_comments_study ON review_comments(study_id);
+      CREATE INDEX IF NOT EXISTS idx_review_comments_entity ON review_comments(entity_type, entity_id);
+
+      CREATE TABLE IF NOT EXISTS share_links (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+        created_by UUID REFERENCES farm_users(id),
+        scope VARCHAR(50) NOT NULL CHECK (scope IN ('dataset','notebook','report','protocol')),
+        entity_id INTEGER NOT NULL,
+        access_level VARCHAR(50) DEFAULT 'read_only' CHECK (access_level IN ('read_only','download')),
+        token_hash VARCHAR(128) NOT NULL,
+        expires_at TIMESTAMPTZ,
+        download_count INTEGER DEFAULT 0,
+        max_downloads INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_share_links_study ON share_links(study_id);
+
+      CREATE TABLE IF NOT EXISTS onboarding_checklists (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES farm_users(id),
+        study_id INTEGER REFERENCES studies(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        role VARCHAR(50) NOT NULL,
+        checklist JSONB DEFAULT '[]',
+        progress_pct INTEGER DEFAULT 0,
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_onboarding_checklists_farm ON onboarding_checklists(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_onboarding_checklists_user ON onboarding_checklists(user_id);
+    `);
+    logger.info('Research collaboration tables ready (migration 047)');
+  } catch (err) {
+    logger.warn('Migration 047 warning:', err.message);
+  }
+
+    logger.info('Database migrations completed');
 }
 
 /**

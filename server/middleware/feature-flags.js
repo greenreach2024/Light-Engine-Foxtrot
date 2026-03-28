@@ -29,7 +29,15 @@ const FEATURE_DEFINITIONS = {
   // Advanced features (farm servers and full deployments)
   'analytics': { tiers: ['full', 'edge', 'enterprise'], name: 'Advanced Analytics' },
   'ml': { tiers: ['full', 'edge', 'enterprise'], name: 'Machine Learning' },
-  'api_access': { tiers: ['full', 'edge', 'enterprise'], name: 'API Access' },
+  'api_access': { tiers: ['full', 'edge', 'enterprise', 'research'], name: 'API Access' },
+  
+  // Research features (research tier only)
+  'research_workspace': { tiers: ['research'], name: 'Research Workspace' },
+  'research_data': { tiers: ['research'], name: 'Research Data & Provenance' },
+  'research_eln': { tiers: ['research'], name: 'Electronic Lab Notebook' },
+  'research_exports': { tiers: ['research'], name: 'Research Exports' },
+  'research_compliance': { tiers: ['research'], name: 'Research Compliance & DMP' },
+  'research_collaboration': { tiers: ['research'], name: 'Research Collaboration' },
 };
 
 /**
@@ -59,6 +67,9 @@ const ENDPOINT_FEATURES = {
   '/api/analytics': 'analytics',
   
   // Wholesale - ALWAYS ALLOWED (all tiers)
+  // Research endpoints (require 'research_workspace' feature)
+  '/api/research': 'research_workspace',
+  
   '/api/wholesale': null, // null = no restriction
   '/GR-wholesale.html': null,
   '/GR-admin.html': null,
@@ -78,7 +89,7 @@ async function getDeploymentMode() {
   
   // Check environment variable first
   const envMode = process.env.DEPLOYMENT_MODE;
-  if (envMode && ['inventory-only', 'full', 'edge', 'enterprise'].includes(envMode)) {
+  if (envMode && ['inventory-only', 'full', 'edge', 'enterprise', 'research'].includes(envMode)) {
     console.log('[FeatureFlags] Using DEPLOYMENT_MODE:', envMode);
     return envMode;
   }
