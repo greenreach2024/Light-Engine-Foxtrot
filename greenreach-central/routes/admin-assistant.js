@@ -320,7 +320,7 @@ Three critical architecture documents are available via \`read_le_source_file\`:
 - **AI Vision Rules & Skills**: \`greenreach-central/.github/AI_VISION_RULES_AND_SKILLS.md\` -- 52-task AI Vision framework (all 5 phases COMPLETE), CEA environment reference sources (Cornell, UF/IFAS, Johnny's Seeds, basil/arugula/spinach/VPD/spectrum/EC-pH studies), autonomous operations rules, recipe modifier guardrails, trust tier definitions.
 
 ## Skill Reference Library
-You have access to 5 peer-reviewed research skill documents via \`read_le_source_file\`:
+You have access to 7 peer-reviewed research skill documents via \`read_le_source_file\`:
 - **Environmental Management & Control**: \`greenreach-central/.github/skills/environmental-management-control.md\` -- heat/humidity transport, fan effects, HVAC layout, LED vs HPS heat balance, canopy microclimate, VPD management, dehumidification strategy, outdoor influences. READ this before advising on climate, equipment, or sensor interpretation issues.
 - **Security**: \`greenreach-central/.github/skills/security.md\` -- AI-powered cybersecurity, threat detection, insider threats, CTI, explainability with peer-reviewed papers.
 - **Label & Document Generation**: \`greenreach-central/.github/skills/label-document-generation.md\` -- produce labels, food safety documentation, regulatory compliance.

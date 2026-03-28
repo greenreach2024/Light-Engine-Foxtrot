@@ -3664,6 +3664,8 @@ async function executeExtendedTool(toolName, params, farmId) {
           'label-document-generation',
           'lot-code-traceability',
           'record-keeping-audit-trail',
+          'social-media-marketing',
+          'device-setup-onboarding',
           'ai-vision-rules'
         ]);
         const skillName = (params.skill_name || '').toLowerCase().trim();

@@ -2002,6 +2002,8 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 
 ### 16.3 Network Intelligence Routes (network-growers.js)
 
+18 routes. All GET. Mounted at /api/ prefix by Central server.js.
+
 | HTTP | Path | Description |
 |------|------|-------------|
 | GET | /api/network/dashboard | Network KPIs: total/active/offline farms, health, alerts, activity |
@@ -2009,20 +2011,19 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 | GET | /api/network/farms/:farmId | Single farm detail |
 | GET | /api/network/comparative-analytics | Per-farm yield, loss rate, grow days comparison |
 | GET | /api/network/trends | Production trend (week/harvests/yield), demand, network growth |
-| GET | /api/network/alerts | High loss rate + below benchmark alerts |
-| GET | /api/network/benchmarking | Farm yield/loss ranking against network |
-| GET | /api/network/recipes | Network recipe analytics |
 | GET | /api/network/buyer-behavior | Buyer behavior + 3-tier churn classification |
-| GET | /api/growers/dashboard | Grower management dashboard |
-| GET | /api/growers/list | Grower details with performance |
-| GET | /api/leaderboard | Composite scoring: yield 40% + loss 30% + consistency 30% |
-| GET | /api/growers/performance/:growerId | Per-grower rating, harvest count, yield, loss |
-| GET | /api/growers/invitations/list | Grower invitation tracking |
-| POST | /api/growers/invite | Send grower invitation |
-| POST | /api/growers/:growerId/remove | Remove grower from network |
+| GET | /api/network/alerts | High loss rate + below benchmark alerts |
+| GET | /api/network/anomaly-correlation | Cross-farm anomaly detection + environmental correlation |
 | GET | /api/network/energy-benchmarks | Per-crop and per-farm energy efficiency (kWh/kg) rankings |
 | GET | /api/network/farm-performance/:farmId | Per-farm weekly yield/loss trends, period comparison, network rank |
 | GET | /api/network/performance-leaderboard | Network-wide ranking with consistency scores + trend direction |
+| GET | /api/growers/dashboard | Grower management dashboard |
+| GET | /api/growers/list | Grower details with performance |
+| GET | /api/farms/list | Alias for farm listing |
+| GET | /api/contracts/list | Contract listing |
+| GET | /api/leaderboard | Composite scoring: yield 40% + loss 30% + consistency 30% |
+| GET | /api/performance/:growerId | Per-grower rating, harvest count, yield, loss |
+| GET | /api/invitations/list | Pending invitations |
 
 ### 16.4 Farm-Side Intelligence Consumption
 

@@ -1,22 +1,27 @@
 /**
  * Network & Grower Management Routes
  * Backend for GR-central-admin.html network management sections
+ * 18 endpoints
  *
  * Endpoints:
- *   GET /api/network/dashboard            - Network overview dashboard
- *   GET /api/network/farms/list           - List network farms
- *   GET /api/network/farms/:farmId        - Single farm detail
- *   GET /api/network/comparative-analytics - Cross-farm analytics
- *   GET /api/network/trends               - Network trend data
- *   GET /api/network/buyer-behavior       - Buyer behavior and churn analytics
- *   GET /api/network/alerts               - Network alerts
- *   GET /api/growers/dashboard            - Grower management dashboard
- *   GET /api/growers/list                 - List all growers
- *   GET /api/farms/list                   - Alias for farm listing
- *   GET /api/contracts/list               - Contract listing
- *   GET /api/leaderboard                  - Farm leaderboard
- *   GET /api/performance/:growerId        - Grower performance
- *   GET /api/invitations/list             - Pending invitations
+ *   GET /api/network/dashboard              - Network overview dashboard
+ *   GET /api/network/farms/list             - List network farms
+ *   GET /api/network/farms/:farmId          - Single farm detail
+ *   GET /api/network/comparative-analytics  - Cross-farm analytics
+ *   GET /api/network/trends                 - Network trend data
+ *   GET /api/network/buyer-behavior         - Buyer behavior and churn analytics
+ *   GET /api/network/alerts                 - Network alerts
+ *   GET /api/network/anomaly-correlation    - Cross-farm anomaly correlation
+ *   GET /api/network/energy-benchmarks      - Per-crop energy efficiency rankings
+ *   GET /api/network/farm-performance/:id   - Per-farm yield/loss trends + rank
+ *   GET /api/network/performance-leaderboard - Network ranking with consistency scores
+ *   GET /api/growers/dashboard              - Grower management dashboard
+ *   GET /api/growers/list                   - List all growers
+ *   GET /api/farms/list                     - Alias for farm listing
+ *   GET /api/contracts/list                 - Contract listing
+ *   GET /api/leaderboard                    - Farm leaderboard
+ *   GET /api/performance/:growerId          - Grower performance
+ *   GET /api/invitations/list               - Pending invitations
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
