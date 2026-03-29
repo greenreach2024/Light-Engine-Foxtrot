@@ -1,0 +1,38 @@
+name: UI Regression Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run nightly at 06:00 UTC (1am EST)
+    - cron: '0 6 * * *'
+
+jobs:
+  ui-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run UI regression tests
+        run: npm run test:ui
+        env:
+          BASE_URL: ${{ secrets.UI_TEST_BASE_URL || 'https://greenreachgreens.com' }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: test-results/
+          retention-days: 14
