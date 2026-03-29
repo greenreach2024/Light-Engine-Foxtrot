@@ -387,7 +387,6 @@ router.post('/research/entries/:id/snapshot', verifyEntryOwnership, async (req, 
     const snapshotHash = crypto.createHash('sha256')
       .update(JSON.stringify(snapshotContent))
       .digest('hex');
-    const storedHash = nonce + '.' + signatureHash;
 
     const result = await query(`
       INSERT INTO eln_snapshots (entry_id, snapshot_content, snapshot_hash, milestone_id)
