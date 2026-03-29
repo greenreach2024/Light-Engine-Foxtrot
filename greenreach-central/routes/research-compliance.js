@@ -401,4 +401,283 @@ router.post('/research/studies/:id/closeout', verifyStudyOwnership, async (req, 
   }
 });
 
+// ── Phase 1 Enhancements ──
+// dmp_templates: id, farm_id, template_name, grant_type, sections (JSONB), created_at
+// dmp_change_log: id, dmp_id, farm_id, changed_by, field_changed, old_value, new_value, reason, created_at
+// data_dictionary_entries: id, farm_id, study_id, variable_name, description, data_type, unit,
+//   allowed_values (JSONB), source, collection_method, created_at, updated_at
+// metadata_registry: id, farm_id, study_id, schema_name, schema_version, schema_definition (JSONB),
+//   standard (Dublin_Core|DataCite|custom), created_at
+// budget_contributions: id, budget_id, farm_id, contributor_type (cash|in_kind), contributor_name,
+//   institution, amount, description, confirmed, confirmed_at, created_at
+
+// ── DMP Templates ──
+router.get('/research/dmp-templates', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.query.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { grant_type } = req.query;
+    const params = [farmId];
+    let where = 'WHERE dt.farm_id = $1';
+    if (grant_type) { params.push(grant_type); where += ` AND dt.grant_type = $${params.length}`; }
+
+    const result = await query(`SELECT dt.* FROM dmp_templates dt ${where} ORDER BY dt.created_at DESC`, params);
+    res.json({ ok: true, templates: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchCompliance] DMP templates list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list DMP templates' });
+  }
+});
+
+router.post('/research/dmp-templates', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { template_name, grant_type, sections } = req.body;
+    if (!template_name) return res.status(400).json({ ok: false, error: 'template_name required' });
+
+    const result = await query(`
+      INSERT INTO dmp_templates (farm_id, template_name, grant_type, sections)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `, [farmId, template_name, grant_type || null, JSON.stringify(sections || [])]);
+
+    res.status(201).json({ ok: true, template: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] DMP template create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create DMP template' });
+  }
+});
+
+// ── DMP Living Change Log ──
+router.get('/research/dmp/:id/changes', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT cl.*, u.email as changed_by_email
+      FROM dmp_change_log cl
+      LEFT JOIN farm_users u ON cl.changed_by = u.id
+      WHERE cl.dmp_id = $1
+      ORDER BY cl.created_at DESC
+      LIMIT 200
+    `, [req.params.id]);
+
+    res.json({ ok: true, changes: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchCompliance] DMP change log error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list DMP changes' });
+  }
+});
+
+router.post('/research/dmp/:id/changes', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { field_changed, old_value, new_value, reason } = req.body;
+    if (!field_changed || !reason) return res.status(400).json({ ok: false, error: 'field_changed and reason required' });
+
+    const result = await query(`
+      INSERT INTO dmp_change_log (dmp_id, farm_id, changed_by, field_changed, old_value, new_value, reason)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [req.params.id, farmId, req.userId || null, field_changed, old_value || null, new_value || null, reason]);
+
+    res.status(201).json({ ok: true, change: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] DMP change create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to record DMP change' });
+  }
+});
+
+// ── Data Dictionary ──
+router.get('/research/studies/:id/data-dictionary', verifyStudyOwnership, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT * FROM data_dictionary_entries WHERE study_id = $1 ORDER BY variable_name
+    `, [req.params.id]);
+    res.json({ ok: true, entries: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchCompliance] Data dictionary list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list data dictionary' });
+  }
+});
+
+router.post('/research/studies/:id/data-dictionary', verifyStudyOwnership, async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { variable_name, description, data_type, unit, allowed_values, source, collection_method } = req.body;
+    if (!variable_name || !data_type) return res.status(400).json({ ok: false, error: 'variable_name and data_type required' });
+
+    const result = await query(`
+      INSERT INTO data_dictionary_entries (farm_id, study_id, variable_name, description, data_type, unit, allowed_values, source, collection_method)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [farmId, req.params.id, variable_name, description || null, data_type, unit || null, JSON.stringify(allowed_values || []), source || null, collection_method || null]);
+
+    res.status(201).json({ ok: true, entry: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] Data dictionary create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create data dictionary entry' });
+  }
+});
+
+router.patch('/research/data-dictionary/:id', async (req, res) => {
+  try {
+    const { description, data_type, unit, allowed_values, source, collection_method } = req.body;
+    const fields = [];
+    const params = [];
+    let idx = 1;
+    if (description !== undefined) { fields.push(`description = $${idx}`); params.push(description); idx++; }
+    if (data_type !== undefined) { fields.push(`data_type = $${idx}`); params.push(data_type); idx++; }
+    if (unit !== undefined) { fields.push(`unit = $${idx}`); params.push(unit); idx++; }
+    if (allowed_values !== undefined) { fields.push(`allowed_values = $${idx}`); params.push(JSON.stringify(allowed_values)); idx++; }
+    if (source !== undefined) { fields.push(`source = $${idx}`); params.push(source); idx++; }
+    if (collection_method !== undefined) { fields.push(`collection_method = $${idx}`); params.push(collection_method); idx++; }
+    if (!fields.length) return res.status(400).json({ ok: false, error: 'No fields to update' });
+
+    fields.push('updated_at = NOW()');
+    params.push(req.params.id);
+    const result = await query(`UPDATE data_dictionary_entries SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Entry not found' });
+    res.json({ ok: true, entry: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] Data dictionary update error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to update data dictionary entry' });
+  }
+});
+
+// ── Metadata/Schema Registry ──
+router.get('/research/studies/:id/metadata', verifyStudyOwnership, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT * FROM metadata_registry WHERE study_id = $1 ORDER BY schema_name
+    `, [req.params.id]);
+    res.json({ ok: true, schemas: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchCompliance] Metadata list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list metadata schemas' });
+  }
+});
+
+router.post('/research/studies/:id/metadata', verifyStudyOwnership, async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { schema_name, schema_version, schema_definition, standard } = req.body;
+    if (!schema_name || !schema_definition) return res.status(400).json({ ok: false, error: 'schema_name and schema_definition required' });
+
+    const result = await query(`
+      INSERT INTO metadata_registry (farm_id, study_id, schema_name, schema_version, schema_definition, standard)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [farmId, req.params.id, schema_name, schema_version || '1.0', JSON.stringify(schema_definition), standard || 'custom']);
+
+    res.status(201).json({ ok: true, schema: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] Metadata create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create metadata schema' });
+  }
+});
+
+// ── Budget Contributions (cash and in-kind) ──
+router.get('/research/budgets/:id/contributions', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT * FROM budget_contributions WHERE budget_id = $1 ORDER BY created_at DESC
+    `, [req.params.id]);
+
+    const totals = await query(`
+      SELECT contributor_type, SUM(amount) as total
+      FROM budget_contributions WHERE budget_id = $1
+      GROUP BY contributor_type
+    `, [req.params.id]);
+
+    res.json({ ok: true, contributions: result.rows, totals: totals.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchCompliance] Contributions list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list contributions' });
+  }
+});
+
+router.post('/research/budgets/:id/contributions', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { contributor_type, contributor_name, institution, amount, description } = req.body;
+    if (!contributor_type || !contributor_name || amount === undefined) {
+      return res.status(400).json({ ok: false, error: 'contributor_type, contributor_name, and amount required' });
+    }
+    if (!['cash', 'in_kind'].includes(contributor_type)) {
+      return res.status(400).json({ ok: false, error: 'contributor_type must be cash or in_kind' });
+    }
+
+    const result = await query(`
+      INSERT INTO budget_contributions (budget_id, farm_id, contributor_type, contributor_name, institution, amount, description)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [req.params.id, farmId, contributor_type, contributor_name, institution || null, amount, description || null]);
+
+    res.status(201).json({ ok: true, contribution: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] Contribution create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to add contribution' });
+  }
+});
+
+router.patch('/research/contributions/:id/confirm', async (req, res) => {
+  try {
+    const result = await query(`
+      UPDATE budget_contributions SET confirmed = true, confirmed_at = NOW()
+      WHERE id = $1 RETURNING *
+    `, [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Contribution not found' });
+    res.json({ ok: true, contribution: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchCompliance] Contribution confirm error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to confirm contribution' });
+  }
+});
+
+// ── Spend vs Budget Dashboard ──
+router.get('/research/budgets/:id/dashboard', async (req, res) => {
+  try {
+    const budget = await query('SELECT * FROM grant_budgets WHERE id = $1', [req.params.id]);
+    if (!budget.rows.length) return res.status(404).json({ ok: false, error: 'Budget not found' });
+
+    const lineItems = await query(`
+      SELECT category, SUM(planned_amount) as planned, SUM(actual_amount) as actual,
+        SUM(planned_amount) - SUM(actual_amount) as variance
+      FROM budget_line_items WHERE budget_id = $1
+      GROUP BY category ORDER BY category
+    `, [req.params.id]);
+
+    const contributions = await query(`
+      SELECT contributor_type, SUM(amount) as total, COUNT(*) as count
+      FROM budget_contributions WHERE budget_id = $1
+      GROUP BY contributor_type
+    `, [req.params.id]);
+
+    const totalPlanned = lineItems.rows.reduce((sum, r) => sum + parseFloat(r.planned || 0), 0);
+    const totalActual = lineItems.rows.reduce((sum, r) => sum + parseFloat(r.actual || 0), 0);
+    const burnRate = totalPlanned > 0 ? ((totalActual / totalPlanned) * 100).toFixed(1) : 0;
+
+    res.json({
+      ok: true,
+      budget: budget.rows[0],
+      by_category: lineItems.rows,
+      contributions: contributions.rows,
+      summary: { total_planned: totalPlanned, total_actual: totalActual, variance: totalPlanned - totalActual, burn_rate_pct: parseFloat(burnRate) }
+    });
+  } catch (err) {
+    console.error('[ResearchCompliance] Budget dashboard error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to get budget dashboard' });
+  }
+});
+
 export default router;

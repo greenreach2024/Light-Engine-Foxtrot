@@ -2494,6 +2494,125 @@ export const TOOL_CATALOG = {
     }
   },
 
+  // ─── Phase 1 Research Operations Tools ─────────────────────────────────
+  'get_recipe_versions': {
+    description: 'List beta recipe versions for the farm. Shows recipe title, status, version number, and deployment count.',
+    category: 'read',
+    required: [],
+    optional: ['status'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const queryParams = [farmId];
+        const statusFilter = params.status ? `AND rv.status = $${queryParams.push(params.status)}` : '';
+        const result = await dbQuery(`
+          SELECT rv.id, rv.title, rv.status, rv.version_number, rv.created_at,
+            (SELECT COUNT(*) FROM recipe_deployments rd WHERE rd.recipe_version_id = rv.id) as deployment_count
+          FROM recipe_versions rv WHERE rv.farm_id = $1 ${statusFilter}
+          ORDER BY rv.updated_at DESC LIMIT 30
+        `, queryParams);
+        return { ok: true, recipes: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_audit_log': {
+    description: 'Query the research audit log. Returns recent audit entries filtered by entity or action.',
+    category: 'read',
+    required: [],
+    optional: ['entity_type', 'action', 'limit'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const limit = parseInt(params.limit, 10) || 50;
+        const queryParams = [farmId];
+        let filters = '';
+        if (params.entity_type) { filters += ` AND al.entity_type = $${queryParams.push(params.entity_type)}`; }
+        if (params.action) { filters += ` AND al.action = $${queryParams.push(params.action)}`; }
+        queryParams.push(limit);
+        const result = await dbQuery(`
+          SELECT al.* FROM audit_log al
+          WHERE al.farm_id = $1 ${filters}
+          ORDER BY al.created_at DESC LIMIT $${queryParams.length}
+        `, queryParams);
+        return { ok: true, entries: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_workspace_tasks': {
+    description: 'List tasks for a study. Returns title, assignee, status, priority, and due date.',
+    category: 'read',
+    required: ['study_id'],
+    optional: ['status'],
+    handler: async (params) => {
+      try {
+        const queryParams = [params.study_id];
+        const statusFilter = params.status ? `AND wt.status = $${queryParams.push(params.status)}` : '';
+        const result = await dbQuery(`
+          SELECT wt.* FROM workspace_tasks wt
+          WHERE wt.study_id = $1 ${statusFilter}
+          ORDER BY wt.priority ASC, wt.due_date ASC NULLS LAST LIMIT 50
+        `, queryParams);
+        return { ok: true, tasks: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_batch_chain': {
+    description: 'Trace the full provenance chain for a batch (seed-to-ship). Returns all traceability events in chronological order.',
+    category: 'read',
+    required: ['batch_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const result = await dbQuery(`
+          WITH RECURSIVE chain AS (
+            SELECT * FROM batch_traceability WHERE batch_id = $1 AND farm_id = $2
+            UNION ALL
+            SELECT bt.* FROM batch_traceability bt
+            INNER JOIN chain c ON bt.batch_id = c.previous_batch_id AND bt.farm_id = c.farm_id
+          )
+          SELECT * FROM chain ORDER BY timestamp
+        `, [params.batch_id, farmId]);
+        return { ok: true, chain: result.rows, count: result.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_data_quality_summary': {
+    description: 'Get a summary of data quality alerts for a dataset, grouped by type and severity.',
+    category: 'read',
+    required: ['dataset_id'],
+    optional: ['resolved'],
+    handler: async (params) => {
+      try {
+        const queryParams = [params.dataset_id];
+        let resolvedFilter = '';
+        if (params.resolved !== undefined) {
+          resolvedFilter = ` AND resolved = $${queryParams.push(params.resolved === 'true')}`;
+        }
+        const summary = await dbQuery(`
+          SELECT alert_type, severity, COUNT(*) as count
+          FROM data_quality_alerts WHERE dataset_id = $1 ${resolvedFilter}
+          GROUP BY alert_type, severity ORDER BY count DESC
+        `, queryParams);
+        const total = await dbQuery(`
+          SELECT COUNT(*) as total, SUM(CASE WHEN resolved THEN 1 ELSE 0 END) as resolved_count
+          FROM data_quality_alerts WHERE dataset_id = $1
+        `, [params.dataset_id]);
+        return { ok: true, by_type: summary.rows, totals: total.rows[0] };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
   // ─── EVIE Scanning Integration Tools ─────────────────────────────────
   'scan_bus_channels': {
     description: 'Scan all bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered devices with addresses, protocols, and suggested types. Use this to begin device onboarding.',

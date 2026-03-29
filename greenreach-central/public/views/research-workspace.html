@@ -324,6 +324,14 @@
           <div class="stat-value" id="stat-alerts">--</div>
           <div class="stat-label">Open Alerts</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-recipes">--</div>
+          <div class="stat-label">Beta Recipes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-tasks">--</div>
+          <div class="stat-label">Open Tasks</div>
+        </div>
       </div>
 
       <!-- Alerts -->
@@ -335,6 +343,8 @@
         <button class="btn btn-secondary" onclick="createNotebook()">New Notebook</button>
         <button class="btn btn-secondary" onclick="exportData()">Export Data</button>
         <button class="btn btn-secondary" onclick="showCalibrations()">Calibrations</button>
+        <button class="btn btn-secondary" onclick="createRecipe()">New Recipe</button>
+        <button class="btn btn-secondary" onclick="createTask()">New Task</button>
       </div>
 
       <!-- Tabs -->
@@ -344,6 +354,9 @@
         <div class="tab" data-tab="notebooks">Lab Notebooks</div>
         <div class="tab" data-tab="compliance">Compliance</div>
         <div class="tab" data-tab="collaborators">Collaborators</div>
+        <div class="tab" data-tab="recipes">Recipes</div>
+        <div class="tab" data-tab="tasks">Tasks</div>
+        <div class="tab" data-tab="audit">Audit</div>
       </div>
 
       <!-- Studies Tab -->
@@ -369,6 +382,21 @@
       <!-- Collaborators Tab -->
       <div class="tab-content" id="tab-collaborators">
         <div id="collaborators-list"></div>
+      </div>
+
+      <!-- Recipes Tab -->
+      <div class="tab-content" id="tab-recipes">
+        <div id="recipes-list"></div>
+      </div>
+
+      <!-- Tasks Tab -->
+      <div class="tab-content" id="tab-tasks">
+        <div id="tasks-list"></div>
+      </div>
+
+      <!-- Audit Tab -->
+      <div class="tab-content" id="tab-audit">
+        <div id="audit-list"></div>
       </div>
     </div>
   </div>
@@ -540,8 +568,113 @@
 
     function showCalibrations() {
       window.location.hash = '#calibrations';
-      // Could navigate to a dedicated calibrations view
       alert('Calibration management is available through your farm assistant -- ask "show calibration status"');
+    }
+
+    async function createRecipe() {
+      const title = prompt('Recipe title:');
+      if (!title) return;
+      const version = prompt('Version number (e.g. 1.0):') || '1.0';
+      try {
+        await apiFetch('/api/research/recipes', {
+          method: 'POST',
+          body: JSON.stringify({ title, version_number: version, parameters: {} })
+        });
+        loadRecipes();
+      } catch (err) { alert('Failed to create recipe: ' + err.message); }
+    }
+
+    async function createTask() {
+      const studyId = prompt('Study ID:');
+      if (!studyId) return;
+      const title = prompt('Task title:');
+      if (!title) return;
+      const assignee = prompt('Assignee email (optional):');
+      try {
+        await apiFetch(`/api/research/studies/${studyId}/tasks`, {
+          method: 'POST',
+          body: JSON.stringify({ title, assigned_to: assignee || null, status: 'open', priority: 3 })
+        });
+        loadTasks();
+      } catch (err) { alert('Failed to create task: ' + err.message); }
+    }
+
+    async function loadRecipes() {
+      const el = document.getElementById('recipes-list');
+      try {
+        const data = await apiFetch('/api/research/recipes');
+        const recipes = data.recipes || [];
+        document.getElementById('stat-recipes').textContent = recipes.length;
+        if (!recipes.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No beta recipes</h3><p>Create a recipe to begin the beta lifecycle.</p></div>';
+          return;
+        }
+        el.innerHTML = `<table>
+          <thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Deployments</th><th>Created</th></tr></thead>
+          <tbody>${recipes.map(r => `<tr>
+            <td><strong>${r.title}</strong></td>
+            <td>${r.version_number || '--'}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${r.deployment_count || 0}</td>
+            <td>${formatDate(r.created_at)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch (err) {
+        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function loadTasks() {
+      const el = document.getElementById('tasks-list');
+      try {
+        const studies = await apiFetch('/api/research/studies');
+        let allTasks = [];
+        for (const s of (studies.studies || []).slice(0, 10)) {
+          const t = await apiFetch(`/api/research/studies/${s.id}/tasks`).catch(() => ({ tasks: [] }));
+          (t.tasks || []).forEach(task => { task._study_title = s.title; });
+          allTasks = allTasks.concat(t.tasks || []);
+        }
+        document.getElementById('stat-tasks').textContent = allTasks.filter(t => t.status !== 'done').length;
+        if (!allTasks.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No tasks</h3><p>Create a task within a study to track work.</p></div>';
+          return;
+        }
+        el.innerHTML = `<table>
+          <thead><tr><th>Title</th><th>Study</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead>
+          <tbody>${allTasks.map(t => `<tr>
+            <td>${t.title}</td>
+            <td>${t._study_title || '--'}</td>
+            <td>${statusBadge(t.status)}</td>
+            <td>${t.priority || '--'}</td>
+            <td>${formatDate(t.due_date)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch (err) {
+        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function loadAudit() {
+      const el = document.getElementById('audit-list');
+      try {
+        const data = await apiFetch('/api/research/audit?limit=50');
+        const entries = data.entries || [];
+        if (!entries.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No audit entries</h3><p>Actions across the research platform are logged here.</p></div>';
+          return;
+        }
+        el.innerHTML = `<table>
+          <thead><tr><th>Action</th><th>Entity</th><th>User</th><th>When</th></tr></thead>
+          <tbody>${entries.map(e => `<tr>
+            <td>${e.action}</td>
+            <td>${e.entity_type || '--'}${e.entity_id ? ' #' + e.entity_id : ''}</td>
+            <td>${e.actor_email || e.user_id || '--'}</td>
+            <td>${formatDate(e.created_at)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch (err) {
+        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
+      }
     }
 
     // Compliance tab loader
@@ -572,6 +705,24 @@
       } catch (err) {
         el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
       }
+    });
+
+    // Recipes tab loader
+    document.querySelector('[data-tab="recipes"]').addEventListener('click', () => {
+      const el = document.getElementById('recipes-list');
+      if (!el.dataset.loaded) { loadRecipes(); el.dataset.loaded = 'true'; }
+    });
+
+    // Tasks tab loader
+    document.querySelector('[data-tab="tasks"]').addEventListener('click', () => {
+      const el = document.getElementById('tasks-list');
+      if (!el.dataset.loaded) { loadTasks(); el.dataset.loaded = 'true'; }
+    });
+
+    // Audit tab loader
+    document.querySelector('[data-tab="audit"]').addEventListener('click', () => {
+      const el = document.getElementById('audit-list');
+      if (!el.dataset.loaded) { loadAudit(); el.dataset.loaded = 'true'; }
     });
 
     // Collaborators tab loader

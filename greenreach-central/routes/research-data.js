@@ -392,4 +392,179 @@ router.post('/research/maintenance', async (req, res) => {
   }
 });
 
+// ── Phase 1 Enhancements ──
+// event_markers: id, farm_id, study_id, dataset_id, marker_type (anomaly|phase_change|intervention|note),
+//   timestamp, title, description, created_by, created_at
+// batch_traceability: id, farm_id, study_id, batch_id, event_type (seeded|transplanted|harvested|tested|shipped),
+//   timestamp, location, details (JSONB), previous_batch_id, created_at
+// data_quality_alerts: id, farm_id, dataset_id, variable_name, alert_type (missing|outlier|drift|gap),
+//   severity (low|medium|high), message, detected_at, resolved, resolved_at
+
+// ── Event Markers ──
+router.get('/research/datasets/:id/markers', verifyDatasetOwnership, async (req, res) => {
+  try {
+    const { marker_type, since } = req.query;
+    const params = [req.params.id];
+    let where = 'WHERE em.dataset_id = $1';
+    if (marker_type) { params.push(marker_type); where += ` AND em.marker_type = $${params.length}`; }
+    if (since) { params.push(since); where += ` AND em.timestamp >= $${params.length}`; }
+
+    const result = await query(`SELECT em.* FROM event_markers em ${where} ORDER BY em.timestamp DESC LIMIT 500`, params);
+    res.json({ ok: true, markers: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchData] Event markers list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list event markers' });
+  }
+});
+
+router.post('/research/datasets/:id/markers', verifyDatasetOwnership, async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { marker_type, timestamp, title, description, study_id } = req.body;
+    if (!marker_type || !title) return res.status(400).json({ ok: false, error: 'marker_type and title required' });
+
+    const validTypes = ['anomaly', 'phase_change', 'intervention', 'note'];
+    if (!validTypes.includes(marker_type)) {
+      return res.status(400).json({ ok: false, error: `marker_type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const result = await query(`
+      INSERT INTO event_markers (farm_id, study_id, dataset_id, marker_type, timestamp, title, description, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [farmId, study_id || null, req.params.id, marker_type, timestamp || new Date().toISOString(), title, description || null, req.userId || null]);
+
+    res.status(201).json({ ok: true, marker: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchData] Event marker create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create event marker' });
+  }
+});
+
+// ── Batch Traceability ──
+router.get('/research/studies/:id/batches', verifyStudyOwnership, async (req, res) => {
+  try {
+    const { batch_id, event_type } = req.query;
+    const params = [req.params.id];
+    let where = 'WHERE bt.study_id = $1';
+    if (batch_id) { params.push(batch_id); where += ` AND bt.batch_id = $${params.length}`; }
+    if (event_type) { params.push(event_type); where += ` AND bt.event_type = $${params.length}`; }
+
+    const result = await query(`SELECT bt.* FROM batch_traceability bt ${where} ORDER BY bt.timestamp DESC LIMIT 500`, params);
+    res.json({ ok: true, batches: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchData] Batch trace list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list batch traceability' });
+  }
+});
+
+router.post('/research/studies/:id/batches', verifyStudyOwnership, async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { batch_id, event_type, timestamp, location, details, previous_batch_id } = req.body;
+    if (!batch_id || !event_type) return res.status(400).json({ ok: false, error: 'batch_id and event_type required' });
+
+    const validEvents = ['seeded', 'transplanted', 'harvested', 'tested', 'shipped'];
+    if (!validEvents.includes(event_type)) {
+      return res.status(400).json({ ok: false, error: `event_type must be one of: ${validEvents.join(', ')}` });
+    }
+
+    const result = await query(`
+      INSERT INTO batch_traceability (farm_id, study_id, batch_id, event_type, timestamp, location, details, previous_batch_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [farmId, req.params.id, batch_id, event_type, timestamp || new Date().toISOString(), location || null, JSON.stringify(details || {}), previous_batch_id || null]);
+
+    res.status(201).json({ ok: true, batch: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchData] Batch trace create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create batch event' });
+  }
+});
+
+// ── Batch Chain (full provenance lineage for a batch) ──
+router.get('/research/batches/:batchId/chain', async (req, res) => {
+  try {
+    const farmId = req.farmId || req.query.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const result = await query(`
+      WITH RECURSIVE chain AS (
+        SELECT * FROM batch_traceability WHERE batch_id = $1 AND farm_id = $2
+        UNION ALL
+        SELECT bt.* FROM batch_traceability bt
+        INNER JOIN chain c ON bt.batch_id = c.previous_batch_id AND bt.farm_id = c.farm_id
+      )
+      SELECT * FROM chain ORDER BY timestamp
+    `, [req.params.batchId, farmId]);
+
+    res.json({ ok: true, chain: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchData] Batch chain error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to trace batch chain' });
+  }
+});
+
+// ── Data Quality Alerts ──
+router.get('/research/datasets/:id/alerts', verifyDatasetOwnership, async (req, res) => {
+  try {
+    const { alert_type, severity, resolved } = req.query;
+    const params = [req.params.id];
+    let where = 'WHERE dqa.dataset_id = $1';
+    if (alert_type) { params.push(alert_type); where += ` AND dqa.alert_type = $${params.length}`; }
+    if (severity) { params.push(severity); where += ` AND dqa.severity = $${params.length}`; }
+    if (resolved !== undefined) { params.push(resolved === 'true'); where += ` AND dqa.resolved = $${params.length}`; }
+
+    const result = await query(`SELECT dqa.* FROM data_quality_alerts dqa ${where} ORDER BY dqa.detected_at DESC LIMIT 200`, params);
+    res.json({ ok: true, alerts: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchData] Quality alerts list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list quality alerts' });
+  }
+});
+
+router.post('/research/datasets/:id/alerts', verifyDatasetOwnership, async (req, res) => {
+  try {
+    const farmId = req.farmId || req.body.farm_id;
+    if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
+
+    const { variable_name, alert_type, severity, message } = req.body;
+    if (!alert_type || !message) return res.status(400).json({ ok: false, error: 'alert_type and message required' });
+
+    const validTypes = ['missing', 'outlier', 'drift', 'gap'];
+    if (!validTypes.includes(alert_type)) {
+      return res.status(400).json({ ok: false, error: `alert_type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const result = await query(`
+      INSERT INTO data_quality_alerts (farm_id, dataset_id, variable_name, alert_type, severity, message)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [farmId, req.params.id, variable_name || null, alert_type, severity || 'medium', message]);
+
+    res.status(201).json({ ok: true, alert: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchData] Quality alert create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create quality alert' });
+  }
+});
+
+router.patch('/research/alerts/:id/resolve', async (req, res) => {
+  try {
+    const result = await query(`
+      UPDATE data_quality_alerts SET resolved = true, resolved_at = NOW()
+      WHERE id = $1 RETURNING *
+    `, [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Alert not found' });
+    res.json({ ok: true, alert: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchData] Alert resolve error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to resolve alert' });
+  }
+});
+
 export default router;

@@ -224,6 +224,40 @@ async function checkOnboardingOwnership(checklistId, farmId) {
   return checkDirectOwnership('onboarding_checklists', checklistId, farmId);
 }
 
+// Phase 1 new entity ownership checks
+
+async function checkRecipeVersionOwnership(recipeId, farmId) {
+  return checkDirectOwnership('recipe_versions', recipeId, farmId);
+}
+
+async function checkDeploymentOwnership(deploymentId, farmId) {
+  return checkDirectOwnership('recipe_deployments', deploymentId, farmId);
+}
+
+async function checkNoteOwnership(noteId, farmId) {
+  return checkDirectOwnership('workspace_notes', noteId, farmId);
+}
+
+async function checkTaskOwnership(taskId, farmId) {
+  return checkDirectOwnership('workspace_tasks', taskId, farmId);
+}
+
+async function checkChangeRequestOwnership(crId, farmId) {
+  return checkDirectOwnership('change_requests', crId, farmId);
+}
+
+async function checkCOIOwnership(coiId, farmId) {
+  return checkDirectOwnership('coi_declarations', coiId, farmId);
+}
+
+async function checkApprovalOwnership(approvalId, farmId) {
+  return checkDirectOwnership('approval_chains', approvalId, farmId);
+}
+
+async function checkContributionOwnership(contribId, farmId) {
+  return checkDirectOwnership('authorship_contributions', contribId, farmId);
+}
+
 // ── Middleware Factories ────────────────────────────────────────────
 
 function makeOwnershipMiddleware(checker, paramName, entityLabel) {
@@ -264,3 +298,11 @@ export const verifyAlertOwnership = makeOwnershipMiddleware(checkAlertOwnership,
 export const verifyQualityFlagOwnership = makeOwnershipMiddleware(checkQualityFlagOwnership, 'id', 'Quality flag');
 export const verifyProfileOwnership = makeOwnershipMiddleware(checkProfileOwnership, 'id', 'Profile');
 export const verifyOnboardingOwnership = makeOwnershipMiddleware(checkOnboardingOwnership, 'id', 'Onboarding');
+export const verifyRecipeVersionOwnership = makeOwnershipMiddleware(checkRecipeVersionOwnership, 'id', 'Recipe version');
+export const verifyDeploymentOwnership = makeOwnershipMiddleware(checkDeploymentOwnership, 'id', 'Deployment');
+export const verifyNoteOwnership = makeOwnershipMiddleware(checkNoteOwnership, 'id', 'Note');
+export const verifyTaskOwnership = makeOwnershipMiddleware(checkTaskOwnership, 'id', 'Task');
+export const verifyChangeRequestOwnership = makeOwnershipMiddleware(checkChangeRequestOwnership, 'id', 'Change request');
+export const verifyCOIOwnership = makeOwnershipMiddleware(checkCOIOwnership, 'id', 'COI declaration');
+export const verifyApprovalOwnership = makeOwnershipMiddleware(checkApprovalOwnership, 'id', 'Approval');
+export const verifyContributionOwnership = makeOwnershipMiddleware(checkContributionOwnership, 'id', 'Contribution');

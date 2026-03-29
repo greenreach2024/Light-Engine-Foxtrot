@@ -625,7 +625,10 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm/products | routes/custom-products.js | Custom farm product CRUD + image upload |
-| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration) |
+| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops) |
+| /api/research/recipes | routes/research-recipes.js | Beta recipe lifecycle: versions, deployments, comparisons, eligibility, rollback |
+| /api/research/audit | routes/research-audit.js | Immutable audit log, COI declarations, signoffs, approval chains, contributions |
+| /api/research/studies/:id/notes,tasks,change-requests | routes/research-workspace-ops.js | Workspace operations: notes, tasks, change requests, milestone evidence |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
 | /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
@@ -810,7 +813,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 | Page | Purpose |
 |------|---------|
-| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators). Embedded in LE-farm-admin via iframe. E.V.I.E. enabled. Located in views/ |
+| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators, recipes, tasks, audit). Embedded in LE-farm-admin via iframe. E.V.I.E. enabled. Located in views/. Phase 1 tabs: Studies, Datasets, Notebooks, Compliance, Collaborators, Recipes, Tasks, Audit |
 | research-subscription.html | Research tier overview and feature summary. Embedded in LE-farm-admin via iframe. E.V.I.E. enabled |
 | setup-wizard.html | New farm setup wizard |
 | grant-wizard.html | Grant application wizard (FREE) |
@@ -1490,6 +1493,74 @@ EnvStore
 
 **audit_log** (id SERIAL PK)
 - event_type, entity_type, entity_id, actor, details JSONB, created_at
+
+### 8.12 Research Platform (Phase 1)
+
+**recipe_versions** (id SERIAL PK)
+- farm_id, study_id, title, version_number, parameters JSONB, status (draft|review|approved_beta|live|archived|retired), parent_version_id, created_by, created_at, updated_at
+
+**recipe_deployments** (id SERIAL PK)
+- recipe_version_id, farm_id, target_zone, deployed_by, deployed_at, acknowledged, acknowledged_by, acknowledged_at, rolled_back, rollback_reason, rollback_at
+
+**recipe_comparisons** (id SERIAL PK)
+- farm_id, recipe_a_id, recipe_b_id, comparison_metrics JSONB, result_summary, created_at
+
+**recipe_eligibility_rules** (id SERIAL PK)
+- recipe_version_id, farm_id, rule_type, rule_definition JSONB, created_at
+
+**recipe_operator_acks** (id SERIAL PK)
+- deployment_id, farm_id, operator_id, acknowledged_at, notes
+
+**coi_declarations** (id SERIAL PK)
+- study_id, farm_id, user_id, declaration_text, relationship_type, status (pending|reviewed|cleared|flagged), reviewed_by, reviewed_at, created_at
+
+**role_signoffs** (id SERIAL PK)
+- study_id, farm_id, role, user_id, milestone, signed_at, notes
+
+**approval_chains** (id SERIAL PK)
+- study_id, farm_id, approval_type, step_order, approver_role, approver_id, status (pending|approved|rejected), decided_at, notes, created_at
+
+**authorship_contributions** (id SERIAL PK)
+- study_id, farm_id, user_id, role (PI|Co-PI|technician|student|collaborator), contribution_description, orcid, affiliation, created_at, updated_at
+
+**workspace_notes** (id SERIAL PK)
+- study_id, farm_id, note_type (decision|meeting|general), title, content, created_by, created_at, updated_at
+
+**workspace_tasks** (id SERIAL PK)
+- study_id, farm_id, title, description, assigned_to, status (open|in_progress|done|blocked), priority, due_date, institution, created_at, updated_at
+
+**change_requests** (id SERIAL PK)
+- study_id, farm_id, title, description, requested_by, status (pending|approved|rejected|implemented), reviewed_by, reviewed_at, created_at
+
+**milestone_evidence** (id SERIAL PK)
+- milestone_id, farm_id, evidence_type, description, file_url, uploaded_by, created_at
+
+**protocol_design_elements** (id SERIAL PK)
+- protocol_id, farm_id, element_type (randomization|inclusion_exclusion|success_metric|stopping_rule|replication_plan), content JSONB, created_at, updated_at
+
+**dmp_templates** (id SERIAL PK)
+- farm_id, template_name, grant_type, sections JSONB, created_at
+
+**dmp_change_log** (id SERIAL PK)
+- dmp_id, farm_id, changed_by, field_changed, old_value, new_value, reason, created_at
+
+**data_dictionary_entries** (id SERIAL PK)
+- farm_id, study_id, variable_name, description, data_type, unit, allowed_values JSONB, source, collection_method, created_at, updated_at
+
+**metadata_registry** (id SERIAL PK)
+- farm_id, study_id, schema_name, schema_version, schema_definition JSONB, standard (Dublin_Core|DataCite|custom), created_at
+
+**budget_contributions** (id SERIAL PK)
+- budget_id, farm_id, contributor_type (cash|in_kind), contributor_name, institution, amount, description, confirmed, confirmed_at, created_at
+
+**event_markers** (id SERIAL PK)
+- farm_id, study_id, dataset_id, marker_type (anomaly|phase_change|intervention|note), timestamp, title, description, created_by, created_at
+
+**batch_traceability** (id SERIAL PK)
+- farm_id, study_id, batch_id, event_type (seeded|transplanted|harvested|tested|shipped), timestamp, location, details JSONB, previous_batch_id, created_at
+
+**data_quality_alerts** (id SERIAL PK)
+- farm_id, dataset_id, variable_name, alert_type (missing|outlier|drift|gap), severity (low|medium|high), message, detected_at, resolved, resolved_at
 
 ---
 

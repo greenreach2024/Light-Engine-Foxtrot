@@ -416,4 +416,85 @@ router.post('/research/studies/:id/deviations', verifyStudyOwnership, async (req
   }
 });
 
+// ── Phase 1 Enhancements: Protocol Builder ──
+// protocol_design_elements: id, protocol_id, study_id, element_type
+//   (randomization|inclusion_exclusion|success_metric|stopping_rule|replication_plan),
+//   title, definition (JSONB), created_at
+
+// ── Protocol design elements (randomization, inclusion/exclusion, etc.) ──
+router.get('/research/protocols/:id/design', async (req, res) => {
+  try {
+    const { element_type } = req.query;
+    const params = [req.params.id];
+    let where = 'WHERE pde.protocol_id = $1';
+    if (element_type) { params.push(element_type); where += ` AND pde.element_type = $${params.length}`; }
+
+    const result = await query(`
+      SELECT pde.* FROM protocol_design_elements pde
+      ${where}
+      ORDER BY pde.element_type, pde.created_at
+    `, params);
+
+    res.json({ ok: true, elements: result.rows, count: result.rows.length });
+  } catch (err) {
+    console.error('[ResearchStudies] Design elements list error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to list protocol design elements' });
+  }
+});
+
+router.post('/research/protocols/:id/design', async (req, res) => {
+  try {
+    const { element_type, title, definition, study_id } = req.body;
+    if (!element_type || !title) {
+      return res.status(400).json({ ok: false, error: 'element_type and title required' });
+    }
+    const validTypes = ['randomization', 'inclusion_exclusion', 'success_metric', 'stopping_rule', 'replication_plan'];
+    if (!validTypes.includes(element_type)) {
+      return res.status(400).json({ ok: false, error: `Invalid element_type. Valid: ${validTypes.join(', ')}` });
+    }
+
+    const result = await query(`
+      INSERT INTO protocol_design_elements (protocol_id, study_id, element_type, title, definition)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [req.params.id, study_id || null, element_type, title, JSON.stringify(definition || {})]);
+
+    res.status(201).json({ ok: true, element: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchStudies] Design element create error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to create protocol design element' });
+  }
+});
+
+router.patch('/research/design-elements/:id', async (req, res) => {
+  try {
+    const { title, definition } = req.body;
+    const fields = [];
+    const params = [];
+    let idx = 1;
+    if (title !== undefined) { fields.push(`title = $${idx}`); params.push(title); idx++; }
+    if (definition !== undefined) { fields.push(`definition = $${idx}`); params.push(JSON.stringify(definition)); idx++; }
+    if (!fields.length) return res.status(400).json({ ok: false, error: 'No fields to update' });
+
+    params.push(req.params.id);
+    const result = await query(`UPDATE protocol_design_elements SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Design element not found' });
+    res.json({ ok: true, element: result.rows[0] });
+  } catch (err) {
+    console.error('[ResearchStudies] Design element update error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to update design element' });
+  }
+});
+
+router.delete('/research/design-elements/:id', async (req, res) => {
+  try {
+    const result = await query('DELETE FROM protocol_design_elements WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Design element not found' });
+    res.json({ ok: true, deleted: true });
+  } catch (err) {
+    console.error('[ResearchStudies] Design element delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete design element' });
+  }
+});
+
 export default router;
