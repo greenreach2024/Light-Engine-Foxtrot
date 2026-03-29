@@ -131,6 +131,6 @@ async function sendResearchInviteEmail({ name, email, code }) {
   await emailService.sendEmail({ to: email, subject, html, text });
 }
 
-module.exports.sendResearchInviteEmail = sendResearchInviteEmail;
+export { sendResearchInviteEmail };
 
 export default new EmailService();
