@@ -1710,6 +1710,8 @@ EnvStore
 **Post-Remediation Hotfix (Mar 29, 2026)**
 - Fixed ELN snapshot endpoint runtime bug by removing an invalid `storedHash` reference in snapshot creation flow.
 - De-duplicated Research Workspace sidebar link so LE admin shows a single canonical entry under the Research section.
+- Repaired Research Workspace UI workflow API paths (`/dmp`, `/deadlines/upcoming`, `/deadlines/alerts`) to match backend routes.
+- Re-synchronized `public/views/research-workspace.html` and `greenreach-central/public/views/research-workspace.html` to keep LE/Central page behavior consistent.
 
 ---
 

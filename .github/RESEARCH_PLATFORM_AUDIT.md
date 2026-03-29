@@ -15,6 +15,7 @@ The Research Platform is **structurally complete** -- 30 tables, 84 endpoints, 1
 
 **Update (Mar 28, 2026)**: Critical findings C2-C5 have been remediated in production. C1 remains open.
 **Update (Mar 29, 2026)**: C1 has been remediated in production via Central feature-gate middleware and route-chain enforcement. Post-deploy hotfixes also resolved ELN snapshot runtime failure and duplicate Research Workspace sidebar links.
+**Re-audit (Mar 29, 2026, Workflow Pass)**: Research Workspace page API wiring mismatches were corrected (`/research/studies/:id/dmp`, `/research/deadlines/upcoming`, `/research/deadlines/alerts`) and dual public copies were synchronized.
 
 **Current residual risk (Mar 29, 2026)**:
 - Feature gate is intentionally fail-open when DB is unavailable or tier lookup errors occur (availability-first tradeoff).

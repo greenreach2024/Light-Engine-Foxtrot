@@ -527,7 +527,7 @@
           apiFetch('/api/research/studies').catch(() => ({ studies: [] })),
           apiFetch('/api/research/datasets').catch(() => ({ datasets: [] })),
           apiFetch('/api/research/notebooks').catch(() => ({ notebooks: [] })),
-          apiFetch('/api/research/alerts?resolved=false').catch(() => ({ alerts: [] })),
+          apiFetch(`/api/research/deadlines/alerts?farm_id=${farmId}`).catch(() => ({ alerts: [] })),
           apiFetch('/api/research/grants').catch(() => ({ grants: [] })),
           apiFetch('/api/research/trainees').catch(() => ({ trainees: [] })),
           apiFetch('/api/research/partners').catch(() => ({ partners: [] }))
@@ -549,7 +549,7 @@
         Promise.all([
           apiFetch(`/api/research/publications?farm_id=${farmId}`).catch(() => ({ publications: [] })),
           apiFetch(`/api/research/equipment?farm_id=${farmId}`).catch(() => ({ equipment: [] })),
-          apiFetch(`/api/research/deadlines?farm_id=${farmId}`).catch(() => ({ deadlines: [] }))
+          apiFetch(`/api/research/deadlines/upcoming?farm_id=${farmId}`).catch(() => ({ deadlines: [] }))
         ]).then(([pubs, equip, dl]) => {
           document.getElementById("stat-publications").textContent = (pubs.publications || []).length;
           document.getElementById("stat-equipment").textContent = (equip.equipment || []).length;
@@ -793,13 +793,13 @@
         }
         let html = '<div class="card-grid">';
         for (const s of studies.studies.slice(0, 5)) {
-          const [dmps, budgets] = await Promise.all([
-            apiFetch(`/api/research/studies/${s.id}/dmps`).catch(() => ({ dmps: [] })),
+          const [dmpData, budgets] = await Promise.all([
+            apiFetch(`/api/research/studies/${s.id}/dmp`).catch(() => ({ plans: [] })),
             apiFetch(`/api/research/studies/${s.id}/budgets`).catch(() => ({ budgets: [] }))
           ]);
           html += `<div class="card">
             <h3>${s.title}</h3>
-            <p>DMPs: ${(dmps.dmps || []).length} | Budgets: ${(budgets.budgets || []).length}</p>
+            <p>DMPs: ${(dmpData.plans || []).length} | Budgets: ${(budgets.budgets || []).length}</p>
             <div class="meta">${statusBadge(s.status)}</div>
           </div>`;
         }
@@ -973,7 +973,9 @@
           html += `<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>`;
           if (d.studies) html += d.studies.map(s => `<tr><td>Studies (${s.status})</td><td>${s.count}</td></tr>`).join('');
           if (d.grants) html += d.grants.map(g => `<tr><td>Grants (${g.status})</td><td>${g.count}</td></tr>`).join('');
-          html += `</tbody></table>          html += `</tbody></table>          html +-st          html += `</tbody></table>          html += `</tbody></table>erHTML = html;
+          html += `</tbody></table>`;
+        }
+        el.innerHTML = html;
         el.dataset.loaded = 'true';
       } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
     });
@@ -982,7 +984,7 @@
       const el = document.getElementById('deadlines-list');
       if (el.dataset.loaded) return;
       try {
-        const data = await apiFetch(`/api/research/deadlines?farm_id=${farmId}`);
+        const data = await apiFetch(`/api/research/deadlines/upcoming?farm_id=${farmId}`);
         let html = '<h3>Upcoming Deadlines</h3>';
         if (data.deadlines?.length) {
           html += `<table><thead><tr><th>Title</th><th>Type</th><th>Due</th><th>Priority</th></tr></thead>
