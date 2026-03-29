@@ -95,8 +95,8 @@ router.post('/login', async (req, res) => {
     }
 
     if (useDatabase) {
-      // Database mode: Query farm_users table
-      // Support login by email OR by farm_id alone (find first admin)
+      // Database mode: query farm users.
+      // Support login by email OR by farm_id alone.
       let userQuery, params;
 
       if (normalizedEmail) {
@@ -123,7 +123,8 @@ router.post('/login', async (req, res) => {
         `;
         params = farm_id ? [normalizedEmail, farm_id] : [normalizedEmail];
       } else if (farm_id) {
-        // No email — find first admin user for this farm (matches local Foxtrot behavior)
+        // No email — fetch all active users for this farm and match by password.
+        // This allows invited non-admin users to authenticate from Farm ID + password flows.
         userQuery = `
           SELECT 
             fu.id,
@@ -141,10 +142,16 @@ router.post('/login', async (req, res) => {
           FROM farm_users fu
           JOIN farms f ON fu.farm_id = f.farm_id
           WHERE fu.farm_id = $1
-          AND fu.role = 'admin'
           AND fu.status = 'active'
-          ORDER BY fu.created_at ASC
-          LIMIT 1
+          ORDER BY
+            CASE fu.role
+              WHEN 'admin' THEN 1
+              WHEN 'manager' THEN 2
+              WHEN 'operator' THEN 3
+              WHEN 'viewer' THEN 4
+              ELSE 5
+            END,
+            fu.created_at ASC
         `;
         params = [farm_id];
       } else {
@@ -164,7 +171,24 @@ router.post('/login', async (req, res) => {
         console.log(`[Auth] No farm_users entry for ${farm_id || normalizedEmail}, falling through to fallback`);
         useDatabase = false;
       } else {
-        user = rows[0];
+        if (normalizedEmail) {
+          user = rows[0];
+        } else {
+          // Farm ID-only login: identify which active user owns this password hash.
+          for (const candidate of rows) {
+            // eslint-disable-next-line no-await-in-loop
+            const ok = await bcrypt.compare(password, candidate.password_hash);
+            if (ok) {
+              user = candidate;
+              break;
+            }
+          }
+
+          if (!user) {
+            const adminCandidate = rows.find((r) => (r.role || '').toLowerCase() === 'admin') || rows[0];
+            user = adminCandidate;
+          }
+        }
       }
     }
 
