@@ -18,7 +18,7 @@
  */
 import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
-import { verifyDatasetOwnership } from '../middleware/research-tenant.js';
+import { verifyDatasetOwnership, verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
