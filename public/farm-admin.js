@@ -7327,10 +7327,13 @@ async function loadUsers() {
         }
 
         // Store for filtering
+        // Ensure every user has an id (API may not return one)
+        users.forEach((u, i) => { if (u.id == null) u.id = i + 1; });
         window.allUsers = users;
         
         renderUsersTable(users);
         loadAccessLog();
+        loadPendingInvitations(users);
     } catch (error) {
         console.error('Error loading users:', error);
         showToast('Error loading users', 'error');
@@ -7366,7 +7369,7 @@ function renderUsersTable(users) {
         
         return `
             <tr>
-                <td style="font-weight: 500;">${escapeHtml(user.name)}</td>
+                <td style="font-weight: 500;">${escapeHtml(user.name || user.email || "Unknown")}</td>
                 <td>${escapeHtml(user.email)}</td>
                 <td>
                     <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: rgba(${roleColors[user.role]}, 0.1); color: ${roleColors[user.role]}; border: 1px solid ${roleColors[user.role]};">
@@ -7529,6 +7532,39 @@ function addPendingInvitation(invitation) {
     tbody.appendChild(row);
 }
 
+
+
+/**
+ * Populate pending invitations table from user list.
+ * Users who have never logged in are treated as pending invitations.
+ */
+function loadPendingInvitations(users) {
+    var tbody = document.querySelector('#invitations-table tbody');
+    if (!tbody) return;
+
+    var pending = (users || []).filter(function(u) { return !u.lastLogin && u.status === 'active'; });
+
+    if (pending.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px;">No pending invitations</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    pending.forEach(function(u) {
+        var sent = u.createdAt ? formatTimeSince(new Date(u.createdAt)) : '--';
+        var row = document.createElement('tr');
+        row.innerHTML = '<td>' + escapeHtml(u.email) + '</td>'
+            + '<td style="text-transform: capitalize;">' + (u.role || 'operator') + '</td>'
+            + '<td>' + escapeHtml(currentSession.email || 'Admin') + '</td>'
+            + '<td>' + sent + '</td>'
+            + '<td>--</td>'
+            + '<td>'
+            + '<button class="btn btn-sm" onclick="resendInvitation(\x27' + u.email + '\x27)" style="padding: 4px 8px; font-size: 12px;">Resend</button> '
+            + '<button class="btn btn-sm" onclick="cancelInvitation(\x27' + u.email + '\x27)" style="padding: 4px 8px; font-size: 12px; background: var(--accent-red);">Cancel</button>'
+            + '</td>';
+        tbody.appendChild(row);
+    });
+}
 /**
  * Open edit user modal
  */
@@ -7537,7 +7573,7 @@ function openEditUserModal(userId) {
     if (!user) return;
     
     document.getElementById('edit-user-id').value = user.id;
-    document.getElementById('edit-user-name').value = user.name;
+    document.getElementById('edit-user-name').value = user.name || user.email || '';
     document.getElementById('edit-user-email').value = user.email;
     document.getElementById('edit-user-role').value = user.role;
     document.getElementById('edit-user-status').value = user.status;
@@ -7596,22 +7632,30 @@ async function saveUserChanges(event) {
 async function removeUser() {
     const userId = parseInt(document.getElementById('edit-user-id').value);
     const user = window.allUsers.find(u => u.id === userId);
+    if (!user) {
+        showToast('User not found', 'error');
+        return;
+    }
     
-    if (!confirm(`Are you sure you want to remove ${user.name}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to remove ${user.name || user.email}? This action cannot be undone.`)) {
         return;
     }
     
     try {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        await fetch('/api/users/delete', {
+        const response = await fetch(`${API_BASE}/api/users/delete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${currentSession.token}`
             },
             body: JSON.stringify({ email: user.email })
         });
         
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || errData.message || `Server returned ${response.status}`);
+        }
+
         window.allUsers = window.allUsers.filter(u => u.id !== userId);
         
         showToast('User removed successfully', 'success');
@@ -7620,7 +7664,7 @@ async function removeUser() {
         
     } catch (error) {
         console.error('Error removing user:', error);
-        showToast('Error removing user', 'error');
+        showToast('Error removing user: ' + error.message, 'error');
     }
 }
 
@@ -8107,25 +8151,12 @@ function showNotification(message, type = 'info') {
  * Initialize user management section
  */
 async function initUserManagement() {
-    // Load current user info
-    if (currentSession && currentSession.email) {
-        document.getElementById('current-user-email').value = currentSession.email || '';
-        document.getElementById('current-user-role').value = currentSession.role || 'admin';
+    // Safe init: only call loadUsers -- legacy DOM elements were removed from HTML
+    try {
+        await loadUsers();
+    } catch (err) {
+        console.warn("initUserManagement: loadUsers failed:", err.message);
     }
-
-    // Setup event listeners
-    document.getElementById('change-password-form').addEventListener('submit', handlePasswordChange);
-    document.getElementById('add-user-btn').addEventListener('click', () => {
-        document.getElementById('add-user-form-container').style.display = 'block';
-    });
-    document.getElementById('cancel-add-user-btn').addEventListener('click', () => {
-        document.getElementById('add-user-form-container').style.display = 'none';
-        document.getElementById('add-user-form').reset();
-    });
-    document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
-
-    // Load users list
-    await loadUsers();
 }
 
 /**
@@ -8234,7 +8265,7 @@ async function handleAddUser(event) {
 }
 
 /**
- * Delete user
+ * Delete user (by email, called from user table actions)
  */
 async function deleteUser(email) {
     if (!confirm(`Are you sure you want to remove ${email} from this farm?`)) {
@@ -8243,26 +8274,23 @@ async function deleteUser(email) {
 
     try {
         const response = await fetch(`${API_BASE}/api/users/delete`, {
-            method: 'DELETE',
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentSession.token}`
             },
-            body: JSON.stringify({
-                email,
-                farmId: currentSession.farmId
-            })
+            body: JSON.stringify({ email })
         });
 
         if (response.ok) {
-            showNotification('User removed successfully', 'success');
+            showToast('User removed successfully', 'success');
             loadUsers();
         } else {
-            const data = await response.json();
-            throw new Error(data.message || 'Failed to remove user');
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || data.message || 'Failed to remove user');
         }
     } catch (error) {
-        showNotification(error.message, 'error');
+        showToast(error.message, 'error');
     }
 }
 

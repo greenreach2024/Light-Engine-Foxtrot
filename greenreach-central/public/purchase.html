@@ -1110,6 +1110,20 @@
                 <div class="error-message" id="modalError"></div>
 
                 <form id="purchaseForm" onsubmit="handlePurchaseSubmit(event)">
+                                        <div class="form-group" id="researchCodeGroup" style="display:none;">
+                                            <label for="modalResearchCode" class="form-label">
+                                                Research Invitation Code <span style="color: #f59e0b;">(Required for Research Tier)</span>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                id="modalResearchCode" 
+                                                class="form-input" 
+                                                placeholder="e.g., 1A2B3C4D5E6F7G8H"
+                                                minlength="8"
+                                                maxlength="32"
+                                            >
+                                            <p class="form-help">Enter your research invitation code (provided by GreenReach or your institution).</p>
+                                        </div>
                     <div class="form-group">
                         <label for="modalFarmName" class="form-label">
                             Farm Name <span style="color: #dc2626;">*</span>
@@ -1395,20 +1409,23 @@
             const modal = document.getElementById('purchaseModal');
             const planName = document.getElementById('modalPlanName');
             const planDesc = document.getElementById('modalPlanDescription');
-            
             // Update modal content
             planName.textContent = planDetails[plan].name;
             planDesc.textContent = planDetails[plan].description;
-            
             // Clear form
             document.getElementById('purchaseForm').reset();
             document.getElementById('modalError').classList.remove('show');
             document.getElementById('modalError').textContent = '';
-            
+            // Show/hide research code field
+            const researchCodeGroup = document.getElementById('researchCodeGroup');
+            if (plan === 'research') {
+                researchCodeGroup.style.display = '';
+            } else {
+                researchCodeGroup.style.display = 'none';
+            }
             // Show modal
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('show'), 10);
-            
             // Focus first input
             document.getElementById('modalFarmName').focus();
         }
@@ -1442,6 +1459,7 @@
                 const contactName = document.getElementById('modalContactName').value.trim();
                 const email = document.getElementById('modalEmail').value.trim();
                 const farmId = document.getElementById('modalFarmId').value.trim() || null;
+                const researchCode = document.getElementById('modalResearchCode') ? document.getElementById('modalResearchCode').value.trim() : null;
                 
                 // Validate required fields
                 if (!farmName || !contactName || !email) {
@@ -1470,6 +1488,36 @@
                     return;
                 }
                 
+                // If research plan, validate research code
+                if (currentPlan === 'research') {
+                    if (!researchCode) {
+                        showModalError('A valid research invitation code is required for Research Tier onboarding.');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+                    // Validate code via API
+                    submitBtn.textContent = 'Validating Research Code...';
+                    try {
+                        const codeResp = await fetch('/api/admin/research-invitations/validate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ code: researchCode })
+                        });
+                        const codeData = await codeResp.json();
+                        if (!codeResp.ok || !codeData.valid) {
+                            showModalError(codeData.error || 'Invalid research invitation code.');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                            return;
+                        }
+                    } catch (err) {
+                        showModalError('Could not validate research code. Please try again.');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                        return;
+                    }
+                }
                 // If Farm ID provided, verify it first
                 if (farmId) {
                     // Validate Farm ID format
@@ -1550,7 +1598,7 @@
                 }
                 
                 // No Farm ID - For cloud plan, go directly to checkout. For edge, capture as lead.
-                if (currentPlan === 'cloud') {
+                if (currentPlan === 'cloud' || currentPlan === 'research') {
                     // Cloud plan - proceed directly to payment
                     console.log('[Purchase] Cloud plan - proceeding to payment');
                     submitBtn.textContent = 'Creating checkout session...';
@@ -1563,7 +1611,8 @@
                             farm_name: farmName,
                             contact_name: contactName,
                             email: email,
-                            farm_id: null
+                            farm_id: null,
+                            research_code: currentPlan === 'research' ? researchCode : undefined
                         })
                     });
                     

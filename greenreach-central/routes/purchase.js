@@ -186,6 +186,14 @@ const PLANS = {
     description: 'Light Engine Farm Server — On-Premises Automation',
     line_item_name: 'Light Engine Farm Server Subscription',
   },
+  research: {
+    name: 'Light Engine Research',
+    type: 'research',
+    amount_cents: 1000, // $10.00 CAD/mo — placeholder
+    currency: 'CAD',
+    description: 'Light Engine Research Tier — Study design, datasets, ELN, compliance, collaboration',
+    line_item_name: 'Light Engine Research Subscription',
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -195,7 +203,7 @@ const PLANS = {
 router.post('/api/farms/create-checkout-session', async (req, res) => {
   try {
     await ensureTables();
-    const { plan, farm_name, contact_name, email, farm_id } = req.body;
+    const { plan, farm_name, contact_name, email, farm_id, research_code } = req.body;
 
     // Validate required fields
     if (!farm_name || !contact_name || !email) {
@@ -206,6 +214,21 @@ router.post('/api/farms/create-checkout-session', async (req, res) => {
     const locationId = process.env.SQUARE_LOCATION_ID;
     const client = await getSquareClient();
 
+    // If research plan, require research_code
+    if (plan === 'research') {
+      if (!research_code) {
+        return res.status(400).json({ ok: false, error: 'Research invitation code is required for Research Tier.' });
+      }
+      // Validate code via research-invitations API (reuse internal logic if possible)
+      if (isDatabaseAvailable()) {
+        const codeResult = await query('SELECT * FROM research_invitations WHERE code = $1', [research_code]);
+        if (!codeResult.rows.length) {
+          return res.status(400).json({ ok: false, error: 'Invalid research invitation code.' });
+        }
+        // Optionally: mark code as used, or update used_at after payment
+      }
+    }
+
     if (!client || !locationId) {
       console.warn('[Purchase] Square not configured — using demo mode');
       // Demo/fallback mode: create a local session and redirect to success page
@@ -213,9 +236,9 @@ router.post('/api/farms/create-checkout-session', async (req, res) => {
 
       if (isDatabaseAvailable()) {
         await query(
-          `INSERT INTO checkout_sessions (session_id, plan_type, amount_cents, currency, farm_name, contact_name, email, existing_farm_id, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'demo')`,
-          [sessionId, planConfig.type, planConfig.amount_cents, planConfig.currency, farm_name, contact_name, email, farm_id || null]
+          `INSERT INTO checkout_sessions (session_id, plan_type, amount_cents, currency, farm_name, contact_name, email, existing_farm_id, status, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'demo', $9)`,
+          [sessionId, planConfig.type, planConfig.amount_cents, planConfig.currency, farm_name, contact_name, email, farm_id || null, research_code ? JSON.stringify({ research_code }) : '{}']
         );
       }
 
@@ -281,9 +304,9 @@ router.post('/api/farms/create-checkout-session', async (req, res) => {
     if (isDatabaseAvailable()) {
       await query(
         `INSERT INTO checkout_sessions 
-         (session_id, square_order_id, square_payment_link_id, square_payment_link_url, plan_type, amount_cents, currency, farm_name, contact_name, email, existing_farm_id, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')`,
-        [sessionId, squareOrderId, squareLinkId, squareUrl, planConfig.type, planConfig.amount_cents, planConfig.currency, farm_name, contact_name, email.toLowerCase(), farm_id || null]
+         (session_id, square_order_id, square_payment_link_id, square_payment_link_url, plan_type, amount_cents, currency, farm_name, contact_name, email, existing_farm_id, status, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)`,
+        [sessionId, squareOrderId, squareLinkId, squareUrl, planConfig.type, planConfig.amount_cents, planConfig.currency, farm_name, contact_name, email.toLowerCase(), farm_id || null, research_code ? JSON.stringify({ research_code }) : '{}']
       );
     }
 

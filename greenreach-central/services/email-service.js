@@ -107,4 +107,30 @@ class EmailService {
   }
 }
 
+/**
+ * Send a research invitation email (Light Engine Research Beta)
+ * @param {Object} param0 { name, email, code }
+ */
+async function sendResearchInviteEmail({ name, email, code }) {
+  const subject = 'Invitation: Light Engine Research Beta Access';
+  const html = `
+    <h2>Welcome to the Light Engine Research Beta</h2>
+    <p>Hi ${name},</p>
+    <p>You have been invited to explore the new Light Engine Research Beta. Your access code is:</p>
+    <div style="font-size:1.5em;font-weight:bold;margin:16px 0;">${code}</div>
+    <p><b>What is Light Engine?</b><br>
+    The Light Engine is a cloud-based platform built to support indoor growers and researchers. It provides live data streaming from a growing network of farms, bridging research and real-world practice.</p>
+    <ul>
+      <li><b>For Growers:</b> Real-time monitoring, AI-driven insights, and the ability to test new lighting, nutrient, and environment recipes.</li>
+      <li><b>For Researchers:</b> Introduce theoretical protocols, run experiments across multiple farms, and receive real-world feedback to accelerate validation.</li>
+    </ul>
+    <p>This is a unique opportunity to access live data, collaborate with growers, and help move the CEA industry forward. Please use your code to register for the Research Beta. We welcome your feedback and ideas!</p>
+    <p>Best regards,<br>GreenReach & Light Engine Team</p>
+  `;
+  const text = `Hi ${name},\n\nYou have been invited to the Light Engine Research Beta.\nYour access code: ${code}\n\nWhat is Light Engine?\n- For Growers: Real-time monitoring, AI-driven insights, and the ability to test new lighting, nutrient, and environment recipes.\n- For Researchers: Introduce theoretical protocols, run experiments across multiple farms, and receive real-world feedback to accelerate validation.\n\nThis is a unique opportunity to access live data, collaborate with growers, and help move the CEA industry forward.\n\nBest,\nGreenReach & Light Engine Team`;
+  await emailService.sendEmail({ to: email, subject, html, text });
+}
+
+module.exports.sendResearchInviteEmail = sendResearchInviteEmail;
+
 export default new EmailService();
