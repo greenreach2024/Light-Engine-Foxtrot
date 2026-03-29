@@ -4777,6 +4777,38 @@ app.get('/admin.html', (req, res) => {
 // LE-dashboard.html, LE-farm-admin.html, farm-vitality.html now served
 // directly as static files from public/ (no redirects needed)
 
+// Scanner-noise suppression for public internet probe traffic.
+// This reduces false Red health transitions caused by high-volume 404 scans
+// against known exploit paths that are not part of GreenReach routes.
+const SCANNER_PROBE_PATTERNS = [
+  /^\/wp-admin/i,
+  /^\/wp-login/i,
+  /^\/wordpress/i,
+  /^\/phpmyadmin/i,
+  /^\/\.env/i,
+  /^\/boaform/i,
+  /^\/cgi-bin/i,
+  /^\/HNAP1/i,
+  /^\/actuator\//i,
+  /^\/manager\//i,
+  /^\/solr\//i,
+  /^\/(portal|login|admin-ng|geoserver|arcgis|cas|webui|nagios|webmail|pmuser)\b/i,
+  /\.(php|asp|aspx|jsp|cgi|do|nsf)(\?.*)?$/i
+];
+
+function isLikelyScannerProbe(req) {
+  const p = req.path || '';
+  if (!p || p === '/' || p.startsWith('/api/')) return false;
+  if (req.headers.authorization || req.headers['x-api-key']) return false;
+  return SCANNER_PROBE_PATTERNS.some((rx) => rx.test(p));
+}
+
+app.use((req, res, next) => {
+  if (!isLikelyScannerProbe(req)) return next();
+  logger.warn(`[ScannerProbe] Suppressed ${req.method} ${req.path}`);
+  return res.status(204).end();
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({

@@ -123,3 +123,6 @@ data/pos-inventory.json
 tmp/
 data/farm-square-tokens.json
 tmp-fix-*.py
+
+# Generated UI test artifacts
+test-results/
