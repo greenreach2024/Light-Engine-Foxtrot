@@ -53,9 +53,13 @@ const IS_PROD_LIKE = process.env.NODE_ENV === 'production'
 if (IS_PROD_LIKE && !process.env.TOKEN_ENCRYPTION_KEY) {
   console.error('[farm-square] TOKEN_ENCRYPTION_KEY is required in production');
 }
-const RAW_ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY || null;
+const RAW_ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY
+  || process.env.SQUARE_APPLICATION_SECRET
+  || null;
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY
-  ? (RAW_ENCRYPTION_KEY.length === 64 ? Buffer.from(RAW_ENCRYPTION_KEY, 'hex') : Buffer.from(RAW_ENCRYPTION_KEY).subarray(0, 32))
+  ? (RAW_ENCRYPTION_KEY.length === 64
+      ? Buffer.from(RAW_ENCRYPTION_KEY, 'hex')
+      : crypto.createHash('sha256').update(String(RAW_ENCRYPTION_KEY)).digest())
   : crypto.randomBytes(32);
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
@@ -132,22 +136,32 @@ function verifySignedState(stateToken) {
 // ---------------------------------------------------------------------------
 // Persistent storage (flat-file in data/ -- encrypted tokens)
 // ---------------------------------------------------------------------------
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const LEGACY_DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = process.env.FARM_SQUARE_DATA_DIR || '/var/app/data/greenreach';
 const TOKENS_FILE = path.join(DATA_DIR, 'farm-square-tokens.json');
 const OAUTH_STATES_FILE = path.join(DATA_DIR, 'farm-square-oauth-states.json');
+const LEGACY_TOKENS_FILE = path.join(LEGACY_DATA_DIR, 'farm-square-tokens.json');
+const LEGACY_OAUTH_STATES_FILE = path.join(LEGACY_DATA_DIR, 'farm-square-oauth-states.json');
 
 const farmSquareAccounts = new Map();
 const oauthStates = new Map();
 
 function loadTokensFromDisk() {
   try {
-    if (fs.existsSync(TOKENS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
+    const sourceFile = fs.existsSync(TOKENS_FILE)
+      ? TOKENS_FILE
+      : (fs.existsSync(LEGACY_TOKENS_FILE) ? LEGACY_TOKENS_FILE : null);
+    if (sourceFile) {
+      const raw = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
       if (raw && typeof raw === 'object') {
         for (const [farmId, account] of Object.entries(raw)) {
           farmSquareAccounts.set(farmId, account);
         }
-        console.log('[farm-square] Loaded ' + farmSquareAccounts.size + ' account(s) from disk');
+        console.log('[farm-square] Loaded ' + farmSquareAccounts.size + ' account(s) from disk (' + sourceFile + ')');
+        if (sourceFile !== TOKENS_FILE) {
+          saveTokensToDisk();
+          console.log('[farm-square] Migrated token store to persistent path ' + TOKENS_FILE);
+        }
       }
     }
   } catch (err) {
@@ -185,8 +199,11 @@ function cleanupExpiredOauthStates() {
 
 function loadOauthStatesFromDisk() {
   try {
-    if (!fs.existsSync(OAUTH_STATES_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(OAUTH_STATES_FILE, 'utf8'));
+    const sourceFile = fs.existsSync(OAUTH_STATES_FILE)
+      ? OAUTH_STATES_FILE
+      : (fs.existsSync(LEGACY_OAUTH_STATES_FILE) ? LEGACY_OAUTH_STATES_FILE : null);
+    if (!sourceFile) return;
+    const raw = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
     if (!raw || typeof raw !== 'object') return;
 
     for (const [stateToken, stateData] of Object.entries(raw)) {
@@ -195,7 +212,11 @@ function loadOauthStatesFromDisk() {
     }
 
     const removed = cleanupExpiredOauthStates();
-    console.log('[farm-square] Loaded ' + oauthStates.size + ' oauth state token(s) from disk (expired removed: ' + removed + ')');
+    console.log('[farm-square] Loaded ' + oauthStates.size + ' oauth state token(s) from disk (' + sourceFile + ') (expired removed: ' + removed + ')');
+    if (sourceFile !== OAUTH_STATES_FILE) {
+      saveOauthStatesToDisk();
+      console.log('[farm-square] Migrated oauth-state store to persistent path ' + OAUTH_STATES_FILE);
+    }
   } catch (err) {
     console.warn('[farm-square] Failed to load oauth states from disk:', err.message);
   }
@@ -281,6 +302,10 @@ router.post('/authorize', async (req, res) => {
       return res.status(503).json({ ok: false, error: 'Square not configured (missing SQUARE_APPLICATION_ID)' });
     }
 
+    if (!SQUARE_APPLICATION_SECRET) {
+      return res.status(503).json({ ok: false, error: 'Square not configured (missing SQUARE_APPLICATION_SECRET)' });
+    }
+
     // Determine callback URI -- prefer explicit env var, fall back to request origin
     const redirectUri = OAUTH_REDIRECT_URI
       || req.protocol + '://' + req.get('host') + '/api/farm/square/callback';
@@ -351,6 +376,14 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send(callbackHtml(
         'Invalid Request',
         '<p>Missing authorization code or state parameter.</p>',
+        false
+      ));
+    }
+
+    if (!SQUARE_APPLICATION_ID || !SQUARE_APPLICATION_SECRET) {
+      return res.status(503).send(callbackHtml(
+        'Square Not Configured',
+        '<p>Missing Square application credentials on server. Please contact support.</p>',
         false
       ));
     }

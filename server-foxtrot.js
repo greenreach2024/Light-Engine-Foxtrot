@@ -7085,7 +7085,7 @@ app.get('/api/setup/status', asyncHandler(async (req, res) => {
     if (dbPool) {
       // For Cloud plan: check farm status and if rooms exist
       // Get farmId from query or authenticated session
-      const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId;
+      const farmId = req.query.farmId || req.session?.farmId || req.user?.farmId || req.headers['x-farm-id'];
       
       if (!farmId) {
         // No farmId available, check if any setup config exists
@@ -7288,8 +7288,12 @@ async function initializeSecurity() {
       checkInterval: 24 * 60 * 60 * 1000 // 24 hours
     });
     
-    await certificateManager.initialize();
-    console.log('[security] Certificate manager initialized');
+    try {
+      await certificateManager.initialize();
+      console.log('[security] Certificate manager initialized');
+    } catch (err) {
+      console.warn('[security] Certificate manager init skipped (cloud deployment):', err.message);
+    }
   }
   
   if (!credentialManager) {
@@ -7297,8 +7301,12 @@ async function initializeSecurity() {
       storageDir: process.env.CRED_DIR || '/etc/greenreach/credentials'
     });
     
-    await credentialManager.initialize();
-    console.log('[security] Credential manager initialized');
+    try {
+      await credentialManager.initialize();
+      console.log('[security] Credential manager initialized');
+    } catch (err) {
+      console.warn('[security] Credential manager init skipped (cloud deployment):', err.message);
+    }
   }
 }
 
@@ -7318,27 +7326,38 @@ async function getCredentialManager() {
 app.get('/api/certs/status', asyncHandler(async (req, res) => {
   try {
     const certManager = await getCertificateManager();
-    const info = await certManager.getCertificateInfo();
-    
-    if (!info) {
-      res.json({
+    const certPath = certManager.getCertificatePath('cert');
+
+    // Cloud deployments use load balancer TLS -- no local cert file expected
+    if (!fs.existsSync(certPath)) {
+      return res.json({
         provisioned: false,
-        message: 'No certificate provisioned'
+        message: 'No local certificate provisioned (cloud deployment uses load balancer TLS)'
       });
-      return;
     }
-    
+
+    const info = await certManager.getCertificateInfo(certPath);
+
+    if (!info || !info.valid) {
+      return res.json({
+        provisioned: false,
+        message: 'No valid certificate found'
+      });
+    }
+
     res.json({
       provisioned: true,
       valid: info.daysUntilExpiry > 0,
-      expiresAt: info.expiresAt,
+      expiresAt: info.notAfter,
       daysUntilExpiry: info.daysUntilExpiry,
-      subject: info.subject,
-      issuer: info.issuer
+      subject: info.subject
     });
   } catch (error) {
     console.error('[certs] Status error:', error);
-    res.status(500).json({ error: 'Failed to get certificate status' });
+    res.json({
+      provisioned: false,
+      message: 'Certificate status unavailable (cloud deployment uses load balancer TLS)'
+    });
   }
 }));
 

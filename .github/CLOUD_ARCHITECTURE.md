@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 1.2.0
-**Date**: March 28, 2026
+**Version**: 1.3.0
+**Date**: March 29, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---

@@ -55,6 +55,8 @@ import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js'
 import { processSquarePayments, refundPayment } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
+import { sendBuyerWelcomeEmail } from '../services/email.js';
+import { pushSocialNotification } from '../services/scott-social-push.js';
 import { farmStore } from '../lib/farm-data-store.js';
 import { assembleInvoice, renderInvoiceHTML } from '../lib/wholesale/invoice-generator.js';
 
@@ -1536,12 +1538,24 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
     });
     const token = issueBuyerToken(buyer.id);
 
-    // Send welcome email (non-blocking)
-    emailService.sendEmail({
-      to: buyer.email,
-      subject: 'Welcome to GreenReach Wholesale',
-      text: `Hi ${buyer.contactName || buyer.businessName},\n\nYour wholesale buyer account has been created.\n\nYou can now browse the catalog and place orders.\n\n— GreenReach Farms`
-    }).catch(err => console.warn('[Email] Welcome email failed:', err.message));
+    // Send polished welcome email (non-blocking)
+    sendBuyerWelcomeEmail({
+      email: buyer.email,
+      businessName: buyer.businessName || buyer.business_name,
+      contactName: buyer.contactName || buyer.contact_name,
+      buyerType: buyer.buyerType || buyer.buyer_type
+    }).catch(err => console.warn('[Email] Buyer welcome email failed:', err.message));
+    // Push social notification via SCOTT (non-blocking)
+    pushSocialNotification({
+      platform: 'linkedin',
+      sourceType: 'wholesale',
+      sourceContext: {
+        event: 'new_buyer',
+        businessName: buyer.businessName || buyer.business_name,
+        buyerType: buyer.buyerType || buyer.buyer_type,
+      },
+      customInstructions: 'Announce a new wholesale buyer joining the GreenReach marketplace. Keep it professional and welcoming. Do not reveal the buyer name — just celebrate growth.',
+    }).catch(err => console.warn('[SCOTT] New buyer social push failed:', err.message));
 
     return res.json({
       status: 'ok',

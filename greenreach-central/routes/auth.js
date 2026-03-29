@@ -113,7 +113,8 @@ router.post('/login', async (req, res) => {
             CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
             f.name as farm_name,
             f.status as farm_status,
-            COALESCE(f.setup_completed, false) as setup_completed
+            COALESCE(f.setup_completed, false) as setup_completed,
+            COALESCE(f.plan_type, 'light-engine') as plan_type
           FROM farm_users fu
           JOIN farms f ON fu.farm_id = f.farm_id
           WHERE fu.email = $1
@@ -135,7 +136,8 @@ router.post('/login', async (req, res) => {
             CASE WHEN fu.status = 'active' THEN true ELSE false END as active,
             f.name as farm_name,
             f.status as farm_status,
-            COALESCE(f.setup_completed, false) as setup_completed
+            COALESCE(f.setup_completed, false) as setup_completed,
+            COALESCE(f.plan_type, 'light-engine') as plan_type
           FROM farm_users fu
           JOIN farms f ON fu.farm_id = f.farm_id
           WHERE fu.farm_id = $1
@@ -223,7 +225,8 @@ router.post('/login', async (req, res) => {
         email: email || process.env.ADMIN_EMAIL || `admin@${farm_id || 'farm'}.local`,
         password: adminPassword || password,
         name: process.env.ADMIN_NAME || 'Farm Admin',
-        role: FARM_ROLES.ADMIN
+        role: FARM_ROLES.ADMIN,
+        plan_type: 'light-engine'
       };
 
       // Only password must match; email is optional
@@ -242,7 +245,7 @@ router.post('/login', async (req, res) => {
       if (farm_id && req.db) {
         try {
           const farmRow = await req.db.query(
-            'SELECT farm_id, name, status, COALESCE(setup_completed, false) as setup_completed FROM farms WHERE farm_id = $1',
+            'SELECT farm_id, name, status, COALESCE(setup_completed, false) as setup_completed, COALESCE(plan_type, \'light-engine\') as plan_type FROM farms WHERE farm_id = $1',
             [farm_id]
           );
           if (farmRow.rows.length > 0) {
@@ -260,7 +263,8 @@ router.post('/login', async (req, res) => {
       user_id: user.id || 'local-user',
       role: user.role || FARM_ROLES.ADMIN,
       name: user.name,
-      email: user.email
+      email: user.email,
+      plan_type: user.plan_type || 'light-engine'
     });
 
     console.log(`[Auth] Successful login: ${email} (Farm: ${user.farm_id})`);
@@ -273,7 +277,7 @@ router.post('/login', async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role || FARM_ROLES.ADMIN,
-      planType: 'cloud',
+      planType: user.plan_type || 'light-engine',
       must_change_password: user.must_change_password || false,
       setup_completed: user.setup_completed || false,
       expires_in: JWT_EXPIRES_IN

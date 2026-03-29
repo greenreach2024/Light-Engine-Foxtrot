@@ -1326,7 +1326,8 @@ function renderContextualSidebar() {
                 {
                     title: 'Marketing',
                     items: [
-                        { label: 'Marketing AI', view: 'marketing-ai' }
+                        { label: 'Marketing Dashboard', view: 'marketing-ai' },
+                        { label: 'S.C.O.T.T.', view: 'scott-core' }
                     ]
                 },
                 {
@@ -1351,6 +1352,13 @@ function renderContextualSidebar() {
                         { label: 'All Farms', view: 'farms' },
                         { label: 'Users', view: 'users' },
                         { label: 'Recipes', view: 'recipes' }
+                    ]
+                },
+                {
+                    title: 'Research',
+                    items: [
+                        { label: 'G.W.E.N.', view: 'gwen-core', external: '/gwen-core.html' },
+                        { label: 'Research Workspace', view: 'research-workspace', external: '/views/research-workspace.html' }
                     ]
                 },
                 {
@@ -5570,6 +5578,11 @@ async function navigate(view, element) {
             await loadMarketingDashboard();
             break;
 
+        case 'scott-core':
+            document.getElementById('scott-core-view').style.display = 'block';
+            await initScottChat();
+            break;
+
         case 'market-intelligence':
             document.getElementById('market-intelligence-view').style.display = 'block';
             await loadMarketIntelligenceView();
@@ -7468,34 +7481,60 @@ async function loadAlertsView(options = {}) {
             return;
         }
         
-        // Render alerts table
-        const html = alerts.map(alert => `
-            <tr>
+        // Render alerts table with expandable detail rows
+        const html = alerts.map((alert, idx) => {
+            const sourceLabel = alert.source_table === 'admin' ? 'F.A.Y.E.' : 'E.V.I.E.';
+            const sourceColor = alert.source_table === 'admin' ? 'var(--accent-blue)' : 'var(--accent-green, #22c55e)';
+            const hasDetail = alert.detail || alert.tool || alert.recovery_strategy;
+            const detailId = `alert-detail-${alert.source_table}-${alert.id}`;
+
+            // Build detail content
+            let detailParts = [];
+            if (alert.detail) detailParts.push(`<strong>Detail:</strong> ${alert.detail}`);
+            if (alert.tool) detailParts.push(`<strong>Source/Tool:</strong> ${alert.tool}`);
+            if (alert.recovery_attempted) {
+                detailParts.push(`<strong>Recovery attempted:</strong> ${alert.recovery_strategy || 'yes'}`);
+            }
+            if (alert.acknowledged_at) {
+                detailParts.push(`<strong>Acknowledged at:</strong> ${new Date(alert.acknowledged_at).toLocaleString()} by ${alert.acknowledged_by || 'system'}`);
+            }
+            if (alert.resolved_at) {
+                detailParts.push(`<strong>Resolved at:</strong> ${new Date(alert.resolved_at).toLocaleString()}`);
+            }
+
+            const mainRow = `<tr class="alert-row" style="cursor: ${hasDetail ? 'pointer' : 'default'};" onclick="${hasDetail ? `toggleAlertDetail('${detailId}')` : ''}">
                 <td>${new Date(alert.timestamp).toLocaleString()}</td>
-                <td>${alert.farm_name || alert.farm_id}</td>
-                <td><span class="status-badge status-${alert.severity}">${alert.severity}</span></td>
-                <td>${alert.category || alert.type}</td>
                 <td>
-                    <div style="margin-bottom: 4px;">${alert.message}</div>
-                    ${alert.value ? `<small style="color: var(--text-muted);">Value: ${alert.value} | Threshold: ${alert.threshold}</small>` : ''}
+                    ${alert.farm_id || alert.category || '--'}
+                    <div style="margin-top: 2px;"><small style="color: ${sourceColor};">${sourceLabel}</small></div>
+                </td>
+                <td><span class="status-badge status-${alert.severity === 'high' ? 'critical' : alert.severity}">${alert.severity}</span></td>
+                <td>${alert.category || alert.type || '--'}</td>
+                <td>
+                    <div style="margin-bottom: 2px;">${alert.message || '--'}</div>
+                    ${hasDetail ? '<small style="color: var(--text-muted); text-decoration: underline;">Click to expand</small>' : ''}
                 </td>
                 <td><span class="status-badge status-${alert.status === 'active' ? 'warning' : (alert.status === 'resolved' ? 'success' : 'info')}">${alert.status}</span></td>
                 <td>${alert.acknowledged_by || '--'}</td>
                 <td>
-                    ${alert.status === 'active' ? 
-                        `<button class="btn-small" onclick="acknowledgeAlert('${alert.id}')">Acknowledge</button>` : 
+                    ${alert.status === 'active' ?
+                        `<button class="btn-small" onclick="event.stopPropagation(); acknowledgeAlert('${alert.id}', '${alert.source_table}')">Acknowledge</button>` :
                         alert.status === 'acknowledged' ?
-                        `<button class="btn-small" onclick="resolveAlert('${alert.id}')">Resolve</button>` :
+                        `<button class="btn-small" onclick="event.stopPropagation(); resolveAlert('${alert.id}', '${alert.source_table}')">Resolve</button>` :
                         '--'
                     }
-                    ${alert.context ? 
-                        `<button class="btn-small" style="margin-left: 4px;" onclick="traceAlert('${alert.id}', ${JSON.stringify(alert.context).replace(/"/g, '&quot;')})">Trace</button>` : 
-                        ''
-                    }
                 </td>
-            </tr>
-        `).join('');
-        
+            </tr>`;
+
+            const detailRow = hasDetail ? `<tr id="${detailId}" class="alert-detail-row" style="display: none;">
+                <td colspan="8" style="padding: 12px 20px; background: var(--bg-secondary, rgba(0,0,0,0.15)); border-left: 3px solid ${sourceColor};">
+                    ${detailParts.join('<br style="margin-bottom: 6px;">')}
+                </td>
+            </tr>` : '';
+
+            return mainRow + detailRow;
+        }).join('');
+
         tbody.innerHTML = html;
         
     } catch (error) {
@@ -7522,11 +7561,12 @@ function filterAlerts() {
 /**
  * Acknowledge an alert
  */
-async function acknowledgeAlert(alertId) {
+async function acknowledgeAlert(alertId, sourceTable) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/acknowledge`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_table: sourceTable || 'farm' })
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to acknowledge alert');
@@ -7541,11 +7581,12 @@ async function acknowledgeAlert(alertId) {
 /**
  * Resolve an alert
  */
-async function resolveAlert(alertId) {
+async function resolveAlert(alertId, sourceTable) {
     try {
         const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/${alertId}/resolve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_table: sourceTable || 'farm' })
         });
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to resolve alert');
@@ -7570,6 +7611,54 @@ async function traceAlert(alertId, context) {
         showToast(`Tracing to ${context.farm_id} / ${context.room_id}`, 'info');
     } else {
         showToast(`Alert source: ${context.farm_id}`, 'info');
+    }
+}
+
+/**
+ * Toggle expandable detail row for an alert
+ */
+function toggleAlertDetail(detailId) {
+    const row = document.getElementById(detailId);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    }
+}
+
+/**
+ * Acknowledge all active alerts (batch operation)
+ */
+async function acknowledgeAllAlerts() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/acknowledge-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to acknowledge alerts');
+        showToast(`${data.count} alert(s) acknowledged`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Error acknowledging all alerts:', error);
+        showToast('Failed to acknowledge alerts', 'error');
+    }
+}
+
+/**
+ * Resolve all unresolved alerts (batch operation)
+ */
+async function resolveAllAlerts() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/api/admin/alerts/resolve-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to resolve alerts');
+        showToast(`${data.count} alert(s) resolved`, 'success');
+        await loadAlertsView();
+    } catch (error) {
+        console.error('[Alerts] Error resolving all alerts:', error);
+        showToast('Failed to resolve alerts', 'error');
     }
 }
 
@@ -10996,7 +11085,7 @@ async function saveCustomProduct(productId) {
         // Upload thumbnail if selected
         if (thumbnailFile && savedId) {
             const formData = new FormData();
-            formData.append('thumbnail', thumbnailFile);
+            formData.append('image', thumbnailFile);
             try {
                 await authenticatedFetch(`${API_BASE}/api/farm/products/${savedId}/image`, {
                     method: 'POST',
@@ -11805,10 +11894,169 @@ function filterAiActivity(filter) {
 
 // ==================== MARKETING AI ====================
 
+// ======================================================================
+// S.C.O.T.T. Marketing Agent -- Chat Functions
+// ======================================================================
+
+let scottConversationId = null;
+let scottLoading = false;
+
+/**
+ * Initialize Scott chat -- check agent status and load any directives.
+ */
+async function initScottChat() {
+    const badge = document.getElementById('scott-status-badge');
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/scott/status`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.ok) {
+                badge.textContent = 'Online';
+                badge.style.background = 'rgba(16,185,129,0.15)';
+                badge.style.color = '#10b981';
+            } else {
+                badge.textContent = 'Degraded';
+                badge.style.background = 'rgba(245,158,11,0.15)';
+                badge.style.color = '#f59e0b';
+            }
+        } else {
+            badge.textContent = 'Offline';
+            badge.style.background = 'rgba(239,68,68,0.15)';
+            badge.style.color = '#ef4444';
+        }
+    } catch {
+        badge.textContent = 'Offline';
+        badge.style.background = 'rgba(239,68,68,0.15)';
+        badge.style.color = '#ef4444';
+    }
+}
+
+/**
+ * Send a message to Scott.
+ */
+async function sendScottMessage() {
+    const input = document.getElementById('scott-input');
+    const message = input.value.trim();
+    if (!message || scottLoading) return;
+
+    // Hide welcome
+    const welcome = document.getElementById('scott-welcome');
+    if (welcome) welcome.style.display = 'none';
+
+    // Add user message to chat
+    appendScottMessage('user', message);
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Show loading
+    scottLoading = true;
+    const sendBtn = document.getElementById('scott-send-btn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    const loadingId = appendScottMessage('assistant', 'Thinking...');
+
+    try {
+        const res = await authenticatedFetch(`${API_BASE}/api/admin/scott/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message,
+                conversation_id: scottConversationId
+            })
+        });
+
+        const data = await res.json();
+
+        // Remove loading message
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+
+        if (data.ok) {
+            scottConversationId = data.conversation_id;
+            appendScottMessage('assistant', data.reply, data.tool_calls);
+        } else {
+            appendScottMessage('assistant', `Error: ${data.error || 'Unknown error'}`);
+        }
+    } catch (err) {
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+        appendScottMessage('assistant', `Connection error: ${err.message}`);
+    } finally {
+        scottLoading = false;
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+    }
+}
+
+/**
+ * Append a message to the Scott chat display.
+ */
+function appendScottMessage(role, content, toolCalls) {
+    const container = document.getElementById('scott-messages');
+    const id = 'scott-msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = role === 'user'
+        ? 'align-self:flex-end;max-width:75%;padding:12px 16px;border-radius:12px 12px 4px 12px;background:var(--accent-blue);color:#fff;font-size:14px;line-height:1.6;'
+        : 'align-self:flex-start;max-width:85%;padding:12px 16px;border-radius:12px 12px 12px 4px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);font-size:14px;line-height:1.6;';
+
+    if (role === 'assistant' && content !== 'Thinking...') {
+        div.innerHTML = formatScottResponse(content);
+    } else {
+        div.textContent = content;
+        if (content === 'Thinking...') {
+            div.style.opacity = '0.6';
+            div.style.fontStyle = 'italic';
+        }
+    }
+
+    // Show tool calls as a subtle indicator
+    if (toolCalls && toolCalls.length > 0) {
+        const toolDiv = document.createElement('div');
+        toolDiv.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);';
+        const toolNames = toolCalls.map(t => t.tool.replace(/_/g, ' ')).join(', ');
+        toolDiv.textContent = `Tools used: ${toolNames}`;
+        div.appendChild(toolDiv);
+    }
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return id;
+}
+
+/**
+ * Format Scott's response with basic markdown-like rendering.
+ */
+function formatScottResponse(text) {
+    if (!text) return '';
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:var(--bg-secondary);padding:2px 6px;border-radius:4px;font-size:13px;">$1</code>')
+        .replace(/\n\n/g, '</p><p style="margin:8px 0;">')
+        .replace(/\n- /g, '<br>&#x2022; ')
+        .replace(/\n(\d+)\. /g, '<br>$1. ')
+        .replace(/\n/g, '<br>');
+    return '<p style="margin:0;">' + html + '</p>';
+}
+
+/**
+ * Quick action button handler for Scott.
+ */
+function scottQuickAction(message) {
+    const input = document.getElementById('scott-input');
+    input.value = message;
+    sendScottMessage();
+}
+
 /**
  * Marketing AI Dashboard - state
  */
-let mktCurrentTab = 'generate';
+let mktCurrentTab = 'queue';
 let mktQueueFilter = 'all';
 
 /**
@@ -11830,14 +12078,12 @@ async function loadMarketingDashboard() {
         document.getElementById('mkt-kpi-published').textContent = metrics.summary?.total_published || 0;
         document.getElementById('mkt-kpi-scheduled').textContent = metrics.summary?.total_scheduled || 0;
         document.getElementById('mkt-kpi-cost').textContent = '$' + Number(metrics.summary?.total_cost || 0).toFixed(2);
-        document.getElementById('mkt-kpi-provider').textContent =
-            settings.ai?.anthropic?.configured ? 'Claude' : (settings.ai?.openai?.configured ? 'OpenAI' : 'None');
     } catch (err) {
         console.error('[Marketing AI] Dashboard load error:', err);
     }
 
-    // Load current tab (or default to 'generate' on first load)
-    const activeTab = mktCurrentTab || 'generate';
+    // Load current tab (or default to 'queue' on first load)
+    const activeTab = mktCurrentTab || 'queue';
     switchMarketingTab(activeTab);
 }
 

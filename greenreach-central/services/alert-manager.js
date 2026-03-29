@@ -307,25 +307,13 @@ function evaluateDirectionalMetric(farmId, metric, direction, value, levels, zon
  */
 async function storeAlerts(farmId, alerts) {
   try {
-    // Get farm database ID
-    const farmResult = await query(
-      'SELECT id FROM farms WHERE farm_id = $1',
-      [farmId]
-    );
-    
-    if (farmResult.rows.length === 0) {
-      logger.warn(`[AlertManager] Farm ${farmId} not found in database`);
-      return;
-    }
-    
-    const farmDbId = farmResult.rows[0].id;
-    
     // Check for existing active alerts to avoid duplicates
     const existingAlertsResult = await query(
       `SELECT alert_type, zone_id, severity 
        FROM farm_alerts 
        WHERE farm_id = $1 AND resolved = false`,
-      [farmDbId]
+      [farmId],
+      { isAdmin: true }
     );
     
     const existingAlerts = new Set(
@@ -349,7 +337,9 @@ async function storeAlerts(farmId, alerts) {
              AND zone_id = $3 
              AND severity = $4
              AND resolved = false`,
-          [farmDbId, alert.alert_type, alert.zone_id, alert.severity]
+          [farmId, alert.alert_type, alert.zone_id, alert.severity]
+    ,
+      { isAdmin: true }
         );
         logger.debug(`[AlertManager] Updated existing alert: ${alertKey}`);
       } else {
@@ -359,13 +349,15 @@ async function storeAlerts(farmId, alerts) {
            (farm_id, alert_type, severity, message, zone_id, device_id, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
           [
-            farmDbId,
+            farmId,
             alert.alert_type,
             alert.severity,
             alert.message,
             alert.zone_id,
             null  // device_id not applicable for environmental alerts
           ]
+    ,
+      { isAdmin: true }
         );
         insertedCount++;
         logger.info(`[AlertManager] Created new alert: ${alert.severity} - ${alert.message}`);
@@ -388,23 +380,15 @@ export async function autoResolveAlerts(farmId, telemetryData) {
   try {
     if (!await isDatabaseAvailable()) return;
     
-    // Get farm database ID
-    const farmResult = await query(
-      'SELECT id FROM farms WHERE farm_id = $1',
-      [farmId]
-    );
-    
-    if (farmResult.rows.length === 0) return;
-    const farmDbId = farmResult.rows[0].id;
-    
     // Get all active environmental alerts
     const activeAlertsResult = await query(
-      `SELECT id, alert_type, zone_id, severity 
+      `SELECT alert_type, zone_id, severity 
        FROM farm_alerts 
        WHERE farm_id = $1 
          AND resolved = false 
          AND alert_type LIKE 'environmental_%'`,
-      [farmDbId]
+      [farmId],
+      { isAdmin: true }
     );
     
     if (activeAlertsResult.rows.length === 0) return;
@@ -461,11 +445,16 @@ export async function autoResolveAlerts(farmId, telemetryData) {
         await query(
           `UPDATE farm_alerts 
            SET resolved = true, resolved_at = NOW(), updated_at = NOW()
-           WHERE id = $1`,
-          [alert.id]
+           WHERE farm_id = $1
+             AND alert_type = $2
+             AND zone_id = $3
+             AND severity = $4
+             AND resolved = false`,
+          [farmId, alert.alert_type, alert.zone_id, alert.severity],
+          { isAdmin: true }
         );
         resolvedCount++;
-        logger.info(`[AlertManager] Auto-resolved alert ${alert.id}: ${metric} in zone ${alert.zone_id} returned to normal`);
+        logger.info(`[AlertManager] Auto-resolved ${metric} alert in zone ${alert.zone_id}`);
       } else if (!isResolved) {
         clearResolveState(farmId, metric, direction, alert.zone_id);
       }

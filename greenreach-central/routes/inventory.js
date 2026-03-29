@@ -83,18 +83,23 @@ export async function recalculateAutoInventoryFromGroups(farmId) {
     const estimatedLbs = Math.round((estimatedOz / 16) * 100) / 100;
 
     const productId = cropName.toLowerCase().replace(/\s+/g, '-');
+    const cropPrices = await resolveCropPricing(farmId, cropName);
     await query(
       `INSERT INTO farm_inventory (
         farm_id, product_id, product_name, quantity, auto_quantity_lbs,
-        quantity_available, unit, quantity_unit, inventory_source, last_updated
-      ) VALUES ($1,$2,$3,$4,$5,$6,'lb','lb','auto',NOW())
+        quantity_available, unit, quantity_unit, inventory_source,
+        retail_price, wholesale_price, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,'lb','lb','auto',$7,$8,NOW())
       ON CONFLICT (farm_id, product_id) DO UPDATE SET
         auto_quantity_lbs = EXCLUDED.auto_quantity_lbs,
         quantity = EXCLUDED.quantity,
         quantity_available = EXCLUDED.auto_quantity_lbs + COALESCE(farm_inventory.manual_quantity_lbs, 0) - COALESCE(farm_inventory.sold_quantity_lbs, 0),
+        retail_price = CASE WHEN COALESCE(farm_inventory.retail_price, 0) = 0 THEN EXCLUDED.retail_price ELSE farm_inventory.retail_price END,
+        wholesale_price = CASE WHEN COALESCE(farm_inventory.wholesale_price, 0) = 0 THEN EXCLUDED.wholesale_price ELSE farm_inventory.wholesale_price END,
         last_updated = NOW()
       WHERE farm_inventory.inventory_source NOT IN ('manual', 'custom') AND COALESCE(farm_inventory.is_custom, FALSE) = FALSE`,
-      [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs]
+      [farmId, productId, cropName, estimatedLbs, estimatedLbs, estimatedLbs,
+       cropPrices.retailPrice, cropPrices.wholesalePrice]
     );
     updated++;
   }

@@ -11,8 +11,8 @@ const router = express.Router();
 
 // ─── Subscription Plans ────────────────────────────────────
 const SUBSCRIPTION_PLANS = {
-  base: { name: 'Light Engine Base', amount_cents: 2900, currency: 'CAD', interval: 'monthly', ai_included_calls: 500 },
-  pro:  { name: 'Light Engine Pro',  amount_cents: 7900, currency: 'CAD', interval: 'monthly', ai_included_calls: 5000 },
+  cloud:    { name: 'Light Engine Cloud',    amount_cents: 2900, currency: 'CAD', interval: 'monthly', ai_included_calls: 500,  included_data_gb: 0.05 },
+  research: { name: 'Light Engine Research', amount_cents: 1000, currency: 'CAD', interval: 'monthly', ai_included_calls: 2500, included_data_gb: 0.5,  pricing_note: 'TBA -- $10/mo test placeholder + usage charges' },
 };
 
 // Usage-billing policy (requested): charge AI + data in $15 tranches.
@@ -28,15 +28,15 @@ function ceilTranches(amountCad) {
   return Math.ceil(amountCad / USAGE_TRANCHE_CAD);
 }
 
-function computeDataTrancheBilling(storageGb) {
-  const chargeableGb = Math.max(0, (storageGb || 0) - INCLUDED_DATA_GB);
+function computeDataTrancheBilling(storageGb, includedGb = INCLUDED_DATA_GB) {
+  const chargeableGb = Math.max(0, (storageGb || 0) - includedGb);
   const costBasisCad = chargeableGb * DATA_COST_PER_GB_CAD;
   const revenueRequired = DATA_MARGIN_TARGET >= 1
     ? costBasisCad
     : (costBasisCad / Math.max(0.0001, 1 - DATA_MARGIN_TARGET));
   const tranches = ceilTranches(revenueRequired);
   return {
-    included_gb: INCLUDED_DATA_GB,
+    included_gb: includedGb,
     chargeable_gb: Math.round(chargeableGb * 1000) / 1000,
     cost_basis_cad: Math.round(costBasisCad * 100) / 100,
     target_margin: DATA_MARGIN_TARGET,
@@ -70,7 +70,7 @@ async function ensureSubscriptionTables() {
       CREATE TABLE IF NOT EXISTS farm_subscriptions (
         id SERIAL PRIMARY KEY,
         farm_id VARCHAR(255) NOT NULL,
-        plan_key VARCHAR(50) NOT NULL DEFAULT 'base',
+        plan_key VARCHAR(50) NOT NULL DEFAULT 'cloud',
         status VARCHAR(50) NOT NULL DEFAULT 'active',
         current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         current_period_end TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 month'),
@@ -253,14 +253,26 @@ router.get('/usage/:farmId', async (req, res) => {
       } catch { /* table may not exist */ }
     }
 
+    // Look up farm subscription to apply plan-specific included amounts
+    let farmPlanKey = 'cloud';
+    if (isDatabaseAvailable()) {
+      try {
+        const subRow = await query('SELECT plan_key FROM farm_subscriptions WHERE farm_id = $1', [farmId]);
+        if (subRow.rows.length > 0) farmPlanKey = subRow.rows[0].plan_key;
+      } catch { /* table may not exist */ }
+    }
+    const farmPlan = SUBSCRIPTION_PLANS[farmPlanKey] || SUBSCRIPTION_PLANS.cloud;
+    const planIncludedData = farmPlan.included_data_gb || INCLUDED_DATA_GB;
+    const planIncludedAi = farmPlan.ai_included_calls || INCLUDED_AI_ACTIONS;
+
     const storageGb = Math.round((storageBytes / (1024 * 1024 * 1024)) * 1000) / 1000;
-    const dataBilling = computeDataTrancheBilling(storageGb);
-    const aiBilling = computeAiTrancheBilling(aiCallsMonth, aiCostUsdMonth, INCLUDED_AI_ACTIONS);
+    const dataBilling = computeDataTrancheBilling(storageGb, planIncludedData);
+    const aiBilling = computeAiTrancheBilling(aiCallsMonth, aiCostUsdMonth, planIncludedAi);
 
     return res.json({
       status: 'ok',
       dataAvailable: true,
-      plan: 'pilot',
+      plan: farmPlanKey,
       limits: {
         devices: 50,
         api_calls_per_day: 10000,
@@ -284,8 +296,8 @@ router.get('/usage/:farmId', async (req, res) => {
         subscription_plus_usage: true,
         usage_tranche_cad: USAGE_TRANCHE_CAD,
         data_margin_target: DATA_MARGIN_TARGET,
-        included_data_gb: INCLUDED_DATA_GB,
-        included_ai_actions: INCLUDED_AI_ACTIONS,
+        included_data_gb: planIncludedData,
+        included_ai_actions: planIncludedAi,
       },
       usage_billing_estimate: {
         data: dataBilling,
@@ -331,7 +343,7 @@ router.get('/subscription', async (req, res) => {
     }
 
     const sub = result.rows[0];
-    const plan = SUBSCRIPTION_PLANS[sub.plan_key] || SUBSCRIPTION_PLANS.base;
+    const plan = SUBSCRIPTION_PLANS[sub.plan_key] || SUBSCRIPTION_PLANS.cloud;
 
     return res.json({
       status: 'ok',
@@ -365,7 +377,7 @@ router.post('/subscription', async (req, res) => {
     if (!farmId) return res.status(400).json({ status: 'error', message: 'Farm ID required' });
 
     const { plan_key } = req.body || {};
-    const plan = SUBSCRIPTION_PLANS[plan_key || 'base'];
+    const plan = SUBSCRIPTION_PLANS[plan_key || 'cloud'];
     if (!plan) {
       return res.status(400).json({ status: 'error', message: 'Invalid plan', available_plans: Object.keys(SUBSCRIPTION_PLANS) });
     }
@@ -387,14 +399,14 @@ router.post('/subscription', async (req, res) => {
          current_period_start = EXCLUDED.current_period_start,
          current_period_end = EXCLUDED.current_period_end,
          updated_at = NOW()`,
-      [farmId, plan_key || 'base', now.toISOString(), periodEnd.toISOString()]
+      [farmId, plan_key || 'cloud', now.toISOString(), periodEnd.toISOString()]
     );
 
     return res.json({
       status: 'ok',
       subscription: {
         farm_id: farmId,
-        plan_key: plan_key || 'base',
+        plan_key: plan_key || 'cloud',
         plan_name: plan.name,
         amount: (plan.amount_cents / 100).toFixed(2),
         currency: plan.currency,
@@ -434,8 +446,8 @@ router.get('/ai-costs/:farmId', async (req, res) => {
 
     // Get subscription plan
     const subResult = await query('SELECT plan_key, current_period_start, current_period_end FROM farm_subscriptions WHERE farm_id = $1', [farmId]);
-    const planKey = subResult.rows[0]?.plan_key || 'base';
-    const plan = SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.base;
+    const planKey = subResult.rows[0]?.plan_key || 'cloud';
+    const plan = SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.cloud;
     const periodStart = subResult.rows[0]?.current_period_start || new Date(new Date().setDate(1)).toISOString();
     const periodEnd = subResult.rows[0]?.current_period_end || new Date().toISOString();
 
@@ -506,8 +518,8 @@ router.post('/generate-invoice/:farmId', async (req, res) => {
     // Get subscription
     const subResult = await query('SELECT * FROM farm_subscriptions WHERE farm_id = $1', [farmId]);
     const sub = subResult.rows[0];
-    const planKey = sub?.plan_key || 'base';
-    const plan = SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.base;
+    const planKey = sub?.plan_key || 'cloud';
+    const plan = SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.cloud;
     const periodStart = sub?.current_period_start || new Date(new Date().setDate(1));
     const periodEnd = sub?.current_period_end || new Date();
 

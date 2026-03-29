@@ -525,6 +525,40 @@ E.V.I.E. is your little sister. You are the older, responsible one. Your relatio
 
 // ── Claude Tool-Calling Loop ──────────────────────────────────────
 
+// ── Self-Solving Error Recovery ────────────────────────────────────────
+
+async function attemptAdminAutoRecovery(toolName, params, errorMsg) {
+  const errLower = (errorMsg || '').toLowerCase();
+
+  // Strategy 1: database unavailable -- retry once after 1s
+  if (errLower.includes('database') && errLower.includes('unavailable')) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const result = await executeAdminTool(toolName, params);
+      if (result?.ok !== false) return { recovered: true, result, strategy: 'database_retry_success' };
+    } catch { /* fall through */ }
+    return { recovered: false, strategy: 'database_retry_failed', hint: 'Database is temporarily unavailable. Try again in a few minutes.' };
+  }
+
+  // Strategy 2: connection/timeout errors -- retry once after 2s
+  if (errLower.includes('econnrefused') || errLower.includes('timeout') || errLower.includes('econnreset')) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const result = await executeAdminTool(toolName, params);
+      if (result?.ok !== false) return { recovered: true, result, strategy: 'connection_retry_success' };
+    } catch { /* fall through */ }
+    return { recovered: false, strategy: 'connection_retry_failed', hint: 'Connection failed after retry. The service may be temporarily down.' };
+  }
+
+  // Strategy 3: constraint violation
+  if (errLower.includes('foreign key') || errLower.includes('violates') || errLower.includes('constraint')) {
+    return { recovered: false, strategy: 'constraint_violation', hint: 'A database constraint was violated. A referenced record likely does not exist.' };
+  }
+
+  // No auto-recovery available
+  return { recovered: false, strategy: 'no_recovery_available', hint: `Tool "${toolName}" failed: ${errorMsg}` };
+}
+
 function estimateClaudeCost(inputTokens, outputTokens) {
   // Claude Sonnet 4 pricing: $3/M input, $15/M output
   return (inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15;
@@ -614,6 +648,17 @@ async function chatWithClaude(systemPrompt, messages, tools, convId, adminId) {
           }
         } catch (err) {
           result = { ok: false, error: err.message };
+        }
+      }
+
+      // Self-solving: attempt auto-recovery on failure
+      if (result?.ok === false && result?.error) {
+        const recovery = await attemptAdminAutoRecovery(name, input, result.error);
+        if (recovery.recovered) {
+          result = recovery.result;
+          console.log(`[F.A.Y.E. Self-Solve] Auto-recovered ${name}: ${recovery.strategy}`);
+        } else if (recovery.hint) {
+          result._self_solve_hint = recovery.hint;
         }
       }
 
@@ -753,6 +798,17 @@ async function chatWithOpenAI(systemPrompt, userMessages, tools, convId, adminId
               logDecision(fnName, fnArgs, result).catch(() => {});
             }
           }
+        }
+      }
+
+      // Self-solving: attempt auto-recovery on failure
+      if (result?.ok === false && result?.error) {
+        const recovery = await attemptAdminAutoRecovery(fnName, fnArgs, result.error);
+        if (recovery.recovered) {
+          result = recovery.result;
+          console.log(`[F.A.Y.E. OpenAI Self-Solve] Auto-recovered ${fnName}: ${recovery.strategy}`);
+        } else if (recovery.hint) {
+          result._self_solve_hint = recovery.hint;
         }
       }
 

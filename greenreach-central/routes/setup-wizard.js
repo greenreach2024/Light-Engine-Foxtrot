@@ -360,7 +360,7 @@ router.get('/status', authenticateToken, async (req, res) => {
 router.post('/complete', authenticateToken, async (req, res) => {
   try {
     const farmId = req.farmId;
-    const { farmName, contact, location, rooms, certifications, credentials, endpoints } = req.body;
+    const { farmName, contact, location, rooms, certifications, credentials, endpoints, affiliation_type, institution, department, orcid } = req.body;
 
     // Accept both nested contact object AND flat fields from wizard
     // Wizard sends: ownerName, contactEmail, contactPhone (flat)
@@ -426,6 +426,24 @@ router.post('/complete', authenticateToken, async (req, res) => {
           'UPDATE farm_users SET must_change_password = false WHERE farm_id = $1',
           [farmId]
         );
+
+        // Save research affiliation fields if this is a research plan farm
+        if (affiliation_type) {
+          try {
+            await pool.query(
+              `UPDATE farms SET
+                 researcher_affiliation_type = COALESCE($2, researcher_affiliation_type),
+                 researcher_institution = COALESCE($3, researcher_institution),
+                 researcher_department = COALESCE($4, researcher_department),
+                 researcher_orcid = COALESCE($5, researcher_orcid)
+               WHERE farm_id = $1`,
+              [farmId, affiliation_type, institution || null, department || null, orcid || null]
+            );
+            console.log(`[Setup Wizard] Research affiliation saved for farm ${farmId}: ${affiliation_type}`);
+          } catch (affErr) {
+            console.warn('[Setup Wizard] Research affiliation save failed (non-fatal):', affErr.message);
+          }
+        }
       } catch (dbErr) {
         console.warn('[Setup Wizard] DB update failed (non-fatal):', dbErr.message);
       }
@@ -446,6 +464,96 @@ router.post('/complete', authenticateToken, async (req, res) => {
       success: false,
       error: 'Failed to complete setup' 
     });
+  }
+});
+
+
+/**
+ * GET /api/setup-wizard/research-profile
+ * Get research affiliation profile for setup wizard
+ */
+router.get('/research-profile', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const pool = req.db;
+
+    if (!pool) {
+      return res.json({ success: true, profile: null });
+    }
+
+    const result = await pool.query(
+      `SELECT plan_type, researcher_affiliation_type, researcher_institution,
+              researcher_department, researcher_orcid
+       FROM farms WHERE farm_id = $1`,
+      [farmId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ success: true, profile: null });
+    }
+
+    const farm = result.rows[0];
+    res.json({
+      success: true,
+      profile: {
+        plan_type: farm.plan_type,
+        affiliation_type: farm.researcher_affiliation_type,
+        institution: farm.researcher_institution,
+        department: farm.researcher_department,
+        orcid: farm.researcher_orcid
+      }
+    });
+  } catch (error) {
+    console.error('[Setup Wizard] Research profile error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load research profile' });
+  }
+});
+
+/**
+ * PUT /api/setup-wizard/research-profile
+ * Save or update research affiliation profile during setup
+ * Body: { affiliation_type, institution, department, orcid }
+ */
+router.put('/research-profile', authenticateToken, async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const pool = req.db;
+
+    if (!pool) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+
+    const { affiliation_type, institution, department, orcid } = req.body;
+
+    const VALID_AFFILIATIONS = ['school', 'research_facility', 'independent_researcher'];
+    if (!affiliation_type || !VALID_AFFILIATIONS.includes(affiliation_type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid affiliation_type required: school, research_facility, or independent_researcher'
+      });
+    }
+
+    await pool.query(
+      `UPDATE farms SET
+         researcher_affiliation_type = $2,
+         researcher_institution = $3,
+         researcher_department = $4,
+         researcher_orcid = $5,
+         updated_at = NOW()
+       WHERE farm_id = $1`,
+      [farmId, affiliation_type, institution || null, department || null, orcid || null]
+    );
+
+    console.log(`[Setup Wizard] Research profile updated for farm ${farmId}: ${affiliation_type}`);
+
+    res.json({
+      success: true,
+      message: 'Research profile saved',
+      profile: { affiliation_type, institution, department, orcid }
+    });
+  } catch (error) {
+    console.error('[Setup Wizard] Research profile save error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save research profile' });
   }
 });
 

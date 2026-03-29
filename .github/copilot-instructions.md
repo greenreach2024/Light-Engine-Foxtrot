@@ -21,6 +21,51 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
 
+### Recent Fixes (Mar 29, 2026)
+
+14. **E.V.I.E. LLM Fallback (Anthropic)**
+    - File: `greenreach-central/routes/assistant-chat.js`
+    - Added Anthropic (Claude Sonnet 4) as fallback when OpenAI fails
+    - chatWithAnthropicFallback() with full tool-calling loop
+    - Both /chat and /chat/stream catch blocks fall back automatically
+    - Env var: ANTHROPIC_API_KEY, ANTHROPIC_FALLBACK_MODEL (default: claude-sonnet-4-20250514)
+
+15. **F.A.Y.E. Auto-Recovery**
+    - File: `greenreach-central/routes/admin-assistant.js`
+    - attemptAdminAutoRecovery() with 3 strategies: DB retry, connection retry, constraint hinting
+    - Wired into both chatWithClaude and chatWithOpenAI tool loops
+
+16. **Heartbeat False Alert Fix**
+    - Files: `greenreach-central/services/faye-intelligence.js`, `greenreach-central/routes/sync.js`
+    - faye-intelligence.js now queries farms table (primary) with GREATEST() fallback to farm_heartbeats
+    - sync.js heartbeat endpoint now writes to BOTH farms and farm_heartbeats tables
+    - Removed "hardware issues" from alert text (cloud-only architecture)
+
+17. **Farm Settings DB Persistence**
+    - File: `greenreach-central/routes/farm-settings.js`
+    - farmSettingsStore now backed by farm_data table (data_type='farm_settings')
+    - persistSettingsToDB() called on every settings change (4 endpoints)
+    - hydrateFarmSettings() restores from DB on module load
+
+18. **Custom Product Image Upload Fix**
+    - File: `greenreach-central/public/central-admin.js`
+    - Fixed field name mismatch: frontend sent 'thumbnail', backend expected 'image'
+
+19. **LE Instance Pinned to 1**
+    - `eb scale 1` applied to light-engine-foxtrot-prod-v3
+    - Prevents AWS launch failures from account autoscaling block
+
+20. **Research Subscriber Tier (Light Engine Research)**
+    - Two subscription plans: Light Engine Cloud ($29 CAD/mo, 500 AI calls, 50MB data) and Light Engine Research (TBA pricing, $10/mo test placeholder, 2500 AI calls, 500MB data)
+    - Pro plan removed -- usage-based billing (data + AI tranches) replaces tiered approach
+    - Files: billing.js (SUBSCRIPTION_PLANS), farms.js (registration), auth.js + farms.js (JWT plan_type), setup-wizard.js (research profile), feature-gate.js (plan_type check), admin.js (revenue breakdown), database.js (migration 049)
+    - Registration accepts plan_type ('light-engine' or 'research') + affiliation fields (affiliation_type, institution, department, orcid)
+    - Research farms auto-enable research features via settings.features.research_enabled flag and plan_type in JWT
+    - Feature gate updated: checks JWT plan_type first, then DB plan_type, then settings flag
+    - Admin KPIs include planBreakdown + new GET /api/admin/subscriptions/summary endpoint
+    - Affiliation types: school, research_facility, independent_researcher
+    - New setup wizard endpoints: GET/PUT /api/setup-wizard/research-profile
+
 ### Recent Fixes (Mar 28, 2026)
 
 8. **Security Hardening -- Research Platform + Core Routes (9 patches)**

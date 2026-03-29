@@ -86,6 +86,39 @@ try {
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
+// ── Anthropic Client (LLM Fallback) ───────────────────────────────────
+let anthropicClient = null;
+const FALLBACK_MODEL = process.env.ANTHROPIC_FALLBACK_MODEL || 'claude-sonnet-4-20250514';
+
+async function getAnthropicClient() {
+  if (anthropicClient) return anthropicClient;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    anthropicClient = new Anthropic({ apiKey });
+    return anthropicClient;
+  } catch (err) {
+    console.error('[E.V.I.E.] Failed to init Anthropic client:', err.message);
+    return null;
+  }
+}
+
+function openaiToolsToAnthropic(tools) {
+  return tools.filter(t => t && t.function).map(t => ({
+    name: t.function.name,
+    description: t.function.description || '',
+    input_schema: t.function.parameters || { type: 'object', properties: {} }
+  }));
+}
+
+function estimateAnthropicCost(inputTokens, outputTokens) {
+  const isHaiku = FALLBACK_MODEL.includes('haiku');
+  const inputRate = isHaiku ? 0.80 : 3;
+  const outputRate = isHaiku ? 4 : 15;
+  return (inputTokens / 1_000_000) * inputRate + (outputTokens / 1_000_000) * outputRate;
+}
+
 // ── Conversation Memory (in-memory cache + DB persistence) ─────────
 const conversations = new Map();
 const CONVERSATION_TTL_MS = 30 * 60 * 1000;
@@ -3870,6 +3903,115 @@ async function logSystemAlert(alertData) {
   }
 }
 
+// ── Anthropic Fallback Chat Function ──────────────────────────────────
+
+async function chatWithAnthropicFallback(systemPrompt, history, userMessage, farmId, convId) {
+  const client = await getAnthropicClient();
+  if (!client) throw new Error('ANTHROPIC_API_KEY not configured');
+
+  const anthropicTools = openaiToolsToAnthropic(GPT_TOOLS);
+  const toolCallResults = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let loopCount = 0;
+
+  // Convert history to Anthropic message format (user/assistant only)
+  const messages = history
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }));
+  messages.push({ role: 'user', content: userMessage });
+
+  let response = await client.messages.create({
+    model: FALLBACK_MODEL,
+    max_tokens: 1500,
+    system: systemPrompt,
+    messages,
+    tools: anthropicTools,
+    temperature: 0.7
+  });
+
+  totalInputTokens += response.usage?.input_tokens || 0;
+  totalOutputTokens += response.usage?.output_tokens || 0;
+
+  // Tool-calling loop
+  while (response.stop_reason === 'tool_use' && loopCount < 10) {
+    loopCount++;
+    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+    const toolResults = [];
+
+    for (const block of toolUseBlocks) {
+      const { id, name, input } = block;
+      console.log(`[E.V.I.E. Anthropic fallback] Tool call #${loopCount}: ${name}`);
+
+      let toolResult;
+      try {
+        const isWriteTool = TOOL_CATALOG[name]?.category === 'write' || TRUST_TIERS.confirm.has(name) || TRUST_TIERS.admin.has(name);
+        const tier = getTrustTier(name);
+
+        if (isWriteTool && tier === 'auto') {
+          toolResult = await executeExtendedTool(name, input || {}, farmId);
+        } else if (isWriteTool && tier === 'quick_confirm') {
+          toolResult = await executeExtendedTool(name, { ...input, confirm: true }, farmId);
+        } else if (isWriteTool && (tier === 'confirm' || tier === 'admin')) {
+          pendingActions.set(convId, { tool: name, params: input || {}, farmId, created: Date.now() });
+          toolResult = {
+            status: 'pending_confirmation',
+            message: 'This action requires user confirmation before execution.',
+            tool: name, params: input
+          };
+        } else {
+          toolResult = await executeExtendedTool(name, input || {}, farmId);
+        }
+      } catch (err) {
+        toolResult = { ok: false, error: err.message };
+      }
+
+      // Self-solving: attempt auto-recovery on failure
+      if (toolResult && toolResult.ok === false && toolResult.error) {
+        const recovery = await attemptAutoRecovery(name, input || {}, toolResult.error, farmId);
+        if (recovery.recovered) {
+          toolResult = recovery.result;
+          logger.info(`[E.V.I.E. Fallback Self-Solve] Auto-recovered ${name}: ${recovery.strategy}`);
+        }
+      }
+
+      toolCallResults.push({ tool: name, params: input, success: toolResult?.ok !== false });
+      toolResults.push({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(toolResult) });
+    }
+
+    messages.push({ role: 'assistant', content: response.content });
+    messages.push({ role: 'user', content: toolResults });
+
+    response = await client.messages.create({
+      model: FALLBACK_MODEL,
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages,
+      tools: anthropicTools,
+      temperature: 0.4
+    });
+
+    totalInputTokens += response.usage?.input_tokens || 0;
+    totalOutputTokens += response.usage?.output_tokens || 0;
+  }
+
+  const textBlocks = response.content.filter(b => b.type === 'text');
+  const replyText = textBlocks.map(b => b.text).join('\n') || 'Request processed.';
+
+  return {
+    reply: replyText,
+    toolCalls: toolCallResults,
+    model: FALLBACK_MODEL,
+    provider: 'anthropic',
+    usage: {
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      total_tokens: totalInputTokens + totalOutputTokens,
+      estimated_cost: estimateAnthropicCost(totalInputTokens, totalOutputTokens)
+    }
+  };
+}
+
 // ── Main Chat Endpoint ────────────────────────────────────────────────
 
 /**
@@ -3895,10 +4037,10 @@ function checkRateLimit(farmId) {
 }
 
 router.post('/chat', async (req, res) => {
-  if (!openai) {
+  if (!openai && !process.env.ANTHROPIC_API_KEY) {
     return res.status(503).json({
       ok: false,
-      error: 'AI assistant not available — OPENAI_API_KEY not configured'
+      error: 'AI assistant not available — no LLM provider configured'
     });
   }
 
@@ -4159,7 +4301,48 @@ router.post('/chat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[Assistant Chat] Error:', error.message);
+    // Attempt Anthropic fallback before giving up
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        console.warn('[E.V.I.E.] OpenAI failed, attempting Anthropic fallback:', error.message);
+        const fbExisting = await getConversation(convId, farmId);
+        const fbHistory = fbExisting ? [...fbExisting.messages] : [];
+        const fbSystemPrompt = await buildSystemPrompt(farmId);
+        const fallbackResult = await chatWithAnthropicFallback(fbSystemPrompt, fbHistory, sanitizedMessage, farmId, convId);
+
+        trackAiUsage({
+          farm_id: farmId, endpoint: 'assistant-chat', model: fallbackResult.model,
+          prompt_tokens: fallbackResult.usage.input_tokens,
+          completion_tokens: fallbackResult.usage.output_tokens,
+          total_tokens: fallbackResult.usage.total_tokens,
+          estimated_cost: fallbackResult.usage.estimated_cost,
+          status: 'success'
+        });
+
+        const fbUpdatedHistory = [
+          ...fbHistory,
+          { role: 'user', content: sanitizedMessage },
+          { role: 'assistant', content: fallbackResult.reply }
+        ];
+        await upsertConversation(convId, fbUpdatedHistory, farmId);
+
+        const fbToolNames = fallbackResult.toolCalls.map(t => t.tool);
+        trackEngagement(farmId, { messages: 1, toolCalls: fbToolNames.length, toolsUsed: fbToolNames });
+
+        const fbPendingAction = pendingActions.get(convId);
+        return res.json({
+          ok: true,
+          reply: fallbackResult.reply,
+          conversation_id: convId,
+          tool_calls: fallbackResult.toolCalls.length > 0 ? fallbackResult.toolCalls : undefined,
+          pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
+          model: fallbackResult.model,
+          provider: 'anthropic'
+        });
+      } catch (fallbackErr) {
+        console.error('[E.V.I.E.] Both LLMs failed. OpenAI:', error.message, 'Anthropic:', fallbackErr.message);
+      }
+    }
 
     trackAiUsage({
       farm_id: farmId,
@@ -4376,12 +4559,18 @@ router.get('/state', async (req, res) => {
  * GET /api/assistant/status
  * Returns whether the assistant chat is available
  */
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
+  let fallbackAvailable = false;
+  try { fallbackAvailable = !!(await getAnthropicClient()); } catch { /* */ }
   res.json({
     ok: true,
-    available: !!openai,
+    available: !!openai || fallbackAvailable,
     model: MODEL,
     active_conversations: conversations.size,
+    llm: {
+      primary: { provider: 'openai', model: MODEL, available: !!openai },
+      fallback: { provider: 'anthropic', model: FALLBACK_MODEL, available: fallbackAvailable }
+    },
     features: {
       streaming: true,
       trust_tiers: true,
@@ -4404,8 +4593,8 @@ router.get('/status', (req, res) => {
  * Returns: Server-Sent Events stream with tokens as they arrive.
  */
 router.post('/chat/stream', async (req, res) => {
-  if (!openai) {
-    return res.status(503).json({ ok: false, error: 'AI assistant not available' });
+  if (!openai && !process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ ok: false, error: 'AI assistant not available — no LLM provider configured' });
   }
 
   const { message, conversation_id, farm_id, image_url } = req.body;
@@ -4589,6 +4778,57 @@ router.post('/chat/stream', async (req, res) => {
       });
     }
   } catch (error) {
+    // Attempt Anthropic fallback before sending error
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        console.warn('[E.V.I.E. Stream] OpenAI failed, using Anthropic fallback:', error.message);
+        sendEvent('fallback', { provider: 'anthropic', reason: error.message });
+
+        const fbExisting = await getConversation(convId, farmId);
+        const fbHistory = fbExisting ? [...fbExisting.messages] : [];
+        const fbSystemPrompt = await buildSystemPrompt(farmId);
+        const fallbackResult = await chatWithAnthropicFallback(fbSystemPrompt, fbHistory, sanitizedMessage, farmId, convId);
+
+        // Emit reply as chunks for streaming feel
+        const chunkSize = 12;
+        for (let i = 0; i < fallbackResult.reply.length; i += chunkSize) {
+          sendEvent('token', { text: fallbackResult.reply.slice(i, i + chunkSize) });
+        }
+
+        const fbUpdatedHistory = [
+          ...fbHistory,
+          { role: 'user', content: sanitizedMessage },
+          { role: 'assistant', content: fallbackResult.reply }
+        ];
+        await upsertConversation(convId, fbUpdatedHistory, farmId);
+
+        const fbToolNames = fallbackResult.toolCalls.map(t => t.tool);
+        trackEngagement(farmId, { messages: 1, toolCalls: fbToolNames.length, toolsUsed: fbToolNames });
+
+        trackAiUsage({
+          farm_id: farmId, endpoint: 'assistant-chat', model: fallbackResult.model,
+          prompt_tokens: fallbackResult.usage.input_tokens,
+          completion_tokens: fallbackResult.usage.output_tokens,
+          total_tokens: fallbackResult.usage.total_tokens,
+          estimated_cost: fallbackResult.usage.estimated_cost,
+          status: 'success'
+        });
+
+        const fbPendingAction = pendingActions.get(convId);
+        sendEvent('done', {
+          conversation_id: convId,
+          tool_calls: fallbackResult.toolCalls.length > 0 ? fallbackResult.toolCalls : undefined,
+          pending_action: fbPendingAction ? { tool: fbPendingAction.tool, params: fbPendingAction.params } : undefined,
+          model: fallbackResult.model,
+          provider: 'anthropic'
+        });
+        res.end();
+        return;
+      } catch (fallbackErr) {
+        console.error('[E.V.I.E. Stream] Both LLMs failed. OpenAI:', error.message, 'Anthropic:', fallbackErr.message);
+      }
+    }
+
     console.error('[Stream Chat] Error:', error.message);
     sendEvent('error', { message: 'Failed to process your message.' });
   }

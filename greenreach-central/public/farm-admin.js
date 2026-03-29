@@ -5308,7 +5308,7 @@ async function loadSettings() {
         // Load user preferences — try server first, fallback to localStorage
         let settings = {};
         try {
-            const token = sessionStorage.getItem('token') || localStorage.getItem('token') || currentSession?.token;
+            const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
             const sHeaders = {};
             if (token) sHeaders['Authorization'] = 'Bearer ' + token;
             const sResp = await fetch('/data/farm-settings.json', { headers: sHeaders });
@@ -5499,17 +5499,29 @@ async function saveSettings() {
         // Save to localStorage
         localStorage.setItem('farmSettings', JSON.stringify(settings));
         
-        // Also persist to server
+        // Persist to server (DB-backed via farmStore)
         try {
-            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = 'Bearer ' + token;
-            await fetch('/data/farm-settings.json', {
+            const saveResp = await fetch('/data/farm-settings.json', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(settings)
             });
-        } catch (_) { /* server save is best-effort */ }
+            if (!saveResp.ok) {
+                console.warn('[Farm Settings] Server save returned', saveResp.status);
+            } else {
+                console.log('[Farm Settings] Saved to server successfully');
+            }
+        } catch (err) {
+            console.warn('[Farm Settings] Server save failed:', err.message);
+        }
+
+        // Broadcast display prefs so other admin sections can react
+        try {
+            window.dispatchEvent(new CustomEvent('farmSettingsUpdated', { detail: settings }));
+        } catch (_) {}
 
         // Also save farm profile (contact info) so the bottom Save Settings captures everything
         try {
@@ -5620,11 +5632,15 @@ async function saveEditCertifications(event) {
         };
         
         // Save to API
-        const headers = { 'Content-Type': 'application/json' };
-        if (currentSession?.token) {
-            headers['Authorization'] = `Bearer ${currentSession.token}`;
+        const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
+        if (!token) {
+            console.warn('[Farm Settings] No auth token available for certifications save');
+            showToast('Not authenticated -- please log in again', 'error');
+            return;
         }
+        const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
         
+        console.log('[Farm Settings] Saving certifications:', updatedCertifications);
         const response = await fetch('/api/setup/certifications', {
             method: 'POST',
             headers,
@@ -5633,8 +5649,11 @@ async function saveEditCertifications(event) {
         
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.success === false) {
-            throw new Error(result.error || 'Failed to save certifications');
+            console.error('[Farm Settings] Certifications save failed:', response.status, result);
+            throw new Error(result.error || 'Server returned ' + response.status);
         }
+        
+        console.log('[Farm Settings] Certifications saved successfully');
         
         // Close modal and reload settings to show updates
         closeEditCertificationsModal();
@@ -5644,10 +5663,9 @@ async function saveEditCertifications(event) {
         await loadSettings();
         
     } catch (error) {
-        console.error('Error saving certifications:', error);
-        showToast('Error saving certifications', 'error');
-        
-        closeEditCertificationsModal();
+        console.error('[Farm Settings] Error saving certifications:', error);
+        showToast('Error saving certifications: ' + error.message, 'error');
+        // Do NOT close modal on error -- let user retry
     }
 }
 
@@ -5738,10 +5756,9 @@ async function saveProfileSettings(options = {}) {
             return;
         }
 
+        const token = currentSession?.token || sessionStorage.getItem('token') || localStorage.getItem('token');
         const headers = { 'Content-Type': 'application/json' };
-        if (currentSession?.token) {
-            headers['Authorization'] = `Bearer ${currentSession.token}`;
-        }
+        if (token) headers['Authorization'] = 'Bearer ' + token;
 
         const response = await fetch('/api/setup/profile', {
             method: 'PATCH',
@@ -7345,8 +7362,7 @@ function renderUsersTable(users) {
             inactive: 'var(--text-muted)'
         };
         
-        const lastLogin = new Date(user.lastLogin);
-        const timeSince = formatTimeSince(lastLogin);
+        const timeSince = user.lastLogin ? formatTimeSince(new Date(user.lastLogin)) : 'Never';
         
         return `
             <tr>
@@ -7449,7 +7465,10 @@ async function sendUserInvitation(event) {
                 name: fullName,
                 role,
                 password: tempPassword,
-                farmId: currentSession.farmId
+                farmId: currentSession.farmId,
+                sendEmail: true,
+                farmName: currentSession.farmName || 'Light Engine Farm',
+                personalMessage: message || undefined
             })
         });
 
@@ -7461,12 +7480,15 @@ async function sendUserInvitation(event) {
         
         closeInviteUserModal();
         
-        // Show temp password to admin so they can share it manually
-        // (email sending is not available - SES sandbox restriction)
-        const credentialsMsg = `User created successfully!\n\nLogin credentials for ${fullName}:\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nPlease share these credentials securely with the user and ask them to change their password after first login.`;
-        alert(credentialsMsg);
-        
-        showToast(`User ${email} created successfully`, 'success');
+        if (data.emailSent) {
+            const credentialsMsg = `User created and invitation email sent to ${email}.\n\nBackup credentials (in case email is delayed):\nFarm ID: ${currentSession.farmId}\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nThe user should change their password after first login.`;
+            alert(credentialsMsg);
+            showToast(`Invitation sent to ${email}`, 'success');
+        } else {
+            const credentialsMsg = `User created but invitation email could not be sent.\n\nPlease share these credentials manually:\nFarm ID: ${currentSession.farmId}\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nAsk the user to change their password after first login.`;
+            alert(credentialsMsg);
+            showToast(`User ${email} created (email not sent)`, 'warning');
+        }
         
         // Reload users list
         loadUsers();

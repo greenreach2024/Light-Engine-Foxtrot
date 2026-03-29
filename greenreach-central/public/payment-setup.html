@@ -464,6 +464,11 @@
 
         localStorage.setItem('payment_setup_farm_name', farmName);
 
+        // Pre-open popup NOW during the synchronous click handler.
+        // Browsers allow window.open() in direct user-interaction context.
+        // After the async fetch, window.open() is no longer trusted and gets blocked.
+        var authWindow = window.open('about:blank', '_blank');
+
         try {
           clearLaunchOptions();
           setStatus('warn', 'Requesting Square authorization URL...');
@@ -482,20 +487,21 @@
 
           var authUrl = payload.data.authorizationUrl;
           log('Authorization URL generated');
-          setStatus('warn', 'Authorization URL ready. Click Authorize in New Tab below.');
-          showLaunchOptions(authUrl);
-          startPollingForConnection();
-          log('Started connection polling immediately after URL generation');
 
-          // Best-effort auto-open. If blocked, explicit links remain available.
-          var opened = window.open(authUrl, '_blank', 'noopener');
-          if (opened) {
+          if (authWindow && !authWindow.closed) {
+            authWindow.location.href = authUrl;
             setStatus('warn', 'Square tab opened. Complete authorization there, then return here.');
-            log('Authorization tab auto-opened');
+            log('Authorization tab opened via pre-opened window');
           } else {
-            log('Popup was blocked; waiting for user to click explicit authorize link');
+            log('Pre-opened window was blocked; showing manual authorize links');
+            setStatus('warn', 'Authorization URL ready. Click Authorize in New Tab below.');
+            showLaunchOptions(authUrl);
           }
+
+          startPollingForConnection();
+          log('Started connection polling');
         } catch (err) {
+          if (authWindow && !authWindow.closed) { authWindow.close(); }
           setStatus('error', 'Authorization start failed: ' + err.message);
           log('Authorization error: ' + err.message);
         }

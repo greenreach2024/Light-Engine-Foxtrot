@@ -105,11 +105,20 @@ async function checkPaymentFailures() {
 async function checkFarmHeartbeats() {
   if (!isDatabaseAvailable()) return;
   try {
+    // Check both data sources: farms.last_heartbeat (updated by sync-service)
+    // and farm_heartbeats.last_seen_at (updated by farms.js registration).
     const stale = await query(`
-      SELECT farm_id, farm_name,
-             EXTRACT(EPOCH FROM (NOW() - COALESCE(last_seen_at, "timestamp"))) / 60 AS minutes_stale
-      FROM farm_heartbeats
-      WHERE COALESCE(last_seen_at, "timestamp") < NOW() - INTERVAL '30 minutes'
+      SELECT f.farm_id, COALESCE(f.name, f.farm_id) AS farm_name,
+             EXTRACT(EPOCH FROM (NOW() - GREATEST(
+               f.last_heartbeat,
+               (SELECT MAX(COALESCE(h.last_seen_at, h.timestamp)) FROM farm_heartbeats h WHERE h.farm_id = f.farm_id)
+             ))) / 60 AS minutes_stale
+      FROM farms f
+      WHERE f.status != 'inactive'
+        AND GREATEST(
+              f.last_heartbeat,
+              (SELECT MAX(COALESCE(h.last_seen_at, h.timestamp)) FROM farm_heartbeats h WHERE h.farm_id = f.farm_id)
+            ) < NOW() - INTERVAL '30 minutes'
     `);
 
     for (const farm of stale.rows) {
@@ -118,7 +127,7 @@ async function checkFarmHeartbeats() {
         const severity = mins > 240 ? 'critical' : mins > 120 ? 'high' : 'medium';
         await createAlert('farms', severity,
           `Farm offline: ${farm.farm_name || farm.farm_id}`,
-          `No heartbeat for ${mins} minutes. Farm may be experiencing connectivity or hardware issues.`);
+          `No heartbeat for ${mins} minutes. Farm may be experiencing connectivity issues.`);
         await trackPattern(`farm_offline:${farm.farm_id}`, 'farms',
           `Farm "${farm.farm_name || farm.farm_id}" went offline (${mins} min)`,
           { farm_id: farm.farm_id, minutes_stale: mins, severity });

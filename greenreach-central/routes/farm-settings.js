@@ -14,9 +14,51 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 const router = express.Router();
 
 // In-memory storage for farm settings (pending changes)
-// In production, this would use a database
+// Backed by farm_data DB table for persistence across restarts
 const farmSettingsStore = new Map();
 const changeLog = [];
+
+// -- Persist settings to farm_data DB --
+async function persistSettingsToDB(farmId) {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const settings = farmSettingsStore.get(farmId);
+    if (!settings) return;
+    await query(
+      `INSERT INTO farm_data (farm_id, data_type, data, updated_at)
+       VALUES ($1, 'farm_settings', $2, NOW())
+       ON CONFLICT (farm_id, data_type)
+       DO UPDATE SET data = $2, updated_at = NOW()`,
+      [farmId, JSON.stringify(settings)]
+    );
+  } catch (err) {
+    logger.warn('[Farm Settings] DB persist failed:', err.message);
+  }
+}
+
+// -- Hydrate settings from DB on startup --
+export async function hydrateFarmSettings() {
+  if (!isDatabaseAvailable()) return;
+  try {
+    const result = await query(
+      `SELECT farm_id, data FROM farm_data WHERE data_type = 'farm_settings'`
+    );
+    for (const row of result.rows) {
+      if (row.data && !farmSettingsStore.has(row.farm_id)) {
+        const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        farmSettingsStore.set(row.farm_id, parsed);
+      }
+    }
+    if (result.rows.length > 0) {
+      logger.info(`[Farm Settings] Hydrated settings for ${result.rows.length} farm(s) from DB`);
+    }
+  } catch (err) {
+    logger.warn('[Farm Settings] DB hydration failed:', err.message);
+  }
+}
+
+// Auto-hydrate on module load (non-blocking)
+setTimeout(() => hydrateFarmSettings().catch(() => {}), 2000);
 
 /**
  * Middleware: Authenticate farm device
@@ -102,6 +144,7 @@ router.post('/:farmId/certifications', async (req, res, next) => {
     
     farmSettings.lastUpdated = new Date().toISOString();
     farmSettingsStore.set(farmId, farmSettings);
+    await persistSettingsToDB(farmId);
     
     // Log change for audit
     changeLog.push({
@@ -200,6 +243,7 @@ router.post('/:farmId/ack', authenticateFarm, async (req, res, next) => {
     }
     
     farmSettingsStore.set(farmId, farmSettings);
+    await persistSettingsToDB(farmId);
     
     res.json({
       success: true,
@@ -264,6 +308,7 @@ router.post('/:farmId/notify-preferences', async (req, res, next) => {
     
     farmSettings.lastUpdated = new Date().toISOString();
     farmSettingsStore.set(farmId, farmSettings);
+    await persistSettingsToDB(farmId);
     
     changeLog.push({
       farmId,
@@ -311,6 +356,7 @@ router.post('/:farmId/display-preferences', async (req, res, next) => {
     
     farmSettings.lastUpdated = new Date().toISOString();
     farmSettingsStore.set(farmId, farmSettings);
+    await persistSettingsToDB(farmId);
     
     changeLog.push({
       farmId,

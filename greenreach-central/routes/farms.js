@@ -263,7 +263,12 @@ router.post('/register', async (req, res, next) => {
       registration_code,
       farm_name,
       contact_email,
-      api_url
+      api_url,
+      plan_type: requested_plan_type,
+      affiliation_type,
+      institution,
+      department,
+      orcid
     } = req.body;
 
     const now = new Date().toISOString();
@@ -277,6 +282,18 @@ router.post('/register', async (req, res, next) => {
     }
 
     const resolvedName = name || farm_name || resolvedFarmId;
+
+    // Validate plan_type (defaults to light-engine for cloud farms)
+    const VALID_PLAN_TYPES = ['light-engine', 'research'];
+    const resolvedPlanType = VALID_PLAN_TYPES.includes(requested_plan_type) ? requested_plan_type : 'light-engine';
+
+    // Research plans require affiliation_type
+    if (resolvedPlanType === 'research' && !affiliation_type) {
+      return res.status(400).json({
+        success: false,
+        error: 'Research plan requires affiliation_type (school, research_facility, or independent_researcher)'
+      });
+    }
 
     const metadata = {
       location: location || {},
@@ -302,8 +319,30 @@ router.post('/register', async (req, res, next) => {
          api_secret = COALESCE(farms.api_secret, EXCLUDED.api_secret),
          api_url = COALESCE(EXCLUDED.api_url, farms.api_url),
          updated_at = NOW()`,
-      [resolvedFarmId, resolvedName, 'active', now, jwtSecret, apiKey, apiSecret, 'light-engine', JSON.stringify(metadata), api_url || null]
+      [resolvedFarmId, resolvedName, 'active', now, jwtSecret, apiKey, apiSecret, resolvedPlanType, JSON.stringify(metadata), api_url || null]
     );
+
+    // Save research affiliation fields if present
+    if (resolvedPlanType === 'research') {
+      try {
+        await query(
+          `UPDATE farms SET
+             researcher_affiliation_type = $2,
+             researcher_institution = $3,
+             researcher_department = $4,
+             researcher_orcid = $5,
+             settings = jsonb_set(
+               COALESCE(settings, '{}'::jsonb),
+               '{features,research_enabled}',
+               'true'::jsonb
+             )
+           WHERE farm_id = $1`,
+          [resolvedFarmId, affiliation_type, institution || null, department || null, orcid || null]
+        );
+      } catch (affErr) {
+        logger.warn('Research affiliation save warning (non-fatal):', affErr.message);
+      }
+    }
 
     // Also keep in-memory
     inMemoryFarms.set(resolvedFarmId, {
@@ -759,7 +798,8 @@ router.post('/auth/login', async (req, res) => {
         farm_id: user.farmId,
         user_id: user.id,
         role: user.role,
-        name: user.name
+        name: user.name,
+        plan_type: user.planType || 'light-engine'
       },
       JWT_SECRET,
       { expiresIn: '24h', issuer: 'greenreach-central', audience: 'greenreach-farms' }

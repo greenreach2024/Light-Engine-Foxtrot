@@ -61,6 +61,12 @@ export function requireResearchTier() {
       });
     }
 
+    // Check JWT plan_type first (avoids DB round-trip for research subscribers)
+    if (req.plan_type === 'research' || req.planType === 'research') {
+      setCache(farmId, true);
+      return next();
+    }
+
     // Check cache first
     const cached = getCached(farmId);
     if (cached === true) return next();
@@ -82,14 +88,15 @@ export function requireResearchTier() {
       }
     }
 
-    // Check DB: farms.settings -> features -> research_enabled
+    // Check DB: plan_type = 'research' OR settings -> features -> research_enabled
     if (isDatabaseAvailable()) {
       try {
         const result = await dbQuery(
-          `SELECT settings->'features'->>'research_enabled' as enabled FROM farms WHERE farm_id = $1`,
+          `SELECT plan_type, settings->'features'->>'research_enabled' as enabled FROM farms WHERE farm_id = $1`,
           [farmId]
         );
-        const enabled = result.rows[0]?.enabled === 'true';
+        const row = result.rows[0];
+        const enabled = row?.plan_type === 'research' || row?.enabled === 'true';
         setCache(farmId, enabled);
         if (enabled) return next();
       } catch (err) {

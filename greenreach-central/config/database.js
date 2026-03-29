@@ -3097,6 +3097,560 @@ async function runMigrations(client) {
     logger.warn('Migration 048 warning:', err.message);
   }
 
+
+  // --- Migration 049: Research affiliation columns on farms table ---
+  // Supports Light Engine Research plan: stores institution-level affiliation
+  // for research subscribers during registration/setup.
+  try {
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS researcher_affiliation_type VARCHAR(50)`);
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS researcher_institution VARCHAR(255)`);
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS researcher_department VARCHAR(255)`);
+    await pool.query(`ALTER TABLE farms ADD COLUMN IF NOT EXISTS researcher_orcid VARCHAR(50)`);
+    logger.info('Research affiliation columns on farms ready (migration 049)');
+  } catch (err) {
+    logger.warn('Migration 049 warning:', err.message);
+  }
+
+  // --- Migration 050: Align farm_alerts schema with alert-manager.js ---
+  // farm_alerts may be missing id (old schema), zone_id, device_id, updated_at
+  // (needed by alert-manager.js) and acknowledged/resolved_at (needed by UI + F.A.Y.E.).
+  try {
+    await pool.query(`
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS id SERIAL;
+    `);
+    // Ensure primary key exists
+    await pool.query(`
+      DO $do$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'farm_alerts_pkey') THEN
+          ALTER TABLE farm_alerts ADD CONSTRAINT farm_alerts_pkey PRIMARY KEY (id);
+        END IF;
+      END $do$;
+    `);
+    await pool.query(`
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS zone_id VARCHAR(100);
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS device_id VARCHAR(100);
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS acknowledged BOOLEAN DEFAULT FALSE;
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS acknowledged_by VARCHAR(100);
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ;
+      ALTER TABLE farm_alerts ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+    `);
+    logger.info('farm_alerts schema aligned (migration 050)');
+  } catch (err) {
+    logger.warn('Migration 050 warning:', err.message);
+  }
+
+  // --- Migration 051: Research Platform Phase 2/3 tables ---
+  // Grant lifecycle, HQP/trainee management, partner institutions, publications,
+  // lab equipment, ethics/biosafety/security compliance, workspace tasks
+  try {
+    await pool.query(`
+      -- Grant Milestones
+      CREATE TABLE IF NOT EXISTS grant_milestones (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        due_date DATE,
+        completed_date DATE,
+        deliverable_type VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Grant Reports
+      CREATE TABLE IF NOT EXISTS grant_reports (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        report_type VARCHAR(50) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        reporting_period_start DATE,
+        reporting_period_end DATE,
+        due_date DATE,
+        content JSONB DEFAULT '{}',
+        financials JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Grant Publications (grant-scoped)
+      CREATE TABLE IF NOT EXISTS grant_publications (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        authors TEXT,
+        journal VARCHAR(300),
+        doi VARCHAR(200),
+        publication_type VARCHAR(100),
+        published_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        open_access BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Grant Extensions (No-Cost Extensions)
+      CREATE TABLE IF NOT EXISTS grant_extensions (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        extension_type VARCHAR(100),
+        new_end_date DATE,
+        justification TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Grant Amendments (budget re-allocations)
+      CREATE TABLE IF NOT EXISTS grant_amendments (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        amendment_type VARCHAR(100),
+        from_category VARCHAR(200),
+        to_category VARCHAR(200),
+        amount NUMERIC(12,2),
+        justification TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Trainee Records (HQP)
+      CREATE TABLE IF NOT EXISTS trainee_records (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE SET NULL,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(300),
+        institution VARCHAR(300),
+        department VARCHAR(300),
+        trainee_type VARCHAR(100) NOT NULL,
+        program VARCHAR(300),
+        supervisor_name VARCHAR(300),
+        start_date DATE,
+        expected_end_date DATE,
+        actual_end_date DATE,
+        status VARCHAR(50) DEFAULT 'active',
+        outcome TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Trainee Milestones
+      CREATE TABLE IF NOT EXISTS trainee_milestones (
+        id SERIAL PRIMARY KEY,
+        trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        milestone_type VARCHAR(100) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        due_date DATE,
+        completed_date DATE,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Supervision Meetings
+      CREATE TABLE IF NOT EXISTS supervision_meetings (
+        id SERIAL PRIMARY KEY,
+        trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        meeting_date DATE NOT NULL,
+        attendees JSONB DEFAULT '[]',
+        agenda TEXT,
+        notes TEXT,
+        action_items JSONB DEFAULT '[]',
+        next_meeting_date DATE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Professional Development
+      CREATE TABLE IF NOT EXISTS professional_development (
+        id SERIAL PRIMARY KEY,
+        trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        activity_type VARCHAR(100),
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        activity_date DATE,
+        hours NUMERIC(6,1),
+        provider VARCHAR(300),
+        certificate_url TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- EDI Self-Identification (voluntary, anonymized)
+      CREATE TABLE IF NOT EXISTS edi_self_identification (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        response TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Partner Institutions
+      CREATE TABLE IF NOT EXISTS partner_institutions (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        name VARCHAR(300) NOT NULL,
+        partner_type VARCHAR(100) NOT NULL,
+        country VARCHAR(100) DEFAULT 'Canada',
+        province_state VARCHAR(100),
+        address TEXT,
+        website TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Partner Contacts
+      CREATE TABLE IF NOT EXISTS partner_contacts (
+        id SERIAL PRIMARY KEY,
+        partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(300),
+        role VARCHAR(200),
+        department VARCHAR(200),
+        phone VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Data Sharing Agreements
+      CREATE TABLE IF NOT EXISTS data_sharing_agreements (
+        id SERIAL PRIMARY KEY,
+        partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        agreement_type VARCHAR(100) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        data_types JSONB DEFAULT '[]',
+        access_level VARCHAR(50) DEFAULT 'read_only',
+        start_date DATE,
+        end_date DATE,
+        terms JSONB DEFAULT '{}',
+        signed_date DATE,
+        signed_by VARCHAR(300),
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Publications (cross-grant, Phase 3)
+      CREATE TABLE IF NOT EXISTS publications (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        grant_id INTEGER REFERENCES grant_applications(id) ON DELETE SET NULL,
+        title VARCHAR(500) NOT NULL,
+        journal VARCHAR(300),
+        publication_type VARCHAR(100) DEFAULT 'journal_article',
+        doi VARCHAR(200),
+        abstract TEXT,
+        submission_date DATE,
+        code_url TEXT,
+        data_url TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Publication-Dataset Links
+      CREATE TABLE IF NOT EXISTS publication_datasets (
+        id SERIAL PRIMARY KEY,
+        publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+        dataset_id INTEGER REFERENCES research_datasets(id) ON DELETE CASCADE,
+        role VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Publication Authors
+      CREATE TABLE IF NOT EXISTS publication_authors (
+        id SERIAL PRIMARY KEY,
+        publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(300),
+        institution VARCHAR(300),
+        orcid VARCHAR(50),
+        author_position INTEGER,
+        role VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Lab Equipment
+      CREATE TABLE IF NOT EXISTS lab_equipment (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        name VARCHAR(300) NOT NULL,
+        category VARCHAR(100) DEFAULT 'other',
+        manufacturer VARCHAR(300),
+        model VARCHAR(300),
+        serial_number VARCHAR(200),
+        location VARCHAR(300),
+        purchase_date DATE,
+        maintenance_interval_days INTEGER,
+        calibration_interval_days INTEGER,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'available',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Equipment Bookings
+      CREATE TABLE IF NOT EXISTS equipment_bookings (
+        id SERIAL PRIMARY KEY,
+        equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        booked_by VARCHAR(300),
+        start_time TIMESTAMPTZ NOT NULL,
+        end_time TIMESTAMPTZ NOT NULL,
+        purpose TEXT,
+        status VARCHAR(50) DEFAULT 'confirmed',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Equipment Maintenance
+      CREATE TABLE IF NOT EXISTS equipment_maintenance (
+        id SERIAL PRIMARY KEY,
+        equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        maintenance_type VARCHAR(100),
+        description TEXT,
+        performed_by VARCHAR(300),
+        performed_at TIMESTAMPTZ,
+        next_due DATE,
+        cost NUMERIC(10,2),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Ethics Applications
+      CREATE TABLE IF NOT EXISTS ethics_applications (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        protocol_title VARCHAR(500) NOT NULL,
+        protocol_number VARCHAR(100),
+        submission_date DATE,
+        approval_date DATE,
+        expiry_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Biosafety Protocols
+      CREATE TABLE IF NOT EXISTS biosafety_protocols (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        protocol_title VARCHAR(500) NOT NULL,
+        biosafety_level VARCHAR(20),
+        approval_date DATE,
+        expiry_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Security Audits
+      CREATE TABLE IF NOT EXISTS security_audits (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        audit_type VARCHAR(100),
+        performed_date DATE,
+        next_audit_date DATE,
+        findings JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Workspace Tasks (deadline auto-generation)
+      CREATE TABLE IF NOT EXISTS workspace_tasks (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE CASCADE,
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        priority VARCHAR(20) DEFAULT 'medium',
+        due_date DATE,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    logger.info('Research Phase 2/3 tables ready (migration 051)');
+  } catch (err) {
+    logger.warn('Migration 051 warning:', err.message);
+  }
+
+  // --- Migration 052: Research grant_applications schema completion ---
+  // The grant_applications table was created for the grant portal (user_id, wizard_step, etc.)
+  // but the research routes need farm_id, funding_agency, study_id and other columns.
+  try {
+    await pool.query(`
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS farm_id VARCHAR(255);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL;
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS funding_agency VARCHAR(100);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS program VARCHAR(300);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS amount_requested NUMERIC(12,2) DEFAULT 0;
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS amount_awarded NUMERIC(12,2);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'CAD';
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS start_date DATE;
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS end_date DATE;
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS pi_name VARCHAR(255);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS pi_institution VARCHAR(255);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS co_investigators JSONB DEFAULT '[]';
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS grant_number VARCHAR(100);
+      ALTER TABLE grant_applications ADD COLUMN IF NOT EXISTS title VARCHAR(500);
+      CREATE INDEX IF NOT EXISTS idx_grant_applications_farm_id ON grant_applications(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_grant_applications_study_id ON grant_applications(study_id);
+      CREATE INDEX IF NOT EXISTS idx_grant_applications_funding_agency ON grant_applications(funding_agency);
+    `);
+    logger.info('Research grant_applications schema extended (migration 052)');
+  } catch (err) {
+    logger.warn('Migration 052 warning:', err.message);
+  }
+
+  // --- Migration 053: Ensure Phase 2/3 research tables exist individually ---
+  // Migration 051 runs all CREATE TABLE statements in one query. If any FK fails
+  // the entire implicit transaction rolls back and no tables are created.
+  // This migration creates each table individually to guarantee they exist.
+  const phase2Tables = [
+    `CREATE TABLE IF NOT EXISTS grant_milestones (
+      id SERIAL PRIMARY KEY, grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, title VARCHAR(500) NOT NULL, description TEXT,
+      due_date DATE, completed_date DATE, deliverable_type VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS grant_reports (
+      id SERIAL PRIMARY KEY, grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, report_type VARCHAR(50) NOT NULL, title VARCHAR(500) NOT NULL,
+      reporting_period_start DATE, reporting_period_end DATE, due_date DATE,
+      content JSONB DEFAULT '{}', financials JSONB DEFAULT '{}',
+      status VARCHAR(50) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS grant_publications (
+      id SERIAL PRIMARY KEY, grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, title VARCHAR(500) NOT NULL, authors TEXT, journal VARCHAR(300),
+      doi VARCHAR(200), publication_type VARCHAR(100), published_date DATE,
+      status VARCHAR(50) DEFAULT 'draft', open_access BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS grant_extensions (
+      id SERIAL PRIMARY KEY, grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, extension_type VARCHAR(100), new_end_date DATE,
+      justification TEXT, status VARCHAR(50) DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS grant_amendments (
+      id SERIAL PRIMARY KEY, grant_id INTEGER REFERENCES grant_applications(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, amendment_type VARCHAR(100), from_category VARCHAR(200),
+      to_category VARCHAR(200), amount NUMERIC(12,2), justification TEXT,
+      status VARCHAR(50) DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS trainee_records (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL,
+      study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+      grant_id INTEGER REFERENCES grant_applications(id) ON DELETE SET NULL,
+      name VARCHAR(300) NOT NULL, email VARCHAR(300), institution VARCHAR(300), department VARCHAR(300),
+      trainee_type VARCHAR(100) NOT NULL, program VARCHAR(300), supervisor_name VARCHAR(300),
+      start_date DATE, expected_end_date DATE, actual_end_date DATE,
+      status VARCHAR(50) DEFAULT 'active', outcome TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS trainee_milestones (
+      id SERIAL PRIMARY KEY, trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, milestone_type VARCHAR(100) NOT NULL, title VARCHAR(500) NOT NULL,
+      description TEXT, due_date DATE, completed_date DATE, status VARCHAR(50) DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS supervision_meetings (
+      id SERIAL PRIMARY KEY, trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, meeting_date DATE NOT NULL, attendees JSONB DEFAULT '[]',
+      agenda TEXT, notes TEXT, action_items JSONB DEFAULT '[]', next_meeting_date DATE,
+      created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS professional_development (
+      id SERIAL PRIMARY KEY, trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, activity_type VARCHAR(100), title VARCHAR(500) NOT NULL,
+      description TEXT, activity_date DATE, hours NUMERIC(6,1), provider VARCHAR(300),
+      certificate_url TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS edi_self_identification (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, category VARCHAR(100) NOT NULL,
+      response TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS partner_institutions (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, name VARCHAR(300) NOT NULL,
+      partner_type VARCHAR(100) NOT NULL, country VARCHAR(100) DEFAULT 'Canada',
+      province_state VARCHAR(100), address TEXT, website TEXT, notes TEXT,
+      status VARCHAR(50) DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS partner_contacts (
+      id SERIAL PRIMARY KEY, partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, name VARCHAR(300) NOT NULL, email VARCHAR(300),
+      role VARCHAR(200), department VARCHAR(200), phone VARCHAR(50),
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS data_sharing_agreements (
+      id SERIAL PRIMARY KEY, partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, agreement_type VARCHAR(100) NOT NULL, title VARCHAR(500) NOT NULL,
+      description TEXT, data_types JSONB DEFAULT '[]', access_level VARCHAR(50) DEFAULT 'read_only',
+      start_date DATE, end_date DATE, terms JSONB DEFAULT '{}', signed_date DATE, signed_by VARCHAR(300),
+      status VARCHAR(50) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS publications (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL,
+      grant_id INTEGER REFERENCES grant_applications(id) ON DELETE SET NULL,
+      title VARCHAR(500) NOT NULL, journal VARCHAR(300), publication_type VARCHAR(100) DEFAULT 'journal_article',
+      doi VARCHAR(200), abstract TEXT, submission_date DATE, code_url TEXT, data_url TEXT,
+      status VARCHAR(50) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS publication_datasets (
+      id SERIAL PRIMARY KEY, publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+      dataset_id INTEGER REFERENCES research_datasets(id) ON DELETE CASCADE,
+      role VARCHAR(100), created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS publication_authors (
+      id SERIAL PRIMARY KEY, publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+      name VARCHAR(300) NOT NULL, email VARCHAR(300), institution VARCHAR(300), orcid VARCHAR(50),
+      author_position INTEGER, role VARCHAR(100), created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS lab_equipment (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, name VARCHAR(300) NOT NULL,
+      category VARCHAR(100) DEFAULT 'other', manufacturer VARCHAR(300), model VARCHAR(300),
+      serial_number VARCHAR(200), location VARCHAR(300), purchase_date DATE,
+      maintenance_interval_days INTEGER, calibration_interval_days INTEGER, notes TEXT,
+      status VARCHAR(50) DEFAULT 'available', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS equipment_bookings (
+      id SERIAL PRIMARY KEY, equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+      booked_by VARCHAR(300), start_time TIMESTAMPTZ NOT NULL, end_time TIMESTAMPTZ NOT NULL,
+      purpose TEXT, status VARCHAR(50) DEFAULT 'confirmed', created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS equipment_maintenance (
+      id SERIAL PRIMARY KEY, equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+      farm_id VARCHAR(64) NOT NULL, maintenance_type VARCHAR(100), description TEXT,
+      performed_by VARCHAR(300), performed_at TIMESTAMPTZ, next_due DATE, cost NUMERIC(10,2),
+      created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS ethics_applications (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, protocol_title VARCHAR(500) NOT NULL,
+      protocol_number VARCHAR(100), submission_date DATE, approval_date DATE, expiry_date DATE,
+      status VARCHAR(50) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS biosafety_protocols (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, protocol_title VARCHAR(500) NOT NULL,
+      biosafety_level VARCHAR(20), approval_date DATE, expiry_date DATE,
+      status VARCHAR(50) DEFAULT 'draft', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS security_audits (
+      id SERIAL PRIMARY KEY, farm_id VARCHAR(64) NOT NULL, audit_type VARCHAR(100),
+      performed_date DATE, next_audit_date DATE, findings JSONB DEFAULT '{}',
+      status VARCHAR(50) DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS workspace_tasks (
+      id SERIAL PRIMARY KEY, study_id INTEGER REFERENCES studies(id) ON DELETE CASCADE,
+      title VARCHAR(500) NOT NULL, description TEXT, status VARCHAR(50) DEFAULT 'pending',
+      priority VARCHAR(20) DEFAULT 'medium', due_date DATE, metadata JSONB DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`
+  ];
+  for (const ddl of phase2Tables) {
+    try { await pool.query(ddl); } catch (err) {
+      if (!err.message.includes('already exists')) logger.warn('Migration 053 table warning:', err.message);
+    }
+  }
+  logger.info('Research Phase 2/3 tables verified individually (migration 053)');
+
     logger.info('Database migrations completed');
 }
 

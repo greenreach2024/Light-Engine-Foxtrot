@@ -2,7 +2,7 @@
 
 **Reference**: `.github/CUSTOM_PRODUCT_FEATURE.md`
 **Date**: March 28, 2026 (Deployed)
-**Status**: All 8 phases complete and deployed.
+**Status**: All 8 phases complete and deployed. Image upload field name bugfix deployed Mar 29.
 
 ---
 

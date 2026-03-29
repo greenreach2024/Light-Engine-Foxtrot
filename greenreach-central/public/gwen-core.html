@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G.W.E.N. -- Grants, Workplans, Evidence &amp; Navigation</title>
+  <link rel="stylesheet" href="/styles/gwen-core.css">
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- TOPBAR                                                        -->
+  <!-- ============================================================ -->
+  <header class="gwen-topbar">
+    <div class="gwen-topbar-brand">
+      <span class="gwen-brand-icon">&#9670;</span>
+      <span class="gwen-brand-name">G.W.E.N.</span>
+      <span class="gwen-brand-sub">Grants, Workplans, Evidence &amp; Navigation</span>
+    </div>
+    <nav class="gwen-topbar-nav">
+      <a href="/views/research-workspace.html" class="gwen-nav-link">Research Workspace</a>
+      <a href="/GR-central-admin.html" class="gwen-nav-link">Central Admin</a>
+      <a href="/faye-core.html" class="gwen-nav-link">F.A.Y.E.</a>
+    </nav>
+    <div class="gwen-topbar-meta">
+      <span class="gwen-status-dot" id="gwenStatusDot"></span>
+      <span class="gwen-status-label" id="gwenStatusLabel">Initializing...</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- HERO SECTION                                                  -->
+  <!-- ============================================================ -->
+  <section class="gwen-hero">
+    <div class="gwen-hero-orb-wrap">
+      <div class="gwen-hero-orb" id="gwenOrb">
+        <div class="gwen-orb-ring gwen-orb-ring-1"></div>
+        <div class="gwen-orb-ring gwen-orb-ring-2"></div>
+        <div class="gwen-orb-ring gwen-orb-ring-3"></div>
+        <div class="gwen-orb-core"></div>
+      </div>
+    </div>
+    <div class="gwen-hero-text">
+      <h1 class="gwen-hero-title">G.W.E.N.</h1>
+      <p class="gwen-hero-subtitle">Research Intelligence Agent</p>
+    </div>
+    <div class="gwen-hero-stats" id="gwenHeroStats">
+      <div class="gwen-hero-stat">
+        <span class="gwen-hero-stat-value" id="statModel">--</span>
+        <span class="gwen-hero-stat-label">Model</span>
+      </div>
+      <div class="gwen-hero-stat">
+        <span class="gwen-hero-stat-value" id="statTools">--</span>
+        <span class="gwen-hero-stat-label">Tools</span>
+      </div>
+      <div class="gwen-hero-stat">
+        <span class="gwen-hero-stat-value" id="statDatabase">--</span>
+        <span class="gwen-hero-stat-label">Database</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- RESEARCH STATS ROW                                            -->
+  <!-- ============================================================ -->
+  <section class="gwen-stats-row" id="gwenStatsRow">
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statStudies">--</span>
+      <span class="gwen-stat-card-label">Active Studies</span>
+    </div>
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statDatasets">--</span>
+      <span class="gwen-stat-card-label">Datasets</span>
+    </div>
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statNotebooks">--</span>
+      <span class="gwen-stat-card-label">ELN Notebooks</span>
+    </div>
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statGrants">--</span>
+      <span class="gwen-stat-card-label">Grant Apps</span>
+    </div>
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statTasks">--</span>
+      <span class="gwen-stat-card-label">Open Tasks</span>
+    </div>
+    <div class="gwen-stat-card">
+      <span class="gwen-stat-card-value" id="statEquipment">--</span>
+      <span class="gwen-stat-card-label">Equipment</span>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- CORE GRID -- Research Capabilities                            -->
+  <!-- ============================================================ -->
+  <section class="gwen-core-grid">
+
+    <!-- Left Column: Quick Actions -->
+    <div class="gwen-card gwen-card-actions">
+      <h3 class="gwen-card-title">Quick Actions</h3>
+      <div class="gwen-actions-list" id="gwenActions">
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Screen my funding eligibility')">
+          <span class="gwen-action-icon">&#9733;</span>
+          Funding Eligibility
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Map competition rubric for NSERC Alliance')">
+          <span class="gwen-action-icon">&#9670;</span>
+          Rubric Mapping
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Score my proposal writing style')">
+          <span class="gwen-action-icon">&#9674;</span>
+          Writing Score
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Draft a research budget')">
+          <span class="gwen-action-icon">&#9632;</span>
+          Budget Draft
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Generate a data management plan')">
+          <span class="gwen-action-icon">&#9679;</span>
+          Data Management
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Review my study design')">
+          <span class="gwen-action-icon">&#9651;</span>
+          Study Design Review
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Build my narrative CV')">
+          <span class="gwen-action-icon">&#9654;</span>
+          Narrative CV
+        </button>
+        <button class="gwen-action-btn" onclick="gwenQuickAction('Generate submission checklist')">
+          <span class="gwen-action-icon">&#9744;</span>
+          Submission Checklist
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Column: Capability Categories -->
+    <div class="gwen-card gwen-card-capabilities">
+      <h3 class="gwen-card-title">Capabilities</h3>
+      <div class="gwen-capabilities-grid" id="gwenCapabilities">
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Funding Eligibility</span>
+          <span class="gwen-cap-desc">CIHR, NSERC, SSHRC, ORF, provincial streams</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Rubric Mapping</span>
+          <span class="gwen-cap-desc">Competition-specific scoring guidance</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Narrative CV</span>
+          <span class="gwen-cap-desc">DORA-aligned quality & impact CVs</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Budget Design</span>
+          <span class="gwen-cap-desc">Activity-linked eligible cost budgets</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Research Security</span>
+          <span class="gwen-cap-desc">STRAC, export control, risk screening</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Data Management</span>
+          <span class="gwen-cap-desc">Living DMPs per tri-agency RDM guidance</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Responsible AI</span>
+          <span class="gwen-cap-desc">Interagency AI compliance checks</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">EDI Assessment</span>
+          <span class="gwen-cap-desc">Team composition & inclusion analysis</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Knowledge Mobilization</span>
+          <span class="gwen-cap-desc">Impact pathways & dissemination plans</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Resubmission Strategy</span>
+          <span class="gwen-cap-desc">Evidence-based resubmission coaching</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Writing Optimization</span>
+          <span class="gwen-cap-desc">Active voice, clarity, jargon reduction</span>
+        </div>
+        <div class="gwen-cap-item">
+          <span class="gwen-cap-title">Study Design</span>
+          <span class="gwen-cap-desc">Pre-submission design review</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Recent Activity -->
+    <div class="gwen-card gwen-card-activity">
+      <h3 class="gwen-card-title">Recent Activity</h3>
+      <div class="gwen-activity-list" id="gwenActivity">
+        <p class="gwen-empty-state">No activity yet. Start a conversation below.</p>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- DYNAMIC WORKSPACE -- Expanded Area for Charts & Data          -->
+  <!-- ============================================================ -->
+  <section class="gwen-workspace" id="gwenWorkspace">
+    <div class="gwen-workspace-header">
+      <h2 class="gwen-workspace-title">Research Workspace</h2>
+      <div class="gwen-workspace-controls">
+        <button class="gwen-ws-btn" onclick="clearWorkspace()">Clear Displays</button>
+        <button class="gwen-ws-btn" onclick="refreshWorkspace()">Refresh</button>
+      </div>
+    </div>
+    <div class="gwen-workspace-canvas" id="gwenCanvas">
+      <div class="gwen-ws-empty" id="gwenWsEmpty">
+        <p class="gwen-ws-empty-title">Dynamic Research Workspace</p>
+        <p class="gwen-ws-empty-desc">Ask G.W.E.N. to create charts, data tables, or visualizations. They will appear here.</p>
+        <div class="gwen-ws-examples">
+          <span class="gwen-ws-example" onclick="gwenQuickAction('Create a line chart of my sensor data for the last 48 hours')">Sensor data chart</span>
+          <span class="gwen-ws-example" onclick="gwenQuickAction('Build a comparison table of NSERC vs CIHR eligibility for my study')">Eligibility comparison</span>
+          <span class="gwen-ws-example" onclick="gwenQuickAction('Create a heatmap of environmental conditions in my growth chamber')">Environment heatmap</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- CHAT INTERFACE                                                -->
+  <!-- ============================================================ -->
+  <section class="gwen-chat-bar" id="gwenChatBar">
+    <div class="gwen-chat-toggle" id="gwenChatToggle" onclick="toggleChat()">
+      <span class="gwen-chat-toggle-icon">&#9650;</span>
+      <span class="gwen-chat-toggle-label">Chat with G.W.E.N.</span>
+    </div>
+  </section>
+
+  <section class="gwen-chat-panel" id="gwenChatPanel">
+    <div class="gwen-chat-messages" id="gwenChatMessages">
+      <div class="gwen-chat-msg gwen-chat-msg-agent">
+        <div class="gwen-chat-msg-avatar">G</div>
+        <div class="gwen-chat-msg-body">
+          <p>Welcome to G.W.E.N. I am your research intelligence agent, specialized in grant writing, study design, data management, and compliance. How can I help with your research today?</p>
+        </div>
+      </div>
+    </div>
+    <div class="gwen-chat-input-row">
+      <textarea class="gwen-chat-input" id="gwenChatInput" rows="2" placeholder="Ask about grants, study design, compliance, data management..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGwenMessage();}"></textarea>
+      <button class="gwen-chat-send" id="gwenChatSend" onclick="sendGwenMessage()">Send</button>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- JAVASCRIPT                                                    -->
+  <!-- ============================================================ -->
+  <script>
+  (function() {
+    'use strict';
+
+    // -- State --
+    let conversationId = null;
+    let chatOpen = false;
+    let isWaiting = false;
+
+    // -- Auth --
+    function getAuthHeaders() {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const farmId = localStorage.getItem('farm_id');
+      if (farmId) headers['x-farm-id'] = farmId;
+      return headers;
+    }
+
+    // -- API helper --
+    async function apiFetch(url, opts) {
+      const defaults = { headers: getAuthHeaders() };
+      const resp = await fetch(url, { ...defaults, ...opts });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || 'Request failed (' + resp.status + ')');
+      }
+      return resp.json();
+    }
+
+    // -- Init --
+    window.addEventListener('DOMContentLoaded', function() {
+      loadStatus();
+      loadState();
+      setInterval(loadState, 30000);
+    });
+
+    // -- Load Status --
+    async function loadStatus() {
+      try {
+        const data = await apiFetch('/api/research/gwen/status');
+        const dot = document.getElementById('gwenStatusDot');
+        const label = document.getElementById('gwenStatusLabel');
+        if (data.ok) {
+          dot.className = 'gwen-status-dot gwen-status-online';
+          label.textContent = 'Online';
+        } else {
+          dot.className = 'gwen-status-dot gwen-status-degraded';
+          label.textContent = 'Degraded';
+        }
+        document.getElementById('statModel').textContent = data.primary_llm ? data.primary_llm.split('-').slice(0, 2).join(' ') : 'Fallback';
+        document.getElementById('statTools').textContent = data.tool_count || '--';
+        document.getElementById('statDatabase').textContent = data.database ? 'Connected' : 'Offline';
+      } catch (err) {
+        document.getElementById('gwenStatusDot').className = 'gwen-status-dot gwen-status-offline';
+        document.getElementById('gwenStatusLabel').textContent = 'Offline';
+      }
+    }
+
+    // -- Load State --
+    async function loadState() {
+      try {
+        const data = await apiFetch('/api/research/gwen/state');
+        if (!data.ok) return;
+        const s = data.stats || {};
+        document.getElementById('statStudies').textContent = s.active_studies || 0;
+        document.getElementById('statDatasets').textContent = s.datasets || 0;
+        document.getElementById('statNotebooks').textContent = s.notebooks || 0;
+        document.getElementById('statGrants').textContent = s.grants || 0;
+        document.getElementById('statTasks').textContent = s.open_tasks || 0;
+        document.getElementById('statEquipment').textContent = s.equipment || 0;
+      } catch { /* silent */ }
+    }
+
+    // -- Toggle Chat --
+    window.toggleChat = function() {
+      chatOpen = !chatOpen;
+      const panel = document.getElementById('gwenChatPanel');
+      const toggle = document.getElementById('gwenChatToggle');
+      if (chatOpen) {
+        panel.classList.add('gwen-chat-panel-open');
+        toggle.querySelector('.gwen-chat-toggle-icon').innerHTML = '&#9660;';
+        document.getElementById('gwenChatInput').focus();
+      } else {
+        panel.classList.remove('gwen-chat-panel-open');
+        toggle.querySelector('.gwen-chat-toggle-icon').innerHTML = '&#9650;';
+      }
+    };
+
+    // -- Send Message --
+    window.sendGwenMessage = async function() {
+      if (isWaiting) return;
+      const input = document.getElementById('gwenChatInput');
+      const msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      appendMessage('user', msg);
+      setOrbState('analyzing');
+      isWaiting = true;
+
+      try {
+        const data = await apiFetch('/api/research/gwen/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: msg, conversation_id: conversationId }),
+        });
+        conversationId = data.conversation_id;
+        appendMessage('agent', data.reply, data.tool_calls);
+        // Log tool calls as activity
+        if (data.tool_calls && data.tool_calls.length > 0) {
+          addActivity(data.tool_calls);
+        }
+        // Refresh workspace if tools created displays
+        if (data.tool_calls && data.tool_calls.some(function(tc) { return tc.tool === 'create_custom_display' || tc.tool === 'create_research_table'; })) {
+          refreshWorkspace();
+        }
+      } catch (err) {
+        appendMessage('agent', 'Error: ' + err.message);
+      } finally {
+        isWaiting = false;
+        setOrbState('idle');
+      }
+    };
+
+    // -- Quick Action --
+    window.gwenQuickAction = function(prompt) {
+      if (!chatOpen) toggleChat();
+      document.getElementById('gwenChatInput').value = prompt;
+      sendGwenMessage();
+    };
+
+    // -- Append Message --
+    function appendMessage(role, text, toolCalls) {
+      var container = document.getElementById('gwenChatMessages');
+      var div = document.createElement('div');
+      div.className = 'gwen-chat-msg gwen-chat-msg-' + role;
+
+      var avatar = document.createElement('div');
+      avatar.className = 'gwen-chat-msg-avatar';
+      avatar.textContent = role === 'agent' ? 'G' : 'You';
+
+      var body = document.createElement('div');
+      body.className = 'gwen-chat-msg-body';
+      body.innerHTML = formatResponse(text);
+
+      // Show tool usage indicators
+      if (toolCalls && toolCalls.length > 0) {
+        var tools = document.createElement('div');
+        tools.className = 'gwen-chat-tools-used';
+        tools.innerHTML = '<span class="gwen-tools-label">Tools used:</span> ' +
+          toolCalls.map(function(tc) {
+            return '<span class="gwen-tool-badge ' + (tc.result_ok ? 'gwen-tool-ok' : 'gwen-tool-err') + '">' + tc.tool.replace(/_/g, ' ') + '</span>';
+          }).join(' ');
+        body.appendChild(tools);
+      }
+
+      div.appendChild(avatar);
+      div.appendChild(body);
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // -- Format Response (markdown-lite) --
+    function formatResponse(text) {
+      if (!text) return '';
+      // Escape HTML
+      var s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      // Bold
+      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      // Italic
+      s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      // Inline code
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // Headers
+      s = s.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+      s = s.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+      // Lists
+      s = s.replace(/^- (.+)$/gm, '<li>$1</li>');
+      s = s.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+      // Tables (simple pipe tables)
+      s = s.replace(/\|(.+)\|/g, function(match) {
+        var cells = match.split('|').filter(function(c) { return c.trim(); });
+        if (cells.every(function(c) { return /^[\s-:]+$/.test(c); })) return '';
+        return '<tr>' + cells.map(function(c) { return '<td>' + c.trim() + '</td>'; }).join('') + '</tr>';
+      });
+      // Wrap consecutive <tr> in <table>
+      s = s.replace(/((?:<tr>.*?<\/tr>\s*)+)/g, '<table class="gwen-table">$1</table>');
+      // Paragraphs
+      s = s.replace(/\n\n/g, '</p><p>');
+      s = '<p>' + s + '</p>';
+      // Clean empty paragraphs
+      s = s.replace(/<p>\s*<\/p>/g, '');
+      return s;
+    }
+
+    // -- Activity Feed --
+    function addActivity(toolCalls) {
+      var list = document.getElementById('gwenActivity');
+      var empty = list.querySelector('.gwen-empty-state');
+      if (empty) empty.remove();
+
+      toolCalls.forEach(function(tc) {
+        var item = document.createElement('div');
+        item.className = 'gwen-activity-item';
+        var now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        item.innerHTML = '<span class="gwen-activity-time">' + now + '</span>' +
+          '<span class="gwen-activity-tool">' + tc.tool.replace(/_/g, ' ') + '</span>' +
+          '<span class="gwen-activity-status ' + (tc.result_ok ? 'gwen-activity-ok' : 'gwen-activity-err') + '">' +
+          (tc.result_ok ? 'OK' : 'ERR') + '</span>';
+        list.insertBefore(item, list.firstChild);
+      });
+
+      // Keep only last 20 items
+      while (list.children.length > 20) {
+        list.removeChild(list.lastChild);
+      }
+    }
+
+    // -- Workspace --
+    window.refreshWorkspace = async function() {
+      try {
+        var url = '/api/research/gwen/workspace';
+        if (conversationId) url += '?conversation_id=' + conversationId;
+        var data = await apiFetch(url);
+        renderWorkspace(data.displays || []);
+      } catch { /* silent */ }
+    };
+
+    window.clearWorkspace = function() {
+      var canvas = document.getElementById('gwenCanvas');
+      canvas.innerHTML = document.getElementById('gwenWsEmpty') ?
+        '<div class="gwen-ws-empty" id="gwenWsEmpty"><p class="gwen-ws-empty-title">Dynamic Research Workspace</p><p class="gwen-ws-empty-desc">Ask G.W.E.N. to create charts, data tables, or visualizations. They will appear here.</p></div>' : '';
+    };
+
+    function renderWorkspace(displays) {
+      var canvas = document.getElementById('gwenCanvas');
+      if (!displays.length) return;
+
+      // Remove empty state
+      var empty = document.getElementById('gwenWsEmpty');
+      if (empty) empty.remove();
+
+      // Clear and rebuild
+      canvas.innerHTML = '';
+      displays.forEach(function(d) {
+        var panel = document.createElement('div');
+        panel.className = 'gwen-ws-panel gwen-ws-panel-' + d.type;
+        panel.innerHTML = '<h4 class="gwen-ws-panel-title">' + escapeHtml(d.title) + '</h4>' +
+          '<div class="gwen-ws-panel-body" id="ws-' + d.id + '"></div>';
+        canvas.appendChild(panel);
+        renderDisplay(d, panel.querySelector('.gwen-ws-panel-body'));
+      });
+    }
+
+    function renderDisplay(display, container) {
+      switch (display.type) {
+        case 'metric_card':
+          renderMetricCard(display, container);
+          break;
+        case 'data_table':
+          renderDataTable(display, container);
+          break;
+        case 'line_chart':
+        case 'bar_chart':
+        case 'scatter_plot':
+        case 'heatmap':
+          renderChart(display, container);
+          break;
+        default:
+          container.innerHTML = '<p>Display type: ' + display.type + '</p><pre>' + escapeHtml(JSON.stringify(display.data, null, 2)) + '</pre>';
+      }
+    }
+
+    function renderMetricCard(display, container) {
+      var data = display.data || [];
+      container.innerHTML = '<div class="gwen-ws-metrics">' +
+        data.map(function(m) {
+          return '<div class="gwen-ws-metric"><span class="gwen-ws-metric-value">' +
+            escapeHtml(String(m.value || '--')) + '</span><span class="gwen-ws-metric-label">' +
+            escapeHtml(m.label || '') + '</span></div>';
+        }).join('') + '</div>';
+    }
+
+    function renderDataTable(display, container) {
+      var data = display.data || [];
+      if (!data.length) { container.innerHTML = '<p class="gwen-ws-no-data">No data</p>'; return; }
+      var headers = Object.keys(data[0]);
+      var html = '<div class="gwen-ws-table-wrap"><table class="gwen-ws-table"><thead><tr>' +
+        headers.map(function(h) { return '<th>' + escapeHtml(h) + '</th>'; }).join('') +
+        '</tr></thead><tbody>' +
+        data.map(function(row) {
+          return '<tr>' + headers.map(function(h) { return '<td>' + escapeHtml(String(row[h] || '')) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+      container.innerHTML = html;
+    }
+
+    function renderChart(display, container) {
+      // Canvas-based chart rendering for line, bar, scatter, heatmap
+      var data = display.data || [];
+      if (!data.length) { container.innerHTML = '<p class="gwen-ws-no-data">No data available for chart</p>'; return; }
+      var cvs = document.createElement('canvas');
+      cvs.className = 'gwen-ws-chart-canvas';
+      cvs.width = 600;
+      cvs.height = 300;
+      container.appendChild(cvs);
+      var ctx = cvs.getContext('2d');
+      var cfg = display.config || {};
+      var w = cvs.width, h = cvs.height;
+      var pad = 50;
+
+      // Extract numeric values
+      var values = data.map(function(d) { return parseFloat(d.value || d.y || 0); });
+      var labels = data.map(function(d) { return d.label || d.x || d.time || ''; });
+      var minVal = Math.min.apply(null, values);
+      var maxVal = Math.max.apply(null, values);
+      if (minVal === maxVal) { maxVal = minVal + 1; }
+
+      // Background
+      ctx.fillStyle = '#0a0f1a';
+      ctx.fillRect(0, 0, w, h);
+
+      // Axes
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(pad, h - pad);
+      ctx.lineTo(w - pad, h - pad);
+      ctx.stroke();
+
+      // Y-axis labels
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      for (var yi = 0; yi <= 4; yi++) {
+        var yv = minVal + (maxVal - minVal) * yi / 4;
+        var yp = h - pad - ((yi / 4) * (h - 2 * pad));
+        ctx.fillText(yv.toFixed(1), pad - 4, yp + 3);
+        ctx.strokeStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(pad, yp);
+        ctx.lineTo(w - pad, yp);
+        ctx.stroke();
+      }
+
+      var step = (w - 2 * pad) / Math.max(values.length - 1, 1);
+
+      if (display.type === 'bar_chart') {
+        // Bar chart
+        var barW = Math.max(step * 0.6, 4);
+        values.forEach(function(v, i) {
+          var x = pad + i * step;
+          var barH = ((v - minVal) / (maxVal - minVal)) * (h - 2 * pad);
+          var gradient = ctx.createLinearGradient(x, h - pad - barH, x, h - pad);
+          gradient.addColorStop(0, cfg.color || '#f59e0b');
+          gradient.addColorStop(1, cfg.color_end || '#d97706');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x - barW / 2, h - pad - barH, barW, barH);
+        });
+      } else if (display.type === 'scatter_plot') {
+        // Scatter plot
+        ctx.fillStyle = cfg.color || '#f59e0b';
+        values.forEach(function(v, i) {
+          var x = pad + i * step;
+          var y = h - pad - ((v - minVal) / (maxVal - minVal)) * (h - 2 * pad);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else {
+        // Line chart (default)
+        ctx.strokeStyle = cfg.color || '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        values.forEach(function(v, i) {
+          var x = pad + i * step;
+          var y = h - pad - ((v - minVal) / (maxVal - minVal)) * (h - 2 * pad);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // Fill area
+        ctx.lineTo(pad + (values.length - 1) * step, h - pad);
+        ctx.lineTo(pad, h - pad);
+        ctx.closePath();
+        ctx.fillStyle = (cfg.color || '#f59e0b') + '15';
+        ctx.fill();
+        // Dots
+        ctx.fillStyle = cfg.color || '#f59e0b';
+        values.forEach(function(v, i) {
+          var x = pad + i * step;
+          var y = h - pad - ((v - minVal) / (maxVal - minVal)) * (h - 2 * pad);
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // X-axis labels (show a subset if too many)
+      ctx.fillStyle = '#94a3b8';
+      ctx.textAlign = 'center';
+      ctx.font = '9px monospace';
+      var labelStep = Math.ceil(labels.length / 8);
+      labels.forEach(function(l, i) {
+        if (i % labelStep === 0) {
+          var x = pad + i * step;
+          ctx.fillText(String(l).slice(0, 10), x, h - pad + 14);
+        }
+      });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(s));
+      return d.innerHTML;
+    }
+
+    // -- Orb State --
+    function setOrbState(state) {
+      var orb = document.getElementById('gwenOrb');
+      orb.className = 'gwen-hero-orb';
+      if (state) orb.classList.add('gwen-orb-' + state);
+    }
+  })();
+  </script>
+
+</body>
+</html>

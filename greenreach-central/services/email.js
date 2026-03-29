@@ -16,6 +16,9 @@
 
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
+
+import { sendBuyerWelcomeEmail as _sendBuyerWelcomeEmail, sendBuyerMonthlyStatement as _sendBuyerMonthlyStatement, sendProducerMonthlyStatement as _sendProducerMonthlyStatement } from './email-new-templates.js';
+
 const SES_FROM =  process.env.SES_FROM_EMAIL || 'info@greenreachgreens.com';
 const SES_REGION = process.env.SES_REGION || 'us-east-1';
 const SES_ENABLED = process.env.SES_ENABLED !== 'false';
@@ -243,4 +246,149 @@ greenreachgreens.com | info@greenreachgreens.com`;
   return sendEmail({ to: email, subject, html, text });
 }
 
-export default { sendWelcomeEmail };
+export default { sendWelcomeEmail, sendInviteEmail, sendBuyerWelcomeEmail, sendBuyerMonthlyStatement, sendProducerMonthlyStatement };
+
+// ═══════════════════════════════════════════════════════════════
+// Team Invite Email — sent when admin invites a user to the farm
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Send invitation email with login credentials to a new team member.
+ * @param {Object} params
+ * @param {string} params.email - Recipient email
+ * @param {string} params.farmId - Farm ID
+ * @param {string} params.farmName - Farm display name
+ * @param {string} params.firstName - Invited user's first name
+ * @param {string} params.role - Assigned role (admin/manager/operator/viewer)
+ *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  * por *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  * por *Optional personal message from admin
+ */
+export async function sendInviteEmail({ email, farmId, farmName, firstName, role, tempPassword, personalMessage }) {
+  const loginUrl = 'https://greenreachgreens.com/farm-admin-login.html';
+  const dashboardUrl = 'https://greenreachgreens.com/farm-admin.html';
+  const displayName = firstName || 'there';
+  const roleLabel = (role || 'operator').charAt(0).toUpperCase() + (role || 'operator').slice(1);
+  const messageBlock = personalMessage
+    ? `<p style="color:#4a5568;font-size:14px;line-height:1.6;margin:0 0 24px;padding:16px;background:#f8fafc;border-left:3px solid #10b981;border-radius:4px;font-style:italic;">"${personalMessage}"</p>`
+    : '';
+  const messageText = personalMessage ? `\nMessage from admin: "${personalMessage}"\n` : '';
+
+  const subject = `You've been invited to ${farmName || 'a Light Engine farm'}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px;text-align:center;">
+            <h1 style="color:white;margin:0;font-size:24px;font-weight:700;">You're Invited</h1>
+            <p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Join ${farmName || 'a Light Engine farm'} on Light Engine</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px;">
+            <p style="color:#1a202c;font-size:16px;line-height:1.6;margin:0 0 20px;">
+              Hi ${displayName},
+            </p>
+            <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 24px;">
+              You have been added as a <strong>${roleLabel}</strong> on <strong>${farmName || 'Light Engine'}</strong>. Use the credentials below to log in:
+            </p>
+            ${messageBlock}
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;margin:0 0 24px;">
+              <tr><td style="padding:20px 24px;">
+                <p style="color:#166534;font-weight:700;font-size:15px;margin:0 0 16px;">Your Login Credentials</p>
+                <table width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;width:140px;">Farm ID</td>
+                    <td style="padding:8px 0;color:#1a202c;font-size:16px;font-weight:700;font-family:'SF Mono','Fira Code',Consolas,monospace;">${farmId}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;border-top:1px solid #d1fae5;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Email</td>
+                    <td style="padding:8px 0;border-top:1px solid #d1fae5;color:#1a202c;font-size:15px;font-weight:600;">${email}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;border-top:1px solid #d1fae5;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Temp Password</td>
+                    <td style="padding:8px 0;border-top:1px solid #d1fae5;color:#1a202c;font-size:16px;font-weight:700;font-family:'SF Mono','Fira Code',Consolas,monospace;">${tempPassword}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td align="center" style="padding:8px 0 24px;">
+                <a href="${dashboardUrl}" style="display:inline-block;background:#10b981;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
+                  Go to Farm Dashboard
+                </a>
+              </td></tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:0 0 16px;">
+              <tr><td style="padding:14px 16px;">
+                <p style="color:#92400e;font-weight:700;font-size:13px;margin:0 0 4px;">Save This Email</p>
+                <p style="color:#78350f;font-size:13px;line-height:1.5;margin:0;">
+                  Keep this email for your records. Please change your password after first login.
+                </p>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+            <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>
+            <p style="color:#94a3b8;font-size:12px;margin:0;">
+              <a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `You're Invited to ${farmName || 'Light Engine'}!
+
+Hi ${displayName},
+
+You have been added as a ${roleLabel} on ${farmName || 'Light Engine'}.
+${messageText}
+YOUR LOGIN CREDENTIALS
+----------------------------------------------
+Farm ID:        ${farmId}
+Email:          ${email}
+Temp Password:  ${tempPassword}
+
+GETTING STARTED
+----------------------------------------------
+1. Open: ${dashboardUrl}
+2. Enter your Farm ID and Temporary Password
+3. Change your password after first login
+
+Login page: ${loginUrl}
+
+IMPORTANT: Save this email and change your password after first login.
+
+--
+GreenReach -- The foundation for smarter farms
+greenreachgreens.com`;
+
+  return sendEmail({ to: email, subject, html, text });
+}
+
+
+// ===================================================================
+// Wrapper exports for new notification templates
+// ===================================================================
+
+export async function sendBuyerWelcomeEmail(params) {
+  return _sendBuyerWelcomeEmail(sendEmail, params);
+}
+
+export async function sendBuyerMonthlyStatement(params) {
+  return _sendBuyerMonthlyStatement(sendEmail, params);
+}
+
+export async function sendProducerMonthlyStatement(params) {
+  return _sendProducerMonthlyStatement(sendEmail, params);
+}

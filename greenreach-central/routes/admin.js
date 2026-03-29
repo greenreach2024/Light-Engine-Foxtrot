@@ -1930,7 +1930,22 @@ router.get('/kpis', async (req, res) => {
         } catch (e) {
             console.warn('[Admin API] Farms table query failed:', e.message);
         }
-        
+
+        // Plan type breakdown
+        let planBreakdown = { cloud: 0, research: 0 };
+        try {
+            const planResult = await query(`
+                SELECT COALESCE(plan_type, 'light-engine') as plan_type, COUNT(*) as count
+                FROM farms GROUP BY COALESCE(plan_type, 'light-engine')
+            `);
+            for (const row of planResult.rows) {
+                const key = row.plan_type === 'research' ? 'research' : 'cloud';
+                planBreakdown[key] += parseInt(row.count);
+            }
+        } catch (e) {
+            console.warn('[Admin API] Plan breakdown query failed:', e.message);
+        }
+
         try {
             const ordersResult = await query('SELECT COUNT(*) as total, COALESCE(SUM((order_data->>\'total\')::numeric), 0) as revenue FROM orders WHERE status != $1', ['cancelled']);
             totalOrders = parseInt(ordersResult.rows[0].total);
@@ -1946,7 +1961,8 @@ router.get('/kpis', async (req, res) => {
                 activeFarms,
                 totalOrders,
                 revenue,
-                alerts: 0
+                alerts: 0,
+                planBreakdown
             }
         });
     } catch (error) {
@@ -1956,6 +1972,58 @@ router.get('/kpis', async (req, res) => {
             error: 'Failed to fetch KPIs',
             message: error.message
         });
+    }
+});
+
+/**
+ * GET /api/admin/subscriptions/summary
+ * Subscription + revenue summary by plan type
+ */
+router.get('/subscriptions/summary', async (req, res) => {
+    try {
+        let summary = { plans: [], total_mrr_cents: 0, usage_revenue_cad: 0 };
+
+        try {
+            const planResult = await query(`
+                SELECT
+                    COALESCE(fs.plan_key, 'cloud') as plan_key,
+                    COUNT(*) as subscribers,
+                    COALESCE(SUM(CASE
+                        WHEN fs.plan_key = 'research' THEN 1000
+                        ELSE 2900
+                    END), 0) as mrr_cents
+                FROM farm_subscriptions fs
+                WHERE fs.status = 'active'
+                GROUP BY COALESCE(fs.plan_key, 'cloud')
+                ORDER BY mrr_cents DESC
+            `);
+
+            for (const row of planResult.rows) {
+                summary.plans.push({
+                    plan_key: row.plan_key,
+                    subscribers: parseInt(row.subscribers),
+                    mrr_cents: parseInt(row.mrr_cents)
+                });
+                summary.total_mrr_cents += parseInt(row.mrr_cents);
+            }
+        } catch (e) {
+            console.warn('[Admin API] Subscription summary query failed:', e.message);
+        }
+
+        // Research farm count (including unsubscribed research farms)
+        try {
+            const researchResult = await query(
+                "SELECT COUNT(*) as count FROM farms WHERE plan_type = 'research'"
+            );
+            summary.research_farms_total = parseInt(researchResult.rows[0].count);
+        } catch (e) {
+            summary.research_farms_total = 0;
+        }
+
+        res.json({ success: true, summary });
+    } catch (error) {
+        console.error('[Admin API] Subscription summary error:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch subscription summary' });
     }
 });
 
@@ -2433,169 +2501,147 @@ router.get('/fleet/monitoring', async (req, res) => {
  */
 router.get('/alerts', async (req, res) => {
     try {
-        const { severity, status, farm_id, limit = 50 } = req.query;
+        const { severity, status, farm_id, source, limit = 50 } = req.query;
         const now = new Date();
 
         if (!(await isDatabaseAvailable())) {
             return res.json({
                 success: true,
                 alerts: [],
-                summary: {
-                    total: 0,
-                    active: 0,
-                    acknowledged: 0,
-                    resolved: 0,
-                    critical: 0,
-                    warning: 0,
-                    info: 0
-                },
+                summary: { total: 0, active: 0, acknowledged: 0, resolved: 0, critical: 0, warning: 0, info: 0 },
                 timestamp: now.toISOString()
             });
         }
 
-        const conditions = [];
-        const params = [];
-        let paramIndex = 1;
+        // Unified query across BOTH farm_alerts and admin_alerts tables.
+        // farm_alerts: E.V.I.E.-generated (tool failures, recovery).
+        // admin_alerts: F.A.Y.E.-generated (payments, heartbeat, orders, accounting).
+        // The UNION normalizes column names so the UI gets a consistent shape.
+
+        const farmConditions = [];
+        const adminConditions = [];
+        const farmParams = [];
+        const adminParams = [];
+        let fpIdx = 1;
+        let apIdx = 1;
 
         if (severity) {
-            conditions.push(`fa.severity = $${paramIndex}`);
-            params.push(severity);
-            paramIndex++;
+            farmConditions.push(`fa.severity = $${fpIdx++}`);
+            farmParams.push(severity);
+            adminConditions.push(`aa.severity = $${apIdx++}`);
+            adminParams.push(severity);
         }
-
         if (farm_id) {
-            conditions.push(`f.farm_id = $${paramIndex}`);
-            params.push(farm_id);
-            paramIndex++;
+            farmConditions.push(`fa.farm_id = $${fpIdx++}`);
+            farmParams.push(farm_id);
+            // admin_alerts are platform-level (no farm_id) -- skip this filter for them
         }
-
         if (status) {
-            if (status === 'active') {
-                conditions.push('fa.resolved = false AND fa.acknowledged = false');
-            } else if (status === 'acknowledged') {
-                conditions.push('fa.acknowledged = true AND fa.resolved = false');
-            } else if (status === 'resolved') {
-                conditions.push('fa.resolved = true');
+            const farmStatusCond = status === 'active' ? 'fa.resolved = false AND COALESCE(fa.acknowledged, false) = false'
+                : status === 'acknowledged' ? 'COALESCE(fa.acknowledged, false) = true AND fa.resolved = false'
+                : status === 'resolved' ? 'fa.resolved = true' : null;
+            const adminStatusCond = status === 'active' ? 'aa.resolved = false AND aa.acknowledged = false'
+                : status === 'acknowledged' ? 'aa.acknowledged = true AND aa.resolved = false'
+                : status === 'resolved' ? 'aa.resolved = true' : null;
+            if (farmStatusCond) farmConditions.push(farmStatusCond);
+            if (adminStatusCond) adminConditions.push(adminStatusCond);
+        }
+
+        const farmWhere = farmConditions.length ? 'AND ' + farmConditions.join(' AND ') : '';
+        const adminWhere = adminConditions.length ? 'AND ' + adminConditions.join(' AND ') : '';
+
+        let allAlerts = [];
+
+        // Query farm_alerts (E.V.I.E. source)
+        if (source !== 'admin') {
+            try {
+                const farmResult = await query(
+                    `SELECT fa.id, 'farm' AS source_table,
+                            fa.alert_type AS type, fa.severity, fa.message,
+                            fa.tool, fa.error AS detail, fa.recovery_attempted, fa.recovery_strategy,
+                            COALESCE(fa.acknowledged, false) AS acknowledged, fa.acknowledged_by, fa.acknowledged_at,
+                            fa.resolved, fa.resolved_at, fa.created_at,
+                            fa.farm_id, NULL AS domain
+                     FROM farm_alerts fa
+                     WHERE 1=1 ${farmWhere}
+                     ORDER BY fa.created_at DESC
+                     LIMIT $${fpIdx}`,
+                    [...farmParams, parseInt(limit)]
+                );
+                allAlerts.push(...farmResult.rows);
+            } catch (e) {
+                if (!e.message?.includes('relation')) throw e;
             }
         }
 
-        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
-        let summaryResult;
-        let alertsResult;
-        try {
-            summaryResult = await query(
-                `SELECT
-                    COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE fa.resolved = false AND fa.acknowledged = false) as active,
-                    COUNT(*) FILTER (WHERE fa.acknowledged = true AND fa.resolved = false) as acknowledged,
-                    COUNT(*) FILTER (WHERE fa.resolved = true) as resolved,
-                    COUNT(*) FILTER (WHERE fa.severity = 'critical') as critical,
-                    COUNT(*) FILTER (WHERE fa.severity = 'warning') as warning,
-                    COUNT(*) FILTER (WHERE fa.severity = 'info') as info
-                 FROM farm_alerts fa
-                 JOIN farms f ON f.id = fa.farm_id
-                 ${whereClause}`,
-                params
-            );
-
-            alertsResult = await query(
-                `SELECT
-                    fa.id,
-                    fa.alert_type,
-                    fa.severity,
-                    fa.message,
-                    fa.zone_id,
-                    fa.device_id,
-                    fa.acknowledged,
-                    fa.acknowledged_by,
-                    fa.acknowledged_at,
-                    fa.resolved,
-                    fa.resolved_at,
-                    fa.created_at,
-                    f.farm_id,
-                    f.name as farm_name
-                 FROM farm_alerts fa
-                 JOIN farms f ON f.id = fa.farm_id
-                 ${whereClause}
-                 ORDER BY fa.created_at DESC
-                 LIMIT $${params.length + 1}`,
-                [...params, parseInt(limit)]
-            );
-        } catch (dbError) {
-            const message = dbError?.message || '';
-            if (message.includes('relation') && message.includes('farm_alerts')) {
-                return res.json({
-                    success: true,
-                    alerts: [],
-                    summary: {
-                        total: 0,
-                        active: 0,
-                        acknowledged: 0,
-                        resolved: 0,
-                        critical: 0,
-                        warning: 0,
-                        info: 0
-                    },
-                    timestamp: now.toISOString()
-                });
+        // Query admin_alerts (F.A.Y.E. source)
+        if (source !== 'farm') {
+            try {
+                const adminResult = await query(
+                    `SELECT aa.id, 'admin' AS source_table,
+                            aa.title AS type, aa.severity, aa.title AS message,
+                            aa.source AS tool, aa.detail, false AS recovery_attempted, NULL AS recovery_strategy,
+                            aa.acknowledged, aa.acknowledged_by::text, aa.acknowledged_at,
+                            aa.resolved, aa.resolved_at, aa.created_at,
+                            NULL AS farm_id, aa.domain
+                     FROM admin_alerts aa
+                     WHERE 1=1 ${adminWhere}
+                     ORDER BY aa.created_at DESC
+                     LIMIT $${apIdx}`,
+                    [...adminParams, parseInt(limit)]
+                );
+                allAlerts.push(...adminResult.rows);
+            } catch (e) {
+                if (!e.message?.includes('relation')) throw e;
             }
-            throw dbError;
         }
 
-        const summaryRow = summaryResult.rows[0] || {};
-        const summary = {
-            total: parseInt(summaryRow.total || 0),
-            active: parseInt(summaryRow.active || 0),
-            acknowledged: parseInt(summaryRow.acknowledged || 0),
-            resolved: parseInt(summaryRow.resolved || 0),
-            critical: parseInt(summaryRow.critical || 0),
-            warning: parseInt(summaryRow.warning || 0),
-            info: parseInt(summaryRow.info || 0)
-        };
+        // Sort combined results by created_at descending
+        allAlerts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        allAlerts = allAlerts.slice(0, parseInt(limit));
 
-        const alerts = alertsResult.rows.map(row => {
-            const statusValue = row.resolved
-                ? 'resolved'
-                : row.acknowledged
-                ? 'acknowledged'
-                : 'active';
+        // Compute unified summary
+        const summaryObj = { total: 0, active: 0, acknowledged: 0, resolved: 0, critical: 0, warning: 0, info: 0 };
+        for (const a of allAlerts) {
+            summaryObj.total++;
+            if (a.resolved) summaryObj.resolved++;
+            else if (a.acknowledged) summaryObj.acknowledged++;
+            else summaryObj.active++;
+            if (a.severity === 'critical' || a.severity === 'high') summaryObj.critical++;
+            else if (a.severity === 'warning' || a.severity === 'medium') summaryObj.warning++;
+            else summaryObj.info++;
+        }
 
+        const alerts = allAlerts.map(row => {
+            const statusValue = row.resolved ? 'resolved'
+                : row.acknowledged ? 'acknowledged' : 'active';
             return {
                 id: row.id,
+                source_table: row.source_table,
                 timestamp: row.created_at,
                 farm_id: row.farm_id,
-                farm_name: row.farm_name,
+                farm_name: null,
                 severity: row.severity,
-                type: row.alert_type,
-                category: row.alert_type,
+                type: row.type,
+                category: row.domain || row.type,
                 message: row.message,
+                detail: row.detail || null,
+                tool: row.tool || null,
+                recovery_attempted: row.recovery_attempted || false,
+                recovery_strategy: row.recovery_strategy || null,
                 status: statusValue,
                 acknowledged: row.acknowledged,
                 acknowledged_by: row.acknowledged_by,
                 acknowledged_at: row.acknowledged_at,
                 resolved: row.resolved,
-                resolved_at: row.resolved_at,
-                context: row.zone_id || row.device_id ? {
-                    zone_id: row.zone_id,
-                    device_id: row.device_id
-                } : null
+                resolved_at: row.resolved_at
             };
         });
 
-        res.json({
-            success: true,
-            alerts,
-            summary,
-            timestamp: now.toISOString()
-        });
+        res.json({ success: true, alerts, summary: summaryObj, timestamp: now.toISOString() });
     } catch (error) {
         console.error('[Admin API] Error fetching alerts:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to fetch alerts',
-            message: error.message
-        });
+        res.status(500).json({ success: false, error: 'Failed to fetch alerts', message: error.message });
     }
 });
 
@@ -2615,14 +2661,26 @@ router.post('/alerts/:id/acknowledge', async (req, res) => {
         }
 
         const adminUser = req.adminUser?.email || req.adminUser?.username || 'admin';
+        const sourceTable = req.body?.source_table || 'farm';
 
-        const result = await query(
-            `UPDATE farm_alerts
-             SET acknowledged = true, acknowledged_by = $1, acknowledged_at = NOW()
-             WHERE id = $2 AND acknowledged = false
-             RETURNING id`,
-            [adminUser, alertId]
-        );
+        let result;
+        if (sourceTable === 'admin') {
+            result = await query(
+                `UPDATE admin_alerts
+                 SET acknowledged = TRUE, acknowledged_by = $1, acknowledged_at = NOW()
+                 WHERE id = $2 AND acknowledged = FALSE
+                 RETURNING id`,
+                [adminUser, alertId]
+            );
+        } else {
+            result = await query(
+                `UPDATE farm_alerts
+                 SET acknowledged = true, acknowledged_by = $1, acknowledged_at = NOW()
+                 WHERE id = $2 AND COALESCE(acknowledged, false) = false
+                 RETURNING id`,
+                [adminUser, alertId]
+            );
+        }
 
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Alert not found or already acknowledged' });
@@ -2650,13 +2708,26 @@ router.post('/alerts/:id/resolve', async (req, res) => {
             return res.status(503).json({ success: false, error: 'Database not available' });
         }
 
-        const result = await query(
-            `UPDATE farm_alerts
-             SET resolved = true, resolved_at = NOW()
-             WHERE id = $1 AND resolved = false
-             RETURNING id`,
-            [alertId]
-        );
+        const sourceTable = req.body?.source_table || 'farm';
+
+        let result;
+        if (sourceTable === 'admin') {
+            result = await query(
+                `UPDATE admin_alerts
+                 SET resolved = TRUE, resolved_at = NOW()
+                 WHERE id = $1 AND resolved = FALSE
+                 RETURNING id`,
+                [alertId]
+            );
+        } else {
+            result = await query(
+                `UPDATE farm_alerts
+                 SET resolved = true, resolved_at = NOW()
+                 WHERE id = $1 AND resolved = false
+                 RETURNING id`,
+                [alertId]
+            );
+        }
 
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Alert not found or already resolved' });
@@ -2666,6 +2737,69 @@ router.post('/alerts/:id/resolve', async (req, res) => {
     } catch (error) {
         console.error('[Admin API] Error resolving alert:', error);
         res.status(500).json({ success: false, error: 'Failed to resolve alert' });
+    }
+});
+
+/**
+ * POST /api/admin/alerts/acknowledge-all
+ * Acknowledge all unacknowledged alerts across both tables.
+ */
+router.post('/alerts/acknowledge-all', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+        const adminUser = req.adminUser?.email || req.adminUser?.username || 'admin';
+
+        const farmResult = await query(
+            `UPDATE farm_alerts
+             SET acknowledged = true, acknowledged_by = $1, acknowledged_at = NOW()
+             WHERE COALESCE(acknowledged, false) = false AND resolved = false
+             RETURNING id`,
+            [adminUser]
+        );
+
+        const adminResult = await query(
+            `UPDATE admin_alerts
+             SET acknowledged = TRUE, acknowledged_by = $1, acknowledged_at = NOW()
+             WHERE acknowledged = FALSE AND resolved = FALSE
+             RETURNING id`,
+            [adminUser]
+        );
+
+        const total = farmResult.rows.length + adminResult.rows.length;
+        res.json({ success: true, message: `${total} alert(s) acknowledged`, count: total });
+    } catch (error) {
+        console.error('[Admin API] Error acknowledging all alerts:', error);
+        res.status(500).json({ success: false, error: 'Failed to acknowledge alerts' });
+    }
+});
+
+/**
+ * POST /api/admin/alerts/resolve-all
+ * Resolve all unresolved alerts across both tables.
+ */
+router.post('/alerts/resolve-all', async (req, res) => {
+    try {
+        if (!(await isDatabaseAvailable())) {
+            return res.status(503).json({ success: false, error: 'Database not available' });
+        }
+
+        const farmResult = await query(
+            `UPDATE farm_alerts SET resolved = true, resolved_at = NOW()
+             WHERE resolved = false RETURNING id`
+        );
+
+        const adminResult = await query(
+            `UPDATE admin_alerts SET resolved = TRUE, resolved_at = NOW()
+             WHERE resolved = FALSE RETURNING id`
+        );
+
+        const total = farmResult.rows.length + adminResult.rows.length;
+        res.json({ success: true, message: `${total} alert(s) resolved`, count: total });
+    } catch (error) {
+        console.error('[Admin API] Error resolving all alerts:', error);
+        res.status(500).json({ success: false, error: 'Failed to resolve alerts' });
     }
 });
 

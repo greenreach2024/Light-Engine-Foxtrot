@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
 import { query, isDatabaseAvailable } from '../config/database.js';
+import { pushSocialNotification } from '../services/scott-social-push.js';
 import { sendWelcomeEmail } from '../services/email.js';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
 
@@ -374,6 +375,20 @@ router.get('/api/farms/verify-session/:sessionId', async (req, res) => {
         result.email_sent = false;
       }
 
+
+      // Push social notification via SCOTT for new producer (non-blocking)
+      if (!result.existing_account) {
+        pushSocialNotification({
+          platform: 'linkedin',
+          sourceType: 'milestone',
+          sourceContext: {
+            event: 'new_producer',
+            farmName: result.farm_name,
+            planType: result.plan_type,
+          },
+          customInstructions: 'Announce a new farm joining the GreenReach platform. Celebrate the growth of local agriculture. Do not reveal the farm name unless it is clearly a business entity.',
+        }).catch(err => console.warn('[SCOTT] New producer social push failed:', err.message));
+      }
       return res.json(result);
     }
 
@@ -455,6 +470,20 @@ router.get('/api/farms/verify-session/:sessionId', async (req, res) => {
       }
     } else {
       result.email_sent = false;
+    }
+
+    // Push social notification via SCOTT for new producer (non-blocking)
+    if (!result.existing_account) {
+      pushSocialNotification({
+        platform: 'linkedin',
+        sourceType: 'milestone',
+        sourceContext: {
+          event: 'new_producer',
+          farmName: result.farm_name,
+          planType: result.plan_type,
+        },
+        customInstructions: 'Announce a new farm joining the GreenReach platform. Celebrate the growth of local agriculture. Do not reveal the farm name unless it is clearly a business entity.',
+      }).catch(err => console.warn('[SCOTT] New producer social push failed:', err.message));
     }
 
     res.json(result);

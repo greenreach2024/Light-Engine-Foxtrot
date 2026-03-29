@@ -863,6 +863,96 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+  // ── Farm Alert Management (E.V.I.E.-generated alerts in farm_alerts table) ──
+
+  'acknowledge_farm_alert': {
+    description: 'Acknowledge a farm-level alert from E.V.I.E. (tool failures, recovery attempts). Use this when the admin has reviewed an alert and wants to mark it as seen. These are the alerts visible in the Alert Management dashboard.',
+    category: 'write',
+    trust_tier: 'auto',
+    required: ['alert_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE farm_alerts SET acknowledged = true, acknowledged_by = 'faye', acknowledged_at = NOW()
+           WHERE id = $1 AND COALESCE(acknowledged, false) = false RETURNING id`,
+          [parseInt(params.alert_id, 10)]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Farm alert not found or already acknowledged' };
+        return { ok: true, alert_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'resolve_farm_alert': {
+    description: 'Resolve a farm-level alert from E.V.I.E. Use this when the issue has been addressed or is no longer relevant. These are the alerts visible in the Alert Management dashboard.',
+    category: 'write',
+    trust_tier: 'quick_confirm',
+    required: ['alert_id'],
+    optional: [],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const result = await dbQuery(
+          `UPDATE farm_alerts SET resolved = true, resolved_at = NOW()
+           WHERE id = $1 AND resolved = false RETURNING id`,
+          [parseInt(params.alert_id, 10)]
+        );
+        if (result.rows.length === 0) return { ok: false, error: 'Farm alert not found or already resolved' };
+        return { ok: true, alert_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'resolve_all_alerts': {
+    description: 'Resolve ALL unresolved alerts across both admin_alerts (F.A.Y.E. intelligence) and farm_alerts (E.V.I.E. tool failures). Use when the admin says "clear all alerts" or "resolve everything". This is a batch operation.',
+    category: 'write',
+    trust_tier: 'quick_confirm',
+    required: [],
+    optional: ['source'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        let farmCount = 0;
+        let adminCount = 0;
+        if (!params.source || params.source === 'farm' || params.source === 'all') {
+          const r = await dbQuery(`UPDATE farm_alerts SET resolved = true, resolved_at = NOW() WHERE resolved = false RETURNING id`);
+          farmCount = r.rows.length;
+        }
+        if (!params.source || params.source === 'admin' || params.source === 'all') {
+          const r = await dbQuery(`UPDATE admin_alerts SET resolved = TRUE, resolved_at = NOW() WHERE resolved = FALSE RETURNING id`);
+          adminCount = r.rows.length;
+        }
+        return { ok: true, resolved_farm: farmCount, resolved_admin: adminCount, total: farmCount + adminCount };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'acknowledge_all_alerts': {
+    description: 'Acknowledge ALL unacknowledged alerts across both tables. Use when the admin says "acknowledge all" or "mark all seen".',
+    category: 'write',
+    trust_tier: 'auto',
+    required: [],
+    optional: ['source'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        let farmCount = 0;
+        let adminCount = 0;
+        if (!params.source || params.source === 'farm' || params.source === 'all') {
+          const r = await dbQuery(`UPDATE farm_alerts SET acknowledged = true, acknowledged_by = 'faye', acknowledged_at = NOW() WHERE COALESCE(acknowledged, false) = false AND resolved = false RETURNING id`);
+          farmCount = r.rows.length;
+        }
+        if (!params.source || params.source === 'admin' || params.source === 'all') {
+          const r = await dbQuery(`UPDATE admin_alerts SET acknowledged = TRUE, acknowledged_by = 0, acknowledged_at = NOW() WHERE acknowledged = FALSE AND resolved = FALSE RETURNING id`);
+          adminCount = r.rows.length;
+        }
+        return { ok: true, acknowledged_farm: farmCount, acknowledged_admin: adminCount, total: farmCount + adminCount };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
   // ── Accounting Write Tools ──
 
   'classify_transaction': {
@@ -3827,8 +3917,8 @@ function _leHeaders(extra = {}) {
 // ADMIN: Critical action — require admin to type the action name
 
 export const TRUST_TIERS = {
-  auto: new Set(['create_alert', 'acknowledge_alert', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications']),
-  quick_confirm: new Set(['resolve_alert', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
+  auto: new Set(['create_alert', 'acknowledge_alert', 'acknowledge_farm_alert', 'acknowledge_all_alerts', 'save_admin_memory', 'update_farm_notes', 'store_insight', 'record_outcome', 'rate_alert', 'log_shadow_decision', 'send_message_to_evie', 'record_recommendation_feedback', 'review_producer_applications']),
+  quick_confirm: new Set(['resolve_alert', 'resolve_farm_alert', 'resolve_all_alerts', 'classify_transaction', 'archive_insight', 'set_domain_ownership']),
   confirm: new Set(['send_admin_email', 'send_sms', 'approve_producer_application', 'reject_producer_application']),
   confirm: new Set(['send_admin_email', 'send_sms']),
   admin: new Set(['process_refund'])

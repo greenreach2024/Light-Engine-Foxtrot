@@ -109,6 +109,9 @@ import stripePaymentsRouter from './routes/stripe-payments.js';
 import paymentWebhooksRouter from './routes/payment-webhooks.js';
 import adminAssistantRouter from './routes/admin-assistant.js';
 import adminOpsAgentRouter from './routes/admin-ops-agent.js';
+import scottMarketingRouter from './routes/scott-marketing-agent.js';
+import gwenResearchRouter from './routes/gwen-research-agent.js';
+import adminMarketingRouter from './routes/admin-marketing.js';
 
 // Grant wizard — enabled by default (set ENABLE_GRANT_WIZARD=false to disable)
 import adminPricingRoutes from './routes/admin-pricing.js';
@@ -1592,6 +1595,7 @@ app.use(async (req, res, next) => {
         audience: 'greenreach-farms'
       });
       req.farmId = payload.farm_id;
+      req.plan_type = payload.plan_type || 'light-engine';
       req.farmAuth = { method: 'jwt', role: payload.role, email: payload.email };
       return next();
     } catch (_) { /* fall through */ }
@@ -3332,6 +3336,7 @@ app.use('/api', researchAuthGuard, researchDeadlinesRouter);
 app.use('/api', researchAuthGuard, researchPublicationsRouter);
 app.use('/api', researchAuthGuard, researchEquipmentRouter);
 app.use('/api', researchAuthGuard, researchLineageRouter);
+app.use('/api/research/gwen', researchAuthGuard, gwenResearchRouter); // G.W.E.N. research intelligence agent
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);
 app.use('/api/sync', syncRoutes); // Farms authenticate via API key
@@ -3346,6 +3351,8 @@ app.use('/api/campaign', campaignRoutes); // Field of Dreams campaign (public)
 app.use('/api/admin/network-devices', adminAuthMiddleware, networkDevicesRoutes); // I-3.11: Network device analytics
 app.use('/api/admin/assistant', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminAssistantRouter); // F.A.Y.E. admin AI assistant
 app.use('/api/admin/ops', adminAuthMiddleware, requireAdminRole('admin'), adminOpsAgentRouter); // F.A.Y.E. tool catalog & gateway
+app.use('/api/admin/scott', adminAuthMiddleware, requireAdminRole('admin', 'editor'), scottMarketingRouter); // S.C.O.T.T. marketing agent
+app.use('/api/admin/marketing', adminAuthMiddleware, requireAdminRole('admin', 'editor'), adminMarketingRouter); // Marketing dashboard endpoints (queue, publish, settings)
 app.use('/api/reports', authOrAdminMiddleware, reportsRoutes); // Financial exports and reports
 app.use('/api/ai-insights', authOrAdminMiddleware, aiInsightsRoutes); // GPT-4 powered AI insights
 app.use('/api/tts', ttsRoutes); // OpenAI TTS voice synthesis (rate-limited per IP, no auth needed)

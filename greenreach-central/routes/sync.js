@@ -663,7 +663,9 @@ router.get('/status', authenticateFarm, async (req, res) => {
       // Get last sync times from database
       const result = await query(
         `SELECT data_type, updated_at, 
-         jsonb_array_length(data) as count
+         CASE WHEN jsonb_typeof(data) = 'array' THEN jsonb_array_length(data)
+              ELSE 1
+         END as count
          FROM farm_data 
          WHERE farm_id = $1
          ORDER BY updated_at DESC`,
@@ -831,6 +833,24 @@ router.post('/heartbeat', authenticateFarm, async (req, res) => {
       );
       
       logger.info(`[Sync] Farm ${farmId} upserted successfully with status ${dbStatus}`);
+
+      // Also update farm_heartbeats so F.A.Y.E. intelligence monitoring stays current
+      try {
+        await query(
+          `INSERT INTO farm_heartbeats (farm_id, farm_name, cpu_percent, memory_percent, disk_percent, metadata, last_seen_at, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+          [
+            farmId,
+            farmName,
+            stats?.cpu || null,
+            stats?.memory || null,
+            stats?.disk || null,
+            JSON.stringify(metadata || {})
+          ]
+        );
+      } catch (hbErr) {
+        logger.warn(`[Sync] farm_heartbeats insert failed (non-fatal): ${hbErr.message}`);
+      }
     }
     
     res.json({ 

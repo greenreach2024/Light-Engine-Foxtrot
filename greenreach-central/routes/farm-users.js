@@ -13,6 +13,7 @@ import { Router } from 'express';
 import { query, isDatabaseAvailable } from '../config/database.js';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import { sendInviteEmail } from '../services/email.js';
 
 const router = Router();
 function getJwtSecret() {
@@ -27,7 +28,7 @@ const JWT_SECRET = getJwtSecret();
 router.post('/create', async (req, res) => {
   try {
     const farmId = req.farmId || req.body.farm_id;
-    const { email, name, first_name, last_name, role = 'operator', password } = req.body;
+    const { email, name, first_name, last_name, role = 'operator', password, sendEmail: shouldSendEmail, farmName, personalMessage } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email and password required' });
@@ -50,7 +51,27 @@ router.post('/create', async (req, res) => {
            updated_at = NOW()`,
         [crypto.randomUUID(), farmId, email.toLowerCase(), firstName, lastName, role, hash]
       );
-      res.json({ success: true, message: 'User created' });
+
+      // Send invitation email if requested
+      let emailResult = { sent: false };
+      if (shouldSendEmail) {
+        try {
+          emailResult = await sendInviteEmail({
+            email: email.toLowerCase(),
+            farmId,
+            farmName: farmName || 'Light Engine Farm',
+            firstName,
+            role,
+            tempPassword: password,
+            personalMessage
+          });
+          console.log(`[FarmUsers] Invite email to ${email}: ${emailResult.sent ? 'sent' : 'failed — ' + (emailResult.error || 'unknown')}`);
+        } catch (emailErr) {
+          console.error(`[FarmUsers] Invite email error for ${email}:`, emailErr.message);
+        }
+      }
+
+      res.json({ success: true, message: 'User created', emailSent: emailResult.sent });
     } else {
       res.json({ success: true, message: 'User created (in-memory — no DB)', user: { email, role } });
     }

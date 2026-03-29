@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.6.0
-**Date**: March 28, 2026
-**Last Updated**: March 28, 2026 -- v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). Previous: v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
+**Version**: 1.7.0
+**Date**: March 29, 2026
+**Last Updated**: March 29, 2026 -- v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. Previous: v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -115,7 +115,7 @@
 | CNAME | light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com |
 | Platform | Node.js 20 on 64bit Amazon Linux 2023 |
 | Instance | t3.small |
-| Auto Scaling | Min 1, Max 4 |
+| Auto Scaling | Min 1, Max 1 (pinned -- AWS account block on launch) |
 | Storage | gp3 20 GB |
 | Entry Point | node server-foxtrot.js (via Procfile) |
 | Health Check | /health (30s interval) |
@@ -603,7 +603,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/orders | routes/orders.js | Order management |
 | /api/alerts | routes/alerts.js | Alert configuration |
 | /api/sync | routes/sync.js | Farm data sync, API key auth |
-| /api/farm-settings | routes/farm-settings.js | Settings sync to edge |
+| /api/farm-settings | routes/farm-settings.js | Settings sync to edge (DB-backed via farm_data) |
 | /api/recipes | routes/recipes.js | Public recipe API |
 | /api/wholesale | routes/wholesale.js | Wholesale marketplace |
 | /api/square-proxy | routes/square-oauth-proxy.js | Square OAuth flow |
@@ -2176,6 +2176,38 @@ When you change a file, here is what else is affected:
 - **Price range**: $3.53/each (tomato) to $66.97/lb (French Tarragon). 16 unique price points across 108 crops.
 - **Deploy**: Central only (ai-pricing-fix-perlb-20260327).
 
+
+### 13.6 RESOLVED -- AI AGENT + DATA PERSISTENCE FIXES (v1.7.0)
+
+#### E-023: RESOLVED -- E.V.I.E. LLM Failover (No Fallback Provider)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/assistant-chat.js
+- **Problem**: E.V.I.E. used GPT-4o-mini as sole LLM. Any OpenAI outage caused full AI assistant failure.
+- **Fix Applied**: Added Anthropic (Claude Sonnet 4) as fallback LLM. chatWithAnthropicFallback() implements full tool-calling loop. Both /chat and /chat/stream catch blocks fall back to Anthropic on OpenAI failure. /status endpoint now reports llm.primary and llm.fallback availability.
+
+#### E-024: RESOLVED -- F.A.Y.E. Auto-Recovery (Tool Execution Failures)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/admin-assistant.js
+- **Problem**: F.A.Y.E. tool execution failures (DB timeouts, connection drops) caused immediate error without retry.
+- **Fix Applied**: attemptAdminAutoRecovery() with 3 strategies: DB retry (1s), connection retry (2s), constraint violation hinting. Wired into both chatWithClaude and chatWithOpenAI tool loops.
+
+#### E-025: RESOLVED -- Heartbeat False Alerts (Data Source Mismatch)
+- **Status**: RESOLVED
+- **File**: greenreach-central/services/faye-intelligence.js, greenreach-central/routes/sync.js
+- **Problem**: F.A.Y.E. intelligence checked farm_heartbeats table, but sync-service heartbeats only wrote to farms.last_heartbeat. farm_heartbeats was permanently stale, triggering false "farm offline" alerts. Query also returned all historical rows instead of latest per farm.
+- **Fix Applied**: (1) faye-intelligence.js now queries farms table with GREATEST(farms.last_heartbeat, MAX(farm_heartbeats.last_seen_at)), one row per farm, filters inactive farms. (2) sync.js POST /api/sync/heartbeat now also inserts into farm_heartbeats. (3) Alert text removed "or hardware issues" (cloud-only architecture).
+
+#### E-026: RESOLVED -- Farm Settings Lost on Restart (In-Memory Only)
+- **Status**: RESOLVED
+- **File**: greenreach-central/routes/farm-settings.js
+- **Problem**: farmSettingsStore was a pure in-memory Map. Certifications, notification preferences, and display preferences were lost on EB restart with no recovery mechanism.
+- **Fix Applied**: Added persistSettingsToDB() that writes to farm_data table (data_type='farm_settings') on every change. Added hydrateFarmSettings() that restores from DB on module load. 4 persist calls (certifications, ack, notify-preferences, display-preferences).
+
+#### E-027: RESOLVED -- Custom Product Image Upload Broken (Field Name Mismatch)
+- **Status**: RESOLVED
+- **File**: greenreach-central/public/central-admin.js, greenreach-central/routes/custom-products.js
+- **Problem**: Frontend sent image file with field name 'thumbnail' (formData.append('thumbnail', ...)) but backend multer expected field name 'image' (upload.single('image')). All image uploads silently failed with req.file being undefined.
+- **Fix Applied**: Changed frontend to formData.append('image', thumbnailFile) to match backend expectation.
 
 #### Pricing Formula Reference (v1.3.0)
 - **Formula**: `wholesale_price = max(floor, retail_price * sku_factor)`
