@@ -2613,6 +2613,108 @@ export const TOOL_CATALOG = {
     }
   },
 
+  // ─── Phase 2 Research Operations Tools ─────────────────────────────────
+  'get_grant_dashboard': {
+    description: 'Get grant administration dashboard for the farm. Shows active grants, upcoming milestones, pending reports, and HQP counts.',
+    category: 'read',
+    required: [],
+    optional: ['grant_id'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        if (params.grant_id) {
+          const dash = await dbQuery(`
+            SELECT ga.id, ga.title, ga.funding_agency, ga.status, ga.amount_awarded,
+              (SELECT COUNT(*) FROM grant_milestones gm WHERE gm.grant_id = ga.id AND gm.status = 'pending') as pending_milestones,
+              (SELECT COUNT(*) FROM grant_reports gr WHERE gr.grant_id = ga.id AND gr.status = 'pending') as pending_reports,
+              (SELECT COUNT(*) FROM trainee_records tr WHERE tr.grant_id = ga.id AND tr.status = 'active') as active_hqp
+            FROM grant_applications ga WHERE ga.id = $1 AND ga.farm_id = $2
+          `, [params.grant_id, farmId]);
+          return { ok: true, grant: dash.rows[0] || null };
+        }
+        const grants = await dbQuery(`
+          SELECT ga.id, ga.title, ga.funding_agency, ga.status, ga.amount_awarded, ga.end_date,
+            (SELECT COUNT(*) FROM trainee_records tr WHERE tr.grant_id = ga.id AND tr.status = 'active') as active_hqp
+          FROM grant_applications ga WHERE ga.farm_id = $1 AND ga.status IN ('active', 'awarded')
+          ORDER BY ga.end_date ASC NULLS LAST
+        `, [farmId]);
+        return { ok: true, grants: grants.rows, count: grants.rows.length };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_ethics_status': {
+    description: 'Get ethics and biosafety approval status. Shows active approvals, expiring within 60 days, and pending reviews.',
+    category: 'read',
+    required: [],
+    optional: ['study_id'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const queryParams = [farmId];
+        let studyFilter = '';
+        if (params.study_id) { studyFilter = ` AND ea.study_id = $${queryParams.push(params.study_id)}`; }
+        const active = await dbQuery(`SELECT ea.id, ea.protocol_title, ea.ethics_type, ea.status, ea.expiry_date FROM ethics_applications ea WHERE ea.farm_id = $1 AND ea.status = 'approved' ${studyFilter} ORDER BY ea.expiry_date ASC NULLS LAST`, queryParams);
+        const expiring = await dbQuery(`SELECT ea.id, ea.protocol_title, ea.expiry_date FROM ethics_applications ea WHERE ea.farm_id = $1 AND ea.status = 'approved' AND ea.expiry_date <= NOW() + INTERVAL '60 days' ${studyFilter} ORDER BY ea.expiry_date ASC`, queryParams);
+        return { ok: true, active: active.rows, expiring_soon: expiring.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_hqp_summary': {
+    description: 'Get HQP (trainee) summary. Shows trainee counts by type, active trainees, and milestone progress.',
+    category: 'read',
+    required: [],
+    optional: ['grant_id'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const queryParams = [farmId];
+        let grantFilter = '';
+        if (params.grant_id) { grantFilter = ` AND tr.grant_id = $${queryParams.push(params.grant_id)}`; }
+        const byType = await dbQuery(`SELECT trainee_type, status, COUNT(*) as count FROM trainee_records tr WHERE tr.farm_id = $1 ${grantFilter} GROUP BY trainee_type, status ORDER BY count DESC`, queryParams);
+        const milestones = await dbQuery(`SELECT tm.status, COUNT(*) as count FROM trainee_milestones tm WHERE tm.farm_id = $1 GROUP BY tm.status`, [farmId]);
+        return { ok: true, by_type: byType.rows, milestone_status: milestones.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_partner_network': {
+    description: 'Get partner institution network summary. Shows partners by type and agreement status.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const partners = await dbQuery(`SELECT partner_type, status, COUNT(*) as count FROM partner_institutions WHERE farm_id = $1 GROUP BY partner_type, status ORDER BY count DESC`, [farmId]);
+        const agreements = await dbQuery(`SELECT dsa.agreement_type, dsa.status, COUNT(*) as count FROM data_sharing_agreements dsa JOIN partner_institutions p ON dsa.partner_id = p.id WHERE p.farm_id = $1 GROUP BY dsa.agreement_type, dsa.status ORDER BY count DESC`, [farmId]);
+        return { ok: true, partners: partners.rows, agreements: agreements.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+  'get_security_overview': {
+    description: 'Get research data security overview. Shows data classifications, open incidents, and recent audits.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const classifications = await dbQuery(`SELECT classification_level, COUNT(*) as count FROM data_classifications WHERE farm_id = $1 GROUP BY classification_level`, [farmId]);
+        const incidents = await dbQuery(`SELECT severity, status, COUNT(*) as count FROM security_incidents WHERE farm_id = $1 AND status NOT IN ('closed', 'dismissed') GROUP BY severity, status ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END`, [farmId]);
+        return { ok: true, classifications: classifications.rows, open_incidents: incidents.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
   // ─── EVIE Scanning Integration Tools ─────────────────────────────────
   'scan_bus_channels': {
     description: 'Scan all bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered devices with addresses, protocols, and suggested types. Use this to begin device onboarding.',

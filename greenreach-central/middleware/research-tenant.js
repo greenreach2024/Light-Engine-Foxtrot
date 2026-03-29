@@ -258,6 +258,39 @@ async function checkContributionOwnership(contribId, farmId) {
   return checkDirectOwnership('authorship_contributions', contribId, farmId);
 }
 
+
+async function checkGrantOwnership(grantId, farmId) {
+  return checkDirectOwnership('grant_applications', grantId, farmId);
+}
+
+async function checkEthicsOwnership(ethicsId, farmId) {
+  return checkDirectOwnership('ethics_applications', ethicsId, farmId);
+}
+
+async function checkBiosafetyOwnership(biosafetyId, farmId) {
+  return checkDirectOwnership('biosafety_protocols', biosafetyId, farmId);
+}
+
+async function checkTraineeOwnership(traineeId, farmId) {
+  return checkDirectOwnership('trainee_records', traineeId, farmId);
+}
+
+async function checkPartnerOwnership(partnerId, farmId) {
+  return checkDirectOwnership('partner_institutions', partnerId, farmId);
+}
+
+async function checkAgreementOwnership(agreementId, farmId) {
+  return checkDirectOwnership('data_sharing_agreements', agreementId, farmId);
+}
+
+async function checkClassificationOwnership(classId, farmId) {
+  return checkDirectOwnership('data_classifications', classId, farmId);
+}
+
+async function checkIncidentOwnership(incidentId, farmId) {
+  return checkDirectOwnership('security_incidents', incidentId, farmId);
+}
+
 // ── Middleware Factories ────────────────────────────────────────────
 
 function makeOwnershipMiddleware(checker, paramName, entityLabel) {
@@ -306,3 +339,11 @@ export const verifyChangeRequestOwnership = makeOwnershipMiddleware(checkChangeR
 export const verifyCOIOwnership = makeOwnershipMiddleware(checkCOIOwnership, 'id', 'COI declaration');
 export const verifyApprovalOwnership = makeOwnershipMiddleware(checkApprovalOwnership, 'id', 'Approval');
 export const verifyContributionOwnership = makeOwnershipMiddleware(checkContributionOwnership, 'id', 'Contribution');
+export const verifyGrantOwnership = makeOwnershipMiddleware(checkGrantOwnership, 'id', 'Grant');
+export const verifyEthicsOwnership = makeOwnershipMiddleware(checkEthicsOwnership, 'id', 'Ethics application');
+export const verifyBiosafetyOwnership = makeOwnershipMiddleware(checkBiosafetyOwnership, 'id', 'Biosafety protocol');
+export const verifyTraineeOwnership = makeOwnershipMiddleware(checkTraineeOwnership, 'id', 'Trainee');
+export const verifyPartnerOwnership = makeOwnershipMiddleware(checkPartnerOwnership, 'id', 'Partner');
+export const verifyAgreementOwnership = makeOwnershipMiddleware(checkAgreementOwnership, 'id', 'Agreement');
+export const verifyClassificationOwnership = makeOwnershipMiddleware(checkClassificationOwnership, 'id', 'Classification');
+export const verifyIncidentOwnership = makeOwnershipMiddleware(checkIncidentOwnership, 'id', 'Incident');

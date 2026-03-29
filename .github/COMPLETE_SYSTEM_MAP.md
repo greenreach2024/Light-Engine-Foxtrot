@@ -625,10 +625,15 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm/products | routes/custom-products.js | Custom farm product CRUD + image upload |
-| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops) |
+| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops, grants, ethics, hqp, partners, security) |
 | /api/research/recipes | routes/research-recipes.js | Beta recipe lifecycle: versions, deployments, comparisons, eligibility, rollback |
 | /api/research/audit | routes/research-audit.js | Immutable audit log, COI declarations, signoffs, approval chains, contributions |
 | /api/research/studies/:id/notes,tasks,change-requests | routes/research-workspace-ops.js | Workspace operations: notes, tasks, change requests, milestone evidence |
+| /api/research/grants | routes/research-grants.js | NSERC/tri-council grant lifecycle: applications, reports, publications, milestones, extensions, amendments |
+| /api/research/ethics, /api/research/studies/:id/ethics,biosafety | routes/research-ethics.js | Ethics review (REB), biosafety protocols, amendments, renewals, dashboard |
+| /api/research/trainees, /api/research/edi | routes/research-hqp.js | HQP trainee records, supervision, milestones, professional development, EDI self-identification |
+| /api/research/partners | routes/research-partners.js | Partner institutions, data sharing agreements, contacts, partner network dashboard |
+| /api/research/security | routes/research-security.js | Data classification, access policies, security incidents, audits, security dashboard |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
 | /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
@@ -1561,6 +1566,74 @@ EnvStore
 
 **data_quality_alerts** (id SERIAL PK)
 - farm_id, dataset_id, variable_name, alert_type (missing|outlier|drift|gap), severity (low|medium|high), message, detected_at, resolved, resolved_at
+
+### 8.13 Research Platform (Phase 2)
+
+**grant_applications** (id SERIAL PK)
+- farm_id, study_id, title, funding_agency (NSERC|CIHR|SSHRC|CFI|MITACS|provincial|internal|other), program, amount_requested, amount_awarded, currency, pi_name, pi_institution, co_investigators JSONB, grant_number, start_date, end_date, status (draft|submitted|under_review|awarded|active|completed|declined|withdrawn|suspended|terminated), created_at, updated_at
+
+**grant_reports** (id SERIAL PK)
+- grant_id, farm_id, report_type (progress|financial|annual|final|interim), title, content, period_start, period_end, status (draft|submitted|accepted|revision_required), submitted_at, created_at, updated_at
+
+**grant_publications** (id SERIAL PK)
+- grant_id, farm_id, publication_type (journal_article|conference_paper|thesis|technical_report|book_chapter|preprint|dataset), title, authors JSONB, journal_or_venue, doi, year, status (draft|submitted|accepted|published), acknowledgment_text, created_at, updated_at
+
+**grant_milestones** (id SERIAL PK)
+- grant_id, farm_id, title, description, due_date, completed_date, status (pending|in_progress|completed|overdue), created_at, updated_at
+
+**grant_extensions** (id SERIAL PK)
+- grant_id, farm_id, extension_type, reason, original_end_date, new_end_date, status (requested|approved|denied), requested_at, decided_at, created_at
+
+**grant_amendments** (id SERIAL PK)
+- grant_id, farm_id, amendment_type, description, amount_change, justification, status (draft|submitted|approved|denied), submitted_at, decided_at, created_at, updated_at
+
+**ethics_applications** (id SERIAL PK)
+- farm_id, study_id, protocol_title, protocol_number, ethics_type (human_ethics|animal_ethics|biosafety|environmental|dual_use), risk_level (minimal|low|medium|high), involves_humans, involves_animals, involves_biohazards, reb_name, submission_date, decision_date, expiry_date, conditions JSONB, status (draft|submitted|under_review|approved|approved_with_conditions|revisions_required|declined), created_at, updated_at
+
+**ethics_amendments** (id SERIAL PK)
+- ethics_id, farm_id, amendment_type, description, submitted_at, status (submitted|approved|denied), decided_at, created_at
+
+**ethics_renewals** (id SERIAL PK)
+- ethics_id, farm_id, renewal_year, submitted_at, new_expiry_date, status (submitted|approved|denied), decided_at, changes_description, created_at
+
+**biosafety_protocols** (id SERIAL PK)
+- farm_id, study_id, protocol_title, containment_level (1|2|3|4), agents JSONB, risk_assessment JSONB, ppe_requirements JSONB, waste_procedures JSONB, emergency_procedures, status (draft|active|expired|revoked), approved_date, expiry_date, created_at, updated_at
+
+**trainee_records** (id SERIAL PK)
+- farm_id, study_id, grant_id, name, email, institution, department, trainee_type (undergraduate|masters|phd|postdoc|research_associate|technician|visiting_scholar|co_op|intern), program, supervisor_name, start_date, expected_end_date, actual_end_date, status (active|completed|withdrawn|on_leave), outcome, created_at, updated_at
+
+**supervision_meetings** (id SERIAL PK)
+- trainee_id, farm_id, meeting_date, attendees JSONB, agenda, notes, action_items JSONB, next_meeting_date, created_at
+
+**trainee_milestones** (id SERIAL PK)
+- trainee_id, farm_id, milestone_type (comprehensive_exam|thesis_proposal|thesis_defense|publication|conference_presentation|progress_report|coursework_complete|ethics_training|safety_training), title, description, due_date, completed_date, status (pending|in_progress|completed|overdue), created_at, updated_at
+
+**professional_development** (id SERIAL PK)
+- trainee_id, farm_id, activity_type, title, description, activity_date, hours, provider, certificate_url, created_at
+
+**edi_self_identification** (id SERIAL PK)
+- farm_id, category (gender|indigenous|visible_minority|disability|prefer_not_to_say), response, created_at
+
+**partner_institutions** (id SERIAL PK)
+- farm_id, name, partner_type (university|college|research_institute|government|industry|hospital|ngo|international), country, province_state, address, website, notes, status (active|inactive), created_at, updated_at
+
+**data_sharing_agreements** (id SERIAL PK)
+- partner_id, farm_id, agreement_type (data_sharing|material_transfer|collaboration|non_disclosure|intellectual_property|service), title, description, data_types JSONB, access_level, start_date, end_date, terms JSONB, signed_date, signed_by, status (draft|submitted|under_review|approved|revisions_required|rejected|active|expired|terminated|renewed|withdrawn|cancelled), created_at, updated_at
+
+**partner_contacts** (id SERIAL PK)
+- partner_id, farm_id, name, email, role, department, phone, created_at, updated_at
+
+**data_classifications** (id SERIAL PK)
+- farm_id, resource_type, resource_id, classification_level (public|internal|confidential|restricted), justification, handling_instructions, retention_period_days, created_at, updated_at
+
+**access_control_policies** (id SERIAL PK)
+- farm_id, name, description, classification_level, allowed_roles JSONB, requires_mfa, requires_vpn, max_export_rows, ip_restrictions JSONB, created_at, updated_at
+
+**security_incidents** (id SERIAL PK)
+- farm_id, incident_type, severity (low|medium|high|critical), title, description, affected_resources JSONB, reported_by, containment_actions JSONB, root_cause, remediation_steps JSONB, lessons_learned, status (reported|investigating|contained|escalated|remediating|resolved|dismissed|closed), reported_at, resolved_at, created_at, updated_at
+
+**security_audits** (id SERIAL PK)
+- farm_id, audit_type, scope, findings JSONB, recommendations JSONB, auditor, audit_date, next_audit_date, created_at
 
 ---
 

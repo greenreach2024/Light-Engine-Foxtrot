@@ -2,7 +2,7 @@
 
 **Version**: 1.6.0
 **Date**: March 28, 2026
-**Last Updated**: March 28, 2026 -- v1.6.0: Security audit schema compatibility (farm_heartbeats last_seen_at + compatibility columns), run_security_audit anomaly/explainability expansion, EVIE/FAYE chat memory persistence restored in presence UIs, recent-changes repository diagnostics hardening
+**Last Updated**: March 28, 2026 -- v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). Previous: v1.4.0: Wholesale remediation (order expiry, payment reconciliation, inventory hold-to-commit), Square connection cleanup (wizard removed, standalone payment-setup.html), POS auto-login fix (embedded iframe token sharing), FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 
@@ -50,7 +50,7 @@
 |                           |  |                           |
 | PostgreSQL (RDS)          |  | EnvStore (in-memory)      |
 | farmStore (in-memory)     |  | env-state.json (file)     |
-| 45+ database tables       |  | NeDB / SQLite             |
+| 70+ database tables       |  | NeDB / SQLite             |
 |                           |  |                           |
 | F.A.Y.E. (admin AI)      |  | E.V.I.E. (farm AI)       |
 | Admin dashboard           |  | Farm dashboard             |
@@ -624,6 +624,16 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/market-intelligence | routes/market-intelligence.js | North American market data |
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
+| /api/farm/products | routes/custom-products.js | Custom farm product CRUD + image upload |
+| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops, grants, ethics, hqp, partners, security) |
+| /api/research/recipes | routes/research-recipes.js | Beta recipe lifecycle: versions, deployments, comparisons, eligibility, rollback |
+| /api/research/audit | routes/research-audit.js | Immutable audit log, COI declarations, signoffs, approval chains, contributions |
+| /api/research/studies/:id/notes,tasks,change-requests | routes/research-workspace-ops.js | Workspace operations: notes, tasks, change requests, milestone evidence |
+| /api/research/grants | routes/research-grants.js | NSERC/tri-council grant lifecycle: applications, reports, publications, milestones, extensions, amendments |
+| /api/research/ethics, /api/research/studies/:id/ethics,biosafety | routes/research-ethics.js | Ethics review (REB), biosafety protocols, amendments, renewals, dashboard |
+| /api/research/trainees, /api/research/edi | routes/research-hqp.js | HQP trainee records, supervision, milestones, professional development, EDI self-identification |
+| /api/research/partners | routes/research-partners.js | Partner institutions, data sharing agreements, contacts, partner network dashboard |
+| /api/research/security | routes/research-security.js | Data classification, access policies, security incidents, audits, security dashboard |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
 | /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
@@ -808,6 +818,8 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 | Page | Purpose |
 |------|---------|
+| research-workspace.html | Research dashboard (studies, datasets, ELN, compliance, collaborators, recipes, tasks, audit). Embedded in LE-farm-admin via iframe. E.V.I.E. enabled. Located in views/. Phase 1 tabs: Studies, Datasets, Notebooks, Compliance, Collaborators, Recipes, Tasks, Audit |
+| research-subscription.html | Research tier overview and feature summary. Embedded in LE-farm-admin via iframe. E.V.I.E. enabled |
 | setup-wizard.html | New farm setup wizard |
 | grant-wizard.html | Grant application wizard (FREE) |
 | delivery.html | Delivery management |
@@ -887,6 +899,8 @@ Files that MUST exist in both `greenreach-central/public/` and root `public/`:
 | evie-presence.js | E.V.I.E. ambient intelligence |
 | farm-admin.js | Main admin navigation and section handler |
 | auth-guard.js | Client-side JWT validation and redirect |
+| research-workspace.html | Research dashboard -- embedded in LE-farm-admin iframe |
+| research-subscription.html | Research tier overview -- embedded in LE-farm-admin iframe |
 
 **Rule**: Edit in `greenreach-central/public/` first, then copy to root `public/`. The `.ebignore` excludes `greenreach-central/public/` from LE deploy, so root `public/` is the only source for LE-EB.
 
@@ -1485,6 +1499,142 @@ EnvStore
 **audit_log** (id SERIAL PK)
 - event_type, entity_type, entity_id, actor, details JSONB, created_at
 
+### 8.12 Research Platform (Phase 1)
+
+**recipe_versions** (id SERIAL PK)
+- farm_id, study_id, title, version_number, parameters JSONB, status (draft|review|approved_beta|live|archived|retired), parent_version_id, created_by, created_at, updated_at
+
+**recipe_deployments** (id SERIAL PK)
+- recipe_version_id, farm_id, target_zone, deployed_by, deployed_at, acknowledged, acknowledged_by, acknowledged_at, rolled_back, rollback_reason, rollback_at
+
+**recipe_comparisons** (id SERIAL PK)
+- farm_id, recipe_a_id, recipe_b_id, comparison_metrics JSONB, result_summary, created_at
+
+**recipe_eligibility_rules** (id SERIAL PK)
+- recipe_version_id, farm_id, rule_type, rule_definition JSONB, created_at
+
+**recipe_operator_acks** (id SERIAL PK)
+- deployment_id, farm_id, operator_id, acknowledged_at, notes
+
+**coi_declarations** (id SERIAL PK)
+- study_id, farm_id, user_id, declaration_text, relationship_type, status (pending|reviewed|cleared|flagged), reviewed_by, reviewed_at, created_at
+
+**role_signoffs** (id SERIAL PK)
+- study_id, farm_id, role, user_id, milestone, signed_at, notes
+
+**approval_chains** (id SERIAL PK)
+- study_id, farm_id, approval_type, step_order, approver_role, approver_id, status (pending|approved|rejected), decided_at, notes, created_at
+
+**authorship_contributions** (id SERIAL PK)
+- study_id, farm_id, user_id, role (PI|Co-PI|technician|student|collaborator), contribution_description, orcid, affiliation, created_at, updated_at
+
+**workspace_notes** (id SERIAL PK)
+- study_id, farm_id, note_type (decision|meeting|general), title, content, created_by, created_at, updated_at
+
+**workspace_tasks** (id SERIAL PK)
+- study_id, farm_id, title, description, assigned_to, status (open|in_progress|done|blocked), priority, due_date, institution, created_at, updated_at
+
+**change_requests** (id SERIAL PK)
+- study_id, farm_id, title, description, requested_by, status (pending|approved|rejected|implemented), reviewed_by, reviewed_at, created_at
+
+**milestone_evidence** (id SERIAL PK)
+- milestone_id, farm_id, evidence_type, description, file_url, uploaded_by, created_at
+
+**protocol_design_elements** (id SERIAL PK)
+- protocol_id, farm_id, element_type (randomization|inclusion_exclusion|success_metric|stopping_rule|replication_plan), content JSONB, created_at, updated_at
+
+**dmp_templates** (id SERIAL PK)
+- farm_id, template_name, grant_type, sections JSONB, created_at
+
+**dmp_change_log** (id SERIAL PK)
+- dmp_id, farm_id, changed_by, field_changed, old_value, new_value, reason, created_at
+
+**data_dictionary_entries** (id SERIAL PK)
+- farm_id, study_id, variable_name, description, data_type, unit, allowed_values JSONB, source, collection_method, created_at, updated_at
+
+**metadata_registry** (id SERIAL PK)
+- farm_id, study_id, schema_name, schema_version, schema_definition JSONB, standard (Dublin_Core|DataCite|custom), created_at
+
+**budget_contributions** (id SERIAL PK)
+- budget_id, farm_id, contributor_type (cash|in_kind), contributor_name, institution, amount, description, confirmed, confirmed_at, created_at
+
+**event_markers** (id SERIAL PK)
+- farm_id, study_id, dataset_id, marker_type (anomaly|phase_change|intervention|note), timestamp, title, description, created_by, created_at
+
+**batch_traceability** (id SERIAL PK)
+- farm_id, study_id, batch_id, event_type (seeded|transplanted|harvested|tested|shipped), timestamp, location, details JSONB, previous_batch_id, created_at
+
+**data_quality_alerts** (id SERIAL PK)
+- farm_id, dataset_id, variable_name, alert_type (missing|outlier|drift|gap), severity (low|medium|high), message, detected_at, resolved, resolved_at
+
+### 8.13 Research Platform (Phase 2)
+
+**grant_applications** (id SERIAL PK)
+- farm_id, study_id, title, funding_agency (NSERC|CIHR|SSHRC|CFI|MITACS|provincial|internal|other), program, amount_requested, amount_awarded, currency, pi_name, pi_institution, co_investigators JSONB, grant_number, start_date, end_date, status (draft|submitted|under_review|awarded|active|completed|declined|withdrawn|suspended|terminated), created_at, updated_at
+
+**grant_reports** (id SERIAL PK)
+- grant_id, farm_id, report_type (progress|financial|annual|final|interim), title, content, period_start, period_end, status (draft|submitted|accepted|revision_required), submitted_at, created_at, updated_at
+
+**grant_publications** (id SERIAL PK)
+- grant_id, farm_id, publication_type (journal_article|conference_paper|thesis|technical_report|book_chapter|preprint|dataset), title, authors JSONB, journal_or_venue, doi, year, status (draft|submitted|accepted|published), acknowledgment_text, created_at, updated_at
+
+**grant_milestones** (id SERIAL PK)
+- grant_id, farm_id, title, description, due_date, completed_date, status (pending|in_progress|completed|overdue), created_at, updated_at
+
+**grant_extensions** (id SERIAL PK)
+- grant_id, farm_id, extension_type, reason, original_end_date, new_end_date, status (requested|approved|denied), requested_at, decided_at, created_at
+
+**grant_amendments** (id SERIAL PK)
+- grant_id, farm_id, amendment_type, description, amount_change, justification, status (draft|submitted|approved|denied), submitted_at, decided_at, created_at, updated_at
+
+**ethics_applications** (id SERIAL PK)
+- farm_id, study_id, protocol_title, protocol_number, ethics_type (human_ethics|animal_ethics|biosafety|environmental|dual_use), risk_level (minimal|low|medium|high), involves_humans, involves_animals, involves_biohazards, reb_name, submission_date, decision_date, expiry_date, conditions JSONB, status (draft|submitted|under_review|approved|approved_with_conditions|revisions_required|declined), created_at, updated_at
+
+**ethics_amendments** (id SERIAL PK)
+- ethics_id, farm_id, amendment_type, description, submitted_at, status (submitted|approved|denied), decided_at, created_at
+
+**ethics_renewals** (id SERIAL PK)
+- ethics_id, farm_id, renewal_year, submitted_at, new_expiry_date, status (submitted|approved|denied), decided_at, changes_description, created_at
+
+**biosafety_protocols** (id SERIAL PK)
+- farm_id, study_id, protocol_title, containment_level (1|2|3|4), agents JSONB, risk_assessment JSONB, ppe_requirements JSONB, waste_procedures JSONB, emergency_procedures, status (draft|active|expired|revoked), approved_date, expiry_date, created_at, updated_at
+
+**trainee_records** (id SERIAL PK)
+- farm_id, study_id, grant_id, name, email, institution, department, trainee_type (undergraduate|masters|phd|postdoc|research_associate|technician|visiting_scholar|co_op|intern), program, supervisor_name, start_date, expected_end_date, actual_end_date, status (active|completed|withdrawn|on_leave), outcome, created_at, updated_at
+
+**supervision_meetings** (id SERIAL PK)
+- trainee_id, farm_id, meeting_date, attendees JSONB, agenda, notes, action_items JSONB, next_meeting_date, created_at
+
+**trainee_milestones** (id SERIAL PK)
+- trainee_id, farm_id, milestone_type (comprehensive_exam|thesis_proposal|thesis_defense|publication|conference_presentation|progress_report|coursework_complete|ethics_training|safety_training), title, description, due_date, completed_date, status (pending|in_progress|completed|overdue), created_at, updated_at
+
+**professional_development** (id SERIAL PK)
+- trainee_id, farm_id, activity_type, title, description, activity_date, hours, provider, certificate_url, created_at
+
+**edi_self_identification** (id SERIAL PK)
+- farm_id, category (gender|indigenous|visible_minority|disability|prefer_not_to_say), response, created_at
+
+**partner_institutions** (id SERIAL PK)
+- farm_id, name, partner_type (university|college|research_institute|government|industry|hospital|ngo|international), country, province_state, address, website, notes, status (active|inactive), created_at, updated_at
+
+**data_sharing_agreements** (id SERIAL PK)
+- partner_id, farm_id, agreement_type (data_sharing|material_transfer|collaboration|non_disclosure|intellectual_property|service), title, description, data_types JSONB, access_level, start_date, end_date, terms JSONB, signed_date, signed_by, status (draft|submitted|under_review|approved|revisions_required|rejected|active|expired|terminated|renewed|withdrawn|cancelled), created_at, updated_at
+
+**partner_contacts** (id SERIAL PK)
+- partner_id, farm_id, name, email, role, department, phone, created_at, updated_at
+
+**data_classifications** (id SERIAL PK)
+- farm_id, resource_type, resource_id, classification_level (public|internal|confidential|restricted), justification, handling_instructions, retention_period_days, created_at, updated_at
+
+**access_control_policies** (id SERIAL PK)
+- farm_id, name, description, classification_level, allowed_roles JSONB, requires_mfa, requires_vpn, max_export_rows, ip_restrictions JSONB, created_at, updated_at
+
+**security_incidents** (id SERIAL PK)
+- farm_id, incident_type, severity (low|medium|high|critical), title, description, affected_resources JSONB, reported_by, containment_actions JSONB, root_cause, remediation_steps JSONB, lessons_learned, status (reported|investigating|contained|escalated|remediating|resolved|dismissed|closed), reported_at, resolved_at, created_at, updated_at
+
+**security_audits** (id SERIAL PK)
+- farm_id, audit_type, scope, findings JSONB, recommendations JSONB, auditor, audit_date, next_audit_date, created_at
+
 ---
 
 ## 9. Authentication Architecture
@@ -2002,6 +2152,8 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 
 ### 16.3 Network Intelligence Routes (network-growers.js)
 
+18 routes. All GET. Mounted at /api/ prefix by Central server.js.
+
 | HTTP | Path | Description |
 |------|------|-------------|
 | GET | /api/network/dashboard | Network KPIs: total/active/offline farms, health, alerts, activity |
@@ -2009,20 +2161,19 @@ The `analyzeAndPushToAllFarms()` service runs every 30 minutes, pushing a `netwo
 | GET | /api/network/farms/:farmId | Single farm detail |
 | GET | /api/network/comparative-analytics | Per-farm yield, loss rate, grow days comparison |
 | GET | /api/network/trends | Production trend (week/harvests/yield), demand, network growth |
-| GET | /api/network/alerts | High loss rate + below benchmark alerts |
-| GET | /api/network/benchmarking | Farm yield/loss ranking against network |
-| GET | /api/network/recipes | Network recipe analytics |
 | GET | /api/network/buyer-behavior | Buyer behavior + 3-tier churn classification |
-| GET | /api/growers/dashboard | Grower management dashboard |
-| GET | /api/growers/list | Grower details with performance |
-| GET | /api/leaderboard | Composite scoring: yield 40% + loss 30% + consistency 30% |
-| GET | /api/growers/performance/:growerId | Per-grower rating, harvest count, yield, loss |
-| GET | /api/growers/invitations/list | Grower invitation tracking |
-| POST | /api/growers/invite | Send grower invitation |
-| POST | /api/growers/:growerId/remove | Remove grower from network |
+| GET | /api/network/alerts | High loss rate + below benchmark alerts |
+| GET | /api/network/anomaly-correlation | Cross-farm anomaly detection + environmental correlation |
 | GET | /api/network/energy-benchmarks | Per-crop and per-farm energy efficiency (kWh/kg) rankings |
 | GET | /api/network/farm-performance/:farmId | Per-farm weekly yield/loss trends, period comparison, network rank |
 | GET | /api/network/performance-leaderboard | Network-wide ranking with consistency scores + trend direction |
+| GET | /api/growers/dashboard | Grower management dashboard |
+| GET | /api/growers/list | Grower details with performance |
+| GET | /api/farms/list | Alias for farm listing |
+| GET | /api/contracts/list | Contract listing |
+| GET | /api/leaderboard | Composite scoring: yield 40% + loss 30% + consistency 30% |
+| GET | /api/performance/:growerId | Per-grower rating, harvest count, yield, loss |
+| GET | /api/invitations/list | Pending invitations |
 
 ### 16.4 Farm-Side Intelligence Consumption
 
@@ -2536,6 +2687,6 @@ The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. T
 ---
 
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.5.0
-**Generated**: March 27, 2026
+**Document Version**: 1.6.0
+**Generated**: March 28, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

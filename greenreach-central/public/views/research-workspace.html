@@ -332,6 +332,18 @@
           <div class="stat-value" id="stat-tasks">--</div>
           <div class="stat-label">Open Tasks</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-grants">--</div>
+          <div class="stat-label">Active Grants</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-trainees">--</div>
+          <div class="stat-label">Active HQP</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-partners">--</div>
+          <div class="stat-label">Partners</div>
+        </div>
       </div>
 
       <!-- Alerts -->
@@ -357,6 +369,11 @@
         <div class="tab" data-tab="recipes">Recipes</div>
         <div class="tab" data-tab="tasks">Tasks</div>
         <div class="tab" data-tab="audit">Audit</div>
+        <div class="tab" data-tab="grants">Grants</div>
+        <div class="tab" data-tab="ethics">Ethics</div>
+        <div class="tab" data-tab="hqp">HQP</div>
+        <div class="tab" data-tab="partners">Partners</div>
+        <div class="tab" data-tab="security">Security</div>
       </div>
 
       <!-- Studies Tab -->
@@ -397,6 +414,31 @@
       <!-- Audit Tab -->
       <div class="tab-content" id="tab-audit">
         <div id="audit-list"></div>
+      </div>
+
+      <!-- Grants Tab -->
+      <div class="tab-content" id="tab-grants">
+        <div id="grants-list"></div>
+      </div>
+
+      <!-- Ethics Tab -->
+      <div class="tab-content" id="tab-ethics">
+        <div id="ethics-list"></div>
+      </div>
+
+      <!-- HQP Tab -->
+      <div class="tab-content" id="tab-hqp">
+        <div id="hqp-list"></div>
+      </div>
+
+      <!-- Partners Tab -->
+      <div class="tab-content" id="tab-partners">
+        <div id="partners-list"></div>
+      </div>
+
+      <!-- Security Tab -->
+      <div class="tab-content" id="tab-security">
+        <div id="security-list"></div>
       </div>
     </div>
   </div>
@@ -439,11 +481,14 @@
     // ── Load dashboard ──
     async function loadDashboard() {
       try {
-        const [studies, datasets, notebooks, alerts] = await Promise.all([
+        const [studies, datasets, notebooks, alerts, grants, trainees, partners] = await Promise.all([
           apiFetch('/api/research/studies').catch(() => ({ studies: [] })),
           apiFetch('/api/research/datasets').catch(() => ({ datasets: [] })),
           apiFetch('/api/research/notebooks').catch(() => ({ notebooks: [] })),
-          apiFetch('/api/research/alerts?resolved=false').catch(() => ({ alerts: [] }))
+          apiFetch('/api/research/alerts?resolved=false').catch(() => ({ alerts: [] })),
+          apiFetch('/api/research/grants').catch(() => ({ grants: [] })),
+          apiFetch('/api/research/trainees').catch(() => ({ trainees: [] })),
+          apiFetch('/api/research/partners').catch(() => ({ partners: [] }))
         ]);
 
         const activeStudies = (studies.studies || []).filter(s => s.status === 'active');
@@ -451,6 +496,12 @@
         document.getElementById('stat-datasets').textContent = (datasets.datasets || []).length;
         document.getElementById('stat-notebooks').textContent = (notebooks.notebooks || []).length;
         document.getElementById('stat-alerts').textContent = (alerts.alerts || []).length;
+
+        const activeGrants = (grants.grants || []).filter(g => g.status === 'active' || g.status === 'awarded');
+        document.getElementById('stat-grants').textContent = activeGrants.length;
+        const activeTrainees = (trainees.trainees || []).filter(t => t.status === 'active');
+        document.getElementById('stat-trainees').textContent = activeTrainees.length;
+        document.getElementById('stat-partners').textContent = (partners.partners || []).length;
 
         // Count 7d observations
         let obsCount = 0;
@@ -755,6 +806,103 @@
       } catch (err) {
         el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
       }
+    });
+
+    // ── Grants tab lazy-load ──
+    document.querySelector('[data-tab="grants"]').addEventListener('click', async () => {
+      const el = document.getElementById('grants-list');
+      if (el.dataset.loaded) return;
+      try {
+        const data = await apiFetch(`/api/research/grants?farm_id=${farmId}`);
+        if (!data.grants?.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No grants yet</h3><p>Create a grant application to get started.</p></div>';
+        } else {
+          el.innerHTML = `<table><thead><tr><th>Title</th><th>Agency</th><th>Status</th><th>Amount</th></tr></thead>
+            <tbody>${data.grants.map(g => `<tr>
+              <td>${g.title}</td><td>${g.funding_agency || '--'}</td>
+              <td>${statusBadge(g.status)}</td><td>${g.amount_awarded ? '$' + Number(g.amount_awarded).toLocaleString() : '--'}</td>
+            </tr>`).join('')}</tbody></table>`;
+        }
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    });
+
+    // ── Ethics tab lazy-load ──
+    document.querySelector('[data-tab="ethics"]').addEventListener('click', async () => {
+      const el = document.getElementById('ethics-list');
+      if (el.dataset.loaded) return;
+      try {
+        const data = await apiFetch(`/api/research/ethics/dashboard?farm_id=${farmId}`);
+        let html = '<h3>Ethics Approvals</h3>';
+        if (data.active_approvals?.length) {
+          html += `<table><thead><tr><th>Protocol</th><th>Type</th><th>Status</th><th>Expiry</th></tr></thead>
+            <tbody>${data.active_approvals.map(e => `<tr>
+              <td>${e.protocol_title}</td><td>${e.ethics_type}</td>
+              <td>${statusBadge(e.status)}</td><td>${formatDate(e.expiry_date)}</td>
+            </tr>`).join('')}</tbody></table>`;
+        } else { html += '<div class="empty-state"><p>No active ethics approvals.</p></div>'; }
+        el.innerHTML = html;
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    });
+
+    // ── HQP tab lazy-load ──
+    document.querySelector('[data-tab="hqp"]').addEventListener('click', async () => {
+      const el = document.getElementById('hqp-list');
+      if (el.dataset.loaded) return;
+      try {
+        const data = await apiFetch(`/api/research/trainees?farm_id=${farmId}`);
+        if (!data.trainees?.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No trainees yet</h3><p>Add HQP/trainee records to track supervision and milestones.</p></div>';
+        } else {
+          el.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Institution</th><th>Status</th></tr></thead>
+            <tbody>${data.trainees.map(t => `<tr>
+              <td>${t.name}</td><td>${t.trainee_type}</td>
+              <td>${t.institution || '--'}</td><td>${statusBadge(t.status)}</td>
+            </tr>`).join('')}</tbody></table>`;
+        }
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    });
+
+    // ── Partners tab lazy-load ──
+    document.querySelector('[data-tab="partners"]').addEventListener('click', async () => {
+      const el = document.getElementById('partners-list');
+      if (el.dataset.loaded) return;
+      try {
+        const data = await apiFetch(`/api/research/partners?farm_id=${farmId}`);
+        if (!data.partners?.length) {
+          el.innerHTML = '<div class="empty-state"><h3>No partners yet</h3><p>Add partner institutions to manage collaborations and agreements.</p></div>';
+        } else {
+          el.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th>Agreements</th></tr></thead>
+            <tbody>${data.partners.map(p => `<tr>
+              <td>${p.name}</td><td>${p.partner_type}</td>
+              <td>${p.country || '--'}</td><td>${p.agreement_count || 0}</td>
+            </tr>`).join('')}</tbody></table>`;
+        }
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    });
+
+    // ── Security tab lazy-load ──
+    document.querySelector('[data-tab="security"]').addEventListener('click', async () => {
+      const el = document.getElementById('security-list');
+      if (el.dataset.loaded) return;
+      try {
+        const data = await apiFetch(`/api/research/security/dashboard?farm_id=${farmId}`);
+        let html = '<h3>Data Classifications</h3>';
+        if (data.classification_summary?.length) {
+          html += `<table><thead><tr><th>Level</th><th>Count</th></tr></thead>
+            <tbody>${data.classification_summary.map(c => `<tr><td>${c.classification_level}</td><td>${c.count}</td></tr>`).join('')}</tbody></table>`;
+        } else { html += '<div class="empty-state"><p>No classifications applied yet.</p></div>'; }
+        if (data.open_incidents?.length) {
+          html += '<h3>Open Incidents</h3>';
+          html += `<table><thead><tr><th>Severity</th><th>Status</th><th>Count</th></tr></thead>
+            <tbody>${data.open_incidents.map(i => `<tr><td>${i.severity}</td><td>${i.status}</td><td>${i.count}</td></tr>`).join('')}</tbody></table>`;
+        }
+        el.innerHTML = html;
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
     });
 
     // ── Init ──
