@@ -273,9 +273,9 @@
 .faye-orb--panel {
   width: 40px; height: 40px;
 }
-.faye-orb--panel .faye-orb-core { width: 10px; height: 10px; }
-.faye-orb--panel .faye-orb-ring--inner { width: 22px; height: 22px; }
-.faye-orb--panel .faye-orb-ring--middle { width: 32px; height: 32px; }
+.faye-orb--panel .faye-orb-core { width: 16px; height: 16px; }
+.faye-orb--panel .faye-orb-ring--inner { width: 28px; height: 28px; }
+.faye-orb--panel .faye-orb-ring--middle { width: 36px; height: 36px; }
 .faye-orb--panel .faye-orb-ring--outer { width: 40px; height: 40px; }
 
 .faye-orb--ambient {
@@ -741,7 +741,7 @@
 .faye-intel-panel {
   position: fixed;
   top: 0; right: 0;
-  width: 580px;
+  width: 100vw;
   height: 100vh;
   background: var(--faye-bg-panel);
   border-left: 1px solid rgba(16, 185, 129, 0.1);
@@ -845,12 +845,12 @@
   background: rgba(26, 42, 61, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--faye-text);
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
   resize: none;
   outline: none;
-  min-height: 36px;
-  max-height: 80px;
+  min-height: 44px;
+  max-height: 120px;
   line-height: 1.4;
   backdrop-filter: blur(8px);
 }
@@ -894,18 +894,18 @@
 .faye-conversation-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 .faye-conv-msg {
   max-width: 88%;
-  padding: 10px 14px;
+  padding: 14px 20px;
   border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.75;
   word-wrap: break-word;
   animation: faye-fade-in 0.25s ease-out;
 }
@@ -1280,6 +1280,71 @@
 }
 .faye-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.35);
+}
+
+
+/* -- Thinking State: violet processing indicator ----------------------- */
+.faye-orb-container.faye-state-thinking .faye-orb-core {
+  background: radial-gradient(circle, #fff 0%, var(--faye-learning) 40%, transparent 70%);
+  box-shadow: 0 0 16px var(--faye-learning-glow), 0 0 40px var(--faye-learning-glow);
+  animation: faye-think-shimmer 1.5s ease-in-out infinite;
+}
+.faye-orb-container.faye-state-thinking .faye-orb-ring--inner {
+  border-color: var(--faye-learning);
+  opacity: 0.7;
+  animation: faye-orbit 2.5s linear infinite;
+}
+.faye-orb-container.faye-state-thinking .faye-orb-ring--middle {
+  border-color: var(--faye-learning);
+  opacity: 0.5;
+  animation: faye-orbit 3.5s linear infinite reverse;
+}
+.faye-orb-container.faye-state-thinking .faye-orb-ring--outer {
+  border-color: rgba(139, 92, 246, 0.3);
+  opacity: 0.4;
+  animation  animation  animation  animation  animation  animae-o  animation  animation  animation  animation  animation  animae-o  animation  animatye-orbit 1.8s linear infinite;
+}
+
+@keyframes faye-think-shimmer {
+  0%, 100% { opacity: 1; box-shadow: 0 0 16px var(--faye-learning-glow), 0 0 40px var(--faye-learning-glow); }
+  50% { opacity: 0.7; box-shadow: 0 0 24px var(--faye-learning-glow), 0 0 56px var(--faye-learning-glow); }
+}
+
+/* -- Data Halo Effect -------------------------------------------------- */
+.faye-data-halo {
+  position: relative;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--faye-text);
+  text-shadow: 0 0 20px var(--faye-confident-glow), 0 0 40px rgba(16, 185, 129, 0.15);
+}
+.faye-data-halo::after {
+  content: "";
+  position: absolute;
+  inset: -8px -12px;
+  border-radius: 12px;
+  background: radial-gradient(ellipse, var(--faye-confident-soft) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.faye-conv-msg .faye-data-halo,
+.faye-conv-msg strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--faye-text-accent);
+}
+
+/* -- Enhanced Orb Visibility ------------------------------------------- */
+.faye-orb-ring--inner {
+  border-width: 2px;
+}
+.faye-orb-ring--middle {
+  border-width: 1.5px;
+}
+.faye-orb-ring--outer {
+  border-width: 1.5px;
+  opacity: 0.35;
 }
 
 /* Responsive */

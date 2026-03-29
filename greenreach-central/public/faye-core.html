@@ -310,6 +310,7 @@
           'analyzing': 'faye-state-analyzing',
           'alerting': 'faye-state-alerting',
           'executing': 'faye-state-executing',
+          'thinking': 'faye-state-thinking',
           'uncertain': 'faye-state-uncertain',
           'confident': 'faye-state-confident'
         };
@@ -583,7 +584,7 @@
         messages.scrollTop = messages.scrollHeight;
 
         // Set orb to analyzing
-        setHeroState('analyzing');
+        setHeroState('thinking');
 
         fetch(API + '/chat', {
           method: 'POST',

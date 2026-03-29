@@ -157,6 +157,7 @@ import { generateGovernanceReport, formatReportText } from './reports/governance
 // import deadlineMonitor from '../services/deadline-monitor.js'; // Not available in standalone deployment
 import logger from './utils/logger.js';
 import { upsertNetworkFarm } from './services/networkFarmsStore.js';
+import leamBridge from './lib/leam-bridge.js';
 
 // Load environment variables
 dotenv.config();
@@ -4917,6 +4918,12 @@ async function startServer() {
         try {
           const data = JSON.parse(message);
           logger.debug('WebSocket message received', { type: data.type });
+
+          // LEAM companion agent messages (ble_scan, network_scan, etc.)
+          if (data.type && data.type.startsWith('leam_')) {
+            leamBridge.processMessage(ws, ws.farmId || farmId, data);
+            return;
+          }
           
           // Handle different message types
           if (data.type === 'subscribe') {
@@ -4934,6 +4941,7 @@ async function startServer() {
       });
 
       ws.on('close', () => {
+        leamBridge.handleDisconnect(ws.farmId || farmId, ws);
         logger.info('WebSocket connection closed');
       });
 
@@ -4944,6 +4952,7 @@ async function startServer() {
 
     // Store WebSocket server for use in other modules
     app.locals.wss = wss;
+    app.locals.leamBridge = leamBridge;
 
     /**
      * Broadcast an event to all WebSocket clients subscribed to a specific farm.

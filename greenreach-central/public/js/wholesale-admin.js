@@ -1658,7 +1658,7 @@
           : '/api/admin/wholesale/buyers';
         const res = await fetch(url, { headers });
         const json = await res.json();
-        const buyers = json.data?.buyers || [];
+        const buyers = (json.data?.buyers || []).map((buyer) => this.normalizeBuyer(buyer));
         this.buyers = buyers;
 
         // Stats
@@ -1804,13 +1804,13 @@
       if (!confirm('Deactivate this buyer account? They will lose API access immediately.')) return;
       const headers = this.getAuthHeaders();
       try {
-        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}/deactivate`, {
-          method: 'POST', headers
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}`, {
+          method: 'DELETE', headers
         });
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
         if (json.status === 'ok') {
           this.showToast('Buyer deactivated', 'success');
-          this.loadBuyers();
+          await this.loadBuyers();
         } else {
           this.showToast(json.message || 'Deactivation failed', 'error');
         }
@@ -1958,6 +1958,20 @@
       } catch (err) {
         this.showToast('Error: ' + err.message, 'error');
       }
+    },
+
+    normalizeBuyer(buyer) {
+      const status = buyer?.status || (buyer?.active === false ? 'deactivated' : 'active');
+      return {
+        ...buyer,
+        id: buyer?.id || buyer?.buyerId,
+        businessName: buyer?.businessName || buyer?.business_name || '',
+        contactName: buyer?.contactName || buyer?.contact_name || '',
+        email: buyer?.email || '',
+        buyerType: buyer?.buyerType || buyer?.buyer_type || '',
+        status,
+        createdAt: buyer?.createdAt || buyer?.created_at || null
+      };
     },
 
     esc(str) {

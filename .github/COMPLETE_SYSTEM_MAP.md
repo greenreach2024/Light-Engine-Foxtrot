@@ -1961,7 +1961,8 @@ On login and token expiry, all farm-scoped browser storage keys are cleared.
 | Service | Env Vars | Purpose | Server |
 |---------|----------|---------|--------|
 | SwitchBot Cloud API | SWITCHBOT_TOKEN, SWITCHBOT_SECRET | Sensor data polling | LE |
-| Square Payments | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale payments (12% commission). OAuth connection via standalone payment-setup.html (v1.4.0 -- LE-dashboard wizard removed) | Central |
+| Square Payments (Wholesale) | SQUARE_APPLICATION_ID, SQUARE_ACCESS_TOKEN | Wholesale marketplace (12% commission via app_fee_money). Route: /api/square-proxy/* | Central |
+| Square Payments (Farm) | SQUARE_APPLICATION_ID, SQUARE_APPLICATION_SECRET, FARM_SQUARE_REDIRECT_URI, TOKEN_ENCRYPTION_KEY | Per-farm Square OAuth. Each farm connects their own Square account for POS/retail. Route: /api/farm/square/* on LE, proxied through Central. OAuth via standalone payment-setup.html (v1.4.0). See Section 17 | LE (via Central proxy) |
 | Stripe | Farm-configured | Farm payment setup | LE |
 | OpenAI (GPT-4) | OPENAI_API_KEY | AI insights, recipe recommendations | Both |
 | AWS CloudWatch | CLOUDWATCH_ENABLED, AWS_REGION | Metrics/logs | LE |
@@ -2161,11 +2162,12 @@ When you change a file, here is what else is affected:
 - **Impact**: POS was unusable when embedded as iframe in LE-farm-admin.
 - **Fix Applied**: Token fallback chain (checks both token and farm_token) plus embedded mode auto-login that inherits the admin session.
 
-#### E-021: Square Wizard Popup Blocked -- RESOLVED v1.4.0
-- **File**: greenreach-central/public/LE-dashboard.html
-- **Problem**: LE-dashboard payment wizard opened Square OAuth popups from inside an iframe. Browsers block popups from cross-origin iframes by default.
-- **Impact**: Farm operators could not connect their Square account through the setup wizard.
-- **Fix Applied**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
+#### E-021: Square Wizard Popup Blocked -- RESOLVED v1.4.0, RECURRED + RESOLVED v1.8.0
+- **File**: public/payment-setup.html (both copies)
+- **Problem (v1.4.0)**: LE-dashboard payment wizard opened Square OAuth popups from inside an iframe. Browsers block popups from cross-origin iframes by default.
+- **Fix (v1.4.0)**: Payment wizard removed from LE-dashboard. Replaced with standalone payment-setup.html page that handles Square OAuth directly (same-origin returnUrl, DOM API rendering).
+- **Problem (v1.8.0)**: window.open(authUrl) called after await fetch() in startAuthorization(). Browsers only allow programmatic popups during synchronous user-gesture handlers. The await crosses the gesture boundary, causing the popup to be blocked.
+- **Fix (v1.8.0)**: Pre-open the popup window synchronously (window.open('about:blank')) during the click event before any await, then navigate the already-opened window to the auth URL after the fetch returns. Fallback link buttons still shown if even the pre-open is blocked.
 
 
 #### E-022: AI Pricing Assistant Per-Oz/Per-Lb Mismatch -- RESOLVED v10
@@ -2796,7 +2798,172 @@ The inventory pipeline errors E-010 through E-015 were all RESOLVED in v1.2.0. T
 
 ---
 
+## 17. Square Payment Connection -- Multi-Tenant Architecture
+
+### 17.1 Overview
+
+Two completely separate Square integrations exist. They use different credentials, different scopes, different storage backends, and serve different business purposes.
+
+| System | Route Prefix | Server | Purpose |
+|--------|-------------|--------|---------|
+| Farm-Individual Square | /api/farm/square/* | LE (proxied via Central) | Each farm processes their own customer payments (POS retail, online store, subscriptions) |
+| Wholesale Marketplace Square | /api/square-proxy/* | Central | GreenReach collects 12% broker commission via app_fee_money on wholesale orders |
+
+This section documents the **Farm-Individual Square** system only. Wholesale is documented in the wholesale pipeline section.
+
+### 17.2 Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| routes/farm-square-setup.js | LE root | Backend: 7 endpoints (authorize, callback, status, refresh, settings, disconnect, test-payment) |
+| public/payment-setup.html | Both public/ dirs | Frontend: standalone Square OAuth connection page |
+| greenreach-central/server.js (lines ~3250-3277) | Central | Proxy: forwards all /api/farm/square/* requests to LE via edgeProxy() |
+| greenreach-central/routes/square-oauth-proxy.js | Central | Wholesale-only (NOT used by farm-individual flow) |
+
+### 17.3 Environment Variables (LE)
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| SQUARE_APPLICATION_ID | Square app client ID (sq0idp-...) | Yes |
+| SQUARE_APPLICATION_SECRET | Square app secret (sq0csp-...) | Yes |
+| SQUARE_ENVIRONMENT | "production" or "sandbox" | Yes (defaults to "production") |
+| FARM_SQUARE_REDIRECT_URI | OAuth callback URL. Must be: https://greenreachgreens.com/api/farm/square/callback | Yes |
+| TOKEN_ENCRYPTION_KEY | 64-char hex key for AES-256-GCM token encryption | Yes in production |
+| SQUARE_LOCATION_ID | Default Square location (used by wholesale, not farm-individual) | No |
+| SQUARE_ACCESS_TOKEN | GreenReach's own Square token (wholesale only, not farm-individual) | No |
+
+### 17.4 OAuth Connection Flow
+
+```
+Step 1: User opens payment-setup.html
+        (served from LE or Central -- both copies exist)
+        Page reads farmId from URL query param or localStorage
+
+Step 2: User clicks "Connect to Square"
+        -> window.open('about:blank', '_blank')  [pre-opens window SYNCHRONOUSLY in click handler]
+        -> POST /api/farm/square/authorize { farmId, farmName }
+           (if served from Central, proxied to LE via edgeProxy)
+
+Step 3: LE /authorize handler (farm-square-setup.js)
+        -> Validates farmId + farmName present
+        -> Builds redirect_uri from FARM_SQUARE_REDIRECT_URI env var
+           (fallback: req.protocol + '://' + req.get('host') + '/api/farm/square/callback')
+        -> Creates signed state token (HMAC-SHA256, 10-min expiry)
+           State payload: { farm_id, farm_name, redirect_uri, timestamp, nonce }
+        -> Stores state in oauthStates Map + saves to disk
+        -> Returns { authorizationUrl, state, expiresIn: 600 }
+
+Step 4: Browser navigates pre-opened window to Square OAuth URL
+        https://connect.squareup.com/oauth2/authorize?
+          client_id=<SQUARE_APPLICATION_ID>
+          &scope=PAYMENTS_WRITE MERCHANT_PROFILE_READ ORDERS_WRITE ORDERS_READ
+          &session=false
+          &state=<signed_state_token>
+          &redirect_uri=https://greenreachgreens.com/api/farm/square/callback
+
+Step 5: User logs into Square and authorizes the app
+
+Step 6: Square redirects to callback URL with ?code=<auth_code>&state=<state_token>
+        -> Hits Central (greenreachgreens.com)
+        -> Central proxy (server.js line ~3252) forwards to LE via edgeProxy
+           (custom handler passes query string, returns HTML content-type)
+
+Step 7: LE /callback handler (farm-square-setup.js)
+        -> Validates state token (HMAC signature + 10-min expiry)
+        -> Extracts farm_id + redirect_uri from state payload
+        -> POST https://connect.squareup.com/oauth2/token
+           { client_id, client_secret, code, grant_type, redirect_uri }
+        -> Receives access_token, refresh_token, expires_at, merchant_id
+        -> Fetches merchant locations via Square SDK
+        -> Encrypts access_token + refresh_token (AES-256-GCM)
+        -> Stores in farmSquareAccounts Map[farmId] + saves to disk
+        -> Returns HTML page with success message
+
+Step 8: Callback HTML signals opener
+        -> Writes to localStorage: key="square_connected_signal"
+        -> Calls window.opener.postMessage(signalData, "*")
+        -> Auto-closes after 3 seconds
+
+Step 9: payment-setup.html detects connection
+        -> Storage event listener catches square_connected_signal
+        -> OR: polling (every 5s, max 72 attempts) hits GET /status
+        -> Shows success: merchant name + location
+```
+
+### 17.5 Multi-Tenant Isolation
+
+**Token storage is keyed by farmId.** Each farm's encrypted tokens are stored separately in a single Map (in-memory) and a single JSON file (on disk).
+
+```
+farmSquareAccounts Map:
+  "FARM-MLTP9LVH-B0B85039" -> { merchantId, locationId, accessToken: {encrypted}, ... }
+  "FARM-XXXXXXXX-YYYYYYYY" -> { merchantId, locationId, accessToken: {encrypted}, ... }
+```
+
+**Isolation guarantees:**
+- GET /status requires farmId in query param or x-farm-id header -- returns only that farm's status
+- POST /authorize stores state token with farm_id embedded -- callback extracts it
+- POST /refresh, /disconnect, /settings all resolve farmId from header or body
+- No endpoint returns a list of all connected farms (no enumeration vector)
+- Tokens are encrypted at rest -- raw tokens never written to disk
+
+**Global encryption key:** All farms share a single TOKEN_ENCRYPTION_KEY (AES-256-GCM). Each token gets a unique random IV (16 bytes) and auth tag, so identical plaintext tokens produce different ciphertext. The key itself must be protected as a platform secret.
+
+### 17.6 Token Persistence
+
+| Location | Format | Purpose |
+|----------|--------|---------|
+| In-memory Map | farmSquareAccounts (farmId -> account) | Fast runtime lookups |
+| /var/app/data/greenreach/farm-square-tokens.json | JSON (encrypted values) | Survives LE restarts |
+| /var/app/data/greenreach/farm-square-oauth-states.json | JSON (pending auths) | Survives restarts during active OAuth flows |
+
+On startup, farm-square-setup.js calls loadTokensFromDisk() and loadOauthStatesFromDisk() to rehydrate. Legacy fallback checks ./data/ directory and migrates if found.
+
+### 17.7 Popup Blocker Fix History
+
+| Date | Commit | Problem | Fix |
+|------|--------|---------|-----|
+| Mar 26, 2026 | 5dc98559 | Wizard flow broken | Route buttons to guided setup |
+| Mar 26, 2026 | 99e9f764 | postMessage unreliable | Poll status instead |
+| Mar 26, 2026 | 5562e0cc | localStorage signal for iframe compat | Added localStorage-based signaling |
+| Mar 27, 2026 | 0676ee54 | Iframe popups blocked by browsers | Removed iframe wizard, standalone payment-setup.html |
+| Mar 29, 2026 | (current) | window.open() after await loses click context | Pre-open window synchronously before fetch, navigate after |
+
+Root cause pattern: browsers only allow window.open() during synchronous user-gesture handlers. Any await or setTimeout between the click and the open causes the popup to be blocked.
+
+### 17.8 Square Developer Dashboard Requirements
+
+The Square Developer Dashboard (developer.squareup.com) must have these settings for the OAuth flow to work:
+
+- **Application ID**: Must match SQUARE_APPLICATION_ID env var on LE
+- **Application Secret**: Must match SQUARE_APPLICATION_SECRET env var on LE
+- **OAuth Redirect URL**: Must be exactly `https://greenreachgreens.com/api/farm/square/callback`
+- **OAuth Scopes**: PAYMENTS_WRITE, MERCHANT_PROFILE_READ, ORDERS_WRITE, ORDERS_READ
+- **Production access**: Must be approved and active
+
+If the redirect URL in the Dashboard does not exactly match FARM_SQUARE_REDIRECT_URI, Square will reject the callback and the flow silently fails.
+
+### 17.9 Central Proxy Configuration
+
+Central does NOT mount farm-square-setup.js routes directly. Instead, server.js defines inline proxy routes (lines ~3250-3277) that forward to LE via edgeProxy():
+
+| Central Route | Method | LE Target | Notes |
+|---------------|--------|-----------|-------|
+| /api/farm/square/status | GET | edgeProxy | JSON passthrough |
+| /api/farm/square/authorize | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/callback | GET | Custom proxy | HTML content-type, query string forwarded |
+| /api/farm/square/refresh | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/settings | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/disconnect | POST | edgeProxy | JSON passthrough |
+| /api/farm/square/test-payment | POST | edgeProxy | JSON passthrough |
+
+The callback proxy uses a custom handler (not edgeProxy) because it returns HTML, not JSON. It forwards the full query string to LE and passes through the response content-type.
+
+Central resolves the LE URL via resolveEdgeUrlForProxy(): FARM_EDGE_URL env var (currently http://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com).
+
+---
+
 **END OF COMPLETE SYSTEM MAP**
-**Document Version**: 1.6.0
-**Generated**: March 28, 2026
+**Document Version**: 1.8.0
+**Generated**: March 29, 2026
 **Next Review**: Update when any new routes, pages, tables, or integrations are added

@@ -1,0 +1,29 @@
+{
+  "name": "light-engine-access-manager",
+  "version": "1.0.0",
+  "description": "Local companion agent for Light Engine — BLE, WiFi, and system-level device scanning",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "leam": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js --verbose"
+  },
+  "keywords": [
+    "ble",
+    "bluetooth",
+    "device-discovery",
+    "light-engine",
+    "greenreach"
+  ],
+  "author": "GreenReach Farms",
+  "license": "PROPRIETARY",
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-24",
+    "bonjour-service": "^1.3.0",
+    "ws": "^8.16.0",
+    "systeminformation": "^5.22.0"
+  }
+}

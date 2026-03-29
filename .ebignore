@@ -114,3 +114,4 @@ create-*.js
 check-*.js
 cleanup-*.sh
 build-and-verify.sh
+light-engine-access-manager/

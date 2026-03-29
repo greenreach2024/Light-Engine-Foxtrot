@@ -150,8 +150,8 @@ body {
 
 .gwen-hero-orb-wrap {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 140px;
+  height: 140px;
   margin-bottom: 16px;
 }
 
@@ -165,8 +165,8 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--gwen-amber);
@@ -178,18 +178,18 @@ body {
   top: 50%;
   left: 50%;
   border-radius: 50%;
-  border: 1.5px solid rgba(245, 158, 11, 0.2);
+  border: 2.5px solid rgba(245, 158, 11, 0.4);
   transform: translate(-50%, -50%);
   animation: gwenOrbPulse 4s ease-in-out infinite;
 }
 
-.gwen-orb-ring-1 { width: 56px; height: 56px; animation-delay: 0s; }
-.gwen-orb-ring-2 { width: 76px; height: 76px; animation-delay: 0.6s; }
-.gwen-orb-ring-3 { width: 96px; height: 96px; animation-delay: 1.2s; }
+.gwen-orb-ring-1 { width: 72px; height: 72px; animation-delay: 0s; }
+.gwen-orb-ring-2 { width: 100px; height: 100px; animation-delay: 0.6s; }
+.gwen-orb-ring-3 { width: 132px; height: 132px; animation-delay: 1.2s; }
 
 @keyframes gwenOrbPulse {
-  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.08); }
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.08); }
 }
 
 /* Orb states */
@@ -284,10 +284,11 @@ body {
 }
 
 .gwen-stat-card-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--gwen-amber);
   font-family: 'SF Mono', 'Fira Code', monospace;
+  text-shadow: 0 0 20px var(--gwen-amber-glow), 0 0 40px rgba(245, 158, 11, 0.15);
 }
 
 .gwen-stat-card-label {
@@ -623,10 +624,11 @@ body {
 }
 
 .gwen-ws-metric-value {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--gwen-amber);
   font-family: 'SF Mono', 'Fira Code', monospace;
+  text-shadow: 0 0 20px var(--gwen-amber-glow), 0 0 40px rgba(245, 158, 11, 0.15);
 }
 
 .gwen-ws-metric-label {
@@ -706,16 +708,16 @@ body {
 }
 
 .gwen-chat-panel-open {
-  max-height: 520px;
+  max-height: 100vh;
 }
 
 .gwen-chat-messages {
   max-height: 400px;
   overflow-y: auto;
-  padding: 16px 24px;
+  padding: 20px 28px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .gwen-chat-msg {
@@ -734,8 +736,8 @@ body {
 }
 
 .gwen-chat-msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -756,10 +758,10 @@ body {
 }
 
 .gwen-chat-msg-body {
-  padding: 10px 14px;
+  padding: 14px 20px;
   border-radius: var(--gwen-radius);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.75;
 }
 
 .gwen-chat-msg-agent .gwen-chat-msg-body {
@@ -839,8 +841,8 @@ body {
   border: 1px solid var(--gwen-border);
   border-radius: var(--gwen-radius-sm);
   color: var(--gwen-text-primary);
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 14px 20px;
+  font-size: 15px;
   font-family: inherit;
   resize: none;
   outline: none;
@@ -888,6 +890,53 @@ body {
   .gwen-stats-row {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* -- Thinking State: amber pulse with rotating rings ------------------- */
+.gwen-orb-thinking .gwen-orb-core {
+  animation: gwenOrbThink 1.5s ease-in-out infinite;
+  box-shadow: 0 0 36px var(--gwen-amber-glow), 0 0 64px rgba(245, 158, 11, 0.2);
+}
+.gwen-orb-thinking .gwen-orb-ring {
+  animation: gwenOrbSpin 2s linear infinite;
+  border-color: var(--gwen-amber);
+  border-width: 3px;
+  opacity: 0.7;
+}
+
+@keyframes gwenOrbThink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 36px var(--gwen-amber-glow), 0 0 64px rgba(245, 158, 11, 0.2); }
+  50% { opacity: 0.7; box-shadow: 0 0 48px var(--gwen-amber-glow), 0 0 80px rgba(245, 158, 11, 0.3); }
+}
+
+/* -- Data Halo Effect -------------------------------------------------- */
+.gwen-data-halo {
+  position: relative;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gwen-text-primary);
+  text-shadow: 0 0 20px var(--gwen-amber-glow), 0 0 40px rgba(245, 158, 11, 0.15);
+}
+.gwen-data-halo::after {
+  content: '';
+  position: absolute;
+  inset: -8px -12px;
+  border-radius: 12px;
+  background: radial-gradient(ellipse, var(--gwen-amber-subtle) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.gwen-chat-msg-body .gwen-data-halo,
+.gwen-chat-msg-body strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gwen-amber-bright);
+}
+
+/* -- Enhanced Stat Card Halo ------------------------------------------- */
+.gwen-stat-card:hover .gwen-stat-card-value {
+  text-shadow: 0 0 24px var(--gwen-amber-glow), 0 0 48px rgba(245, 158, 11, 0.25);
 }
 
 @media (max-width: 768px) {

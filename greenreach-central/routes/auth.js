@@ -269,6 +269,19 @@ router.post('/login', async (req, res) => {
 
     console.log(`[Auth] Successful login: ${email} (Farm: ${user.farm_id})`);
 
+    // Update last_login timestamp for database users
+    if (useDatabase && user.id && req.db) {
+      try {
+        await req.db.query(
+          'UPDATE farm_users SET last_login = NOW() WHERE id = $1',
+          [user.id]
+        );
+      } catch (loginUpdateErr) {
+        console.warn('[Auth] Failed to update last_login:', loginUpdateErr.message);
+      }
+    }
+
+
     res.json({
       success: true,
       token,

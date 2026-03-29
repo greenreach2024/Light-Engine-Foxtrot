@@ -764,6 +764,46 @@
       const isCentralServer = window.location.hostname.includes('greenreachgreens.com') || 
                              window.location.hostname.includes('greenreach.farm');
 
+      let cropRegistry = {};
+
+      function getGroupCCAInfo(group) {
+        const hc = group.planConfig?.harvestCycle;
+        if (hc && hc.strategy === 'cut_and_come_again') {
+          return hc;
+        }
+
+        const planName = (group.plan || group.planId || '').toLowerCase();
+        for (const [key, crop] of Object.entries(cropRegistry)) {
+          if (crop.growth?.harvestStrategy === 'cut_and_come_again') {
+            if (planName.includes(key.toLowerCase()) || (crop.planIds || []).some(id => id === group.plan)) {
+              return {
+                strategy: 'cut_and_come_again',
+                maxHarvests: crop.growth.maxHarvests || 4,
+                regrowthDays: crop.growth.regrowthDays || 14,
+                currentHarvest: 0
+              };
+            }
+          }
+        }
+
+        return null;
+      }
+
+      function renderCCABadge(group) {
+        const cca = getGroupCCAInfo(group);
+        if (!cca) return '';
+        const status = group.status;
+        const current = cca.currentHarvest || 0;
+        const max = cca.maxHarvests || 4;
+        if (status === 'regrowing') {
+          const regrowthStart = cca.regrowthStartDate ? new Date(cca.regrowthStartDate) : null;
+          const daysInRegrowth = regrowthStart ? Math.floor((Date.now() - regrowthStart.getTime()) / 86400000) : 0;
+          const daysLeft = Math.max(0, (cca.regrowthDays || 14) - daysInRegrowth);
+          return `<span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:600;margin-left:0.5rem;">🔄 Regrowing ${current}/${max} · ${daysLeft}d left</span>`;
+        }
+        return `<span style="background:rgba(52,211,153,0.15);color:#34d399;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:600;margin-left:0.5rem;">✂️ CCA ${max} harvests</span>`;
+      }
+
     async function loadInventory() {
       console.debug('[loadInventory] Starting...');
       console.log('[loadInventory] API_BASE:', API_BASE);
@@ -857,7 +897,6 @@
         });
 
         // Load crop registry for CCA (Cut and Come Again) awareness
-        let cropRegistry = {};
         try {
           const regResp = await fetchWithFarmAuth(`${API_BASE}/data/crop-registry.json`);
           if (regResp.ok) {
@@ -866,46 +905,6 @@
           }
         } catch (e) {
           console.warn('[loadInventory] Failed to load crop registry:', e);
-        }
-
-        // Build helper: get CCA info for a group
-        function getGroupCCAInfo(group) {
-          // Check if group already has harvestCycle in planConfig
-          const hc = group.planConfig?.harvestCycle;
-          if (hc && hc.strategy === 'cut_and_come_again') {
-            return hc;
-          }
-          // Fall back to crop registry lookup by plan name
-          const planName = (group.plan || group.planId || '').toLowerCase();
-          for (const [key, crop] of Object.entries(cropRegistry)) {
-            if (crop.growth?.harvestStrategy === 'cut_and_come_again') {
-              if (planName.includes(key.toLowerCase()) || (crop.planIds || []).some(id => id === group.plan)) {
-                return {
-                  strategy: 'cut_and_come_again',
-                  maxHarvests: crop.growth.maxHarvests || 4,
-                  regrowthDays: crop.growth.regrowthDays || 14,
-                  currentHarvest: 0
-                };
-              }
-            }
-          }
-          return null;
-        }
-
-        // Helper: render CCA badge HTML for a group
-        function renderCCABadge(group) {
-          const cca = getGroupCCAInfo(group);
-          if (!cca) return '';
-          const status = group.status;
-          const current = cca.currentHarvest || 0;
-          const max = cca.maxHarvests || 4;
-          if (status === 'regrowing') {
-            const regrowthStart = cca.regrowthStartDate ? new Date(cca.regrowthStartDate) : null;
-            const daysInRegrowth = regrowthStart ? Math.floor((Date.now() - regrowthStart.getTime()) / 86400000) : 0;
-            const daysLeft = Math.max(0, (cca.regrowthDays || 14) - daysInRegrowth);
-            return `<span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:600;margin-left:0.5rem;">🔄 Regrowing ${current}/${max} · ${daysLeft}d left</span>`;
-          }
-          return `<span style="background:rgba(52,211,153,0.15);color:#34d399;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:600;margin-left:0.5rem;">✂️ CCA ${max} harvests</span>`;
         }
 
         // Update header with farm name (for cross-page context)

@@ -7596,22 +7596,30 @@ async function saveUserChanges(event) {
 async function removeUser() {
     const userId = parseInt(document.getElementById('edit-user-id').value);
     const user = window.allUsers.find(u => u.id === userId);
+    if (!user) {
+        showToast('User not found', 'error');
+        return;
+    }
     
-    if (!confirm(`Are you sure you want to remove ${user.name}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to remove ${user.name || user.email}? This action cannot be undone.`)) {
         return;
     }
     
     try {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        await fetch('/api/users/delete', {
+        const response = await fetch(`${API_BASE}/api/users/delete`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${currentSession.token}`
             },
             body: JSON.stringify({ email: user.email })
         });
         
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || errData.message || `Server returned ${response.status}`);
+        }
+
         window.allUsers = window.allUsers.filter(u => u.id !== userId);
         
         showToast('User removed successfully', 'success');
@@ -7620,7 +7628,7 @@ async function removeUser() {
         
     } catch (error) {
         console.error('Error removing user:', error);
-        showToast('Error removing user', 'error');
+        showToast('Error removing user: ' + error.message, 'error');
     }
 }
 

@@ -75,45 +75,45 @@
 .evie-orb-halo--inner {
   width: 36px; height: 36px;
   transform: translate(-50%, -50%);
-  border: 1.5px solid var(--evie-vitality);
-  opacity: 0.4;
+  border: 2px solid var(--evie-vitality);
+  opacity: 0.5;
   z-index: 2;
 }
 
 .evie-orb-halo--mid {
   width: 52px; height: 52px;
   transform: translate(-50%, -50%);
-  border: 1px solid var(--evie-vitality);
-  opacity: 0.2;
+  border: 1.5px solid var(--evie-vitality);
+  opacity: 0.3;
   z-index: 1;
 }
 
 .evie-orb-halo--outer {
   width: 64px; height: 64px;
   transform: translate(-50%, -50%);
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   box-shadow: 0 0 24px var(--evie-vitality-glow);
-  opacity: 0.15;
+  opacity: 0.25;
   z-index: 0;
 }
 
 /* -- Orb Size Variants ------------------------------------------------- */
 
 .evie-orb-container.evie-orb--hero {
-  width: 120px; height: 120px;
+  width: 160px; height: 160px;
 }
-.evie-orb--hero .evie-orb-core   { width: 36px; height: 36px; }
-.evie-orb--hero .evie-orb-halo--inner  { width: 64px; height: 64px; }
-.evie-orb--hero .evie-orb-halo--mid    { width: 90px; height: 90px; }
-.evie-orb--hero .evie-orb-halo--outer  { width: 120px; height: 120px; }
+.evie-orb--hero .evie-orb-core   { width: 48px; height: 48px; }
+.evie-orb--hero .evie-orb-halo--inner  { width: 80px; height: 80px; }
+.evie-orb--hero .evie-orb-halo--mid    { width: 120px; height: 120px; }
+.evie-orb--hero .evie-orb-halo--outer  { width: 160px; height: 160px; }
 
 .evie-orb-container.evie-orb--compact {
-  width: 40px; height: 40px;
+  width: 48px; height: 48px;
 }
-.evie-orb--compact .evie-orb-core { width: 12px; height: 12px; }
-.evie-orb--compact .evie-orb-halo--inner { width: 22px; height: 22px; }
-.evie-orb--compact .evie-orb-halo--mid   { width: 32px; height: 32px; }
-.evie-orb--compact .evie-orb-halo--outer { width: 40px; height: 40px; }
+.evie-orb--compact .evie-orb-core { width: 16px; height: 16px; }
+.evie-orb--compact .evie-orb-halo--inner { width: 28px; height: 28px; }
+.evie-orb--compact .evie-orb-halo--mid   { width: 38px; height: 38px; }
+.evie-orb--compact .evie-orb-halo--outer { width: 48px; height: 48px; }
 
 /* ======================================================================
    ORB STATES
@@ -392,7 +392,7 @@
 .evie-intel-panel {
   position: fixed;
   top: 0; right: 0;
-  width: 580px;
+  width: 100vw;
   height: 100vh;
   background: rgba(18, 29, 46, 0.88);
   border-left: 1px solid rgba(16, 185, 129, 0.1);
@@ -630,10 +630,11 @@
   border-color: rgba(16, 185, 129, 0.2);
 }
 .evie-stat-value {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--evie-text);
   line-height: 1.1;
+  text-shadow: 0 0 20px var(--evie-vitality-glow), 0 0 40px rgba(16, 185, 129, 0.15);
 }
 .evie-stat-label {
   font-size: 10px;
@@ -656,16 +657,19 @@
 .evie-conv-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .evie-conv-msg {
-  padding: 10px 14px;
-  font-size: 13px;
-  line-height: 1.5;
+  padding: 14px 20px;
+  font-size: 15px;
+  line-height: 1.75;
   color: var(--evie-text);
   border-radius: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 .evie-conv-msg.user {
   color: var(--evie-sensing);
@@ -697,9 +701,9 @@
   background: rgba(26, 42, 61, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 14px 20px;
   color: var(--evie-text);
-  font-size: 13px;
+  font-size: 15px;
   outline: none;
   transition: all 0.25s ease;
   backdrop-filter: blur(8px);
@@ -909,6 +913,39 @@
 }
 .evie-section-icon svg {
   display: block;
+}
+
+/* -- Data Halo Effect -------------------------------------------------- */
+.evie-data-halo {
+  position: relative;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--evie-text);
+  text-shadow: 0 0 20px var(--evie-vitality-glow), 0 0 40px rgba(16, 185, 129, 0.15);
+}
+.evie-data-halo::after {
+  content: '';
+  position: absolute;
+  inset: -8px -12px;
+  border-radius: 12px;
+  background: radial-gradient(ellipse, rgba(16, 185, 129, 0.08) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.evie-conv-msg .evie-data-halo,
+.evie-conv-msg strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--evie-text-accent);
+}
+
+/* -- Enhanced Stat Halo ------------------------------------------------ */
+.evie-stat {
+  position: relative;
+}
+.evie-stat:hover .evie-stat-value {
+  text-shadow: 0 0 24px var(--evie-vitality-glow), 0 0 48px rgba(16, 185, 129, 0.2);
 }
 
 /* ======================================================================

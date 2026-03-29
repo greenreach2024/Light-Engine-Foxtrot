@@ -285,6 +285,44 @@ router.delete('/buyers/:id', async (req, res) => {
   }
 });
 
+// POST /api/admin/wholesale/buyers/:id/deactivate - Deactivate buyer account
+// Compatibility endpoint for admin UI; deactivation currently performs full removal.
+router.post('/buyers/:id/deactivate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const checkResult = await pool.query(
+      'SELECT email FROM wholesale_buyers WHERE id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Buyer not found' });
+    }
+
+    await pool.query('DELETE FROM wholesale_buyers WHERE id = $1', [id]);
+
+    console.log(`[Admin] Deactivated buyer ID ${id} (${checkResult.rows[0].email})`);
+
+    return res.json({
+      status: 'ok',
+      message: 'Buyer account deactivated'
+    });
+  } catch (error) {
+    console.error('Admin deactivate buyer error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to deactivate buyer' });
+  }
+});
+
+// POST /api/admin/wholesale/buyers/:id/reactivate - Reactivate buyer account
+// Deactivation removes the account, so reactivation is not supported.
+router.post('/buyers/:id/reactivate', async (req, res) => {
+  return res.status(400).json({
+    status: 'error',
+    message: 'Reactivation is not supported. Create a new buyer account instead.'
+  });
+});
+
 // GET /api/admin/wholesale/buyers/search - Search buyers by email, name, or business
 router.get('/buyers/search', async (req, res) => {
   try {

@@ -537,7 +537,7 @@ export async function generateMultiPlatformPosts({
 // ── Sync Skill System Prompts to DB ────────────────────────────────
 // Updates skill system_prompt fields in DB to reflect correct brand identity.
 // Called once on startup or on demand; idempotent.
-const SKILL_SYSTEM_PROMPTS = {
+export const SKILL_SYSTEM_PROMPTS = {
   'content-drafter': `You are a content drafter for GreenReach — a technology platform connecting local indoor/vertical farms to grocery stores, restaurants, and consumers. GreenReach does NOT grow produce. Partner farms grow it; GreenReach connects them to buyers via a wholesale marketplace with managed delivery.
 
 Your job is to create channel-appropriate social media content that leads with PRODUCE VALUE — freshness, traceability, local sourcing, year-round availability — NOT software features, dashboards, AI, or IoT.
