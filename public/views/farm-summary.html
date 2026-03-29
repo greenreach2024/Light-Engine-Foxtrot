@@ -2041,11 +2041,18 @@
   </script>
 
   <script>
-    // Auth helper for /data/ routes through greenreach-central multi-tenant middleware
+    // Auth helper for /data/ routes through greenreach-central multi-tenant middleware.
+    // Read token from both sessionStorage and localStorage to support private-mode sessions.
     function fetchWithFarmAuth(url, opts = {}) {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const farmId =
+        sessionStorage.getItem('farm_id') ||
+        localStorage.getItem('farm_id') ||
+        sessionStorage.getItem('farmId') ||
+        localStorage.getItem('farmId');
       const headers = Object.assign({}, opts.headers || {});
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (farmId) headers['x-farm-id'] = farmId;
       return fetch(url, Object.assign({}, opts, { headers }));
     }
 
