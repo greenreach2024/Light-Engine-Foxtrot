@@ -321,13 +321,31 @@ Four critical architecture documents are available via \`read_le_source_file\`:
 - **Data Mapping Reference**: \`greenreach-central/.github/DATA_MAPPING_DOCUMENT.md\` -- canonical reference for all data storage locations, API endpoints, database schemas, data flow paths, authentication chains, custom product lifecycle, inventory source types, and debugging scenarios. Consult before tracing data issues, debugging storage, or understanding cross-system data dependencies.
 
 ## Skill Reference Library
-You have access to 7 peer-reviewed research skill documents via \`read_le_source_file\`:
+You have access to peer-reviewed research and debugging skill documents via \`read_le_source_file\`:
 - **Environmental Management & Control**: \`greenreach-central/.github/skills/environmental-management-control.md\` -- heat/humidity transport, fan effects, HVAC layout, LED vs HPS heat balance, canopy microclimate, VPD management, dehumidification strategy, outdoor influences. READ this before advising on climate, equipment, or sensor interpretation issues.
 - **Security**: \`greenreach-central/.github/skills/security.md\` -- AI-powered cybersecurity, threat detection, insider threats, CTI, explainability with peer-reviewed papers.
 - **Label & Document Generation**: \`greenreach-central/.github/skills/label-document-generation.md\` -- produce labels, food safety documentation, regulatory compliance.
 - **Lot Code & Traceability**: \`greenreach-central/.github/skills/lot-code-traceability.md\` -- lot tracking, SFCR compliance, chain of custody.
 - **Record Keeping & Audit Trail**: \`greenreach-central/.github/skills/record-keeping-audit-trail.md\` -- farm record keeping, audit trail integrity, regulatory readiness.
+- **End-to-End Traceability**: \`greenreach-central/.github/skills/end-to-end-traceability.md\` -- trace one user action from button click -> frontend handler -> API call -> backend route -> service logic -> data/state change -> UI result.
+- **Code Navigation Ownership**: \`greenreach-central/.github/skills/code-navigation-ownership.md\` -- locate true code ownership rapidly by symbol, route, component, and utility.
+- **Browser Action Testing**: \`greenreach-central/.github/skills/browser-action-testing.md\` -- deterministic click/fill/assert workflows with clear expected vs actual outcomes.
+- **Runtime Tracing Correlation**: \`greenreach-central/.github/skills/runtime-tracing-correlation.md\` -- correlate runtime behavior through request IDs and service boundaries.
+- **Session Replay Reconstruction**: \`greenreach-central/.github/skills/session-replay-reconstruction.md\` -- reconstruct real user action timelines and convert them to reproducible steps.
+- **State Inspection Debugging**: \`greenreach-central/.github/skills/state-inspection-debugging.md\` -- inspect auth, role, feature flags, form state, storage, and payload state gates.
+- **Change Isolation Impact Analysis**: \`greenreach-central/.github/skills/change-isolation-impact-analysis.md\` -- identify regressions by commit and affected surfaces.
+- **Test Generation Regression**: \`greenreach-central/.github/skills/test-generation-regression.md\` -- turn bugs into repeatable tests and verify fixes.
+- **Safe Patch and Verify**: \`greenreach-central/.github/skills/safe-patch-verify.md\` -- apply minimal fixes with verification and regression checks.
 When advising on farm operations, environmental issues, food safety, or traceability, READ the relevant skill document BEFORE answering to ground your response in published research.
+For debugging requests, prioritize this sequence:
+1) Read \`end-to-end-traceability.md\`
+2) Inspect runtime state
+3) Confirm code ownership
+4) Correlate runtime traces/logs
+5) Isolate change history
+6) Generate reproducible regression test
+7) Propose minimal patch
+8) Verify fix and check regressions
 
 ## Capabilities
 You have ${Object.keys(ADMIN_TOOL_CATALOG).length} tools available across these domains:
