@@ -1175,11 +1175,15 @@ export const TOOL_CATALOG = {
     }
   },
   'scan_devices': {
-    description: 'Trigger a network/protocol scan for IoT devices (SwitchBot, Light Engine, wired). Returns discovered devices that can then be registered.',
+    description: 'Unified device discovery scan. Supports wireless (SwitchBot, Light Engine, LEAM BLE/network), wired (bus channel scan), or all modes. Returns a normalized discovery result with asset_kind, source, registration_state, and a discovery_session_id for follow-up actions.',
     category: 'read',
     required: [],
-    optional: ['protocol'],
-    handler: async ({ protocol }) => {
+    optional: ['protocol', 'mode', 'bus_type'],
+    handler: async (params) => {
+      const { protocol, mode, bus_type } = params;
+      const scanMode = mode || 'wireless'; // wireless | wired | all
+      const farmId = params.farm_id || process.env.FARM_ID;
+      const sessionId = 'ds-' + crypto.randomBytes(6).toString('hex');
       const discovered = [];
 
       // 1. Check Light Engine edge proxy
@@ -1270,18 +1274,109 @@ export const TOOL_CATALOG = {
         return true;
       });
 
+      // 4. Wired bus channel scan (if mode is 'wired' or 'all')
+      const wiredChannels = [];
+      if (scanMode === 'wired' || scanMode === 'all') {
+        try {
+          const farmUrl = process.env.FARM_API_URL || process.env.LE_API_URL;
+          if (farmUrl) {
+            const busResp = await fetch(`${farmUrl}/api/devices/scan-bus`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bus_type: bus_type || 'all', timeout_ms: 5000 }),
+              signal: AbortSignal.timeout(8000)
+            });
+            if (busResp.ok) {
+              const busData = await busResp.json();
+              const channels = busData.channels || busData.devices || [];
+              for (const ch of channels) {
+                wiredChannels.push({
+                  asset_kind: 'wired_channel',
+                  source: 'bus-scan',
+                  discovered_id: ch.address || ch.channel_id || ch.id,
+                  display_name: ch.name || ch.label || `${(ch.bus_type || 'unknown').toUpperCase()} @ ${ch.address || ch.id}`,
+                  protocol: ch.bus_type || ch.protocol || 'wired',
+                  bus_id: ch.bus_id || null,
+                  node_id: ch.node_id || null,
+                  channel_id: ch.channel_id || ch.address || ch.id,
+                  registration_state: 'new',
+                  recommended_next_action: 'save_bus_mapping'
+                });
+              }
+            }
+          }
+        } catch { /* bus scan failed -- non-fatal */ }
+
+        // Check which wired channels are already mapped
+        if (wiredChannels.length > 0) {
+          try {
+            const mapped = await dbQuery(
+              'SELECT device_id, metadata FROM devices WHERE farm_id = $1 AND metadata IS NOT NULL',
+              [farmId]
+            );
+            const mappedAddresses = new Set();
+            for (const row of mapped.rows) {
+              try {
+                const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+                if (meta?.bus_address) mappedAddresses.add(meta.bus_address);
+                if (meta?.bus_mapping?.bus_address) mappedAddresses.add(meta.bus_mapping.bus_address);
+              } catch { /* skip */ }
+            }
+            for (const ch of wiredChannels) {
+              if (mappedAddresses.has(ch.discovered_id) || mappedAddresses.has(ch.channel_id)) {
+                ch.registration_state = 'mapped';
+                ch.recommended_next_action = null;
+              }
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      // 5. Normalize wireless devices into unified schema
+      const unifiedWireless = discovered.map(d => ({
+        asset_kind: 'wireless_device',
+        source: d.source || 'unknown',
+        discovered_id: d.device_id || null,
+        display_name: d.name || 'Unknown Device',
+        protocol: d.protocol || 'unknown',
+        bus_id: null,
+        node_id: null,
+        channel_id: null,
+        registration_state: (d.device_id && existingIds.has(d.device_id)) || existingNames.has((d.name || '').toLowerCase()) ? 'registered' : 'new',
+        recommended_next_action: (d.device_id && existingIds.has(d.device_id)) || existingNames.has((d.name || '').toLowerCase()) ? null : 'register_device',
+        device_type: d.type || null,
+        brand: d.brand || null
+      }));
+
+      // 6. Build unified response
+      const allAssets = [...unifiedWireless, ...wiredChannels];
+      const newAssets = allAssets.filter(a => a.registration_state === 'new');
+      const registeredAssets = allAssets.filter(a => a.registration_state !== 'new');
+
       return {
         ok: true,
-        total_discovered: discovered.length,
-        already_registered: discovered.length - newDevices.length,
+        discovery_session_id: sessionId,
+        mode: scanMode,
+        total_discovered: allAssets.length,
+        new_assets: newAssets.length,
+        registered_assets: registeredAssets.length,
+        assets: allAssets,
+        // Legacy fields for backward compat
         new_devices: newDevices.length,
         devices: newDevices,
         all_discovered: discovered,
-        note: newDevices.length > 0
-          ? `Found ${newDevices.length} new device(s). Use register_device to add them.`
-          : discovered.length > 0
-            ? 'All discovered devices are already registered.'
-            : 'No devices found on the network. Check that devices are powered on and connected.'
+        wired_channels: wiredChannels,
+        summary: {
+          wireless_new: unifiedWireless.filter(a => a.registration_state === 'new').length,
+          wireless_registered: unifiedWireless.filter(a => a.registration_state === 'registered').length,
+          wired_unmapped: wiredChannels.filter(a => a.registration_state === 'new').length,
+          wired_mapped: wiredChannels.filter(a => a.registration_state === 'mapped').length
+        },
+        note: newAssets.length > 0
+          ? `Found ${newAssets.length} new asset(s). Use register_device for wireless devices or save_bus_mapping for wired channels.`
+          : allAssets.length > 0
+            ? 'All discovered assets are already registered or mapped.'
+            : 'No devices found. Check that devices are powered on and connected.'
       };
     }
   },
@@ -2856,30 +2951,59 @@ export const TOOL_CATALOG = {
     }
   },
   'get_bus_mappings': {
-    description: 'Get current bus-to-device mappings. Shows which physical addresses/channels are mapped to which registered devices.',
+    description: 'Get current bus-to-device mappings with coverage summary. Shows which physical addresses/channels are mapped to which registered devices, total mapped channels, and unmapped channels by bus type.',
     category: 'read',
     required: [],
     optional: ['bus_type'],
     handler: async (params) => {
       try {
         const farmId = params.farm_id || process.env.FARM_ID;
-        const busParams = [];
-        const busFilter = params.bus_type ? `AND sl.entity_type = $${busParams.push(params.bus_type)}` : '';
-        const result = await dbQuery(`
-          SELECT sl.entity_id as address, sl.entity_type as bus_type,
-            d.device_id, d.name as device_name, d.device_type, d.status
-          FROM study_links sl
-          LEFT JOIN devices d ON d.device_id = sl.entity_id
-          WHERE sl.study_id IS NULL AND sl.linked_by IS NULL ${busFilter}
-          ORDER BY sl.entity_type, sl.entity_id
-        `, busParams);
-        // Fallback: query devices table directly for bus mappings
+        // Query devices table for all devices with bus mapping metadata
         const devices = await dbQuery(`
-          SELECT device_id, name, device_type, status, metadata
+          SELECT device_id, name, device_type, status, metadata, updated_at
           FROM devices WHERE farm_id = $1
           ORDER BY device_type, name
         `, [farmId]);
-        return { ok: true, mappings: result.rows, registered_devices: devices.rows };
+
+        // Extract bus mappings from device metadata
+        const mappings = [];
+        const busCounts = {};
+        for (const d of devices.rows) {
+          let meta = null;
+          try {
+            meta = typeof d.metadata === 'string' ? JSON.parse(d.metadata) : d.metadata;
+          } catch { /* skip */ }
+          const busInfo = meta?.bus_mapping || (meta?.bus_type ? meta : null);
+          if (busInfo?.bus_type && busInfo?.bus_address) {
+            mappings.push({
+              address: busInfo.bus_address,
+              bus_type: busInfo.bus_type,
+              device_id: d.device_id,
+              device_name: d.name,
+              device_type: d.device_type,
+              status: d.status,
+              mapped_at: busInfo.mapped_at || d.updated_at
+            });
+            busCounts[busInfo.bus_type] = (busCounts[busInfo.bus_type] || 0) + 1;
+          }
+        }
+
+        // Filter by bus_type if requested
+        const filtered = params.bus_type
+          ? mappings.filter(m => m.bus_type === params.bus_type)
+          : mappings;
+
+        return {
+          ok: true,
+          total_mapped_channels: filtered.length,
+          mappings_by_bus: busCounts,
+          mappings: filtered,
+          registered_devices: devices.rows,
+          recent_mapping_updates: mappings
+            .filter(m => m.mapped_at)
+            .sort((a, b) => new Date(b.mapped_at) - new Date(a.mapped_at))
+            .slice(0, 5)
+        };
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -2917,6 +3041,16 @@ export const TOOL_CATALOG = {
   }
 
 };
+
+// Discovery session cache: sessionId -> { assets, created_at, farm_id }
+const discoverySessions = new Map();
+const DISCOVERY_SESSION_TTL_MS = 15 * 60 * 1000; // 15 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, sess] of discoverySessions) {
+    if (now - sess.created_at > DISCOVERY_SESSION_TTL_MS) discoverySessions.delete(id);
+  }
+}, 5 * 60 * 1000);
 
 // Idempotency cache: key → { result, created_at }
 const idempotencyCache = new Map();

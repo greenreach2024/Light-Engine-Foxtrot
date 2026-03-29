@@ -451,11 +451,13 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'scan_devices',
-      description: 'Trigger a real network/protocol scan for IoT devices (SwitchBot, Light Engine, wired sensors). Returns discovered devices that are NOT yet registered. After scanning, use register_device to add new devices to the inventory.',
+      description: 'Unified device discovery scan. Scans wireless (SwitchBot, Light Engine), wired (bus channels), or all. Returns normalized assets with asset_kind, source, registration_state, and a discovery_session_id for follow-up register_device or save_bus_mapping calls. Use mode "all" for comprehensive onboarding.',
       parameters: {
         type: 'object',
         properties: {
-          protocol: { type: 'string', description: 'Protocol to scan: "all", "switchbot", "light-engine". Default: all.' }
+          protocol: { type: 'string', description: 'Wireless protocol filter: "all", "switchbot", "light-engine". Default: all.' },
+          mode: { type: 'string', description: 'Scan scope: "wireless" (default), "wired" (bus channels only), or "all" (both wireless and wired).' },
+          bus_type: { type: 'string', description: 'For wired scans: bus type filter ("i2c", "spi", "1wire", "uart", "all"). Default: all.' }
         }
       }
     }
@@ -1389,6 +1391,53 @@ const GPT_TOOLS = [
       }
     }
   },
+  // ── Bus Mapping & Wired Channel Tools ──────────────────────────────
+  {
+    type: 'function',
+    function: {
+      name: 'scan_bus_channels',
+      description: 'Scan wired bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered channels with addresses and suggested types. Use this for targeted wired-only scanning when you already know the bus type.',
+      parameters: {
+        type: 'object',
+        properties: {
+          bus_type: { type: 'string', description: 'Bus type to scan: "i2c", "spi", "1wire", "uart", or "all" (default).' },
+          timeout_ms: { type: 'number', description: 'Scan timeout in milliseconds (default 5000).' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_bus_mappings',
+      description: 'Get current bus-to-device mappings with coverage summary. Shows total mapped channels, unmapped channels by bus type, and recent mapping updates. Use this to understand current mapping coverage before scanning or onboarding.',
+      parameters: {
+        type: 'object',
+        properties: {
+          bus_type: { type: 'string', description: 'Filter by bus type (i2c, spi, 1wire, uart). Omit for all.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_bus_mapping',
+      description: 'Map a discovered wired bus channel to a device. WRITE operation -- describe the mapping and ask the user to confirm before executing. Creates or updates the device record with bus mapping metadata.',
+      parameters: {
+        type: 'object',
+        properties: {
+          bus_address: { type: 'string', description: 'Physical bus address (e.g. "0x48", "28-00000abcdef").' },
+          device_id: { type: 'string', description: 'Device identifier to map to (auto-generated if omitted).' },
+          bus_type: { type: 'string', description: 'Bus type: "i2c", "spi", "1wire", "uart".' },
+          device_name: { type: 'string', description: 'Human-readable device name (e.g. "Zone 1 Temp Sensor").' },
+          device_type: { type: 'string', description: 'Device type: sensor, light_controller, fan_controller, etc.' },
+          group_name: { type: 'string', description: 'Optional group/zone to assign the mapping to.' }
+        },
+        required: ['bus_address', 'bus_type']
+      }
+    }
+  },
   // ── LEAM (Local Companion) Tools ────────────────────────────────────
   {
     type: 'function',
@@ -1753,19 +1802,37 @@ PLANTING SCHEDULE WORKFLOW:
 - If the farmer asks to “update the schedule based on harvests” or “optimise around the harvest schedule”, correlate get_scheduled_harvests with get_planting_assignments — propose new plantings for zones that are freeing up.
 - For succession planting, stagger seed dates so harvests are spread across weeks rather than all at once.
 
-DEVICE MANAGEMENT:
-- When the farmer asks to scan for devices, discover hardware, or check what's connected:
-  1. Call scan_devices to trigger a real network/protocol scan.
-  2. Also call get_device_status to show the current inventory.
-  3. Report what was found: new devices on the network + already registered devices.
-  4. For each new device found, offer to register it using register_device.
+DEVICE MANAGEMENT AND ONBOARDING WORKFLOW:
+- When the farmer asks to scan for devices, discover hardware, find new devices, or "what's connected":
+  1. Call get_device_status to show current inventory and get_bus_mappings for wired coverage.
+  2. Call scan_devices with mode "all" for a unified scan (wireless + wired).
+  3. Group the results by asset_kind: wireless_device vs wired_channel.
+  4. For each group, summarize what was found:
+     - New wireless devices: offer to register using register_device.
+     - New unmapped wired channels: offer to map using save_bus_mapping.
+     - Already registered/mapped assets: confirm they are accounted for.
+  5. Use the discovery_session_id from scan results to reference assets in follow-up.
+- WIRED ONBOARDING (bus mapping):
+  When unmapped bus channels are found:
+  1. List each channel with address, protocol, and suggested type.
+  2. For each channel the user wants to map, propose: device name, device type, group/zone.
+  3. Ask for explicit confirmation before calling save_bus_mapping.
+  4. After mapping, call get_bus_mappings to verify the mapping was saved.
+- WIRELESS ONBOARDING:
+  When new wireless devices are found:
+  1. List each device with name, protocol, brand, and suggested type.
+  2. For each device the user wants to add, propose: name, type, room_id, zone, protocol.
+  3. Ask for explicit confirmation before calling register_device.
+  4. After registration, call get_device_status to verify.
 - When the farmer asks to add, introduce, register, or set up a specific device (e.g. "add a dehumidifier to zone 1"):
   1. Call get_device_status to see the current inventory and available rooms.
   2. Use register_device with the device details (name, type, room_id, zone, protocol, brand).
   3. Device types: sensor, light_controller, fan_controller, dehumidifier, hvac, humidifier, irrigation, camera, hub, relay, meter, other.
   4. After registration, call get_device_status to verify it's in the inventory.
-- Only offer auto_assign_devices when there are multiple unassigned devices that need bulk assignment.
 - When asked "what devices do I have" or "show my devices", use get_device_status (no scan needed).
+- When asked "show bus mappings" or "what's mapped", use get_bus_mappings.
+- Only offer auto_assign_devices when there are multiple unassigned devices that need bulk assignment.
+- CONFIRMATION POLICY: Always ask the user to confirm before executing register_device, save_bus_mapping, or any operation that modifies device inventory or mappings.
 
 PRICING WORKFLOW:
 - When the farmer asks to update crop prices, FIRST call get_pricing_info to see current prices and units.
@@ -3858,6 +3925,19 @@ async function executeExtendedTool(toolName, params, farmId) {
       } catch (err) {
         return { ok: false, error: `Failed to read skill: ${err.message}` };
       }
+    }
+
+    // ── Bus Mapping & Wired Channel Tools ──────────────────────────────
+    case 'scan_bus_channels':
+    case 'get_bus_mappings':
+    case 'save_bus_mapping': {
+      // These tools are in TOOL_CATALOG -- dispatch via executeTool
+      const busResult = await executeTool(toolName, { ...params, farm_id: farmId });
+      // Cache discovery sessions for follow-up
+      if (toolName === 'scan_bus_channels' && busResult.ok) {
+        // Scan results don't go through scan_devices but should still be traceable
+      }
+      return busResult;
     }
 
     // ── LEAM Companion Agent Tools ──────────────────────────────────────
