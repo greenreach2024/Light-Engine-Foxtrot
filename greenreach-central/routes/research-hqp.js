@@ -55,7 +55,7 @@ router.get('/research/trainees', async (req, res) => {
 
 router.post('/research/trainees', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, grant_id, name, email, institution, department, trainee_type,
@@ -147,7 +147,7 @@ router.get('/research/trainees/:id/supervision', async (req, res) => {
 
 router.post('/research/trainees/:id/supervision', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { meeting_date, attendees, agenda, notes, action_items, next_meeting_date } = req.body;
@@ -182,7 +182,7 @@ router.get('/research/trainees/:id/milestones', async (req, res) => {
 
 router.post('/research/trainees/:id/milestones', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { milestone_type, title, description, due_date } = req.body;
@@ -246,7 +246,7 @@ router.get('/research/trainees/:id/professional-dev', async (req, res) => {
 
 router.post('/research/trainees/:id/professional-dev', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { activity_type, title, description, activity_date, hours, provider, certificate_url } = req.body;
@@ -329,7 +329,7 @@ router.get('/research/edi/summary', async (req, res) => {
 
 router.post('/research/edi/self-identification', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { category, response } = req.body;

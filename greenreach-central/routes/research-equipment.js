@@ -57,7 +57,7 @@ router.get('/research/equipment', async (req, res) => {
 
 router.post('/research/equipment', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, category, manufacturer, model, serial_number, location, purchase_date,
@@ -111,7 +111,7 @@ router.get('/research/equipment/:id', async (req, res) => {
 
 router.patch('/research/equipment/:id', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const fields = ['name', 'category', 'manufacturer', 'model', 'serial_number', 'location',
@@ -145,7 +145,7 @@ router.patch('/research/equipment/:id', async (req, res) => {
 
 router.patch('/research/equipment/:id/status', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { status } = req.body;
@@ -189,7 +189,7 @@ router.get('/research/equipment/:id/bookings', async (req, res) => {
 
 router.post('/research/equipment/:id/bookings', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, booked_by, start_time, end_time, purpose } = req.body;
@@ -278,7 +278,7 @@ router.get('/research/equipment/:id/maintenance', async (req, res) => {
 
 router.post('/research/equipment/:id/maintenance', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { maintenance_type, description, performed_by, performed_at, next_due, cost } = req.body;

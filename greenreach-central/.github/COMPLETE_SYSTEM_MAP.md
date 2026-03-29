@@ -1680,6 +1680,33 @@ EnvStore
 **data_annotations** (id SERIAL PK)
 - farm_id, dataset_id, annotation_type (quality_note|classification|retention|processing_note|access_restriction|compliance_tag|custom), content, author, metadata JSONB, created_at, updated_at
 
+### 8.15 Research Platform (Phase 4 Audit Remediation)
+
+**Security/Tenant Controls**
+- Added `greenreach-central/middleware/feature-gate.js` and enforced `requireResearchTier()` in `greenreach-central/server.js` research auth chain.
+- Research routes now require both auth and tier gate: `authMiddleware -> requireResearchTier() -> route handler`.
+- Tier gate supports env controls: `RESEARCH_TIER_ENABLED=*` (all farms) or `RESEARCH_TIER_FARMS=farm1,farm2`, with DB fallback at `farms.settings.features.research_enabled`.
+
+**Input Safety & IDOR Remediation**
+- Removed `req.body.farm_id` fallback across research write endpoints; farm scope now derives from authenticated context (`req.farmId`) only.
+- Standardized pagination bounds on research list endpoints: default limit 20, max limit 100, offset >= 0.
+- Added validation guards for:
+  - `retention_period_years` (integer 1-100)
+  - `indirect_rate` (0-100)
+  - text fields (title/comment/description/justification/content) with max lengths in high-volume write endpoints.
+
+**Data Query Performance**
+- Replaced correlated subquery count patterns (N+1-style) with `LEFT JOIN + GROUP BY` aggregations in:
+  - `routes/research-studies.js` list endpoint (protocol/link counts)
+  - `routes/research-data.js` dataset list endpoint (observation count)
+
+**ELN Signature Hardening**
+- ELN signature hash now includes cryptographic nonce per signature event.
+- Stored signature format: `nonce.hash` in `eln_signatures.signature_hash`.
+
+**Admin Navigation**
+- Added Research Workspace link in LE admin sidebar (`/views/research-workspace.html`) and mirrored in both deploy-target public directories.
+
 ---
 
 ## 9. Authentication Architecture

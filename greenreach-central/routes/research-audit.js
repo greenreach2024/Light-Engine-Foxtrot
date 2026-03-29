@@ -4,6 +4,9 @@ import { verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
+const MAX_TEXT_LENGTH = 5000;
+const MAX_TITLE_LENGTH = 255;
+
 const checkDb = async (req, res, next) => {
   if (!(await isDatabaseAvailable())) {
     return res.status(503).json({ ok: false, error: 'Database not available' });
@@ -44,14 +47,16 @@ router.get('/research/audit', async (req, res) => {
     const farmId = req.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
-    const { study_id, entity_type, action, user_id, limit = 100, offset = 0 } = req.query;
+    const { study_id, entity_type, action, user_id, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [farmId];
     let where = 'WHERE a.farm_id = $1';
     if (study_id) { params.push(study_id); where += ` AND a.study_id = $${params.length}`; }
     if (entity_type) { params.push(entity_type); where += ` AND a.entity_type = $${params.length}`; }
     if (action) { params.push(action); where += ` AND a.action = $${params.length}`; }
     if (user_id) { params.push(user_id); where += ` AND a.user_id = $${params.length}`; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT a.*, u.email as user_email
@@ -90,12 +95,15 @@ router.get('/research/studies/:id/coi', verifyStudyOwnership, async (req, res) =
 
 router.post('/research/studies/:id/coi', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { declaration_type, related_entity, description } = req.body;
     if (!declaration_type || !description) {
       return res.status(400).json({ ok: false, error: 'declaration_type and description required' });
+    }
+    if (description.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'description must be 5000 characters or fewer' });
     }
 
     const result = await query(`
@@ -117,6 +125,9 @@ router.patch('/research/coi/:id/review', async (req, res) => {
     const { status, comments } = req.body;
     if (!status || !['reviewed', 'cleared', 'flagged'].includes(status)) {
       return res.status(400).json({ ok: false, error: 'Valid status required (reviewed|cleared|flagged)' });
+    }
+    if (comments && comments.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'comments must be 5000 characters or fewer' });
     }
 
     const result = await query(`
@@ -155,7 +166,7 @@ router.get('/research/studies/:id/signoffs', verifyStudyOwnership, async (req, r
 
 router.post('/research/studies/:id/signoffs', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { role_title, responsibilities } = req.body;
@@ -201,7 +212,7 @@ router.get('/research/studies/:id/approvals', verifyStudyOwnership, async (req, 
 
 router.post('/research/studies/:id/approvals', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { entity_type, entity_id, steps } = req.body;
@@ -236,6 +247,9 @@ router.patch('/research/approvals/:id/decide', async (req, res) => {
     const { status, comments } = req.body;
     if (!status || !['approved', 'rejected', 'skipped'].includes(status)) {
       return res.status(400).json({ ok: false, error: 'Valid status required (approved|rejected|skipped)' });
+    }
+    if (comments && comments.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'comments must be 5000 characters or fewer' });
     }
 
     const result = await query(`
@@ -274,12 +288,24 @@ router.get('/research/studies/:id/contributions', verifyStudyOwnership, async (r
 
 router.post('/research/studies/:id/contributions', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { contributor_name, role, contribution_description, credit_order, orcid, institution, user_id } = req.body;
     if (!contributor_name || !role) {
       return res.status(400).json({ ok: false, error: 'contributor_name and role required' });
+    }
+    if (contributor_name.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'contributor_name must be 255 characters or fewer' });
+    }
+    if (role.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'role must be 255 characters or fewer' });
+    }
+    if (contribution_description && contribution_description.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'contribution_description must be 5000 characters or fewer' });
+    }
+    if (institution && institution.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'institution must be 255 characters or fewer' });
     }
 
     const result = await query(`
@@ -299,6 +325,12 @@ router.post('/research/studies/:id/contributions', verifyStudyOwnership, async (
 router.patch('/research/contributions/:id', async (req, res) => {
   try {
     const { credit_order, role, contribution_description, confirmed_at } = req.body;
+    if (role !== undefined && role.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'role must be 255 characters or fewer' });
+    }
+    if (contribution_description !== undefined && contribution_description.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'contribution_description must be 5000 characters or fewer' });
+    }
     const fields = [];
     const params = [];
     let idx = 1;

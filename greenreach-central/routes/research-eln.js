@@ -66,7 +66,7 @@ router.get('/research/notebooks', async (req, res) => {
 
 router.post('/research/notebooks', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { title, study_id, owner_id } = req.body;
@@ -141,11 +141,13 @@ router.patch('/research/notebooks/:id', verifyNotebookOwnership, async (req, res
 router.get('/research/notebooks/:id/entries', verifyNotebookOwnership, async (req, res) => {
   try {
     const { id } = req.params;
-    const { entry_type, limit = 100, offset = 0 } = req.query;
+    const { entry_type, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [id];
     let where = 'WHERE e.notebook_id = $1';
     if (entry_type) { params.push(entry_type); where += ` AND e.entry_type = $${params.length}`; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT e.*, u.email as created_by_email,
@@ -266,15 +268,17 @@ router.post('/research/entries/:id/sign', verifyEntryOwnership, async (req, res)
     const entry = await query('SELECT content FROM eln_entries WHERE id = $1', [id]);
     if (entry.rows.length === 0) return res.status(404).json({ ok: false, error: 'Entry not found' });
 
+    const nonce = crypto.randomBytes(16).toString('hex');
     const signatureHash = crypto.createHash('sha256')
-      .update(JSON.stringify(entry.rows[0].content) + ':' + id + ':' + signer_id + ':' + signature_type + ':' + new Date().toISOString())
+      .update(JSON.stringify(entry.rows[0].content) + ':' + id + ':' + signer_id + ':' + signature_type + ':' + new Date().toISOString() + ':' + nonce)
       .digest('hex');
+    const storedHash = nonce + '.' + signatureHash;
 
     const result = await query(`
       INSERT INTO eln_signatures (entry_id, signer_id, signature_type, signature_hash)
       VALUES ($1, $2, $3, $4)
       RETURNING *
-    `, [id, signer_id, signature_type, signatureHash]);
+    `, [id, signer_id, signature_type, storedHash]);
 
     // Auto-lock entry on PI approval
     if (signature_type === 'pi_approval') {
@@ -383,6 +387,7 @@ router.post('/research/entries/:id/snapshot', verifyEntryOwnership, async (req, 
     const snapshotHash = crypto.createHash('sha256')
       .update(JSON.stringify(snapshotContent))
       .digest('hex');
+    const storedHash = nonce + '.' + signatureHash;
 
     const result = await query(`
       INSERT INTO eln_snapshots (entry_id, snapshot_content, snapshot_hash, milestone_id)
@@ -424,7 +429,7 @@ router.get('/research/templates', async (req, res) => {
 
 router.post('/research/templates', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, description, fields, created_by } = req.body;

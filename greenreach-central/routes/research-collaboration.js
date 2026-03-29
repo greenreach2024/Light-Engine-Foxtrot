@@ -20,6 +20,9 @@ import { verifyCollaboratorOwnership, verifyCommentOwnership, verifyOnboardingOw
 
 const router = Router();
 
+const MAX_TEXT_LENGTH = 5000;
+const MAX_TITLE_LENGTH = 255;
+
 const checkDb = async (req, res, next) => {
   if (!(await isDatabaseAvailable())) {
     return res.status(503).json({ ok: false, error: 'Database not available' });
@@ -147,7 +150,10 @@ router.post('/research/studies/:id/comments', verifyStudyOwnership, async (req, 
     const { id } = req.params;
     const { entity_type, entity_id, comment_text, commenter_id } = req.body;
     if (!entity_type || !entity_id || !comment_text) {
-      return res.status(400).json({ ok: false, error: 'entity_type, entity_id, and comment_text required' });
+      return res.status(400).json({ ok: false, error: "entity_type, entity_id, and comment_text required" });
+    }
+    if (comment_text.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: "comment_text must be 5000 characters or fewer" });
     }
 
     const result = await query(`
@@ -274,7 +280,7 @@ router.get('/research/onboarding', async (req, res) => {
 
 router.post('/research/onboarding', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { user_id, study_id, role, checklist } = req.body;

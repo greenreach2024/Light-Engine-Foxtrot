@@ -42,8 +42,8 @@ router.get('/research/lineage', async (req, res) => {
     if (dataset_id) { params.push(dataset_id); where += ` AND dl.dataset_id = $${params.length}`; }
     if (event_type) { params.push(event_type); where += ` AND dl.event_type = $${params.length}`; }
 
-    const maxRows = Math.min(parseInt(lim, 10) || 200, 1000);
-    params.push(maxRows);
+    const safeLimit = Math.min(Math.max(parseInt(lim, 10) || 20, 1), 100);
+    params.push(safeLimit);
 
     const result = await query(`
       SELECT dl.*, rd.name as dataset_name
@@ -61,7 +61,7 @@ router.get('/research/lineage', async (req, res) => {
 
 router.post('/research/lineage', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { dataset_id, event_type, description, actor, source_entity_type, source_entity_id, metadata } = req.body;
@@ -140,7 +140,7 @@ router.get('/research/lineage/chain/:dataset_id', async (req, res) => {
 
 router.post('/research/lineage/derivation', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { parent_dataset_id, child_dataset_id, transformation, actor } = req.body;
@@ -241,7 +241,7 @@ router.get('/research/annotations', async (req, res) => {
 
 router.post('/research/annotations', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { dataset_id, annotation_type, content, author, target_field, target_row_id } = req.body;

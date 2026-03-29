@@ -20,6 +20,9 @@ import { verifyBudgetItemOwnership, verifyBudgetOwnership, verifyProfileOwnershi
 
 const router = Router();
 
+const MAX_TEXT_LENGTH = 5000;
+const MAX_TITLE_LENGTH = 255;
+
 const checkDb = async (req, res, next) => {
   if (!(await isDatabaseAvailable())) {
     return res.status(503).json({ ok: false, error: 'Database not available' });
@@ -77,12 +80,22 @@ router.post('/research/studies/:id/retention', verifyStudyOwnership, async (req,
   try {
     const { id } = req.params;
     const { retention_period_years, archival_location, embargo_until, sharing_level, auto_delete_after } = req.body;
+    const retentionYears = retention_period_years === undefined || retention_period_years === null || retention_period_years === ""
+      ? 10
+      : Number(retention_period_years);
+
+    if (!Number.isInteger(retentionYears) || retentionYears < 1 || retentionYears > 100) {
+      return res.status(400).json({ ok: false, error: "retention_period_years must be an integer between 1 and 100" });
+    }
+    if (archival_location && archival_location.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: "archival_location must be 255 characters or fewer" });
+    }
 
     const result = await query(`
       INSERT INTO retention_policies (study_id, retention_period_years, archival_location, embargo_until, sharing_level, auto_delete_after)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
-    `, [id, retention_period_years || 10, archival_location || null,
+    `, [id, retentionYears, archival_location || null,
         embargo_until || null, sharing_level || 'private', auto_delete_after || null]);
 
     res.status(201).json({ ok: true, policy: result.rows[0] });
@@ -120,7 +133,17 @@ router.post('/research/studies/:id/budgets', verifyStudyOwnership, async (req, r
     const { id } = req.params;
     const { budget_name, grant_application_id, award_period_start, award_period_end, total_amount, indirect_rate } = req.body;
     if (!budget_name) {
-      return res.status(400).json({ ok: false, error: 'budget_name required' });
+      return res.status(400).json({ ok: false, error: "budget_name required" });
+    }
+    if (budget_name.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: "budget_name must be 255 characters or fewer" });
+    }
+
+    const parsedIndirectRate = indirect_rate === undefined || indirect_rate === null || indirect_rate === ""
+      ? 0
+      : Number(indirect_rate);
+    if (!Number.isFinite(parsedIndirectRate) || parsedIndirectRate < 0 || parsedIndirectRate > 100) {
+      return res.status(400).json({ ok: false, error: "indirect_rate must be between 0 and 100" });
     }
 
     const result = await query(`
@@ -128,7 +151,7 @@ router.post('/research/studies/:id/budgets', verifyStudyOwnership, async (req, r
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `, [id, budget_name, grant_application_id || null, award_period_start || null,
-        award_period_end || null, total_amount || 0, indirect_rate || 0]);
+        award_period_end || null, total_amount || 0, parsedIndirectRate]);
 
     res.status(201).json({ ok: true, budget: result.rows[0] });
   } catch (err) {
@@ -254,7 +277,7 @@ router.get('/research/profiles', async (req, res) => {
 
 router.post('/research/profiles', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { user_id, orcid_id, institution, department, role_title, affiliation_type, bio } = req.body;
@@ -336,7 +359,7 @@ router.get('/research/citations', async (req, res) => {
 
 router.post('/research/citations', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, dataset_id, citation_type, title, authors, doi, repository, version, metadata_schema } = req.body;
@@ -432,7 +455,7 @@ router.get('/research/dmp-templates', async (req, res) => {
 
 router.post('/research/dmp-templates', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { template_name, grant_type, sections } = req.body;
@@ -472,7 +495,7 @@ router.get('/research/dmp/:id/changes', async (req, res) => {
 
 router.post('/research/dmp/:id/changes', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { field_changed, old_value, new_value, reason } = req.body;
@@ -506,7 +529,7 @@ router.get('/research/studies/:id/data-dictionary', verifyStudyOwnership, async 
 
 router.post('/research/studies/:id/data-dictionary', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { variable_name, description, data_type, unit, allowed_values, source, collection_method } = req.body;
@@ -565,7 +588,7 @@ router.get('/research/studies/:id/metadata', verifyStudyOwnership, async (req, r
 
 router.post('/research/studies/:id/metadata', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { schema_name, schema_version, schema_definition, standard } = req.body;
@@ -606,7 +629,7 @@ router.get('/research/budgets/:id/contributions', async (req, res) => {
 
 router.post('/research/budgets/:id/contributions', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { contributor_type, contributor_name, institution, amount, description } = req.body;

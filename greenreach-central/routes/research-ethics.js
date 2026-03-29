@@ -41,7 +41,7 @@ router.get('/research/studies/:id/ethics', verifyStudyOwnership, async (req, res
 
 router.post('/research/studies/:id/ethics', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { ethics_type, board_name, protocol_number, title, risk_level,
@@ -164,7 +164,7 @@ router.get('/research/ethics/:id/amendments', async (req, res) => {
 
 router.post('/research/ethics/:id/amendments', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { amendment_type, description, changes_summary } = req.body;
@@ -197,7 +197,7 @@ router.get('/research/ethics/:id/renewals', async (req, res) => {
 
 router.post('/research/ethics/:id/renewals', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { renewal_date, new_expiry_date, annual_report } = req.body;
@@ -230,7 +230,7 @@ router.get('/research/studies/:id/biosafety', verifyStudyOwnership, async (req, 
 
 router.post('/research/studies/:id/biosafety', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { containment_level, agents, risk_assessment, ppe_requirements, waste_procedures } = req.body;

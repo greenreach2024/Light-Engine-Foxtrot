@@ -152,7 +152,7 @@ router.get('/research/reports/grants/:id/health', async (req, res) => {
 
 router.post('/research/reports/grant-annual', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { grant_id, year } = req.body;
@@ -197,7 +197,7 @@ router.post('/research/reports/grant-annual', async (req, res) => {
 
 router.post('/research/reports/study-closeout', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id } = req.body;
@@ -242,7 +242,7 @@ router.post('/research/reports/study-closeout', async (req, res) => {
 
 router.post('/research/reports/compliance-summary', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const [ethics, dmps, classifications, incidents, audits, coi] = await Promise.all([
@@ -312,7 +312,7 @@ router.get('/research/reports/activity-feed', async (req, res) => {
     const farmId = req.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
 
     const result = await query(`
       SELECT * FROM (

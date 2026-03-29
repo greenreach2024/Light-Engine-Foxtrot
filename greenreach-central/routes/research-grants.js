@@ -59,7 +59,7 @@ router.get('/research/grants', async (req, res) => {
 
 router.post('/research/grants', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, title, funding_agency, program, amount_requested, currency,
@@ -189,7 +189,7 @@ router.get('/research/grants/:id/reports', async (req, res) => {
 
 router.post('/research/grants/:id/reports', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { report_type, title, reporting_period_start, reporting_period_end, content, financials } = req.body;
@@ -255,7 +255,7 @@ router.get('/research/grants/:id/publications', async (req, res) => {
 
 router.post('/research/grants/:id/publications', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { title, authors, journal, doi, publication_type, published_date, status, open_access } = req.body;
@@ -324,7 +324,7 @@ router.get('/research/grants/:id/milestones', async (req, res) => {
 
 router.post('/research/grants/:id/milestones', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { title, description, due_date, deliverable_type } = req.body;
@@ -411,7 +411,7 @@ router.get('/research/grants/:id/extensions', async (req, res) => {
 
 router.post('/research/grants/:id/extensions', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { extension_type, new_end_date, justification } = req.body;
@@ -444,7 +444,7 @@ router.get('/research/grants/:id/amendments', async (req, res) => {
 
 router.post('/research/grants/:id/amendments', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { amendment_type, from_category, to_category, amount, justification } = req.body;

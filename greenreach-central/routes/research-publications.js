@@ -59,7 +59,7 @@ router.get('/research/publications', async (req, res) => {
 
 router.post('/research/publications', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { title, grant_id, journal, publication_type, doi, abstract,
@@ -122,7 +122,7 @@ router.get('/research/publications/:id', async (req, res) => {
 
 router.patch('/research/publications/:id', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const fields = ['title', 'journal', 'publication_type', 'doi', 'abstract',
@@ -156,7 +156,7 @@ router.patch('/research/publications/:id', async (req, res) => {
 
 router.patch('/research/publications/:id/status', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { status } = req.body;

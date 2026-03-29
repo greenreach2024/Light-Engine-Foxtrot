@@ -41,23 +41,28 @@ router.get('/research/studies', async (req, res) => {
     const farmId = req.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
-    const { status, limit = 50, offset = 0 } = req.query;
+    const { status, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [farmId];
     let where = 'WHERE s.farm_id = $1';
     if (status) {
       params.push(status);
       where += ` AND s.status = $${params.length}`;
     }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT s.*, 
         u.email as pi_email,
-        (SELECT COUNT(*) FROM study_protocols sp WHERE sp.study_id = s.id) as protocol_count,
-        (SELECT COUNT(*) FROM study_links sl WHERE sl.study_id = s.id) as linked_entities
+        COUNT(DISTINCT sp.id)::int as protocol_count,
+        COUNT(DISTINCT sl.id)::int as linked_entities
       FROM studies s
       LEFT JOIN farm_users u ON s.pi_user_id = u.id
+      LEFT JOIN study_protocols sp ON sp.study_id = s.id
+      LEFT JOIN study_links sl ON sl.study_id = s.id
       ${where}
+      GROUP BY s.id, u.email
       ORDER BY s.updated_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `, params);
@@ -72,7 +77,7 @@ router.get('/research/studies', async (req, res) => {
 // ─── POST /research/studies ───────────────────────────────────────────
 router.post('/research/studies', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { title, objectives, hypotheses, irb_number, funding_source, pi_user_id, metadata } = req.body;
@@ -126,7 +131,7 @@ router.get('/research/studies/:id', verifyStudyOwnership, async (req, res) => {
 router.patch('/research/studies/:id', verifyStudyOwnership, async (req, res) => {
   try {
     const { id } = req.params;
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     const allowed = ['title', 'status', 'objectives', 'hypotheses', 'irb_number', 'funding_source', 'pi_user_id', 'metadata'];
     const updates = [];
     const values = [];

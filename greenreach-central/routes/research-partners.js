@@ -53,7 +53,7 @@ router.get('/research/partners', async (req, res) => {
 
 router.post('/research/partners', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, partner_type, country, province_state, address, website, notes } = req.body;
@@ -132,7 +132,7 @@ router.get('/research/partners/:id/agreements', async (req, res) => {
 
 router.post('/research/partners/:id/agreements', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { agreement_type, title, description, data_types, access_level,
@@ -240,7 +240,7 @@ router.get('/research/partners/:id/contacts', async (req, res) => {
 
 router.post('/research/partners/:id/contacts', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, email, role, department, phone } = req.body;

@@ -29,7 +29,9 @@ router.get('/research/recipes', async (req, res) => {
     const farmId = req.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
-    const { status, study_id, limit = 50, offset = 0 } = req.query;
+    const { status, study_id, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [farmId];
     let where = 'WHERE rv.farm_id = $1';
     if (status) {
@@ -40,7 +42,7 @@ router.get('/research/recipes', async (req, res) => {
       params.push(study_id);
       where += ` AND rv.study_id = $${params.length}`;
     }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT rv.*,
@@ -64,7 +66,7 @@ router.get('/research/recipes', async (req, res) => {
 // ── Create recipe version ──
 router.post('/research/recipes', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, recipe_name, parameters, release_notes, rationale, promoted_from } = req.body;
@@ -180,7 +182,7 @@ router.patch('/research/recipes/:id', async (req, res) => {
 router.post('/research/recipes/:id/deploy', async (req, res) => {
   try {
     const { room_id, zone_id } = req.body;
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const recipe = await query('SELECT status FROM recipe_versions WHERE id = $1', [req.params.id]);
@@ -259,7 +261,7 @@ router.post('/research/deployments/:id/rollback', async (req, res) => {
 router.post('/research/recipes/:id/compare', async (req, res) => {
   try {
     const { control_recipe_id, metric_name, control_value, beta_value, unit, study_id } = req.body;
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
     if (!metric_name || control_value === undefined || beta_value === undefined) {
       return res.status(400).json({ ok: false, error: 'metric_name, control_value, and beta_value required' });

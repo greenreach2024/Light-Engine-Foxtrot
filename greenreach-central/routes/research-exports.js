@@ -34,7 +34,7 @@ router.use(checkDb);
 // ─── POST /research/exports ───────────────────────────────────────────
 router.post('/research/exports', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, dataset_id, format, includes_metadata, includes_provenance, includes_data_dictionary, generated_by } = req.body;

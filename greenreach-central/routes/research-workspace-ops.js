@@ -4,6 +4,9 @@ import { verifyStudyOwnership } from '../middleware/research-tenant.js';
 
 const router = Router();
 
+const MAX_TEXT_LENGTH = 5000;
+const MAX_TITLE_LENGTH = 255;
+
 const checkDb = async (req, res, next) => {
   if (!(await isDatabaseAvailable())) {
     return res.status(503).json({ ok: false, error: 'Database not available' });
@@ -28,12 +31,14 @@ router.use(checkDb);
 // ── Workspace Notes (decisions log, meeting notes, shared notes) ──
 router.get('/research/studies/:id/notes', verifyStudyOwnership, async (req, res) => {
   try {
-    const { note_type, pinned, limit = 50, offset = 0 } = req.query;
+    const { note_type, pinned, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [req.params.id];
     let where = 'WHERE wn.study_id = $1';
     if (note_type) { params.push(note_type); where += ` AND wn.note_type = $${params.length}`; }
     if (pinned === 'true') { where += ' AND wn.pinned = true'; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT wn.*, u.email as author_email
@@ -53,11 +58,13 @@ router.get('/research/studies/:id/notes', verifyStudyOwnership, async (req, res)
 
 router.post('/research/studies/:id/notes', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { note_type, title, content, action_items, pinned } = req.body;
-    if (!title || !content) return res.status(400).json({ ok: false, error: 'title and content required' });
+    if (!title || !content) return res.status(400).json({ ok: false, error: "title and content required" });
+    if (title.length > MAX_TITLE_LENGTH) return res.status(400).json({ ok: false, error: "title must be 255 characters or fewer" });
+    if (content.length > MAX_TEXT_LENGTH) return res.status(400).json({ ok: false, error: "content must be 5000 characters or fewer" });
     if (note_type && !['decision', 'meeting', 'general', 'action'].includes(note_type)) {
       return res.status(400).json({ ok: false, error: 'Invalid note_type' });
     }
@@ -78,6 +85,12 @@ router.post('/research/studies/:id/notes', verifyStudyOwnership, async (req, res
 router.patch('/research/notes/:id', async (req, res) => {
   try {
     const { title, content, action_items, pinned } = req.body;
+    if (title !== undefined && title.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: "title must be 255 characters or fewer" });
+    }
+    if (content !== undefined && content.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: "content must be 5000 characters or fewer" });
+    }
     const fields = [];
     const params = [];
     let idx = 1;
@@ -101,14 +114,16 @@ router.patch('/research/notes/:id', async (req, res) => {
 // ── Cross-Institution Task Management ──
 router.get('/research/studies/:id/tasks', verifyStudyOwnership, async (req, res) => {
   try {
-    const { status, assigned_to, institution, priority, limit = 100, offset = 0 } = req.query;
+    const { status, assigned_to, institution, priority, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [req.params.id];
     let where = 'WHERE wt.study_id = $1';
     if (status) { params.push(status); where += ` AND wt.status = $${params.length}`; }
     if (assigned_to) { params.push(assigned_to); where += ` AND wt.assigned_to = $${params.length}`; }
     if (institution) { params.push(institution); where += ` AND wt.institution = $${params.length}`; }
     if (priority) { params.push(priority); where += ` AND wt.priority = $${params.length}`; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT wt.*, a.email as assigned_email, b.email as assigner_email
@@ -129,11 +144,13 @@ router.get('/research/studies/:id/tasks', verifyStudyOwnership, async (req, res)
 
 router.post('/research/studies/:id/tasks', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { assigned_to, title, description, priority, institution, due_date } = req.body;
-    if (!title) return res.status(400).json({ ok: false, error: 'title required' });
+    if (!title) return res.status(400).json({ ok: false, error: "title required" });
+    if (title.length > MAX_TITLE_LENGTH) return res.status(400).json({ ok: false, error: "title must be 255 characters or fewer" });
+    if (description && description.length > MAX_TEXT_LENGTH) return res.status(400).json({ ok: false, error: "description must be 5000 characters or fewer" });
 
     const result = await query(`
       INSERT INTO workspace_tasks (farm_id, study_id, assigned_to, assigned_by, title, description, priority, institution, due_date)
@@ -151,6 +168,12 @@ router.post('/research/studies/:id/tasks', verifyStudyOwnership, async (req, res
 router.patch('/research/tasks/:id', async (req, res) => {
   try {
     const { status, priority, assigned_to, title, description, due_date } = req.body;
+    if (title !== undefined && title.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: "title must be 255 characters or fewer" });
+    }
+    if (description !== undefined && description.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: "description must be 5000 characters or fewer" });
+    }
     const fields = [];
     const params = [];
     let idx = 1;
@@ -205,7 +228,7 @@ router.get('/research/studies/:id/change-requests', verifyStudyOwnership, async 
 
 router.post('/research/studies/:id/change-requests', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { request_type, title, description, justification, current_state, proposed_state } = req.body;
@@ -214,6 +237,15 @@ router.post('/research/studies/:id/change-requests', verifyStudyOwnership, async
     }
     if (!['scope', 'budget', 'personnel', 'timeline'].includes(request_type)) {
       return res.status(400).json({ ok: false, error: 'Invalid request_type' });
+    }
+    if (title.length > MAX_TITLE_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'title must be 255 characters or fewer' });
+    }
+    if (description && description.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'description must be 5000 characters or fewer' });
+    }
+    if (justification.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'justification must be 5000 characters or fewer' });
     }
 
     const result = await query(`
@@ -234,6 +266,9 @@ router.patch('/research/change-requests/:id/review', async (req, res) => {
     const { status, comments } = req.body;
     if (!status || !['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ ok: false, error: 'Valid status required (approved|rejected)' });
+    }
+    if (comments && comments.length > MAX_TEXT_LENGTH) {
+      return res.status(400).json({ ok: false, error: 'comments must be 5000 characters or fewer' });
     }
 
     const result = await query(`
@@ -270,7 +305,7 @@ router.get('/research/milestones/:id/evidence', async (req, res) => {
 
 router.post('/research/milestones/:id/evidence', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { study_id, evidence_type, title, file_key, file_checksum } = req.body;

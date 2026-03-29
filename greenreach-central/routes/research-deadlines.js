@@ -156,7 +156,7 @@ router.get('/research/deadlines/calendar', async (req, res) => {
 
 router.post('/research/deadlines/auto-generate-tasks', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const lookAheadDays = parseInt(req.body.look_ahead_days, 10) || 30;

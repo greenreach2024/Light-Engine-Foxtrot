@@ -37,20 +37,24 @@ router.get('/research/datasets', async (req, res) => {
     const farmId = req.farmId || req.query.farm_id;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
-    const { study_id, status, limit = 50, offset = 0 } = req.query;
+    const { study_id, status, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [farmId];
     let where = 'WHERE rd.farm_id = $1';
     if (study_id) { params.push(study_id); where += ` AND rd.study_id = $${params.length}`; }
     if (status) { params.push(status); where += ` AND rd.status = $${params.length}`; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT rd.*,
         s.title as study_title,
-        (SELECT COUNT(*) FROM research_observations ro WHERE ro.dataset_id = rd.id) as observation_count
+        COUNT(ro.id)::int as observation_count
       FROM research_datasets rd
       LEFT JOIN studies s ON rd.study_id = s.id
+      LEFT JOIN research_observations ro ON ro.dataset_id = rd.id
       ${where}
+      GROUP BY rd.id, s.title
       ORDER BY rd.created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `, params);
@@ -65,7 +69,7 @@ router.get('/research/datasets', async (req, res) => {
 // ─── POST /research/datasets ──────────────────────────────────────────
 router.post('/research/datasets', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, study_id, description, variable_definitions, unit_normalization, timezone, created_by } = req.body;
@@ -209,7 +213,9 @@ router.post('/research/datasets/:id/observations', verifyDatasetOwnership, async
 router.get('/research/datasets/:id/observations', verifyDatasetOwnership, async (req, res) => {
   try {
     const { id } = req.params;
-    const { variable_name, observation_type, device_id, from, to, limit = 1000, offset = 0 } = req.query;
+    const { variable_name, observation_type, device_id, from, to, limit = 20, offset = 0 } = req.query;
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const params = [id];
     let where = 'WHERE ro.dataset_id = $1';
     if (variable_name) { params.push(variable_name); where += ` AND ro.variable_name = $${params.length}`; }
@@ -217,7 +223,7 @@ router.get('/research/datasets/:id/observations', verifyDatasetOwnership, async 
     if (device_id) { params.push(device_id); where += ` AND ro.device_id = $${params.length}`; }
     if (from) { params.push(from); where += ` AND ro.observed_at >= $${params.length}`; }
     if (to) { params.push(to); where += ` AND ro.observed_at <= $${params.length}`; }
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+    params.push(safeLimit, safeOffset);
 
     const result = await query(`
       SELECT ro.* FROM research_observations ro
@@ -312,7 +318,7 @@ router.get('/research/calibrations', async (req, res) => {
 // ─── POST /research/calibrations ──────────────────────────────────────
 router.post('/research/calibrations', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { device_id, sensor_id, calibration_type, reference_value, measured_value, offset_value, calibrated_by, next_due } = req.body;
@@ -370,7 +376,7 @@ router.get('/research/maintenance', async (req, res) => {
 // ─── POST /research/maintenance ───────────────────────────────────────
 router.post('/research/maintenance', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { device_id, maintenance_type, description, performed_by, next_scheduled } = req.body;
@@ -419,7 +425,7 @@ router.get('/research/datasets/:id/markers', verifyDatasetOwnership, async (req,
 
 router.post('/research/datasets/:id/markers', verifyDatasetOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { marker_type, timestamp, title, description, study_id } = req.body;
@@ -462,7 +468,7 @@ router.get('/research/studies/:id/batches', verifyStudyOwnership, async (req, re
 
 router.post('/research/studies/:id/batches', verifyStudyOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { batch_id, event_type, timestamp, location, details, previous_batch_id } = req.body;
@@ -529,7 +535,7 @@ router.get('/research/datasets/:id/alerts', verifyDatasetOwnership, async (req, 
 
 router.post('/research/datasets/:id/alerts', verifyDatasetOwnership, async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { variable_name, alert_type, severity, message } = req.body;

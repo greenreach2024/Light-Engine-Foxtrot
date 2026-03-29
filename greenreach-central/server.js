@@ -101,6 +101,7 @@ import researchDeadlinesRouter from './routes/research-deadlines.js';
 import researchPublicationsRouter from './routes/research-publications.js';
 import researchEquipmentRouter from './routes/research-equipment.js';
 import researchLineageRouter from './routes/research-lineage.js';
+import { requireResearchTier } from './middleware/feature-gate.js';
 import purchaseRouter from './routes/purchase.js';
 import farmOpsAgentRouter from './routes/farm-ops-agent.js';
 import assistantChatRouter from './routes/assistant-chat.js';
@@ -3298,12 +3299,16 @@ app.use('/api/inventory', authOrAdminMiddleware, inventoryMgmtRoutes);  // seeds
 app.use('/api/inventory', authOrAdminMiddleware, inventoryRoutes);     // crop inventory (current, forecast, sync)
 app.use('/api/lots', authOrAdminMiddleware, lotSystemRoutes);
 
-// Research Platform API (feature-gated via ENDPOINT_FEATURES in feature-flags.js)
+// Research Platform API -- auth + tier-based feature gate (resolves audit C1)
 // Guard only /api/research/* traffic here; avoid intercepting unrelated /api routes
 // such as /api/admin/auth/login before their dedicated routers run.
+const researchFeatureGate = requireResearchTier();
 const researchAuthGuard = (req, res, next) => {
   if (req.path.startsWith('/research/')) {
-    return authMiddleware(req, res, next);
+    return authMiddleware(req, res, (authErr) => {
+      if (authErr) return next(authErr);
+      return researchFeatureGate(req, res, next);
+    });
   }
   return next();
 };

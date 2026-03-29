@@ -51,7 +51,7 @@ router.get('/research/security/classifications', async (req, res) => {
 
 router.post('/research/security/classifications', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { resource_type, resource_id, classification_level, justification,
@@ -131,7 +131,7 @@ router.get('/research/security/access-policies', async (req, res) => {
 
 router.post('/research/security/access-policies', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { name, description, classification_level, allowed_roles, requires_mfa,
@@ -206,7 +206,7 @@ router.get('/research/security/incidents', async (req, res) => {
 
 router.post('/research/security/incidents', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { incident_type, severity, title, description, affected_resources,
@@ -320,7 +320,7 @@ router.get('/research/security/audits', async (req, res) => {
 
 router.post('/research/security/audits', async (req, res) => {
   try {
-    const farmId = req.farmId || req.body.farm_id;
+    const farmId = req.farmId;
     if (!farmId) return res.status(400).json({ ok: false, error: 'farm_id required' });
 
     const { audit_type, scope, findings, recommendations, auditor, audit_date, next_audit_date } = req.body;
