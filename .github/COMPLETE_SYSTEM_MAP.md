@@ -625,7 +625,7 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/crop-pricing | routes/crop-pricing.js | Farm pricing |
 | /api/users | routes/farm-users.js | Farm user CRUD |
 | /api/farm/products | routes/custom-products.js | Custom farm product CRUD + image upload |
-| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops, grants, ethics, hqp, partners, security) |
+| /api/research/* | routes/research-*.js | Research platform (studies, datasets, exports, compliance, ELN, collaboration, recipes, audit, workspace-ops, grants, ethics, hqp, partners, security, reporting, deadlines, publications, equipment, lineage) |
 | /api/research/recipes | routes/research-recipes.js | Beta recipe lifecycle: versions, deployments, comparisons, eligibility, rollback |
 | /api/research/audit | routes/research-audit.js | Immutable audit log, COI declarations, signoffs, approval chains, contributions |
 | /api/research/studies/:id/notes,tasks,change-requests | routes/research-workspace-ops.js | Workspace operations: notes, tasks, change requests, milestone evidence |
@@ -634,6 +634,11 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 | /api/research/trainees, /api/research/edi | routes/research-hqp.js | HQP trainee records, supervision, milestones, professional development, EDI self-identification |
 | /api/research/partners | routes/research-partners.js | Partner institutions, data sharing agreements, contacts, partner network dashboard |
 | /api/research/security | routes/research-security.js | Data classification, access policies, security incidents, audits, security dashboard |
+| /api/research/reports | routes/research-reporting.js | Unified dashboards, cross-entity health, grant annual reports, study closeout, KPIs, activity feed, budget overview, HQP outcomes, output metrics |
+| /api/research/deadlines | routes/research-deadlines.js | Deadline forecasting, auto-task generation, conflict detection, calendar export, bulk operations, upcoming alerts |
+| /api/research/publications | routes/research-publications.js | Publication lifecycle, grant attribution, dataset linking, co-author management, citation metrics, metadata export |
+| /api/research/equipment | routes/research-equipment.js | Lab equipment registry, booking system, maintenance scheduling, utilization metrics, availability calendar |
+| /api/research/lineage | routes/research-lineage.js | Data provenance chains, dataset derivation trees, annotation tracking, governance dashboard, lineage visualization |
 | /api/farm-sales/* | routes/farm-sales.js | Farm selling and orders |
 | /api/network/*, /api/growers/*, /api/leaderboard | routes/network-growers.js | Network intelligence (18 routes): dashboard, farms, comparative analytics, trends, alerts, benchmarking, recipes, buyer behavior, performance, energy benchmarks, farm performance tracking, leaderboard |
 | /api/lots | routes/lot-system.js | Lot tracking |
@@ -1634,6 +1639,46 @@ EnvStore
 
 **security_audits** (id SERIAL PK)
 - farm_id, audit_type, scope, findings JSONB, recommendations JSONB, auditor, audit_date, next_audit_date, created_at
+
+
+### 8.14 Research Platform (Phase 3)
+
+**publications** (id SERIAL PK)
+- farm_id, study_id, title, publication_type (journal_article|conference_paper|thesis|technical_report|book_chapter|preprint|dataset|poster|workshop_paper), authors JSONB, journal_or_venue, doi, url, volume, issue, pages, publisher, publication_year, abstract, keywords JSONB, status (draft|submitted|in_review|revision|accepted|published|retracted), submitted_at, accepted_at, published_at, created_at, updated_at
+
+**publication_grants** (id SERIAL PK)
+- publication_id, grant_id, farm_id, acknowledgment_text, is_primary, created_at
+
+**publication_datasets** (id SERIAL PK)
+- publication_id, dataset_id, farm_id, relationship (source_data|supplementary|derived|referenced), description, created_at
+
+**publication_authors** (id SERIAL PK)
+- publication_id, farm_id, author_name, email, inst- publication_id, farm_id, author_name, email, inst_au- publication_id, farm_id, author_name, email, inst- publication_id, farm_it** (id SERIAL PK)
+- farm_id, name, description, category, manufacturer, model, serial_number, location, purchase_date, purchase_cost, warranty_expiry, maintenance_interval_days, status (available|in_use|maintenance|calibration|retired|out_of_service), specifications JSONB, created_at, updated_at
+
+**equipment_bookings** (id SERIAL PK)
+- equipment_id, farm_id, booked_by, purpose, study_id, start_time, end_time, status (pending|confirmed|cancelled|completed|no_show), notes, created_at, updated_at
+
+**equipment_maintenance** (id SERIAL PK)
+- equipment_id, farm_id, maintenance_type (preventive|corrective|calibration|inspection|cleaning), description, performed_by, performed_at, next_due_date, cost, parts_replaced JSONB, notes, created_at
+
+**research_deadlines** (id SERIAL PK)
+- farm_id, study_id, grant_id, title, description, deadline_type (grant_report|ethics_renewal|milestone|deliverable|conference|publication|review|regulatory|custom), due_date, priority (low|normal|high|critical), status (upcoming|pending|overdue|completed|cancelled|deferred), assigned_to, reminder_days_before, auto_generated, source_entity_type, source_entity_id, completed_at, created_at, updated_at
+
+**deadline_tasks** (id SERIAL PK)
+- deadline_id, farm_id, title, description, assigned_to, due_date, status (pending|in_progress|completed|cancelled), completed_at, created_at, updated_at
+
+**report_templates** (id SERIAL PK)
+- farm_id, name, description, report_type (grant_annual|grant_final|study_closeout|compliance_summary|ethics_report|hqp_summary|equipment_utilization|custom), template_config JSONB, schedule_cron, last_generated_at, status (active|disabled), created_at, updated_at
+
+**generated_reports** (id SERIAL PK)
+- template_id, farm_id, title, report_data JSONB, format (json|pdf|csv|html), generated_at, generated_by, created_at
+
+**dataset_lineage** (id SERIAL PK)
+- farm_id, dataset_id, event_type (created|imported|transformed|derived|merged|split|filtered|cleaned|anonymized|exported|archived|deleted|versioned), description, actor, source_datasets JSONB, parameters JSONB, parent_lineage_id, created_at
+
+**data_annotations** (id SERIAL PK)
+- farm_id, dataset_id, annotation_type (quality_note|classification|retention|processing_note|access_restriction|compliance_tag|custom), content, author, metadata JSONB, created_at, updated_at
 
 ---
 

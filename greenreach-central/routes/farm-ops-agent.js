@@ -2715,6 +2715,110 @@ export const TOOL_CATALOG = {
     }
   },
 
+  // ─── Research Platform Phase 3 Tools ─────────────────────────────────
+  'get_research_dashboard': {
+    description: 'Get unified research operations dashboard. Shows study health, grant status, compliance summary, HQP outcomes, and output metrics across the entire farm.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const [studies, grants, compliance, outputs] = await Promise.all([
+          dbQuery(`SELECT status, COUNT(*) as count FROM research_studies WHERE farm_id = $1 GROUP BY status`, [farmId]),
+          dbQuery(`SELECT status, COUNT(*) as count FROM research_grants WHERE farm_id = $1 GROUP BY status`, [farmId]),
+          dbQuery(`SELECT COUNT(*) as open_alerts FROM compliance_alerts WHERE farm_id = $1 AND status NOT IN ('resolved', 'dismissed')`, [farmId]),
+          dbQuery(`SELECT COUNT(*) as total_datasets, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_datasets FROM research_datasets WHERE farm_id = $1`, [farmId])
+        ]);
+        return { ok: true, studies: studies.rows, grants: grants.rows, compliance: compliance.rows[0], outputs: outputs.rows[0] };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'get_deadline_summary': {
+    description: 'Get upcoming research deadlines across all modules. Shows grant milestones, ethics renewals, trainee deadlines, and task due dates with urgency classification.',
+    category: 'read',
+    required: [],
+    optional: ['days_ahead'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const days = parseInt(params.days_ahead, 10) || 30;
+        const [grantMilestones, ethicsExpiry, tasks] = await Promise.all([
+          dbQuery(`SELECT gm.title, gm.due_date, rg.title as grant_title FROM grant_milestones gm JOIN research_grants rg ON rg.id = gm.grant_id WHERE rg.farm_id = $1 AND gm.status = 'pending' AND gm.due_date <= NOW() + make_interval(days => $2) ORDER BY gm.due_date ASC`, [farmId, days]),
+          dbQuery(`SELECT ea.protocol_title, ea.expiry_date FROM ethics_applications ea WHERE ea.farm_id = $1 AND ea.status = 'approved' AND ea.expiry_date <= NOW() + make_interval(days => $2) ORDER BY ea.expiry_date ASC`, [farmId, days]),
+          dbQuery(`SELECT title, due_date, priority FROM workspace_tasks WHERE farm_id = $1 AND status NOT IN ('completed', 'cancelled') AND due_date <= NOW() + make_interval(days => $2) ORDER BY due_date ASC`, [farmId, days])
+        ]);
+        return { ok: true, grant_milestones: grantMilestones.rows, ethics_expiring: ethicsExpiry.rows, tasks_due: tasks.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'get_publication_pipeline': {
+    description: 'Get publication pipeline status. Shows publications by status (draft, submitted, in review, accepted, published) and grant compliance gaps.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const pipeline = await dbQuery(`SELECT status, COUNT(*) as count FROM publications WHERE farm_id = $1 GROUP BY status ORDER BY CASE status WHEN 'draft' THEN 1 WHEN 'submitted' THEN 2 WHEN 'in_review' THEN 3 WHEN 'accepted' THEN 4 WHEN 'published' THEN 5 ELSE 6 END`, [farmId]);
+        const recent = await dbQuery(`SELECT title, status, publication_type, updated_at FROM publications WHERE farm_id = $1 ORDER BY updated_at DESC LIMIT 5`, [farmId]);
+        return { ok: true, pipeline: pipeline.rows, recent: recent.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'get_equipment_status': {
+    description: 'Get lab equipment status overview. Shows equipment counts by status, upcoming bookings, and maintenance due alerts.',
+    category: 'read',
+    required: [],
+    optional: [],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        const [statusCounts, upcomingBookings, maintenanceDue] = await Promise.all([
+          dbQuery(`SELECT status, COUNT(*) as count FROM lab_equipment WHERE farm_id = $1 GROUP BY status`, [farmId]),
+          dbQuery(`SELECT eb.start_time, eb.end_time, eb.purpose, le.name as equipment_name FROM equipment_bookings eb JOIN lab_equipment le ON le.id = eb.equipment_id WHERE le.farm_id = $1 AND eb.status = 'confirmed' AND eb.start_time > NOW() ORDER BY eb.start_time ASC LIMIT 10`, [farmId]),
+          dbQuery(`SELECT le.name, le.maintenance_interval_days, (SELECT MAX(em.performed_at) FROM equipment_maintenance em WHERE em.equipment_id = le.id) as last_maintenance FROM lab_equipment le WHERE le.farm_id = $1 AND le.status NOT IN ('retired') AND le.maintenance_interval_days IS NOT NULL`, [farmId])
+        ]);
+        return { ok: true, status_counts: statusCounts.rows, upcoming_bookings: upcomingBookings.rows, maintenance_items: maintenanceDue.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
+  'get_data_lineage': {
+    description: 'Get data lineage and governance overview. Shows dataset provenance events, untracked datasets, and classification compliance.',
+    category: 'read',
+    required: [],
+    optional: ['dataset_id'],
+    handler: async (params) => {
+      try {
+        const farmId = params.farm_id || process.env.FARM_ID;
+        if (params.dataset_id) {
+          const chain = await dbQuery(`SELECT * FROM dataset_lineage WHERE dataset_id = $1 AND farm_id = $2 ORDER BY created_at ASC`, [params.dataset_id, farmId]);
+          return { ok: true, dataset_id: params.dataset_id, chain: chain.rows };
+        }
+        const [eventTypes, untracked, annotations] = await Promise.all([
+          dbQuery(`SELECT event_type, COUNT(*) as count FROM dataset_lineage WHERE farm_id = $1 GROUP BY event_type ORDER BY count DESC`, [farmId]),
+          dbQuery(`SELECT rd.id, rd.name FROM research_datasets rd LEFT JOIN dataset_lineage dl ON dl.dataset_id = rd.id WHERE rd.farm_id = $1 AND dl.id IS NULL LIMIT 20`, [farmId]),
+          dbQuery(`SELECT annotation_type, COUNT(*) as count FROM data_annotations WHERE farm_id = $1 GROUP BY annotation_type ORDER BY count DESC`, [farmId])
+        ]);
+        return { ok: true, event_types: eventTypes.rows, untracked_datasets: untracked.rows, annotation_types: annotations.rows };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+  },
+
   // ─── EVIE Scanning Integration Tools ─────────────────────────────────
   'scan_bus_channels': {
     description: 'Scan all bus channels (I2C, SPI, 1-Wire, UART) for connected devices. Returns discovered devices with addresses, protocols, and suggested types. Use this to begin device onboarding.',

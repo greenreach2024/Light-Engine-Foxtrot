@@ -291,6 +291,30 @@ async function checkIncidentOwnership(incidentId, farmId) {
   return checkDirectOwnership('security_incidents', incidentId, farmId);
 }
 
+async function checkPublicationOwnership(pubId, farmId) {
+  return checkDirectOwnership('publications', pubId, farmId);
+}
+
+async function checkEquipmentOwnership(equipId, farmId) {
+  return checkDirectOwnership('lab_equipment', equipId, farmId);
+}
+
+async function checkBookingOwnership(bookingId, farmId) {
+  return checkDirectOwnership('equipment_bookings', bookingId, farmId);
+}
+
+async function checkMaintenanceOwnership(maintId, farmId) {
+  return checkDirectOwnership('equipment_maintenance', maintId, farmId);
+}
+
+async function checkLineageOwnership(lineageId, farmId) {
+  return checkDirectOwnership('dataset_lineage', lineageId, farmId);
+}
+
+async function checkAnnotationOwnership(annotId, farmId) {
+  return checkDirectOwnership('data_annotations', annotId, farmId);
+}
+
 // ── Middleware Factories ────────────────────────────────────────────
 
 function makeOwnershipMiddleware(checker, paramName, entityLabel) {
@@ -347,3 +371,9 @@ export const verifyPartnerOwnership = makeOwnershipMiddleware(checkPartnerOwners
 export const verifyAgreementOwnership = makeOwnershipMiddleware(checkAgreementOwnership, 'id', 'Agreement');
 export const verifyClassificationOwnership = makeOwnershipMiddleware(checkClassificationOwnership, 'id', 'Classification');
 export const verifyIncidentOwnership = makeOwnershipMiddleware(checkIncidentOwnership, 'id', 'Incident');
+export const verifyPublicationOwnership = makeOwnershipMiddleware(checkPublicationOwnership, 'id', 'Publication');
+export const verifyEquipmentOwnership = makeOwnershipMiddleware(checkEquipmentOwnership, 'id', 'Equipment');
+export const verifyBookingOwnership = makeOwnershipMiddleware(checkBookingOwnership, 'id', 'Booking');
+export const verifyMaintenanceOwnership = makeOwnershipMiddleware(checkMaintenanceOwnership, 'id', 'Maintenance');
+export const verifyLineageOwnership = makeOwnershipMiddleware(checkLineageOwnership, 'id', 'Lineage');
+export const verifyAnnotationOwnership = makeOwnershipMiddleware(checkAnnotationOwnership, 'id', 'Annotation');
