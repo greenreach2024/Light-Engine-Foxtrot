@@ -4167,8 +4167,7 @@
         if (grid) {
           grid.innerHTML = `
             <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
-              <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
-              <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">Connect environmental sensors to review data</div>
+              <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">No environmental sensor data available</div>
               <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
             </div>`;
         }
@@ -4390,116 +4389,63 @@
     }
 
     function renderEnvironmental(zone, envData) {
-      if (!zone) return;
-      
-      // Find outdoor sensor (East Outdoor Sensor or similar)
-      let outdoorZone = null;
-      if (envData && Array.isArray(envData.zones)) {
-        outdoorZone = envData.zones.find(z => {
-          const name = (z.name || '').toLowerCase();
-          const location = (z.location || '').toLowerCase();
-          return name.includes('outside') || name.includes('outdoor') || 
-                 location.includes('outside') || location.includes('outdoor');
-        });
-      }
-      
+      // IMPORTANT: Outdoor weather comes from the /api/weather endpoint (loadWeather).
+      // There is NO outdoor sensor. Do NOT search envData.zones for outdoor/outside zones.
+      // Indoor sensor data is provided by SwitchBot IoT sensors mapped to zones via room-map.
+
+      const allZones = (envData && Array.isArray(envData.zones)) ? envData.zones : [];
+      // Filter to indoor zones only (all zones are indoor — no outdoor sensor exists)
+      const indoorZones = allZones.length > 0 ? allZones : (zone ? [zone] : []);
+
       const metrics = [
-        {
-          key: 'temperature',
-          label: 'Temperature',
-          unit: '°C',
-          sensorKey: 'tempC',
-          valueFormatter: (value) => formatNumber(value, 1),
-          targetFormatter: (value) => `${formatNumber(value, 1)}°C`
-        },
-        {
-          key: 'humidity',
-          label: 'Humidity',
-          unit: '%',
-          sensorKey: 'rh',
-          valueFormatter: (value) => formatNumber(value, 0),
-          targetFormatter: (value) => `${formatNumber(value, 0)}%`
-        },
-        {
-          key: 'vpd',
-          label: 'VPD',
-          unit: 'kPa',
-          sensorKey: 'vpd',
-          valueFormatter: (value) => formatNumber(value, 2),
-          targetFormatter: (value) => `${formatNumber(value, 2)} kPa`
-        }
+        { key: 'temperature', label: 'Temp', unit: '\u00b0C', sensorKey: 'tempC', valueFormatter: (v) => formatNumber(v, 1) },
+        { key: 'humidity', label: 'Humidity', unit: '%', sensorKey: 'rh', valueFormatter: (v) => formatNumber(v, 0) },
+        { key: 'vpd', label: 'VPD', unit: 'kPa', sensorKey: 'vpd', valueFormatter: (v) => formatNumber(v, 2) }
       ];
 
-      const html = metrics.map((metric) => {
-        const sensor = zone.sensors?.[metric.sensorKey] || {};
-        const currentValue = Number.isFinite(sensor.current) ? Number(sensor.current) : null;
-        // Note: No target display or status alerts for Indoor Conditions as this shows averaged data across all zones
-        const marker = metric.key === 'temperature' ? ' <span style="color: blue; font-weight: bold;">✓</span>' : '';
-        return `
-          <div class="env-metric" data-help-title="${metric.label}" data-help="Current average ${metric.label.toLowerCase()} reading across all active sensors in this zone.">
-            <div class="label">${metric.label}${marker}</div>
+      let html = '';
+      let anyData = false;
+
+      for (const z of indoorZones) {
+        const zoneName = z.name || z.id || 'Unknown Zone';
+        const sensorCount = z._sensorCount || '';
+        const hasData = metrics.some(m => {
+          const sensor = z.sensors?.[m.sensorKey] || {};
+          return Number.isFinite(sensor.current);
+        });
+        if (!hasData) continue;
+        anyData = true;
+
+        // Zone label row
+        html += `
+          <div style="grid-column: 1 / -1; ${html ? 'margin-top: 0.75rem; border-top: 1px solid rgba(148, 163, 184, 0.15); padding-top: 0.75rem;' : ''}">
+            <span style="color: #a78bfa; font-weight: 600; font-size: 0.85rem;">${zoneName}</span>
+            ${sensorCount ? `<span style="color: #64748b; font-size: 0.75rem; margin-left: 0.5rem;">(${sensorCount} sensor${sensorCount > 1 ? 's' : ''})</span>` : ''}
+          </div>`;
+
+        // Metric cards for this zone
+        html += metrics.map(metric => {
+          const sensor = z.sensors?.[metric.sensorKey] || {};
+          const currentValue = Number.isFinite(sensor.current) ? Number(sensor.current) : null;
+          return `
+          <div class="env-metric" data-help-title="${metric.label}" data-help="Current ${metric.label.toLowerCase()} reading from sensors in ${zoneName}.">
+            <div class="label">${metric.label}</div>
             <div class="value">${metric.valueFormatter(currentValue)}</div>
             <div class="unit">${metric.unit}</div>
-          </div>
-        `;
-      }).join('');
+          </div>`;
+        }).join('');
+      }
 
-      // Check if ALL metrics have no data (no sensors connected)
-      const hasAnySensorData = metrics.some(m => {
-        const sensor = zone.sensors?.[m.sensorKey] || {};
-        return Number.isFinite(sensor.current);
-      });
-
-      let finalHtml = html;
-      if (!hasAnySensorData) {
-        finalHtml = `
+      if (!anyData) {
+        html = `
           <div style="grid-column: 1 / -1; padding: 2rem; text-align: center;">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌡️</div>
-            <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">Connect environmental sensors to review data</div>
+            <div style="color: #94a3b8; font-weight: 600; font-size: 1rem;">No environmental sensor data available</div>
             <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Link sensors via the Room Mapper to see live readings here</div>
           </div>`;
       }
 
-      // Add outdoor conditions section if outdoor sensor found
-      let outdoorHtml = '';
-      if (outdoorZone) {
-        const outdoorTemp = outdoorZone.sensors?.tempC?.current;
-        const outdoorHumidity = outdoorZone.sensors?.rh?.current;
-        const outdoorName = outdoorZone.name || 'Outdoor';
-        
-        if (Number.isFinite(outdoorTemp) || Number.isFinite(outdoorHumidity)) {
-          outdoorHtml = `
-            <div class="env-metric outdoor-metric" style="grid-column: 1 / -1; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 0.75rem; margin-top: 0.75rem;">
-              <div style="display: flex; align-items: center; gap: 1rem; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #94a3b8;">
-                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                  </svg>
-                  <span style="color: #94a3b8; font-size: 0.875rem; font-weight: 500;">${outdoorName}</span>
-                </div>
-                <div style="display: flex; gap: 2rem; align-items: center;">
-                  ${Number.isFinite(outdoorTemp) ? `
-                    <div style="display: flex; align-items: baseline; gap: 0.25rem;">
-                      <span style="font-size: 1.25rem; font-weight: 600; color: #60a5fa;">${formatNumber(outdoorTemp, 1)}</span>
-                      <span style="font-size: 0.875rem; color: #94a3b8;">°C</span>
-                    </div>
-                  ` : ''}
-                  ${Number.isFinite(outdoorHumidity) ? `
-                    <div style="display: flex; align-items: baseline; gap: 0.25rem;">
-                      <span style="font-size: 1.25rem; font-weight: 600; color: #10b981;">${formatNumber(outdoorHumidity, 0)}</span>
-                      <span style="font-size: 0.875rem; color: #94a3b8;">%</span>
-                    </div>
-                  ` : ''}
-                </div>
-              </div>
-            </div>
-          `;
-        }
-      }
-
       const grid = document.getElementById('envGrid');
-      if (grid) grid.innerHTML = finalHtml + outdoorHtml;
+      if (grid) grid.innerHTML = html;
 
       // Update "last updated" indicator on env card
       const envTs = document.getElementById('envLastUpdated');
