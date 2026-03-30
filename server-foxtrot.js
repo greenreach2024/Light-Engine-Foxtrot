@@ -19009,8 +19009,8 @@ ${msgBlock}
         const invText = `You're Invited to ${farmName || 'Light Engine'}!\n\nHi ${firstName},\n\nYou have been added as a ${roleLabel} on ${farmName || 'Light Engine'}.\n${msgText}\nYOUR LOGIN CREDENTIALS\n----------------------------------------------\nFarm ID:        ${farmId}\nEmail:          ${email}\nTemp Password:  ${password}\n\nGETTING STARTED\n----------------------------------------------\n1. Open: ${invDashUrl}\n2. Enter your Farm ID and Temporary Password\n3. Change your password after first login\n\nLogin page: ${invLoginUrl}\n\nIMPORTANT: Save this email and change your password after first login.\n\n--\nGreenReach -- The foundation for smarter farms\ngreenreachgreens.com`;
 
         const result = await sendEmailViaSES({ to: email, subject: invSubject, html: invHtml, text: invText, from: 'GreenReach <info@greenreachgreens.com>' });
-        emailSent = result.sent;
-        console.log(`[/api/users/create] Invite email to ${email}: ${result.sent ? 'sent' : 'failed -- ' + (result.error || 'unknown')}`);
+        emailSent = result.success || false;
+        console.log(`[/api/users/create] Invite email to ${email}: ${result.success ? 'sent via ' + (result.provider || 'unknown') : 'failed -- ' + (result.error || 'unknown')}`);
       } catch (emailErr) {
         console.error(`[/api/users/create] Invite email error for ${email}:`, emailErr.message);
       }
