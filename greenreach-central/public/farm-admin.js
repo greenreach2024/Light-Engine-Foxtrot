@@ -2570,17 +2570,19 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
     const isWeight = comparisonUnit === 'weight';
 
     const averageSourcePriceUSD = Number(marketData.avgPriceUSD || 0);
+    const isLiveDb = marketData._dataSource === 'database';
+    const isCanadianSource = marketData.country === 'Canada';
     const convertToCad = marketData.country !== 'Canada' && marketData._dataSource !== 'database';
     const exchangeMultiplier = convertToCad ? currentExchangeRate : 1;
 
     if (!isWeight) {
-        const isLiveDb = marketData._dataSource === 'database';
         const marketAverageCAD = isLiveDb
             ? Number(marketData.avgPriceCAD || 0)
             : averageSourcePriceUSD * exchangeMultiplier;
 
-        const sourceAverageUSD = isLiveDb
-            ? marketAverageCAD / (currentExchangeRate || 1)
+        const sourceCurrency = (isLiveDb || isCanadianSource) ? 'CAD' : 'USD';
+        const sourceAverage = isLiveDb
+            ? marketAverageCAD
             : averageSourcePriceUSD;
 
         const priceRangeCAD = isLiveDb
@@ -2591,7 +2593,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
             comparisonUnit,
             comparisonUnitLabel: comparisonUnit === 'pint' ? '/pint' : '/each',
             marketAverageCAD,
-            sourceAverageUSD,
+            sourceAverage,
+            sourceCurrency,
+            sourceUnitLabel: comparisonUnit === 'pint' ? '/pint' : '/each',
             priceRangeCAD,
             pricePerLbCAD: null,
             pricePer100gCAD: null,
@@ -2615,6 +2619,10 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
 
     const pricePerLbCAD = pricePerOzCAD * 16;
     const pricePer100gCAD = pricePerLbCAD * LB_TO_100G;
+    const sourceAverage = (isLiveDb || isCanadianSource)
+        ? pricePerLbCAD
+        : pricePerOzUSD * 16;
+    const sourceCurrency = (isLiveDb || isCanadianSource) ? 'CAD' : 'USD';
 
     const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
         ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16 * exchangeMultiplier)
@@ -2624,7 +2632,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
         comparisonUnit,
         comparisonUnitLabel: '/lb',
         marketAverageCAD: pricePerLbCAD,
-        sourceAverageUSD: pricePerOzUSD,
+        sourceAverage,
+        sourceCurrency,
+        sourceUnitLabel: '/lb',
         priceRangeCAD,
         pricePerLbCAD,
         pricePer100gCAD,
@@ -2728,7 +2738,9 @@ function generateRecommendations() {
             comparisonUnitLabel: normalizedMarket.comparisonUnitLabel,
             pricePerLbCAD: normalizedMarket.pricePerLbCAD,
             pricePer100gCAD: normalizedMarket.pricePer100gCAD,
-            sourcePriceUSD: normalizedMarket.sourceAverageUSD,
+            sourcePrice: normalizedMarket.sourceAverage,
+            sourceCurrency: normalizedMarket.sourceCurrency || 'USD',
+            sourceUnitLabel: normalizedMarket.sourceUnitLabel || normalizedMarket.comparisonUnitLabel,
             priceRange: normalizedMarket.priceRangeCAD,
             exchangeRate: currentExchangeRate,
             sourceCountry: marketData.country || 'Canada',
@@ -2823,11 +2835,11 @@ function displayRecommendations(recommendations) {
                         `}
                     </div>
                     <div>
-                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : 'Source (USD)'}</div>
+                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : `Source (${rec.sourceCurrency || 'USD'})`}</div>
                         <div style="font-size: 16px; font-weight: 600; color: var(--text-muted);">
                             ${rec.dataSource === 'database'
                                 ? `${rec.observationCount || '—'} obs`
-                                : `$${rec.sourcePriceUSD.toFixed(2)}${unitLabel}`}
+                                : `$${Number(rec.sourcePrice || 0).toFixed(2)}${rec.sourceUnitLabel || unitLabel}`}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             ${rec.dataSource === 'database' ? `${(rec.retailers || []).length} retailers` : rec.sourceCountry}

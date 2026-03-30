@@ -11202,14 +11202,15 @@ function syncEditPrices(source) {
     const ozInput = document.getElementById('edit-retail-oz');
     const lbInput = document.getElementById('edit-retail-lb');
     const wsInput = document.getElementById('edit-wholesale-lb');
+    const defaultSkuFactor = 0.75;
     if (source === 'oz' && ozInput.value) {
         const ozVal = parseFloat(ozInput.value);
         lbInput.value = (ozVal * 16).toFixed(2);
-        wsInput.value = (ozVal * 16 * 0.65).toFixed(2);
+        wsInput.value = (ozVal * 16 * defaultSkuFactor).toFixed(2);
     } else if (source === 'lb' && lbInput.value) {
         const lbVal = parseFloat(lbInput.value);
         ozInput.value = (lbVal / 16).toFixed(2);
-        wsInput.value = (lbVal * 0.65).toFixed(2);
+        wsInput.value = (lbVal * defaultSkuFactor).toFixed(2);
     }
 }
 
