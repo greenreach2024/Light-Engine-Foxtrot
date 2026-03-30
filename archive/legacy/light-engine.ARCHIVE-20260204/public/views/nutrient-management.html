@@ -1,0 +1,3442 @@
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .nav-item {
+      position: relative;
+    }
+
+    .nav-button, .nav-link-button {
+      background: rgba(59, 130, 246, 0.2);
+      border: 2px solid #3b82f6;
+      color: #93c5fd;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+
+    .nav-button:hover, .nav-link-button:hover {
+      background: rgba(59, 130, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .nav-button.active {
+      background: rgba(59, 130, 246, 0.4);
+      border-color: #60a5fa;
+      color: white;
+    }
+
+    .nav-arrow {
+      font-size: 0.7rem;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-item:hover .nav-arrow {
+      transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+      padding: 0.5rem;
+      min-width: 200px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .dropdown-menu.dropdown-right {
+      left: auto;
+      right: 0;
+    }
+
+    .nav-item:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-item {
+      display: block;
+      padding: 0.75rem 1rem;
+      color: #93c5fd;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .dropdown-item.active {
+      background: rgba(59, 130, 246, 0.4);
+      color: white;
+      font-weight: 600;
+    }
+
+    .nav-btn.close {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .nav-btn.close:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .nav-btn.admin {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: #a855f7;
+      color: #e9d5ff;
+    }
+
+    .nav-btn.admin:hover {
+      background: rgba(168, 85, 247, 0.35);
+    }
+
+    main {
+      flex: 1;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-auto-rows: minmax(120px, auto);
+      gap: 1.75rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      position: relative;
+      box-shadow: 0 14px 44px rgba(15, 23, 42, 0.45);
+    }
+
+    .card h2 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #93c5fd;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric {
+      background: rgba(15, 23, 42, 0.55);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .metric-label {
+      font-size: 0.82rem;
+      color: var(--neutral-300);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric-value {
+      font-size: 1.55rem;
+      font-weight: 600;
+      color: var(--neutral-100);
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      color: var(--neutral-100);
+    }
+
+    canvas.sparkline {
+      width: 100%;
+      height: 54px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .warning {
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: rgba(248, 113, 113, 0.12);
+      color: #fecaca;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+      line-height: 1.4;
+    }
+
+    .warning strong {
+      font-weight: 600;
+      color: #f87171;
+    }
+
+    #wizardOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(14px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 2rem;
+    }
+
+    #wizardOverlay[data-visible="true"] {
+      display: flex;
+    }
+
+    #wizardOverlay.loading .wizard-card {
+      pointer-events: none;
+      opacity: 0.92;
+    }
+
+    .wizard-card {
+      width: min(720px, 100%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 18px;
+      box-shadow: 0 25px 70px rgba(2, 6, 23, 0.55);
+      display: flex;
+      flex-direction: column;
+      max-height: 90vh;
+    }
+
+    .wizard-header {
+      padding: 1.5rem 1.75rem 1rem;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .wizard-header h3 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: #bfdbfe;
+    }
+
+    .wizard-close {
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #e2e8f0;
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+
+    .wizard-body {
+      padding: 1.5rem 1.75rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .wizard-footer {
+      padding: 1.25rem 1.75rem;
+      border-top: 1px solid rgba(59, 130, 246, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .wizard-footer-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .wizard-progress {
+      color: var(--neutral-300);
+      font-size: 0.85rem;
+    }
+
+    .wizard-footer-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .wizard-footer button {
+      padding: 0.7rem 1.4rem;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .wizard-secondary {
+      background: rgba(148, 163, 184, 0.12);
+      color: #e2e8f0;
+    }
+
+    .wizard-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .wizard-log {
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 1rem;
+      background: rgba(15, 23, 42, 0.55);
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: var(--neutral-300);
+    }
+
+    .wizard-log span {
+      display: block;
+      margin-bottom: 0.45rem;
+    }
+
+    .wizard-log span[data-type="error"] {
+      color: #fca5a5;
+    }
+
+    .wizard-log span[data-type="success"] {
+      color: #bbf7d0;
+    }
+
+    .wizard-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .wizard-actions button {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      background: rgba(37, 99, 235, 0.12);
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      color: #bfdbfe;
+      cursor: pointer;
+    }
+
+    .wizard-content {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .wizard-field-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+
+    .wizard-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .wizard-field label {
+      font-size: 0.85rem;
+      color: var(--neutral-300);
+    }
+
+    .wizard-field input,
+    .wizard-field select,
+    .wizard-field textarea {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 10px;
+      padding: 0.75rem 0.9rem;
+      color: var(--neutral-100);
+      font-size: 0.95rem;
+    }
+
+    .wizard-field textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--neutral-300);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    input[type="number"],
+    input[type="text"] {
+      background: rgba(15, 23, 42, 0.55);
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 0.75rem 0.9rem;
+      color: var(--neutral-100);
+      font-size: 0.95rem;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="number"]:focus,
+    input[type="text"]:focus {
+      outline: none;
+      border-color: rgba(96, 165, 250, 0.8);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+
+    button {
+      align-self: flex-start;
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.92), rgba(14, 165, 233, 0.92));
+      border: none;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(14, 165, 233, 0.45);
+    }
+
+    .toast {
+      position: fixed;
+      right: 2rem;
+      bottom: 2rem;
+      min-width: 240px;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: var(--neutral-100);
+      font-size: 0.9rem;
+      box-shadow: 0 18px 52px rgba(15, 23, 42, 0.65);
+      display: none;
+      z-index: 50;
+    }
+
+    .toast[data-visible="true"] {
+      display: block;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0.9rem;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 0.9rem;
+    }
+
+    .list-item span:last-child {
+      color: var(--neutral-300);
+      font-size: 0.85rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.18);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      font-size: 0.78rem;
+      color: #bfdbfe;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .irrigation-cycle-field.hidden {
+      display: none;
+    }
+
+    .chart-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    footer.page-footer {
+      padding: 1.25rem 2.5rem;
+      color: var(--neutral-500);
+      font-size: 0.85rem;
+      text-align: right;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(15, 23, 42, 0.55);
+    }
+
+    @media (max-width: 960px) {
+      header.page-header {
+        flex-direction: column;
+        gap: 1.5rem;
+        text-align: center;
+      }
+
+      .page-header p {
+        max-width: none;
+      }
+
+      main {
+        padding: 2rem 1.5rem 2.5rem;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/styles/farm-assistant.css">
+</head>
+<body class="le-theme">
+  <header class="page-header">
+    <div>
+      <h1>Nutrient Management</h1>
+      <p>Monitor tank health, tune setpoints, and audit nutrient usage alongside calibration-ready dosing analytics.</p>
+    </div>
+    <div class="header-actions">
+      <nav class="nav-menu">
+        <div class="nav-item">
+          <button class="nav-button">
+            Inventory Management
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="planting-scheduler.html" class="dropdown-item">Planting Scheduler</a>
+            <a href="tray-setup.html" class="dropdown-item">Tray Setup</a>
+            <a href="farm-inventory.html" class="dropdown-item">Farm Inventory</a>
+            <a href="tray-inventory.html" class="dropdown-item">Activity Hub</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button active">
+            Farm Monitoring
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="farm-summary.html" class="dropdown-item">Farm Summary</a>
+            <a href="nutrient-management.html" class="dropdown-item active">Nutrient Management</a>
+            <a href="room-heatmap.html" class="dropdown-item">Heat Map</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Admin
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/LE-farm-admin.html" class="dropdown-item">Admin</a>
+            <a href="/" class="dropdown-item">Setup/Update</a>
+          </div>
+        </div>
+        <div class="nav-item">
+          <button class="nav-button">
+            Sales
+            <span class="nav-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu dropdown-right">
+            <a href="/farm-sales-pos.html" class="dropdown-item">Farm Sales Terminal</a>
+            <a href="/farm-sales-pos.html" class="dropdown-item">Lot Traceability</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="systemConfigCard">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+        <h2>System Configuration</h2>
+        <span class="pill">System Automation</span>
+      </div>
+      <p style="color: var(--neutral-300); margin-bottom: 1.25rem;">Define the hydroponic system and irrigation strategy. Automation uses environmental conditions and day/night timing to optimize cycles without user inputs.</p>
+      <form id="systemConfigForm" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="split">
+          <label>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Hydroponic System</span>
+            <select name="hydroponicSystem" id="hydroponicSystem" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+              <option value="DWC">Deep Water Culture (DWC)</option>
+              <option value="NFT">Nutrient Film Technique (NFT)</option>
+              <option value="LPA">Low Pressure Aeroponics</option>
+              <option value="HPA">High Pressure Aeroponics</option>
+            </select>
+          </label>
+          <label>
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Irrigation Mode</span>
+            <select name="irrigationMode" id="irrigationMode" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+              <option value="always_on">Always On</option>
+              <option value="cycle">On/Off Cycle</option>
+            </select>
+          </label>
+          <label class="irrigation-cycle-field">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">On Duration (minutes)</span>
+            <input type="number" name="irrigationOnMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label class="irrigation-cycle-field">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Off Duration (minutes)</span>
+            <input type="number" name="irrigationOffMinutes" min="1" max="240" step="1" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label style="display: flex; gap: 0.5rem; align-items: center; margin-top: 1.8rem;">
+            <input type="checkbox" name="dayNightSync" id="dayNightSync" style="width: auto;" />
+            <span style="color: var(--neutral-200);">Sync cycles to day/night</span>
+          </label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <button type="submit" style="padding: 0.75rem 1.5rem; background: var(--accent-blue); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer;">Save Configuration</button>
+          <div id="systemConfigStatus" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
+        </div>
+      </form>
+    </section>
+
+    <!-- Tank 1: Vegetative System -->
+    <section class="card" id="tank1Card">
+      <h2>Tank 1 - Vegetative</h2>
+      
+      <!-- Nutrient Provider & Status -->
+      <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Nutrient Provider</label>
+          <select id="tank1Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+            <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth" selected>EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
+            <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit">EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
+            <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
+            <option value="Jack's Hydro 5-12-26">Jack's Hydro 5-12-26</option>
+          </select>
+        </div>
+        <div class="status-chip" id="tank1Status" style="padding: 0.5rem 1rem;">
+          <span>Simulated</span>
+        </div>
+      </div>
+
+      <!-- Current Readings -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin-bottom: 1rem;">Current Readings</h3>
+      <div class="metric-grid" id="tank1CurrentMetrics"></div>
+      <div id="tank1CurrentWarnings" style="margin-top: 1rem;"></div>
+
+      <!-- Setpoints & Targets (Auto-calculated) -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Setpoints & Targets <small style="color: var(--neutral-400); font-weight: 400;">(Auto-calculated from vegetative groups)</small></h3>
+      <div class="metric-grid" id="tank1Setpoints"></div>
+      <!-- Collapsible Vegetative Groups Section -->
+      <div id="tank1VegGroupsToggle" style="margin-top: 1rem; padding: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid rgba(34, 197, 94, 0.2);" onclick="toggleVegGroups()">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 0.875rem; color: var(--neutral-300); font-weight: 500;">
+            <span id="vegGroupsIcon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+            <span id="vegGroupsLabel">Show Vegetative Groups</span>
+          </span>
+        </div>
+      </div>
+      <div id="tank1VegGroups" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px; font-size: 0.875rem; color: var(--neutral-300);"></div>
+
+      <!-- Trending Signals -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Trending Signals (24 pts)</h3>
+      <div class="chart-container">
+        <div>
+          <div class="metric-label">pH Trend</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ph"></canvas>
+        </div>
+        <div>
+          <div class="metric-label">EC Trend</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="ec"></canvas>
+        </div>
+        <div>
+          <div class="metric-label">Temperature (°C)</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank1" data-metric="temperature"></canvas>
+        </div>
+      </div>
+
+      <!-- Dosing Analytics -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Dosing Analytics</h3>
+      <div class="metric-grid" id="tank1DosingMetrics"></div>
+      <div class="list" id="tank1RecentDoses"></div>
+
+      <!-- Calibration -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Calibration</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <form id="tank1CalibrationForm">
+          <label style="display: block; margin-bottom: 0.75rem;">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Run Time (seconds)</span>
+            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label style="display: block; margin-bottom: 0.75rem;">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Measured Volume (mL)</span>
+            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+        </form>
+        <div class="list" id="tank1CalibrationSummary"></div>
+      </div>
+
+      <!-- Concentrate Inventory -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Concentrate Inventory</h3>
+      <div class="metric-grid" id="tank1InventoryMetrics"></div>
+      <div id="tank1InventoryWarnings"></div>
+
+      <!-- PID Roadmap -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">PID Roadmap</h3>
+      <p id="tank1PidNotes" style="color: var(--neutral-300); margin-bottom: 1rem;"></p>
+      <div class="list" id="tank1PidSignals"></div>
+
+      <!-- Nutrient Composition -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Nutrient Composition</h3>
+      <div id="tank1NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+    </section>
+
+    <!-- Tank 2: Live Fruiting System -->
+    <section class="card" id="tank2Card">
+      <h2>Tank 2 - Fruiting</h2>
+      
+      <!-- Nutrient Provider & Status -->
+      <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem;">
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Nutrient Provider</label>
+          <select id="tank2Provider" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);">
+            <option value="EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit" selected>EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit</option>
+            <option value="EZ-GRO FIRE PROFESSIONAL - Veg and Growth">EZ-GRO FIRE PROFESSIONAL - Veg and Growth</option>
+            <option value="General Hydroponics Flora Series">General Hydroponics Flora Series</option>
+            <option value="Jack's Hydro 5-12-26">Jack's Hydro 5-12-26</option>
+          </select>
+        </div>
+        <div class="status-chip" id="tank2Status" style="padding: 0.5rem 1rem;">
+          <span>Loading...</span>
+        </div>
+      </div>
+
+      <!-- Current Readings -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin-bottom: 1rem;">Current Readings</h3>
+      <div class="metric-grid" id="tank2CurrentMetrics"></div>
+      <div id="tank2CurrentWarnings" style="margin-top: 1rem;"></div>
+
+      <!-- Setpoints & Targets (Auto-calculated) -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Setpoints & Targets <small style="color: var(--neutral-400); font-weight: 400;">(Auto-calculated from fruiting groups)</small></h3>
+      <div class="metric-grid" id="tank2Setpoints"></div>
+      <div id="tank2AutodoseControls" style="margin-top: 1.5rem; padding: 1.25rem; border-radius: 14px; border: 1px solid var(--card-border); background: rgba(15, 23, 42, 0.55); display: flex; flex-direction: column; gap: 1rem;">
+        <h4 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.25rem;">Autodose Controls</h4>
+        <form id="tank2SetpointForm" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="form-row">
+            <label>
+              <span>pH Target</span>
+              <input type="number" name="phTarget" step="0.01" min="4" max="7.5" required />
+            </label>
+            <label>
+              <span>pH Tolerance</span>
+              <input type="number" name="phTolerance" step="0.01" min="0.05" max="1" required />
+            </label>
+            <label style="display: flex; gap: 0.5rem; align-items: center;">
+              <span>Autodose Enabled</span>
+              <input type="checkbox" name="autodoseEnabled" style="width: auto;" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>EC Target (µS/cm)</span>
+              <input type="number" name="ecTarget" step="1" min="100" max="2500" required />
+            </label>
+            <label>
+              <span>EC Tolerance (µS/cm)</span>
+              <input type="number" name="ecTolerance" step="1" min="5" max="500" required />
+            </label>
+            <label>
+              <span>Min Dose Interval (sec)</span>
+              <input type="number" name="minDoseIntervalSec" step="1" min="30" max="3600" required />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>EC Dose Duration (sec)</span>
+              <input type="number" name="ecDoseSeconds" step="0.1" min="0.5" max="20" required />
+            </label>
+            <label>
+              <span>pH Down Duration (sec)</span>
+              <input type="number" name="phDownDoseSeconds" step="0.1" min="0.5" max="5" required />
+            </label>
+          </div>
+          <button type="submit" style="padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer;">Push Setpoints to Doser</button>
+        </form>
+        <div id="tank2SetpointStatus" style="font-size: 0.9rem; color: var(--neutral-300);"></div>
+        <div id="tank2AutodoseSummary" style="font-size: 0.85rem; color: var(--neutral-300);"></div>
+      </div>
+      <div id="tank2FruitingGroups" style="margin-top: 1rem; padding: 0.75rem; background: rgba(244, 63, 94, 0.1); border-radius: 8px; font-size: 0.875rem; color: var(--neutral-300);"></div>
+
+      <!-- Trending Signals -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Trending Signals (24 pts)</h3>
+      <div class="chart-container">
+        <div>
+          <div class="metric-label">pH Trend</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ph"></canvas>
+        </div>
+        <div>
+          <div class="metric-label">EC Trend</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="ec"></canvas>
+        </div>
+        <div>
+          <div class="metric-label">Temperature (°C)</div>
+          <canvas class="sparkline" width="520" height="140" data-tank="tank2" data-metric="temperature"></canvas>
+        </div>
+      </div>
+
+      <!-- Dosing Analytics -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Dosing Analytics</h3>
+      <div class="metric-grid" id="tank2DosingMetrics"></div>
+      <div class="list" id="tank2RecentDoses"></div>
+
+      <!-- Calibration -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Calibration</h3>
+      <div class="wizard-actions" style="margin-bottom: 1rem;">
+        <button type="button" class="wizard-launch" data-mode="pump" data-tank="tank2">Pump Calibration Wizard</button>
+        <button type="button" class="wizard-launch" data-mode="sensor" data-tank="tank2">Sensor Calibration Wizard</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <form id="tank2CalibrationForm">
+          <label style="display: block; margin-bottom: 0.75rem;">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Run Time (seconds)</span>
+            <input type="number" step="0.1" min="1" name="calRunTime" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <label style="display: block; margin-bottom: 0.75rem;">
+            <span style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--neutral-300);">Measured Volume (mL)</span>
+            <input type="number" step="0.1" min="1" name="calVolume" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); border: 1px solid var(--card-border); border-radius: 8px; color: var(--neutral-100);" />
+          </label>
+          <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--accent-blue); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Compute Calibration</button>
+        </form>
+        <div class="list" id="tank2CalibrationSummary"></div>
+      </div>
+
+      <!-- Concentrate Inventory -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Concentrate Inventory</h3>
+      <div class="metric-grid" id="tank2InventoryMetrics"></div>
+      <div id="tank2InventoryWarnings"></div>
+
+      <!-- PID Roadmap -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">PID Roadmap</h3>
+      <p id="tank2PidNotes" style="color: var(--neutral-300); margin-bottom: 1rem;"></p>
+      <div class="list" id="tank2PidSignals"></div>
+
+      <!-- Nutrient Composition -->
+      <h3 style="font-size: 1.1rem; color: #93c5fd; margin: 2rem 0 1rem;">Nutrient Composition</h3>
+      <div id="tank2NutrientCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;"></div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    Data syncs automatically with Light Engine Charlie public/data store. MQTT configuration remains unchanged per hardware integration guardrails.
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <div id="wizardOverlay" data-visible="false" data-step="0">
+    <div class="wizard-card" data-mode="">
+      <div class="wizard-header">
+        <h3 id="wizardTitle"></h3>
+        <button type="button" class="wizard-close" id="wizardCloseBtn" aria-label="Close wizard">&times;</button>
+      </div>
+      <div class="wizard-body" id="wizardBody"></div>
+      <div class="wizard-footer">
+        <div id="wizardProgress" class="wizard-progress"></div>
+        <div class="wizard-footer-actions">
+          <button type="button" class="wizard-secondary" id="wizardBackBtn">Back</button>
+          <button type="button" class="wizard-primary" id="wizardNextBtn">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_ENDPOINT = '/data/nutrient-dashboard';
+    const LEGACY_CACHE_ENDPOINT = '/data/nutrient-dashboard.json';
+    const SETPOINT_ENDPOINT = '/api/nutrients/targets';
+  const PUMP_CAL_ENDPOINT = '/api/nutrients/pump-calibration';
+  const SENSOR_CAL_ENDPOINT = '/api/nutrients/sensor-calibration';
+  const COMMAND_ENDPOINT = '/api/nutrients/command';
+    const GROUPS_ENDPOINT = '/data/groups.json';
+    const PLANS_ENDPOINT = '/plans';
+    const PAIL_LOW_THRESHOLD = 0.8; // 80%
+    const HISTORY_LIMIT = 48;
+
+    const DEFAULT_AUTODOSE = Object.freeze({
+      autodoseEnabled: true,
+      phTarget: 6.5,
+      phTolerance: 0.15,
+      ecTarget: 800,
+      ecTolerance: 50,
+      ecDoseSeconds: 2.5,
+      phDownDoseSeconds: 1.0,
+      minDoseIntervalSec: 60
+    });
+
+    const DEFAULT_SYSTEM_CONFIG = Object.freeze({
+      hydroponicSystem: 'DWC',
+      irrigation: {
+        mode: 'always_on',
+        onMinutes: 15,
+        offMinutes: 15,
+        dayNightSync: true
+      },
+      automation: {
+        mode: 'system',
+        envAware: true,
+        dayNightAware: true
+      }
+    });
+
+    // EC targets by stage (mS/cm)
+    const EC_TARGETS = {
+      establishment: 1.4,  // First 10-14 days
+      vegetative: 1.6,     // Post-establishment, pre-flower
+      earlyFlowering: 1.6, // Early flowering & fruit set
+      heavyFruiting: 1.8   // Heavy fruiting / start of picking
+    };
+
+    const PH_TARGETS = {
+      establishment: 5.6,  // First 10-14 days (slightly lower for root development)
+      vegetative: 5.8,     // Post-establishment, pre-flower
+      earlyFlowering: 6.0, // Early flowering & fruit set
+      heavyFruiting: 6.2   // Heavy fruiting / start of picking
+    };
+
+    // Nutrient compositions by provider
+    const NUTRIENT_COMPOSITIONS = {
+      'EZ-GRO FIRE PROFESSIONAL - Veg and Growth': {
+        parts: [
+          {
+            name: 'Part 1 - Cal-Base',
+            nutrients: [
+              { element: 'Total Nitrogen (N)', value: '15%', detail: '15% Nitrate Nitrogen' },
+              { element: 'Calcium (Ca)', value: '19%', detail: null }
+            ]
+          },
+          {
+            name: 'Part 2',
+            nutrients: [
+              { element: 'Total Nitrogen (N)', value: '3%', detail: '3% Nitrate Nitrogen' },
+              { element: 'Available Phosphate (P₂O₅)', value: '9%', detail: null },
+              { element: 'Soluble Potash (K₂O)', value: '22%', detail: null },
+              { element: 'Magnesium (Mg)', value: '5.5%', detail: null },
+              { element: 'Boron (B)', value: '0.1%', detail: null },
+              { element: 'Copper (Cu)', value: '0.025%', detail: '0.025% Chelated Copper (Cu)' },
+              { element: 'Iron (Fe)', value: '0.25%', detail: '0.25% Chelated Iron (Fe)' },
+              { element: 'Manganese (Mn)', value: '0.024%', detail: '0.024% Chelated Manganese (Mn)' },
+              { element: 'Molybdenum (Mo)', value: '0.0032%', detail: null },
+              { element: 'Zinc (Zn)', value: '0.025%', detail: '0.025% Chelated Zinc (Zn)' }
+            ]
+          }
+        ]
+      },
+      'EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit': {
+        parts: [
+          {
+            name: 'Part 1',
+            nutrients: [
+              { element: 'Total Nitrogen (N)', value: '15%', detail: '15% Nitrate Nitrogen' },
+              { element: 'Calcium (Ca)', value: '19%', detail: null }
+            ]
+          },
+          {
+            name: 'Part 2',
+            nutrients: [
+              { element: 'Available Phosphate (P₂O₅)', value: '12%', detail: null },
+              { element: 'Soluble Potash (K₂O)', value: '24%', detail: null },
+              { element: 'Magnesium (Mg)', value: '5.1%', detail: null },
+              { element: 'Boron (B)', value: '0.1%', detail: null },
+              { element: 'Copper (Cu)', value: '0.025%', detail: '0.025% Chelated Copper (Cu)' },
+              { element: 'Iron (Fe)', value: '0.25%', detail: '0.25% Chelated Iron (Fe)' },
+              { element: 'Manganese (Mn)', value: '0.023%', detail: '0.023% Chelated Manganese (Mn)' },
+              { element: 'Molybdenum (Mo)', value: '0.003%', detail: null },
+              { element: 'Zinc (Zn)', value: '0.025%', detail: '0.025% Chelated Zinc (Zn)' }
+            ]
+          }
+        ]
+      }
+    };
+
+    const state = {
+      raw: null,
+      groups: null,
+      computed: {
+        pumpFlowMlPerSec: 0,
+        todaysVolume: 0,
+        dailyAverageMl: 0,
+        warningFlags: [],
+        fruitingGroups: [],
+        tank2EC: 1.6,
+      },
+      autodose: { ...DEFAULT_AUTODOSE },
+      system: JSON.parse(JSON.stringify(DEFAULT_SYSTEM_CONFIG)),
+      history: {
+        tank2: {
+          ph: [],
+          ec: [],
+          temperature: []
+        }
+      },
+      wizard: {
+        mode: null,
+        step: 0,
+        steps: [],
+        context: {},
+        log: [],
+        loading: false
+      },
+      snapshot: null,
+      legacyCache: null
+    };
+
+    const wizardOverlay = document.getElementById('wizardOverlay');
+    const wizardTitleNode = document.getElementById('wizardTitle');
+    const wizardBodyNode = document.getElementById('wizardBody');
+    const wizardProgressNode = document.getElementById('wizardProgress');
+    const wizardBackBtn = document.getElementById('wizardBackBtn');
+    const wizardNextBtn = document.getElementById('wizardNextBtn');
+    const wizardCloseBtn = document.getElementById('wizardCloseBtn');
+
+    function formatNumber(value, precision = 2) {
+      if (!Number.isFinite(value)) return '—';
+      return Number(value).toFixed(precision);
+    }
+
+    function toFiniteNumber(value, fallback = null) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    }
+
+    function convertEcToMicro(value) {
+      const num = toFiniteNumber(value, null);
+      if (!Number.isFinite(num)) return null;
+      return num <= 25 ? Math.round(num * 1000) : Math.round(num);
+    }
+
+    function convertEcToMilli(value) {
+      const num = toFiniteNumber(value, null);
+      if (!Number.isFinite(num)) return null;
+      return num >= 25 ? num / 1000 : num;
+    }
+
+    function formatEcDisplay(tankId, rawValue, precision = 2) {
+      const value = toFiniteNumber(rawValue, null);
+      if (!Number.isFinite(value)) return '—';
+      if (tankId === 'tank2') {
+        const milli = value / 1000;
+        return `${formatNumber(milli, precision)} mS/cm`;
+      }
+      return `${formatNumber(value, precision)} µS/cm`;
+    }
+
+    function normalizeSystemConfig(config) {
+      const base = JSON.parse(JSON.stringify(DEFAULT_SYSTEM_CONFIG));
+      if (!config || typeof config !== 'object') return base;
+      const hydro = typeof config.hydroponicSystem === 'string' ? config.hydroponicSystem : base.hydroponicSystem;
+      const irrigation = config.irrigation || {};
+      return {
+        hydroponicSystem: hydro,
+        irrigation: {
+          mode: ['always_on', 'cycle'].includes(irrigation.mode) ? irrigation.mode : base.irrigation.mode,
+          onMinutes: toFiniteNumber(irrigation.onMinutes, base.irrigation.onMinutes),
+          offMinutes: toFiniteNumber(irrigation.offMinutes, base.irrigation.offMinutes),
+          dayNightSync: typeof irrigation.dayNightSync === 'boolean' ? irrigation.dayNightSync : base.irrigation.dayNightSync
+        },
+        automation: {
+          mode: 'system',
+          envAware: true,
+          dayNightAware: true
+        }
+      };
+    }
+
+    function updateIrrigationCycleVisibility() {
+      const modeSelect = document.getElementById('irrigationMode');
+      const mode = modeSelect?.value || 'always_on';
+      document.querySelectorAll('.irrigation-cycle-field').forEach((field) => {
+        field.classList.toggle('hidden', mode !== 'cycle');
+      });
+    }
+
+    function renderSystemConfig() {
+      const systemConfig = normalizeSystemConfig(state.raw?.system || state.system);
+      state.system = systemConfig;
+
+      const hydroSelect = document.getElementById('hydroponicSystem');
+      const modeSelect = document.getElementById('irrigationMode');
+      const onInput = document.querySelector('[name="irrigationOnMinutes"]');
+      const offInput = document.querySelector('[name="irrigationOffMinutes"]');
+      const dayNightToggle = document.getElementById('dayNightSync');
+
+      if (hydroSelect) hydroSelect.value = systemConfig.hydroponicSystem;
+      if (modeSelect) modeSelect.value = systemConfig.irrigation.mode;
+      if (onInput) onInput.value = systemConfig.irrigation.onMinutes;
+      if (offInput) offInput.value = systemConfig.irrigation.offMinutes;
+      if (dayNightToggle) dayNightToggle.checked = systemConfig.irrigation.dayNightSync;
+
+      updateIrrigationCycleVisibility();
+    }
+
+    function getSystemConfigFromForm() {
+      const hydroSelect = document.getElementById('hydroponicSystem');
+      const modeSelect = document.getElementById('irrigationMode');
+      const onInput = document.querySelector('[name="irrigationOnMinutes"]');
+      const offInput = document.querySelector('[name="irrigationOffMinutes"]');
+      const dayNightToggle = document.getElementById('dayNightSync');
+
+      const mode = modeSelect?.value || 'always_on';
+      return {
+        hydroponicSystem: hydroSelect?.value || 'DWC',
+        irrigation: {
+          mode,
+          onMinutes: toFiniteNumber(onInput?.value, DEFAULT_SYSTEM_CONFIG.irrigation.onMinutes),
+          offMinutes: toFiniteNumber(offInput?.value, DEFAULT_SYSTEM_CONFIG.irrigation.offMinutes),
+          dayNightSync: Boolean(dayNightToggle?.checked)
+        },
+        automation: {
+          mode: 'system',
+          envAware: true,
+          dayNightAware: true
+        }
+      };
+    }
+
+    function setSystemConfigStatus(message, type = 'neutral') {
+      const status = document.getElementById('systemConfigStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = type === 'error' ? 'var(--accent-red)' : 'var(--neutral-300)';
+    }
+
+    async function handleSystemConfigSave(event) {
+      event.preventDefault();
+      try {
+        const config = normalizeSystemConfig(getSystemConfigFromForm());
+        const payload = deepClone(state.raw || {});
+        payload.system = {
+          ...config,
+          updatedAt: new Date().toISOString()
+        };
+
+        await persistData(payload, 'System configuration saved');
+        state.raw = payload;
+        state.system = config;
+        renderSystemConfig();
+        setSystemConfigStatus(`Saved at ${new Date().toLocaleTimeString()}`);
+      } catch (error) {
+        console.error('[nutrient] system config save failed:', error);
+        setSystemConfigStatus(error.message || 'Failed to save configuration', 'error');
+      }
+    }
+
+    function pushHistory(buffer, value, limit = HISTORY_LIMIT) {
+      if (!Number.isFinite(value)) {
+        return Array.isArray(buffer) ? buffer.slice() : [];
+      }
+      const next = Array.isArray(buffer) ? buffer.slice() : [];
+      next.push(value);
+      if (next.length > limit) {
+        next.shift();
+      }
+      return next;
+    }
+
+    function clamp(value, min, max) {
+      const num = toFiniteNumber(value, null);
+      if (!Number.isFinite(num)) return null;
+      return Math.min(Math.max(num, min), max);
+    }
+
+    function deepClone(value) {
+      try {
+        if (typeof structuredClone === 'function') {
+          return structuredClone(value);
+        }
+      } catch (error) {
+        console.warn('structuredClone failed, fallback to JSON clone', error);
+      }
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizePumpCalibration(pumpCal) {
+      if (!pumpCal || typeof pumpCal !== 'object') return null;
+      const runTimeSeconds = toFiniteNumber(pumpCal.runTimeSeconds ?? pumpCal.durationSeconds, null);
+      const measuredVolumeMl = toFiniteNumber(
+        pumpCal.measuredVolumeMl ?? pumpCal.volumeMl ?? pumpCal.referenceVolumeMl,
+        null
+      );
+      const flowFromPayload = toFiniteNumber(pumpCal.flowMlPerSec ?? pumpCal.measuredFlowMlPerSec, null);
+      const flowMlPerSec = Number.isFinite(runTimeSeconds) && runTimeSeconds > 0 && Number.isFinite(measuredVolumeMl)
+        ? Number((measuredVolumeMl / runTimeSeconds).toFixed(4))
+        : (Number.isFinite(flowFromPayload) ? Number(flowFromPayload.toFixed(4)) : null);
+
+      return {
+        runTimeSeconds: Number.isFinite(runTimeSeconds) ? runTimeSeconds : null,
+        measuredVolumeMl: Number.isFinite(measuredVolumeMl) ? measuredVolumeMl : null,
+        flowMlPerSec,
+        recordedAt: pumpCal.recordedAt || pumpCal.completedAt || pumpCal.timestamp || pumpCal.updatedAt || null,
+        requestedBy: pumpCal.requestedBy || pumpCal.operator || pumpCal.user || null,
+        notes: pumpCal.notes || pumpCal.note || null
+      };
+    }
+
+    function normalizeSensorCalibration(sensorCal) {
+      if (!sensorCal || typeof sensorCal !== 'object') return null;
+      const logsSource = Array.isArray(sensorCal.logs)
+        ? sensorCal.logs
+        : Array.isArray(sensorCal.history)
+          ? sensorCal.history
+          : [];
+
+      const normalizeEntry = (entry) => ({
+        sensor: entry?.sensor || entry?.type || null,
+        target: entry?.target ?? entry?.expected ?? entry?.reference ?? null,
+        reading: entry?.reading ?? entry?.value ?? entry?.measured ?? null,
+        recordedAt: entry?.recordedAt || entry?.timestamp || entry?.observedAt || entry?.updatedAt || null,
+        step: entry?.step || entry?.buffer || entry?.tag || null,
+        note: entry?.note || entry?.notes || null
+      });
+
+      const logs = logsSource.map(normalizeEntry);
+      const findLatest = (key) => {
+        const direct = sensorCal[key];
+        if (direct && typeof direct === 'object') return normalizeEntry(direct);
+        for (let i = logs.length - 1; i >= 0; i -= 1) {
+          const entry = logs[i];
+          if ((entry.sensor || '').toLowerCase() === key) {
+            return entry;
+          }
+        }
+        return null;
+      };
+
+      return {
+        logs,
+        ph: findLatest('ph'),
+        ec: findLatest('ec')
+      };
+    }
+
+    function extractCalibrationData(snapshotCal, fallbackCal, prevCal) {
+      const source = snapshotCal || fallbackCal;
+      const previous = prevCal || {};
+      if (!source && !previous) return null;
+
+      const next = { ...previous };
+
+      const pumpSource = source?.pump || (source && !source.sensors ? source : null);
+      const normalizedPump = normalizePumpCalibration(pumpSource);
+      if (normalizedPump) {
+        next.pump = normalizedPump;
+      }
+
+      const sensorSource = source?.sensors;
+      const normalizedSensors = normalizeSensorCalibration(sensorSource);
+      if (normalizedSensors) {
+        next.sensors = normalizedSensors;
+      }
+
+      if (Array.isArray(source?.logs)) {
+        next.logs = source.logs.slice(-25);
+      }
+
+      return Object.keys(next).length ? next : null;
+    }
+
+    function fillInputNumber(input, value, precision = 2) {
+      if (Number.isFinite(value)) {
+        input.value = Number(value).toFixed(precision);
+      } else {
+        input.value = '';
+      }
+    }
+
+        function pushWizardLog(message, type = 'info') {
+          if (!message) return;
+          const timestamp = new Date().toLocaleTimeString();
+          state.wizard.log = [...(state.wizard.log || []), { timestamp, type, message }].slice(-40);
+          const logBox = document.getElementById('wizardLog');
+          if (logBox) {
+            const entry = document.createElement('span');
+            entry.dataset.type = type;
+            entry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+          }
+        }
+
+        function humanizeTimestamp(ts) {
+          if (!ts) return '—';
+          const date = new Date(ts);
+          if (Number.isNaN(date.getTime())) return '—';
+          const now = new Date();
+          const diff = now - date;
+          if (diff < 60_000) return 'just now';
+          if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} minutes ago`;
+          if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} hours ago`;
+          return date.toLocaleString();
+        }
+
+        function closeWizard() {
+          if (!wizardOverlay) return;
+          wizardOverlay.dataset.visible = 'false';
+          wizardOverlay.dataset.step = '0';
+          wizardOverlay.setAttribute('data-mode', '');
+          wizardOverlay.classList.remove('loading');
+          wizardBodyNode.innerHTML = '';
+          wizardProgressNode.innerHTML = '';
+          state.wizard = {
+            mode: null,
+            step: 0,
+            steps: [],
+            context: {},
+            log: [],
+            loading: false
+          };
+        }
+
+        function updateWizardControls() {
+          if (!wizardOverlay) return;
+          const { step, steps } = state.wizard;
+          const total = steps.length;
+          wizardProgressNode.textContent = total ? `Step ${step + 1} of ${total}` : '';
+          wizardBackBtn.disabled = step === 0;
+          if (step === total - 1) {
+            wizardNextBtn.textContent = state.wizard.loading ? 'Working…' : 'Finish';
+          } else {
+            wizardNextBtn.textContent = state.wizard.loading ? 'Working…' : 'Next';
+          }
+          wizardNextBtn.disabled = !!state.wizard.loading;
+        }
+
+        function renderWizardStep() {
+          const { steps, step } = state.wizard;
+          if (!Array.isArray(steps) || !steps.length || !steps[step]) {
+            closeWizard();
+            return;
+          }
+          const descriptor = steps[step];
+          wizardTitleNode.textContent = descriptor.title || 'Calibration Wizard';
+          wizardOverlay.dataset.step = String(step);
+          wizardOverlay.dataset.mode = state.wizard.mode || '';
+          wizardBodyNode.innerHTML = '';
+          const content = document.createElement('div');
+          content.className = 'wizard-content';
+          wizardBodyNode.appendChild(content);
+
+          if (typeof descriptor.render === 'function') {
+            descriptor.render({
+              container: content,
+              state,
+              context: state.wizard.context,
+              log: pushWizardLog
+            });
+          }
+
+          if (descriptor.showLog !== false) {
+            let logBox = document.getElementById('wizardLog');
+            if (!logBox) {
+              logBox = document.createElement('div');
+              logBox.id = 'wizardLog';
+              logBox.className = 'wizard-log';
+              wizardBodyNode.appendChild(logBox);
+            } else {
+              logBox.innerHTML = '';
+              wizardBodyNode.appendChild(logBox);
+            }
+            state.wizard.log.forEach((entry) => {
+              const row = document.createElement('span');
+              row.dataset.type = entry.type;
+              row.innerHTML = `<strong>[${entry.timestamp}]</strong> ${entry.message}`;
+              logBox.appendChild(row);
+            });
+            logBox.scrollTop = logBox.scrollHeight;
+          }
+
+          updateWizardControls();
+        }
+
+        function openWizard(config) {
+          if (!config || !wizardOverlay) return;
+          const { mode, steps, context = {} } = config;
+          state.wizard = {
+            mode,
+            step: 0,
+            steps: Array.isArray(steps) ? steps : [],
+            context,
+            log: [],
+            loading: false
+          };
+          wizardBodyNode.innerHTML = '';
+          wizardOverlay.dataset.visible = 'true';
+          renderWizardStep();
+        }
+
+        function setWizardLoading(isLoading) {
+          state.wizard.loading = Boolean(isLoading);
+          wizardOverlay.classList.toggle('loading', state.wizard.loading);
+          updateWizardControls();
+        }
+
+        function handleWizardAdvance() {
+          const { steps, step, context } = state.wizard;
+          if (!Array.isArray(steps) || !steps.length) {
+            closeWizard();
+            return;
+          }
+          const descriptor = steps[step];
+          const proceed = () => {
+            if (step >= steps.length - 1) {
+              closeWizard();
+            } else {
+              state.wizard.step = Math.min(step + 1, steps.length - 1);
+              renderWizardStep();
+            }
+          };
+          if (typeof descriptor?.onNext !== 'function') {
+            proceed();
+            return;
+          }
+
+          try {
+            const result = descriptor.onNext({
+              state,
+              context,
+              closeWizard,
+              proceed,
+              log: pushWizardLog,
+              setLoading: setWizardLoading
+            });
+            if (result && typeof result.then === 'function') {
+              setWizardLoading(true);
+              result.then((outcome) => {
+                setWizardLoading(false);
+                if (outcome === false) return;
+                proceed();
+              }).catch((error) => {
+                console.error('Wizard step failed', error);
+                setWizardLoading(false);
+                pushWizardLog(error?.message || 'Step failed', 'error');
+                showToast(error?.message || 'Wizard step failed', 'error');
+              });
+            } else if (result === false) {
+              // Validation blocked progression.
+              return;
+            } else {
+              proceed();
+            }
+          } catch (error) {
+            console.error('Wizard onNext error', error);
+            pushWizardLog(error?.message || 'Wizard step error', 'error');
+            showToast(error?.message || 'Wizard step error', 'error');
+            setWizardLoading(false);
+          }
+        }
+
+        function handleWizardBack() {
+          if (state.wizard.loading) return;
+          const { steps, step } = state.wizard;
+          if (!Array.isArray(steps) || !steps.length) {
+            closeWizard();
+            return;
+          }
+          const descriptor = steps[step];
+          if (typeof descriptor?.onBack === 'function') {
+            const shouldContinue = descriptor.onBack({ state, context: state.wizard.context });
+            if (shouldContinue === false) return;
+          }
+          state.wizard.step = Math.max(0, step - 1);
+          renderWizardStep();
+        }
+
+        function formatTankLabel(tankId) {
+          if (tankId === 'tank1') return 'Tank 1 - Vegetative';
+          if (tankId === 'tank2') return 'Tank 2 - Fruiting';
+          return tankId || 'Tank';
+        }
+
+        function startPumpCalibrationWizard(tankId = 'tank2') {
+          const tankData = state.raw?.tanks?.[tankId] || {};
+          const pumpCal = tankData?.calibration?.pump || tankData?.calibration || {};
+          const context = {
+            tankId,
+            channel: pumpCal?.channel || 'ecMixA',
+            runTimeSeconds: Number.isFinite(pumpCal?.runTimeSeconds) ? pumpCal.runTimeSeconds : 30,
+            measuredVolumeMl: Number.isFinite(pumpCal?.measuredVolumeMl) ? pumpCal.measuredVolumeMl : null,
+            notes: '',
+            lastCalibration: pumpCal,
+            sentCommands: [],
+            initiatedAt: new Date().toISOString()
+          };
+
+          const tankLabel = formatTankLabel(tankId);
+
+          const steps = [
+            {
+              title: `${tankLabel}: Prep`,
+              render: ({ container }) => {
+                const instructions = document.createElement('div');
+                instructions.innerHTML = `
+                  <p style="color: var(--neutral-200); line-height: 1.5;">
+                    Verify the collection cylinder is empty, disconnect the tank feed line, and route the pump output into a graduated cylinder. We will run a timed dose and measure the captured volume to compute an updated flow rate.
+                  </p>
+                  <div style="margin-top: 1rem;">
+                    <strong>Last Calibration:</strong><br>
+                    <span style="color: var(--neutral-300);">${humanizeTimestamp(pumpCal?.recordedAt || pumpCal?.lastCalibratedAt)}</span>
+                  </div>
+                `;
+                container.appendChild(instructions);
+
+                const channelField = document.createElement('div');
+                channelField.className = 'wizard-field';
+                channelField.innerHTML = `
+                  <label for="wizardPumpChannel">Pump Channel</label>
+                  <select id="wizardPumpChannel" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100);">
+                    <option value="ecMixA">EC Mix A</option>
+                    <option value="ecMixB">EC Mix B</option>
+                    <option value="phDown">pH Down</option>
+                  </select>
+                `;
+                container.appendChild(channelField);
+                const select = channelField.querySelector('select');
+                select.value = context.channel;
+                select.addEventListener('change', () => {
+                  context.channel = select.value;
+                  pushWizardLog(`Channel set to ${context.channel}`);
+                });
+              },
+              onNext: () => {
+                if (!context.channel) {
+                  showToast('Select a pump channel to continue.', 'error');
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              title: `${tankLabel}: Timed Dose`,
+              render: ({ container }) => {
+                container.innerHTML = `
+                  <p style="color: var(--neutral-200); line-height: 1.5;">
+                    Enter a runtime, then start the pump to fill the cylinder. Stop the pump manually if needed. Capture the exact runtime used for the volume measurement.
+                  </p>
+                `;
+                const fieldGroup = document.createElement('div');
+                fieldGroup.className = 'wizard-field-group';
+                fieldGroup.innerHTML = `
+                  <div class="wizard-field">
+                    <label for="wizardPumpRuntime">Dose Runtime (seconds)</label>
+                    <input type="number" id="wizardPumpRuntime" min="5" max="600" step="0.5" value="${Number(context.runTimeSeconds || 30).toFixed(1)}" />
+                  </div>
+                `;
+                container.appendChild(fieldGroup);
+                const runtimeInput = fieldGroup.querySelector('#wizardPumpRuntime');
+                runtimeInput.addEventListener('input', () => {
+                  const value = toFiniteNumber(runtimeInput.value, null);
+                  context.runTimeSeconds = Number.isFinite(value) ? value : context.runTimeSeconds;
+                });
+
+                const controls = document.createElement('div');
+                controls.className = 'wizard-actions';
+                const startButton = document.createElement('button');
+                startButton.type = 'button';
+                startButton.textContent = 'Start Pump Dose';
+                controls.appendChild(startButton);
+
+                const stopButton = document.createElement('button');
+                stopButton.type = 'button';
+                stopButton.textContent = 'Send Stop Command';
+                controls.appendChild(stopButton);
+
+                container.appendChild(controls);
+
+                startButton.addEventListener('click', async () => {
+                  const duration = toFiniteNumber(runtimeInput.value, null);
+                  if (!Number.isFinite(duration) || duration <= 0) {
+                    showToast('Provide a valid runtime before starting the pump.', 'error');
+                    return;
+                  }
+                  context.runTimeSeconds = duration;
+                  try {
+                    setWizardLoading(true);
+                    pushWizardLog(`Dispatching ${context.channel} for ${formatNumber(duration, 1)} seconds…`);
+                    const response = await fetch(COMMAND_ENDPOINT, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: context.channel, durationSec: duration })
+                    });
+                    if (!response.ok) {
+                      const errorPayload = await response.json().catch(() => ({}));
+                      throw new Error(errorPayload?.error || `HTTP ${response.status}`);
+                    }
+                    context.sentCommands.push({ action: context.channel, duration, at: new Date().toISOString() });
+                    pushWizardLog('Pump dose started. Measure captured volume.', 'success');
+                    showToast('Pump command sent.', 'info');
+                  } catch (error) {
+                    console.error('Pump command failed', error);
+                    pushWizardLog(error?.message || 'Failed to send pump command', 'error');
+                    showToast(error?.message || 'Failed to send pump command', 'error');
+                  } finally {
+                    setWizardLoading(false);
+                  }
+                });
+
+                stopButton.addEventListener('click', async () => {
+                  try {
+                    setWizardLoading(true);
+                    pushWizardLog('Dispatching stop command…');
+                    const response = await fetch(COMMAND_ENDPOINT, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'stop' })
+                    });
+                    if (!response.ok) {
+                      const errorPayload = await response.json().catch(() => ({}));
+                      throw new Error(errorPayload?.error || `HTTP ${response.status}`);
+                    }
+                    pushWizardLog('Stop command sent to doser.', 'success');
+                    showToast('Stop command sent.', 'info');
+                  } catch (error) {
+                    console.error('Stop command failed', error);
+                    pushWizardLog(error?.message || 'Failed to send stop command', 'error');
+                    showToast(error?.message || 'Failed to send stop command', 'error');
+                  } finally {
+                    setWizardLoading(false);
+                  }
+                });
+              },
+              onNext: () => {
+                if (!Number.isFinite(context.runTimeSeconds) || context.runTimeSeconds <= 0) {
+                  showToast('Record the runtime used before proceeding.', 'error');
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              title: `${tankLabel}: Measured Volume`,
+              render: ({ container }) => {
+                container.innerHTML = `
+                  <p style="color: var(--neutral-200); line-height: 1.5;">
+                    Measure the captured fluid and enter the exact milliliters collected during the timed dose.
+                  </p>
+                `;
+                const measuredValue = Number.isFinite(context.measuredVolumeMl)
+                  ? Number(context.measuredVolumeMl).toFixed(2)
+                  : '';
+                const field = document.createElement('div');
+                field.className = 'wizard-field';
+                field.innerHTML = `
+                  <label for="wizardMeasuredVolume">Measured Volume (mL)</label>
+                  <input type="number" id="wizardMeasuredVolume" min="1" step="0.1" value="${measuredValue}" />
+                `;
+                container.appendChild(field);
+                const input = field.querySelector('input');
+                input.addEventListener('input', () => {
+                  const value = toFiniteNumber(input.value, null);
+                  context.measuredVolumeMl = Number.isFinite(value) ? value : null;
+                });
+              },
+              onNext: () => {
+                if (!Number.isFinite(context.measuredVolumeMl) || context.measuredVolumeMl <= 0) {
+                  showToast('Enter the measured milliliters to continue.', 'error');
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              title: `${tankLabel}: Review & Save`,
+              render: ({ container }) => {
+                const flow = Number.isFinite(context.measuredVolumeMl) && Number.isFinite(context.runTimeSeconds) && context.runTimeSeconds > 0
+                  ? context.measuredVolumeMl / context.runTimeSeconds
+                  : null;
+                const summary = document.createElement('div');
+                summary.className = 'wizard-field-group';
+                summary.innerHTML = `
+                  <div class="wizard-field">
+                    <label>Channel</label>
+                    <div style="padding: 0.5rem 0; color: var(--neutral-200);">${context.channel}</div>
+                  </div>
+                  <div class="wizard-field">
+                    <label>Runtime</label>
+                    <div style="padding: 0.5rem 0; color: var(--neutral-200);">${formatNumber(context.runTimeSeconds, 2)} s</div>
+                  </div>
+                  <div class="wizard-field">
+                    <label>Measured Volume</label>
+                    <div style="padding: 0.5rem 0; color: var(--neutral-200);">${formatNumber(context.measuredVolumeMl, 2)} mL</div>
+                  </div>
+                  <div class="wizard-field">
+                    <label>Flow Rate</label>
+                    <div style="padding: 0.5rem 0; color: var(--accent-cyan);">${Number.isFinite(flow) ? `${formatNumber(flow, 4)} mL/s` : '—'}</div>
+                  </div>
+                `;
+                container.appendChild(summary);
+
+                const notesField = document.createElement('div');
+                notesField.className = 'wizard-field';
+                notesField.innerHTML = `
+                  <label for="wizardPumpNotes">Notes (optional)</label>
+                  <textarea id="wizardPumpNotes" placeholder="Recorded by ${tankLabel}"></textarea>
+                `;
+                container.appendChild(notesField);
+                const notesInput = notesField.querySelector('textarea');
+                notesInput.value = context.notes || '';
+                notesInput.addEventListener('input', () => {
+                  context.notes = notesInput.value.trim();
+                });
+
+                const comparison = document.createElement('div');
+                comparison.className = 'wizard-log';
+                comparison.innerHTML = `
+                  <span><strong>Previous Flow:</strong> ${formatNumber(pumpCal?.flowMlPerSec, 4)} mL/s</span>
+                  <span><strong>Previous Runtime:</strong> ${formatNumber(pumpCal?.runTimeSeconds, 1)} s</span>
+                  <span><strong>Snapshot Updated:</strong> ${humanizeTimestamp(pumpCal?.recordedAt || pumpCal?.lastCalibratedAt)}</span>
+                `;
+                container.appendChild(comparison);
+              },
+              onNext: async () => {
+                if (!Number.isFinite(context.measuredVolumeMl) || !Number.isFinite(context.runTimeSeconds)) {
+                  showToast('Measurement details incomplete.', 'error');
+                  return false;
+                }
+                setWizardLoading(true);
+                pushWizardLog('Publishing calibration to doser…');
+                try {
+                  const response = await fetch(PUMP_CAL_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      channel: context.channel,
+                      runTimeSeconds: context.runTimeSeconds,
+                      measuredVolumeMl: context.measuredVolumeMl,
+                      notes: context.notes || undefined
+                    })
+                  });
+                  if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => ({}));
+                    throw new Error(errorPayload?.error || `HTTP ${response.status}`);
+                  }
+                  pushWizardLog('Calibration dispatched. Awaiting firmware acknowledgement.', 'success');
+                  showToast('Pump calibration sent to doser', 'info');
+                  await hydrate().catch((err) => {
+                    console.warn('Refresh after calibration failed', err);
+                    pushWizardLog('Refresh failed; check dashboard manually.', 'error');
+                  });
+                  return true;
+                } catch (error) {
+                  console.error('Pump calibration submission failed', error);
+                  pushWizardLog(error?.message || 'Failed to publish calibration', 'error');
+                  showToast(error?.message || 'Failed to publish calibration', 'error');
+                  return false;
+                } finally {
+                  setWizardLoading(false);
+                }
+              }
+            }
+          ];
+
+          openWizard({
+            mode: 'pump-calibration',
+            steps,
+            context
+          });
+        }
+
+        function startSensorCalibrationWizard(tankId = 'tank2') {
+          const tankLabel = formatTankLabel(tankId);
+          const context = {
+            tankId,
+            sensor: 'ph',
+            sentCommands: [],
+            valueOverrides: {},
+            notes: ''
+          };
+
+          const renderSensorPicker = ({ container }) => {
+            container.innerHTML = `
+              <p style="color: var(--neutral-200); line-height: 1.5;">
+                Select which probe you are calibrating. The wizard will surface the recommended sequence of calibration points and send commands to the doser over MQTT.
+              </p>
+            `;
+            const picker = document.createElement('div');
+            picker.className = 'wizard-field';
+            picker.innerHTML = `
+              <label for="wizardSensorSelect">Sensor</label>
+              <select id="wizardSensorSelect" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 10px; padding: 0.75rem 0.9rem; color: var(--neutral-100);">
+                <option value="ph">pH Probe</option>
+                <option value="ec">EC Probe</option>
+              </select>
+            `;
+            container.appendChild(picker);
+            const select = picker.querySelector('select');
+            select.value = context.sensor;
+            select.addEventListener('change', () => {
+              context.sensor = select.value;
+              context.sentCommands = [];
+              context.valueOverrides = {};
+              pushWizardLog(`Sensor set to ${context.sensor}`);
+            });
+
+            const checklist = document.createElement('div');
+            checklist.className = 'wizard-log';
+            checklist.innerHTML = `
+              <span><strong>Prep Checklist</strong></span>
+              <span>• Rinse the probe with distilled water between solutions.</span>
+              <span>• Use fresh calibration buffers at room temperature.</span>
+              <span>• Gently swirl the probe to release trapped bubbles.</span>
+            `;
+            container.appendChild(checklist);
+          };
+
+          const renderCommandPanel = ({ container }) => {
+            const isPh = context.sensor === 'ph';
+            const commandConfigs = isPh
+              ? [
+                  { key: 'clear', label: 'Clear Offsets', description: 'Reset stored calibration points before starting.' },
+                  { key: 'mid', label: 'Mid Point (pH 7.0)', description: 'Immerse probe in pH 7.0 buffer.', defaultValue: 7.0 },
+                  { key: 'low', label: 'Low Point (pH 4.0)', description: 'Optional: 4.0 acidic buffer.', defaultValue: 4.0 },
+                  { key: 'high', label: 'High Point (pH 10.0)', description: 'Optional: 10.0 basic buffer.', defaultValue: 10.0 },
+                  { key: 'status', label: 'Request Status', description: 'Ask firmware to publish current calibration state.' }
+                ]
+              : [
+                  { key: 'clear', label: 'Clear Offsets', description: 'Reset EC probe calibration before new points.' },
+                  { key: 'dry', label: 'Dry Point', description: 'Dry the probe and issue dry command.' },
+                  { key: 'one', label: 'Single Point (µS/cm)', description: 'Enter solution µS/cm (e.g. 1413 for 1.413 mS).', defaultValue: 1413 },
+                  { key: 'low', label: 'Low Point (optional)', description: 'Enter low-range solution value.', defaultValue: 12880 },
+                  { key: 'high', label: 'High Point (optional)', description: 'Enter high-range solution value.', defaultValue: 80000 },
+                  { key: 'status', label: 'Request Status', description: 'Ask firmware to publish current calibration state.' }
+                ];
+
+            container.innerHTML = `
+              <p style="color: var(--neutral-200); line-height: 1.5;">
+                Use the controls below to send calibration commands. Allow the probe to stabilize in each buffer before issuing the command. Watch the wizard log for acknowledgements.
+              </p>
+            `;
+
+            commandConfigs.forEach((config) => {
+              const block = document.createElement('div');
+              block.style.border = '1px solid rgba(59, 130, 246, 0.25)';
+              block.style.borderRadius = '12px';
+              block.style.padding = '1rem';
+              block.style.marginBottom = '0.75rem';
+
+              const heading = document.createElement('div');
+              heading.style.display = 'flex';
+              heading.style.justifyContent = 'space-between';
+              heading.style.alignItems = 'center';
+              heading.innerHTML = `
+                <div>
+                  <strong style="color: #bfdbfe;">${config.label}</strong>
+                  <div style="color: var(--neutral-300); font-size: 0.85rem; margin-top: 0.25rem;">${config.description}</div>
+                </div>
+              `;
+              block.appendChild(heading);
+
+              let valueInput = null;
+              if (typeof config.defaultValue !== 'undefined' && config.key !== 'clear' && config.key !== 'dry' && config.key !== 'status') {
+                const inputWrap = document.createElement('div');
+                inputWrap.className = 'wizard-field';
+                inputWrap.style.marginTop = '0.75rem';
+                inputWrap.innerHTML = `
+                  <label>${isPh ? 'Buffer Value' : 'Solution Value (µS/cm)'}</label>
+                  <input type="number" step="${isPh ? '0.1' : '1'}" value="${context.valueOverrides[config.key] ?? config.defaultValue}" />
+                `;
+                block.appendChild(inputWrap);
+                valueInput = inputWrap.querySelector('input');
+                valueInput.addEventListener('input', () => {
+                  const value = toFiniteNumber(valueInput.value, null);
+                  if (Number.isFinite(value)) {
+                    context.valueOverrides[config.key] = value;
+                  }
+                });
+              }
+
+              const actionBar = document.createElement('div');
+              actionBar.className = 'wizard-actions';
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.textContent = `Send ${config.key}`;
+              actionBar.appendChild(button);
+              block.appendChild(actionBar);
+
+              button.addEventListener('click', async () => {
+                try {
+                  setWizardLoading(true);
+                  const rawValue = valueInput ? toFiniteNumber(valueInput.value, null) : null;
+                  const payload = {
+                    sensor: context.sensor,
+                    command: config.key,
+                    notes: context.notes || undefined
+                  };
+                  if (Number.isFinite(rawValue)) {
+                    payload.value = rawValue;
+                  }
+                  pushWizardLog(`Sending ${context.sensor.toUpperCase()} ${config.key} command…`);
+                  const response = await fetch(SENSOR_CAL_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                  });
+                  if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => ({}));
+                    throw new Error(errorPayload?.error || `HTTP ${response.status}`);
+                  }
+                  context.sentCommands.push({
+                    sensor: context.sensor,
+                    command: config.key,
+                    value: Number.isFinite(rawValue) ? rawValue : undefined,
+                    at: new Date().toISOString()
+                  });
+                  pushWizardLog(`${config.key} command accepted by firmware.`, 'success');
+                  showToast(`${config.key} command dispatched`, 'info');
+                } catch (error) {
+                  console.error('Sensor calibration command failed', error);
+                  pushWizardLog(error?.message || 'Command failed', 'error');
+                  showToast(error?.message || 'Command failed', 'error');
+                } finally {
+                  setWizardLoading(false);
+                }
+              });
+
+              container.appendChild(block);
+            });
+          };
+
+          const renderSensorSummary = ({ container }) => {
+            const list = document.createElement('div');
+            list.className = 'wizard-log';
+            if (context.sentCommands.length === 0) {
+              list.innerHTML = '<span>No calibration commands were sent in this session.</span>';
+            } else {
+              context.sentCommands.forEach((entry) => {
+                const line = document.createElement('span');
+                const valueText = Number.isFinite(entry.value) ? ` → ${entry.value}` : '';
+                line.innerHTML = `<strong>[${new Date(entry.at).toLocaleTimeString()}]</strong> ${entry.sensor.toUpperCase()} ${entry.command}${valueText}`;
+                list.appendChild(line);
+              });
+            }
+            container.appendChild(list);
+
+            const notesField = document.createElement('div');
+            notesField.className = 'wizard-field';
+            notesField.innerHTML = `
+              <label for="wizardSensorNotes">Notes (optional)</label>
+              <textarea id="wizardSensorNotes" placeholder="Buffer lot, temperature, or probe condition"></textarea>
+            `;
+            container.appendChild(notesField);
+            const notesInput = notesField.querySelector('textarea');
+            notesInput.value = context.notes || '';
+            notesInput.addEventListener('input', () => {
+              context.notes = notesInput.value.trim();
+            });
+
+            const guidance = document.createElement('div');
+            guidance.className = 'wizard-log';
+            guidance.innerHTML = `
+              <span><strong>Next Steps</strong></span>
+              <span>• Wait for firmware to publish updated calibration telemetry.</span>
+              <span>• Re-run the wizard to add additional buffer points if needed.</span>
+              <span>• Record offsets in your lab notebook for traceability.</span>
+            `;
+            container.appendChild(guidance);
+          };
+
+          const steps = [
+            {
+              title: `${tankLabel}: Select Sensor`,
+              render: renderSensorPicker,
+              onNext: () => {
+                if (!context.sensor) {
+                  showToast('Select a sensor to continue.', 'error');
+                  return false;
+                }
+                return true;
+              }
+            },
+            {
+              title: `${tankLabel}: Send Calibration Commands`,
+              render: renderCommandPanel,
+              onNext: () => {
+                if (context.sentCommands.length === 0) {
+                  const confirmProceed = window.confirm('No commands were sent. Close wizard anyway?');
+                  if (!confirmProceed) return false;
+                }
+                return true;
+              }
+            },
+            {
+              title: `${tankLabel}: Wrap Up`,
+              render: renderSensorSummary,
+              onNext: () => true
+            }
+          ];
+
+          openWizard({
+            mode: 'sensor-calibration',
+            steps,
+            context
+          });
+        }
+
+    function drawSparkline(canvas, values, options = {}) {
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+      const data = Array.isArray(values) ? values.filter(Number.isFinite) : [];
+      if (!data.length) {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.45)';
+        ctx.fillText('No data', 12, height / 2);
+        return;
+      }
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const range = max - min || 1;
+      const step = width / Math.max(data.length - 1, 1);
+      ctx.strokeStyle = options.color || 'rgba(96, 165, 250, 0.85)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      data.forEach((value, index) => {
+        const x = index * step;
+        const normalized = (value - min) / range;
+        const y = height - normalized * (height - 8) - 4;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      // Baseline
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, height - ((data[data.length - 1] - min) / range) * (height - 8) - 4);
+      ctx.lineTo(width, height - ((data[data.length - 1] - min) / range) * (height - 8) - 4);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function showToast(message, variant = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.dataset.visible = 'true';
+      toast.style.borderColor = variant === 'error' ? 'rgba(248, 113, 113, 0.35)' : 'rgba(59, 130, 246, 0.35)';
+      toast.style.background = variant === 'error'
+        ? 'rgba(248, 113, 113, 0.12)'
+        : 'rgba(15, 23, 42, 0.88)';
+      window.clearTimeout(showToast._timer);
+      showToast._timer = window.setTimeout(() => {
+        toast.dataset.visible = 'false';
+      }, 3400);
+    }
+
+    function groupByDay(history, pumpFlow) {
+      const totals = new Map();
+      history.forEach((event) => {
+        if (!event?.timestamp || !Number.isFinite(event?.durationSec)) return;
+        const dt = new Date(event.timestamp);
+        if (Number.isNaN(dt.getTime())) return;
+        const dayKey = dt.toISOString().slice(0, 10);
+        const volume = pumpFlow * event.durationSec;
+        totals.set(dayKey, (totals.get(dayKey) || 0) + volume);
+      });
+      return totals;
+    }
+
+    function calculatePumpFlow(data) {
+      const ratingGPD = Number(data?.metadata?.pumpRatingGPD) || 0;
+      if (ratingGPD <= 0) return 0;
+      const baseFlow = ratingGPD * 3785.41 / 86400; // mL per second
+      const calibrationFactor = Number(data?.metadata?.calibrationFactor) || 1;
+      return baseFlow * calibrationFactor;
+    }
+
+    function determineGroupStage(group) {
+      // Determine current day in plan
+      if (!group?.plan?.days?.length) {
+        return { stage: 'unknown', day: 0, isFruiting: false, ecStage: 'vegetative' };
+      }
+      
+      // Calculate current day: use DPS from planConfig if available, otherwise calculate from startDate
+      let currentDay = 1;
+      if (group.planConfig?.anchor?.dps) {
+        currentDay = group.planConfig.anchor.dps;
+      } else if (group.plan.startDate) {
+        const startDate = new Date(group.plan.startDate);
+        const today = new Date();
+        const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+        currentDay = daysSinceStart + 1; // 1-indexed
+      }
+      
+      // Find the day in the plan (find closest day if exact match not found)
+      let planDay = group.plan.days.find(d => d.day === currentDay);
+      if (!planDay) {
+        // Find closest day <= currentDay
+        const sortedDays = [...group.plan.days].sort((a, b) => a.day - b.day);
+        planDay = sortedDays.reverse().find(d => d.day <= currentDay);
+      }
+      const stageName = planDay?.stage || '';
+      
+      // Normalize stage name
+      const stageNorm = (stageName || '').trim().toLowerCase();
+      
+      // Determine if this is a fruiting stage
+      const isFruiting = /flower|fruit/.test(stageNorm);
+      
+      // Map to EC stage
+      let ecStage = 'vegetative';
+      if (currentDay <= 14) {
+        ecStage = 'establishment';
+      } else if (stageNorm.includes('flower') || stageNorm.includes('early')) {
+        ecStage = 'earlyFlowering';
+      } else if (stageNorm.includes('fruit') || stageNorm.includes('heavy') || stageNorm.includes('harvest')) {
+        ecStage = 'heavyFruiting';
+      } else if (isFruiting) {
+        ecStage = 'earlyFlowering';
+      }
+      
+      return {
+        stage: stageName,
+        ecStage: ecStage,
+        day: currentDay,
+        isFruiting: isFruiting
+      };
+    }
+
+    function calculateTank1Targets(groups) {
+      if (!groups || !Array.isArray(groups)) {
+        return { ec: EC_TARGETS.vegetative, ph: PH_TARGETS.vegetative };
+      }
+      
+      // Find all vegetative (non-fruiting) groups
+      const vegGroups = [];
+      groups.forEach(group => {
+        const stageInfo = determineGroupStage(group);
+        if (!stageInfo.isFruiting) {
+          vegGroups.push({
+            name: group.name || group.label || 'Unknown',
+            stage: stageInfo.stage,
+            ecStage: stageInfo.ecStage,
+            day: stageInfo.day,
+            targetEC: EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.vegetative,
+            targetPH: PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.vegetative
+          });
+        }
+      });
+      
+      state.computed.vegetativeGroups = vegGroups;
+      
+      if (vegGroups.length === 0) {
+        return { ec: EC_TARGETS.vegetative, ph: PH_TARGETS.vegetative };
+      }
+      
+      // Use the highest EC and pH requirements (to support the most demanding crops)
+      const maxEC = Math.max(...vegGroups.map(g => g.targetEC));
+      const maxPH = Math.max(...vegGroups.map(g => g.targetPH));
+      return { ec: maxEC, ph: maxPH };
+    }
+
+    function calculateTank2Targets(groups) {
+      if (!groups || !Array.isArray(groups)) {
+        console.log('[nutrient] calculateTank2Targets: no groups array', { groups });
+        return { ec: EC_TARGETS.earlyFlowering, ph: PH_TARGETS.earlyFlowering };
+      }
+      
+      console.log(`[nutrient] calculateTank2Targets: processing ${groups.length} groups`);
+      
+      // Find all fruiting groups
+      const fruitingGroups = [];
+      groups.forEach(group => {
+        const stageInfo = determineGroupStage(group);
+        console.log(`[nutrient] Group "${group.name}": day ${stageInfo.day}, stage "${stageInfo.stage}", isFruiting=${stageInfo.isFruiting}`);
+        
+        if (stageInfo.isFruiting) {
+          fruitingGroups.push({
+            name: group.name || group.label || 'Unknown',
+            stage: stageInfo.stage,
+            ecStage: stageInfo.ecStage,
+            day: stageInfo.day,
+            targetEC: EC_TARGETS[stageInfo.ecStage] || EC_TARGETS.earlyFlowering,
+            targetPH: PH_TARGETS[stageInfo.ecStage] || PH_TARGETS.earlyFlowering
+          });
+        }
+      });
+      
+      state.computed.fruitingGroups = fruitingGroups;
+      console.log(`[nutrient] Tank 2: Found ${fruitingGroups.length} fruiting groups`);
+      
+      if (fruitingGroups.length === 0) {
+        return { ec: EC_TARGETS.earlyFlowering, ph: PH_TARGETS.earlyFlowering };
+      }
+      
+      // Use the highest EC and pH requirements (to support the most demanding crops)
+      const maxEC = Math.max(...fruitingGroups.map(g => g.targetEC));
+      const maxPH = Math.max(...fruitingGroups.map(g => g.targetPH));
+      return { ec: maxEC, ph: maxPH };
+    }
+
+    function ensureHistoryBuffers() {
+      if (!state.history) {
+        state.history = { tank2: { ph: [], ec: [], temperature: [] } };
+      }
+      if (!state.history.tank2) {
+        state.history.tank2 = { ph: [], ec: [], temperature: [] };
+      }
+    }
+
+    function extractAutodoseFromLegacy(doc) {
+      if (!doc || typeof doc !== 'object') return { ...DEFAULT_AUTODOSE };
+      const tank2 = doc.tanks?.tank2 || {};
+      const merged = { ...DEFAULT_AUTODOSE };
+      const legacyAutodose = tank2.autodose || {};
+      merged.autodoseEnabled = typeof legacyAutodose.autodoseEnabled === 'boolean'
+        ? legacyAutodose.autodoseEnabled
+        : merged.autodoseEnabled;
+      const maybeNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+      const assign = (key, value) => {
+        const num = maybeNumber(value);
+        if (Number.isFinite(num)) merged[key] = key.startsWith('ec') ? Math.round(num) : num;
+      };
+      assign('phTarget', tank2.phSetpoint ?? legacyAutodose.phTarget);
+      assign('phTolerance', tank2.phTolerance ?? legacyAutodose.phTolerance);
+      assign('ecTarget', tank2.ecSetpoint ?? legacyAutodose.ecTarget);
+      assign('ecTolerance', tank2.ecTolerance ?? legacyAutodose.ecTolerance);
+      assign('ecDoseSeconds', legacyAutodose.ecDoseSeconds ?? tank2.dosing?.ecDoseSeconds);
+      assign('phDownDoseSeconds', legacyAutodose.phDownDoseSeconds ?? tank2.dosing?.phDownDoseSeconds);
+      assign('minDoseIntervalSec', legacyAutodose.minDoseIntervalSec ?? tank2.dosing?.minDoseIntervalSec);
+      return merged;
+    }
+
+    function extractAutodoseConfig(snapshot, fallbackDoc) {
+      if (!snapshot || typeof snapshot !== 'object') {
+        return extractAutodoseFromLegacy(fallbackDoc);
+      }
+      const cfg = { ...DEFAULT_AUTODOSE };
+      const automation = snapshot.targets?.automation || {};
+      const topTargets = snapshot.targets || {};
+      const dosingTarget = snapshot.dosing?.target || topTargets.dosing || {};
+      const ph = topTargets.ph || {};
+      const ec = topTargets.ec || {};
+
+      const safeAssign = (key, value, transform) => {
+        const num = toFiniteNumber(value, null);
+        if (Number.isFinite(num)) {
+          cfg[key] = typeof transform === 'function' ? transform(num) : num;
+        }
+      };
+
+      if (typeof topTargets.autodoseEnabled === 'boolean') {
+        cfg.autodoseEnabled = topTargets.autodoseEnabled;
+      } else if (typeof automation.enabled === 'boolean') {
+        cfg.autodoseEnabled = automation.enabled;
+      } else if (typeof dosingTarget.enabled === 'boolean') {
+        cfg.autodoseEnabled = dosingTarget.enabled;
+      }
+
+      safeAssign('phTarget', ph.target);
+      safeAssign('phTolerance', ph.tolerance);
+      safeAssign('ecTarget', ec.target, convertEcToMicro);
+      safeAssign('ecTolerance', ec.tolerance, convertEcToMicro);
+      safeAssign('ecDoseSeconds', dosingTarget.ecDoseSeconds ?? topTargets.ecDoseSeconds);
+      safeAssign('phDownDoseSeconds', dosingTarget.phDownDoseSeconds ?? topTargets.phDownDoseSeconds);
+      safeAssign('minDoseIntervalSec', dosingTarget.minDoseIntervalSec ?? topTargets.minDoseIntervalSec);
+
+      return cfg;
+    }
+
+    function applySnapshotToState(snapshot, fallbackDoc) {
+      if (!snapshot || typeof snapshot !== 'object') return;
+      ensureHistoryBuffers();
+      state.snapshot = snapshot;
+      state.autodose = extractAutodoseConfig(snapshot, fallbackDoc);
+
+      const telemetry = snapshot.telemetry || {};
+      const observedAt = snapshot.observedAt
+        || telemetry.ph?.observedAt
+        || telemetry.ec?.observedAt
+        || telemetry.temperature?.observedAt
+        || null;
+
+      const base = deepClone(fallbackDoc || state.raw || {});
+      base.tanks = base.tanks || {};
+      const tank2Prev = base.tanks.tank2 || {};
+
+      const phValue = toFiniteNumber(telemetry.ph?.value, tank2Prev?.sensors?.ph?.current ?? null);
+      const ecMilli = toFiniteNumber(telemetry.ec?.value, null);
+      const ecMicro = Number.isFinite(ecMilli) ? convertEcToMicro(ecMilli) : toFiniteNumber(tank2Prev?.sensors?.ec?.current, null);
+      const tempValue = toFiniteNumber(telemetry.temperature?.value, tank2Prev?.sensors?.temperature?.current ?? null);
+
+      if (Number.isFinite(phValue)) {
+        state.history.tank2.ph = pushHistory(state.history.tank2.ph, phValue);
+      }
+      if (Number.isFinite(ecMicro)) {
+        state.history.tank2.ec = pushHistory(state.history.tank2.ec, ecMicro);
+      }
+      if (Number.isFinite(tempValue)) {
+        state.history.tank2.temperature = pushHistory(state.history.tank2.temperature, tempValue);
+      }
+
+      const tank2 = {
+        ...tank2Prev,
+        sensors: {
+          ph: {
+            current: phValue,
+            history: state.history.tank2.ph.slice(),
+            updatedAt: telemetry.ph?.observedAt || tank2Prev?.sensors?.ph?.updatedAt || observedAt
+          },
+          ec: {
+            current: ecMicro,
+            history: state.history.tank2.ec.slice(),
+            updatedAt: telemetry.ec?.observedAt || tank2Prev?.sensors?.ec?.updatedAt || observedAt
+          },
+          temperature: {
+            current: tempValue,
+            history: state.history.tank2.temperature.slice(),
+            updatedAt: telemetry.temperature?.observedAt || tank2Prev?.sensors?.temperature?.updatedAt || observedAt
+          }
+        },
+        metadata: {
+          ...(tank2Prev.metadata || {}),
+          updatedAt: observedAt || tank2Prev.metadata?.updatedAt || snapshot.metadata?.derivedAt || null
+        },
+        dosing: snapshot.dosing ? {
+          ...snapshot.dosing,
+          history: Array.isArray(snapshot.dosing.history) ? snapshot.dosing.history.slice() : (tank2Prev.dosing?.history || [])
+        } : (tank2Prev.dosing || {}),
+        autodose: { ...state.autodose }
+      };
+
+      if (Number.isFinite(state.autodose.phTarget)) {
+        tank2.phSetpoint = state.autodose.phTarget;
+      }
+      if (Number.isFinite(state.autodose.phTolerance)) {
+        tank2.phTolerance = state.autodose.phTolerance;
+      }
+      if (Number.isFinite(state.autodose.ecTarget)) {
+        tank2.ecSetpoint = state.autodose.ecTarget;
+      }
+      if (Number.isFinite(state.autodose.ecTolerance)) {
+        tank2.ecTolerance = state.autodose.ecTolerance;
+      }
+
+      const calibrationData = extractCalibrationData(snapshot.calibration, fallbackDoc?.calibration, tank2Prev.calibration);
+      if (calibrationData) {
+        tank2.calibration = calibrationData;
+      }
+
+      base.tanks.tank2 = tank2;
+      base.dosing = tank2.dosing;
+      base.metadata = base.metadata || {};
+      base.metadata.updatedAt = tank2.metadata?.updatedAt || base.metadata.updatedAt || observedAt;
+      base.sensors = base.sensors || {};
+      base.sensors.ph = tank2.sensors.ph;
+      base.sensors.ec = tank2.sensors.ec;
+      base.sensors.temperature = tank2.sensors.temperature;
+
+      state.raw = base;
+    }
+
+    function renderTank2Groups() {
+      const container = document.getElementById('tank2Groups');
+      if (!container) return;
+      
+      const fruitingGroups = state.computed.fruitingGroups || [];
+      
+      if (fruitingGroups.length === 0) {
+        container.innerHTML = '<strong>No fruiting groups detected</strong> — EC set to default early flowering target (1.6 mS/cm)';
+        return;
+      }
+      
+      let html = `<strong>Fruiting Groups (${fruitingGroups.length}):</strong><br>`;
+      fruitingGroups.forEach(group => {
+        html += `<div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 4px;">
+          <strong>${group.name}</strong> — Day ${group.day} • ${group.stage}<br>
+          <span style="font-size: 0.8rem; color: var(--neutral-400);">Target EC: ${group.targetEC} mS/cm (${group.ecStage})</span>
+        </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function evaluateWarnings(data) {
+      const warnings = [];
+      const ec = Number(data?.sensors?.ec?.current);
+      const emptyThreshold = Number(data?.sensors?.ec?.emptyThreshold) || 0;
+      const baseline = Number(data?.sensors?.ec?.tapBaseline ?? data?.sensors?.ph?.tapBaseline) || 0;
+      if (ec && emptyThreshold && ec < emptyThreshold) {
+        warnings.push({
+          title: 'Dosing Paused',
+          detail: `EC ${formatNumber(ec, 0)} µS/cm is below the empty threshold (${emptyThreshold}). Pause dosing, clean the tank, then resume once EC rises above baseline ${baseline || 'tap'} µS/cm.`,
+          level: 'critical',
+        });
+      }
+      const todaysVolume = state.computed.todaysVolume;
+      const average = Number(data?.dosing?.averageDailyVolumeMl) || 0;
+      const multiplier = Number(data?.dosing?.anomalyThresholdMultiplier) || 1.4;
+      if (todaysVolume && average && todaysVolume > average * multiplier) {
+        warnings.push({
+          title: 'Dosing Spike',
+          detail: `Delivered ${formatNumber(todaysVolume, 1)} mL today vs avg ${formatNumber(average, 1)} mL. Investigate schedules or sensor drift.`,
+          level: 'warning',
+        });
+      }
+      return warnings;
+    }
+
+    function evaluateInventory(data) {
+      const inventoryWarnings = [];
+      const remaining = Number(data?.dosing?.pailRemainingEstimateLiters);
+      const capacity = Number(data?.dosing?.pailVolumeLiters) || 20;
+      if (Number.isFinite(remaining) && remaining < capacity * PAIL_LOW_THRESHOLD) {
+        const pct = (remaining / capacity) * 100;
+        inventoryWarnings.push({
+          title: 'Concentrate Low',
+          detail: `Estimated ${formatNumber(remaining, 2)} L remaining (${formatNumber(pct, 1)}% of 20 L pail). Schedule a replacement.`,
+        });
+      }
+      return inventoryWarnings;
+    }
+
+    function renderCurrentMetrics(data, tankId) {
+      const root = document.getElementById(`${tankId}CurrentMetrics`);
+      if (!root) return;
+      root.innerHTML = '';
+      
+      const tankData = data?.tanks?.[tankId] || {};
+      const items = [
+        {
+          label: 'pH',
+          value: formatNumber(tankData?.sensors?.ph?.current, 2),
+        },
+        {
+          label: 'EC',
+          value: formatEcDisplay(tankId, tankData?.sensors?.ec?.current),
+        },
+        {
+          label: 'Temperature',
+          value: `${formatNumber(tankData?.sensors?.temperature?.current, 1)} °C`,
+        },
+        {
+          label: 'Updated',
+          value: humanizeTimestamp(tankData?.metadata?.updatedAt),
+        },
+      ];
+      items.forEach((item) => {
+        const metric = document.createElement('div');
+        metric.className = 'metric';
+        metric.innerHTML = `
+          <span class="metric-label">${item.label}</span>
+          <span class="metric-value">${item.value}</span>
+        `;
+        root.appendChild(metric);
+      });
+    }
+    
+    function renderSetpoints(data, tankId) {
+      const root = document.getElementById(`${tankId}Setpoints`);
+      if (!root) return;
+      root.innerHTML = '';
+      
+      const tankData = data?.tanks?.[tankId] || {};
+      const autodose = tankData?.autodose || state.autodose || DEFAULT_AUTODOSE;
+      const items = [];
+
+      items.push({
+        label: 'pH Target',
+        value: formatNumber(tankData?.phSetpoint, 2),
+      });
+
+      if (Number.isFinite(tankData?.phTolerance)) {
+        items.push({
+          label: 'pH Tolerance',
+          value: `±${formatNumber(tankData.phTolerance, 2)}`,
+        });
+      }
+
+      items.push({
+        label: 'EC Target',
+        value: formatEcDisplay(tankId, tankData?.ecSetpoint, 2),
+      });
+
+      if (Number.isFinite(tankData?.ecTolerance)) {
+        items.push({
+          label: 'EC Tolerance',
+          value: `±${formatEcDisplay(tankId, tankData.ecTolerance, 2)}`,
+        });
+      }
+
+      if (Number.isFinite(tankData?.tapBaseline)) {
+        items.push({
+          label: 'Tap Baseline',
+          value: `${formatNumber(tankData.tapBaseline, 0)} µS/cm`,
+        });
+      }
+
+      if (Number.isFinite(tankData?.emptyThreshold)) {
+        items.push({
+          label: 'Empty Threshold',
+          value: `${formatNumber(tankData.emptyThreshold, 0)} µS/cm`,
+        });
+      }
+
+      if (tankId === 'tank2') {
+        items.push({
+          label: 'Autodose',
+          value: autodose?.autodoseEnabled ? 'Enabled' : 'Disabled',
+        });
+        items.push({
+          label: 'Dose Duration',
+          value: `EC ${formatNumber(autodose?.ecDoseSeconds, 2)}s • pH ${formatNumber(autodose?.phDownDoseSeconds, 2)}s`,
+        });
+        items.push({
+          label: 'Min Dose Interval',
+          value: `${formatNumber(autodose?.minDoseIntervalSec, 0)} s`,
+        });
+      }
+      items.forEach((item) => {
+        const metric = document.createElement('div');
+        metric.className = 'metric';
+        metric.innerHTML = `
+          <span class="metric-label">${item.label}</span>
+          <span class="metric-value">${item.value}</span>
+        `;
+        root.appendChild(metric);
+      });
+    }
+
+    function renderWarnings(warnings, host) {
+      host.innerHTML = '';
+      warnings.forEach((warning) => {
+        const div = document.createElement('div');
+        div.className = 'warning';
+        const badge = warning.level === 'critical' ? '⚠️' : '⚡️';
+        div.innerHTML = `<strong>${badge} ${warning.title}</strong><span>${warning.detail}</span>`;
+        host.appendChild(div);
+      });
+    }
+
+    function renderTrends(data, tankId) {
+      document.querySelectorAll(`canvas.sparkline[data-tank="${tankId}"]`).forEach((canvas) => {
+        const metric = canvas.dataset.metric;
+        const tankData = data?.tanks?.[tankId] || {};
+        const history = tankData?.sensors?.[metric]?.history || [];
+        const colorMap = {
+          ph: 'rgba(96, 165, 250, 0.9)',
+          ec: 'rgba(74, 222, 128, 0.9)',
+          temperature: 'rgba(244, 114, 182, 0.85)',
+        };
+        drawSparkline(canvas, history, { color: colorMap[metric] });
+      });
+    }
+
+    function renderDosing(data, tankId) {
+      const tankData = data?.tanks?.[tankId] || {};
+      const pump = calculatePumpFlow(tankData);
+      
+      const metricsHost = document.getElementById(`${tankId}DosingMetrics`);
+      if (!metricsHost) return;
+      metricsHost.innerHTML = '';
+      
+      const metrics = [
+        {
+          label: 'Pump Flow',
+          value: `${formatNumber(pump * 60, 1)} mL/min`,
+        },
+        {
+          label: 'Calibration Factor',
+          value: formatNumber(tankData?.metadata?.calibrationFactor, 3),
+        },
+        {
+          label: 'Daily Avg (window)',
+          value: `${formatNumber(tankData?.dosing?.averageDailyVolumeMl, 1)} mL / ${tankData?.dosing?.dailyVolumeWindow || 7}d`,
+        },
+        {
+          label: 'Today Delivered',
+          value: `${formatNumber(tankData?.computed?.todaysVolume || 0, 1)} mL`,
+        },
+      ];
+      metrics.forEach((item) => {
+        const node = document.createElement('div');
+        node.className = 'metric';
+        node.innerHTML = `
+          <span class="metric-label">${item.label}</span>
+          <span class="metric-value">${item.value}</span>
+        `;
+        metricsHost.appendChild(node);
+      });
+
+      const listHost = document.getElementById(`${tankId}RecentDoses`);
+      if (!listHost) return;
+      listHost.innerHTML = '';
+      const history = (tankData?.dosing?.history || [])
+        .slice()
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 8);
+      history.forEach((event) => {
+        const volume = pump * event.durationSec;
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `
+          <span>${humanizeTimestamp(event.timestamp)}</span>
+          <span>${event.channel} • ${formatNumber(event.durationSec, 1)} s → ${formatNumber(volume, 1)} mL</span>
+        `;
+        listHost.appendChild(row);
+      });
+    }
+
+    function renderCalibration(data, tankId) {
+      const summaryHost = document.getElementById(`${tankId}CalibrationSummary`);
+      if (!summaryHost) return;
+      summaryHost.innerHTML = '';
+      
+      const tankData = data?.tanks?.[tankId] || {};
+      const calibration = tankData?.calibration || {};
+      const pumpCal = calibration?.pump;
+      const displayed = [
+        {
+          key: 'Last Calibrated',
+          value: humanizeTimestamp(pumpCal?.recordedAt || calibration?.lastCalibratedAt),
+        },
+        {
+          key: 'Reference Volume',
+          value: `${formatNumber(pumpCal?.measuredVolumeMl || calibration?.referenceVolumeMl, 1)} mL`,
+        },
+        {
+          key: 'Run Time',
+          value: `${formatNumber(pumpCal?.runTimeSeconds || calibration?.runTimeSeconds, 1)} s`,
+        },
+        {
+          key: 'Flow Rate',
+          value: `${formatNumber(pumpCal?.flowMlPerSec || calibration?.measuredFlowMlPerSec, 3)} mL/s`,
+        },
+      ];
+      if (pumpCal?.notes) {
+        displayed.push({
+          key: 'Notes',
+          value: pumpCal.notes,
+        });
+      }
+      displayed.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        const labelSpan = document.createElement('span');
+        labelSpan.textContent = item.key;
+        const valueSpan = document.createElement('span');
+        valueSpan.textContent = item.value;
+        row.appendChild(labelSpan);
+        row.appendChild(valueSpan);
+        summaryHost.appendChild(row);
+      });
+      const sensorCal = calibration?.sensors;
+      if (sensorCal) {
+        const logBox = document.createElement('div');
+        logBox.className = 'list-item';
+        const ph = sensorCal.ph;
+        const ec = sensorCal.ec;
+        const lines = [];
+        if (ph) {
+          lines.push(`pH → target ${formatNumber(ph.target, 2)} • measured ${formatNumber(ph.reading, 2)} @ ${humanizeTimestamp(ph.recordedAt)}`);
+        }
+        if (ec) {
+          lines.push(`EC → target ${formatNumber(ec.target, 2)} • measured ${formatNumber(ec.reading, 2)} @ ${humanizeTimestamp(ec.recordedAt)}`);
+        }
+        if (lines.length) {
+          const header = document.createElement('span');
+          header.textContent = 'Latest Sensor Updates';
+          logBox.appendChild(header);
+          lines.forEach((line) => {
+            const span = document.createElement('span');
+            span.textContent = line;
+            logBox.appendChild(span);
+          });
+          summaryHost.appendChild(logBox);
+        }
+      }
+    }
+
+    function renderInventory(data, tankId) {
+      const host = document.getElementById(`${tankId}InventoryMetrics`);
+      if (!host) return;
+      host.innerHTML = '';
+      
+      const tankData = data?.tanks?.[tankId] || {};
+      const remaining = Number(tankData?.dosing?.pailRemainingEstimateLiters);
+      const capacity = Number(tankData?.dosing?.pailVolumeLiters) || 20;
+      const percent = Number.isFinite(remaining) ? (remaining / capacity) * 100 : null;
+      const items = [
+        {
+          label: 'Pail Remaining',
+          value: Number.isFinite(remaining) ? `${formatNumber(remaining, 2)} L` : '—',
+        },
+        {
+          label: 'Pail Capacity',
+          value: `${formatNumber(capacity, 1)} L`,
+        },
+        {
+          label: 'Estimated %',
+          value: Number.isFinite(percent) ? `${formatNumber(percent, 1)} %` : '—',
+        },
+        {
+          label: 'Tank Volume',
+          value: `${formatNumber(tankData?.dosing?.tankVolumeLiters, 0)} L`,
+        },
+      ];
+      items.forEach((item) => {
+        const box = document.createElement('div');
+        box.className = 'metric';
+        box.innerHTML = `
+          <span class="metric-label">${item.label}</span>
+          <span class="metric-value">${item.value}</span>
+        `;
+        host.appendChild(box);
+      });
+      
+      const warningsHost = document.getElementById(`${tankId}InventoryWarnings`);
+      if (warningsHost) {
+        renderWarnings(evaluateInventory(tankData), warningsHost);
+      }
+    }
+
+    function renderPidRoadmap(data, tankId) {
+      const notesEl = document.getElementById(`${tankId}PidNotes`);
+      if (notesEl) {
+        const tankData = data?.tanks?.[tankId] || {};
+        notesEl.textContent = tankData?.pid?.notes || 'PID controller disabled.';
+      }
+      
+      const list = document.getElementById(`${tankId}PidSignals`);
+      if (!list) return;
+      list.innerHTML = '';
+      const items = [
+        'Signal: EC, pH, tank temperature (raw + filtered)',
+        'Control: pump runtime per channel, dosing pause state',
+        'Feedback: concentration drawdown, pail depletion trends',
+        'Guardrails: EC < empty threshold, resumed at tap baseline',
+      ];
+      items.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `<span>${entry}</span>`;
+        list.appendChild(row);
+      });
+    }
+
+    function updateDosingStatus(data, tankId) {
+      const status = document.getElementById(`${tankId}Status`);
+      if (!status) return;
+      
+      const tankData = data?.tanks?.[tankId] || {};
+      const ec = Number(tankData?.sensors?.ec?.current);
+      const emptyThreshold = Number(tankData?.emptyThreshold) || 0;
+      const tapBaseline = Number(tankData?.tapBaseline) || 0;
+      const autodoseConfig = tankData?.autodose || state.autodose || DEFAULT_AUTODOSE;
+      
+      if (!Number.isFinite(ec)) {
+        status.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+        status.style.color = '#bfdbfe';
+        status.innerHTML = 'Awaiting telemetry';
+        return;
+      }
+
+
+      if (!autodoseConfig?.autodoseEnabled) {
+        status.style.borderColor = 'rgba(148, 163, 184, 0.35)';
+        status.style.color = '#cbd5e1';
+        status.innerHTML = `Autodose paused • EC ${formatNumber(ec, 0)} µS/cm`;
+        return;
+      }
+
+      if (ec < emptyThreshold && emptyThreshold > 0) {
+        status.style.borderColor = 'rgba(248, 113, 113, 0.45)';
+        status.style.color = '#fca5a5';
+        status.innerHTML = `Dosing paused • EC ${formatNumber(ec, 0)} < ${emptyThreshold}`;
+      } else if (ec > tapBaseline && tapBaseline > 0) {
+        status.style.borderColor = 'rgba(34, 197, 94, 0.45)';
+        status.style.color = '#bbf7d0';
+        status.innerHTML = `Autodose active • EC ${formatNumber(ec, 0)} µS/cm`;
+      } else {
+        status.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+        status.style.color = '#bfdbfe';
+        status.innerHTML = `Baseline hold • EC ${formatNumber(ec, 0)} µS/cm`;
+      }
+    }
+    
+    // Toggle vegetative groups visibility
+    function toggleVegGroups() {
+      const container = document.getElementById('tank1VegGroups');
+      const icon = document.getElementById('vegGroupsIcon');
+      const label = document.getElementById('vegGroupsLabel');
+      
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        icon.style.transform = 'rotate(90deg)';
+        label.textContent = 'Hide Vegetative Groups';
+      } else {
+        container.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        label.textContent = 'Show Vegetative Groups';
+      }
+    }
+    
+    function renderVegetativeGroups() {
+      const container = document.getElementById('tank1VegGroups');
+      if (!container) return;
+      
+      const vegGroups = state.computed.vegetativeGroups || [];
+      
+      if (vegGroups.length === 0) {
+        container.innerHTML = '<strong>No vegetative groups detected</strong> — Tank 1 using default vegetative targets';
+        return;
+      }
+      
+      let html = `<strong>Vegetative Groups (${vegGroups.length}):</strong><br>`;
+      vegGroups.forEach(group => {
+        html += `<div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(34, 197, 94, 0.1); border-radius: 4px;">
+          <strong>${group.name}</strong> — Day ${group.day} • ${group.stage}<br>
+          <span style="font-size: 0.8rem; color: var(--neutral-400);">Target: EC ${group.targetEC} mS/cm, pH ${formatNumber(group.targetPH, 1)}</span>
+        </div>`;
+      });
+      container.innerHTML = html;
+    }
+    
+    function renderFruitingGroups() {
+      const container = document.getElementById('tank2FruitingGroups');
+      if (!container) return;
+      
+      const fruitingGroups = state.computed.fruitingGroups || [];
+      
+      if (fruitingGroups.length === 0) {
+        container.innerHTML = '<strong>No fruiting groups detected</strong> — EC set to default early flowering target (1.6 mS/cm)';
+        return;
+      }
+      
+      let html = `<strong>Fruiting Groups (${fruitingGroups.length}):</strong><br>`;
+      fruitingGroups.forEach(group => {
+        html += `<div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(244, 63, 94, 0.1); border-radius: 4px;">
+          <strong>${group.name}</strong> — Day ${group.day} • ${group.stage}<br>
+          <span style="font-size: 0.8rem; color: var(--neutral-400);">Target: EC ${group.targetEC} mS/cm, pH ${formatNumber(group.targetPH, 1)} (${group.ecStage})</span>
+        </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function renderNutrientCards(tankId, providerName) {
+      const container = document.getElementById(`${tankId}NutrientCards`);
+      if (!container) return;
+      
+      const composition = NUTRIENT_COMPOSITIONS[providerName];
+      if (!composition || !composition.parts) {
+        container.innerHTML = '<div style="color: var(--neutral-400); padding: 1rem; text-align: center;">No nutrient composition data available for selected provider</div>';
+        return;
+      }
+      
+      let html = '';
+      composition.parts.forEach(part => {
+        html += `
+          <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem;">
+            <h4 style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 1rem;">${part.name}</h4>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              ${part.nutrients.map(nutrient => `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.5rem 0; border-bottom: 1px solid rgba(100, 116, 139, 0.2);">
+                  <div style="flex: 1;">
+                    <div style="font-size: 0.875rem; color: var(--neutral-100); font-weight: 500;">${nutrient.element}</div>
+                    ${nutrient.detail ? `<div style="font-size: 0.75rem; color: var(--neutral-400); margin-top: 0.25rem;">${nutrient.detail}</div>` : ''}
+                  </div>
+                  <div style="font-size: 0.875rem; font-weight: 600; color: var(--accent-green); white-space: nowrap; margin-left: 1rem;">${nutrient.value}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+
+    function populateCalibrationForms(data) {
+      // Tank 1 calibration form
+      const tank1CalForm = document.getElementById('tank1CalibrationForm');
+      if (tank1CalForm) {
+        const pump = data?.tanks?.tank1?.calibration?.pump || data?.tanks?.tank1?.calibration;
+        fillInputNumber(tank1CalForm.calRunTime, pump?.runTimeSeconds ?? 180, 1);
+        fillInputNumber(tank1CalForm.calVolume, pump?.measuredVolumeMl ?? pump?.referenceVolumeMl ?? 120, 1);
+      }
+      
+      // Tank 2 calibration form
+      const tank2CalForm = document.getElementById('tank2CalibrationForm');
+      if (tank2CalForm) {
+        const pump = data?.tanks?.tank2?.calibration?.pump || data?.tanks?.tank2?.calibration;
+        fillInputNumber(tank2CalForm.calRunTime, pump?.runTimeSeconds ?? 180, 1);
+        fillInputNumber(tank2CalForm.calVolume, pump?.measuredVolumeMl ?? pump?.referenceVolumeMl ?? 120, 1);
+      }
+    }
+
+    function populateSetpointForm() {
+      const form = document.getElementById('tank2SetpointForm');
+      if (!form) return;
+      const cfg = state.autodose || DEFAULT_AUTODOSE;
+      fillInputNumber(form.phTarget, cfg.phTarget, 2);
+      fillInputNumber(form.phTolerance, cfg.phTolerance, 2);
+      fillInputNumber(form.ecTarget, cfg.ecTarget, 0);
+      fillInputNumber(form.ecTolerance, cfg.ecTolerance, 0);
+      fillInputNumber(form.ecDoseSeconds, cfg.ecDoseSeconds, 2);
+      fillInputNumber(form.phDownDoseSeconds, cfg.phDownDoseSeconds, 2);
+      fillInputNumber(form.minDoseIntervalSec, cfg.minDoseIntervalSec, 0);
+      if (form.autodoseEnabled) {
+        form.autodoseEnabled.checked = Boolean(cfg.autodoseEnabled);
+      }
+    }
+
+    function renderAutodoseSummary() {
+      const summary = document.getElementById('tank2AutodoseSummary');
+      if (!summary) return;
+      const cfg = state.autodose || DEFAULT_AUTODOSE;
+      const lines = [];
+      lines.push(`<span><strong>Status:</strong> ${cfg.autodoseEnabled ? 'Enabled' : 'Disabled'}</span>`);
+      if (Number.isFinite(cfg.phTarget) && Number.isFinite(cfg.phTolerance)) {
+        lines.push(`<span><strong>pH:</strong> ${formatNumber(cfg.phTarget, 2)} ± ${formatNumber(cfg.phTolerance, 2)}</span>`);
+      }
+      if (Number.isFinite(cfg.ecTarget) && Number.isFinite(cfg.ecTolerance)) {
+        lines.push(`<span><strong>EC:</strong> ${formatNumber(cfg.ecTarget / 1000, 2)} mS/cm ± ${formatNumber(cfg.ecTolerance / 1000, 2)} mS/cm</span>`);
+      }
+      if (Number.isFinite(cfg.ecDoseSeconds) && Number.isFinite(cfg.phDownDoseSeconds)) {
+        lines.push(`<span><strong>Dose:</strong> EC ${formatNumber(cfg.ecDoseSeconds, 2)}s • pH ${formatNumber(cfg.phDownDoseSeconds, 2)}s</span>`);
+      }
+      if (Number.isFinite(cfg.minDoseIntervalSec)) {
+        lines.push(`<span><strong>Interval:</strong> ${formatNumber(cfg.minDoseIntervalSec, 0)} seconds</span>`);
+      }
+      summary.innerHTML = lines.join('<br>');
+    }
+
+    function updateSetpointStatus(message, variant = 'info') {
+      const status = document.getElementById('tank2SetpointStatus');
+      if (!status) return;
+      status.textContent = message;
+      const colorMap = {
+        info: 'var(--neutral-300)',
+        success: '#bbf7d0',
+        error: '#fca5a5'
+      };
+      status.style.color = colorMap[variant] || 'var(--neutral-300)';
+    }
+
+    async function handleSetpointSubmit(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Pushing…';
+      }
+
+      try {
+        const payload = {
+          phTarget: toFiniteNumber(form.phTarget.value, null),
+          phTolerance: toFiniteNumber(form.phTolerance.value, null),
+          ecTarget: toFiniteNumber(form.ecTarget.value, null),
+          ecTolerance: toFiniteNumber(form.ecTolerance.value, null),
+          ecDoseSeconds: toFiniteNumber(form.ecDoseSeconds.value, null),
+          phDownDoseSeconds: toFiniteNumber(form.phDownDoseSeconds.value, null),
+          minDoseIntervalSec: toFiniteNumber(form.minDoseIntervalSec.value, null),
+          autodoseEnabled: Boolean(form.autodoseEnabled?.checked)
+        };
+
+        if (!Number.isFinite(payload.phTarget) || !Number.isFinite(payload.ecTarget)) {
+          throw new Error('Provide valid pH and EC targets.');
+        }
+
+        updateSetpointStatus('Dispatching setpoints…', 'info');
+
+        const sanitized = {
+          phTarget: clamp(payload.phTarget, 4.0, 7.5),
+          phTolerance: clamp(payload.phTolerance, 0.05, 1.0),
+          ecTarget: clamp(payload.ecTarget, 100, 2500),
+          ecTolerance: clamp(payload.ecTolerance, 5, 500),
+          ecDoseSeconds: clamp(payload.ecDoseSeconds, 0.5, 20),
+          phDownDoseSeconds: clamp(payload.phDownDoseSeconds, 0.5, 5),
+          minDoseIntervalSec: clamp(payload.minDoseIntervalSec, 30, 3600),
+          autodoseEnabled: payload.autodoseEnabled
+        };
+
+        if (!Number.isFinite(sanitized.phTarget) || !Number.isFinite(sanitized.ecTarget)) {
+          throw new Error('Targets fall outside acceptable guardrails.');
+        }
+
+        const response = await fetch(SETPOINT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sanitized)
+        });
+
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => ({}));
+          throw new Error(errorPayload?.error || `HTTP ${response.status}`);
+        }
+
+        const now = new Date();
+
+        state.autodose = {
+          autodoseEnabled: sanitized.autodoseEnabled,
+          phTarget: sanitized.phTarget,
+          phTolerance: sanitized.phTolerance,
+          ecTarget: sanitized.ecTarget,
+          ecTolerance: sanitized.ecTolerance,
+          ecDoseSeconds: sanitized.ecDoseSeconds,
+          phDownDoseSeconds: sanitized.phDownDoseSeconds,
+          minDoseIntervalSec: sanitized.minDoseIntervalSec
+        };
+
+        if (state.raw?.tanks?.tank2) {
+          const tank2 = state.raw.tanks.tank2;
+          tank2.phSetpoint = state.autodose.phTarget;
+          tank2.phTolerance = state.autodose.phTolerance;
+          tank2.ecSetpoint = state.autodose.ecTarget;
+          tank2.ecTolerance = state.autodose.ecTolerance;
+          tank2.autodose = { ...state.autodose };
+        }
+
+        populateSetpointForm();
+        renderAutodoseSummary();
+        renderSetpoints(state.raw, 'tank2');
+        updateDosingStatus(state.raw, 'tank2');
+
+        updateSetpointStatus(`Setpoints pushed at ${now.toLocaleTimeString()}`, 'success');
+        showToast('Setpoints pushed to doser', 'info');
+      } catch (error) {
+        console.error('[nutrient] setpoint push failed:', error);
+        updateSetpointStatus(error.message || 'Failed to push setpoints', 'error');
+        showToast(error.message || 'Failed to push setpoints', 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = 'Push Setpoints to Doser';
+        }
+      }
+    }
+
+    function computeState(data) {
+      const pumpFlow = calculatePumpFlow(data);
+      state.computed.pumpFlowMlPerSec = pumpFlow;
+      const totalsByDay = groupByDay(data?.dosing?.history || [], pumpFlow);
+      const todayKey = new Date().toISOString().slice(0, 10);
+      state.computed.todaysVolume = totalsByDay.get(todayKey) || 0;
+      const sum = Array.from(totalsByDay.values()).reduce((acc, value) => acc + value, 0);
+      state.computed.dailyAverageMl = totalsByDay.size ? sum / totalsByDay.size : 0;
+      state.computed.warningFlags = evaluateWarnings(data);
+      
+      // Calculate Tank 1 and Tank 2 targets based on group plans
+      const tank1Targets = calculateTank1Targets(state.groups);
+      state.computed.tank1EC = tank1Targets.ec;
+      state.computed.tank1PH = tank1Targets.ph;
+      
+      const tank2Targets = calculateTank2Targets(state.groups);
+      state.computed.tank2EC = tank2Targets.ec;
+      state.computed.tank2PH = tank2Targets.ph;
+
+      if (Number.isFinite(state.autodose?.ecTarget)) {
+        state.computed.tank2EC = state.autodose.ecTarget / 1000;
+      }
+      if (Number.isFinite(state.autodose?.phTarget)) {
+        state.computed.tank2PH = state.autodose.phTarget;
+      }
+    }
+
+    async function persistData(updatedData, successMessage = 'Saved') {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData, null, 2),
+      });
+      if (!response.ok) {
+        throw new Error(`Save failed: ${response.status}`);
+      }
+      showToast(successMessage, 'info');
+    }
+
+    async function handleProviderChange(tankId) {
+      try {
+        const select = document.getElementById(`${tankId}Provider`);
+        if (!select) return;
+        
+        const payload = deepClone(state.raw);
+        payload.tanks = payload.tanks || {};
+        payload.tanks[tankId] = payload.tanks[tankId] || {};
+        payload.tanks[tankId].nutrientProvider = select.value;
+        payload.tanks[tankId].lastUpdated = new Date().toISOString();
+        
+        await persistData(payload, `${tankId === 'tank1' ? 'Tank 1' : 'Tank 2'} provider updated`);
+        state.raw = payload;
+        
+        // Re-render nutrient cards with new provider
+        renderNutrientCards(tankId, select.value);
+      } catch (error) {
+        console.error(error);
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function handleCalibration(event, tankId) {
+      event.preventDefault();
+      try {
+        const form = event.currentTarget;
+        const runTime = Number(form.calRunTime.value);
+        const volume = Number(form.calVolume.value);
+        if (!runTime || !volume) throw new Error('Provide run time and measured volume.');
+        
+        const payload = deepClone(state.raw);
+        payload.tanks = payload.tanks || {};
+        payload.tanks[tankId] = payload.tanks[tankId] || {};
+        
+        const tankData = payload.tanks[tankId];
+        const baseFlow = Number(tankData?.metadata?.pumpRatingGPD || 5) * 3785.41 / 86400;
+        if (!Number.isFinite(baseFlow) || baseFlow <= 0) {
+          throw new Error('Pump rating missing. Update metadata before calibrating.');
+        }
+        
+        const measuredFlow = volume / runTime; // mL/s
+        const calibrationFactor = measuredFlow / baseFlow;
+        
+        const recordedAt = new Date().toISOString();
+        const pumpCal = {
+          channel: tankId === 'tank2' ? 'ecMixA' : 'manual',
+          runTimeSeconds: Number(runTime.toFixed(2)),
+          measuredVolumeMl: Number(volume.toFixed(2)),
+          flowMlPerSec: Number(measuredFlow.toFixed(4)),
+          recordedAt,
+          notes: 'Manual entry from dashboard form'
+        };
+        
+        tankData.metadata = tankData.metadata || {};
+        tankData.metadata.calibrationFactor = Number(calibrationFactor.toFixed(4));
+        tankData.calibration = {
+          ...(tankData.calibration || {}),
+          pump: pumpCal,
+          lastCalibratedAt: recordedAt,
+          referenceVolumeMl: pumpCal.measuredVolumeMl,
+          runTimeSeconds: pumpCal.runTimeSeconds,
+          measuredFlowMlPerSec: pumpCal.flowMlPerSec
+        };
+        
+        tankData.dosing = tankData.dosing || {};
+        const totals = groupByDay(tankData?.dosing?.history || [], measuredFlow);
+        if (totals.size) {
+          const totalVolume = Array.from(totals.values()).reduce((acc, value) => acc + value, 0);
+          tankData.dosing.averageDailyVolumeMl = Number((totalVolume / totals.size).toFixed(1));
+        }
+        
+        tankData.metadata.updatedAt = new Date().toISOString();
+        await persistData(payload, `${tankId === 'tank1' ? 'Tank 1' : 'Tank 2'} calibration updated`);
+        state.raw = payload;
+        initialize();
+      } catch (error) {
+        console.error(error);
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function initialize() {
+      computeState(state.raw);
+      
+      if (!state.raw.tanks) state.raw.tanks = {};
+      state.raw.tanks.tank1 = state.raw.tanks.tank1 || {};
+      state.raw.tanks.tank1.ecSetpoint = state.computed.tank1EC;
+      state.raw.tanks.tank1.phSetpoint = state.computed.tank1PH;
+      
+      // Ensure Tank 2 has calculated targets and default provider
+      state.raw.tanks.tank2 = state.raw.tanks.tank2 || {};
+      const tank2 = state.raw.tanks.tank2;
+      if (Number.isFinite(state.autodose?.ecTarget)) {
+        tank2.ecSetpoint = state.autodose.ecTarget;
+        if (Number.isFinite(state.autodose?.ecTolerance)) {
+          tank2.ecTolerance = state.autodose.ecTolerance;
+        }
+      } else {
+        tank2.ecSetpoint = Math.round(state.computed.tank2EC * 1000);
+      }
+      if (Number.isFinite(state.autodose?.phTarget)) {
+        tank2.phSetpoint = state.autodose.phTarget;
+        if (Number.isFinite(state.autodose?.phTolerance)) {
+          tank2.phTolerance = state.autodose.phTolerance;
+        }
+      } else {
+        tank2.phSetpoint = state.computed.tank2PH;
+      }
+      tank2.autodose = { ...state.autodose };
+      if (!tank2.nutrientProvider) {
+        tank2.nutrientProvider = 'EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit';
+      }
+      
+      // Render Tank 1
+      renderCurrentMetrics(state.raw, 'tank1');
+      renderSetpoints(state.raw, 'tank1');
+      renderWarnings([], document.getElementById('tank1CurrentWarnings'));
+      renderTrends(state.raw, 'tank1');
+      renderDosing(state.raw, 'tank1');
+      renderCalibration(state.raw, 'tank1');
+      renderInventory(state.raw, 'tank1');
+      renderPidRoadmap(state.raw, 'tank1');
+      updateDosingStatus(state.raw, 'tank1');
+      renderVegetativeGroups();
+      renderNutrientCards('tank1', state.raw.tanks.tank1?.nutrientProvider || 'EZ-GRO FIRE PROFESSIONAL - Veg and Growth');
+      
+      // Render Tank 2 (Live)
+      renderCurrentMetrics(state.raw, 'tank2');
+      renderSetpoints(state.raw, 'tank2');
+      renderWarnings(state.computed.warningFlags, document.getElementById('tank2CurrentWarnings'));
+      renderTrends(state.raw, 'tank2');
+      renderDosing(state.raw, 'tank2');
+      renderCalibration(state.raw, 'tank2');
+      renderInventory(state.raw, 'tank2');
+      renderPidRoadmap(state.raw, 'tank2');
+      updateDosingStatus(state.raw, 'tank2');
+      renderFruitingGroups();
+      renderNutrientCards('tank2', state.raw.tanks.tank2?.nutrientProvider || 'EZ-GRO FIRE PROFESSIONAL - Two Part - Flower and Fruit');
+      
+      // Update nutrient provider dropdowns
+      const tank1Provider = document.getElementById('tank1Provider');
+      const tank2Provider = document.getElementById('tank2Provider');
+      if (tank1Provider && state.raw.tanks.tank1?.nutrientProvider) {
+        tank1Provider.value = state.raw.tanks.tank1.nutrientProvider;
+      }
+      if (tank2Provider && state.raw.tanks.tank2?.nutrientProvider) {
+        tank2Provider.value = state.raw.tanks.tank2.nutrientProvider;
+      }
+      
+      // Populate calibration forms
+      populateCalibrationForms(state.raw);
+      populateSetpointForm();
+      renderAutodoseSummary();
+      renderSystemConfig();
+    }
+
+    async function fetchGroups() {
+      try {
+        const response = await fetch(`${GROUPS_ENDPOINT}?t=${Date.now()}`);
+        if (!response.ok) {
+          console.warn('Failed to load groups data, using defaults');
+          return null;
+        }
+        const data = await response.json();
+        return data?.groups || data; // Handle both {groups: [...]} and [...] formats
+      } catch (error) {
+        console.warn('Error fetching groups:', error);
+        return null;
+      }
+    }
+
+    async function fetchPlans() {
+      try {
+        const response = await fetch(`${PLANS_ENDPOINT}?t=${Date.now()}`);
+        if (!response.ok) {
+          console.warn('Failed to load plans data, using defaults');
+          return null;
+        }
+        const data = await response.json();
+        return data?.plans || data; // Handle both {plans: [...]} and [...] formats
+      } catch (error) {
+        console.warn('Error fetching plans:', error);
+        return null;
+      }
+    }
+
+    function enrichGroupsWithPlans(groups, plans) {
+      if (!groups || !plans) {
+        console.log('[nutrient] enrichGroupsWithPlans: groups or plans missing', { hasGroups: !!groups, hasPlans: !!plans });
+        return groups || [];
+      }
+      
+      // Create a map of plans by ID for quick lookup
+      const plansMap = new Map();
+      plans.forEach(plan => {
+        if (plan.id) plansMap.set(plan.id, plan);
+      });
+      
+      console.log(`[nutrient] Enriching ${groups.length} groups with plans (${plansMap.size} plans available)`);
+      
+      // Enrich each group with its plan data
+      return groups.map(group => {
+        if (!group.plan || typeof group.plan !== 'string') {
+          console.log('[nutrient] Group has no plan string:', group.name);
+          return group;
+        }
+        
+        const planData = plansMap.get(group.plan);
+        if (!planData) {
+          console.warn(`[nutrient] Plan "${group.plan}" not found for group "${group.name}"`);
+          return group;
+        }
+        
+        console.log(`[nutrient] Enriched group "${group.name}" with plan "${planData.name}" (${planData.days?.length || 0} days)`);
+        
+        // Create enriched group with plan data
+        return {
+          ...group,
+          plan: {
+            id: planData.id,
+            name: planData.name,
+            startDate: group.planConfig?.anchor?.seedDate || new Date().toISOString(),
+            days: planData.days || []
+          }
+        };
+      });
+    }
+
+    async function hydrate() {
+      try {
+        const ts = Date.now();
+        const [snapshotResponse, legacyResponse, groupsData, plansData] = await Promise.all([
+          fetch(`${API_ENDPOINT}?t=${ts}`),
+          fetch(`${LEGACY_CACHE_ENDPOINT}?t=${ts}`),
+          fetchGroups(),
+          fetchPlans()
+        ]);
+
+        state.legacyCache = legacyResponse?.ok ? await legacyResponse.json().catch(() => null) : null;
+
+        if (!snapshotResponse?.ok && !state.legacyCache) {
+          throw new Error(`Failed to load nutrient data (${snapshotResponse?.status || 'no-response'})`);
+        }
+
+        if (snapshotResponse?.ok) {
+          const payload = await snapshotResponse.json();
+          if (payload && typeof payload === 'object' && payload.telemetry) {
+            applySnapshotToState(payload, state.legacyCache);
+          } else {
+            state.raw = payload || {};
+            state.autodose = extractAutodoseFromLegacy(state.raw);
+          }
+        } else {
+          state.raw = state.legacyCache || {};
+          state.autodose = extractAutodoseFromLegacy(state.raw);
+        }
+
+        // Enrich groups with their plan data
+        state.groups = enrichGroupsWithPlans(groupsData, plansData);
+        
+        console.log(`[nutrient] Loaded ${state.groups?.length || 0} groups`);
+        initialize();
+      } catch (error) {
+        console.error(error);
+        showToast(error.message, 'error');
+      }
+    }
+
+    // Nutrient provider change handlers
+    document.getElementById('tank1Provider')?.addEventListener('change', () => handleProviderChange('tank1'));
+    document.getElementById('tank2Provider')?.addEventListener('change', () => handleProviderChange('tank2'));
+    
+    // Calibration form handlers
+    document.getElementById('tank1CalibrationForm')?.addEventListener('submit', (e) => handleCalibration(e, 'tank1'));
+    document.getElementById('tank2CalibrationForm')?.addEventListener('submit', (e) => handleCalibration(e, 'tank2'));
+
+    document.querySelectorAll('.wizard-launch').forEach((button) => {
+      button.addEventListener('click', () => {
+        const mode = button.dataset.mode;
+        const tankId = button.dataset.tank || 'tank2';
+        if (mode === 'pump') {
+          startPumpCalibrationWizard(tankId);
+        } else if (mode === 'sensor') {
+          startSensorCalibrationWizard(tankId);
+        }
+      });
+    });
+
+    wizardNextBtn?.addEventListener('click', handleWizardAdvance);
+    wizardBackBtn?.addEventListener('click', handleWizardBack);
+    wizardCloseBtn?.addEventListener('click', closeWizard);
+    wizardOverlay?.addEventListener('click', (event) => {
+      if (event.target === wizardOverlay) {
+        closeWizard();
+      }
+    });
+
+    // ESC key handler for both wizard and main close button
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (wizardOverlay?.dataset?.visible === 'true') {
+          closeWizard();
+        } else {
+          window.history.back();
+        }
+      }
+    });
+
+    document.getElementById('tank2SetpointForm')?.addEventListener('submit', handleSetpointSubmit);
+    document.getElementById('systemConfigForm')?.addEventListener('submit', handleSystemConfigSave);
+    document.getElementById('irrigationMode')?.addEventListener('change', updateIrrigationCycleVisibility);
+    hydrate();
+  </script>
+
+  <!-- Intro Card Component -->
+  <script src="/js/intro-card.js?v=5"></script>
+  <script>
+    // Show intro card when page loads (only in demo mode)
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        showIntroCard('nutrient-management');
+      }, 500);
+    });
+  </script>
+  <script src="/js/farm-assistant.js"></script>
+</body>
+</html>

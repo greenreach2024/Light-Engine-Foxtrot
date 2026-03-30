@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Monitor - GreenReach</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0f1e;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --border: #2d3748;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 2rem;
+        }
+
+        .sync-dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: var(--accent-green);
+        }
+
+        .status-indicator.disconnected {
+            background: var(--accent-red);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .metric-value.success {
+            color: var(--accent-green);
+        }
+
+        .metric-value.warning {
+            color: var(--accent-yellow);
+        }
+
+        .metric-value.error {
+            color: var(--accent-red);
+        }
+
+        .sync-button {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 1rem;
+        }
+
+        .sync-button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        .sync-button:active {
+            transform: translateY(0);
+        }
+
+        .sync-button:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .queue-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .queue-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .queue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .queue-item-type {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .queue-item-retries {
+            background: var(--accent-yellow);
+            color: var(--bg-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .queue-item-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .error-log {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .error-time {
+            color: var(--text-secondary);
+        }
+
+        .error-type {
+            color: var(--accent-yellow);
+            font-weight: 600;
+        }
+
+        .error-message {
+            color: var(--accent-red);
+            margin-top: 0.5rem;
+        }
+
+        .chart-container {
+            height: 200px;
+            margin-top: 1rem;
+        }
+
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .connection-banner {
+            background: var(--accent-red);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .connection-banner.show {
+            display: flex;
+        }
+
+        .connection-banner.reconnecting {
+            background: var(--accent-yellow);
+            color: var(--bg-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="sync-dashboard">
+        <h1>
+            <span class="status-indicator connected" id="connection-status"></span>
+            Sync Monitor
+        </h1>
+
+        <div class="connection-banner" id="connection-banner">
+            <span>⚠️</span>
+            <div>
+                <strong>Connection Lost</strong><br>
+                <span id="banner-message">Attempting to reconnect...</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Connection Status -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">🔌</span>
+                    Connection Status
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Status</span>
+                    <span class="metric-value success" id="ws-status">Connecting...</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Farm ID</span>
+                    <span class="metric-value" id="farm-id">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Uptime</span>
+                    <span class="metric-value" id="uptime">-</span>
+                </div>
+            </div>
+
+            <!-- Last Sync Times -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">🕐</span>
+                    Last Sync Times
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Inventory</span>
+                    <span class="metric-value timestamp" id="last-inventory">Never</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Health</span>
+                    <span class="metric-value timestamp" id="last-health">Never</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Config</span>
+                    <span class="metric-value timestamp" id="last-config">Never</span>
+                </div>
+            </div>
+
+            <!-- Sync Errors -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">⚠️</span>
+                    Sync Errors
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Inventory</span>
+                    <span class="metric-value" id="errors-inventory">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Health</span>
+                    <span class="metric-value" id="errors-health">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Config</span>
+                    <span class="metric-value" id="errors-config">0</span>
+                </div>
+            </div>
+
+            <!-- Queue Status -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="card-icon">📋</span>
+                    Offline Queue
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Queue Size</span>
+                    <span class="metric-value" id="queue-size">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Processing</span>
+                    <span class="metric-value" id="queue-processing">No</span>
+                </div>
+                <button class="sync-button" onclick="processQueue()">Process Queue Now</button>
+            </div>
+        </div>
+
+        <!-- Manual Sync Controls -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">🔄</span>
+                Manual Sync
+            </div>
+            <div class="grid">
+                <button class="sync-button" onclick="manualSync('inventory')">Sync Inventory</button>
+                <button class="sync-button" onclick="manualSync('health')">Sync Health</button>
+                <button class="sync-button" onclick="manualSync('config')">Sync Config</button>
+                <button class="sync-button" onclick="manualSync('all')">Sync All</button>
+            </div>
+        </div>
+
+        <!-- Queue Details -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-title">
+                <span class="card-icon">📦</span>
+                Queue Details
+            </div>
+            <div class="queue-list" id="queue-list">
+                <div class="empty-state">No items in queue</div>
+            </div>
+        </div>
+
+        <!-- Recent Errors -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-title">
+                <span class="card-icon">🐛</span>
+                Recent Errors
+            </div>
+            <div id="error-log">
+                <div class="empty-state">No errors logged</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let reconnectTimeout = null;
+        let startTime = Date.now();
+
+        // Update uptime every second
+        setInterval(() => {
+            const uptime = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(uptime / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            const seconds = uptime % 60;
+            document.getElementById('uptime').textContent = 
+                `${hours}h ${minutes}m ${seconds}s`;
+        }, 1000);
+
+        // Connect to sync status WebSocket
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/sync-status`);
+
+            ws.onopen = () => {
+                console.log('Connected to sync monitor');
+                document.getElementById('connection-status').className = 'status-indicator connected';
+                document.getElementById('ws-status').textContent = 'Connected';
+                document.getElementById('ws-status').className = 'metric-value success';
+                document.getElementById('connection-banner').classList.remove('show');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateUI(data);
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from sync monitor');
+                document.getElementById('connection-status').className = 'status-indicator disconnected';
+                document.getElementById('ws-status').textContent = 'Disconnected';
+                document.getElementById('ws-status').className = 'metric-value error';
+                
+                const banner = document.getElementById('connection-banner');
+                banner.classList.add('show', 'reconnecting');
+                document.getElementById('banner-message').textContent = 'Attempting to reconnect...';
+
+                // Reconnect after 3 seconds
+                reconnectTimeout = setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // Update UI with sync status
+        function updateUI(data) {
+            // Farm ID
+            if (data.farmId) {
+                document.getElementById('farm-id').textContent = data.farmId;
+            }
+
+            // Last sync times
+            if (data.lastSync) {
+                document.getElementById('last-inventory').textContent = 
+                    data.lastSync.inventory ? formatTime(data.lastSync.inventory) : 'Never';
+                document.getElementById('last-health').textContent = 
+                    data.lastSync.health ? formatTime(data.lastSync.health) : 'Never';
+                document.getElementById('last-config').textContent = 
+                    data.lastSync.config ? formatTime(data.lastSync.config) : 'Never';
+            }
+
+            // Sync errors
+            if (data.syncErrors) {
+                updateErrorCount('errors-inventory', data.syncErrors.inventory);
+                updateErrorCount('errors-health', data.syncErrors.health);
+                updateErrorCount('errors-config', data.syncErrors.config);
+            }
+
+            // Queue status
+            if (data.queueSize !== undefined) {
+                document.getElementById('queue-size').textContent = data.queueSize;
+                
+                if (data.queueSize > 0) {
+                    document.getElementById('queue-size').classList.add('warning');
+                } else {
+                    document.getElementById('queue-size').classList.remove('warning');
+                }
+            }
+
+            if (data.processing !== undefined) {
+                document.getElementById('queue-processing').textContent = data.processing ? 'Yes' : 'No';
+            }
+
+            // Queue details
+            if (data.queue) {
+                updateQueueList(data.queue);
+            }
+
+            // Recent errors
+            if (data.recentErrors) {
+                updateErrorLog(data.recentErrors);
+            }
+        }
+
+        // Format timestamp
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Update error count styling
+        function updateErrorCount(elementId, count) {
+            const element = document.getElementById(elementId);
+            element.textContent = count;
+            
+            if (count === 0) {
+                element.className = 'metric-value success';
+            } else if (count < 5) {
+                element.className = 'metric-value warning';
+            } else {
+                element.className = 'metric-value error';
+            }
+        }
+
+        // Update queue list
+        function updateQueueList(queue) {
+            const container = document.getElementById('queue-list');
+            
+            if (queue.length === 0) {
+                container.innerHTML = '<div class="empty-state">No items in queue</div>';
+                return;
+            }
+
+            container.innerHTML = queue.map(item => `
+                <div class="queue-item">
+                    <div class="queue-item-header">
+                        <span class="queue-item-type">${item.type}</span>
+                        <span class="queue-item-retries">Retry ${item.retries}/5</span>
+                    </div>
+                    <div class="queue-item-timestamp">Queued: ${formatTime(item.timestamp)}</div>
+                </div>
+            `).join('');
+        }
+
+        // Update error log
+        function updateErrorLog(errors) {
+            const container = document.getElementById('error-log');
+            
+            if (errors.length === 0) {
+                container.innerHTML = '<div class="empty-state">No errors logged</div>';
+                return;
+            }
+
+            container.innerHTML = errors.slice(0, 10).map(error => `
+                <div class="error-log">
+                    <span class="error-time">${formatTime(error.timestamp)}</span> - 
+                    <span class="error-type">${error.type}</span>
+                    <div class="error-message">${error.message}</div>
+                </div>
+            `).join('');
+        }
+
+        // Manual sync
+        async function manualSync(type) {
+            try {
+                const response = await fetch(`/api/sync/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type })
+                });
+
+                if (response.ok) {
+                    console.log(`Manual ${type} sync triggered`);
+                } else {
+                    console.error('Manual sync failed:', response.status);
+                }
+            } catch (error) {
+                console.error('Manual sync error:', error);
+            }
+        }
+
+        // Process queue
+        async function processQueue() {
+            try {
+                const response = await fetch('/api/sync/process-queue', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    console.log('Queue processing triggered');
+                } else {
+                    console.error('Queue processing failed:', response.status);
+                }
+            } catch (error) {
+                console.error('Queue processing error:', error);
+            }
+        }
+
+        // Fetch initial status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/sync/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateUI(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch sync status:', error);
+            }
+        }
+
+        // Initialize
+        connectWebSocket();
+        fetchStatus();
+
+        // Poll status every 10 seconds as backup
+        setInterval(fetchStatus, 10000);
+    </script>
+</body>
+</html>

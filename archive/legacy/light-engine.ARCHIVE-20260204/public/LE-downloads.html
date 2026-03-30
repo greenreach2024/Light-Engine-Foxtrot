@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Downloads - Light Engine</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles/nav-color-palette.css">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --border-color: #374151;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-blue);
+        }
+
+        .back-link {
+            color: var(--accent-blue);
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border: 1px solid var(--accent-blue);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            margin: 2rem 0 1rem 0;
+            color: var(--text-primary);
+        }
+
+        .page-description {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+        }
+
+        .download-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .download-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .download-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .download-icon {
+            font-size: 3rem;
+        }
+
+        .download-info h3 {
+            font-size: 1.8rem;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        .download-info p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        .download-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--accent-blue);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .download-button:hover {
+            background: #2563eb;
+            transform: scale(1.05);
+        }
+
+        .download-button:active {
+            transform: scale(0.98);
+        }
+
+        .file-size {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card h4 {
+            color: var(--accent-green);
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .instructions {
+            background: var(--bg-secondary);
+            border-left: 4px solid var(--accent-blue);
+            padding: 2rem;
+            margin-top: 3rem;
+            border-radius: 8px;
+        }
+
+        .instructions h3 {
+            color: var(--accent-blue);
+            margin-bottom: 1rem;
+        }
+
+        .instructions ol {
+            margin-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .instructions li {
+            margin-bottom: 0.75rem;
+            line-height: 1.8;
+        }
+
+        .coming-soon {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .coming-soon .download-button {
+            background: var(--bg-secondary);
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Light Engine</div>
+        <a href="/farm-dashboard.html" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title">Desktop Application Downloads</h1>
+        <p class="page-description">
+            Download the Light Engine desktop application to manage your farm offline with enhanced performance.
+        </p>
+
+        <!-- macOS Intel -->
+        <div class="download-card">
+            <div class="download-header">
+                <div class="download-icon">🍎</div>
+                <div class="download-info">
+                    <h3>macOS (Intel) <span class="version-badge">v1.0.0</span></h3>
+                    <p>For Intel-based Mac computers (2020 and earlier)</p>
+                </div>
+            </div>
+            <a href="https://light-engine-downloads.s3.amazonaws.com/Light-Engine-MacOS-Intel.dmg" 
+               class="download-button" 
+               download>
+                <span>↓</span>
+                <span>Download for Mac Intel</span>
+            </a>
+            <div class="file-size">Size: ~108 MB</div>
+        </div>
+
+        <!-- macOS ARM -->
+        <div class="download-card">
+            <div class="download-header">
+                <div class="download-icon">🍎</div>
+                <div class="download-info">
+                    <h3>macOS (Apple Silicon) <span class="version-badge">v1.0.0</span></h3>
+                    <p>For M1, M2, M3 Mac computers (2020 and newer)</p>
+                </div>
+            </div>
+            <a href="https://light-engine-downloads.s3.amazonaws.com/Light-Engine-MacOS-ARM.dmg" 
+               class="download-button" 
+               download>
+                <span>↓</span>
+                <span>Download for Mac ARM</span>
+            </a>
+            <div class="file-size">Size: ~101 MB</div>
+        </div>
+
+        <!-- Windows - Coming Soon -->
+        <div class="download-card coming-soon">
+            <div class="download-header">
+                <div class="download-icon">🪟</div>
+                <div class="download-info">
+                    <h3>Windows <span class="version-badge">Coming Soon</span></h3>
+                    <p>For Windows 10/11 computers</p>
+                </div>
+            </div>
+            <button class="download-button" disabled>
+                <span>⏱</span>
+                <span>Coming Soon</span>
+            </button>
+            <div class="file-size">Please use the web app for now</div>
+        </div>
+
+        <!-- Features -->
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📴</div>
+                <h4>Offline Mode</h4>
+                <p>Work without internet connection. All data syncs when you're back online.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h4>Faster Performance</h4>
+                <p>Native desktop app runs faster than web version with smoother animations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔄</div>
+                <h4>Auto-Start</h4>
+                <p>Launches automatically when your computer starts. Always ready to use.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h4>System Tray</h4>
+                <p>Runs in background with quick access from system tray icon.</p>
+            </div>
+        </div>
+
+        <!-- Installation Instructions -->
+        <div class="instructions">
+            <h3>Installation Instructions</h3>
+            <ol>
+                <li><strong>Download</strong> the appropriate version for your computer</li>
+                <li><strong>macOS:</strong> Open the .dmg file and drag Light Engine to your Applications folder</li>
+                <li><strong>macOS Security:</strong> If you see a security warning, go to System Preferences → Security & Privacy and click "Open Anyway"</li>
+                <li><strong>Login:</strong> Use your same farm credentials to login to the desktop app</li>
+                <li><strong>Sync:</strong> Your farm data will automatically sync from the cloud</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Check authentication
+        const token = localStorage.getItem('auth_token');
+        const farmId = localStorage.getItem('farm_id');
+        
+        if (!token || !farmId) {
+            window.location.href = '/login.html';
+        }
+
+        // Track download events
+        document.querySelectorAll('.download-button').forEach(button => {
+            button.addEventListener('click', function(e) {
+                const platform = this.textContent.includes('Intel') ? 'macos-intel' : 
+                               this.textContent.includes('ARM') ? 'macos-arm' : 'windows';
+                
+                console.log('Download started:', platform);
+                
+                // Optional: Send analytics to server
+                fetch('/api/analytics/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        farm_id: farmId,
+                        platform: platform,
+                        version: '1.0.0',
+                        timestamp: new Date().toISOString()
+                    })
+                }).catch(err => console.log('Analytics failed:', err));
+            });
+        });
+    </script>
+</body>
+</html>

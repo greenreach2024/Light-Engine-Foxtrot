@@ -1,0 +1,46 @@
+/* SwitchBot Manager Styles */
+.switchbot-manager-card {
+  border: 1px solid var(--gr-border, #dce5e5);
+  border-radius: 12px;
+  background: var(--gr-surface, #ffffff);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--gr-primary-light, #e0f2f2);
+  color: var(--gr-primary, #0d7d7d);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.switchbot-manager-assignment {
+  display: flex;
+  gap: 8px;
+}
+
+.switchbot-manager-assignment select {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--gr-border, #dce5e5);
+  background: var(--gr-surface, #ffffff);
+  font-size: 13px;
+  color: var(--gr-text, #0b1220);
+}
+
+.switchbot-controls {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.switchbot-controls button {
+  min-width: 60px;
+}

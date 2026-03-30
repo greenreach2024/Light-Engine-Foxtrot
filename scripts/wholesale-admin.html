@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenReach Wholesale Admin</title>
+  <style>
+    :root {
+      --primary: #2d5016;
+      --primary-light: #3d6821;
+      --primary-dark: #1d3810;
+      --accent: #82c341;
+      --bg: #f5f7f3;
+      --surface: #ffffff;
+      --border: #d8e3cf;
+      --text: #1a1a1a;
+      --text-secondary: #5a5a5a;
+      --error: #c53030;
+      --success: #38a169;
+      --warning: #d69e2e;
+      --info: #3182ce;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .header-nav a:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    nav button:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    nav button.active {
+      color: var(--primary);
+      border-bottom-color: var(--accent);
+      font-weight: 500;
+    }
+
+    main {
+      max-width: 1600px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .stat-change {
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .stat-change.positive {
+      color: var(--success);
+    }
+
+    .stat-change.negative {
+      color: var(--error);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 2px solid var(--border);
+    }
+
+    td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.inactive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .badge.onboarding {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.completed {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.failed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .badge.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-light);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #9b2c2c;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #2f855a;
+    }
+
+    .btn-sm {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+
+    .chart-container {
+      height: 300px;
+      margin: 1rem 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+
+    .chart-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+      max-width: 80px;
+    }
+
+    .chart-bar-fill {
+      width: 100%;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      transition: height 0.3s;
+    }
+
+    .chart-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .chart-value {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-secondary);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: var(--bg);
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .modal-footer {
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.625rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: var(--surface);
+    }
+
+    .filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .filter-group label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .filter-group select,
+    .filter-group input {
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      background: var(--surface);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      max-width: 400px;
+      z-index: 3000;
+      animation: slideIn 0.3s;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .toast.success {
+      border-left: 4px solid var(--success);
+    }
+
+    .toast.error {
+      border-left: 4px solid var(--error);
+    }
+
+    .toast.info {
+      border-left: 4px solid var(--info);
+    }
+
+    @media (max-width: 768px) {
+      main {
+        padding: 0 1rem;
+      }
+
+      header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      nav {
+        padding: 0 1rem;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        font-size: 0.875rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>GreenReach Wholesale Admin</h1>
+      <p style="margin-top: 0.25rem; opacity: 0.9; font-size: 0.95rem;">Operational dashboard for wholesale platform</p>
+    </div>
+    <div class="header-nav">
+      <a href="/GR-wholesale.html">Buyer Portal</a>
+    </div>
+  </header>
+
+  <nav>
+    <button class="nav-tab active" data-view="overview">Overview</button>
+    <button class="nav-tab" data-view="farms">Farm Management</button>
+    <button class="nav-tab" data-view="payments">Payments & Fees</button>
+    <button class="nav-tab" data-view="orders">Orders</button>
+    <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
+    <button class="nav-tab" data-view="compliance">Compliance Export</button>
+  </nav>
+
+  <main>
+    <!-- Overview View -->
+    <div id="overview-view" class="view active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total GMV (30d)</div>
+          <div class="stat-value" id="stat-gmv">$0</div>
+          <div class="stat-change positive" id="stat-gmv-change">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Broker Fees Collected</div>
+          <div class="stat-value" id="stat-fees">$0</div>
+          <div class="stat-change positive" id="stat-fees-change">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Farms</div>
+          <div class="stat-value" id="stat-farms">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value" id="stat-orders">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">GMV by Farm (Last 30 Days)</h2>
+        </div>
+        <div id="gmv-chart" class="chart-container">
+          <div class="loading">Loading chart data...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Recent Activity</h2>
+        </div>
+        <div id="recent-activity">
+          <div class="loading">Loading activity...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Farm Management View -->
+    <div id="farms-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Farm Onboarding Status</h2>
+          <div class="card-actions">
+            <button class="btn btn-primary" onclick="admin.openOnboardModal()">Onboard New Farm</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Farm ID</th>
+              <th>Farm Name</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Last Sync</th>
+              <th>Certifications</th>
+              <th>Practices</th>
+            </tr>
+          </thead>
+          <tbody id="farms-table">
+            <tr>
+              <td colspan="7" class="loading">Loading farms...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payments & Fees View -->
+    <div id="payments-view" class="view">
+      <div class="filters">
+        <div class="filter-group">
+          <label for="payment-status-filter">Status</label>
+          <select id="payment-status-filter">
+            <option value="all">All Statuses</option>
+            <option value="created">Created</option>
+            <option value="authorized">Authorized</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="payment-date-from">From Date</label>
+          <input type="date" id="payment-date-from" />
+        </div>
+        <div class="filter-group">
+          <label for="payment-date-to">To Date</label>
+          <input type="date" id="payment-date-to" />
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" onclick="admin.filterPayments()">Apply Filters</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Payment Records</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary" onclick="admin.reconcilePayments()">Reconcile All</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Payment ID</th>
+              <th>Farm</th>
+              <th>Amount</th>
+              <th>Broker Fee</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="payments-table">
+            <tr>
+              <td colspan="7" class="loading">Loading payments...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Farm Payout Summary</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Farm</th>
+              <th>Gross Revenue</th>
+              <th>Broker Fees</th>
+              <th>Net Payout</th>
+              <th>Orders</th>
+            </tr>
+          </thead>
+          <tbody id="payout-summary-table">
+            <tr>
+              <td colspan="5" class="loading">Loading summary...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Orders View -->
+    <div id="orders-view" class="view">
+      <div class="filters">
+        <div class="filter-group">
+          <label for="order-status-filter">Status</label>
+          <select id="order-status-filter">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="order-date-from">From Date</label>
+          <input type="date" id="order-date-from" />
+        </div>
+        <div class="filter-group">
+          <label for="order-date-to">To Date</label>
+          <input type="date" id="order-date-to" />
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" onclick="admin.filterOrders()">Apply Filters</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Master Orders</h2>
+        </div>
+        <div id="orders-list">
+          <div class="loading">Loading orders...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reconciliation View -->
+    <div id="reconciliation-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Payment Reconciliation</h2>
+          <div class="card-actions">
+            <button class="btn btn-success" onclick="admin.runReconciliation()">Run Reconciliation</button>
+          </div>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+          Reconciliation queries Square API for payment status updates and synchronizes with local records. 
+          Run this if webhook events were missed or payment statuses seem outdated.
+        </p>
+        <div id="reconciliation-log">
+          <div class="empty-state">Click "Run Reconciliation" to start</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Refund History</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Refund ID</th>
+              <th>Payment ID</th>
+              <th>Amount</th>
+              <th>Broker Fee Refunded</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="refunds-table">
+            <tr>
+              <td colspan="7" class="loading">Loading refunds...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Compliance Export View -->
+    <div id="compliance-view" class="view">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Compliance Export Tool</h2>
+        </div>
+        <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+          Generate regulatory compliance reports including order transactions, farm source information, product details, and traceability events.
+          Designed for USDA traceability requirements, FDA FSMA, and state-level food safety programs.
+        </p>
+
+        <div class="card" style="margin-bottom: 1.5rem; background: var(--bg);">
+          <div class="card-header">
+            <h3 style="font-size: 1.125rem;">Export Configuration</h3>
+          </div>
+          <div style="padding: 1.5rem;">
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="export-start-date">Start Date</label>
+                <input type="date" id="export-start-date" />
+              </div>
+              <div class="form-group">
+                <label for="export-end-date">End Date</label>
+                <input type="date" id="export-end-date" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="export-format">Export Format</label>
+              <select id="export-format">
+                <option value="csv">CSV (Excel Compatible)</option>
+                <option value="json">JSON (API/Integration)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Data Scope</label>
+              <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: var(--surface); border-radius: 6px;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-orders" checked />
+                  Order Transactions
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-farms" checked />
+                  Farm Source Information
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-products" checked />
+                  Product Details & Certifications
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="export-traceability" checked />
+                  Traceability Events (QR scan data)
+                </label>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="admin.generateComplianceExport()">
+              Generate Export
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 style="font-size: 1.125rem;">Export History</h3>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Records</th>
+                <th>Format</th>
+                <th>Date Range</th>
+                <th>Status</th>
+                <th>Generated</th>
+              </tr>
+            </thead>
+            <tbody id="export-history-table">
+              <tr>
+                <td colspan="6" class="empty-state">No exports generated yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Onboard Farm Modal -->
+  <div id="onboard-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Onboard New Farm</h3>
+        <button class="modal-close" onclick="admin.closeOnboardModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="onboard-form">
+          <div class="form-group">
+            <label for="farm-id">Farm ID</label>
+            <input type="text" id="farm-id" required placeholder="farm_123" />
+          </div>
+          <div class="form-group">
+            <label for="farm-name">Farm Name</label>
+            <input type="text" id="farm-name" required placeholder="Green Acres Farm" />
+          </div>
+          <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
+            This will generate a Square OAuth URL. Send this URL to the farm owner to complete onboarding.
+          </p>
+        </form>
+        <div id="oauth-url-display" style="display: none; margin-top: 1rem;">
+          <div class="form-group">
+            <label>OAuth URL (expires in 10 minutes)</label>
+            <textarea id="oauth-url" readonly rows="4" style="font-size: 0.8rem;"></textarea>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="admin.copyOAuthUrl()">Copy URL</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="admin.closeOnboardModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="admin.generateOAuthUrl()">Generate OAuth URL</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const admin = {
+      currentView: 'overview',
+      farms: [],
+      payments: [],
+      orders: [],
+      refunds: [],
+      demoMode: true, // Enable demo mode by default
+
+      async init() {
+        // Check URL params for demo mode
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('demo') === '0') {
+          this.demoMode = false;
+        }
+
+        console.log('[Wholesale Admin] Initializing in demo mode:', this.demoMode);
+        
+        this.setupEventListeners();
+        await this.loadOverview();
+      },
+
+      setupEventListeners() {
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+          tab.addEventListener('click', (e) => {
+            const view = e.target.dataset.view;
+            this.navigateTo(view);
+          });
+        });
+      },
+
+      navigateTo(view) {
+        this.currentView = view;
+        
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.view === view);
+        });
+
+        document.querySelectorAll('.view').forEach(v => {
+          v.classList.toggle('active', v.id === `${view}-view`);
+        });
+
+        // Load view-specific data
+        switch(view) {
+          case 'overview':
+            this.loadOverview();
+            break;
+          case 'farms':
+            this.loadFarms();
+            break;
+          case 'payments':
+            this.loadPayments();
+            break;
+          case 'orders':
+            this.loadOrders();
+            break;
+          case 'reconciliation':
+            this.loadRefunds();
+            break;
+          case 'compliance':
+            this.initComplianceView();
+            break;
+        }
+      },
+
+      initComplianceView() {
+        // Set default date range (last 30 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+
+        document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
+        document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
+      },
+
+      async loadOverview() {
+        try {
+          // Load farms
+          const farmsRes = await fetch('/api/wholesale/oauth/square/farms');
+          const farmsData = await farmsRes.json();
+          this.farms = farmsData.data?.farms || [];
+
+          // Load payments
+          const paymentsRes = await fetch('/api/wholesale/webhooks/payments');
+          const paymentsData = await paymentsRes.json();
+          this.payments = paymentsData.data?.payments || [];
+
+          // Calculate stats
+          const totalGMV = this.payments
+            .filter(p => p.status === 'completed')
+            .reduce((sum, p) => sum + p.amount, 0);
+
+          const totalFees = this.payments
+            .filter(p => p.status === 'completed')
+            .reduce((sum, p) => sum + p.broker_fee_amount, 0);
+
+          const activeFarms = this.farms.filter(f => f.status === 'active').length;
+
+          // Update stats
+          document.getElementById('stat-gmv').textContent = `$${totalGMV.toFixed(2)}`;
+          document.getElementById('stat-fees').textContent = `$${totalFees.toFixed(2)}`;
+          document.getElementById('stat-farms').textContent = activeFarms.toString();
+          document.getElementById('stat-orders').textContent = this.payments.length.toString();
+
+          // Render GMV chart
+          this.renderGMVChart();
+
+          // Render recent activity
+          this.renderRecentActivity();
+
+        } catch (error) {
+          console.error('Load overview error:', error);
+          this.showToast('Failed to load overview data', 'error');
+        }
+      },
+
+      renderGMVChart() {
+        const chartContainer = document.getElementById('gmv-chart');
+        
+        // Group payments by farm
+        const farmGMV = {};
+        this.payments.forEach(payment => {
+          if (payment.status === 'completed') {
+            if (!farmGMV[payment.farm_id]) {
+              farmGMV[payment.farm_id] = 0;
+            }
+            farmGMV[payment.farm_id] += payment.amount;
+          }
+        });
+
+        if (Object.keys(farmGMV).length === 0) {
+          chartContainer.innerHTML = '<div class="empty-state">No payment data available</div>';
+          return;
+        }
+
+        const maxGMV = Math.max(...Object.values(farmGMV));
+
+        chartContainer.innerHTML = Object.entries(farmGMV).map(([farm_id, gmv]) => {
+          const height = maxGMV > 0 ? (gmv / maxGMV * 200) : 0;
+          return `
+            <div class="chart-bar">
+              <div class="chart-value">$${gmv.toFixed(0)}</div>
+              <div class="chart-bar-fill" style="height: ${height}px;"></div>
+              <div class="chart-label">${farm_id.substring(0, 12)}...</div>
+            </div>
+          `;
+        }).join('');
+      },
+
+      renderRecentActivity() {
+        const container = document.getElementById('recent-activity');
+        
+        // Get recent payments
+        const recentPayments = [...this.payments]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, 5);
+
+        if (recentPayments.length === 0) {
+          container.innerHTML = '<div class="empty-state">No recent activity</div>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Farm</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recentPayments.map(p => `
+                <tr>
+                  <td>${new Date(p.created_at).toLocaleString()}</td>
+                  <td>Payment</td>
+                  <td>${p.farm_id}</td>
+                  <td>$${p.amount.toFixed(2)}</td>
+                  <td><span class="badge ${p.status}">${p.status}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      async loadFarms() {
+        try {
+          const response = await fetch('/api/wholesale/oauth/square/farms');
+          const data = await response.json();
+          
+          if (data.status === 'ok') {
+            this.farms = data.data.farms || [];
+            this.renderFarmsTable();
+          } else {
+            this.showToast('Failed to load farms', 'error');
+          }
+        } catch (error) {
+          console.error('Load farms error:', error);
+          this.showToast('Network error loading farms', 'error');
+        }
+      },
+
+      renderFarmsTable() {
+        const tbody = document.getElementById('farms-table');
+        
+        if (this.farms.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No farms onboarded yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = this.farms.map(farm => `
+          <tr>
+            <td>${farm.farm_id}</td>
+            <td>${farm.merchant_id}</td>
+            <td>${farm.location_name}</td>
+            <td><span class="badge ${farm.status}">${farm.status}</span></td>
+            <td>
+              ${new Date(farm.expires_at).toLocaleDateString()}
+              ${farm.needs_refresh ? '<span style="color: var(--warning);">(needs refresh)</span>' : ''}
+            </td>
+            <td>${new Date(farm.onboarded_at).toLocaleDateString()}</td>
+            <td>
+              ${farm.needs_refresh ? `<button class="btn btn-secondary btn-sm" onclick="admin.refreshToken('${farm.farm_id}')">Refresh Token</button>` : ''}
+              <button class="btn btn-danger btn-sm" onclick="admin.disconnectFarm('${farm.farm_id}')">Disconnect</button>
+            </td>
+          </tr>
+        `).join('');
+      },
+
+      async loadPayments() {
+        try {
+          const response = await fetch('/api/wholesale/webhooks/payments');
+          const data = await response.json();
+          
+          if (data.status === 'ok') {
+            this.payments = data.data.payments || [];
+            this.renderPaymentsTable();
+            this.renderPayoutSummary();
+          } else {
+            this.showToast('Failed to load payments', 'error');
+          }
+        } catch (error) {
+          console.error('Load payments error:', error);
+          this.showToast('Network error loading payments', 'error');
+        }
+      },
+
+      renderPaymentsTable() {
+        const tbody = document.getElementById('payments-table');
+        
+        if (this.payments.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No payments yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = this.payments.map(p => `
+          <tr>
+            <td>${p.payment_id.substring(0, 12)}...</td>
+            <td>${p.farm_id}</td>
+            <td>$${p.amount.toFixed(2)}</td>
+            <td>$${p.broker_fee_amount.toFixed(2)}</td>
+            <td><span class="badge ${p.status}">${p.status}</span></td>
+            <td>${new Date(p.created_at).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="admin.viewPaymentDetails('${p.payment_id}')">Details</button>
+            </td>
+          </tr>
+        `).join('');
+      },
+
+      renderPayoutSummary() {
+        const tbody = document.getElementById('payout-summary-table');
+        
+        // Group by farm
+        const farmSummary = {};
+        this.payments.forEach(p => {
+          if (p.status === 'completed') {
+            if (!farmSummary[p.farm_id]) {
+              farmSummary[p.farm_id] = { gross: 0, fees: 0, count: 0 };
+            }
+            farmSummary[p.farm_id].gross += p.amount;
+            farmSummary[p.farm_id].fees += p.broker_fee_amount;
+            farmSummary[p.farm_id].count += 1;
+          }
+        });
+
+        if (Object.keys(farmSummary).length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No completed payments</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = Object.entries(farmSummary).map(([farm_id, summary]) => `
+          <tr>
+            <td>${farm_id}</td>
+            <td>$${summary.gross.toFixed(2)}</td>
+            <td>$${summary.fees.toFixed(2)}</td>
+            <td><strong>$${(summary.gross - summary.fees).toFixed(2)}</strong></td>
+            <td>${summary.count}</td>
+          </tr>
+        `).join('');
+      },
+
+      async loadOrders() {
+        // Note: Orders are currently stored in-memory in checkout.js
+        // This would need a GET /api/wholesale/orders endpoint in production
+        document.getElementById('orders-list').innerHTML = '<div class="empty-state">Order history endpoint not yet implemented. Orders are currently stored in-memory in checkout module.</div>';
+      },
+
+      async loadRefunds() {
+        try {
+          const response = await fetch('/api/wholesale/refunds');
+          const data = await response.json();
+          
+          if (data.status === 'ok') {
+            this.refunds = data.data.refunds || [];
+            this.renderRefundsTable();
+          } else {
+            this.showToast('Failed to load refunds', 'error');
+          }
+        } catch (error) {
+          console.error('Load refunds error:', error);
+          this.showToast('Network error loading refunds', 'error');
+        }
+      },
+
+      renderRefundsTable() {
+        const tbody = document.getElementById('refunds-table');
+        
+        if (this.refunds.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No refunds</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = this.refunds.map(r => `
+          <tr>
+            <td>${r.id.substring(0, 12)}...</td>
+            <td>${r.payment_record_id.substring(0, 12)}...</td>
+            <td>$${r.refund_amount.toFixed(2)}</td>
+            <td>$${r.broker_fee_refunded.toFixed(2)}</td>
+            <td>${r.reason}</td>
+            <td><span class="badge ${r.status}">${r.status}</span></td>
+            <td>${new Date(r.created_at).toLocaleString()}</td>
+          </tr>
+        `).join('');
+      },
+
+      async reconcilePayments() {
+        try {
+          this.showToast('Running reconciliation...', 'info');
+          
+          const response = await fetch('/api/wholesale/webhooks/reconcile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          const data = await response.json();
+          
+          if (data.status === 'ok') {
+            this.showToast(`Reconciliation complete: ${data.data.updated_count} payments updated`, 'success');
+            this.loadPayments();
+          } else {
+            this.showToast(`Reconciliation failed: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          console.error('Reconciliation error:', error);
+          this.showToast('Network error during reconciliation', 'error');
+        }
+      },
+
+      async runReconciliation() {
+        const log = document.getElementById('reconciliation-log');
+        log.innerHTML = '<div class="loading">Running reconciliation...</div>';
+        
+        try {
+          const response = await fetch('/api/wholesale/webhooks/reconcile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          const data = await response.json();
+          
+          if (data.status === 'ok') {
+            log.innerHTML = `
+              <div style="padding: 1rem; background: var(--bg); border-radius: 6px;">
+                <h4 style="color: var(--success); margin-bottom: 0.5rem;">Reconciliation Complete</h4>
+                <p>Total Payments: ${data.data.total_payments}</p>
+                <p>Updated: ${data.data.updated_count}</p>
+                <p>Failed: ${data.data.failed_count}</p>
+                <p>Completed at: ${new Date().toLocaleString()}</p>
+                ${data.data.errors.length > 0 ? `
+                  <details style="margin-top: 1rem;">
+                    <summary>Errors (${data.data.errors.length})</summary>
+                    <ul style="margin-top: 0.5rem;">
+                      ${data.data.errors.map(e => `<li>${e.payment_id}: ${e.error}</li>`).join('')}
+                    </ul>
+                  </details>
+                ` : ''}
+              </div>
+            `;
+            this.loadPayments();
+          } else {
+            log.innerHTML = `<div class="empty-state" style="color: var(--error);">Reconciliation failed: ${data.message}</div>`;
+          }
+        } catch (error) {
+          console.error('Reconciliation error:', error);
+          log.innerHTML = `<div class="empty-state" style="color: var(--error);">Network error: ${error.message}</div>`;
+        }
+      },
+
+      openOnboardModal() {
+        document.getElementById('onboard-modal').classList.add('open');
+        document.getElementById('oauth-url-display').style.display = 'none';
+      },
+
+      closeOnboardModal() {
+        document.getElementById('onboard-modal').classList.remove('open');
+        document.getElementById('onboard-form').reset();
+        document.getElementById('oauth-url-display').style.display = 'none';
+      },
+
+      async generateOAuthUrl() {
+        const farmId = document.getElementById('farm-id').value;
+        const farmName = document.getElementById('farm-name').value;
+
+        if (!farmId || !farmName) {
+          this.showToast('Farm ID and Name are required', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/wholesale/oauth/square/authorize?farm_id=${encodeURIComponent(farmId)}&farm_name=${encodeURIComponent(farmName)}`);
+          const data = await response.json();
+
+          if (data.status === 'ok') {
+            document.getElementById('oauth-url').value = data.data.authorization_url;
+            document.getElementById('oauth-url-display').style.display = 'block';
+            this.showToast('OAuth URL generated successfully', 'success');
+          } else {
+            this.showToast(`Failed to generate OAuth URL: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          console.error('Generate OAuth URL error:', error);
+          this.showToast('Network error generating OAuth URL', 'error');
+        }
+      },
+
+      copyOAuthUrl() {
+        const urlField = document.getElementById('oauth-url');
+        urlField.select();
+        document.execCommand('copy');
+        this.showToast('OAuth URL copied to clipboard', 'success');
+      },
+
+      async refreshToken(farmId) {
+        try {
+          const response = await fetch('/api/wholesale/oauth/square/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ farm_id: farmId })
+          });
+
+          const data = await response.json();
+
+          if (data.status === 'ok') {
+            this.showToast('Token refreshed successfully', 'success');
+            this.loadFarms();
+          } else {
+            this.showToast(`Token refresh failed: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          console.error('Token refresh error:', error);
+          this.showToast('Network error refreshing token', 'error');
+        }
+      },
+
+      async disconnectFarm(farmId) {
+        if (!confirm(`Are you sure you want to disconnect ${farmId}? This will revoke their Square tokens.`)) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/wholesale/oauth/square/disconnect/${farmId}`, {
+            method: 'DELETE'
+          });
+
+          const data = await response.json();
+
+          if (data.status === 'ok') {
+            this.showToast('Farm disconnected successfully', 'success');
+            this.loadFarms();
+          } else {
+            this.showToast(`Disconnect failed: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          console.error('Disconnect error:', error);
+          this.showToast('Network error disconnecting farm', 'error');
+        }
+      },
+
+      filterPayments() {
+        // Implement filtering logic
+        this.showToast('Filtering not yet implemented', 'info');
+      },
+
+      filterOrders() {
+        // Implement filtering logic
+        this.showToast('Filtering not yet implemented', 'info');
+      },
+
+      viewPaymentDetails(paymentId) {
+        // Implement payment details modal
+        this.showToast('Payment details modal not yet implemented', 'info');
+      },
+
+      async generateComplianceExport() {
+        try {
+          // Get form values
+          const startDate = document.getElementById('export-start-date').value;
+          const endDate = document.getElementById('export-end-date').value;
+          const format = document.getElementById('export-format').value;
+          const includeOrders = document.getElementById('export-orders').checked;
+          const includeFarms = document.getElementById('export-farms').checked;
+          const includeProducts = document.getElementById('export-products').checked;
+          const includeTraceability = document.getElementById('export-traceability').checked;
+
+          if (!startDate || !endDate) {
+            this.showToast('Please select start and end dates', 'error');
+            return;
+          }
+
+          if (new Date(startDate) > new Date(endDate)) {
+            this.showToast('Start date must be before end date', 'error');
+            return;
+          }
+
+          this.showToast('Generating compliance export...', 'info');
+
+          // Mock data generation (in production, fetch from API)
+          const records = this.generateComplianceRecords(startDate, endDate, {
+            includeOrders,
+            includeFarms,
+            includeProducts,
+            includeTraceability
+          });
+
+          if (records.length === 0) {
+            this.showToast('No records found for the selected date range', 'info');
+            return;
+          }
+
+          // Generate file
+          const filename = `compliance-export-${startDate}-to-${endDate}.${format}`;
+          let content, mimeType;
+
+          if (format === 'csv') {
+            content = this.generateCSV(records);
+            mimeType = 'text/csv';
+          } else {
+            content = JSON.stringify(records, null, 2);
+            mimeType = 'application/json';
+          }
+
+          // Download file
+          const blob = new Blob([content], { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          // Add to export history
+          this.addExportHistory({
+            filename,
+            records: records.length,
+            format,
+            dateRange: `${startDate} to ${endDate}`,
+            timestamp: new Date().toISOString()
+          });
+
+          this.showToast(`Export generated: ${records.length} records`, 'success');
+        } catch (error) {
+          console.error('Compliance export error:', error);
+          this.showToast('Failed to generate export', 'error');
+        }
+      },
+
+      generateComplianceRecords(startDate, endDate, options) {
+        const records = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        // Filter payments within date range
+        const relevantPayments = this.payments.filter(payment => {
+          const paymentDate = new Date(payment.created_at);
+          return paymentDate >= start && paymentDate <= end;
+        });
+
+        // Generate compliance records
+        relevantPayments.forEach(payment => {
+          const farm = this.farms.find(f => f.farm_id === payment.farm_id) || {};
+          
+          const record = {
+            traceability_id: `${payment.order_id}-${payment.farm_id}-${payment.payment_id.substring(0, 8)}`,
+            ...(options.includeOrders && {
+              order_id: payment.order_id,
+              order_date: payment.created_at,
+              order_status: payment.status,
+              buyer_id: payment.buyer_id || 'N/A',
+              buyer_email: 'buyer@example.com'
+            }),
+            ...(options.includeFarms && {
+              farm_id: payment.farm_id,
+              farm_name: farm.business_name || payment.farm_id,
+              farm_location: 'Location data not available',
+              farm_certifications: farm.certifications ? farm.certifications.join(', ') : 'N/A'
+            }),
+            ...(options.includeProducts && {
+              product_details: 'Product details from order items',
+              quantity: 'Variable',
+              price: payment.amount
+            }),
+            ...(options.includeTraceability && {
+              payment_id: payment.payment_id,
+              payment_status: payment.status,
+              payment_amount: payment.amount,
+              broker_fee: payment.broker_fee_amount,
+              fulfillment_timestamp: payment.created_at,
+              tracking_info: 'Available via farm sub-order'
+            })
+          };
+
+          records.push(record);
+        });
+
+        return records;
+      },
+
+      generateCSV(records) {
+        if (records.length === 0) return '';
+
+        // Get all unique keys
+        const keys = [...new Set(records.flatMap(r => Object.keys(r)))];
+        
+        // Generate CSV header
+        const header = keys.map(key => `"${key}"`).join(',');
+        
+        // Generate CSV rows
+        const rows = records.map(record => {
+          return keys.map(key => {
+            const value = record[key] !== undefined ? String(record[key]) : '';
+            return `"${value.replace(/"/g, '""')}"`;
+          }).join(',');
+        });
+
+        return [header, ...rows].join('\n');
+      },
+
+      addExportHistory(exportRecord) {
+        const table = document.getElementById('export-history-table');
+        
+        // Remove empty state if it exists
+        if (table.querySelector('.empty-state')) {
+          table.innerHTML = '';
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${exportRecord.filename}</td>
+          <td>${exportRecord.records}</td>
+          <td>${exportRecord.format.toUpperCase()}</td>
+          <td>${exportRecord.dateRange}</td>
+          <td><span class="badge badge-success">Complete</span></td>
+          <td>${new Date(exportRecord.timestamp).toLocaleString()}</td>
+        `;
+        
+        // Insert at the beginning (most recent first)
+        table.insertBefore(row, table.firstChild);
+      },
+
+      showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+          toast.remove();
+        }, 3000);
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      admin.init();
+    });
+  </script>
+</body>
+</html>

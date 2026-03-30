@@ -27,8 +27,8 @@ test/
 tests/
 *.test.js
 
-# Mobile app
-mobile-app/
+# Mobile app (archived)
+# mobile-app/ -- moved to archive/legacy/
 
 # Large deployment files
 *.zip
@@ -36,23 +36,18 @@ external/
 config/sync-queue.json
 data/sync-monitor-snapshot.json
 venv/
-firmware/
 logs/
 *.log
-desktop-app/
 backups/
-dist/
 docs/
-frontend/
-hq-app/
-edge-app/
-esp32/
-esp32-firmware/
 examples/
 /data/
 data.aws-backup/
 lib.aws-backup/
 server.aws-backup/
+
+# Archived legacy code (esp32, firmware, mobile-app, etc.)
+archive/
 # greenreach-central/ — selectively include code dirs for Faye
 greenreach-central/node_modules/
 greenreach-central/public/
@@ -102,16 +97,8 @@ Thumbs.db
 *.sh
 *.py
 !scripts/simple-anomaly-detector.py
-!backend/outdoor_influence.py
-!backend/outdoor_sensor_validator.py
 
 # Preserve EB platform hooks (MUST come AFTER *.sh exclusion to override it)
 !.platform/
 !.platform/**
-alembic.ini
-alembic/
-create-*.js
-check-*.js
-cleanup-*.sh
-build-and-verify.sh
 light-engine-access-manager/
