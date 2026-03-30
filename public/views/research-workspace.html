@@ -664,6 +664,19 @@
             <div class="tab research-tab" data-tab="formulas">Formulas</div>
           </div>
 
+
+          <!-- Integration Tabs -->
+          <div class="tab-section-label">Integrations</div>
+          <div class="tabs">
+            <div class="tab" data-tab="instruments">Instruments</div>
+            <div class="tab" data-tab="workflows">Workflows</div>
+            <div class="tab" data-tab="protocols">Protocols</div>
+            <div class="tab" data-tab="provenance">Provenance</div>
+            <div class="tab" data-tab="governance">Governance</div>
+            <div class="tab" data-tab="cfd-pipeline">CFD Pipeline</div>
+            <div class="tab" data-tab="transfers">Transfers</div>
+          </div>
+
           <!-- Management Tabs -->
           <div class="tab-section-label">Management</div>
           <div class="tabs">
@@ -794,6 +807,125 @@
           <div class="tab-content" id="tab-equipment"><div id="equipment-list"></div></div>
           <div class="tab-content" id="tab-lineage"><div id="lineage-list"></div></div>
           <div class="tab-content" id="tab-network-research"><div id="network-research-list"></div></div>
+
+          <!-- INSTRUMENTS -->
+          <div class="tab-content" id="tab-instruments">
+            <h3 class="section-title">Instrument Registry</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Registered lab instruments with connection protocol adapters (SiLA 2, OPC UA, SCPI, MQTT, REST). Ask Gwen to register new instruments or request instrument runs.</p>
+            <div id="instruments-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;"></div>
+            <div style="margin-top:1.5rem;">
+              <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Recent Sessions</h4>
+              <div id="instrument-sessions-list"></div>
+            </div>
+            <div style="margin-top:1.5rem;">
+              <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Telemetry Feed</h4>
+              <div id="instrument-telemetry-container" style="min-height:200px;background:var(--bg-secondary);border-radius:8px;padding:1rem;"></div>
+            </div>
+          </div>
+
+          <!-- WORKFLOWS -->
+          <div class="tab-content" id="tab-workflows">
+            <h3 class="section-title">Workflow Engine</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Reproducible pipelines (Nextflow, shell, Python, R). Define workflows, submit runs to local/HPC/cloud targets, and track execution status.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Workflow Definitions</h4>
+                <div id="workflows-list"></div>
+              </div>
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Recent Runs</h4>
+                <div id="workflow-runs-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROTOCOLS -->
+          <div class="tab-content" id="tab-protocols">
+            <h3 class="section-title">Research Protocols</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Versioned step-by-step methods with materials, equipment, and safety notes. Supports protocols.io integration for publication and DOI assignment.</p>
+            <div id="protocols-list"></div>
+          </div>
+
+          <!-- PROVENANCE -->
+          <div class="tab-content" id="tab-provenance">
+            <h3 class="section-title">Identity &amp; Provenance</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Researcher ORCID profiles, DataCite DOI records, OSF project links, and immutable run records for audit-grade traceability.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">ORCID Profiles</h4>
+                <div id="orcid-profiles-list"></div>
+              </div>
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">DOI Records</h4>
+                <div id="doi-records-list"></div>
+              </div>
+            </div>
+            <div style="margin-top:1.5rem;">
+              <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">OSF Projects</h4>
+              <div id="osf-projects-list"></div>
+            </div>
+            <div style="margin-top:1.5rem;">
+              <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Immutable Records</h4>
+              <div id="immutable-records-list"></div>
+            </div>
+          </div>
+
+          <!-- GOVERNANCE -->
+          <div class="tab-content" id="tab-governance">
+            <h3 class="section-title">Research Governance</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Role assignments, approval gates, and compliance checkpoints. Roles: PI, Co-PI, Postdoc, Grad Student, Technician, Collaborator, Viewer.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Team Roles</h4>
+                <div id="governance-roles-list"></div>
+              </div>
+              <div>
+                <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Pending Approvals</h4>
+                <div id="governance-approvals-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CFD PIPELINE -->
+          <div class="tab-content" id="tab-cfd-pipeline">
+            <h3 class="section-title">CFD Simulation Pipeline</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">FreeCAD (geometry) -- Gmsh (meshing) -- OpenFOAM (solving) -- ParaView (post-processing). Templates for controlled environment agriculture simulations.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:1.5rem;" id="cfd-templates-grid">
+              <div class="sensor-card" style="cursor:pointer;" data-template="microfluidic_channel">
+                <div class="sensor-label">Microfluidic Channel</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">Laminar flow in nutrient delivery channels</div>
+              </div>
+              <div class="sensor-card" style="cursor:pointer;" data-template="airflow_enclosure">
+                <div class="sensor-label">Airflow Enclosure</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">HVAC &amp; ventilation for controlled environments</div>
+              </div>
+              <div class="sensor-card" style="cursor:pointer;" data-template="mixing_vessel">
+                <div class="sensor-label">Mixing Vessel</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">Stirred tank reactor for nutrient mixing</div>
+              </div>
+              <div class="sensor-card" style="cursor:pointer;" data-template="heat_flow_chamber">
+                <div class="sensor-label">Heat Flow Chamber</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">Thermal analysis for growth chambers</div>
+              </div>
+              <div class="sensor-card" style="cursor:pointer;" data-template="nft_channel">
+                <div class="sensor-label">NFT Channel</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">Nutrient Film Technique flow simulation</div>
+              </div>
+              <div class="sensor-card" style="cursor:pointer;" data-template="bioreactor">
+                <div class="sensor-label">Bioreactor</div>
+                <div style="color:var(--text-secondary);font-size:0.8rem;">Aeration and mixing flow dynamics</div>
+              </div>
+            </div>
+            <h4 style="color:var(--text-primary);margin-bottom:0.5rem;">Pipeline Jobs</h4>
+            <div id="cfd-jobs-list"></div>
+          </div>
+
+          <!-- TRANSFERS -->
+          <div class="tab-content" id="tab-transfers">
+            <h3 class="section-title">Data Transfers (Globus)</h3>
+            <p style="color:var(--text-secondary);margin-bottom:1rem;">Secure cross-institution data transfers via Globus endpoints. Track inbound/outbound transfers with partner institutions.</p>
+            <div id="transfers-list"></div>
+          </div>
 
         </div>
       </div>
@@ -1663,6 +1795,158 @@
         el.innerHTML = html; el.dataset.loaded = 'true';
       } catch (err) { el.innerHTML = '<div class="alert-banner">Error loading network data: '+err.message+'</div>'; }
     });
+
+
+    // ---- INTEGRATION TAB LOADERS ----
+
+    document.querySelector('[data-tab="instruments"]').addEventListener('click', async function() {
+      var el = document.getElementById('instruments-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/integrations/instruments');
+        var items = data.instruments || [];
+        if (items.length) {
+          el.innerHTML = items.map(function(inst) {
+            var statusColor = inst.status === 'online' ? '#22c55e' : inst.status === 'running' ? '#3b82f6' : inst.status === 'error' ? '#ef4444' : '#6b7280';
+            return '<div class="sensor-card"><div class="sensor-label">'+inst.instrument_name+'</div>'
+              +'<div style="font-size:0.75rem;color:var(--text-secondary);">'+(inst.instrument_type||'--')+' | '+(inst.manufacturer||'--')+' '+(inst.model||'')+'</div>'
+              +'<div style="margin-top:0.5rem;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+statusColor+';margin-right:4px;"></span><span style="font-size:0.75rem;">'+inst.status+'</span>'
+              +' <span style="font-size:0.7rem;color:var(--text-secondary);margin-left:8px;">'+inst.connection_protocol+'</span></div>'
+              +(inst.location?'<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;">'+inst.location+'</div>':'')
+              +'</div>';
+          }).join('');
+        } else el.innerHTML = '<div class="empty-state"><p>No instruments registered. Ask Gwen to register an instrument.</p></div>';
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="workflows"]').addEventListener('click', async function() {
+      var wfEl = document.getElementById('workflows-list'); if (wfEl.dataset.loaded) return;
+      try {
+        var r = await Promise.all([
+          apiFetch('/api/research/integrations/workflows').catch(function(){return{workflows:[]};}),
+          apiFetch('/api/research/integrations/workflow-runs').catch(function(){return{runs:[]};})
+        ]);
+        var workflows = r[0].workflows || [], runs = r[1].runs || [];
+        if (workflows.length) {
+          wfEl.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Engine</th><th>Version</th><th>Status</th></tr></thead><tbody>'
+            +workflows.map(function(w){return '<tr><td>'+w.workflow_name+'</td><td>'+(w.workflow_type||'--')+'</td><td>'+(w.engine||'nextflow')+'</td><td>v'+w.version+'</td><td>'+statusBadge(w.status)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else wfEl.innerHTML = '<div class="empty-state"><p>No workflows defined. Ask Gwen to create a workflow.</p></div>';
+        var runsEl = document.getElementById('workflow-runs-list');
+        if (runs.length) {
+          runsEl.innerHTML = '<table><thead><tr><th>Workflow</th><th>Status</th><th>Target</th><th>Submitted</th></tr></thead><tbody>'
+            +runs.map(function(r){return '<tr><td>'+(r.workflow_name||'#'+r.workflow_id)+'</td><td>'+statusBadge(r.run_status)+'</td><td>'+(r.execution_target||'local')+'</td><td>'+formatDate(r.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else runsEl.innerHTML = '<div class="empty-state"><p>No workflow runs yet.</p></div>';
+        wfEl.dataset.loaded = 'true';
+      } catch (err) { wfEl.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="protocols"]').addEventListener('click', async function() {
+      var el = document.getElementById('protocols-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/integrations/protocols');
+        var items = data.protocols || [];
+        if (items.length) {
+          el.innerHTML = '<table><thead><tr><th>Protocol</th><th>Version</th><th>Status</th><th>protocols.io</th><th>Created</th></tr></thead><tbody>'
+            +items.map(function(p){return '<tr><td>'+p.protocol_name+'</td><td>v'+p.version_number+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.protocols_io_doi||p.protocols_io_id||'--')+'</td><td>'+formatDate(p.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else el.innerHTML = '<div class="empty-state"><p>No protocols defined. Ask Gwen to create a protocol version.</p></div>';
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="provenance"]').addEventListener('click', async function() {
+      var orcidEl = document.getElementById('orcid-profiles-list'); if (orcidEl.dataset.loaded) return;
+      try {
+        var r = await Promise.all([
+          apiFetch('/api/research/integrations/orcid/profiles').catch(function(){return{profiles:[]};}),
+          apiFetch('/api/research/integrations/dois').catch(function(){return{dois:[]};}),
+          apiFetch('/api/research/integrations/osf/projects').catch(function(){return{projects:[]};}),
+          apiFetch('/api/research/integrations/immutable-records').catch(function(){return{records:[]};})
+        ]);
+        var orcids = r[0].profiles||[], dois = r[1].dois||[], osfs = r[2].projects||[], records = r[3].records||[];
+        if (orcids.length) {
+          orcidEl.innerHTML = '<table><thead><tr><th>Name</th><th>ORCID</th><th>Affiliation</th><th>Verified</th></tr></thead><tbody>'
+            +orcids.map(function(o){return '<tr><td>'+(o.display_name||'--')+'</td><td><a href="https://orcid.org/'+o.orcid_id+'" target="_blank" style="color:var(--accent);">'+o.orcid_id+'</a></td><td>'+(o.affiliation||'--')+'</td><td>'+(o.verified?'Yes':'No')+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else orcidEl.innerHTML = '<div class="empty-state"><p>No ORCID profiles linked. Ask Gwen to link an ORCID.</p></div>';
+        var doiEl = document.getElementById('doi-records-list');
+        if (dois.length) {
+          doiEl.innerHTML = '<table><thead><tr><th>Entity</th><th>DOI</th><th>Status</th><th>Created</th></tr></thead><tbody>'
+            +dois.map(function(d){return '<tr><td>'+d.entity_type+' #'+d.entity_id+'</td><td>'+(d.doi||'draft')+'</td><td>'+statusBadge(d.doi_status)+'</td><td>'+formatDate(d.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else doiEl.innerHTML = '<div class="empty-state"><p>No DOI records. Ask Gwen to prepare DOI metadata.</p></div>';
+        var osfEl = document.getElementById('osf-projects-list');
+        if (osfs.length) {
+          osfEl.innerHTML = '<table><thead><tr><th>Title</th><th>OSF ID</th><th>Sync Status</th><th>Created</th></tr></thead><tbody>'
+            +osfs.map(function(o){return '<tr><td>'+o.title+'</td><td>'+(o.osf_project_id?'<a href="'+o.osf_url+'" target="_blank" style="color:var(--accent);">'+o.osf_project_id+'</a>':'--')+'</td><td>'+statusBadge(o.sync_status)+'</td><td>'+formatDate(o.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else osfEl.innerHTML = '<div class="empty-state"><p>No OSF projects linked. Ask Gwen to create an OSF project.</p></div>';
+        var recEl = document.getElementById('immutable-records-list');
+        if (records.length) {
+          recEl.innerHTML = '<table><thead><tr><th>Type</th><th>Source</th><th>Hash (first 16)</th><th>Status</th><th>Sealed</th></tr></thead><tbody>'
+            +records.map(function(r){return '<tr><td>'+r.record_type+'</td><td>'+(r.source_table||'--')+' #'+(r.source_id||'--')+'</td><td style="font-family:monospace;font-size:0.7rem;">'+r.record_hash.substring(0,16)+'...</td><td>'+statusBadge(r.verification_status)+'</td><td>'+formatDate(r.sealed_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else recEl.innerHTML = '<div class="empty-state"><p>No immutable records sealed yet.</p></div>';
+        orcidEl.dataset.loaded = 'true';
+      } catch (err) { orcidEl.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="governance"]').addEventListener('click', async function() {
+      var rolesEl = document.getElementById('governance-roles-list'); if (rolesEl.dataset.loaded) return;
+      try {
+        var r = await Promise.all([
+          apiFetch('/api/research/integrations/roles').catch(function(){return{roles:[]};}),
+          apiFetch('/api/research/integrations/approvals?status=pending').catch(function(){return{approvals:[]};})
+        ]);
+        var roles = r[0].roles||[], approvals = r[1].approvals||[];
+        if (roles.length) {
+          rolesEl.innerHTML = '<table><thead><tr><th>Researcher</th><th>Role</th><th>Scope</th><th>ORCID</th><th>Assigned</th></tr></thead><tbody>'
+            +roles.map(function(r){return '<tr><td>'+(r.researcher_name||'User #'+(r.user_id||'--'))+'</td><td>'+r.role_name.replace(/_/g,' ')+'</td><td>'+(r.study_id?'Study #'+r.study_id:'Farm-wide')+'</td><td>'+(r.orcid_id||'--')+'</td><td>'+formatDate(r.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else rolesEl.innerHTML = '<div class="empty-state"><p>No research roles assigned. Ask Gwen to assign roles.</p></div>';
+        var appEl = document.getElementById('governance-approvals-list');
+        if (approvals.length) {
+          appEl.innerHTML = '<table><thead><tr><th>Gate Type</th><th>Entity</th><th>Justification</th><th>Requested</th><th>Status</th></tr></thead><tbody>'
+            +approvals.map(function(a){return '<tr><td>'+a.gate_type.replace(/_/g,' ')+'</td><td>'+(a.entity_type||'--')+' #'+(a.entity_id||'--')+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">'+(a.justification||'--')+'</td><td>'+formatDate(a.requested_at)+'</td><td>'+statusBadge(a.status)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else appEl.innerHTML = '<div class="empty-state"><p>No pending approvals.</p></div>';
+        rolesEl.dataset.loaded = 'true';
+      } catch (err) { rolesEl.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="cfd-pipeline"]').addEventListener('click', async function() {
+      var el = document.getElementById('cfd-jobs-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/integrations/cfd/jobs');
+        var items = data.jobs || [];
+        if (items.length) {
+          var stages = ['geometry', 'meshing', 'solving', 'post_processing', 'complete'];
+          el.innerHTML = '<table><thead><tr><th>Job</th><th>Template</th><th>Stage</th><th>Progress</th><th>Status</th><th>Created</th></tr></thead><tbody>'
+            +items.map(function(j){
+              var stageIdx = stages.indexOf(j.pipeline_stage);
+              var pct = Math.round(((stageIdx+1)/stages.length)*100);
+              return '<tr><td>'+j.job_name+'</td><td>'+(j.template_type||'custom')+'</td><td>'+j.pipeline_stage+'</td><td><div style="width:80px;height:6px;background:var(--bg-secondary);border-radius:3px;display:inline-block;vertical-align:middle;"><div style="width:'+pct+'%;height:100%;background:var(--accent);border-radius:3px;"></div></div> '+pct+'%</td><td>'+statusBadge(j.status)+'</td><td>'+formatDate(j.created_at)+'</td></tr>';
+            }).join('')
+            +'</tbody></table>';
+        } else el.innerHTML = '<div class="empty-state"><p>No CFD pipeline jobs. Ask Gwen to create a CFD simulation job or use a template above.</p></div>';
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="transfers"]').addEventListener('click', async function() {
+      var el = document.getElementById('transfers-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/integrations/globus/transfers');
+        var items = data.transfers || [];
+        if (items.length) {
+          el.innerHTML = '<table><thead><tr><th>Direction</th><th>Source</th><th>Destination</th><th>Partner</th><th>Bytes</th><th>Status</th><th>Created</th></tr></thead><tbody>'
+            +items.map(function(t){return '<tr><td>'+(t.direction==='inbound'?'Inbound':'Outbound')+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">'+t.source_endpoint+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">'+t.destination_endpoint+'</td><td>'+(t.partner_institution||'--')+'</td><td>'+(t.bytes_transferred>0?formatBytes(t.bytes_transferred):'--')+'</td><td>'+statusBadge(t.status)+'</td><td>'+formatDate(t.created_at)+'</td></tr>';}).join('')
+            +'</tbody></table>';
+        } else el.innerHTML = '<div class="empty-state"><p>No Globus transfers recorded. Ask Gwen to initiate a data transfer.</p></div>';
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    function formatBytes(bytes) { if (!bytes) return '--'; var k=1024; var sizes=['B','KB','MB','GB','TB']; var i=Math.floor(Math.log(bytes)/Math.log(k)); return parseFloat((bytes/Math.pow(k,i)).toFixed(1))+' '+sizes[i]; }
+
 
     // ---- INIT ----
     var auth = getAuthContext();

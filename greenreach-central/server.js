@@ -110,6 +110,7 @@ import paymentWebhooksRouter from './routes/payment-webhooks.js';
 import adminAssistantRouter from './routes/admin-assistant.js';
 import adminOpsAgentRouter from './routes/admin-ops-agent.js';
 import scottMarketingRouter from './routes/scott-marketing-agent.js';
+import researchIntegrationsRouter from './routes/research-integrations.js';
 import gwenResearchRouter from './routes/gwen-research-agent.js';
 import adminMarketingRouter from './routes/admin-marketing.js';
 
@@ -3337,6 +3338,7 @@ app.use('/api', researchAuthGuard, researchDeadlinesRouter);
 app.use('/api', researchAuthGuard, researchPublicationsRouter);
 app.use('/api', researchAuthGuard, researchEquipmentRouter);
 app.use('/api', researchAuthGuard, researchLineageRouter);
+app.use('/api', researchAuthGuard, researchIntegrationsRouter); // Research integrations: ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD
 app.use('/api/research/gwen', researchAuthGuard, gwenResearchRouter); // G.W.E.N. research intelligence agent
 app.use('/api/orders', authMiddleware, ordersRoutes);
 app.use('/api/alerts', authMiddleware, alertsRoutes);

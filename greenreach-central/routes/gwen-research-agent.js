@@ -1209,6 +1209,619 @@ const GWEN_TOOL_CATALOG = {
     },
   },
 
+
+  // ========================================
+  // RESEARCH INTEGRATIONS -- ORCID, DataCite, OSF, protocols.io
+  // ========================================
+
+  link_orcid: {
+    description: 'Link a researcher ORCID iD to the farm profile for provenance tracking. ORCID format: 0000-0000-0000-000X.',
+    parameters: {
+      orcid_id: { type: 'string', description: 'ORCID iD (format: 0000-0000-0000-000X)' },
+      display_name: { type: 'string', description: 'Researcher display name' },
+      affiliation: { type: 'string', description: 'Institutional affiliation' },
+    },
+    required: ['orcid_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        if (!/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(params.orcid_id)) {
+          return { ok: false, error: 'Invalid ORCID format. Expected: 0000-0000-0000-000X' };
+        }
+        const result = await query(
+          `INSERT INTO researcher_orcid_profiles (farm_id, orcid_id, display_name, affiliation, created_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (farm_id, orcid_id) DO UPDATE SET display_name = $3, affiliation = $4, updated_at = NOW()
+           RETURNING *`,
+          [ctx.farmId, params.orcid_id, params.display_name || null, params.affiliation || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to link ORCID profile' };
+        return { ok: true, profile: result.rows[0], message: `ORCID ${params.orcid_id} linked to farm profile.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  lookup_orcid: {
+    description: 'Look up a researcher by ORCID iD using the public ORCID API. Returns name, affiliation, and biography.',
+    parameters: {
+      orcid_id: { type: 'string', description: 'ORCID iD to look up' },
+    },
+    required: ['orcid_id'],
+    execute: async (params, ctx) => {
+      try {
+        if (!/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(params.orcid_id)) {
+          return { ok: false, error: 'Invalid ORCID format' };
+        }
+        const resp = await fetch(`https://pub.orcid.org/v3.0/${params.orcid_id}/person`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!resp.ok) return { ok: false, error: 'ORCID profile not found' };
+        const data = await resp.json();
+        const name = data.name || {};
+        return {
+          ok: true,
+          orcid_id: params.orcid_id,
+          given_name: name['given-names']?.value || '',
+          family_name: name['family-name']?.value || '',
+          display_name: [name['given-names']?.value, name['family-name']?.value].filter(Boolean).join(' '),
+          biography: data.biography?.content || '',
+          url: `https://orcid.org/${params.orcid_id}`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  prepare_doi_metadata: {
+    description: 'Prepare DataCite metadata for a dataset, study, or publication to register a DOI. Stores the metadata record for later registration.',
+    parameters: {
+      entity_type: { type: 'string', description: 'Type: study, dataset, publication, protocol, simulation' },
+      entity_id: { type: 'number', description: 'ID of the entity to assign a DOI' },
+      title: { type: 'string', description: 'Title for the DOI record' },
+      creators: { type: 'string', description: 'Comma-separated creator names' },
+      resource_type: { type: 'string', description: 'DataCite resourceTypeGeneral (Dataset, Text, Software, etc.)' },
+      description: { type: 'string', description: 'Description of the resource' },
+    },
+    required: ['entity_type', 'entity_id', 'title'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const metadata = {
+          title: params.title,
+          creators: (params.creators || '').split(',').map(c => ({ name: c.trim() })).filter(c => c.name),
+          resourceType: params.resource_type || 'Dataset',
+          description: params.description || '',
+          publisher: 'GreenReach Research Platform',
+          publicationYear: new Date().getFullYear(),
+        };
+        const result = await query(
+          `INSERT INTO dataset_dois (farm_id, entity_type, entity_id, datacite_metadata, created_at)
+           VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+          [ctx.farmId, params.entity_type, params.entity_id, JSON.stringify(metadata)]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to prepare DOI metadata' };
+        return { ok: true, doi_record: result.rows[0], message: 'DOI metadata prepared. Status: draft. Register with DataCite when ready.' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  create_osf_project: {
+    description: 'Create or link an Open Science Framework (OSF) project for a study. OSF provides public/private repositories for research data, preprints, and registrations.',
+    parameters: {
+      title: { type: 'string', description: 'Project title' },
+      study_id: { type: 'number', description: 'Study ID to link the OSF project to' },
+      osf_project_id: { type: 'string', description: 'Existing OSF node ID to link (e.g., abc12). Omit to create a new record.' },
+    },
+    required: ['title'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const osfUrl = params.osf_project_id ? `https://osf.io/${params.osf_project_id}/` : null;
+        const result = await query(
+          `INSERT INTO osf_projects (farm_id, osf_project_id, study_id, title, osf_url, created_at)
+           VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
+          [ctx.farmId, params.osf_project_id || null, params.study_id || null, params.title, osfUrl]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create OSF project record' };
+        return { ok: true, project: result.rows[0], message: params.osf_project_id ? 'OSF project linked.' : 'OSF project record created. Link to osf.io when repository is set up.' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  create_protocol_version: {
+    description: 'Create or version a research protocol. Protocols define step-by-step methods including materials, equipment, and safety notes. Supports integration with protocols.io.',
+    parameters: {
+      protocol_name: { type: 'string', description: 'Name of the protocol' },
+      study_id: { type: 'number', description: 'Study ID this protocol belongs to' },
+      steps: { type: 'string', description: 'JSON array of protocol steps, or a plain-text description' },
+      materials: { type: 'string', description: 'Materials list' },
+      equipment: { type: 'string', description: 'Equipment list' },
+      safety_notes: { type: 'string', description: 'Safety considerations' },
+      protocols_io_id: { type: 'string', description: 'protocols.io ID if publishing there' },
+    },
+    required: ['protocol_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const existing = await query(
+          'SELECT MAX(version_number) as max_v FROM research_protocol_versions WHERE farm_id = $1 AND protocol_name = $2',
+          [ctx.farmId, params.protocol_name]
+        ).catch(() => ({ rows: [{ max_v: 0 }] }));
+        const nextVersion = (existing.rows[0]?.max_v || 0) + 1;
+        let steps = params.steps || '';
+        try { steps = JSON.parse(steps); } catch (_) { /* keep as string */ }
+        const content = {
+          steps,
+          materials: params.materials || '',
+          equipment: params.equipment || '',
+          safety_notes: params.safety_notes || '',
+        };
+        const result = await query(
+          `INSERT INTO research_protocol_versions (farm_id, study_id, protocol_name, version_number, protocols_io_id, content, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+          [ctx.farmId, params.study_id || null, params.protocol_name, nextVersion, params.protocols_io_id || null, JSON.stringify(content)]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create protocol version' };
+        return { ok: true, protocol: result.rows[0], message: `Protocol "${params.protocol_name}" v${nextVersion} created.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // INSTRUMENT ABSTRACTION (SiLA 2, OPC UA, SCPI)
+  // ========================================
+
+  register_instrument: {
+    description: 'Register a lab instrument in the abstraction layer. Supports connection protocols: SiLA 2 (HTTP/2+gRPC), OPC UA (binary), SCPI (socket), MQTT, REST, vendor SDK, or manual entry.',
+    parameters: {
+      instrument_name: { type: 'string', description: 'Instrument name' },
+      instrument_type: { type: 'string', description: 'Type: spectrometer, microscope, sensor, pump, controller, balance, incubator, bioanalyzer, chromatograph, etc.' },
+      manufacturer: { type: 'string', description: 'Manufacturer name' },
+      model: { type: 'string', description: 'Model number/name' },
+      serial_number: { type: 'string', description: 'Serial number' },
+      connection_protocol: { type: 'string', description: 'Protocol: sila2, opcua, scpi, mqtt, rest, vendor_sdk, manual', enum: ['sila2', 'opcua', 'scpi', 'mqtt', 'rest', 'vendor_sdk', 'manual'] },
+      host: { type: 'string', description: 'Connection host/IP (for networked instruments)' },
+      port: { type: 'number', description: 'Connection port' },
+      location: { type: 'string', description: 'Physical location of the instrument' },
+    },
+    required: ['instrument_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const connectionConfig = {};
+        if (params.host) connectionConfig.host = params.host;
+        if (params.port) connectionConfig.port = params.port;
+        const result = await query(
+          `INSERT INTO instrument_registry (farm_id, instrument_name, instrument_type, manufacturer, model,
+           serial_number, connection_protocol, connection_config, location, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
+          [ctx.farmId, params.instrument_name, params.instrument_type || null,
+           params.manufacturer || null, params.model || null, params.serial_number || null,
+           params.connection_protocol || 'manual', JSON.stringify(connectionConfig), params.location || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to register instrument' };
+        return { ok: true, instrument: result.rows[0], message: `Instrument "${params.instrument_name}" registered with ${params.connection_protocol || 'manual'} protocol.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  list_instruments: {
+    description: 'List registered lab instruments with their status, connection protocol, and calibration information.',
+    parameters: {
+      status: { type: 'string', description: 'Filter by status: online, offline, calibrating, running, error, maintenance' },
+      instrument_type: { type: 'string', description: 'Filter by instrument type' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT * FROM instrument_registry WHERE farm_id = $1';
+        const p = [ctx.farmId];
+        if (params.status) { p.push(params.status); sql += ` AND status = $${p.length}`; }
+        if (params.instrument_type) { p.push(params.instrument_type); sql += ` AND instrument_type = $${p.length}`; }
+        sql += ' ORDER BY instrument_name';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, instruments: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  request_instrument_run: {
+    description: 'Submit an instrument run request. Creates an instrument session and an approval gate that must be approved before the instrument can be activated.',
+    parameters: {
+      instrument_id: { type: 'number', description: 'ID of the instrument to run' },
+      study_id: { type: 'number', description: 'Study ID for context' },
+      session_type: { type: 'string', description: 'Type: calibration, data_collection, experiment_run, maintenance' },
+      parameters: { type: 'string', description: 'JSON object of run parameters (settings, duration, etc.)' },
+      justification: { type: 'string', description: 'Justification for the instrument run' },
+    },
+    required: ['instrument_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const inst = await query('SELECT id, instrument_name FROM instrument_registry WHERE id = $1 AND farm_id = $2', [params.instrument_id, ctx.farmId]).catch(() => ({ rows: [] }));
+        if (!inst.rows.length) return { ok: false, error: 'Instrument not found' };
+        let runParams = {};
+        if (params.parameters) { try { runParams = JSON.parse(params.parameters); } catch (_) { runParams = { raw: params.parameters }; } }
+        const session = await query(
+          `INSERT INTO instrument_sessions (farm_id, instrument_id, study_id, session_type, parameters, started_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`,
+          [ctx.farmId, params.instrument_id, params.study_id || null, params.session_type || 'data_collection', JSON.stringify(runParams), ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        const gate = await query(
+          `INSERT INTO approval_gates (farm_id, gate_type, entity_type, entity_id, requested_by, justification, requested_at)
+           VALUES ($1, 'instrument_run', 'instrument_session', $2, $3, $4, NOW()) RETURNING *`,
+          [ctx.farmId, session.rows[0]?.id, ctx.userId || null, params.justification || `Run request for ${inst.rows[0].instrument_name}`]
+        ).catch(() => ({ rows: [] }));
+        return {
+          ok: true,
+          session: session.rows[0],
+          approval_gate: gate.rows[0],
+          message: `Instrument run requested for "${inst.rows[0].instrument_name}". Approval gate created -- pending PI/supervisor review.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_instrument_telemetry: {
+    description: 'Retrieve telemetry data from an instrument. Shows recent metric readings (temperature, pressure, voltage, etc.) for monitoring.',
+    parameters: {
+      instrument_id: { type: 'number', description: 'Instrument ID' },
+      hours: { type: 'number', description: 'Hours of history to retrieve (default: 24)' },
+      metric_name: { type: 'string', description: 'Filter by specific metric name' },
+    },
+    required: ['instrument_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = `SELECT * FROM instrument_telemetry WHERE farm_id = $1 AND instrument_id = $2
+                    AND recorded_at > NOW() - INTERVAL '1 hour' * $3`;
+        const p = [ctx.farmId, params.instrument_id, params.hours || 24];
+        if (params.metric_name) { p.push(params.metric_name); sql += ` AND metric_name = $${p.length}`; }
+        sql += ' ORDER BY recorded_at DESC LIMIT 200';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, telemetry: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // WORKFLOW ENGINE (Nextflow-compatible pipelines)
+  // ========================================
+
+  create_workflow: {
+    description: 'Define a reproducible workflow pipeline. Supports Nextflow, shell, Python, and R engines. Workflows define process graphs with inputs, outputs, and parameters.',
+    parameters: {
+      workflow_name: { type: 'string', description: 'Workflow name' },
+      workflow_type: { type: 'string', description: 'Type: ingestion, preprocessing, analysis, simulation, cfd, ml_training, reporting' },
+      engine: { type: 'string', description: 'Execution engine: nextflow, shell, python, r' },
+      template_id: { type: 'string', description: 'Template ID for pre-built workflows' },
+      definition: { type: 'string', description: 'JSON workflow definition (process graph, parameters)' },
+    },
+    required: ['workflow_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let def = {};
+        if (params.definition) { try { def = JSON.parse(params.definition); } catch (_) { def = { description: params.definition }; } }
+        const result = await query(
+          `INSERT INTO workflow_definitions (farm_id, workflow_name, workflow_type, engine, template_id, definition, created_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
+          [ctx.farmId, params.workflow_name, params.workflow_type || 'analysis',
+           params.engine || 'nextflow', params.template_id || null, JSON.stringify(def), ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create workflow' };
+        return { ok: true, workflow: result.rows[0], message: `Workflow "${params.workflow_name}" created with ${params.engine || 'nextflow'} engine.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  submit_workflow_run: {
+    description: 'Submit a workflow for execution. Creates an approval gate for workflow runs. Supports execution targets: local, HPC, cloud, cluster.',
+    parameters: {
+      workflow_id: { type: 'number', description: 'Workflow definition ID' },
+      study_id: { type: 'number', description: 'Study ID for context' },
+      parameters: { type: 'string', description: 'JSON run parameters' },
+      inputs: { type: 'string', description: 'JSON input files/datasets' },
+      execution_target: { type: 'string', description: 'Target: local, hpc, cloud, cluster' },
+    },
+    required: ['workflow_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const wf = await query('SELECT id, workflow_name FROM workflow_definitions WHERE id = $1 AND farm_id = $2', [params.workflow_id, ctx.farmId]).catch(() => ({ rows: [] }));
+        if (!wf.rows.length) return { ok: false, error: 'Workflow not found' };
+        let runParams = {}, runInputs = {};
+        if (params.parameters) { try { runParams = JSON.parse(params.parameters); } catch (_) { runParams = { raw: params.parameters }; } }
+        if (params.inputs) { try { runInputs = JSON.parse(params.inputs); } catch (_) { runInputs = { raw: params.inputs }; } }
+        const run = await query(
+          `INSERT INTO workflow_runs (farm_id, workflow_id, study_id, parameters, inputs, execution_target, submitted_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
+          [ctx.farmId, params.workflow_id, params.study_id || null, JSON.stringify(runParams),
+           JSON.stringify(runInputs), params.execution_target || 'local', ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        const gate = await query(
+          `INSERT INTO approval_gates (farm_id, gate_type, entity_type, entity_id, requested_by, justification, requested_at)
+           VALUES ($1, 'workflow_execution', 'workflow_run', $2, $3, $4, NOW()) RETURNING *`,
+          [ctx.farmId, run.rows[0]?.id, ctx.userId || null, `Workflow run: ${wf.rows[0].workflow_name}`]
+        ).catch(() => ({ rows: [] }));
+        return {
+          ok: true,
+          run: run.rows[0],
+          approval_gate: gate.rows[0],
+          message: `Workflow run submitted for "${wf.rows[0].workflow_name}" on ${params.execution_target || 'local'}. Approval gate pending.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_workflow_status: {
+    description: 'Check the status of workflow runs. Shows run status, metrics, outputs, and execution details.',
+    parameters: {
+      workflow_id: { type: 'number', description: 'Filter by workflow definition ID' },
+      status: { type: 'string', description: 'Filter by status: submitted, queued, running, completed, failed, cancelled' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = `SELECT wr.*, wd.workflow_name, wd.engine FROM workflow_runs wr
+                    LEFT JOIN workflow_definitions wd ON wr.workflow_id = wd.id WHERE wr.farm_id = $1`;
+        const p = [ctx.farmId];
+        if (params.workflow_id) { p.push(params.workflow_id); sql += ` AND wr.workflow_id = $${p.length}`; }
+        if (params.status) { p.push(params.status); sql += ` AND wr.run_status = $${p.length}`; }
+        sql += ' ORDER BY wr.created_at DESC LIMIT 20';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, runs: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // DATA TRANSFER (Globus)
+  // ========================================
+
+  initiate_data_transfer: {
+    description: 'Initiate a secure data transfer via Globus. Supports cross-institution transfers of research datasets between endpoints.',
+    parameters: {
+      direction: { type: 'string', description: 'Transfer direction: inbound or outbound' },
+      source_endpoint: { type: 'string', description: 'Source Globus endpoint ID or path' },
+      destination_endpoint: { type: 'string', description: 'Destination Globus endpoint ID or path' },
+      files: { type: 'string', description: 'JSON array of file paths to transfer' },
+      partner_institution: { type: 'string', description: 'Name of the partner institution' },
+    },
+    required: ['direction', 'source_endpoint', 'destination_endpoint'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let fileList = [];
+        if (params.files) { try { fileList = JSON.parse(params.files); } catch (_) { fileList = [{ path: params.files }]; } }
+        const result = await query(
+          `INSERT INTO globus_transfers (farm_id, direction, source_endpoint, destination_endpoint, files, partner_institution, initiated_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
+          [ctx.farmId, params.direction, params.source_endpoint, params.destination_endpoint,
+           JSON.stringify(fileList), params.partner_institution || null, ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create transfer record' };
+        return {
+          ok: true,
+          transfer: result.rows[0],
+          message: `${params.direction} transfer initiated. Source: ${params.source_endpoint} -> Dest: ${params.destination_endpoint}. Status: pending. Connect Globus credentials to activate.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // GOVERNANCE (Roles, Approvals, Provenance)
+  // ========================================
+
+  assign_research_role: {
+    description: 'Assign a research role to a team member for governance and permission control. Roles: PI, Co-PI, Postdoc, Grad Student, Technician, Collaborator, Viewer.',
+    parameters: {
+      researcher_name: { type: 'string', description: 'Name of the researcher' },
+      orcid_id: { type: 'string', description: 'ORCID iD of the researcher' },
+      role_name: { type: 'string', description: 'Role: pi, co_pi, postdoc, grad_student, technician, collaborator, viewer', enum: ['pi', 'co_pi', 'postdoc', 'grad_student', 'technician', 'collaborator', 'viewer'] },
+      study_id: { type: 'number', description: 'Study ID to scope the role (omit for farm-wide)' },
+    },
+    required: ['role_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(
+          `INSERT INTO research_roles (farm_id, orcid_id, researcher_name, role_name, study_id, granted_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`,
+          [ctx.farmId, params.orcid_id || null, params.researcher_name || null,
+           params.role_name, params.study_id || null, ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to assign role' };
+        const scope = params.study_id ? `study #${params.study_id}` : 'farm-wide';
+        return { ok: true, role: result.rows[0], message: `Role "${params.role_name}" assigned${params.researcher_name ? ' to ' + params.researcher_name : ''} (${scope}).` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  request_approval: {
+    description: 'Submit an approval request for a gated action. Gate types: instrument_run, workflow_execution, data_export, protocol_change, publication_submit. Creates a pending approval that must be reviewed by an authorized team member.',
+    parameters: {
+      gate_type: { type: 'string', description: 'Gate type: instrument_run, workflow_execution, data_export, protocol_change, publication_submit' },
+      entity_type: { type: 'string', description: 'Entity type being approved' },
+      entity_id: { type: 'number', description: 'Entity ID' },
+      justification: { type: 'string', description: 'Justification for the request' },
+    },
+    required: ['gate_type', 'justification'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(
+          `INSERT INTO approval_gates (farm_id, gate_type, entity_type, entity_id, requested_by, justification, requested_at)
+           VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`,
+          [ctx.farmId, params.gate_type, params.entity_type || null, params.entity_id || null, ctx.userId || null, params.justification]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create approval request' };
+        return { ok: true, approval: result.rows[0], message: `Approval request submitted (${params.gate_type}). Status: pending.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  review_pending_approvals: {
+    description: 'List pending approval requests that need review. Shows all approval gates awaiting decision with their justifications and requesters.',
+    parameters: {
+      gate_type: { type: 'string', description: 'Filter by gate type' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = "SELECT * FROM approval_gates WHERE farm_id = $1 AND status = 'pending'";
+        const p = [ctx.farmId];
+        if (params.gate_type) { p.push(params.gate_type); sql += ` AND gate_type = $${p.length}`; }
+        sql += ' ORDER BY requested_at ASC';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, pending_approvals: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  seal_run_record: {
+    description: 'Create an immutable, tamper-evident run record. Generates a SHA-512 hash of the experiment/session snapshot for provenance and audit. Once sealed, the record cannot be modified.',
+    parameters: {
+      record_type: { type: 'string', description: 'Type: experiment, instrument_session, workflow_run, calibration, observation' },
+      source_table: { type: 'string', description: 'Source table name (e.g., instrument_sessions, workflow_runs)' },
+      source_id: { type: 'number', description: 'ID from the source table' },
+    },
+    required: ['record_type', 'source_table', 'source_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        // Fetch the source record
+        const validTables = ['instrument_sessions', 'workflow_runs', 'research_observations', 'research_protocol_versions', 'cfd_pipeline_jobs'];
+        if (!validTables.includes(params.source_table)) {
+          return { ok: false, error: `Invalid source table. Supported: ${validTables.join(', ')}` };
+        }
+        const source = await query(`SELECT * FROM ${params.source_table} WHERE id = $1 AND farm_id = $2`, [params.source_id, ctx.farmId]).catch(() => ({ rows: [] }));
+        if (!source.rows.length) return { ok: false, error: 'Source record not found' };
+        const snapshot = source.rows[0];
+        const hash = require('crypto').createHash('sha512').update(JSON.stringify(snapshot)).digest('hex');
+        const result = await query(
+          `INSERT INTO immutable_run_records (farm_id, record_type, source_table, source_id, record_hash, snapshot, sealed_by, sealed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id, record_type, source_table, source_id, record_hash, sealed_at, verification_status`,
+          [ctx.farmId, params.record_type, params.source_table, params.source_id, hash, JSON.stringify(snapshot), ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to seal record' };
+        return {
+          ok: true,
+          sealed_record: result.rows[0],
+          hash_algorithm: 'SHA-512',
+          message: `Record sealed with SHA-512 hash. This immutable record provides tamper-evident provenance for audit and compliance.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // CFD PIPELINE (FreeCAD -> Gmsh -> OpenFOAM -> ParaView)
+  // ========================================
+
+  create_cfd_pipeline_job: {
+    description: 'Create a CFD simulation pipeline job. Templates: microfluidic_channel, airflow_enclosure, mixing_vessel, heat_flow_chamber, nft_channel, bioreactor. Pipeline stages: geometry (FreeCAD) -> meshing (Gmsh) -> solving (OpenFOAM) -> post-processing (ParaView).',
+    parameters: {
+      job_name: { type: 'string', description: 'Job name' },
+      template_type: { type: 'string', description: 'CFD template: microfluidic_channel, airflow_enclosure, mixing_vessel, heat_flow_chamber, nft_channel, bioreactor, custom' },
+      study_id: { type: 'number', description: 'Study ID for context' },
+      geometry_params: { type: 'string', description: 'JSON geometry parameters (dimensions, boundary conditions)' },
+      mesh_params: { type: 'string', description: 'JSON mesh parameters (element size, refinement zones)' },
+      solver_params: { type: 'string', description: 'JSON solver parameters (turbulence model, timestep, iterations)' },
+      execution_target: { type: 'string', description: 'Target: local, hpc, cloud' },
+    },
+    required: ['job_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let geo = {}, mesh = {}, solver = {};
+        if (params.geometry_params) { try { geo = JSON.parse(params.geometry_params); } catch (_) { geo = { description: params.geometry_params }; } }
+        if (params.mesh_params) { try { mesh = JSON.parse(params.mesh_params); } catch (_) { mesh = { description: params.mesh_params }; } }
+        if (params.solver_params) { try { solver = JSON.parse(params.solver_params); } catch (_) { solver = { description: params.solver_params }; } }
+        const result = await query(
+          `INSERT INTO cfd_pipeline_jobs (farm_id, study_id, job_name, template_type, geometry_config, mesh_config, solver_config, execution_target, submitted_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
+          [ctx.farmId, params.study_id || null, params.job_name, params.template_type || 'custom',
+           JSON.stringify(geo), JSON.stringify(mesh), JSON.stringify(solver),
+           params.execution_target || 'local', ctx.userId || null]
+        ).catch(() => ({ rows: [] }));
+        if (!result.rows.length) return { ok: false, error: 'Failed to create CFD job' };
+        return {
+          ok: true,
+          job: result.rows[0],
+          pipeline: 'FreeCAD (geometry) -> Gmsh (meshing) -> OpenFOAM (solving) -> ParaView (visualization)',
+          message: `CFD pipeline job "${params.job_name}" created with ${params.template_type || 'custom'} template. Stage: geometry. Submit for execution when parameters are configured.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_cfd_templates: {
+    description: 'List available CFD simulation templates with default parameters for each pipeline stage.',
+    parameters: {},
+    required: [],
+    execute: async (params, ctx) => {
+      return {
+        ok: true,
+        templates: [
+          {
+            id: 'microfluidic_channel',
+            name: 'Microfluidic Channel',
+            description: 'Laminar flow in microfluidic channels for nutrient delivery analysis',
+            default_geometry: { channel_length_mm: 50, channel_width_mm: 1, channel_height_mm: 0.5, inlet_count: 1, outlet_count: 1 },
+            default_mesh: { element_size_mm: 0.05, refinement_layers: 3 },
+            default_solver: { turbulence_model: 'laminar', timestep_s: 0.001, max_iterations: 1000 },
+          },
+          {
+            id: 'airflow_enclosure',
+            name: 'Airflow Enclosure',
+            description: 'HVAC and ventilation analysis for controlled environment agriculture',
+            default_geometry: { length_m: 3, width_m: 2, height_m: 2.5, inlet_positions: [[0, 1.25, 2.5]], outlet_positions: [[3, 1.25, 0]] },
+            default_mesh: { element_size_m: 0.05, boundary_refinement: true },
+            default_solver: { turbulence_model: 'kEpsilon', timestep_s: 0.1, max_iterations: 5000 },
+          },
+          {
+            id: 'mixing_vessel',
+            name: 'Mixing Vessel',
+            description: 'Stirred tank reactor simulation for nutrient mixing optimization',
+            default_geometry: { diameter_m: 0.5, height_m: 0.8, impeller_type: 'rushton', impeller_rpm: 200 },
+            default_mesh: { element_size_m: 0.01, rotating_zone: true },
+            default_solver: { turbulence_model: 'kOmegaSST', timestep_s: 0.01, max_iterations: 3000 },
+          },
+          {
+            id: 'heat_flow_chamber',
+            name: 'Heat Flow Chamber',
+            description: 'Thermal analysis for growth chambers with heating/cooling elements',
+            default_geometry: { length_m: 2, width_m: 1.5, height_m: 2, heat_sources: [{ position: [1, 0.75, 0], power_w: 500 }] },
+            default_mesh: { element_size_m: 0.03, thermal_boundary_layers: 5 },
+            default_solver: { turbulence_model: 'kEpsilon', energy_equation: true, timestep_s: 0.5, max_iterations: 5000 },
+          },
+          {
+            id: 'nft_channel',
+            name: 'NFT Channel',
+            description: 'Nutrient Film Technique channel flow simulation',
+            default_geometry: { channel_length_m: 3, channel_width_m: 0.1, channel_slope_deg: 1.5, film_depth_mm: 3 },
+            default_mesh: { element_size_mm: 1, free_surface_refinement: true },
+            default_solver: { turbulence_model: 'laminar', multiphase: 'VOF', timestep_s: 0.01, max_iterations: 2000 },
+          },
+          {
+            id: 'bioreactor',
+            name: 'Bioreactor',
+            description: 'Bioreactor flow simulation with aeration and mixing',
+            default_geometry: { diameter_m: 0.3, height_m: 0.6, sparger_type: 'ring', aeration_rate_lpm: 2 },
+            default_mesh: { element_size_m: 0.005, bubble_tracking: true },
+            default_solver: { turbulence_model: 'kOmegaSST', multiphase: 'eulerEuler', timestep_s: 0.005, max_iterations: 5000 },
+          },
+        ],
+        message: 'Available CFD templates. Use create_cfd_pipeline_job with a template_type to create a simulation job with these defaults.',
+      };
+    },
+  },
+
+
   // ========================================
   // FAYE INTEGRATION
   // ========================================
@@ -1913,6 +2526,48 @@ Charts, tables, heatmaps, and metric cards via the original display system.
 ## Equipment Integration
 
 Researchers may bring unknown IoT devices, wired sensors, or specialized equipment. Use register_equipment to onboard new devices. You support connection types: WiFi, Ethernet, BLE, Zigbee, USB, Serial, Modbus, and custom protocols. Once registered, create datasets linked to the equipment for structured data collection.
+
+
+## Research Integration Layer
+
+You have access to a comprehensive integration layer connecting the research workspace to external research infrastructure services. These integrations activate when credentials or endpoints are configured.
+
+### Identity & Provenance (ORCID, DataCite)
+- **ORCID**: Link researcher identities (0000-0000-0000-000X format) to farm profiles for authorship tracking. Look up researchers via the public ORCID API.
+- **DataCite**: Prepare DOI metadata for datasets, studies, protocols, and simulations. Register DOIs when ready for publication.
+- All research outputs can be traced to authenticated researcher identities through ORCID linkage.
+
+### Project Coordination (OSF, protocols.io, JupyterHub)
+- **OSF (Open Science Framework)**: Create or link OSF projects as the public/private repository spine for studies. OSF provides preprint servers, registrations, and wikis.
+- **protocols.io**: Version research protocols with steps, materials, equipment, and safety notes. Protocols auto-increment versions and support approval workflows before publication.
+- **JupyterHub**: Track shared compute sessions for collaborative analysis. Notebooks link to studies and maintain session history.
+
+### Instrument Abstraction (SiLA 2, OPC UA, SCPI)
+- Register lab instruments with connection protocol adapters: SiLA 2 (HTTP/2+gRPC for modern lab devices), OPC UA (industrial automation binary protocol), SCPI (socket commands for test instruments), MQTT, REST, vendor SDK, or manual entry.
+- Submit instrument run requests that create approval gates -- PI/supervisor must approve before activation.
+- Monitor instrument telemetry (temperature, pressure, voltage, flow rate, etc.) in real time.
+- Instrument sessions link to studies and produce data that can be sealed as immutable records.
+
+### Reproducible Workflow Engine (Nextflow-compatible)
+- Define reproducible workflow pipelines with process graphs, parameters, inputs, and outputs.
+- Supported engines: Nextflow, shell, Python, R.
+- Submit workflow runs to execution targets: local, HPC, cloud, or cluster. All runs create approval gates.
+- Track run status, metrics (duration, CPU hours, memory peak), and outputs.
+
+### CFD Simulation Pipeline (FreeCAD -> Gmsh -> OpenFOAM -> ParaView)
+- Create CFD pipeline jobs using templates: microfluidic_channel, airflow_enclosure, mixing_vessel, heat_flow_chamber, nft_channel, bioreactor, or custom.
+- Four-stage pipeline: geometry (FreeCAD parametric), meshing (Gmsh adaptive), solving (OpenFOAM), post-processing (ParaView).
+- Each stage has configurable parameters. Templates provide sensible defaults for controlled environment agriculture.
+
+### Secure Data Transfer (Globus)
+- Initiate cross-institution data transfers via Globus endpoints.
+- Track inbound/outbound transfers with file manifests, byte counts, and partner institution metadata.
+- Connect Globus credentials to activate actual transfer execution.
+
+### Governance & Compliance
+- **Roles**: Assign research roles (PI, Co-PI, Postdoc, Grad Student, Technician, Collaborator, Viewer) scoped to farms or individual studies.
+- **Approval Gates**: Gated checkpoints for instrument runs, workflow execution, data export, protocol changes, and publication submission. All gates require justified requests and authorized review.
+- **Immutable Records**: Seal experiment snapshots with SHA-512 hashes for tamper-evident provenance. Once sealed, records cannot be modified -- verification checks recompute the hash to detect tampering.
 
 ## Response Style
 
