@@ -930,6 +930,286 @@ const GWEN_TOOL_CATALOG = {
   },
 
   // ========================================
+  // RESEARCH DATA CARDS
+  // ========================================
+
+  create_data_card: {
+    description: 'Create a data card for tracking a research variable -- gases (CO2, O2, ethylene, N2O), liquids (nutrient solution pH, EC, dissolved O2), compounds (chlorophyll, anthocyanins, nitrates), environmental metrics, or any researcher-defined measurement. Data cards appear as live-updating tiles in the workspace.',
+    parameters: {
+      card_name: { type: 'string', description: 'Display name for the card (e.g., "CO2 Concentration")' },
+      variable_key: { type: 'string', description: 'Unique key for the variable (e.g., "co2_ppm")' },
+      category: { type: 'string', description: 'Category: gas, liquid, compound, environmental, custom', enum: ['gas', 'liquid', 'compound', 'environmental', 'custom'] },
+      unit: { type: 'string', description: 'Measurement unit (e.g., "ppm", "mg/L", "umol/m2/s")' },
+      source: { type: 'string', description: 'Data source: sensor (live from LE), manual (researcher input), calculated (derived)', enum: ['sensor', 'manual', 'calculated'] },
+      formula: { type: 'string', description: 'If source=calculated, the formula used to derive this value (LaTeX notation accepted)' },
+      thresholds: { type: 'object', description: 'Alert thresholds: { warning_low, warning_high, critical_low, critical_high }' },
+      study_id: { type: 'number', description: 'Link to a specific study (optional)' },
+    },
+    required: ['card_name', 'variable_key', 'category', 'unit'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_data_cards (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, card_name TEXT NOT NULL,
+            variable_key TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'custom',
+            unit TEXT NOT NULL, source TEXT DEFAULT 'manual', formula TEXT,
+            thresholds JSONB DEFAULT '{}', study_id INTEGER,
+            current_value NUMERIC, last_updated TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW(), archived BOOLEAN DEFAULT false,
+            UNIQUE(farm_id, variable_key)
+          )`
+        ).catch(() => {});
+        const result = await query(
+          `INSERT INTO research_data_cards (farm_id, card_name, variable_key, category, unit, source, formula, thresholds, study_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (farm_id, variable_key) DO UPDATE SET card_name = $2, category = $4, unit = $5, source = $6, formula = $7, thresholds = $8, study_id = $9
+           RETURNING *`,
+          [ctx.farmId, params.card_name, params.variable_key, params.category, params.unit,
+           params.source || 'manual', params.formula || null,
+           JSON.stringify(params.thresholds || {}), params.study_id || null]
+        );
+        return { ok: true, card: result.rows[0], note: `Data card "${params.card_name}" created. It will appear in the workspace data card panel.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  update_data_card_value: {
+    description: 'Record a new value for a research data card. Use this for manual observations or calculated results. Sensor-linked cards update automatically.',
+    parameters: {
+      variable_key: { type: 'string', description: 'The variable key of the data card' },
+      value: { type: 'number', description: 'The new value' },
+      notes: { type: 'string', description: 'Optional observation notes' },
+    },
+    required: ['variable_key', 'value'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const updated = await query(
+          `UPDATE research_data_cards SET current_value = $1, last_updated = NOW()
+           WHERE farm_id = $2 AND variable_key = $3 RETURNING *`,
+          [params.value, ctx.farmId, params.variable_key]
+        );
+        if (!updated.rows.length) return { ok: false, error: `No data card found for key "${params.variable_key}"` };
+        // Log in observations table for time series tracking
+        await query(
+          `INSERT INTO research_data_card_log (farm_id, variable_key, value, notes, recorded_at)
+           VALUES ($1, $2, $3, $4, NOW())`,
+          [ctx.farmId, params.variable_key, params.value, params.notes || null]
+        ).catch(() => {});
+        const card = updated.rows[0];
+        const t = card.thresholds || {};
+        let alert = null;
+        if (t.critical_high && params.value > t.critical_high) alert = 'CRITICAL HIGH';
+        else if (t.critical_low && params.value < t.critical_low) alert = 'CRITICAL LOW';
+        else if (t.warning_high && params.value > t.warning_high) alert = 'WARNING HIGH';
+        else if (t.warning_low && params.value < t.warning_low) alert = 'WARNING LOW';
+        return { ok: true, card: card, alert, note: alert ? `Threshold alert: ${alert} for ${card.card_name}` : `Value recorded for ${card.card_name}` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_data_cards: {
+    description: 'List all active data cards for the research workspace. Optionally filter by category or study.',
+    parameters: {
+      category: { type: 'string', description: 'Filter by category: gas, liquid, compound, environmental, custom' },
+      study_id: { type: 'number', description: 'Filter by linked study' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT * FROM research_data_cards WHERE farm_id = $1 AND archived = false';
+        const p = [ctx.farmId];
+        if (params.category) { p.push(params.category); sql += ` AND category = $${p.length}`; }
+        if (params.study_id) { p.push(params.study_id); sql += ` AND study_id = $${p.length}`; }
+        sql += ' ORDER BY category, card_name';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, cards: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_data_card_history: {
+    description: 'Get time-series history for a data card variable. Use to build graphs showing how a measured value changes over time.',
+    parameters: {
+      variable_key: { type: 'string', description: 'The variable key' },
+      hours: { type: 'number', description: 'How far back to look in hours (default 168 = 7 days)' },
+      limit: { type: 'number', description: 'Max data points to return (default 500)' },
+    },
+    required: ['variable_key'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_data_card_log (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, variable_key TEXT NOT NULL,
+            value NUMERIC NOT NULL, notes TEXT, recorded_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        const hours = params.hours || 168;
+        const limit = params.limit || 500;
+        const result = await query(
+          `SELECT value, notes, recorded_at FROM research_data_card_log
+           WHERE farm_id = $1 AND variable_key = $2 AND recorded_at > NOW() - INTERVAL '1 hour' * $3
+           ORDER BY recorded_at ASC LIMIT $4`,
+          [ctx.farmId, params.variable_key, hours, limit]
+        );
+        return { ok: true, variable_key: params.variable_key, data_points: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // VISUALIZATION & CHARTING
+  // ========================================
+
+  create_research_chart: {
+    description: 'Generate a scientific chart configuration for the research workspace. Supports line charts (time series), scatter plots (correlations), bar charts (comparisons), box plots (distributions), heatmaps (2D patterns), and multi-axis overlays. Charts render via Plotly.js in the workspace.',
+    parameters: {
+      chart_type: { type: 'string', description: 'Chart type', enum: ['line', 'scatter', 'bar', 'box', 'heatmap', 'multi_axis'] },
+      title: { type: 'string', description: 'Chart title' },
+      data_sources: { type: 'array', description: 'Array of { variable_key, label, color } objects defining data series' },
+      x_label: { type: 'string', description: 'X-axis label' },
+      y_label: { type: 'string', description: 'Y-axis label' },
+      time_range_hours: { type: 'number', description: 'Time window in hours for time-series data (default 168)' },
+      annotations: { type: 'array', description: 'Array of { x, y, text } annotation markers' },
+      study_id: { type: 'number', description: 'Link chart to a study for the workspace library' },
+    },
+    required: ['chart_type', 'title'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        // Fetch data for each source
+        const traces = [];
+        for (const src of (params.data_sources || [])) {
+          const hours = params.time_range_hours || 168;
+          const result = await query(
+            `SELECT value, recorded_at FROM research_data_card_log
+             WHERE farm_id = $1 AND variable_key = $2 AND recorded_at > NOW() - INTERVAL '1 hour' * $3
+             ORDER BY recorded_at ASC LIMIT 500`,
+            [ctx.farmId, src.variable_key, hours]
+          ).catch(() => ({ rows: [] }));
+          traces.push({ variable_key: src.variable_key, label: src.label || src.variable_key, color: src.color, data: result.rows });
+        }
+        const config = {
+          chart_type: params.chart_type, title: params.title,
+          x_label: params.x_label || 'Time', y_label: params.y_label || 'Value',
+          traces, annotations: params.annotations || [],
+        };
+        // Persist chart for workspace library
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_workspace_charts (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, title TEXT NOT NULL,
+            chart_type TEXT, config JSONB, study_id INTEGER,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        const saved = await query(
+          `INSERT INTO research_workspace_charts (farm_id, title, chart_type, config, study_id)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [ctx.farmId, params.title, params.chart_type, JSON.stringify(config), params.study_id || null]
+        ).catch(() => ({ rows: [{ id: null }] }));
+        return { ok: true, chart_id: saved.rows[0]?.id, config, note: `Chart "${params.title}" created. It will render in the workspace visualization panel.` };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  render_formula: {
+    description: 'Render a mathematical formula or equation in the workspace using LaTeX notation. Use for chemical equations, growth models, rate constants, fluid dynamics equations, or any scientific notation.',
+    parameters: {
+      latex: { type: 'string', description: 'LaTeX formula string (e.g., "\\\\frac{dC}{dt} = D \\\\nabla^2 C - vC + S")' },
+      label: { type: 'string', description: 'Human-readable label for the formula' },
+      context: { type: 'string', description: 'Where this formula applies (e.g., "Fick second law for CO2 diffusion in nutrient film")' },
+    },
+    required: ['latex', 'label'],
+    execute: async (params) => {
+      return {
+        ok: true,
+        display: { type: 'formula', latex: params.latex, label: params.label, context: params.context || '' },
+        note: `Formula "${params.label}" will display in the workspace using KaTeX rendering.`,
+      };
+    },
+  },
+
+  // ========================================
+  // FLUID DYNAMICS & SIMULATION
+  // ========================================
+
+  configure_flow_simulation: {
+    description: 'Configure a fluid dynamics simulation for nutrient film technique (NFT), deep water culture (DWC), aeroponics, or custom flow systems. The simulation models laminar/turbulent flow, nutrient distribution, temperature gradients, and dissolved gas transport. Renders as a 3D visualization in the workspace via Three.js.',
+    parameters: {
+      system_type: { type: 'string', description: 'Hydroponic system type', enum: ['nft', 'dwc', 'aeroponics', 'ebb_flow', 'drip', 'custom'] },
+      channel_length_m: { type: 'number', description: 'Channel or container length in meters' },
+      channel_width_m: { type: 'number', description: 'Channel width in meters' },
+      flow_rate_lpm: { type: 'number', description: 'Flow rate in liters per minute' },
+      fluid_temp_c: { type: 'number', description: 'Fluid temperature in Celsius' },
+      nutrient_ec: { type: 'number', description: 'Nutrient electrical conductivity (mS/cm)' },
+      dissolved_o2_ppm: { type: 'number', description: 'Dissolved oxygen in ppm' },
+      plant_spacing_cm: { type: 'number', description: 'Plant spacing in cm (affects flow obstruction model)' },
+      simulation_name: { type: 'string', description: 'Name for this simulation configuration' },
+    },
+    required: ['system_type', 'simulation_name'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_flow_simulations (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, simulation_name TEXT NOT NULL,
+            system_type TEXT, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        const config = { ...params };
+        delete config.simulation_name;
+        // Calculate Reynolds number for flow classification
+        const flowRate = params.flow_rate_lpm || 2;
+        const width = params.channel_width_m || 0.1;
+        const velocity = (flowRate / 60000) / (width * 0.02); // assume 2cm depth
+        const kinematicViscosity = 1.004e-6; // water at ~20C
+        const hydraulicDiameter = 2 * width * 0.02 / (width + 0.02);
+        const reynolds = velocity * hydraulicDiameter / kinematicViscosity;
+        const flowRegime = reynolds < 2300 ? 'laminar' : reynolds < 4000 ? 'transitional' : 'turbulent';
+        const results = {
+          reynolds_number: Math.round(reynolds),
+          flow_regime: flowRegime,
+          velocity_ms: velocity.toFixed(4),
+          hydraulic_diameter_m: hydraulicDiameter.toFixed(4),
+          residence_time_s: ((params.channel_length_m || 1) / velocity).toFixed(1),
+        };
+        const saved = await query(
+          `INSERT INTO research_flow_simulations (farm_id, simulation_name, system_type, config, results)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [ctx.farmId, params.simulation_name, params.system_type, JSON.stringify(config), JSON.stringify(results)]
+        );
+        return {
+          ok: true, simulation_id: saved.rows[0]?.id, config, results,
+          note: `Flow simulation "${params.simulation_name}" configured. Reynolds number: ${results.reynolds_number} (${flowRegime}). 3D visualization available in workspace.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_flow_simulations: {
+    description: 'List saved fluid dynamics simulations with their parameters and results.',
+    parameters: {
+      system_type: { type: 'string', description: 'Filter by system type' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT * FROM research_flow_simulations WHERE farm_id = $1';
+        const p = [ctx.farmId];
+        if (params.system_type) { p.push(params.system_type); sql += ` AND system_type = $${p.length}`; }
+        sql += ' ORDER BY created_at DESC LIMIT 20';
+        const result = await query(sql, p).catch(() => ({ rows: [] }));
+        return { ok: true, simulations: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
   // FAYE INTEGRATION
   // ========================================
 
@@ -978,6 +1258,64 @@ const GWEN_TOOL_CATALOG = {
           ok: true, active_alerts: alerts.rows, recent_incidents: incidents.rows,
           note: 'Security assessment data gathered from FAYE monitoring systems.',
         };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_faye_directives: {
+    description: 'Check for unread messages and directives from F.A.Y.E. Call this at the start of each conversation to see if FAYE has sent instructions, approvals, security advisories, or feedback.',
+    parameters: {
+      limit: { type: 'number', description: 'Max messages to retrieve (default 10)' },
+    },
+    required: [],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const limit = params.limit || 10;
+        const msgs = await query(
+          `SELECT id, from_agent AS sender, subject, body, priority, status, created_at
+           FROM inter_agent_messages WHERE to_agent = 'gwen' AND status = 'pending'
+           ORDER BY created_at DESC LIMIT $1`, [limit]
+        ).catch(() => ({ rows: [] }));
+        if (msgs.rows.length > 0) {
+          await query(
+            `UPDATE inter_agent_messages SET status = 'read'
+             WHERE to_agent = 'gwen' AND status = 'pending'`
+          ).catch(() => {});
+        }
+        return {
+          ok: true, count: msgs.rows.length, messages: msgs.rows,
+          note: msgs.rows.length ? `${msgs.rows.length} directive(s) from F.A.Y.E. Review and act on high-priority items first.` : 'No pending directives from F.A.Y.E.',
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  reply_to_faye: {
+    description: 'Send a reply, status update, or observation back to F.A.Y.E. Use this for responding to her directives, reporting research findings that have platform-wide relevance, or escalating issues.',
+    parameters: {
+      subject: { type: 'string', description: 'Brief subject line' },
+      body: { type: 'string', description: 'Message body with relevant details' },
+      message_type: { type: 'string', description: 'Type of message', enum: ['reply', 'status_update', 'observation', 'escalation'] },
+      priority: { type: 'string', description: 'Priority level', enum: ['normal', 'high', 'critical'] },
+      reply_to_id: { type: 'number', description: 'ID of the message being replied to (optional)' },
+    },
+    required: ['subject', 'body'],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        await query(
+          `INSERT INTO inter_agent_messages (from_agent, to_agent, message_type, subject, body, priority, reply_to_id, status, created_at)
+           VALUES ('gwen', 'faye', $1, $2, $3, $4, $5, 'pending', NOW())`,
+          [
+            params.message_type || 'reply',
+            params.subject,
+            params.body,
+            params.priority || 'normal',
+            params.reply_to_id || null,
+          ]
+        );
+        return { ok: true, note: `Message sent to F.A.Y.E.: "${params.subject}"` };
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
@@ -1475,6 +1813,8 @@ F.A.Y.E. (Federated Autonomous Yield Engine) is the senior intelligence agent fo
 - You CAN freely read, write, and create within the research bubble (all /api/research/* endpoints, all research database tables, research workspace displays).
 - When you need something outside your bubble, use request_faye_review to submit a safe-patch request.
 - FAYE monitors the security posture of your research workspace. She may flag concerns about data classification, access control, or partner agreements.
+- Use get_faye_directives at the START of every conversation to check for unread messages, approvals, or security advisories from FAYE.
+- Use reply_to_faye to respond to her directives, report findings with platform-wide relevance, or escalate issues that cross bubble boundaries.
 
 ## Research Bubble Boundaries
 
@@ -1532,13 +1872,43 @@ You have internalized the following research on grant writing and apply their fi
 
 ## Dynamic Workspace
 
-You can create visualizations and data tables directly in the research workspace. When asked to display data, create charts, or build custom views, use the create_custom_display tool. The workspace supports:
-- Line charts (time series, sensor data, observation trends)
-- Bar charts (comparisons, distributions)
-- Scatter plots (correlations)
-- Data tables (structured results, custom datasets)
-- Metric cards (KPIs, summary stats)
-- Heatmaps (environmental conditions, temporal patterns)
+You can create visualizations, data cards, charts, formulas, and fluid dynamics simulations directly in the research workspace. The workspace is a high-tech research environment with scientific computing capabilities:
+
+### Data Cards (create_data_card, update_data_card_value, get_data_cards, get_data_card_history)
+Live-updating tiles that track research variables. Supported categories:
+- **Gas**: CO2, O2, ethylene, N2O, VOCs, and custom gas measurements
+- **Liquid**: pH, EC, dissolved O2, nutrient concentration, flow rate
+- **Compound**: chlorophyll, anthocyanins, nitrates, proteins, sugars
+- **Environmental**: temperature, humidity, light intensity, photoperiod
+- **Custom**: any researcher-defined measurement with threshold alerts
+
+### Scientific Charts (create_research_chart)
+Rendered via Plotly.js with full interactivity:
+- Line charts (time series, growth curves, sensor trends)
+- Scatter plots (correlations, dose-response)
+- Bar charts (treatment comparisons, harvest yields)
+- Box plots (statistical distributions)
+- Heatmaps (environmental condition mapping, temporal patterns)
+- Multi-axis overlays (correlating different units, e.g. temp vs growth rate)
+
+### Formulas & Equations (render_formula)
+KaTeX-rendered LaTeX formulas for:
+- Chemical equations and reaction kinetics
+- Growth models (logistic, Gompertz, Monod)
+- Fluid dynamics equations (Navier-Stokes, Reynolds, Bernoulli)
+- Diffusion models (Fick's laws)
+- Statistical formulas
+
+### Fluid Dynamics Simulation (configure_flow_simulation, get_flow_simulations)
+Three.js-powered 3D visualization for hydroponic flow systems:
+- NFT, DWC, aeroponics, ebb-and-flow, drip, custom
+- Reynolds number calculation and flow regime classification
+- Nutrient distribution modeling
+- Residence time estimation
+- Plant spacing obstruction effects
+
+### Existing Tools (create_custom_display)
+Charts, tables, heatmaps, and metric cards via the original display system.
 
 ## Equipment Integration
 

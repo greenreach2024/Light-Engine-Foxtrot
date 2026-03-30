@@ -4,12 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Research Workspace -- Light Engine</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.0.min.js" charset="utf-8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
     :root {
-      --bg: #0f172a;
-      --bg-card: #1e293b;
-      --bg-secondary: #334155;
-      --border: #475569;
+      --bg: #0a0e1a;
+      --bg-card: #111827;
+      --bg-secondary: #1f2937;
+      --bg-elevated: #1a2332;
+      --border: #2d3a4f;
+      --border-active: #3b82f6;
       --text-primary: #e2e8f0;
       --text-secondary: #94a3b8;
       --accent: #f59e0b;
@@ -17,524 +24,793 @@
       --blue: #3b82f6;
       --red: #ef4444;
       --purple: #8b5cf6;
+      --cyan: #06b6d4;
+      --gwen-glow: rgba(139, 92, 246, 0.3);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
       background: var(--bg);
       color: var(--text-primary);
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     header {
-      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      border-bottom: 2px solid var(--accent);
-      padding: 1.5rem 2rem;
+      background: linear-gradient(135deg, #0d1321 0%, #111827 50%, #0d1321 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: relative;
+      z-index: 100;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), var(--purple), var(--cyan), transparent);
+      opacity: 0.5;
     }
 
     header h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--accent);
-      letter-spacing: -0.5px;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
 
-    .header-nav {
-      display: flex;
-      gap: 1rem;
-    }
+    header h1 span { color: var(--text-secondary); font-weight: 400; }
+
+    .header-nav { display: flex; gap: 0.5rem; align-items: center; }
 
     .header-nav a {
       color: var(--text-secondary);
       text-decoration: none;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      font-size: 0.875rem;
-      transition: background 0.2s;
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      letter-spacing: 0.02em;
     }
 
     .header-nav a:hover {
       background: var(--bg-secondary);
       color: var(--text-primary);
+      border-color: var(--border);
+    }
+
+    .gwen-toggle-btn {
+      background: linear-gradient(135deg, var(--purple), #6366f1);
+      color: #fff;
+      border: none;
+      padding: 0.375rem 0.875rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .gwen-toggle-btn:hover { box-shadow: 0 0 12px var(--gwen-glow); }
+
+    .workspace-layout {
+      display: flex;
+      height: calc(100vh - 49px);
+      overflow: hidden;
+    }
+
+    .workspace-main {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1600px;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 1.25rem 1.5rem;
     }
+
+    .data-cards-panel { margin-bottom: 1.25rem; }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .panel-title {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--cyan);
+    }
+
+    .panel-status {
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .data-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .data-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.875rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .data-card:hover { border-color: var(--border-active); }
+
+    .data-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+
+    .data-card[data-category="gas"]::before { background: var(--cyan); }
+    .data-card[data-category="liquid"]::before { background: var(--blue); }
+    .data-card[data-category="compound"]::before { background: var(--green); }
+    .data-card[data-category="environmental"]::before { background: var(--accent); }
+    .data-card[data-category="custom"]::before { background: var(--purple); }
+
+    .dc-label {
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.375rem;
+    }
+
+    .dc-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .dc-unit {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 400;
+      margin-left: 0.25rem;
+    }
+
+    .dc-alert { color: var(--red); font-size: 0.6875rem; margin-top: 0.25rem; font-weight: 600; }
+    .dc-alert.warning { color: var(--accent); }
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 1rem;
     }
 
     .stat-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
       text-align: center;
     }
 
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: var(--accent);
-    }
+    .stat-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
 
     .stat-label {
-      font-size: 0.75rem;
+      font-size: 0.625rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
       color: var(--text-secondary);
-      margin-top: 0.25rem;
+      margin-top: 0.125rem;
     }
 
-    .section-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-      color: var(--text-primary);
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.5rem;
-    }
-
-    .card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-    }
-
-    .card h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 0.75rem;
-      color: var(--accent);
-    }
-
-    .card p {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      margin-bottom: 1rem;
-    }
-
-    .card .meta {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 0.25rem 0.625rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .badge-active { background: rgba(16,185,129,0.15); color: var(--green); }
-    .badge-draft { background: rgba(245,158,11,0.15); color: var(--accent); }
-    .badge-completed { background: rgba(59,130,246,0.15); color: var(--blue); }
-    .badge-archived { background: rgba(148,163,184,0.15); color: var(--text-secondary); }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-    }
-
-    th {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      color: var(--text-secondary);
-      font-weight: 500;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    td {
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid rgba(71,85,105,0.3);
-      color: var(--text-primary);
-    }
-
-    tr:hover {
-      background: rgba(245,158,11,0.05);
-    }
+    .actions-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      font-size: 0.8125rem;
+      gap: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
       font-weight: 500;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
+      font-family: inherit;
+      letter-spacing: 0.02em;
     }
 
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #d97706; }
+    .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
 
-    .btn-primary:hover {
-      background: #d97706;
-    }
-
-    .btn-secondary {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover {
-      background: var(--border);
-    }
-
-    .actions-bar {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 2rem;
-      flex-wrap: wrap;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 3rem;
+    .tab-section-label {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
       color: var(--text-secondary);
-    }
-
-    .empty-state h3 {
-      color: var(--text-primary);
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
+      margin-top: 0.5rem;
+      padding-left: 0.25rem;
     }
 
     .tabs {
       display: flex;
       gap: 0;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 1.5rem;
+      margin-bottom: 0;
+      flex-wrap: wrap;
     }
 
     .tab {
-      padding: 0.75rem 1.25rem;
-      font-size: 0.875rem;
+      padding: 0.5rem 0.875rem;
+      font-size: 0.75rem;
       color: var(--text-secondary);
       cursor: pointer;
       border-bottom: 2px solid transparent;
       transition: all 0.2s;
+      white-space: nowrap;
+      font-family: inherit;
+      letter-spacing: 0.02em;
     }
 
-    .tab:hover {
-      color: var(--text-primary);
-    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+    .tab.active.research-tab { color: var(--purple); border-bottom-color: var(--purple); }
 
-    .tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-
-    .tab-content { display: none; }
+    .tab-content { display: none; padding-top: 1rem; }
     .tab-content.active { display: block; }
 
-    .alert-banner {
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.3);
-      border-radius: 8px;
-      padding: 1rem 1.5rem;
-      margin-bottom: 1.5rem;
+    .viz-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      min-height: 400px;
+    }
+
+    .viz-toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .viz-toolbar select, .viz-toolbar input {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.375rem 0.625rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: inherit;
+    }
+
+    .chart-library {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .chart-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .chart-card:hover { border-color: var(--border-active); }
+
+    .sim-viewport {
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 100%;
+      height: 500px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sim-controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .sim-controls label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      font-size: 0.875rem;
-      color: var(--red);
+      gap: 0.375rem;
     }
 
-    .alert-banner.warning {
-      background: rgba(245,158,11,0.1);
-      border-color: rgba(245,158,11,0.3);
-      color: var(--accent);
+    .sim-controls input[type="range"] { width: 100px; accent-color: var(--cyan); }
+
+    .sim-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.75rem;
     }
 
-    #loading {
+    .sim-result-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem;
       text-align: center;
-      padding: 4rem;
+    }
+
+    .sim-result-value { font-size: 1.125rem; font-weight: 700; color: var(--cyan); }
+    .sim-result-label { font-size: 0.625rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .formula-editor {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+
+    .formula-input {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.875rem;
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .formula-preview {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.5rem;
+      margin-top: 0.75rem;
+      text-align: center;
+      font-size: 1.25rem;
+      min-height: 60px;
+    }
+
+    .formula-library {
+      margin-top: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .formula-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+    }
+
+    .formula-card-label { font-size: 0.75rem; color: var(--accent); margin-bottom: 0.5rem; font-weight: 600; }
+    .formula-card-render { font-size: 1rem; padding: 0.5rem 0; }
+    .formula-card-context { font-size: 0.6875rem; color: var(--text-secondary); margin-top: 0.375rem; font-style: italic; }
+
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .sensor-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+
+    .sensor-label { font-size: 0.6875rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.25rem; }
+    .sensor-value { font-size: 1.75rem; font-weight: 700; color: var(--green); }
+    .sensor-ago { font-size: 0.625rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+    .gwen-sidebar {
+      width: 380px;
+      min-width: 380px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: margin-right 0.3s ease;
+    }
+
+    .gwen-sidebar.collapsed { margin-right: -380px; min-width: 0; width: 0; overflow: hidden; }
+
+    .gwen-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(99,102,241,0.05));
+    }
+
+    .gwen-header-title { font-size: 0.8125rem; font-weight: 600; color: var(--purple); letter-spacing: 0.04em; }
+
+    .gwen-close-btn {
+      background: none;
+      border: 1px solid var(--border);
       color: var(--text-secondary);
+      width: 24px; height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+    }
+
+    .gwen-close-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+    .gwen-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .gwen-msg { padding: 0.625rem 0.75rem; border-radius: 6px; font-size: 0.8125rem; line-height: 1.5; max-width: 95%; }
+    .gwen-msg.gwen { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); align-self: flex-start; }
+    .gwen-msg.user { background: var(--bg-secondary); border: 1px solid var(--border); align-self: flex-end; }
+    .gwen-msg pre { background: var(--bg); padding: 0.5rem; border-radius: 4px; margin: 0.375rem 0; overflow-x: auto; font-size: 0.75rem; }
+
+    .gwen-input-area { padding: 0.75rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
+
+    .gwen-input {
+      flex: 1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      resize: none;
+      min-height: 36px;
+      max-height: 120px;
+    }
+
+    .gwen-input:focus { outline: none; border-color: var(--purple); }
+
+    .gwen-send-btn {
+      background: var(--purple);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .gwen-send-btn:hover { background: #7c3aed; }
+    .gwen-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .gwen-typing { color: var(--text-secondary); font-size: 0.75rem; font-style: italic; padding: 0.25rem 0.75rem; }
+
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--accent); }
+    .card p { font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem; }
+    .card .meta { font-size: 0.6875rem; color: var(--text-secondary); }
+
+    .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge-active { background: rgba(16,185,129,0.15); color: var(--green); }
+    .badge-draft { background: rgba(245,158,11,0.15); color: var(--accent); }
+    .badge-completed { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .badge-archived { background: rgba(148,163,184,0.15); color: var(--text-secondary); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    th { text-align: left; padding: 0.5rem 0.75rem; color: var(--text-secondary); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(45,58,79,0.5); color: var(--text-primary); }
+    tr:hover { background: rgba(59,130,246,0.03); }
+
+    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 0.375rem; }
+    .empty-state { text-align: center; padding: 2.5rem; color: var(--text-secondary); }
+    .empty-state h3 { color: var(--text-primary); margin-bottom: 0.375rem; font-size: 0.9375rem; }
+
+    .alert-banner { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: var(--red); }
+    .alert-banner.warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--accent); }
+
+    #loading { text-align: center; padding: 3rem; color: var(--text-secondary); }
+
+    .network-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 0.75rem; }
+    .network-card h4 { color: var(--accent); margin-bottom: 0.5rem; font-size: 0.875rem; }
+    .benchmark-bar { height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; margin-top: 0.25rem; margin-bottom: 0.375rem; }
+    .benchmark-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    .network-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+    @media (max-width: 1024px) {
+      .gwen-sidebar { width: 320px; min-width: 320px; }
+      .gwen-sidebar.collapsed { margin-right: -320px; }
     }
 
     @media (max-width: 768px) {
-      .container { padding: 1rem; }
-      .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .card-grid { grid-template-columns: 1fr; }
+      .container { padding: 0.75rem; }
+      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+      .data-cards-grid { grid-template-columns: repeat(2, 1fr); }
       header { flex-direction: column; gap: 0.5rem; }
+      .gwen-sidebar { position: fixed; right: 0; top: 49px; bottom: 0; z-index: 200; width: 100vw; min-width: 100vw; }
+      .gwen-sidebar.collapsed { margin-right: -100vw; }
+      .sim-viewport { height: 300px; }
     }
-
-    .network-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .network-card h4 {
-      color: var(--accent);
-      margin-bottom: 0.75rem;
-    }
-
-    .benchmark-bar {
-      height: 8px;
-      background: var(--bg-secondary);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 0.25rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .benchmark-bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent);
-    }
-
-    .network-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
   </style>
 </head>
 <body>
   <header>
-    <h1>Research Workspace</h1>
+    <h1>RESEARCH WORKSPACE <span>// Light Engine</span></h1>
     <nav class="header-nav">
-      <a href="/views/farm-summary.html">Farm Dashboard</a>
+      <a href="/views/farm-summary.html">Dashboard</a>
       <a href="/LE-farm-admin.html">Farm Admin</a>
-      <a href="/gwen-core.html">G.W.E.N.</a>
       <a href="/views/farm-inventory.html">Inventory</a>
+      <button class="gwen-toggle-btn" onclick="toggleGwenPanel()">G.W.E.N.</button>
     </nav>
   </header>
 
-  <div class="container">
-    <div id="loading">Loading research data...</div>
+  <div class="workspace-layout">
+    <div class="workspace-main">
+      <div class="container">
+        <div id="loading">Initializing research environment...</div>
 
-    <div id="app" style="display:none;">
-      <!-- Stats Row -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value" id="stat-studies">--</div>
-          <div class="stat-label">Active Studies</div>
+        <div id="app" style="display:none;">
+
+          <!-- Live Data Cards -->
+          <div class="data-cards-panel">
+            <div class="panel-header">
+              <div class="panel-title">Live Data Cards</div>
+              <div class="panel-status"><div class="status-dot"></div> <span id="sensor-status">Connecting...</span></div>
+            </div>
+            <div class="data-cards-grid" id="dataCardsGrid"></div>
+          </div>
+
+          <!-- Stats Row -->
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value" id="stat-studies">--</div><div class="stat-label">Studies</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-datasets">--</div><div class="stat-label">Datasets</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-observations">--</div><div class="stat-label">Observations</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-notebooks">--</div><div class="stat-label">Notebooks</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-alerts">--</div><div class="stat-label">Alerts</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-recipes">--</div><div class="stat-label">Recipes</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-tasks">--</div><div class="stat-label">Tasks</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-grants">--</div><div class="stat-label">Grants</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-trainees">--</div><div class="stat-label">HQP</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-partners">--</div><div class="stat-label">Partners</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-publications">--</div><div class="stat-label">Pubs</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-equipment">--</div><div class="stat-label">Equipment</div></div>
+            <div class="stat-card"><div class="stat-value" id="stat-deadlines">--</div><div class="stat-label">Deadlines</div></div>
+          </div>
+
+          <div id="alerts-container"></div>
+
+          <div class="actions-bar">
+            <button class="btn btn-primary" onclick="createStudy()">+ Study</button>
+            <button class="btn btn-secondary" onclick="createDataset()">+ Dataset</button>
+            <button class="btn btn-secondary" onclick="createNotebook()">+ Notebook</button>
+            <button class="btn btn-secondary" onclick="addCollaborator()">+ Collaborator</button>
+            <button class="btn btn-secondary" onclick="createTrainee()">+ HQP</button>
+            <button class="btn btn-secondary" onclick="createPartner()">+ Partner</button>
+            <button class="btn btn-secondary" onclick="exportData()">Export</button>
+            <button class="btn btn-secondary" onclick="createRecipe()">+ Recipe</button>
+            <button class="btn btn-secondary" onclick="createTask()">+ Task</button>
+          </div>
+
+          <!-- Research Tabs -->
+          <div class="tab-section-label">Research</div>
+          <div class="tabs">
+            <div class="tab research-tab active" data-tab="lab-console">Lab Console</div>
+            <div class="tab research-tab" data-tab="visualization">Visualization</div>
+            <div class="tab research-tab" data-tab="simulation">Simulation</div>
+            <div class="tab research-tab" data-tab="formulas">Formulas</div>
+          </div>
+
+          <!-- Management Tabs -->
+          <div class="tab-section-label">Management</div>
+          <div class="tabs">
+            <div class="tab" data-tab="studies">Studies</div>
+            <div class="tab" data-tab="datasets">Datasets</div>
+            <div class="tab" data-tab="notebooks">Notebooks</div>
+            <div class="tab" data-tab="compliance">Compliance</div>
+            <div class="tab" data-tab="collaborators">Collaborators</div>
+            <div class="tab" data-tab="recipes">Recipes</div>
+            <div class="tab" data-tab="tasks">Tasks</div>
+            <div class="tab" data-tab="audit">Audit</div>
+            <div class="tab" data-tab="grants">Grants</div>
+            <div class="tab" data-tab="ethics">Ethics</div>
+            <div class="tab" data-tab="hqp">HQP</div>
+            <div class="tab" data-tab="partners">Partners</div>
+            <div class="tab" data-tab="security">Security</div>
+            <div class="tab" data-tab="reports">Reports</div>
+            <div class="tab" data-tab="deadlines">Deadlines</div>
+            <div class="tab" data-tab="publications">Publications</div>
+            <div class="tab" data-tab="equipment">Equipment</div>
+            <div class="tab" data-tab="lineage">Lineage</div>
+            <div class="tab" data-tab="network-research">Network</div>
+          </div>
+
+          <!-- LAB CONSOLE -->
+          <div class="tab-content active" id="tab-lab-console">
+            <h3 class="section-title">Live Sensor Feed</h3>
+            <div class="sensor-grid" id="sensorGrid">
+              <div class="sensor-card"><div class="sensor-label">Temperature</div><div class="sensor-value" id="sensor-temp">--</div><div class="sensor-ago" id="sensor-temp-ago"></div></div>
+              <div class="sensor-card"><div class="sensor-label">Humidity</div><div class="sensor-value" id="sensor-humidity">--</div><div class="sensor-ago" id="sensor-humidity-ago"></div></div>
+              <div class="sensor-card"><div class="sensor-label">CO2</div><div class="sensor-value" id="sensor-co2">--</div><div class="sensor-ago" id="sensor-co2-ago"></div></div>
+              <div class="sensor-card"><div class="sensor-label">Light (PPFD)</div><div class="sensor-value" id="sensor-light">--</div><div class="sensor-ago" id="sensor-light-ago"></div></div>
+              <div class="sensor-card"><div class="sensor-label">VPD</div><div class="sensor-value" id="sensor-vpd">--</div><div class="sensor-ago" id="sensor-vpd-ago"></div></div>
+              <div class="sensor-card"><div class="sensor-label">Nutrient EC</div><div class="sensor-value" id="sensor-ec">--</div><div class="sensor-ago" id="sensor-ec-ago"></div></div>
+            </div>
+            <h3 class="section-title">24-Hour Environmental Trend</h3>
+            <div id="sensorTrendChart" style="width:100%;height:300px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;"></div>
+          </div>
+
+          <!-- VISUALIZATION -->
+          <div class="tab-content" id="tab-visualization">
+            <h3 class="section-title">Chart Builder</h3>
+            <div class="viz-container">
+              <div class="viz-toolbar">
+                <select id="chartTypeSelect">
+                  <option value="line">Line (Time Series)</option>
+                  <option value="scatter">Scatter (Correlation)</option>
+                  <option value="bar">Bar (Comparison)</option>
+                  <option value="box">Box (Distribution)</option>
+                  <option value="heatmap">Heatmap (2D Pattern)</option>
+                </select>
+                <select id="chartDataSource" multiple style="min-width:200px;height:80px;"></select>
+                <input type="number" id="chartHoursBack" placeholder="Hours back" value="168" style="width:100px;">
+                <button class="btn btn-primary" onclick="buildChart()">Build Chart</button>
+              </div>
+              <div id="chartOutput" style="width:100%;min-height:350px;"></div>
+            </div>
+            <h3 class="section-title" style="margin-top:1.25rem;">Saved Charts</h3>
+            <div class="chart-library" id="chartLibrary"></div>
+          </div>
+
+          <!-- SIMULATION -->
+          <div class="tab-content" id="tab-simulation">
+            <h3 class="section-title">Fluid Dynamics Simulation</h3>
+            <div class="sim-viewport" id="simViewport"></div>
+            <div class="sim-controls">
+              <label>System: <select id="simSystemType">
+                <option value="nft">NFT (Nutrient Film)</option>
+                <option value="dwc">DWC (Deep Water)</option>
+                <option value="aeroponics">Aeroponics</option>
+                <option value="ebb_flow">Ebb &amp; Flow</option>
+                <option value="drip">Drip</option>
+              </select></label>
+              <label>Flow Rate (L/min): <input type="range" id="simFlowRate" min="0.5" max="20" step="0.5" value="2"><span id="simFlowRateVal">2</span></label>
+              <label>Channel Length (m): <input type="range" id="simLength" min="0.5" max="10" step="0.5" value="2"><span id="simLengthVal">2</span></label>
+              <label>Temp (C): <input type="range" id="simTemp" min="10" max="35" step="1" value="22"><span id="simTempVal">22</span></label>
+              <button class="btn btn-primary" onclick="runSimulation()">Run Simulation</button>
+            </div>
+            <div class="sim-results" id="simResults"></div>
+            <h3 class="section-title" style="margin-top:1.25rem;">Saved Simulations</h3>
+            <div id="simLibrary"></div>
+          </div>
+
+          <!-- FORMULAS -->
+          <div class="tab-content" id="tab-formulas">
+            <h3 class="section-title">Formula Editor</h3>
+            <div class="formula-editor">
+              <div style="margin-bottom:0.5rem;">
+                <label style="font-size:0.75rem;color:var(--text-secondary);">LaTeX Input</label>
+                <textarea class="formula-input" id="formulaInput" placeholder="Enter LaTeX... e.g. \frac{dC}{dt} = D \nabla^2 C - vC + S"></textarea>
+              </div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                <button class="btn btn-secondary" onclick="insertFormula('\\frac{d}{dt}')">d/dt</button>
+                <button class="btn btn-secondary" onclick="insertFormula('\\nabla^2')">Laplacian</button>
+                <button class="btn btn-secondary" onclick="insertFormula('\\int_{a}^{b}')">Integral</button>
+                <button class="btn btn-secondary" onclick="insertFormula('\\sum_{i=1}^{n}')">Sum</button>
+                <button class="btn btn-secondary" onclick="insertFormula('\\sqrt{}')">Sqrt</button>
+                <button class="btn btn-secondary" onclick="insertFormula('Re = \\frac{\\rho v D_h}{\\mu}')">Reynolds</button>
+                <button class="btn btn-secondary" onclick="insertFormula('\\mu = \\mu_{max} \\frac{S}{K_s + S}')">Monod</button>
+              </div>
+              <div class="formula-preview" id="formulaPreview">Preview will render here</div>
+              <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
+                <input type="text" id="formulaLabel" placeholder="Label (e.g. Fick second law)" style="flex:1;background:var(--bg-secondary);border:1px solid var(--border);color:var(--text-primary);padding:0.375rem 0.625rem;border-radius:4px;font-family:inherit;font-size:0.75rem;">
+                <button class="btn btn-primary" onclick="saveFormula()">Save to Library</button>
+              </div>
+            </div>
+            <h3 class="section-title" style="margin-top:1.25rem;">Formula Library</h3>
+            <div class="formula-library" id="formulaLibrary"></div>
+          </div>
+
+          <!-- MANAGEMENT TABS -->
+          <div class="tab-content" id="tab-studies"><div id="studies-list"></div></div>
+          <div class="tab-content" id="tab-datasets"><div id="datasets-list"></div></div>
+          <div class="tab-content" id="tab-notebooks"><div id="notebooks-list"></div></div>
+          <div class="tab-content" id="tab-compliance"><div id="compliance-list"></div></div>
+          <div class="tab-content" id="tab-collaborators"><div id="collaborators-list"></div></div>
+          <div class="tab-content" id="tab-recipes"><div id="recipes-list"></div></div>
+          <div class="tab-content" id="tab-tasks"><div id="tasks-list"></div></div>
+          <div class="tab-content" id="tab-audit"><div id="audit-list"></div></div>
+          <div class="tab-content" id="tab-grants"><div id="grants-list"></div></div>
+          <div class="tab-content" id="tab-ethics"><div id="ethics-list"></div></div>
+          <div class="tab-content" id="tab-hqp"><div id="hqp-list"></div></div>
+          <div class="tab-content" id="tab-partners"><div id="partners-list"></div></div>
+          <div class="tab-content" id="tab-security"><div id="security-list"></div></div>
+          <div class="tab-content" id="tab-reports"><div id="reports-list"></div></div>
+          <div class="tab-content" id="tab-deadlines"><div id="deadlines-list"></div></div>
+          <div class="tab-content" id="tab-publications"><div id="publications-list"></div></div>
+          <div class="tab-content" id="tab-equipment"><div id="equipment-list"></div></div>
+          <div class="tab-content" id="tab-lineage"><div id="lineage-list"></div></div>
+          <div class="tab-content" id="tab-network-research"><div id="network-research-list"></div></div>
+
         </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-datasets">--</div>
-          <div class="stat-label">Datasets</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-observations">--</div>
-          <div class="stat-label">Observations (7d)</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-notebooks">--</div>
-          <div class="stat-label">ELN Notebooks</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-alerts">--</div>
-          <div class="stat-label">Open Alerts</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-recipes">--</div>
-          <div class="stat-label">Beta Recipes</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-tasks">--</div>
-          <div class="stat-label">Open Tasks</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-grants">--</div>
-          <div class="stat-label">Active Grants</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-trainees">--</div>
-          <div class="stat-label">Active HQP</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-partners">--</div>
-          <div class="stat-label">Partners</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-publications">--</div>
-          <div class="stat-label">Publications</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-equipment">--</div>
-          <div class="stat-label">Lab Equipment</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-deadlines">--</div>
-          <div class="stat-label">Upcoming Deadlines</div>
-        </div>
       </div>
+    </div>
 
-      <!-- Alerts -->
-      <div id="alerts-container"></div>
-
-      <!-- Actions -->
-      <div class="actions-bar">
-        <button class="btn btn-primary" onclick="createStudy()">New Study</button>
-        <button class="btn btn-secondary" onclick="createDataset()">New Dataset</button>
-        <button class="btn btn-secondary" onclick="createNotebook()">New Notebook</button>
-        <button class="btn btn-secondary" onclick="addCollaborator()">Add Collaborator</button>
-        <button class="btn btn-secondary" onclick="createTrainee()">Add HQP/Trainee</button>
-        <button class="btn btn-secondary" onclick="createPartner()">Add Partner</button>
-        <button class="btn btn-secondary" onclick="exportData()">Export Data</button>
-        <button class="btn btn-secondary" onclick="showCalibrations()">Calibrations</button>
-        <button class="btn btn-secondary" onclick="createRecipe()">New Recipe</button>
-        <button class="btn btn-secondary" onclick="createTask()">New Task</button>
-        <button class="btn btn-secondary" onclick="openGwenAgent()">Open Gwen Agent</button>
+    <!-- Gwen AI Sidebar -->
+    <div class="gwen-sidebar collapsed" id="gwenSidebar">
+      <div class="gwen-header">
+        <div class="gwen-header-title">G.W.E.N. // Research Agent</div>
+        <button class="gwen-close-btn" onclick="toggleGwenPanel()">X</button>
       </div>
-
-      <!-- Tabs -->
-      <div class="tabs">
-        <div class="tab active" data-tab="studies">Studies</div>
-        <div class="tab" data-tab="datasets">Datasets</div>
-        <div class="tab" data-tab="notebooks">Lab Notebooks</div>
-        <div class="tab" data-tab="compliance">Compliance</div>
-        <div class="tab" data-tab="collaborators">Collaborators</div>
-        <div class="tab" data-tab="recipes">Recipes</div>
-        <div class="tab" data-tab="tasks">Tasks</div>
-        <div class="tab" data-tab="audit">Audit</div>
-        <div class="tab" data-tab="grants">Grants</div>
-        <div class="tab" data-tab="ethics">Ethics</div>
-        <div class="tab" data-tab="hqp">HQP</div>
-        <div class="tab" data-tab="partners">Partners</div>
-        <div class="tab" data-tab="security">Security</div>
-        <div class="tab" data-tab="reports">Reports</div>
-        <div class="tab" data-tab="deadlines">Deadlines</div>
-        <div class="tab" data-tab="publications">Publications</div>
-        <div class="tab" data-tab="equipment">Equipment</div>
-        <div class="tab" data-tab="lineage">Lineage</div>
-        <div class="tab" data-tab="network-research">Network Research</div>
+      <div class="gwen-messages" id="gwenMessages">
+        <div class="gwen-msg gwen">Research workspace connected. I can build data cards, create charts, render formulas, model fluid dynamics, and navigate your studies. What would you like to work on?</div>
       </div>
-
-      <!-- Studies Tab -->
-      <div class="tab-content active" id="tab-studies">
-        <div id="studies-list"></div>
-      </div>
-
-      <!-- Datasets Tab -->
-      <div class="tab-content" id="tab-datasets">
-        <div id="datasets-list"></div>
-      </div>
-
-      <!-- Notebooks Tab -->
-      <div class="tab-content" id="tab-notebooks">
-        <div id="notebooks-list"></div>
-      </div>
-
-      <!-- Compliance Tab -->
-      <div class="tab-content" id="tab-compliance">
-        <div id="compliance-list"></div>
-      </div>
-
-      <!-- Collaborators Tab -->
-      <div class="tab-content" id="tab-collaborators">
-        <div id="collaborators-list"></div>
-      </div>
-
-      <!-- Recipes Tab -->
-      <div class="tab-content" id="tab-recipes">
-        <div id="recipes-list"></div>
-      </div>
-
-      <!-- Tasks Tab -->
-      <div class="tab-content" id="tab-tasks">
-        <div id="tasks-list"></div>
-      </div>
-
-      <!-- Audit Tab -->
-      <div class="tab-content" id="tab-audit">
-        <div id="audit-list"></div>
-      </div>
-
-      <!-- Grants Tab -->
-      <div class="tab-content" id="tab-grants">
-        <div id="grants-list"></div>
-      </div>
-
-      <!-- Ethics Tab -->
-      <div class="tab-content" id="tab-ethics">
-        <div id="ethics-list"></div>
-      </div>
-
-      <!-- HQP Tab -->
-      <div class="tab-content" id="tab-hqp">
-        <div id="hqp-list"></div>
-      </div>
-
-      <!-- Partners Tab -->
-      <div class="tab-content" id="tab-partners">
-        <div id="partners-list"></div>
-      </div>
-
-      <!-- Security Tab -->
-      <div class="tab-content" id="tab-security">
-        <div id="security-list"></div>
-      </div>
-
-      <!-- Reports Tab -->
-      <div class="tab-content" id="tab-reports">
-        <div id="reports-list"></div>
-      </div>
-
-      <!-- Deadlines Tab -->
-      <div class="tab-content" id="tab-deadlines">
-        <div id="deadlines-list"></div>
-      </div>
-
-      <!-- Publications Tab -->
-      <div class="tab-content" id="tab-publications">
-        <div id="publications-list"></div>
-      </div>
-
-      <!-- Equipment Tab -->
-      <div class="tab-content" id="tab-equipment">
-        <div id="equipment-list"></div>
-      </div>
-
-      <!-- Lineage Tab -->
-      <div class="tab-content" id="tab-lineage">
-        <div id="lineage-list"></div>
-      </div>
-
-      <!-- Network Research Tab -->
-      <div class="tab-content" id="tab-network-research">
-        <div id="network-research-list"></div>
-      </div>
+      <div class="gwen-input-area">
+        <textarea class="gwen-input" id="gwenInput" placeholder="Ask Gwen..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendToGwen();}"></textarea>
+        <button class="gwen-send-btn" id="gwenSendBtn" onclick="sendToGwen()">SEND</button>
       </div>
     </div>
   </div>
@@ -545,52 +821,44 @@
 
     function getAuthContext() {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-      farmId = sessionStorage.getItem('farm_id')
-        || sessionStorage.getItem('farmId')
-        || localStorage.getItem('farm_id')
-        || localStorage.getItem('farmId');
+      farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId');
       return { token, farmId };
     }
 
     function buildHeaders() {
       const { token, farmId } = getAuthContext();
       const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['Authorization'] = 'Bearer ' + token;
       if (farmId) headers['X-Farm-ID'] = farmId;
       return headers;
     }
 
-    async function apiFetch(path, opts = {}) {
-      const merged = { ...opts, headers: { ...buildHeaders(), ...(opts.headers || {}) } };
-      const res = await fetch(`${API_BASE}${path}`, merged);
+    async function apiFetch(path, opts) {
+      opts = opts || {};
+      const merged = Object.assign({}, opts, { headers: Object.assign({}, buildHeaders(), opts.headers || {}) });
+      const res = await fetch(API_BASE + path, merged);
       if (!res.ok) {
         let bodyText = '';
-        try {
-          const body = await res.json();
-          bodyText = body.error || body.message || '';
-        } catch (_) {
-          // No JSON body.
-        }
-        throw new Error(`API ${res.status}: ${bodyText || res.statusText}`);
+        try { const body = await res.json(); bodyText = body.error || body.message || ''; } catch (_) {}
+        throw new Error('API ' + res.status + ': ' + (bodyText || res.statusText));
       }
       return res.json();
     }
 
-    // ── Tab switching ──
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    // Tab system
+    document.querySelectorAll('.tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
         tab.classList.add('active');
-        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+        var target = document.getElementById('tab-' + tab.dataset.tab);
+        if (target) target.classList.add('active');
       });
     });
 
-    // ── Badge helper ──
     function statusBadge(status) {
-      const cls = { active: 'badge-active', draft: 'badge-draft', completed: 'badge-completed',
-                     archived: 'badge-archived', locked: 'badge-completed' }[status] || 'badge-draft';
-      return `<span class="badge ${cls}">${status}</span>`;
+      var cls = { active: 'badge-active', draft: 'badge-draft', completed: 'badge-completed', archived: 'badge-archived', locked: 'badge-completed' }[status] || 'badge-draft';
+      return '<span class="badge ' + cls + '">' + status + '</span>';
     }
 
     function formatDate(d) {
@@ -599,56 +867,469 @@
     }
 
     function promptRequired(label, valueLabel) {
-      const value = prompt(label);
-      if (!value || !value.trim()) {
-        alert(`${valueLabel} is required.`);
-        return null;
-      }
+      var value = prompt(label);
+      if (!value || !value.trim()) { alert(valueLabel + ' is required.'); return null; }
       return value.trim();
     }
 
-    // ── Load dashboard ──
+    function timeAgo(ts) {
+      if (!ts) return '';
+      var diff = (Date.now() - new Date(ts).getTime()) / 1000;
+      if (diff < 60) return Math.round(diff) + 's ago';
+      if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+      return Math.round(diff / 86400) + 'd ago';
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- GWEN CHAT ----
+    var gwenConversationId = null;
+    var gwenLoading = false;
+
+    function toggleGwenPanel() {
+      document.getElementById('gwenSidebar').classList.toggle('collapsed');
+    }
+
+    async function sendToGwen() {
+      if (gwenLoading) return;
+      var input = document.getElementById('gwenInput');
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      var messagesEl = document.getElementById('gwenMessages');
+      messagesEl.innerHTML += '<div class="gwen-msg user">' + escapeHtml(msg) + '</div>';
+      messagesEl.innerHTML += '<div class="gwen-typing" id="gwenTyping">G.W.E.N. is thinking...</div>';
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      gwenLoading = true;
+      document.getElementById('gwenSendBtn').disabled = true;
+
+      try {
+        var body = { message: msg };
+        if (gwenConversationId) body.conversationId = gwenConversationId;
+        var result = await apiFetch('/api/gwen/chat', { method: 'POST', body: JSON.stringify(body) });
+        gwenConversationId = result.conversationId || gwenConversationId;
+        var typing = document.getElementById('gwenTyping');
+        if (typing) typing.remove();
+        var reply = result.response || result.message || 'No response';
+        messagesEl.innerHTML += '<div class="gwen-msg gwen">' + formatGwenResponse(reply) + '</div>';
+        if (result.displays) {
+          for (var i = 0; i < result.displays.length; i++) handleGwenDisplay(result.displays[i]);
+        }
+      } catch (err) {
+        var typing2 = document.getElementById('gwenTyping');
+        if (typing2) typing2.remove();
+        messagesEl.innerHTML += '<div class="gwen-msg gwen" style="color:var(--red);">Error: ' + escapeHtml(err.message) + '</div>';
+      }
+      gwenLoading = false;
+      document.getElementById('gwenSendBtn').disabled = false;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function formatGwenResponse(text) {
+      var html = escapeHtml(text);
+      html = html.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+      html = html.replace(/`([^`]+)`/g, '<code style="background:var(--bg);padding:0.125rem 0.25rem;border-radius:2px;font-size:0.75rem;">$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
+    function handleGwenDisplay(display) {
+      if (display.type === 'chart' && display.config) {
+        switchToTab('visualization');
+        renderPlotlyChart(display.config);
+      } else if (display.type === 'formula') {
+        switchToTab('formulas');
+        addFormulaToLibrary(display.latex, display.label, display.context);
+      } else if (display.type === 'data_card') {
+        loadDataCards();
+      }
+    }
+
+    function switchToTab(tabName) {
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
+      var tab = document.querySelector('[data-tab="' + tabName + '"]');
+      if (tab) tab.classList.add('active');
+      var content = document.getElementById('tab-' + tabName);
+      if (content) content.classList.add('active');
+    }
+
+    // ---- DATA CARDS ----
+    async function loadDataCards() {
+      try {
+        var data = await apiFetch('/api/research/data-cards').catch(function() { return null; });
+        if (!data) { renderDefaultDataCards(); return; }
+        var grid = document.getElementById('dataCardsGrid');
+        var cards = data.cards || [];
+        if (!cards.length) { renderDefaultDataCards(); return; }
+        grid.innerHTML = cards.map(function(card) {
+          var val = card.current_value != null ? Number(card.current_value).toFixed(2) : '--';
+          var t = card.thresholds || {};
+          var alertClass = '', alertText = '';
+          if (card.current_value != null) {
+            if (t.critical_high && card.current_value > t.critical_high) { alertText = 'CRITICAL HIGH'; }
+            else if (t.critical_low && card.current_value < t.critical_low) { alertText = 'CRITICAL LOW'; }
+            else if (t.warning_high && card.current_value > t.warning_high) { alertClass = 'warning'; alertText = 'WARNING HIGH'; }
+            else if (t.warning_low && card.current_value < t.warning_low) { alertClass = 'warning'; alertText = 'WARNING LOW'; }
+          }
+          return '<div class="data-card" data-category="' + card.category + '">' +
+            '<div class="dc-label">' + escapeHtml(card.card_name) + '</div>' +
+            '<div class="dc-value">' + val + '<span class="dc-unit">' + escapeHtml(card.unit) + '</span></div>' +
+            (alertText ? '<div class="dc-alert ' + alertClass + '">' + alertText + '</div>' : '') +
+            (card.last_updated ? '<div style="font-size:0.5625rem;color:var(--text-secondary);margin-top:0.25rem;">' + timeAgo(card.last_updated) + '</div>' : '') +
+            '</div>';
+        }).join('');
+        var sel = document.getElementById('chartDataSource');
+        sel.innerHTML = cards.map(function(c) { return '<option value="' + c.variable_key + '">' + c.card_name + ' (' + c.unit + ')</option>'; }).join('');
+      } catch (err) { renderDefaultDataCards(); }
+    }
+
+    function renderDefaultDataCards() {
+      var defaults = [
+        { name: 'CO2', category: 'gas', unit: 'ppm' },
+        { name: 'O2 Dissolved', category: 'liquid', unit: 'mg/L' },
+        { name: 'Nutrient pH', category: 'liquid', unit: 'pH' },
+        { name: 'Chlorophyll', category: 'compound', unit: 'ug/cm2' },
+        { name: 'PPFD', category: 'environmental', unit: 'umol/m2/s' },
+        { name: 'VPD', category: 'environmental', unit: 'kPa' },
+      ];
+      var grid = document.getElementById('dataCardsGrid');
+      grid.innerHTML = defaults.map(function(d) {
+        return '<div class="data-card" data-category="' + d.category + '">' +
+          '<div class="dc-label">' + d.name + '</div>' +
+          '<div class="dc-value">--<span class="dc-unit">' + d.unit + '</span></div>' +
+          '<div style="font-size:0.5625rem;color:var(--text-secondary);margin-top:0.25rem;">Ask Gwen to create data cards</div></div>';
+      }).join('');
+    }
+
+    // ---- SENSOR DATA ----
+    var sensorPollTimer = null;
+
+    async function pollSensors() {
+      try {
+        var data = await apiFetch('/api/sensors/current').catch(function() { return null; });
+        if (data && data.sensors) {
+          var s = data.sensors;
+          if (s.temperature != null) {
+            document.getElementById('sensor-temp').textContent = Number(s.temperature).toFixed(1) + ' C';
+            document.getElementById('sensor-temp').style.color = s.temperature > 30 ? 'var(--red)' : 'var(--green)';
+            document.getElementById('sensor-temp-ago').textContent = timeAgo(s.temperature_updated || data.timestamp);
+          }
+          if (s.humidity != null) {
+            document.getElementById('sensor-humidity').textContent = Number(s.humidity).toFixed(1) + '%';
+            document.getElementById('sensor-humidity-ago').textContent = timeAgo(s.humidity_updated || data.timestamp);
+          }
+          if (s.co2 != null) {
+            document.getElementById('sensor-co2').textContent = Math.round(s.co2) + ' ppm';
+            document.getElementById('sensor-co2-ago').textContent = timeAgo(s.co2_updated || data.timestamp);
+          }
+          if (s.light != null || s.ppfd != null) {
+            var lv = s.ppfd || s.light;
+            document.getElementById('sensor-light').textContent = Math.round(lv) + ' umol';
+            document.getElementById('sensor-light-ago').textContent = timeAgo(data.timestamp);
+          }
+          if (s.vpd != null) {
+            document.getElementById('sensor-vpd').textContent = Number(s.vpd).toFixed(2) + ' kPa';
+            document.getElementById('sensor-vpd-ago').textContent = timeAgo(data.timestamp);
+          }
+          if (s.ec != null) {
+            document.getElementById('sensor-ec').textContent = Number(s.ec).toFixed(1) + ' mS';
+            document.getElementById('sensor-ec-ago').textContent = timeAgo(data.timestamp);
+          }
+          document.getElementById('sensor-status').textContent = 'Live';
+        } else {
+          document.getElementById('sensor-status').textContent = 'Waiting for data...';
+        }
+      } catch (err) { document.getElementById('sensor-status').textContent = 'Offline'; }
+    }
+
+    async function loadSensorTrendChart() {
+      try {
+        var data = await apiFetch('/api/sensors/history?hours=24').catch(function() { return null; });
+        if (!data || !data.readings || !data.readings.length) {
+          document.getElementById('sensorTrendChart').innerHTML = '<div class="empty-state"><p>No sensor history available yet.</p></div>';
+          return;
+        }
+        var readings = data.readings;
+        var times = readings.map(function(r) { return new Date(r.timestamp || r.recorded_at); });
+        var traces = [];
+        if (readings[0].temperature != null) traces.push({ x: times, y: readings.map(function(r) { return r.temperature; }), name: 'Temp (C)', type: 'scatter', line: { color: '#ef4444' } });
+        if (readings[0].humidity != null) traces.push({ x: times, y: readings.map(function(r) { return r.humidity; }), name: 'Humidity (%)', yaxis: 'y2', type: 'scatter', line: { color: '#3b82f6' } });
+        Plotly.newPlot('sensorTrendChart', traces, {
+          paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { color: '#94a3b8', family: 'SF Mono, monospace', size: 10 },
+          margin: { t: 20, b: 40, l: 50, r: 50 },
+          xaxis: { gridcolor: '#1f2937', linecolor: '#2d3a4f' },
+          yaxis: { title: 'Temperature (C)', gridcolor: '#1f2937', linecolor: '#2d3a4f' },
+          yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right', gridcolor: '#1f2937', linecolor: '#2d3a4f' },
+          legend: { orientation: 'h', y: -0.15 }, showlegend: true,
+        }, { responsive: true, displayModeBar: false });
+      } catch (err) {
+        document.getElementById('sensorTrendChart').innerHTML = '<div class="empty-state"><p>Sensor trend unavailable.</p></div>';
+      }
+    }
+
+    // ---- CHART BUILDER ----
+    async function buildChart() {
+      var type = document.getElementById('chartTypeSelect').value;
+      var sel = document.getElementById('chartDataSource');
+      var keys = Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+      var hours = parseInt(document.getElementById('chartHoursBack').value) || 168;
+      if (!keys.length) { alert('Select at least one data source from the list.'); return; }
+      var traces = [];
+      for (var k = 0; k < keys.length; k++) {
+        try {
+          var data = await apiFetch('/api/research/data-card-history?variable_key=' + encodeURIComponent(keys[k]) + '&hours=' + hours);
+          var points = data.data_points || [];
+          if (points.length) {
+            traces.push({
+              x: points.map(function(p) { return new Date(p.recorded_at); }),
+              y: points.map(function(p) { return Number(p.value); }),
+              name: (sel.querySelector('option[value="' + keys[k] + '"]') || {}).textContent || keys[k],
+              type: type === 'bar' ? 'bar' : type === 'box' ? 'box' : 'scatter',
+              mode: type === 'scatter' ? 'markers' : 'lines+markers',
+            });
+          }
+        } catch (err) { console.warn('Chart data fetch failed for', keys[k], err); }
+      }
+      if (!traces.length) {
+        document.getElementById('chartOutput').innerHTML = '<div class="empty-state"><p>No data points found. Record observations or ask Gwen to update data cards.</p></div>';
+        return;
+      }
+      renderPlotlyChart({ traces: traces, title: type + ' chart -- ' + keys.join(', ') });
+    }
+
+    function renderPlotlyChart(config) {
+      var traces = config.traces || [];
+      Plotly.newPlot('chartOutput', traces, {
+        title: { text: config.title || '', font: { color: '#e2e8f0', size: 14 } },
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#94a3b8', family: 'SF Mono, monospace', size: 10 },
+        margin: { t: 40, b: 50, l: 60, r: 30 },
+        xaxis: { gridcolor: '#1f2937', linecolor: '#2d3a4f', title: config.x_label || '' },
+        yaxis: { gridcolor: '#1f2937', linecolor: '#2d3a4f', title: config.y_label || '' },
+        legend: { orientation: 'h', y: -0.2 }, showlegend: true,
+      }, { responsive: true });
+    }
+
+    async function loadChartLibrary() {
+      try {
+        var data = await apiFetch('/api/research/workspace-charts').catch(function() { return { charts: [] }; });
+        var lib = document.getElementById('chartLibrary');
+        if (!(data.charts || []).length) {
+          lib.innerHTML = '<div class="empty-state"><p>No saved charts. Build one above or ask Gwen.</p></div>';
+          return;
+        }
+        lib.innerHTML = (data.charts || []).map(function(c) {
+          return '<div class="chart-card"><strong style="color:var(--accent);font-size:0.8125rem;">' + escapeHtml(c.title) + '</strong>' +
+            '<div style="font-size:0.6875rem;color:var(--text-secondary);margin-top:0.25rem;">' + c.chart_type + ' -- ' + formatDate(c.created_at) + '</div></div>';
+        }).join('');
+      } catch (err) { document.getElementById('chartLibrary').innerHTML = ''; }
+    }
+
+    // ---- FLUID DYNAMICS (Three.js) ----
+    var simScene, simCamera, simRenderer, simParticles, simAnimationId;
+
+    function initSimulation() {
+      var viewport = document.getElementById('simViewport');
+      if (!viewport || simScene) return;
+      simScene = new THREE.Scene();
+      simScene.background = new THREE.Color(0x0a0e1a);
+      simCamera = new THREE.PerspectiveCamera(60, viewport.clientWidth / viewport.clientHeight, 0.1, 100);
+      simCamera.position.set(3, 2, 4);
+      simCamera.lookAt(0, 0, 0);
+      simRenderer = new THREE.WebGLRenderer({ antialias: true });
+      simRenderer.setSize(viewport.clientWidth, viewport.clientHeight);
+      simRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      viewport.appendChild(simRenderer.domElement);
+      // Channel
+      var channelGeo = new THREE.BoxGeometry(4, 0.15, 0.6);
+      var channelMat = new THREE.MeshBasicMaterial({ color: 0x1f2937, transparent: true, opacity: 0.6 });
+      simScene.add(new THREE.Mesh(channelGeo, channelMat));
+      var wireGeo = new THREE.EdgesGeometry(channelGeo);
+      simScene.add(new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.4 })));
+      var grid = new THREE.GridHelper(8, 20, 0x1f2937, 0x111827);
+      grid.position.y = -0.5;
+      simScene.add(grid);
+      // Particles
+      var pCount = 600;
+      var pGeo = new THREE.BufferGeometry();
+      var positions = new Float32Array(pCount * 3);
+      var colors = new Float32Array(pCount * 3);
+      for (var i = 0; i < pCount; i++) {
+        positions[i*3] = (Math.random()-0.5)*4;
+        positions[i*3+1] = (Math.random()-0.5)*0.12;
+        positions[i*3+2] = (Math.random()-0.5)*0.5;
+        var spd = Math.random();
+        colors[i*3] = 0.05+spd*0.9; colors[i*3+1] = 0.5+spd*0.35; colors[i*3+2] = 0.9;
+      }
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      simParticles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.03, vertexColors: true, transparent: true, opacity: 0.8 }));
+      simScene.add(simParticles);
+      ['simFlowRate','simLength','simTemp'].forEach(function(id) {
+        document.getElementById(id).addEventListener('input', function() {
+          document.getElementById(id+'Val').textContent = this.value;
+        });
+      });
+      animateSim();
+      window.addEventListener('resize', function() {
+        if (!simRenderer) return;
+        var vp = document.getElementById('simViewport');
+        if (!vp) return;
+        simCamera.aspect = vp.clientWidth / vp.clientHeight;
+        simCamera.updateProjectionMatrix();
+        simRenderer.setSize(vp.clientWidth, vp.clientHeight);
+      });
+    }
+
+    function animateSim() {
+      simAnimationId = requestAnimationFrame(animateSim);
+      if (!simParticles) return;
+      var fr = parseFloat((document.getElementById('simFlowRate') || {}).value || 2);
+      var speed = fr * 0.002;
+      var pos = simParticles.geometry.attributes.position.array;
+      for (var i = 0; i < pos.length; i += 3) {
+        pos[i] += speed + (Math.random()-0.5)*0.002;
+        pos[i+1] += (Math.random()-0.5)*0.001;
+        if (pos[i] > 2) pos[i] = -2;
+      }
+      simParticles.geometry.attributes.position.needsUpdate = true;
+      var t = Date.now() * 0.0005;
+      simCamera.position.x = 3*Math.cos(t*0.1)+1;
+      simCamera.position.z = 3*Math.sin(t*0.1)+1;
+      simCamera.lookAt(0,0,0);
+      simRenderer.render(simScene, simCamera);
+    }
+
+    function runSimulation() {
+      var flowRate = parseFloat(document.getElementById('simFlowRate').value) || 2;
+      var length = parseFloat(document.getElementById('simLength').value) || 2;
+      var temp = parseFloat(document.getElementById('simTemp').value) || 22;
+      var width = 0.1, depth = 0.02;
+      var velocity = (flowRate / 60000) / (width * depth);
+      var kinVis = 1.004e-6 * Math.pow(20 / temp, 0.5);
+      var dh = 2 * width * depth / (width + depth);
+      var re = velocity * dh / kinVis;
+      var regime = re < 2300 ? 'Laminar' : re < 4000 ? 'Transitional' : 'Turbulent';
+      var resTime = length / velocity;
+      document.getElementById('simResults').innerHTML =
+        '<div class="sim-result-card"><div class="sim-result-value">' + Math.round(re) + '</div><div class="sim-result-label">Reynolds #</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + regime + '</div><div class="sim-result-label">Flow Regime</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + velocity.toFixed(3) + '</div><div class="sim-result-label">Velocity (m/s)</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + resTime.toFixed(1) + '</div><div class="sim-result-label">Residence (s)</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + (dh*1000).toFixed(1) + '</div><div class="sim-result-label">D_h (mm)</div></div>' +
+        '<div class="sim-result-card"><div class="sim-result-value">' + temp + '</div><div class="sim-result-label">Temp (C)</div></div>';
+    }
+
+    // ---- FORMULA EDITOR (KaTeX) ----
+    var savedFormulas = [];
+    var referenceFormulas = [
+      { latex: '\\frac{dC}{dt} = D \\nabla^2 C - vC + S', label: 'Advection-Diffusion (Nutrient Transport)', context: 'Governs nutrient concentration C over time with diffusion D, velocity v, and source S' },
+      { latex: 'Re = \\frac{\\rho v D_h}{\\mu}', label: 'Reynolds Number', context: 'Classifies flow regime: Re < 2300 laminar, 2300-4000 transitional, > 4000 turbulent' },
+      { latex: '\\mu = \\mu_{max} \\frac{S}{K_s + S}', label: 'Monod Growth Kinetics', context: 'Microbial/plant nutrient uptake rate as a function of substrate concentration S' },
+      { latex: 'VPD = e_s(T) \\times (1 - \\frac{RH}{100})', label: 'Vapor Pressure Deficit', context: 'Driving force for transpiration' },
+      { latex: 'DLI = PPFD \\times \\frac{photoperiod \\times 3600}{10^6}', label: 'Daily Light Integral', context: 'Total photosynthetically active photons per day (mol/m2/day)' },
+      { latex: 'A = V_{cmax} \\frac{C_i - \\Gamma^*}{C_i + K_c(1 + O/K_o)} - R_d', label: 'Farquhar Photosynthesis Model', context: 'Net CO2 assimilation rate under Rubisco-limited conditions' },
+    ];
+
+    function initFormulaEditor() {
+      var input = document.getElementById('formulaInput');
+      if (!input) return;
+      input.addEventListener('input', renderFormulaPreview);
+      loadReferenceFormulas();
+    }
+
+    function renderFormulaPreview() {
+      var input = document.getElementById('formulaInput');
+      var preview = document.getElementById('formulaPreview');
+      if (!input || !preview) return;
+      var latex = input.value.trim();
+      if (!latex) { preview.innerHTML = '<span style="color:var(--text-secondary);">Preview will render here</span>'; return; }
+      try { katex.render(latex, preview, { throwOnError: false, displayMode: true }); }
+      catch (err) { preview.innerHTML = '<span style="color:var(--red);font-size:0.8125rem;">' + escapeHtml(err.message) + '</span>'; }
+    }
+
+    function insertFormula(latex) {
+      document.getElementById('formulaInput').value = latex;
+      renderFormulaPreview();
+    }
+
+    function saveFormula() {
+      var latex = document.getElementById('formulaInput').value.trim();
+      var label = document.getElementById('formulaLabel').value.trim();
+      if (!latex || !label) { alert('Enter a formula and label.'); return; }
+      savedFormulas.push({ latex: latex, label: label, context: '' });
+      addFormulaToLibrary(latex, label, '');
+      document.getElementById('formulaInput').value = '';
+      document.getElementById('formulaLabel').value = '';
+      document.getElementById('formulaPreview').innerHTML = '<span style="color:var(--text-secondary);">Preview will render here</span>';
+    }
+
+    function addFormulaToLibrary(latex, label, context) {
+      var lib = document.getElementById('formulaLibrary');
+      var card = document.createElement('div');
+      card.className = 'formula-card';
+      card.innerHTML = '<div class="formula-card-label">' + escapeHtml(label) + '</div><div class="formula-card-render"></div>' + (context ? '<div class="formula-card-context">' + escapeHtml(context) + '</div>' : '');
+      lib.prepend(card);
+      try { katex.render(latex, card.querySelector('.formula-card-render'), { throwOnError: false, displayMode: true }); }
+      catch (err) { card.querySelector('.formula-card-render').textContent = latex; }
+    }
+
+    function loadReferenceFormulas() {
+      var lib = document.getElementById('formulaLibrary');
+      if (!lib) return;
+      lib.innerHTML = '';
+      for (var i = 0; i < referenceFormulas.length; i++) {
+        addFormulaToLibrary(referenceFormulas[i].latex, referenceFormulas[i].label, referenceFormulas[i].context);
+      }
+    }
+
+    // ---- DASHBOARD LOADER ----
     async function loadDashboard() {
       try {
-        const { farmId: currentFarmId } = getAuthContext();
-        const [studies, datasets, notebooks, alerts, grants, trainees, partners] = await Promise.all([
-          apiFetch('/api/research/studies').catch(() => ({ studies: [] })),
-          apiFetch('/api/research/datasets').catch(() => ({ datasets: [] })),
-          apiFetch('/api/research/notebooks').catch(() => ({ notebooks: [] })),
-          apiFetch(`/api/research/deadlines/alerts?farm_id=${farmId}`).catch(() => ({ alerts: [] })),
-          apiFetch('/api/research/grants').catch(() => ({ grants: [] })),
-          apiFetch('/api/research/trainees').catch(() => ({ trainees: [] })),
-          apiFetch('/api/research/partners').catch(() => ({ partners: [] }))
+        getAuthContext();
+        var results = await Promise.all([
+          apiFetch('/api/research/studies').catch(function() { return { studies: [] }; }),
+          apiFetch('/api/research/datasets').catch(function() { return { datasets: [] }; }),
+          apiFetch('/api/research/notebooks').catch(function() { return { notebooks: [] }; }),
+          apiFetch('/api/research/deadlines/alerts?farm_id=' + farmId).catch(function() { return { alerts: [] }; }),
+          apiFetch('/api/research/grants').catch(function() { return { grants: [] }; }),
+          apiFetch('/api/research/trainees').catch(function() { return { trainees: [] }; }),
+          apiFetch('/api/research/partners').catch(function() { return { partners: [] }; })
         ]);
+        var studies = results[0], datasets = results[1], notebooks = results[2],
+            alerts = results[3], grants = results[4], trainees = results[5], partners = results[6];
 
-        const activeStudies = (studies.studies || []).filter(s => s.status === 'active');
+        var activeStudies = (studies.studies || []).filter(function(s) { return s.status === 'active'; });
         document.getElementById('stat-studies').textContent = activeStudies.length;
         document.getElementById('stat-datasets').textContent = (datasets.datasets || []).length;
         document.getElementById('stat-notebooks').textContent = (notebooks.notebooks || []).length;
         document.getElementById('stat-alerts').textContent = (alerts.alerts || []).length;
-
-        const activeGrants = (grants.grants || []).filter(g => g.status === 'active' || g.status === 'awarded');
+        var activeGrants = (grants.grants || []).filter(function(g) { return g.status === 'active' || g.status === 'awarded'; });
         document.getElementById('stat-grants').textContent = activeGrants.length;
-        const activeTrainees = (trainees.trainees || []).filter(t => t.status === 'active');
+        var activeTrainees = (trainees.trainees || []).filter(function(t) { return t.status === 'active'; });
         document.getElementById('stat-trainees').textContent = activeTrainees.length;
         document.getElementById('stat-partners').textContent = (partners.partners || []).length;
 
-        // Phase 3 stats
         Promise.all([
-          apiFetch(`/api/research/publications?farm_id=${farmId}`).catch(() => ({ publications: [] })),
-          apiFetch(`/api/research/equipment?farm_id=${farmId}`).catch(() => ({ equipment: [] })),
-          apiFetch(`/api/research/deadlines/upcoming?farm_id=${farmId}`).catch(() => ({ deadlines: [] }))
-        ]).then(([pubs, equip, dl]) => {
-          document.getElementById("stat-publications").textContent = (pubs.publications || []).length;
-          document.getElementById("stat-equipment").textContent = (equip.equipment || []).length;
-          document.getElementById("stat-deadlines").textContent = (dl.deadlines || []).length;
-        }).catch(() => {});
+          apiFetch('/api/research/publications?farm_id=' + farmId).catch(function() { return { publications: [] }; }),
+          apiFetch('/api/research/equipment?farm_id=' + farmId).catch(function() { return { equipment: [] }; }),
+          apiFetch('/api/research/deadlines/upcoming?farm_id=' + farmId).catch(function() { return { deadlines: [] }; })
+        ]).then(function(r) {
+          document.getElementById('stat-publications').textContent = (r[0].publications || []).length;
+          document.getElementById('stat-equipment').textContent = (r[1].equipment || []).length;
+          document.getElementById('stat-deadlines').textContent = (r[2].deadlines || []).length;
+        }).catch(function() {});
 
-        // Count 7d observations
-        let obsCount = 0;
-        for (const ds of (datasets.datasets || [])) {
-          obsCount += parseInt(ds.observation_count || 0, 10);
-        }
+        var obsCount = 0;
+        (datasets.datasets || []).forEach(function(ds) { obsCount += parseInt(ds.observation_count || 0, 10); });
         document.getElementById('stat-observations').textContent = obsCount;
 
         renderStudies(studies.studies || []);
@@ -658,633 +1339,335 @@
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('app').style.display = 'block';
+
+        loadDataCards();
+        pollSensors();
+        sensorPollTimer = setInterval(pollSensors, 30000);
+        loadSensorTrendChart();
+        initFormulaEditor();
+        loadChartLibrary();
+        document.querySelector('[data-tab="simulation"]').addEventListener('click', function() { setTimeout(initSimulation, 100); }, { once: true });
       } catch (err) {
-        document.getElementById('loading').innerHTML =
-          `<div class="alert-banner">Failed to load research data: ${err.message}. Check that the Research tier is enabled.</div>`;
+        document.getElementById('loading').innerHTML = '<div class="alert-banner">Failed to load research data: ' + err.message + '. Check that the Research tier is enabled.</div>';
       }
     }
 
+    // ---- RENDERS ----
     function renderStudies(studies) {
-      const el = document.getElementById('studies-list');
-      if (!studies.length) {
-        el.innerHTML = '<div class="empty-state"><h3>No studies yet</h3><p>Create your first research study to get started.</p></div>';
-        return;
-      }
-      el.innerHTML = `<table>
-        <thead><tr><th>Title</th><th>Status</th><th>Protocols</th><th>Created</th></tr></thead>
-        <tbody>${studies.map(s => `<tr>
-          <td><strong>${s.title}</strong></td>
-          <td>${statusBadge(s.status)}</td>
-          <td>${s.protocol_count || 0}</td>
-          <td>${formatDate(s.created_at)}</td>
-        </tr>`).join('')}</tbody>
-      </table>`;
+      var el = document.getElementById('studies-list');
+      if (!studies.length) { el.innerHTML = '<div class="empty-state"><h3>No studies yet</h3><p>Create your first research study to get started.</p></div>'; return; }
+      el.innerHTML = '<table><thead><tr><th>Title</th><th>Status</th><th>Protocols</th><th>Created</th></tr></thead><tbody>' +
+        studies.map(function(s) { return '<tr><td><strong>' + s.title + '</strong></td><td>' + statusBadge(s.status) + '</td><td>' + (s.protocol_count||0) + '</td><td>' + formatDate(s.created_at) + '</td></tr>'; }).join('') +
+        '</tbody></table>';
     }
 
     function renderDatasets(datasets) {
-      const el = document.getElementById('datasets-list');
-      if (!datasets.length) {
-        el.innerHTML = '<div class="empty-state"><h3>No datasets</h3><p>Create a dataset within a study to begin recording observations.</p></div>';
-        return;
-      }
-      el.innerHTML = `<table>
-        <thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th></tr></thead>
-        <tbody>${datasets.map(d => `<tr>
-          <td>${d.name || d.dataset_name || '--'}</td>
-          <td>${statusBadge(d.status)}</td>
-          <td>${d.observation_count || 0}</td>
-          <td>${formatDate(d.created_at)}</td>
-        </tr>`).join('')}</tbody>
-      </table>`;
+      var el = document.getElementById('datasets-list');
+      if (!datasets.length) { el.innerHTML = '<div class="empty-state"><h3>No datasets</h3><p>Create a dataset within a study to begin recording observations.</p></div>'; return; }
+      el.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th></tr></thead><tbody>' +
+        datasets.map(function(d) { return '<tr><td>' + (d.name||d.dataset_name||'--') + '</td><td>' + statusBadge(d.status) + '</td><td>' + (d.observation_count||0) + '</td><td>' + formatDate(d.created_at) + '</td></tr>'; }).join('') +
+        '</tbody></table>';
     }
 
     function renderNotebooks(notebooks) {
-      const el = document.getElementById('notebooks-list');
-      if (!notebooks.length) {
-        el.innerHTML = '<div class="empty-state"><h3>No notebooks</h3><p>Create an electronic lab notebook to start documenting experiments.</p></div>';
-        return;
-      }
-      el.innerHTML = `<div class="card-grid">${notebooks.map(n => `<div class="card">
-        <h3>${n.title}</h3>
-        <p>${n.description || 'No description'}</p>
-        <div class="meta">${statusBadge(n.status)} -- Created ${formatDate(n.created_at)}</div>
-      </div>`).join('')}</div>`;
+      var el = document.getElementById('notebooks-list');
+      if (!notebooks.length) { el.innerHTML = '<div class="empty-state"><h3>No notebooks</h3><p>Create an electronic lab notebook to start documenting experiments.</p></div>'; return; }
+      el.innerHTML = '<div class="card-grid">' + notebooks.map(function(n) { return '<div class="card"><h3>' + n.title + '</h3><p>' + (n.description||'No description') + '</p><div class="meta">' + statusBadge(n.status) + ' -- Created ' + formatDate(n.created_at) + '</div></div>'; }).join('') + '</div>';
     }
 
     function renderAlerts(alerts) {
-      const container = document.getElementById('alerts-container');
-      const unresolved = alerts.filter(a => !a.resolved_at);
+      var container = document.getElementById('alerts-container');
+      var unresolved = alerts.filter(function(a) { return !a.resolved_at; });
       if (!unresolved.length) { container.innerHTML = ''; return; }
-      container.innerHTML = unresolved.slice(0, 3).map(a =>
-        `<div class="alert-banner ${a.severity === 'warning' ? 'warning' : ''}">${a.alert_type}: ${a.message}</div>`
-      ).join('');
+      container.innerHTML = unresolved.slice(0,3).map(function(a) { return '<div class="alert-banner ' + (a.severity==='warning'?'warning':'') + '">' + a.alert_type + ': ' + a.message + '</div>'; }).join('');
     }
 
-    // ── Actions ──
+    // ---- ACTION HANDLERS ----
     async function createStudy() {
-      const title = promptRequired('Study title:', 'Study title');
-      if (!title) return;
-      try {
-        await apiFetch('/api/research/studies', {
-          method: 'POST',
-          body: JSON.stringify({ title, status: 'draft', objectives: '' })
-        });
-        loadDashboard();
-      } catch (err) {
-        alert('Failed to create study: ' + err.message);
-      }
+      var title = promptRequired('Study title:', 'Study title'); if (!title) return;
+      try { await apiFetch('/api/research/studies', { method: 'POST', body: JSON.stringify({ title: title, status: 'draft', objectives: '' }) }); loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function createDataset() {
-      const studyId = promptRequired('Study ID for this dataset:', 'Study ID');
-      if (!studyId) return;
-      const name = promptRequired('Dataset name:', 'Dataset name');
-      if (!name) return;
-      const description = prompt('Description (optional):') || '';
-      try {
-        await apiFetch('/api/research/datasets', {
-          method: 'POST',
-          body: JSON.stringify({ study_id: studyId, name, description })
-        });
-        loadDashboard();
-      } catch (err) {
-        alert('Failed to create dataset: ' + err.message);
-      }
+      var studyId = promptRequired('Study ID for this dataset:', 'Study ID'); if (!studyId) return;
+      var name = promptRequired('Dataset name:', 'Dataset name'); if (!name) return;
+      var desc = prompt('Description (optional):') || '';
+      try { await apiFetch('/api/research/datasets', { method: 'POST', body: JSON.stringify({ study_id: studyId, name: name, description: desc }) }); loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function createNotebook() {
-      const title = promptRequired('Notebook title:', 'Notebook title');
-      if (!title) return;
-      const studyId = prompt('Study ID (leave blank for standalone):');
-      try {
-        await apiFetch('/api/research/notebooks', {
-          method: 'POST',
-          body: JSON.stringify({ title, study_id: studyId || null })
-        });
-        loadDashboard();
-      } catch (err) { alert('Failed to create notebook: ' + err.message); }
+      var title = promptRequired('Notebook title:', 'Notebook title'); if (!title) return;
+      var studyId = prompt('Study ID (leave blank for standalone):');
+      try { await apiFetch('/api/research/notebooks', { method: 'POST', body: JSON.stringify({ title: title, study_id: studyId || null }) }); loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function exportData() {
-      const studyId = prompt('Study ID to export:');
-      if (!studyId) return;
-      try {
-        const result = await apiFetch('/api/research/exports', {
-          method: 'POST',
-          body: JSON.stringify({ study_id: studyId, export_format: 'json', include_sections: ['observations', 'protocols', 'provenance'] })
-        });
-        alert('Export package created: ' + (result.export_package?.id || 'unknown'));
-      } catch (err) { alert('Export failed: ' + err.message); }
+      var studyId = prompt('Study ID to export:'); if (!studyId) return;
+      try { var r = await apiFetch('/api/research/exports', { method: 'POST', body: JSON.stringify({ study_id: studyId, export_format: 'json', include_sections: ['observations','protocols','provenance'] }) }); alert('Export created: ' + ((r.export_package||{}).id || 'unknown')); }
+      catch (err) { alert('Export failed: ' + err.message); }
     }
-
-    function showCalibrations() {
-      window.location.hash = '#calibrations';
-      alert('Calibration management is available through your farm assistant -- ask "show calibration status"');
-    }
-
     async function createRecipe() {
-      const recipeName = promptRequired('Recipe name:', 'Recipe name');
-      if (!recipeName) return;
-      try {
-        await apiFetch('/api/research/recipes', {
-          method: 'POST',
-          body: JSON.stringify({ recipe_name: recipeName, parameters: {} })
-        });
-        loadRecipes();
-      } catch (err) { alert('Failed to create recipe: ' + err.message); }
+      var name = promptRequired('Recipe name:', 'Recipe name'); if (!name) return;
+      try { await apiFetch('/api/research/recipes', { method: 'POST', body: JSON.stringify({ recipe_name: name, parameters: {} }) }); loadRecipes(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function createTask() {
-      const studyId = promptRequired('Study ID:', 'Study ID');
-      if (!studyId) return;
-      const title = promptRequired('Task title:', 'Task title');
-      if (!title) return;
-      const assignee = prompt('Assignee email (optional):');
-      try {
-        await apiFetch(`/api/research/studies/${studyId}/tasks`, {
-          method: 'POST',
-          body: JSON.stringify({ title, assigned_to: assignee || null, status: 'open', priority: 3 })
-        });
-        loadTasks();
-      } catch (err) { alert('Failed to create task: ' + err.message); }
+      var studyId = promptRequired('Study ID:', 'Study ID'); if (!studyId) return;
+      var title = promptRequired('Task title:', 'Task title'); if (!title) return;
+      var assignee = prompt('Assignee email (optional):');
+      try { await apiFetch('/api/research/studies/' + studyId + '/tasks', { method: 'POST', body: JSON.stringify({ title: title, assigned_to: assignee || null, status: 'open', priority: 3 }) }); loadTasks(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function createTrainee() {
-      const name = promptRequired('Trainee name:', 'Trainee name');
-      if (!name) return;
-      const traineeType = promptRequired('Trainee type (undergraduate, masters, phd, postdoc, research_associate, technician, visiting_scholar, co_op, intern):', 'Trainee type');
-      if (!traineeType) return;
-      const studyId = prompt('Study ID (optional):');
-      const institution = prompt('Institution (optional):');
-      try {
-        await apiFetch('/api/research/trainees', {
-          method: 'POST',
-          body: JSON.stringify({
-            name,
-            trainee_type: traineeType,
-            study_id: studyId || null,
-            institution: institution || null
-          })
-        });
-        loadDashboard();
-      } catch (err) {
-        alert('Failed to create trainee: ' + err.message);
-      }
+      var name = promptRequired('Trainee name:', 'Trainee name'); if (!name) return;
+      var type = promptRequired('Trainee type (undergraduate, masters, phd, postdoc, research_associate, technician, visiting_scholar, co_op, intern):', 'Trainee type'); if (!type) return;
+      var studyId = prompt('Study ID (optional):');
+      var inst = prompt('Institution (optional):');
+      try { await apiFetch('/api/research/trainees', { method: 'POST', body: JSON.stringify({ name: name, trainee_type: type, study_id: studyId || null, institution: inst || null }) }); loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function createPartner() {
-      const name = promptRequired('Partner institution name:', 'Partner institution name');
-      if (!name) return;
-      const partnerType = promptRequired('Partner type (university, college, research_institute, government, industry, hospital, ngo, international):', 'Partner type');
-      if (!partnerType) return;
-      const country = prompt('Country (optional, defaults to Canada):') || 'Canada';
-      try {
-        await apiFetch('/api/research/partners', {
-          method: 'POST',
-          body: JSON.stringify({ name, partner_type: partnerType, country })
-        });
-        loadDashboard();
-      } catch (err) {
-        alert('Failed to create partner: ' + err.message);
-      }
+      var name = promptRequired('Partner institution name:', 'Partner institution name'); if (!name) return;
+      var type = promptRequired('Partner type (university, college, research_institute, government, industry, hospital, ngo, international):', 'Partner type'); if (!type) return;
+      var country = prompt('Country (optional, defaults to Canada):') || 'Canada';
+      try { await apiFetch('/api/research/partners', { method: 'POST', body: JSON.stringify({ name: name, partner_type: type, country: country }) }); loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
-
     async function addCollaborator() {
-      const studyId = promptRequired('Study ID:', 'Study ID');
-      if (!studyId) return;
-      const email = promptRequired('Collaborator email:', 'Collaborator email');
-      if (!email) return;
-      const role = promptRequired('Collaborator role (viewer, contributor, reviewer, coordinator):', 'Collaborator role');
-      if (!role) return;
-      try {
-        await apiFetch(`/api/research/studies/${studyId}/collaborators`, {
-          method: 'POST',
-          body: JSON.stringify({ email, role })
-        });
-        const el = document.getElementById('collaborators-list');
-        if (el) el.dataset.loaded = '';
-        loadDashboard();
-      } catch (err) {
-        alert('Failed to add collaborator: ' + err.message);
-      }
+      var studyId = promptRequired('Study ID:', 'Study ID'); if (!studyId) return;
+      var email = promptRequired('Collaborator email:', 'Collaborator email'); if (!email) return;
+      var role = promptRequired('Collaborator role (viewer, contributor, reviewer, coordinator):', 'Collaborator role'); if (!role) return;
+      try { await apiFetch('/api/research/studies/' + studyId + '/collaborators', { method: 'POST', body: JSON.stringify({ email: email, role: role }) }); var el = document.getElementById('collaborators-list'); if (el) el.dataset.loaded = ''; loadDashboard(); }
+      catch (err) { alert('Failed: ' + err.message); }
     }
 
-    function openGwenAgent() {
-      window.location.href = '/gwen-core.html';
-    }
-
+    // ---- LAZY-LOAD TAB HANDLERS ----
     async function loadRecipes() {
-      const el = document.getElementById('recipes-list');
+      var el = document.getElementById('recipes-list');
       try {
-        const data = await apiFetch('/api/research/recipes');
-        const recipes = data.recipes || [];
+        var data = await apiFetch('/api/research/recipes');
+        var recipes = data.recipes || [];
         document.getElementById('stat-recipes').textContent = recipes.length;
-        if (!recipes.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No beta recipes</h3><p>Create a recipe to begin the beta lifecycle.</p></div>';
-          return;
-        }
-        el.innerHTML = `<table>
-          <thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Deployments</th><th>Created</th></tr></thead>
-          <tbody>${recipes.map(r => `<tr>
-            <td><strong>${r.title}</strong></td>
-            <td>${r.version_number || '--'}</td>
-            <td>${statusBadge(r.status)}</td>
-            <td>${r.deployment_count || 0}</td>
-            <td>${formatDate(r.created_at)}</td>
-          </tr>`).join('')}</tbody>
-        </table>`;
-      } catch (err) {
-        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
-      }
+        if (!recipes.length) { el.innerHTML = '<div class="empty-state"><h3>No beta recipes</h3><p>Create a recipe to begin.</p></div>'; return; }
+        el.innerHTML = '<table><thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Deployments</th><th>Created</th></tr></thead><tbody>' + recipes.map(function(r) { return '<tr><td><strong>' + r.title + '</strong></td><td>' + (r.version_number||'--') + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.deployment_count||0) + '</td><td>' + formatDate(r.created_at) + '</td></tr>'; }).join('') + '</tbody></table>';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: ' + err.message + '</div>'; }
     }
 
     async function loadTasks() {
-      const el = document.getElementById('tasks-list');
+      var el = document.getElementById('tasks-list');
       try {
-        const studies = await apiFetch('/api/research/studies');
-        let allTasks = [];
-        for (const s of (studies.studies || []).slice(0, 10)) {
-          const t = await apiFetch(`/api/research/studies/${s.id}/tasks`).catch(() => ({ tasks: [] }));
-          (t.tasks || []).forEach(task => { task._study_title = s.title; });
+        var studies = await apiFetch('/api/research/studies');
+        var allTasks = [];
+        var slist = (studies.studies || []).slice(0, 10);
+        for (var i = 0; i < slist.length; i++) {
+          var t = await apiFetch('/api/research/studies/' + slist[i].id + '/tasks').catch(function() { return { tasks: [] }; });
+          (t.tasks||[]).forEach(function(task) { task._study_title = slist[i].title; });
           allTasks = allTasks.concat(t.tasks || []);
         }
-        document.getElementById('stat-tasks').textContent = allTasks.filter(t => t.status !== 'done').length;
-        if (!allTasks.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No tasks</h3><p>Create a task within a study to track work.</p></div>';
-          return;
-        }
-        el.innerHTML = `<table>
-          <thead><tr><th>Title</th><th>Study</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead>
-          <tbody>${allTasks.map(t => `<tr>
-            <td>${t.title}</td>
-            <td>${t._study_title || '--'}</td>
-            <td>${statusBadge(t.status)}</td>
-            <td>${t.priority || '--'}</td>
-            <td>${formatDate(t.due_date)}</td>
-          </tr>`).join('')}</tbody>
-        </table>`;
-      } catch (err) {
-        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
-      }
+        document.getElementById('stat-tasks').textContent = allTasks.filter(function(t) { return t.status !== 'done'; }).length;
+        if (!allTasks.length) { el.innerHTML = '<div class="empty-state"><h3>No tasks</h3><p>Create a task within a study.</p></div>'; return; }
+        el.innerHTML = '<table><thead><tr><th>Title</th><th>Study</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead><tbody>' + allTasks.map(function(t) { return '<tr><td>' + t.title + '</td><td>' + (t._study_title||'--') + '</td><td>' + statusBadge(t.status) + '</td><td>' + (t.priority||'--') + '</td><td>' + formatDate(t.due_date) + '</td></tr>'; }).join('') + '</tbody></table>';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: ' + err.message + '</div>'; }
     }
 
     async function loadAudit() {
-      const el = document.getElementById('audit-list');
+      var el = document.getElementById('audit-list');
       try {
-        const data = await apiFetch('/api/research/audit?limit=50');
-        const entries = data.entries || [];
-        if (!entries.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No audit entries</h3><p>Actions across the research platform are logged here.</p></div>';
-          return;
-        }
-        el.innerHTML = `<table>
-          <thead><tr><th>Action</th><th>Entity</th><th>User</th><th>When</th></tr></thead>
-          <tbody>${entries.map(e => `<tr>
-            <td>${e.action}</td>
-            <td>${e.entity_type || '--'}${e.entity_id ? ' #' + e.entity_id : ''}</td>
-            <td>${e.actor_email || e.user_id || '--'}</td>
-            <td>${formatDate(e.created_at)}</td>
-          </tr>`).join('')}</tbody>
-        </table>`;
-      } catch (err) {
-        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
-      }
+        var data = await apiFetch('/api/research/audit?limit=50');
+        var entries = data.entries || [];
+        if (!entries.length) { el.innerHTML = '<div class="empty-state"><h3>No audit entries</h3></div>'; return; }
+        el.innerHTML = '<table><thead><tr><th>Action</th><th>Entity</th><th>User</th><th>When</th></tr></thead><tbody>' + entries.map(function(e) { return '<tr><td>' + e.action + '</td><td>' + (e.entity_type||'--') + (e.entity_id?' #'+e.entity_id:'') + '</td><td>' + (e.actor_email||e.user_id||'--') + '</td><td>' + formatDate(e.created_at) + '</td></tr>'; }).join('') + '</tbody></table>';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: ' + err.message + '</div>'; }
     }
 
-    // Compliance tab loader
-    document.querySelector('[data-tab="compliance"]').addEventListener('click', async () => {
-      const el = document.getElementById('compliance-list');
+    // Lazy-load event listeners for management tabs
+    document.querySelector('[data-tab="compliance"]').addEventListener('click', async function() {
+      var el = document.getElementById('compliance-list');
       if (el.dataset.loaded) return;
       try {
-        const studies = await apiFetch('/api/research/studies');
-        if (!studies.studies?.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No compliance data</h3><p>Create a study first.</p></div>';
-          return;
+        var studies = await apiFetch('/api/research/studies');
+        if (!(studies.studies||[]).length) { el.innerHTML = '<div class="empty-state"><h3>No compliance data</h3></div>'; return; }
+        var html = '<div class="card-grid">';
+        for (var i = 0; i < Math.min(5, studies.studies.length); i++) {
+          var s = studies.studies[i];
+          var r = await Promise.all([apiFetch('/api/research/studies/'+s.id+'/dmp').catch(function(){return{plans:[]};}), apiFetch('/api/research/studies/'+s.id+'/budgets').catch(function(){return{budgets:[]};})]);
+          html += '<div class="card"><h3>'+s.title+'</h3><p>DMPs: '+(r[0].plans||[]).length+' | Budgets: '+(r[1].budgets||[]).length+'</p><div class="meta">'+statusBadge(s.status)+'</div></div>';
         }
-        let html = '<div class="card-grid">';
-        for (const s of studies.studies.slice(0, 5)) {
-          const [dmpData, budgets] = await Promise.all([
-            apiFetch(`/api/research/studies/${s.id}/dmp`).catch(() => ({ plans: [] })),
-            apiFetch(`/api/research/studies/${s.id}/budgets`).catch(() => ({ budgets: [] }))
-          ]);
-          html += `<div class="card">
-            <h3>${s.title}</h3>
-            <p>DMPs: ${(dmpData.plans || []).length} | Budgets: ${(budgets.budgets || []).length}</p>
-            <div class="meta">${statusBadge(s.status)}</div>
-          </div>`;
-        }
-        html += '</div>';
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) {
-        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
-      }
+        el.innerHTML = html + '</div>'; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // Recipes tab loader
-    document.querySelector('[data-tab="recipes"]').addEventListener('click', () => {
-      const el = document.getElementById('recipes-list');
-      if (!el.dataset.loaded) { loadRecipes(); el.dataset.loaded = 'true'; }
-    });
+    document.querySelector('[data-tab="recipes"]').addEventListener('click', function() { var el = document.getElementById('recipes-list'); if (!el.dataset.loaded) { loadRecipes(); el.dataset.loaded = 'true'; } });
+    document.querySelector('[data-tab="tasks"]').addEventListener('click', function() { var el = document.getElementById('tasks-list'); if (!el.dataset.loaded) { loadTasks(); el.dataset.loaded = 'true'; } });
+    document.querySelector('[data-tab="audit"]').addEventListener('click', function() { var el = document.getElementById('audit-list'); if (!el.dataset.loaded) { loadAudit(); el.dataset.loaded = 'true'; } });
 
-    // Tasks tab loader
-    document.querySelector('[data-tab="tasks"]').addEventListener('click', () => {
-      const el = document.getElementById('tasks-list');
-      if (!el.dataset.loaded) { loadTasks(); el.dataset.loaded = 'true'; }
-    });
-
-    // Audit tab loader
-    document.querySelector('[data-tab="audit"]').addEventListener('click', () => {
-      const el = document.getElementById('audit-list');
-      if (!el.dataset.loaded) { loadAudit(); el.dataset.loaded = 'true'; }
-    });
-
-    // Collaborators tab loader
-    document.querySelector('[data-tab="collaborators"]').addEventListener('click', async () => {
-      const el = document.getElementById('collaborators-list');
+    document.querySelector('[data-tab="collaborators"]').addEventListener('click', async function() {
+      var el = document.getElementById('collaborators-list');
       if (el.dataset.loaded) return;
       try {
-        const studies = await apiFetch('/api/research/studies');
-        if (!studies.studies?.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No collaborators</h3><p>Create a study first.</p></div>';
-          return;
-        }
-        let html = '';
-        for (const s of studies.studies.slice(0, 5)) {
-          const collabs = await apiFetch(`/api/research/studies/${s.id}/collaborators`).catch(() => ({ collaborators: [] }));
-          if ((collabs.collaborators || []).length) {
-            html += `<h3 style="margin: 1rem 0 0.5rem; color: var(--accent);">${s.title}</h3>
-            <table>
-              <thead><tr><th>Email</th><th>Role</th><th>Added</th></tr></thead>
-              <tbody>${(collabs.collaborators || []).map(c => `<tr>
-                <td>${c.email || 'External'}</td>
-                <td>${c.role}</td>
-                <td>${formatDate(c.added_at)}</td>
-              </tr>`).join('')}</tbody>
-            </table>`;
+        var studies = await apiFetch('/api/research/studies');
+        if (!(studies.studies||[]).length) { el.innerHTML = '<div class="empty-state"><h3>No collaborators</h3></div>'; return; }
+        var html = '';
+        for (var i = 0; i < Math.min(5, studies.studies.length); i++) {
+          var s = studies.studies[i];
+          var c = await apiFetch('/api/research/studies/'+s.id+'/collaborators').catch(function(){return{collaborators:[]};});
+          if ((c.collaborators||[]).length) {
+            html += '<h3 style="margin:1rem 0 0.5rem;color:var(--accent);">'+s.title+'</h3><table><thead><tr><th>Email</th><th>Role</th><th>Added</th></tr></thead><tbody>'+(c.collaborators||[]).map(function(cc){return '<tr><td>'+(cc.email||'External')+'</td><td>'+cc.role+'</td><td>'+formatDate(cc.added_at)+'</td></tr>';}).join('')+'</tbody></table>';
           }
         }
-        el.innerHTML = html || '<div class="empty-state"><h3>No collaborators yet</h3><p>Add collaborators to a study to see them here.</p></div>';
-        el.dataset.loaded = 'true';
-      } catch (err) {
-        el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`;
-      }
+        el.innerHTML = html || '<div class="empty-state"><h3>No collaborators yet</h3></div>'; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── Grants tab lazy-load ──
-    document.querySelector('[data-tab="grants"]').addEventListener('click', async () => {
-      const el = document.getElementById('grants-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/grants?farm_id=${farmId}`);
-        if (!data.grants?.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No grants yet</h3><p>Create a grant application to get started.</p></div>';
-        } else {
-          el.innerHTML = `<table><thead><tr><th>Title</th><th>Agency</th><th>Status</th><th>Amount</th></tr></thead>
-            <tbody>${data.grants.map(g => `<tr>
-              <td>${g.title}</td><td>${g.funding_agency || '--'}</td>
-              <td>${statusBadge(g.status)}</td><td>${g.amount_awarded ? '$' + Number(g.amount_awarded).toLocaleString() : '--'}</td>
-            </tr>`).join('')}</tbody></table>`;
-        }
+    document.querySelector('[data-tab="grants"]').addEventListener('click', async function() {
+      var el = document.getElementById('grants-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/grants?farm_id='+farmId);
+        if (!(data.grants||[]).length) el.innerHTML = '<div class="empty-state"><h3>No grants yet</h3></div>';
+        else el.innerHTML = '<table><thead><tr><th>Title</th><th>Agency</th><th>Status</th><th>Amount</th></tr></thead><tbody>'+data.grants.map(function(g){return '<tr><td>'+g.title+'</td><td>'+(g.funding_agency||'--')+'</td><td>'+statusBadge(g.status)+'</td><td>'+(g.amount_awarded?'$'+Number(g.amount_awarded).toLocaleString():'--')+'</td></tr>';}).join('')+'</tbody></table>';
         el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── Ethics tab lazy-load ──
-    document.querySelector('[data-tab="ethics"]').addEventListener('click', async () => {
-      const el = document.getElementById('ethics-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/ethics/dashboard?farm_id=${farmId}`);
-        let html = '<h3>Ethics Approvals</h3>';
-        if (data.active_approvals?.length) {
-          html += `<table><thead><tr><th>Protocol</th><th>Type</th><th>Status</th><th>Expiry</th></tr></thead>
-            <tbody>${data.active_approvals.map(e => `<tr>
-              <td>${e.protocol_title}</td><td>${e.ethics_type}</td>
-              <td>${statusBadge(e.status)}</td><td>${formatDate(e.expiry_date)}</td>
-            </tr>`).join('')}</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No active ethics approvals.</p></div>'; }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    document.querySelector('[data-tab="ethics"]').addEventListener('click', async function() {
+      var el = document.getElementById('ethics-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/ethics/dashboard?farm_id='+farmId);
+        var html = '<h3>Ethics Approvals</h3>';
+        if ((data.active_approvals||[]).length) html += '<table><thead><tr><th>Protocol</th><th>Type</th><th>Status</th><th>Expiry</th></tr></thead><tbody>'+data.active_approvals.map(function(e){return '<tr><td>'+e.protocol_title+'</td><td>'+e.ethics_type+'</td><td>'+statusBadge(e.status)+'</td><td>'+formatDate(e.expiry_date)+'</td></tr>';}).join('')+'</tbody></table>';
+        else html += '<div class="empty-state"><p>No active ethics approvals.</p></div>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── HQP tab lazy-load ──
-    document.querySelector('[data-tab="hqp"]').addEventListener('click', async () => {
-      const el = document.getElementById('hqp-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/trainees?farm_id=${farmId}`);
-        if (!data.trainees?.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No trainees yet</h3><p>Add HQP/trainee records to track supervision and milestones.</p></div>';
-        } else {
-          el.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Institution</th><th>Status</th></tr></thead>
-            <tbody>${data.trainees.map(t => `<tr>
-              <td>${t.name}</td><td>${t.trainee_type}</td>
-              <td>${t.institution || '--'}</td><td>${statusBadge(t.status)}</td>
-            </tr>`).join('')}</tbody></table>`;
-        }
+    document.querySelector('[data-tab="hqp"]').addEventListener('click', async function() {
+      var el = document.getElementById('hqp-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/trainees?farm_id='+farmId);
+        if (!(data.trainees||[]).length) el.innerHTML = '<div class="empty-state"><h3>No trainees yet</h3></div>';
+        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Institution</th><th>Status</th></tr></thead><tbody>'+data.trainees.map(function(t){return '<tr><td>'+t.name+'</td><td>'+t.trainee_type+'</td><td>'+(t.institution||'--')+'</td><td>'+statusBadge(t.status)+'</td></tr>';}).join('')+'</tbody></table>';
         el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── Partners tab lazy-load ──
-    document.querySelector('[data-tab="partners"]').addEventListener('click', async () => {
-      const el = document.getElementById('partners-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/partners?farm_id=${farmId}`);
-        if (!data.partners?.length) {
-          el.innerHTML = '<div class="empty-state"><h3>No partners yet</h3><p>Add partner institutions to manage collaborations and agreements.</p></div>';
-        } else {
-          el.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th>Agreements</th></tr></thead>
-            <tbody>${data.partners.map(p => `<tr>
-              <td>${p.name}</td><td>${p.partner_type}</td>
-              <td>${p.country || '--'}</td><td>${p.agreement_count || 0}</td>
-            </tr>`).join('')}</tbody></table>`;
-        }
+    document.querySelector('[data-tab="partners"]').addEventListener('click', async function() {
+      var el = document.getElementById('partners-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/partners?farm_id='+farmId);
+        if (!(data.partners||[]).length) el.innerHTML = '<div class="empty-state"><h3>No partners yet</h3></div>';
+        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th>Agreements</th></tr></thead><tbody>'+data.partners.map(function(p){return '<tr><td>'+p.name+'</td><td>'+p.partner_type+'</td><td>'+(p.country||'--')+'</td><td>'+(p.agreement_count||0)+'</td></tr>';}).join('')+'</tbody></table>';
         el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── Security tab lazy-load ──
-    document.querySelector('[data-tab="security"]').addEventListener('click', async () => {
-      const el = document.getElementById('security-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/security/dashboard?farm_id=${farmId}`);
-        let html = '<h3>Data Classifications</h3>';
-        if (data.classification_summary?.length) {
-          html += `<table><thead><tr><th>Level</th><th>Count</th></tr></thead>
-            <tbody>${data.classification_summary.map(c => `<tr><td>${c.classification_level}</td><td>${c.count}</td></tr>`).join('')}</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No classifications applied yet.</p></div>'; }
-        if (data.open_incidents?.length) {
-          html += '<h3>Open Incidents</h3>';
-          html += `<table><thead><tr><th>Severity</th><th>Status</th><th>Count</th></tr></thead>
-            <tbody>${data.open_incidents.map(i => `<tr><td>${i.severity}</td><td>${i.status}</td><td>${i.count}</td></tr>`).join('')}</tbody></table>`;
-        }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
+    document.querySelector('[data-tab="security"]').addEventListener('click', async function() {
+      var el = document.getElementById('security-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/security/dashboard?farm_id='+farmId);
+        var html = '<h3>Data Classifications</h3>';
+        if ((data.classification_summary||[]).length) html += '<table><thead><tr><th>Level</th><th>Count</th></tr></thead><tbody>'+data.classification_summary.map(function(c){return '<tr><td>'+c.classification_level+'</td><td>'+c.count+'</td></tr>';}).join('')+'</tbody></table>';
+        else html += '<div class="empty-state"><p>No classifications applied yet.</p></div>';
+        if ((data.open_incidents||[]).length) html += '<h3>Open Incidents</h3><table><thead><tr><th>Severity</th><th>Status</th><th>Count</th></tr></thead><tbody>'+data.open_incidents.map(function(inc){return '<tr><td>'+inc.severity+'</td><td>'+inc.status+'</td><td>'+inc.count+'</td></tr>';}).join('')+'</tbody></table>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    // ── Init ──
-
-    // ── Phase 3 Lazy-load Tabs ──
-
-    document.querySelector('[data-tab="reports"]').addEventListener('click', async () => {
-      const el = document.getElementById('reports-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/reports/dashboard?farm_id=${farmId}`);
-        let html = '<h3>Research Dashboard</h3>';
+    document.querySelector('[data-tab="reports"]').addEventListener('click', async function() {
+      var el = document.getElementById('reports-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/reports/dashboard?farm_id='+farmId);
+        var html = '<h3>Research Dashboard</h3>';
         if (data.dashboard) {
-          const d = data.dashboard;
-          html += `<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>`;
-          if (d.studies) html += d.studies.map(s => `<tr><td>Studies (${s.status})</td><td>${s.count}</td></tr>`).join('');
-          if (d.grants) html += d.grants.map(g => `<tr><td>Grants (${g.status})</td><td>${g.count}</td></tr>`).join('');
-          html += `</tbody></table>`;
-        }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
-    });
-
-    document.querySelector('[data-tab="deadlines"]').addEventListener('click', async () => {
-      const el = document.getElementById('deadlines-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/deadlines/upcoming?farm_id=${farmId}`);
-        let html = '<h3>Upcoming Deadlines</h3>';
-        if (data.deadlines?.length) {
-          html += `<table><thead><tr><th>Title</th><th>Type</th><th>Due</th><th>Priority</th></tr></thead>
-            <tbody>${data.deadlines.map(d => `<tr><td>${d.title}</td><td>${d.deadline_type || '--'}</td><td>${formatDate(d.due_date)}</td><td>${d.priority || 'normal'}</td></tr>`).join('')}</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No upcoming deadlines.</p></div>'; }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
-    });
-
-    document.querySelector('[data-tab="publications"]').addEventListener('click', async () => {
-      const el = document.getElementById('publications-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/publications?farm_id=${farmId}`);
-        let html = '<h3>Publications</h3>';
-        if (data.publications?.length) {
-          html += `<table><thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Year</th></tr></thead>
-            <tbody>${data.publications.map(p => `<tr><td>${p.title}</td><td>${p.publication_type || '--'}</td><td>${statusBadge(p.status)}</td><td>${p.publication_year || '--'}</td></tr>`).join('')}</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No publications tracked yet.</p></div>'; }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
-    });
-
-    document.querySelector('[data-tab="equipment"]').addEventListener('click', async () => {
-      const el = document.getElementById('equipment-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/equipment?farm_id=${farmId}`);
-        let html = '<h3>Lab Equipment</h3>';
-        if (data.equipment?.length) {
-          html += `<table><thead><tr><th>Name</th><th>Category</th><th>Status</th><th>Bookings</th></tr></thead>
-            <tbody>${data.equipment.map(e => `<tr><td>${e.name}</td><td>${e.category || '--'}</td><td>${statusBadge(e.status)}</td><td>${e.active_bookings || 0}</td></tr>`).join('')}</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No equipment registered yet.</p></div>'; }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
-    });
-
-    document.querySelector('[data-tab="lineage"]').addEventListener('click', async () => {
-      const el = document.getElementById('lineage-list');
-      if (el.dataset.loaded) return;
-      try {
-        const data = await apiFetch(`/api/research/lineage/governance?farm_id=${farmId}`);
-        let html = '<h3>Data Governance</h3>';
-        if (data.governance) {
-          const g = data.governance;
-          html += `<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>`;
-          html += `<tr><td>Total Annotations</td><td>${g.annotation_summary?.total_annotations || 0}</td></tr>`;
-          html += `<tr><td>Lineage Events</td><td>${g.lineage_summary?.total_events || 0}</td></tr>`;
-          html += `<tr><td>Datasets Tracked</td><td>${g.coverage?.total_datasets || 0}</td></tr>`;
-          html += `<tr><td>With Lineage</td><td>${g.coverage?.with_lineage || 0}</td></tr>`;
-          html += `</tbody></table>`;
-        } else { html += '<div class="empty-state"><p>No lineage data available.</p></div>'; }
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
-    });
-
-    // ── Network Research tab lazy-load ──
-    document.querySelector('[data-tab="network-research"]').addEventListener('click', async () => {
-      const el = document.getElementById('network-research-list');
-      if (el.dataset.loaded) return;
-      el.innerHTML = '<p style="color:var(--text-secondary);padding:1rem;">Loading cross-farm data...</p>';
-      try {
-        const [analytics, trends] = await Promise.all([
-          apiFetch('/api/network/comparative-analytics').catch(() => ({ analytics: [] })),
-          apiFetch('/api/network/trends').catch(() => ({ trends: [] }))
-        ]);
-
-        let html = '<h3 class="section-title">Cross-Farm Environmental Comparison</h3>';
-        html += '<p style="color:var(--text-secondary);margin-bottom:1rem;">Environmental data, growth rates, and quality metrics from participating network farms.</p>';
-
-        const farms = analytics.analytics || analytics.farms || [];
-        if (farms.length) {
-          html += '<div class="network-grid">';
-          for (const farm of farms) {
-            const name = farm.farm_name || farm.name || ('Farm ' + (farm.farm_id || '?'));
-            const yield_val = farm.avg_yield || farm.yield_rate || 0;
-            const grow_days = farm.avg_grow_days || farm.grow_days || '--';
-            const loss = farm.avg_loss_rate || farm.loss_rate || 0;
-            const temp = farm.avg_temp || farm.temperature || '--';
-            const humidity = farm.avg_humidity || farm.humidity || '--';
-            const bar_pct = Math.min(100, (yield_val / 5) * 100);
-
-            html += `<div class="network-card">
-              <h4>${name}</h4>
-              <table style="font-size:0.8125rem;">
-                <tr><td style="color:var(--text-secondary)">Avg Yield</td><td>${typeof yield_val === 'number' ? yield_val.toFixed(2) + ' kg' : yield_val}</td></tr>
-                <tr><td style="color:var(--text-secondary)">Grow Days</td><td>${grow_days}</td></tr>
-                <tr><td style="color:var(--text-secondary)">Loss Rate</td><td>${typeof loss === 'number' ? (loss * 100).toFixed(1) + '%' : loss}</td></tr>
-                <tr><td style="color:var(--text-secondary)">Temp</td><td>${temp}${typeof temp === 'number' ? ' C' : ''}</td></tr>
-                <tr><td style="color:var(--text-secondary)">Humidity</td><td>${humidity}${typeof humidity === 'number' ? '%' : ''}</td></tr>
-              </table>
-              <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-secondary);">Yield benchmark</div>
-              <div class="benchmark-bar"><div class="benchmark-bar-fill" style="width:${bar_pct}%"></div></div>
-            </div>`;
-          }
-          html += '</div>';
-        } else {
-          html += '<div class="empty-state"><h3>No network farm data available</h3><p>Cross-farm environmental and growth data will appear here when shared by other farms in the network.</p></div>';
-        }
-
-        // Trends section
-        const trendData = trends.trends || trends.data || [];
-        if (trendData.length) {
-          html += '<h3 class="section-title" style="margin-top:2rem;">Network Trends</h3>';
-          html += '<table><thead><tr><th>Metric</th><th>Period</th><th>Average</th><th>Min</th><th>Max</th></tr></thead><tbody>';
-          for (const t of trendData) {
-            html += `<tr>
-              <td>${t.metric || t.data_type || '--'}</td>
-              <td>${t.period || t.date || '--'}</td>
-              <td>${t.average != null ? Number(t.average).toFixed(2) : '--'}</td>
-              <td>${t.min != null ? Number(t.min).toFixed(2) : '--'}</td>
-              <td>${t.max != null ? Number(t.max).toFixed(2) : '--'}</td>
-            </tr>`;
-          }
+          var d = data.dashboard;
+          html += '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+          if (d.studies) d.studies.forEach(function(s){html+='<tr><td>Studies ('+s.status+')</td><td>'+s.count+'</td></tr>';});
+          if (d.grants) d.grants.forEach(function(g){html+='<tr><td>Grants ('+g.status+')</td><td>'+g.count+'</td></tr>';});
           html += '</tbody></table>';
         }
-
-        el.innerHTML = html;
-        el.dataset.loaded = 'true';
-      } catch (err) { el.innerHTML = `<div class="alert-banner">Error loading network data: ${err.message}</div>`; }
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
 
-    const auth = getAuthContext();
+    document.querySelector('[data-tab="deadlines"]').addEventListener('click', async function() {
+      var el = document.getElementById('deadlines-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/deadlines/upcoming?farm_id='+farmId);
+        var html = '<h3>Upcoming Deadlines</h3>';
+        if ((data.deadlines||[]).length) html += '<table><thead><tr><th>Title</th><th>Type</th><th>Due</th><th>Priority</th></tr></thead><tbody>'+data.deadlines.map(function(d){return '<tr><td>'+d.title+'</td><td>'+(d.deadline_type||'--')+'</td><td>'+formatDate(d.due_date)+'</td><td>'+(d.priority||'normal')+'</td></tr>';}).join('')+'</tbody></table>';
+        else html += '<div class="empty-state"><p>No upcoming deadlines.</p></div>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="publications"]').addEventListener('click', async function() {
+      var el = document.getElementById('publications-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/publications?farm_id='+farmId);
+        var html = '<h3>Publications</h3>';
+        if ((data.publications||[]).length) html += '<table><thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Year</th></tr></thead><tbody>'+data.publications.map(function(p){return '<tr><td>'+p.title+'</td><td>'+(p.publication_type||'--')+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.publication_year||'--')+'</td></tr>';}).join('')+'</tbody></table>';
+        else html += '<div class="empty-state"><p>No publications tracked yet.</p></div>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="equipment"]').addEventListener('click', async function() {
+      var el = document.getElementById('equipment-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/equipment?farm_id='+farmId);
+        var html = '<h3>Lab Equipment</h3>';
+        if ((data.equipment||[]).length) html += '<table><thead><tr><th>Name</th><th>Category</th><th>Status</th><th>Bookings</th></tr></thead><tbody>'+data.equipment.map(function(e){return '<tr><td>'+e.name+'</td><td>'+(e.category||'--')+'</td><td>'+statusBadge(e.status)+'</td><td>'+(e.active_bookings||0)+'</td></tr>';}).join('')+'</tbody></table>';
+        else html += '<div class="empty-state"><p>No equipment registered yet.</p></div>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="lineage"]').addEventListener('click', async function() {
+      var el = document.getElementById('lineage-list'); if (el.dataset.loaded) return;
+      try { var data = await apiFetch('/api/research/lineage/governance?farm_id='+farmId);
+        var html = '<h3>Data Governance</h3>';
+        if (data.governance) {
+          var g = data.governance;
+          html += '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+          html += '<tr><td>Total Annotations</td><td>'+((g.annotation_summary||{}).total_annotations||0)+'</td></tr>';
+          html += '<tr><td>Lineage Events</td><td>'+((g.lineage_summary||{}).total_events||0)+'</td></tr>';
+          html += '<tr><td>Datasets Tracked</td><td>'+((g.coverage||{}).total_datasets||0)+'</td></tr>';
+          html += '<tr><td>With Lineage</td><td>'+((g.coverage||{}).with_lineage||0)+'</td></tr>';
+          html += '</tbody></table>';
+        } else html += '<div class="empty-state"><p>No lineage data available.</p></div>';
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
+    });
+
+    document.querySelector('[data-tab="network-research"]').addEventListener('click', async function() {
+      var el = document.getElementById('network-research-list'); if (el.dataset.loaded) return;
+      el.innerHTML = '<p style="color:var(--text-secondary);padding:1rem;">Loading cross-farm data...</p>';
+      try {
+        var r = await Promise.all([
+          apiFetch('/api/network/comparative-analytics').catch(function(){return{analytics:[]};}),
+          apiFetch('/api/network/trends').catch(function(){return{trends:[]};})
+        ]);
+        var analytics = r[0], trends = r[1];
+        var html = '<h3 class="section-title">Cross-Farm Environmental Comparison</h3>';
+        var farms = analytics.analytics || analytics.farms || [];
+        if (farms.length) {
+          html += '<div class="network-grid">';
+          farms.forEach(function(farm) {
+            var name = farm.farm_name || farm.name || ('Farm '+(farm.farm_id||'?'));
+            var yv = farm.avg_yield || farm.yield_rate || 0;
+            var gd = farm.avg_grow_days || farm.grow_days || '--';
+            var loss = farm.avg_loss_rate || farm.loss_rate || 0;
+            var temp = farm.avg_temp || farm.temperature || '--';
+            var hum = farm.avg_humidity || farm.humidity || '--';
+            var pct = Math.min(100,(yv/5)*100);
+            html += '<div class="network-card"><h4>'+name+'</h4><table style="font-size:0.75rem;"><tr><td style="color:var(--text-secondary)">Avg Yield</td><td>'+(typeof yv==='number'?yv.toFixed(2)+' kg':yv)+'</td></tr><tr><td style="color:var(--text-secondary)">Grow Days</td><td>'+gd+'</td></tr><tr><td style="color:var(--text-secondary)">Loss Rate</td><td>'+(typeof loss==='number'?(loss*100).toFixed(1)+'%':loss)+'</td></tr><tr><td style="color:var(--text-secondary)">Temp</td><td>'+temp+(typeof temp==='number'?' C':'')+'</td></tr><tr><td style="color:var(--text-secondary)">Humidity</td><td>'+hum+(typeof hum==='number'?'%':'')+'</td></tr></table><div style="margin-top:0.5rem;font-size:0.6875rem;color:var(--text-secondary);">Yield benchmark</div><div class="benchmark-bar"><div class="benchmark-bar-fill" style="width:'+pct+'%"></div></div></div>';
+          });
+          html += '</div>';
+        } else html += '<div class="empty-state"><h3>No network farm data available</h3></div>';
+        var trendData = trends.trends || trends.data || [];
+        if (trendData.length) {
+          html += '<h3 class="section-title" style="margin-top:1.5rem;">Network Trends</h3><table><thead><tr><th>Metric</th><th>Period</th><th>Average</th><th>Min</th><th>Max</th></tr></thead><tbody>';
+          trendData.forEach(function(t){html+='<tr><td>'+(t.metric||t.data_type||'--')+'</td><td>'+(t.period||t.date||'--')+'</td><td>'+(t.average!=null?Number(t.average).toFixed(2):'--')+'</td><td>'+(t.min!=null?Number(t.min).toFixed(2):'--')+'</td><td>'+(t.max!=null?Number(t.max).toFixed(2):'--')+'</td></tr>';});
+          html += '</tbody></table>';
+        }
+        el.innerHTML = html; el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = '<div class="alert-banner">Error loading network data: '+err.message+'</div>'; }
+    });
+
+    // ---- INIT ----
+    var auth = getAuthContext();
     if (!auth.token) {
-      document.getElementById('loading').innerHTML =
-        '<div class="alert-banner">Not authenticated. <a href="/farm-admin-login.html" style="color:var(--accent);">Log in</a> to access the Research Workspace.</div>';
+      document.getElementById('loading').innerHTML = '<div class="alert-banner">Not authenticated. <a href="/farm-admin-login.html" style="color:var(--accent);">Log in</a> to access the Research Workspace.</div>';
     } else {
       loadDashboard();
     }
