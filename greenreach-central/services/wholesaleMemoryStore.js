@@ -22,8 +22,8 @@ const tokenBlacklist = new Set();
 
 // ── Login lockout tracking ───────────────────────────────────────────
 const loginAttempts = new Map(); // email → { count, lockedUntil }
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
 // ── Order audit trail ────────────────────────────────────────────────
 const orderAuditLog = [];

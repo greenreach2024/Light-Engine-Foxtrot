@@ -1564,7 +1564,7 @@ router.post('/buyers/login', loginLimiter, requireWholesaleDbForCriticalPaths, a
 
     // Check lockout before authenticating
     if (await isAccountLocked(email)) {
-      return res.status(423).json({ status: 'error', message: 'Account temporarily locked due to too many failed attempts. Try again in 30 minutes.' });
+      return res.status(423).json({ status: 'error', message: 'Account temporarily locked due to too many failed attempts. Try again in 5 minutes.' });
     }
 
     const buyer = await authenticateBuyer({ email, password });
