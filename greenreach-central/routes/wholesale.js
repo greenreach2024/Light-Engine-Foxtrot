@@ -834,7 +834,7 @@ router.post('/diag/fix-schema', async (req, res) => {
       results.alterBuyersId = 'OK';
 
       // Convert buyer_id columns in related tables
-      const relatedTables = ['password_reset_tokens', 'wholesale_orders', 'wholesale_payments'];
+      const relatedTables = ['password_reset_tokens', 'wholesale_orders', 'wholesale_payments', 'buyer_order_summary', 'wholesale_product_requests'];
       for (const tbl of relatedTables) {
         try {
           const check = await query(

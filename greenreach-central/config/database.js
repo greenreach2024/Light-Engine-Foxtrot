@@ -592,9 +592,25 @@ async function runMigrations(client) {
       WHERE table_name = 'wholesale_buyers' AND column_name = 'id'
     `);
     if (colCheck.rows.length > 0 && colCheck.rows[0].data_type === 'integer') {
-      await client.query(`
-        ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text;
-      `);
+      // Drop FK constraints referencing wholesale_buyers.id before ALTER
+      const fks = await client.query(
+        `SELECT tc.constraint_name, tc.table_name FROM information_schema.table_constraints tc
+         JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+         WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'wholesale_buyers' AND ccu.column_name = 'id'`
+      );
+      for (const fk of fks.rows) {
+        await client.query(`ALTER TABLE ${fk.table_name} DROP CONSTRAINT ${fk.constraint_name}`);
+      }
+      await client.query(`ALTER TABLE wholesale_buyers ALTER COLUMN id DROP DEFAULT`);
+      await client.query(`ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text`);
+      // Fix buyer_id columns in related tables
+      for (const fk of fks.rows) {
+        try {
+          await client.query(`ALTER TABLE ${fk.table_name} ALTER COLUMN buyer_id TYPE VARCHAR(255) USING buyer_id::text`);
+          await client.query(`ALTER TABLE ${fk.table_name} ADD CONSTRAINT ${fk.constraint_name} FOREIGN KEY (buyer_id) REFERENCES wholesale_buyers(id)`);
+        } catch (fkErr) { console.warn('[DB Migration] FK fix for', fk.table_name, 'skipped:', fkErr.message); }
+      }
+      logger.info('[DB Migration] Converted wholesale_buyers.id from INTEGER to VARCHAR(255)');
     }
     // Add missing columns if they don't exist
     await client.query(`
@@ -657,7 +673,7 @@ async function runMigrations(client) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS wholesale_product_requests (
         id SERIAL PRIMARY KEY,
-        buyer_id INTEGER NOT NULL REFERENCES wholesale_buyers(id) ON DELETE CASCADE,
+        buyer_id VARCHAR(255) NOT NULL REFERENCES wholesale_buyers(id) ON DELETE CASCADE,
         product_name VARCHAR(255) NOT NULL,
         quantity DECIMAL(10, 2) NOT NULL,
         unit VARCHAR(50) NOT NULL,
