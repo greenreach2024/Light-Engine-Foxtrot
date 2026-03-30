@@ -1134,22 +1134,7 @@ async function refreshData() {
     await loadDashboardData();
 }
 
-/**
- * Logout
- */
-function logout() {
-    grLog(' Returning to home...');
-    console.log(' DEBUG - Logout called from:', window.location.href);
-    console.log(' DEBUG - Redirecting to: /LE-dashboard.html');
-    console.log(' DEBUG - Current page version:', window.__PAGE_VERSION__);
-    
-    // Clear any stored session data
-    localStorage.removeItem(STORAGE_KEY_SESSION);
-    
-    // Redirect to updated dashboard with new UI
-    console.log(' DEBUG - Executing redirect now...');
-    window.location.href = '/LE-dashboard.html';
-}
+
 
 /**
  * Session management
@@ -1240,6 +1225,7 @@ function formatTime(timestamp) {
 let pricingData = [];
 let isPerGram = false; // false = per lb (default), true = per 100g
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
+const DEFAULT_SKU_FACTOR = 0.75;
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
 const PRICING_VERSION = '2026-03-27-v10';
@@ -1396,7 +1382,7 @@ async function loadCropsFromDatabase() {
                         ws3Discount: c.ws3Discount ?? 35,
                         isTaxable: c.isTaxable || false,
                         floor_price: c.floor_price ?? 0,
-                        sku_factor: c.sku_factor ?? 0.75
+                        sku_factor: DEFAULT_SKU_FACTOR
                     }));
                     // Cache to localStorage
                     pricingData.forEach(item => {
@@ -1427,11 +1413,18 @@ async function loadCropsFromDatabase() {
 
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
-                if (saved) return JSON.parse(saved);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    parsed.sku_factor = DEFAULT_SKU_FACTOR;
+                    return parsed;
+                }
                 const defaults = defaultPricing[crop] || { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 };
-                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
+                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: DEFAULT_SKU_FACTOR };
             });
         }
+
+        // Enforce global SKU policy: always 0.75 for every crop row.
+        pricingData = pricingData.map(item => ({ ...item, sku_factor: DEFAULT_SKU_FACTOR }));
 
         renderPricingTable();
     } catch (error) {
@@ -1494,7 +1487,7 @@ function calculateWholesalePrice(retail, discountPercent) {
  * where floor = max(costFloor, manualFloor)
  */
 function calculateFormulaWholesalePrice(retail, floorPrice, skuFactor) {
-    const factor = Math.min(0.75, Math.max(0.5, Number(skuFactor || 0.75)));
+    const factor = DEFAULT_SKU_FACTOR;
     const floor = Number(floorPrice || 0);
     const computed = retail * factor;
     return Math.max(floor, computed);
@@ -1559,14 +1552,16 @@ function renderPricingTable() {
                     <input 
                         type="number" 
                         class="pricing-input" 
-                        value="${(item.sku_factor || 0.75).toFixed(2)}" 
+                        value="${DEFAULT_SKU_FACTOR.toFixed(2)}" 
                         step="0.01" 
-                        min="0.50" 
+                        min="0.75" 
                         max="0.75"
                         data-index="${index}"
                         data-field="sku_factor"
-                        onchange="updatePricing(${index}, 'sku_factor', this.value)"
-                        style="width: 60px;"
+                        readonly
+                        disabled
+                        title="SKU factor is fixed at 0.75 for all crops"
+                        style="width: 60px; opacity: 0.8; cursor: not-allowed;"
                     >
                 </td>
                 <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
@@ -1601,12 +1596,13 @@ function updatePricing(index, field, value) {
             const cropUnit = getCropUnit(pricingData[index].crop);
             pricingData[index].retail = (cropUnit === 'weight' && isPerGram) ? convertPrice(numValue, false) : numValue;
         } else if (field === 'sku_factor') {
-            // Clamp SKU factor to valid range 0.50-0.75
-            pricingData[index].sku_factor = Math.min(0.75, Math.max(0.5, numValue));
+            pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
         } else {
             pricingData[index][field] = numValue;
         }
     }
+
+    pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
     
     renderPricingTable();
 }
@@ -1618,6 +1614,7 @@ async function savePricing() {
     try {
         // Save to localStorage
         pricingData.forEach(item => {
+            item.sku_factor = DEFAULT_SKU_FACTOR;
             localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
         });
         
@@ -1633,7 +1630,7 @@ async function savePricing() {
                 ws3Discount: item.ws3Discount,
                 isTaxable: item.isTaxable || false,
                 floor_price: item.floor_price || 0,
-                sku_factor: item.sku_factor || 0.75
+                sku_factor: DEFAULT_SKU_FACTOR
             }));
             
             const response = await fetch(`${API_BASE}/api/crop-pricing`, {
@@ -1660,7 +1657,7 @@ async function savePricing() {
                             body: JSON.stringify({
                                 crop: item.crop,
                                 floor_price: item.floor_price || 0,
-                                sku_factor: item.sku_factor || 0.75,
+                                sku_factor: DEFAULT_SKU_FACTOR,
                                 use_formula: true,
                                 tier: 'demand-based',
                                 reasoning: 'Updated via LE farm admin pricing table'
@@ -2934,8 +2931,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
     if (index !== -1) {
         const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
-        // Ensure formula fields have defaults when AI sets retail
-        if (!pricingData[index].sku_factor) pricingData[index].sku_factor = 0.75;
+        pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
         if (!pricingData[index].floor_price) pricingData[index].floor_price = 0;
         renderPricingTable();
         
@@ -2999,7 +2995,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             ws3Discount: 0,
             isTaxable: false,
             floor_price: 0,
-            sku_factor: 0.75
+            sku_factor: DEFAULT_SKU_FACTOR
         };
         pricingData.push(newRow);
         index = pricingData.length - 1;
@@ -3023,6 +3019,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
 async function savePricingQuiet() {
     try {
         pricingData.forEach(item => {
+            item.sku_factor = DEFAULT_SKU_FACTOR;
             localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
         });
         const crops = pricingData.map(item => ({
@@ -3035,7 +3032,7 @@ async function savePricingQuiet() {
             ws3Discount: item.ws3Discount,
             isTaxable: item.isTaxable || false,
             floor_price: item.floor_price || 0,
-            sku_factor: item.sku_factor || 0.75
+            sku_factor: DEFAULT_SKU_FACTOR
         }));
         await fetch(`${API_BASE}/api/crop-pricing`, {
             method: 'PUT',
