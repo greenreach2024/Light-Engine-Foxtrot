@@ -1235,7 +1235,11 @@
       } catch (err) {
         var typing2 = document.getElementById('gwenTyping');
         if (typing2) typing2.remove();
-        messagesEl.innerHTML += '<div class="gwen-msg gwen" style="color:var(--red);">Error: ' + escapeHtml(err.message) + '</div>';
+        var errMsg = err.message || 'Unknown error';
+        if (errMsg === 'Failed to fetch' || errMsg.includes('NetworkError') || errMsg.includes('network') || !navigator.onLine) {
+          errMsg = 'Unable to reach G.W.E.N. -- check your internet connection or try again shortly.';
+        }
+        messagesEl.innerHTML += '<div class="gwen-msg gwen" style="color:var(--red);">' + escapeHtml(errMsg) + '</div>';
       }
       gwenLoading = false;
       document.getElementById('gwenSendBtn').disabled = false;

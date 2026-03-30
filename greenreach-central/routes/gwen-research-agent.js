@@ -3566,7 +3566,16 @@ router.post('/chat', async (req, res) => {
     });
   } catch (err) {
     console.error('[GWEN] Chat error:', err.message);
-    res.status(500).json({ ok: false, error: 'Failed to process message' });
+    const msg = err.message || '';
+    let userError = 'G.W.E.N. is temporarily unavailable. Please try again in a moment.';
+    if (msg.includes('ENOTFOUND') || msg.includes('ETIMEDOUT') || msg.includes('ECONNREFUSED') || msg.includes('fetch failed') || msg.includes('network')) {
+      userError = 'G.W.E.N. cannot reach her AI provider right now. The server may be offline or the network is unreachable. Please try again shortly.';
+    } else if (msg.includes('401') || msg.includes('authentication') || msg.includes('api_key') || msg.includes('invalid_api_key')) {
+      userError = 'G.W.E.N. AI credentials need attention. Please contact the administrator.';
+    } else if (msg.includes('429') || msg.includes('rate') || msg.includes('quota')) {
+      userError = 'G.W.E.N. AI provider rate limit reached. Please wait a minute and try again.';
+    }
+    res.status(500).json({ ok: false, error: userError });
   }
 });
 
