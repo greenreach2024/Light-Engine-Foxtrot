@@ -324,10 +324,10 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
-      styleSrc: ["'self'", "'unsafe-inline'"], // Note: unsafe-inline needed for inline styles
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
-      fontSrc: ["'self'", "data:"],
+      fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'"], // Allow same-origin iframes for views
