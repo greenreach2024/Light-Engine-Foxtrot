@@ -3213,6 +3213,410 @@ async function runMigrations(client) {
     logger.warn('Migration 048 warning:', err.message);
   }
 
+
+  // ── Migration 050: Research management tables (Recipes, Ethics, Security, Lineage, Equipment, etc.) ──
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recipe_versions (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        study_id INTEGER,
+        recipe_name VARCHAR(255) NOT NULL,
+        version_number INTEGER DEFAULT 1,
+        status VARCHAR(50) DEFAULT 'draft',
+        parameters JSONB DEFAULT '{}',
+        created_by VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        promoted_from VARCHAR(255),
+        release_notes TEXT,
+        rationale TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_recipe_versions_farm ON recipe_versions(farm_id);
+
+      CREATE TABLE IF NOT EXISTS recipe_deployments (
+        id SERIAL PRIMARY KEY,
+        recipe_version_id INTEGER REFERENCES recipe_versions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255) NOT NULL,
+        room_id VARCHAR(255),
+        zone_id VARCHAR(255),
+        deployed_at TIMESTAMPTZ DEFAULT NOW(),
+        deployed_by VARCHAR(255),
+        operator_acknowledged BOOLEAN DEFAULT false,
+        acknowledged_at TIMESTAMPTZ,
+        rollback_reason TEXT,
+        rolled_back_at TIMESTAMPTZ,
+        status VARCHAR(50) DEFAULT 'active'
+      );
+      CREATE INDEX IF NOT EXISTS idx_recipe_deployments_version ON recipe_deployments(recipe_version_id);
+
+      CREATE TABLE IF NOT EXISTS recipe_comparisons (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER,
+        control_recipe_id INTEGER,
+        beta_recipe_id INTEGER,
+        farm_id VARCHAR(255) NOT NULL,
+        metric_name VARCHAR(255),
+        control_value NUMERIC,
+        beta_value NUMERIC,
+        delta NUMERIC,
+        unit VARCHAR(50),
+        measured_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_eligibility_rules (
+        id SERIAL PRIMARY KEY,
+        recipe_version_id INTEGER REFERENCES recipe_versions(id) ON DELETE CASCADE,
+        rule_type VARCHAR(50),
+        rule_value JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_operator_acks (
+        id SERIAL PRIMARY KEY,
+        deployment_id INTEGER REFERENCES recipe_deployments(id) ON DELETE CASCADE,
+        operator_user_id VARCHAR(255),
+        acknowledged_at TIMESTAMPTZ DEFAULT NOW(),
+        notes TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS ethics_applications (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER,
+        farm_id VARCHAR(255) NOT NULL,
+        ethics_type VARCHAR(100),
+        board_name VARCHAR(255),
+        protocol_number VARCHAR(255),
+        protocol_title VARCHAR(255),
+        title VARCHAR(255),
+        risk_level VARCHAR(50) DEFAULT 'minimal',
+        involves_humans BOOLEAN DEFAULT false,
+        involves_animals BOOLEAN DEFAULT false,
+        involves_biohazards BOOLEAN DEFAULT false,
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        decision_date DATE,
+        conditions JSONB DEFAULT '[]',
+        expiry_date DATE
+      );
+      CREATE INDEX IF NOT EXISTS idx_ethics_applications_farm ON ethics_applications(farm_id);
+
+      CREATE TABLE IF NOT EXISTS ethics_amendments (
+        id SERIAL PRIMARY KEY,
+        ethics_id INTEGER REFERENCES ethics_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255) NOT NULL,
+        amendment_type VARCHAR(100),
+        description TEXT,
+        changes_summary TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS ethics_renewals (
+        id SERIAL PRIMARY KEY,
+        ethics_id INTEGER REFERENCES ethics_applications(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255) NOT NULL,
+        renewal_date DATE,
+        new_expiry_date DATE,
+        annual_report JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS biosafety_protocols (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER,
+        farm_id VARCHAR(255) NOT NULL,
+        containment_level VARCHAR(50),
+        agents JSONB DEFAULT '[]',
+        risk_assessment TEXT,
+        ppe_requirements TEXT,
+        waste_procedures TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS data_classifications (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        resource_type VARCHAR(100),
+        resource_id VARCHAR(255),
+        classification_level VARCHAR(50) DEFAULT 'internal',
+        justification TEXT,
+        handling_instructions TEXT,
+        retention_period_days INTEGER DEFAULT 365,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_data_classifications_farm ON data_classifications(farm_id);
+
+      CREATE TABLE IF NOT EXISTS access_control_policies (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
+        description TEXT,
+        classification_level VARCHAR(50),
+        allowed_roles JSONB DEFAULT '[]',
+        requires_mfa BOOLEAN DEFAULT false,
+        requires_vpn BOOLEAN DEFAULT false,
+        max_export_rows INTEGER DEFAULT 10000,
+        ip_restrictions JSONB DEFAULT '[]',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS security_incidents (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        incident_type VARCHAR(100),
+        severity VARCHAR(50) DEFAULT 'medium',
+        title VARCHAR(255),
+        description TEXT,
+        affected_resources JSONB DEFAULT '[]',
+        reported_by VARCHAR(255),
+        containment_actions JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'open',
+        reported_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_security_incidents_farm ON security_incidents(farm_id);
+
+      CREATE TABLE IF NOT EXISTS security_audits (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        audit_type VARCHAR(100),
+        scope TEXT,
+        findings JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'scheduled',
+        scheduled_date DATE,
+        completed_date DATE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS dataset_lineage (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        dataset_id INTEGER,
+        event_type VARCHAR(100),
+        description TEXT,
+        actor VARCHAR(255),
+        source_entity_type VARCHAR(100),
+        source_entity_id VARCHAR(255),
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_dataset_lineage_farm ON dataset_lineage(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_dataset_lineage_dataset ON dataset_lineage(dataset_id);
+
+      CREATE TABLE IF NOT EXISTS data_annotations (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        dataset_id INTEGER,
+        annotation_type VARCHAR(100),
+        annotation TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS trainee_records (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        study_id INTEGER,
+        grant_id INTEGER,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        institution VARCHAR(255),
+        department VARCHAR(255),
+        trainee_type VARCHAR(100) DEFAULT 'graduate',
+        program VARCHAR(255),
+        supervisor_name VARCHAR(255),
+        start_date DATE,
+        expected_end_date DATE,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_trainee_records_farm ON trainee_records(farm_id);
+
+      CREATE TABLE IF NOT EXISTS trainee_milestones (
+        id SERIAL PRIMARY KEY,
+        trainee_id INTEGER REFERENCES trainee_records(id) ON DELETE CASCADE,
+        title VARCHAR(255),
+        description TEXT,
+        due_date DATE,
+        completed_date DATE,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS workspace_tasks (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255),
+        study_id INTEGER,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        assigned_to VARCHAR(255),
+        priority VARCHAR(50) DEFAULT 'medium',
+        due_date DATE,
+        status VARCHAR(50) DEFAULT 'open',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_workspace_tasks_study ON workspace_tasks(study_id);
+
+      CREATE TABLE IF NOT EXISTS partner_institutions (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        partner_type VARCHAR(100),
+        country VARCHAR(100),
+        province_state VARCHAR(100),
+        address TEXT,
+        website TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_partner_institutions_farm ON partner_institutions(farm_id);
+
+      CREATE TABLE IF NOT EXISTS data_sharing_agreements (
+        id SERIAL PRIMARY KEY,
+        partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255),
+        title VARCHAR(255),
+        agreement_type VARCHAR(100),
+        start_date DATE,
+        end_date DATE,
+        terms JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS partner_contacts (
+        id SERIAL PRIMARY KEY,
+        partner_id INTEGER REFERENCES partner_institutions(id) ON DELETE CASCADE,
+        name VARCHAR(255),
+        email VARCHAR(255),
+        role VARCHAR(100),
+        phone VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS publications (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        grant_id INTEGER,
+        title VARCHAR(255) NOT NULL,
+        journal VARCHAR(255),
+        publication_type VARCHAR(100),
+        publication_year INTEGER,
+        doi VARCHAR(255),
+        abstract TEXT,
+        submission_date DATE,
+        code_url TEXT,
+        data_url TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_publications_farm ON publications(farm_id);
+
+      CREATE TABLE IF NOT EXISTS publication_datasets (
+        id SERIAL PRIMARY KEY,
+        publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+        dataset_id INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS publication_authors (
+        id SERIAL PRIMARY KEY,
+        publication_id INTEGER REFERENCES publications(id) ON DELETE CASCADE,
+        author_id INTEGER,
+        author_name VARCHAR(255),
+        author_order INTEGER DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS lab_equipment (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
+        manufacturer VARCHAR(255),
+        model VARCHAR(255),
+        serial_number VARCHAR(255),
+        location VARCHAR(255),
+        purchase_date DATE,
+        maintenance_interval_days INTEGER DEFAULT 90,
+        calibration_interval_days INTEGER DEFAULT 365,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'operational',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_lab_equipment_farm ON lab_equipment(farm_id);
+
+      CREATE TABLE IF NOT EXISTS equipment_bookings (
+        id SERIAL PRIMARY KEY,
+        equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+        farm_id VARCHAR(255),
+        booked_by VARCHAR(255),
+        start_time TIMESTAMPTZ,
+        end_time TIMESTAMPTZ,
+        purpose TEXT,
+        status VARCHAR(50) DEFAULT 'confirmed',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS equipment_maintenance (
+        id SERIAL PRIMARY KEY,
+        equipment_id INTEGER REFERENCES lab_equipment(id) ON DELETE CASCADE,
+        maintenance_type VARCHAR(100),
+        performed_by VARCHAR(255),
+        performed_at TIMESTAMPTZ DEFAULT NOW(),
+        notes TEXT,
+        next_due DATE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS grant_milestones (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER,
+        title VARCHAR(255),
+        description TEXT,
+        due_date DATE,
+        completed_date DATE,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS grant_reports (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER,
+        farm_id VARCHAR(255),
+        report_type VARCHAR(100),
+        title VARCHAR(255),
+        due_date DATE,
+        submitted_date DATE,
+        content JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS grant_amendments (
+        id SERIAL PRIMARY KEY,
+        grant_id INTEGER,
+        farm_id VARCHAR(255),
+        amendment_type VARCHAR(100),
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    logger.info('Research management tables ready (migration 050)');
+  } catch (err) {
+    logger.warn('Migration 050 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 

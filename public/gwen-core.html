@@ -263,10 +263,10 @@
 
     // -- Auth --
     function getAuthHeaders() {
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token') || localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = 'Bearer ' + token;
-      const farmId = localStorage.getItem('farm_id');
+      const farmId = sessionStorage.getItem('farm_id') || sessionStorage.getItem('farmId') || localStorage.getItem('farm_id') || localStorage.getItem('farmId');
       if (farmId) headers['x-farm-id'] = farmId;
       return headers;
     }
