@@ -141,10 +141,11 @@ The monorepo contains two independently deployed applications:
 
 ### Research Ownership Boundary (Authoritative)
 
-- Farm-facing research UX (G.W.E.N. UI, Research Workspace UI) is a Light Engine feature and must resolve on LE.
-- GreenReach Central owns research data services, governance, and admin/reporting APIs.
-- Central may host `/api/research/*` for multi-tenant data/control, but should not be the direct user-facing host for farm research UI pages.
-- If farm users request `/views/research-workspace.html` or `/gwen-core.html` on Central, Central should redirect to LE.
+- **Central's role**: Record keeping, admin, password resets, business management (including research data management), and multi-farm data hub. Central hosts `/api/research/*` routes for multi-tenant data, governance, and admin/reporting. Central is NOT the research workspace -- it is the backend that stores and serves research data.
+- **LE's role**: The farm-facing research UX. G.W.E.N. UI and Research Workspace UI are Light Engine features accessed through LE-farm-admin.html.
+- **UI files exist on BOTH servers** (`greenreach-central/public/views/research-workspace.html` and `public/views/research-workspace.html`). Both servers serve them directly as static files. DO NOT add redirects between them -- LE has no custom domain, and cross-origin redirects break iframe loading and CSP.
+- **API routing**: LE proxies `/api/research/*` requests to Central. The Research Workspace UI uses relative `/api/research/*` paths, which resolve against whichever server is hosting the page. On LE, the proxy forwards them to Central. On Central, they resolve locally.
+- **DO NOT redirect UI pages from Central to LE or vice versa.** Both servers serve the same static files. No redirect middleware is needed or wanted.
 
 **Import Boundary Rule (Critical)**:
 - Central deploy bundle does NOT include `../server/` from repo root.

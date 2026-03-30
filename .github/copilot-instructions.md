@@ -16,10 +16,12 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 
 1. **LE-EB IS the farm.** `light-engine-foxtrot-prod-v3` runs on the v2 CNAME (CNAME swap). URL contains "v2" but environment is v3. This is correct.
 2. **v2 is DEAD.** `light-engine-foxtrot-prod-v2` is terminated. DO NOT deploy to it. DO NOT reference it as a target.
-3. **Central is the hub.** `greenreach-central-prod-v4` at `greenreachgreens.com`. Separate EB application, separate deploy.
+3. **Central is the hub -- NOT the farm UI.** `greenreach-central-prod-v4` at `greenreachgreens.com`. Central handles record keeping, admin, password resets, business management, and is the multi-farm data hub. Central hosts backend APIs (including `/api/research/*`) but is NOT the primary UI host for farm features like Research Workspace or G.W.E.N.
 4. **Two data directories exist.** `public/data/` (LE) and `greenreach-central/public/data/` (Central). NOT synced.
 5. **SwitchBot credentials are required for sensor data.** Set as EB env vars (`SWITCHBOT_TOKEN`, `SWITCHBOT_SECRET`) on `light-engine-foxtrot-prod-v3`. Also in `public/data/farm.json` under `integrations.switchbot`. If these are missing, sensors silently stop updating.
 6. **Farm ID**: `FARM-MLTP9LVH-B0B85039` ("The Notable Sprout")
+7. **NO cross-origin redirects between LE and Central.** LE has no custom domain (only the raw EB CNAME). Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
+8. **NEVER use the raw EB URL in code.** The `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` hostname is for deployment only. Do not hardcode it in redirects, links, fetch calls, or any runtime code.
 
 ### Recent Fixes (Mar 29, 2026)
 
@@ -210,7 +212,7 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 
 **Feature Gating**: ENDPOINT_FEATURES maps `/api/research` to `research_workspace`. All 6 route files are mounted at `/api` with authMiddleware in server.js.
 
-**UI**: `greenreach-central/public/views/research-workspace.html` -- Research dashboard with studies, datasets, notebooks, compliance, and collaborator tabs.
+**UI**: Research Workspace HTML exists in BOTH `public/views/research-workspace.html` (LE) and `greenreach-central/public/views/research-workspace.html` (Central). Both servers serve it directly as a static file. The primary access path is through LE-farm-admin.html sidebar (iframe-view). API calls use relative paths (`/api/research/*`) -- on LE these are proxied to Central.
 
 **Landing Page**: Third product card (amber #f59e0b border) added to `greenreach-central/public/landing-main.html`.
 
