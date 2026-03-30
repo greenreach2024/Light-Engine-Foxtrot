@@ -595,6 +595,27 @@
       .gwen-sidebar.collapsed { margin-right: -100vw; }
       .sim-viewport { height: 300px; }
     }
+
+    /* Edit Modal */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:none;align-items:center;justify-content:center; }
+    .modal-overlay.active { display:flex; }
+    .modal-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:8px;width:90%;max-width:480px;max-height:80vh;overflow-y:auto;padding:1.5rem; }
+    .modal-panel h3 { margin:0 0 1rem;color:var(--accent); }
+    .modal-field { margin-bottom:0.75rem; }
+    .modal-field label { display:block;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.25rem; }
+    .modal-field input, .modal-field select, .modal-field textarea { width:100%;padding:0.5rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:0.8125rem;font-family:inherit;box-sizing:border-box; }
+    .modal-field textarea { min-height:60px;resize:vertical; }
+    .modal-actions { display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem; }
+    .modal-actions button { padding:0.5rem 1rem;border-radius:4px;border:none;cursor:pointer;font-size:0.8125rem; }
+    .btn-modal-save { background:var(--accent);color:#fff; }
+    .btn-modal-cancel { background:var(--bg-secondary);color:var(--text-secondary); }
+    .actions-cell { white-space:nowrap; }
+    .btn-row-edit, .btn-row-delete { padding:2px 8px;border-radius:3px;border:none;cursor:pointer;font-size:0.6875rem;margin-right:4px; }
+    .btn-row-edit { background:rgba(59,130,246,0.2);color:#60a5fa; }
+    .btn-row-edit:hover { background:rgba(59,130,246,0.35); }
+    .btn-row-delete { background:rgba(239,68,68,0.15);color:#f87171; }
+    .btn-row-delete:hover { background:rgba(239,68,68,0.3); }
+    .card .card-actions { margin-top:0.5rem;display:flex;gap:0.25rem; }
   </style>
 </head>
 <body>
@@ -947,6 +968,18 @@
     </div>
   </div>
 
+
+  <div class="modal-overlay" id="editModalOverlay" onclick="if(event.target===this)closeEditModal()">
+    <div class="modal-panel">
+      <h3 id="editModalTitle">Edit</h3>
+      <div id="editModalFields"></div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-modal-save" id="editModalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API_BASE = window.location.origin;
     let farmId = null;
@@ -1003,6 +1036,156 @@
       if (!value || !value.trim()) { alert(valueLabel + ' is required.'); return null; }
       return value.trim();
     }
+
+    // ---- ENTITY CRUD (Edit / Delete) ----
+    var _entityCache = {};
+    function cacheEntity(type, item) { _entityCache[type + '_' + item.id] = item; }
+    function getCachedEntity(type, id) { return _entityCache[type + '_' + id] || {}; }
+
+    var ENTITY_FIELDS = {
+      study: [
+        { key: 'title', label: 'Title', type: 'text', required: true },
+        { key: 'status', label: 'Status', type: 'select', options: ['draft','active','completed','archived'] },
+        { key: 'objectives', label: 'Objectives', type: 'textarea' }
+      ],
+      dataset: [
+        { key: 'name', label: 'Name', type: 'text', required: true },
+        { key: 'description', label: 'Description', type: 'textarea' }
+      ],
+      notebook: [
+        { key: 'title', label: 'Title', type: 'text', required: true }
+      ],
+      recipe: [
+        { key: 'recipe_name', label: 'Recipe Name', type: 'text', required: true },
+        { key: 'release_notes', label: 'Release Notes', type: 'textarea' },
+        { key: 'rationale', label: 'Rationale', type: 'textarea' }
+      ],
+      task: [
+        { key: 'title', label: 'Title', type: 'text', required: true },
+        { key: 'status', label: 'Status', type: 'select', options: ['open','in_progress','blocked','done'] },
+        { key: 'priority', label: 'Priority', type: 'select', options: ['1','2','3','4','5'] },
+        { key: 'due_date', label: 'Due Date', type: 'date' }
+      ],
+      trainee: [
+        { key: 'name', label: 'Name', type: 'text', required: true },
+        { key: 'email', label: 'Email', type: 'text' },
+        { key: 'trainee_type', label: 'Type', type: 'select', options: ['undergraduate','masters','phd','postdoc','research_associate','technician','visiting_scholar','co_op','intern'] },
+        { key: 'institution', label: 'Institution', type: 'text' },
+        { key: 'supervisor_name', label: 'Supervisor', type: 'text' },
+        { key: 'status', label: 'Status', type: 'select', options: ['active','completed','withdrawn','on_leave'] }
+      ],
+      partner: [
+        { key: 'name', label: 'Name', type: 'text', required: true },
+        { key: 'partner_type', label: 'Type', type: 'select', options: ['university','college','research_institute','government','industry','hospital','ngo','international'] },
+        { key: 'country', label: 'Country', type: 'text' },
+        { key: 'website', label: 'Website', type: 'text' },
+        { key: 'status', label: 'Status', type: 'select', options: ['active','inactive','pending'] }
+      ],
+      collaborator: [
+        { key: 'role', label: 'Role', type: 'select', options: ['viewer','contributor','reviewer','coordinator'] }
+      ]
+    };
+
+    var ENTITY_API = {
+      study: '/api/research/studies/',
+      dataset: '/api/research/datasets/',
+      notebook: '/api/research/notebooks/',
+      recipe: '/api/research/recipes/',
+      task: '/api/research/tasks/',
+      trainee: '/api/research/trainees/',
+      partner: '/api/research/partners/',
+      collaborator: '/api/research/collaborators/'
+    };
+
+    var ENTITY_LABELS = {
+      study: 'Study', dataset: 'Dataset', notebook: 'Notebook', recipe: 'Recipe',
+      task: 'Task', trainee: 'Trainee', partner: 'Partner', collaborator: 'Collaborator'
+    };
+
+    var _editingType = null, _editingId = null;
+
+    function openEditModal(type, id) {
+      _editingType = type; _editingId = id;
+      var data = getCachedEntity(type, id);
+      var fields = ENTITY_FIELDS[type] || [];
+      document.getElementById('editModalTitle').textContent = 'Edit ' + (ENTITY_LABELS[type] || type);
+      var html = '';
+      fields.forEach(function(f) {
+        var val = data[f.key] != null ? data[f.key] : '';
+        if (f.type === 'date' && val) { val = val.substring(0, 10); }
+        html += '<div class="modal-field"><label>' + f.label + (f.required ? ' *' : '') + '</label>';
+        if (f.type === 'select') {
+          html += '<select id="edit_' + f.key + '">' + (f.options||[]).map(function(o) {
+            return '<option value="' + o + '"' + (String(val) === String(o) ? ' selected' : '') + '>' + o.replace(/_/g, ' ') + '</option>';
+          }).join('') + '</select>';
+        } else if (f.type === 'textarea') {
+          html += '<textarea id="edit_' + f.key + '">' + escapeHtml(String(val)) + '</textarea>';
+        } else {
+          html += '<input type="' + (f.type||'text') + '" id="edit_' + f.key + '" value="' + escapeHtml(String(val)) + '">';
+        }
+        html += '</div>';
+      });
+      document.getElementById('editModalFields').innerHTML = html;
+      document.getElementById('editModalSave').onclick = function() { submitEdit(); };
+      document.getElementById('editModalOverlay').classList.add('active');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModalOverlay').classList.remove('active');
+      _editingType = null; _editingId = null;
+    }
+
+    async function submitEdit() {
+      if (!_editingType || !_editingId) return;
+      var fields = ENTITY_FIELDS[_editingType] || [];
+      var body = {};
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        var el = document.getElementById('edit_' + f.key);
+        if (el) body[f.key] = el.value || null;
+      }
+      try {
+        await apiFetch(ENTITY_API[_editingType] + _editingId, { method: 'PATCH', body: JSON.stringify(body) });
+        closeEditModal();
+        refreshTab(_editingType);
+      } catch (err) { alert('Update failed: ' + err.message); }
+    }
+
+    async function confirmDelete(type, id, label) {
+      if (!confirm('Delete ' + (ENTITY_LABELS[type]||type) + ' "' + label + '"? This cannot be undone.')) return;
+      try {
+        await apiFetch(ENTITY_API[type] + id, { method: 'DELETE' });
+        refreshTab(type);
+      } catch (err) { alert('Delete failed: ' + err.message); }
+    }
+
+    function refreshTab(type) {
+      var tabConf = {
+        study: { fn: 'loadDashboard' },
+        dataset: { fn: 'loadDashboard' },
+        notebook: { fn: 'loadDashboard' },
+        recipe: { el: 'recipes-list', fn: 'loadRecipes' },
+        task: { el: 'tasks-list', fn: 'loadTasks' },
+        trainee: { el: 'hqp-list', tab: 'hqp' },
+        partner: { el: 'partners-list', tab: 'partners' },
+        collaborator: { el: 'collaborators-list', tab: 'collaborators' }
+      };
+      var conf = tabConf[type]; if (!conf) return;
+      if (conf.el) { var el = document.getElementById(conf.el); if (el) el.dataset.loaded = ''; }
+      if (conf.fn === 'loadDashboard') loadDashboard();
+      else if (conf.fn === 'loadRecipes') loadRecipes();
+      else if (conf.fn === 'loadTasks') loadTasks();
+      else if (conf.tab) {
+        var tab = document.querySelector('[data-tab="' + conf.tab + '"]'); if (tab) tab.click();
+      }
+    }
+
+    function rowActions(type, id, label) {
+      var safeLabel = escapeHtml(String(label||'')).replace(/"/g, '&quot;');
+      return '<button class="btn-row-edit" data-type="'+type+'" data-id="'+id+'" onclick="openEditModal(this.dataset.type,+this.dataset.id)">Edit</button>'
+           + '<button class="btn-row-delete" data-type="'+type+'" data-id="'+id+'" data-label="'+safeLabel+'" onclick="confirmDelete(this.dataset.type,+this.dataset.id,this.dataset.label)">Delete</button>';
+    }
+
 
     function timeAgo(ts) {
       if (!ts) return '';
@@ -1488,23 +1671,23 @@
     function renderStudies(studies) {
       var el = document.getElementById('studies-list');
       if (!studies.length) { el.innerHTML = '<div class="empty-state"><h3>No studies yet</h3><p>Create your first research study to get started.</p></div>'; return; }
-      el.innerHTML = '<table><thead><tr><th>Title</th><th>Status</th><th>Protocols</th><th>Created</th></tr></thead><tbody>' +
-        studies.map(function(s) { return '<tr><td><strong>' + s.title + '</strong></td><td>' + statusBadge(s.status) + '</td><td>' + (s.protocol_count||0) + '</td><td>' + formatDate(s.created_at) + '</td></tr>'; }).join('') +
+      el.innerHTML = '<table><thead><tr><th>Title</th><th>Status</th><th>Protocols</th><th>Created</th><th>Actions</th></tr></thead><tbody>' +
+        studies.map(function(s) { cacheEntity('study',s); return '<tr><td><strong>' + escapeHtml(s.title) + '</strong></td><td>' + statusBadge(s.status) + '</td><td>' + (s.protocol_count||0) + '</td><td>' + formatDate(s.created_at) + '</td><td class="actions-cell">'+rowActions('study',s.id,s.title)+'</td></tr>'; }).join('') +
         '</tbody></table>';
     }
 
     function renderDatasets(datasets) {
       var el = document.getElementById('datasets-list');
       if (!datasets.length) { el.innerHTML = '<div class="empty-state"><h3>No datasets</h3><p>Create a dataset within a study to begin recording observations.</p></div>'; return; }
-      el.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th></tr></thead><tbody>' +
-        datasets.map(function(d) { return '<tr><td>' + (d.name||d.dataset_name||'--') + '</td><td>' + statusBadge(d.status) + '</td><td>' + (d.observation_count||0) + '</td><td>' + formatDate(d.created_at) + '</td></tr>'; }).join('') +
+      el.innerHTML = '<table><thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th><th>Actions</th></tr></thead><tbody>' +
+        datasets.map(function(d) { cacheEntity('dataset',d); return '<tr><td>' + escapeHtml(d.name||d.dataset_name||'--') + '</td><td>' + statusBadge(d.status) + '</td><td>' + (d.observation_count||0) + '</td><td>' + formatDate(d.created_at) + '</td><td class="actions-cell">'+rowActions('dataset',d.id,d.name||d.dataset_name)+'</td></tr>'; }).join('') +
         '</tbody></table>';
     }
 
     function renderNotebooks(notebooks) {
       var el = document.getElementById('notebooks-list');
       if (!notebooks.length) { el.innerHTML = '<div class="empty-state"><h3>No notebooks</h3><p>Create an electronic lab notebook to start documenting experiments.</p></div>'; return; }
-      el.innerHTML = '<div class="card-grid">' + notebooks.map(function(n) { return '<div class="card"><h3>' + n.title + '</h3><p>' + (n.description||'No description') + '</p><div class="meta">' + statusBadge(n.status) + ' -- Created ' + formatDate(n.created_at) + '</div></div>'; }).join('') + '</div>';
+      el.innerHTML = '<div class="card-grid">' + notebooks.map(function(n) { cacheEntity('notebook',n); return '<div class="card"><h3>' + escapeHtml(n.title) + '</h3><p>' + escapeHtml(n.description||'No description') + '</p><div class="meta">' + statusBadge(n.status) + ' -- Created ' + formatDate(n.created_at) + '</div><div class="card-actions">'+rowActions('notebook',n.id,n.title)+'</div></div>'; }).join('') + '</div>';
     }
 
     function renderAlerts(alerts) {
@@ -1581,7 +1764,7 @@
         var recipes = data.recipes || [];
         document.getElementById('stat-recipes').textContent = recipes.length;
         if (!recipes.length) { el.innerHTML = '<div class="empty-state"><h3>No beta recipes</h3><p>Create a recipe to begin.</p></div>'; return; }
-        el.innerHTML = '<table><thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Deployments</th><th>Created</th></tr></thead><tbody>' + recipes.map(function(r) { return '<tr><td><strong>' + r.title + '</strong></td><td>' + (r.version_number||'--') + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.deployment_count||0) + '</td><td>' + formatDate(r.created_at) + '</td></tr>'; }).join('') + '</tbody></table>';
+        el.innerHTML = '<table><thead><tr><th>Title</th><th>Version</th><th>Status</th><th>Deployments</th><th>Created</th><th>Actions</th></tr></thead><tbody>' + recipes.map(function(r) { cacheEntity('recipe',r); return '<tr><td><strong>' + escapeHtml(r.title||r.recipe_name||'--') + '</strong></td><td>' + (r.version_number||'--') + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.deployment_count||0) + '</td><td>' + formatDate(r.created_at) + '</td><td class="actions-cell">'+rowActions('recipe',r.id,r.title||r.recipe_name)+'</td></tr>'; }).join('') + '</tbody></table>';
       } catch (err) { el.innerHTML = '<div class="alert-banner">Error: ' + err.message + '</div>'; }
     }
 
@@ -1598,7 +1781,7 @@
         }
         document.getElementById('stat-tasks').textContent = allTasks.filter(function(t) { return t.status !== 'done'; }).length;
         if (!allTasks.length) { el.innerHTML = '<div class="empty-state"><h3>No tasks</h3><p>Create a task within a study.</p></div>'; return; }
-        el.innerHTML = '<table><thead><tr><th>Title</th><th>Study</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead><tbody>' + allTasks.map(function(t) { return '<tr><td>' + t.title + '</td><td>' + (t._study_title||'--') + '</td><td>' + statusBadge(t.status) + '</td><td>' + (t.priority||'--') + '</td><td>' + formatDate(t.due_date) + '</td></tr>'; }).join('') + '</tbody></table>';
+        el.innerHTML = '<table><thead><tr><th>Title</th><th>Study</th><th>Status</th><th>Priority</th><th>Due</th><th>Actions</th></tr></thead><tbody>' + allTasks.map(function(t) { cacheEntity('task',t); return '<tr><td>' + escapeHtml(t.title) + '</td><td>' + (t._study_title||'--') + '</td><td>' + statusBadge(t.status) + '</td><td>' + (t.priority||'--') + '</td><td>' + formatDate(t.due_date) + '</td><td class="actions-cell">'+rowActions('task',t.id,t.title)+'</td></tr>'; }).join('') + '</tbody></table>';
       } catch (err) { el.innerHTML = '<div class="alert-banner">Error: ' + err.message + '</div>'; }
     }
 
@@ -1644,7 +1827,7 @@
           var s = studies.studies[i];
           var c = await apiFetch('/api/research/studies/'+s.id+'/collaborators').catch(function(){return{collaborators:[]};});
           if ((c.collaborators||[]).length) {
-            html += '<h3 style="margin:1rem 0 0.5rem;color:var(--accent);">'+s.title+'</h3><table><thead><tr><th>Email</th><th>Role</th><th>Added</th></tr></thead><tbody>'+(c.collaborators||[]).map(function(cc){return '<tr><td>'+(cc.email||'External')+'</td><td>'+cc.role+'</td><td>'+formatDate(cc.added_at)+'</td></tr>';}).join('')+'</tbody></table>';
+            html += '<h3 style="margin:1rem 0 0.5rem;color:var(--accent);">'+escapeHtml(s.title)+'</h3><table><thead><tr><th>Email</th><th>Role</th><th>Added</th><th>Actions</th></tr></thead><tbody>'+(c.collaborators||[]).map(function(cc){cacheEntity('collaborator',cc);return '<tr><td>'+(cc.email||'External')+'</td><td>'+cc.role+'</td><td>'+formatDate(cc.added_at)+'</td><td class="actions-cell">'+rowActions('collaborator',cc.id,cc.email||'External')+'</td></tr>';}).join('')+'</tbody></table>';
           }
         }
         el.innerHTML = html || '<div class="empty-state"><h3>No collaborators yet</h3></div>'; el.dataset.loaded = 'true';
@@ -1674,7 +1857,7 @@
       var el = document.getElementById('hqp-list'); if (el.dataset.loaded) return;
       try { var data = await apiFetch('/api/research/trainees?farm_id='+farmId);
         if (!(data.trainees||[]).length) el.innerHTML = '<div class="empty-state"><h3>No trainees yet</h3></div>';
-        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Institution</th><th>Status</th></tr></thead><tbody>'+data.trainees.map(function(t){return '<tr><td>'+t.name+'</td><td>'+t.trainee_type+'</td><td>'+(t.institution||'--')+'</td><td>'+statusBadge(t.status)+'</td></tr>';}).join('')+'</tbody></table>';
+        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Institution</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+data.trainees.map(function(t){cacheEntity('trainee',t);return '<tr><td>'+escapeHtml(t.name)+'</td><td>'+t.trainee_type+'</td><td>'+(t.institution||'--')+'</td><td>'+statusBadge(t.status)+'</td><td class="actions-cell">'+rowActions('trainee',t.id,t.name)+'</td></tr>';}).join('')+'</tbody></table>';
         el.dataset.loaded = 'true';
       } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });
@@ -1683,7 +1866,7 @@
       var el = document.getElementById('partners-list'); if (el.dataset.loaded) return;
       try { var data = await apiFetch('/api/research/partners?farm_id='+farmId);
         if (!(data.partners||[]).length) el.innerHTML = '<div class="empty-state"><h3>No partners yet</h3></div>';
-        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th>Agreements</th></tr></thead><tbody>'+data.partners.map(function(p){return '<tr><td>'+p.name+'</td><td>'+p.partner_type+'</td><td>'+(p.country||'--')+'</td><td>'+(p.agreement_count||0)+'</td></tr>';}).join('')+'</tbody></table>';
+        else el.innerHTML = '<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th>Agreements</th><th>Actions</th></tr></thead><tbody>'+data.partners.map(function(p){cacheEntity('partner',p);return '<tr><td>'+escapeHtml(p.name)+'</td><td>'+p.partner_type+'</td><td>'+(p.country||'--')+'</td><td>'+(p.agreement_count||0)+'</td><td class="actions-cell">'+rowActions('partner',p.id,p.name)+'</td></tr>';}).join('')+'</tbody></table>';
         el.dataset.loaded = 'true';
       } catch (err) { el.innerHTML = '<div class="alert-banner">Error: '+err.message+'</div>'; }
     });

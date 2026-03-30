@@ -131,6 +131,18 @@ router.patch('/research/trainees/:id', async (req, res) => {
   }
 });
 
+router.delete('/research/trainees/:id', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const result = await query('DELETE FROM trainee_records WHERE id = $1 AND farm_id = $2 RETURNING id', [req.params.id, farmId]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Trainee not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ResearchHQP] Delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete trainee' });
+  }
+});
+
 // ── Supervision Meetings ──
 
 router.get('/research/trainees/:id/supervision', async (req, res) => {

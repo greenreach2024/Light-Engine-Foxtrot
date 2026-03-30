@@ -178,6 +178,18 @@ router.patch('/research/recipes/:id', async (req, res) => {
   }
 });
 
+router.delete('/research/recipes/:id', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const result = await query('DELETE FROM recipe_versions WHERE id = $1 AND farm_id = $2 RETURNING id', [req.params.id, farmId]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Recipe not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ResearchRecipes] Delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete recipe' });
+  }
+});
+
 // ── Deploy recipe to farm/room/zone ──
 router.post('/research/recipes/:id/deploy', async (req, res) => {
   try {

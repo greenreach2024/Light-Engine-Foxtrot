@@ -118,6 +118,18 @@ router.patch('/research/partners/:id', async (req, res) => {
   }
 });
 
+router.delete('/research/partners/:id', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const result = await query('DELETE FROM partner_institutions WHERE id = $1 AND farm_id = $2 RETURNING id', [req.params.id, farmId]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Partner not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ResearchPartners] Delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete partner' });
+  }
+});
+
 // ── Data Sharing Agreements ──
 
 router.get('/research/partners/:id/agreements', async (req, res) => {

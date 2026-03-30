@@ -201,6 +201,18 @@ router.patch('/research/tasks/:id', async (req, res) => {
   }
 });
 
+router.delete('/research/tasks/:id', async (req, res) => {
+  try {
+    const farmId = req.farmId;
+    const result = await query('DELETE FROM workspace_tasks WHERE id = $1 AND farm_id = $2 RETURNING id', [req.params.id, farmId]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Task not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[WorkspaceOps] Task delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete task' });
+  }
+});
+
 // ── Change Requests (scope, budget, personnel, timeline) ──
 router.get('/research/studies/:id/change-requests', verifyStudyOwnership, async (req, res) => {
   try {

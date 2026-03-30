@@ -170,6 +170,17 @@ router.patch('/research/studies/:id', verifyStudyOwnership, async (req, res) => 
   }
 });
 
+router.delete('/research/studies/:id', verifyStudyOwnership, async (req, res) => {
+  try {
+    const result = await query('DELETE FROM studies WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Study not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ResearchStudies] Delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete study' });
+  }
+});
+
 // ─── GET /research/studies/:id/protocols ──────────────────────────────
 router.get('/research/studies/:id/protocols', verifyStudyOwnership, async (req, res) => {
   try {

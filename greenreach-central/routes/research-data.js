@@ -160,6 +160,17 @@ router.patch('/research/datasets/:id', verifyDatasetOwnership, async (req, res) 
   }
 });
 
+router.delete('/research/datasets/:id', verifyDatasetOwnership, async (req, res) => {
+  try {
+    const result = await query('DELETE FROM research_datasets WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Dataset not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ResearchData] Delete error:', err.message);
+    res.status(500).json({ ok: false, error: 'Failed to delete dataset' });
+  }
+});
+
 // ─── POST /research/datasets/:id/observations ────────────────────────
 router.post('/research/datasets/:id/observations', verifyDatasetOwnership, async (req, res) => {
   try {
