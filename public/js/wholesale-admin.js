@@ -52,6 +52,14 @@
         });
       });
 
+      // Buyers search on Enter
+      const buyersSearch = document.getElementById('buyers-search');
+      if (buyersSearch) {
+        buyersSearch.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') this.loadBuyers();
+        });
+      }
+
       document.addEventListener('click', (event) => {
         const target = event.target;
 
@@ -65,6 +73,7 @@
 
         if (target.closest('#orders-apply-filters-btn')) return this.filterOrders();
         if (target.closest('#run-reconciliation-btn')) return this.runReconciliation();
+        if (target.closest('#buyers-refresh-btn')) return this.loadBuyers();
 
         if (target.closest('#network-refresh-btn')) return this.loadNetwork();
 
@@ -108,6 +117,9 @@
         case 'payments':
           this.loadPayments();
           break;
+        case 'buyers':
+          this.loadBuyers();
+          break;
         case 'orders':
           this.loadOrders();
           break;
@@ -117,12 +129,121 @@
         case 'compliance':
           this.loadComplianceView();
           break;
+        case 'product-requests':
+          this.loadProductRequests();
+          break;
       }
+    },
+
+    async loadProductRequests() {
+      const container = document.getElementById('admin-requests-list');
+      if (!container) return;
+      container.innerHTML = '<p style="color: var(--text-secondary);">Loading requests...</p>';
+
+      try {
+        const headers = this.getAuthHeaders();
+        const filterEl = document.getElementById('admin-request-status-filter');
+        const statusFilter = filterEl ? filterEl.value : '';
+        const url = '/api/wholesale/product-requests' + (statusFilter ? '?status=' + statusFilter : '');
+        const res = await fetch(url, { headers });
+        const json = await res.json();
+
+        if (!json.ok || !json.requests || !json.requests.length) {
+          container.innerHTML = '<p style="color: var(--text-secondary);">No product requests found.</p>';
+          return;
+        }
+
+        const statusColors = {
+          open: '#fef3c7',
+          matched: '#dbeafe',
+          fulfilled: '#d1fae5',
+          expired: '#f3f4f6',
+          cancelled: '#fee2e2'
+        };
+        const statusTextColors = {
+          open: '#92400e',
+          matched: '#1e40af',
+          fulfilled: '#065f46',
+          expired: '#6b7280',
+          cancelled: '#991b1b'
+        };
+
+        container.innerHTML = json.requests.map(req => {
+          const bg = statusColors[req.status] || '#f3f4f6';
+          const fg = statusTextColors[req.status] || '#374151';
+          const neededBy = req.needed_by_date
+            ? new Date(req.needed_by_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '--';
+          const created = new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const buyerName = this.escHtml(req.business_name || req.contact_name || ('Buyer #' + req.buyer_id));
+          const SQ = "'";
+
+          let card = '<div style="background: var(--card-bg, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 1.25rem;">'
+            + '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">'
+            + '  <strong style="font-size: 1.05rem;">' + this.escHtml(req.product_name) + '</strong>'
+            + '  <span style="background:' + bg + '; color:' + fg + '; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 600;">' + this.escHtml(req.status) + '</span>'
+            + '</div>'
+            + '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary, #6b7280);">'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Buyer</div>' + buyerName + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Quantity</div>' + this.escHtml(String(req.quantity)) + ' ' + this.escHtml(req.unit || 'units') + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Needed By</div>' + neededBy + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Submitted</div>' + created + '</div>';
+          if (req.max_price_per_unit) {
+            card += '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Max Price</div>$' + Number(req.max_price_per_unit).toFixed(2) + '/' + this.escHtml(req.unit || 'unit') + '</div>';
+          }
+          card += '</div>';
+          if (req.description) {
+            card += '<p style="margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--text-secondary, #6b7280);">' + this.escHtml(req.description) + '</p>';
+          }
+          if (req.status === 'open') {
+            card += '<div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'matched' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #dbeafe; color: #1e40af; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Matched</button>'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'fulfilled' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #d1fae5; color: #065f46; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Fulfilled</button>'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'expired' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #f3f4f6; color: #6b7280; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Expired</button>'
+              + '</div>';
+          }
+          card += '</div>';
+          return card;
+        }).join('');
+      } catch (err) {
+        console.error('[Wholesale Admin] Failed to load product requests:', err);
+        container.innerHTML = '<p style="color: #dc2626;">Failed to load product requests.</p>';
+      }
+    },
+
+    async updateRequestStatus(requestId, status) {
+      try {
+        const headers = this.getAuthHeaders();
+        const res = await fetch('/api/wholesale/product-requests/' + requestId + '/status', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status })
+        });
+        const json = await res.json();
+        if (json.ok) {
+          this.loadProductRequests();
+        } else {
+          alert(json.message || 'Failed to update status');
+        }
+      } catch (err) {
+        console.error('[Wholesale Admin] Status update error:', err);
+        alert('Failed to update request status');
+      }
+    },
+
+    escHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     },
 
     async loadNetwork() {
       try {
         const headers = this.getAuthHeaders();
+        const toArray = (value) => {
+          if (Array.isArray(value)) return value;
+          if (Array.isArray(value?.items)) return value.items;
+          return [];
+        };
         const [farmsRes, snapshotsRes, aggregateRes, eventsRes, recsRes] = await Promise.all([
           fetch('/api/wholesale/network/farms', { headers }),
           fetch('/api/wholesale/network/snapshots', { headers }),
@@ -138,7 +259,7 @@
         const recsJson = await recsRes.json().catch(() => null);
 
         if (farmsRes.ok && farmsJson?.status === 'ok') {
-          this.network.farms = farmsJson.data?.farms || [];
+          this.network.farms = toArray(farmsJson.data?.farms);
           this.network.lastSync = farmsJson.data?.lastSync || null;
         } else {
           this.network.farms = [];
@@ -146,7 +267,7 @@
         }
 
         if (snapshotsRes.ok && snapshotsJson?.status === 'ok') {
-          this.network.snapshots = snapshotsJson.data?.snapshots || [];
+          this.network.snapshots = toArray(snapshotsJson.data?.snapshots);
         } else {
           this.network.snapshots = [];
         }
@@ -158,13 +279,13 @@
         }
 
         if (eventsRes.ok && eventsJson?.status === 'ok') {
-          this.network.events = eventsJson.data?.events || [];
+          this.network.events = toArray(eventsJson.data?.events);
         } else {
           this.network.events = [];
         }
 
         if (recsRes.ok && recsJson?.status === 'ok') {
-          this.network.recommendations = recsJson.data?.recommendations || [];
+          this.network.recommendations = toArray(recsJson.data?.recommendations || recsJson.data);
         } else {
           this.network.recommendations = [];
         }
@@ -192,7 +313,8 @@
 
       if (farmsCountEl) farmsCountEl.textContent = String((this.network.farms || []).length);
 
-      const healthy = (this.network.snapshots || []).filter((s) => Boolean(s.ok)).length;
+      const snapshots = Array.isArray(this.network.snapshots) ? this.network.snapshots : [];
+      const healthy = snapshots.filter((s) => Boolean(s?.ok)).length;
       if (healthyCountEl) healthyCountEl.textContent = String(healthy);
 
       const skuCount = Array.isArray(this.network.aggregate?.items) ? this.network.aggregate.items.length : 0;
@@ -234,7 +356,7 @@
       const tbody = document.getElementById('network-snapshots-table');
       if (!tbody) return;
 
-      const snaps = this.network.snapshots || [];
+      const snaps = Array.isArray(this.network.snapshots) ? this.network.snapshots : [];
       if (!snaps.length) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots yet. Sync runs automatically.</td></tr>';
         return;
@@ -576,6 +698,11 @@
 
       tbody.innerHTML = this.farms
         .map((farm) => {
+          const farmName = farm.farm_name || farm.name || 'N/A';
+          const locationText = this.formatFarmLocation(farm.location);
+          const farmStatus = farm.status || 'active';
+          const lastSyncAt = farm.last_sync || farm.updated_at || farm.created_at || null;
+
           const certBadges = (farm.certifications || []).map(c => 
             `<span class="badge badge-info">${c}</span>`
           ).join(' ');
@@ -587,11 +714,11 @@
           return `
           <tr>
             <td>${farm.farm_id}</td>
-            <td>${farm.farm_name || 'N/A'}</td>
-            <td>${farm.location?.city || 'N/A'}, ${farm.location?.province || 'N/A'}</td>
-            <td><span class="badge ${farm.status}">${farm.status}</span></td>
+            <td>${farmName}</td>
+            <td>${locationText}</td>
+            <td><span class="badge ${farmStatus}">${farmStatus}</span></td>
             <td>
-              ${farm.last_sync ? new Date(farm.last_sync).toLocaleString() : 'Never'}
+              ${lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Never'}
             </td>
             <td>
               ${certBadges || 'None'}
@@ -603,6 +730,19 @@
         `;
         })
         .join('');
+    },
+
+    formatFarmLocation(location) {
+      if (!location) return 'N/A';
+      if (typeof location === 'string') return location;
+
+      const city = location.city || location.town || location.locality || '';
+      const region = location.province || location.state || location.region || '';
+      if (city && region) return `${city}, ${region}`;
+      if (city) return city;
+      if (region) return region;
+
+      return 'N/A';
     },
 
     async loadPayments() {
@@ -1080,47 +1220,75 @@
     },
 
     // ========================================================================
-    // PAYMENT SETUP - Square OAuth Integration
+    // PAYMENT SETUP - Square & Stripe OAuth Integration
     // ========================================================================
 
     async loadPaymentSetup() {
       try {
+        const headers = this.getAuthHeaders();
+
         // Get network farms
-        const farmsResponse = await fetch('/api/wholesale/network/farms');
-        const farmsData = await farmsResponse.json();
-        const farms = farmsData.data?.farms || [];
-        
-        // Check Square status for each farm
-        const statusPromises = farms.map(async (farm) => {
-          try {
-            const statusResponse = await fetch(`/api/square-proxy/status/${farm.farm_id}`);
-            const statusData = await statusResponse.json();
-            return {
-              farm_id: farm.farm_id,
-              farm_name: farm.farm_name,
-              connected: statusData.status === 'ok',
-              merchant_id: statusData.data?.merchant_id || null,
-              location_name: statusData.data?.location_name || null,
-              status: statusData.status
-            };
-          } catch (error) {
-            return {
-              farm_id: farm.farm_id,
-              farm_name: farm.farm_name,
-              connected: false,
-              merchant_id: null,
-              location_name: null,
-              status: 'error'
-            };
+        const farmsResponse = await fetch('/api/wholesale/network/farms', { headers });
+        if (!farmsResponse.ok) {
+          if (farmsResponse.status === 401) {
+            this.showToast('Admin session expired. Please sign in again.', 'warning');
           }
+          throw new Error(`Failed to load farms: ${farmsResponse.status}`);
+        }
+        const farmsData = await farmsResponse.json();
+        const farms = Array.isArray(farmsData?.data?.farms) ? farmsData.data.farms : [];
+        
+        // Check Square and Stripe status for each farm
+        const statusPromises = farms.map(async (farm) => {
+          let squareStatus = { connected: false };
+          let stripeStatus = { connected: false };
+          
+          // Check Square
+          try {
+            const statusResponse = await fetch('/api/farm/square/status', {
+              headers: {
+                ...headers,
+                'X-Farm-ID': farm.farm_id
+              }
+            });
+            const statusData = await statusResponse.json();
+            squareStatus = {
+              connected: statusData.connected === true || statusData.status === 'connected' || statusData.status === 'ok',
+              merchant_id: statusData.data?.merchant_id || statusData.data?.applicationId || null,
+              location_name: statusData.data?.location_name || statusData.data?.locationId || null
+            };
+          } catch (error) { /* Square not available */ }
+          
+          // Check Stripe
+          try {
+            const stripeResponse = await fetch(`/api/farm/stripe/status`, {
+              headers: {
+                ...headers,
+                'X-Farm-ID': farm.farm_id
+              }
+            });
+            const stripeData = await stripeResponse.json();
+            stripeStatus = {
+              connected: stripeData.connected === true,
+              accountId: stripeData.data?.accountId || null,
+              businessName: stripeData.data?.businessName || null
+            };
+          } catch (error) { /* Stripe not available */ }
+          
+          return {
+            farm_id: farm.farm_id,
+            farm_name: farm.farm_name,
+            square: squareStatus,
+            stripe: stripeStatus
+          };
         });
         
         const statuses = await Promise.all(statusPromises);
         
-        // Update summary stats
-        const connectedCount = statuses.filter(s => s.connected).length;
-        const pendingCount = statuses.filter(s => !s.connected).length;
-        const commissionRate = process.env.WHOLESALE_COMMISSION_RATE || '10%';
+        // Update summary stats (count farms with either provider connected)
+        const connectedCount = statuses.filter(s => s.square.connected || s.stripe.connected).length;
+        const pendingCount = statuses.filter(s => !s.square.connected && !s.stripe.connected).length;
+        const commissionRate = '12%';
         
         document.getElementById('square-connected-count').textContent = connectedCount;
         document.getElementById('square-pending-count').textContent = pendingCount;
@@ -1129,27 +1297,41 @@
         // Render table
         const table = document.getElementById('square-status-table');
         if (statuses.length === 0) {
-          table.innerHTML = '<tr><td colspan="6" class="empty-state">No farms in network. Add farms in Farm Management tab.</td></tr>';
+          table.innerHTML = '<tr><td colspan="7" class="empty-state">No farms in network. Add farms in Farm Management tab.</td></tr>';
           return;
         }
         
         table.innerHTML = statuses.map(farm => {
-          const statusBadge = farm.connected
+          const squareBadge = farm.square.connected
             ? '<span class="badge badge-success">Connected</span>'
             : '<span class="badge badge-warning">Not Connected</span>';
           
-          const actionButton = farm.connected
-            ? `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectSquare('${farm.farm_id}')">Disconnect</button>`
-            : `<button class="btn btn-sm btn-primary" onclick="admin.connectSquare('${farm.farm_id}', '${farm.farm_name}')">Connect Square</button>`;
+          const stripeBadge = farm.stripe.connected
+            ? '<span class="badge badge-success">Connected</span>'
+            : '<span class="badge badge-warning">Not Connected</span>';
+          
+          const merchantId = farm.square.merchant_id || farm.stripe.accountId || '—';
+          
+          let actions = '';
+          if (!farm.square.connected) {
+            actions += `<button class="btn btn-sm btn-primary" onclick="admin.connectSquare('${farm.farm_id}', '${farm.farm_name}')" style="margin-right: 4px;">Connect Square</button>`;
+          } else {
+            actions += `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectSquare('${farm.farm_id}')" style="margin-right: 4px;">Disconnect Square</button>`;
+          }
+          if (!farm.stripe.connected) {
+            actions += `<button class="btn btn-sm" onclick="admin.connectStripe('${farm.farm_id}', '${farm.farm_name}')" style="background: #635bff; color: #fff;">Connect Stripe</button>`;
+          } else {
+            actions += `<button class="btn btn-sm btn-secondary" onclick="admin.disconnectStripe('${farm.farm_id}')">Disconnect Stripe</button>`;
+          }
           
           return `
             <tr>
               <td>${farm.farm_id}</td>
               <td>${farm.farm_name}</td>
-              <td>${statusBadge}</td>
-              <td>${farm.merchant_id || '—'}</td>
-              <td>${farm.location_name || '—'}</td>
-              <td>${actionButton}</td>
+              <td>${squareBadge}</td>
+              <td>${stripeBadge}</td>
+              <td>${merchantId}</td>
+              <td>${actions}</td>
             </tr>
           `;
         }).join('');
@@ -1157,7 +1339,7 @@
       } catch (error) {
         console.error('Load payment setup error:', error);
         document.getElementById('square-status-table').innerHTML = 
-          '<tr><td colspan="6" class="error">Failed to load payment setup. Check console for details.</td></tr>';
+          '<tr><td colspan="7" class="error">Failed to load payment setup. Check console for details.</td></tr>';
       }
     },
 
@@ -1237,6 +1419,86 @@
       } catch (error) {
         console.error('Disconnect Square error:', error);
         this.showToast('Failed to disconnect Square', 'error');
+      }
+    },
+
+    async connectStripe(farmId, farmName) {
+      try {
+        const response = await fetch('/api/farm/stripe/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ farm_id: farmId, farmName: farmName })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok || !result.data?.authorizationUrl) {
+          this.showToast(result.message || 'Failed to generate Stripe OAuth URL', 'error');
+          return;
+        }
+        
+        const popup = window.open(
+          result.data.authorizationUrl,
+          'StripeOAuth',
+          'width=600,height=700,scrollbars=yes'
+        );
+        
+        if (!popup) {
+          this.showToast('Please allow popups to complete Stripe authorization', 'warning');
+          return;
+        }
+        
+        // Listen for Stripe connect completion message
+        const self = this;
+        window.addEventListener('message', function handleStripeCallback(event) {
+          if (event.data && event.data.type === 'stripe-connected') {
+            window.removeEventListener('message', handleStripeCallback);
+            self.showToast('Stripe account connected successfully!', 'success');
+            self.loadPaymentSetup();
+          }
+        });
+        
+        // Also poll for popup close
+        const pollInterval = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(pollInterval);
+            setTimeout(() => this.loadPaymentSetup(), 1000);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error('Connect Stripe error:', error);
+        this.showToast('Failed to initiate Stripe OAuth', 'error');
+      }
+    },
+
+    async disconnectStripe(farmId) {
+      if (!confirm(`Disconnect Stripe for farm ${farmId}? This will disable Stripe payments.`)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/farm/stripe/disconnect', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Farm-ID': farmId
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok) {
+          this.showToast(result.message || 'Failed to disconnect Stripe', 'error');
+          return;
+        }
+        
+        this.showToast('Stripe disconnected successfully', 'success');
+        await this.loadPaymentSetup();
+        
+      } catch (error) {
+        console.error('Disconnect Stripe error:', error);
+        this.showToast('Failed to disconnect Stripe', 'error');
       }
     },
 
@@ -1487,6 +1749,339 @@
       `;
 
       container.insertBefore(historyItem, container.firstChild);
+    },
+
+    // ── Buyer Management ─────────────────────────────────────────
+
+    async loadBuyers() {
+      const headers = this.getAuthHeaders();
+      const search = document.getElementById('buyers-search')?.value || '';
+      try {
+        const url = search
+          ? `/api/admin/wholesale/buyers?search=${encodeURIComponent(search)}`
+          : '/api/admin/wholesale/buyers';
+        const res = await fetch(url, { headers });
+        const json = await res.json();
+        const buyers = (json.data?.buyers || []).map((buyer) => this.normalizeBuyer(buyer));
+        this.buyers = buyers;
+
+        // Stats
+        const totalEl = document.getElementById('buyers-total');
+        const activeEl = document.getElementById('buyers-active');
+        if (totalEl) totalEl.textContent = buyers.length;
+        if (activeEl) activeEl.textContent = buyers.filter(b => b.status !== 'deactivated').length;
+
+        // Load aggregate order stats
+        let orderCount = 0;
+        let revenue = 0;
+        try {
+          const ordRes = await fetch('/api/admin/wholesale/orders', { headers });
+          const ordJson = await ordRes.json();
+          const orders = ordJson.data?.orders || ordJson.orders || [];
+          orderCount = orders.length;
+          revenue = orders.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+        } catch (_) {}
+        const ordTotalEl = document.getElementById('buyers-orders-total');
+        const revEl = document.getElementById('buyers-revenue');
+        if (ordTotalEl) ordTotalEl.textContent = orderCount;
+        if (revEl) revEl.textContent = '$' + revenue.toFixed(2);
+
+        // Table
+        const tbody = document.getElementById('buyers-table');
+        if (!tbody) return;
+        if (buyers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--text-secondary);">No buyers found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = buyers.map(b => {
+          const status = b.status || 'active';
+          const statusColor = status === 'active' ? 'var(--success)' : 'var(--error)';
+          const created = b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '—';
+          return `<tr>
+            <td><a href="#" onclick="admin.viewBuyerDetail('${b.id}'); return false;" style="color: var(--primary); font-weight: 600;">${this.esc(b.businessName || '—')}</a></td>
+            <td>${this.esc(b.contactName || '—')}</td>
+            <td>${this.esc(b.email || '—')}</td>
+            <td>${this.esc(b.buyerType || '—')}</td>
+            <td><span style="padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">${status}</span></td>
+            <td>—</td>
+            <td>${created}</td>
+            <td style="white-space: nowrap;">
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-right: 0.25rem;" onclick="admin.openResetPassword('${this.esc(b.email || '')}')">Reset PW</button>
+              ${status === 'active'
+                ? `<button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.deactivateBuyer('${b.id}')">Deactivate</button>`
+                : `<button class="btn btn-primary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="admin.reactivateBuyer('${b.id}')">Reactivate</button>`
+              }
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        console.error('[Buyers] Load error:', err);
+        const tbody = document.getElementById('buyers-table');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="color: var(--error);">Failed to load buyers</td></tr>';
+      }
+    },
+
+    async viewBuyerDetail(buyerId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}`, { headers });
+        const json = await res.json();
+        if (json.status !== 'ok') throw new Error(json.message || 'Failed to load buyer');
+
+        const buyer = json.data.buyer;
+        const orders = json.data.orders || [];
+        const payments = json.data.payments || [];
+        const summary = json.data.summary || {};
+
+        const panel = document.getElementById('buyer-detail-panel');
+        const title = document.getElementById('buyer-detail-title');
+        const content = document.getElementById('buyer-detail-content');
+        if (!panel || !content) return;
+
+        title.textContent = buyer.businessName || buyer.email;
+        panel.style.display = 'block';
+
+        content.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-main); border-radius: 8px;">
+            <div><strong>Contact:</strong> ${this.esc(buyer.contactName || '—')}</div>
+            <div><strong>Email:</strong> ${this.esc(buyer.email || '—')}</div>
+            <div><strong>Phone:</strong> ${this.esc(buyer.phone || '—')}</div>
+            <div><strong>Type:</strong> ${this.esc(buyer.buyerType || '—')}</div>
+            <div><strong>Status:</strong> <span style="font-weight:600; color: ${buyer.status === 'active' ? 'var(--success)' : 'var(--error)'}">${buyer.status || 'active'}</span></div>
+            <div><strong>Registered:</strong> ${buyer.createdAt ? new Date(buyer.createdAt).toLocaleDateString() : '—'}</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="stat-card"><div class="stat-label">Total Orders</div><div class="stat-value">${summary.order_count || 0}</div></div>
+            <div class="stat-card"><div class="stat-label">Total Spent</div><div class="stat-value">$${(summary.total_spent || 0).toFixed(2)}</div></div>
+            <div class="stat-card"><div class="stat-label">First Order</div><div class="stat-value" style="font-size:0.9rem;">${summary.first_order ? new Date(summary.first_order).toLocaleDateString() : '—'}</div></div>
+            <div class="stat-card"><div class="stat-label">Last Order</div><div class="stat-value" style="font-size:0.9rem;">${summary.last_order ? new Date(summary.last_order).toLocaleDateString() : '—'}</div></div>
+          </div>
+
+          <h3 style="margin-bottom: 0.75rem;">Orders (${orders.length})</h3>
+          ${orders.length === 0 ? '<p style="color: var(--text-secondary);">No orders yet</p>' : `
+          <table style="margin-bottom: 1.5rem;">
+            <thead><tr><th>Order ID</th><th>Date</th><th>Status</th><th>Total</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${orders.map(o => `<tr>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((o.id || o.master_order_id || '').slice(0, 16))}...</td>
+                <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}</td>
+                <td>${this.esc(o.status || '—')}</td>
+                <td>$${(parseFloat(o.total) || 0).toFixed(2)}</td>
+                <td>
+                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.viewOrderAudit('${o.id || o.master_order_id}')">Audit</button>
+                  <button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="admin.issueRefund('${o.id || o.master_order_id}', ${parseFloat(o.total) || 0})">Refund</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+
+          <h3 style="margin-bottom: 0.75rem;">Payments (${payments.length})</h3>
+          ${payments.length === 0 ? '<p style="color: var(--text-secondary);">No payments recorded</p>' : `
+          <table>
+            <thead><tr><th>Payment ID</th><th>Order</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>
+              ${payments.map(p => `<tr>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((p.id || '').slice(0, 16))}</td>
+                <td style="font-family: monospace; font-size: 0.8rem;">${this.esc((p.orderId || '').slice(0, 16))}</td>
+                <td>$${(parseFloat(p.amount) || 0).toFixed(2)}</td>
+                <td>${this.esc(p.status || '—')}</td>
+                <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+        `;
+
+        panel.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error('[Buyers] Detail error:', err);
+        this.showToast('Failed to load buyer detail: ' + err.message, 'error');
+      }
+    },
+
+    closeBuyerDetail() {
+      const panel = document.getElementById('buyer-detail-panel');
+      if (panel) panel.style.display = 'none';
+    },
+
+    async deactivateBuyer(buyerId) {
+      if (!confirm('Deactivate this buyer account? They will lose API access immediately.')) return;
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}`, {
+          method: 'DELETE', headers
+        });
+        const json = await res.json().catch(() => ({}));
+        if (json.status === 'ok') {
+          this.showToast('Buyer deactivated', 'success');
+          await this.loadBuyers();
+        } else {
+          this.showToast(json.message || 'Deactivation failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    async reactivateBuyer(buyerId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}/reactivate`, {
+          method: 'POST', headers
+        });
+        const json = await res.json();
+        if (json.status === 'ok') {
+          this.showToast('Buyer reactivated', 'success');
+          this.loadBuyers();
+        } else {
+          this.showToast(json.message || 'Reactivation failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    async viewOrderAudit(orderId) {
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch(`/api/admin/wholesale/audit-log?orderId=${encodeURIComponent(orderId)}`, { headers });
+        const json = await res.json();
+        const events = json.data?.events || [];
+
+        const panel = document.getElementById('audit-log-panel');
+        const content = document.getElementById('audit-log-content');
+        if (!panel || !content) return;
+        panel.style.display = 'block';
+
+        content.innerHTML = events.length === 0
+          ? '<p style="color: var(--text-secondary);">No audit events for this order</p>'
+          : `<table>
+              <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Details</th></tr></thead>
+              <tbody>
+                ${events.map(e => `<tr>
+                  <td style="font-size: 0.8rem;">${new Date(e.timestamp).toLocaleString()}</td>
+                  <td><strong>${this.esc(e.event)}</strong></td>
+                  <td>${this.esc(e.actor || '—')}</td>
+                  <td style="font-size: 0.8rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${this.esc(JSON.stringify(e.details || {}))}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`;
+
+        panel.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        this.showToast('Failed to load audit log: ' + err.message, 'error');
+      }
+    },
+
+    closeAuditLog() {
+      const panel = document.getElementById('audit-log-panel');
+      if (panel) panel.style.display = 'none';
+    },
+
+    async issueRefund(orderId, maxAmount) {
+      const amount = prompt(`Enter refund amount (max $${maxAmount.toFixed(2)}):`);
+      if (!amount) return;
+      const parsedAmt = parseFloat(amount);
+      if (isNaN(parsedAmt) || parsedAmt <= 0 || parsedAmt > maxAmount) {
+        return this.showToast('Invalid refund amount', 'error');
+      }
+      const reason = prompt('Reason for refund:') || 'Admin-initiated refund';
+      const headers = this.getAuthHeaders();
+      try {
+        const res = await fetch('/api/admin/wholesale/refunds', {
+          method: 'POST', headers,
+          body: JSON.stringify({ orderId, amount: parsedAmt, reason })
+        });
+        const json = await res.json();
+        if (json.status === 'ok') {
+          this.showToast(`Refund of $${parsedAmt.toFixed(2)} processed`, 'success');
+        } else {
+          this.showToast(json.message || 'Refund failed', 'error');
+        }
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    exportBuyers() {
+      if (!this.buyers || this.buyers.length === 0) {
+        return this.showToast('No buyers to export', 'error');
+      }
+      const csv = [
+        ['Business Name', 'Contact', 'Email', 'Type', 'Status', 'Registered'],
+        ...this.buyers.map(b => [
+          (b.businessName || b.business_name || '').replace(/,/g, ' '),
+          (b.contactName || b.contact_name || '').replace(/,/g, ' '),
+          b.email || '',
+          b.buyerType || b.buyer_type || '',
+          b.status || 'active',
+          b.createdAt || b.created_at ? new Date(b.createdAt || b.created_at).toLocaleDateString() : ''
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wholesale-buyers-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      this.showToast('Buyers exported to CSV', 'success');
+    },
+
+    openResetPassword(email) {
+      const modal = document.getElementById('resetPasswordModal');
+      document.getElementById('resetEmail').value = email;
+      document.getElementById('resetNewPassword').value = '';
+      if (modal) modal.style.display = 'flex';
+    },
+
+    closeResetModal() {
+      const modal = document.getElementById('resetPasswordModal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    async submitPasswordReset() {
+      const email = document.getElementById('resetEmail').value;
+      const newPassword = document.getElementById('resetNewPassword').value;
+      if (!newPassword || newPassword.length < 8) {
+        return this.showToast('Password must be at least 8 characters', 'error');
+      }
+      try {
+        const headers = this.getAuthHeaders();
+        const res = await fetch('/api/admin/wholesale/buyers/reset-password', {
+          method: 'POST', headers,
+          body: JSON.stringify({ email, newPassword })
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || (json && json.status === 'error')) {
+          return this.showToast(json?.message || json?.error || 'Password reset failed', 'error');
+        }
+        this.showToast('Password reset successfully', 'success');
+        this.closeResetModal();
+      } catch (err) {
+        this.showToast('Error: ' + err.message, 'error');
+      }
+    },
+
+    normalizeBuyer(buyer) {
+      const status = buyer?.status || (buyer?.active === false ? 'deactivated' : 'active');
+      return {
+        ...buyer,
+        id: buyer?.id || buyer?.buyerId,
+        businessName: buyer?.businessName || buyer?.business_name || '',
+        contactName: buyer?.contactName || buyer?.contact_name || '',
+        email: buyer?.email || '',
+        buyerType: buyer?.buyerType || buyer?.buyer_type || '',
+        status,
+        createdAt: buyer?.createdAt || buyer?.created_at || null
+      };
+    },
+
+    esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
     }
   };
 

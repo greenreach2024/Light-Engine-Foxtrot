@@ -646,6 +646,7 @@
     <button class="nav-tab" data-view="payments">Payments & Fees</button>
     <button class="nav-tab" data-view="buyers">Buyers</button>
     <button class="nav-tab" data-view="orders">Orders</button>
+    <button class="nav-tab" data-view="product-requests">Product Requests</button>
     <button class="nav-tab" data-view="reconciliation">Reconciliation</button>
     <button class="nav-tab" data-view="compliance">Compliance Export</button>
     <button class="nav-tab" data-view="crop-analytics">⚖️ Crop Analytics</button>
@@ -1068,6 +1069,25 @@
     </div>
 
     <!-- Reconciliation View -->
+    <div id="product-requests-view" class="view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0;">Product Requests</h2>
+        <div>
+          <select id="admin-request-status-filter" onchange="admin.loadProductRequests()" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color, #ddd);">
+            <option value="">All Statuses</option>
+            <option value="open">Open</option>
+            <option value="matched">Matched</option>
+            <option value="fulfilled">Fulfilled</option>
+            <option value="expired">Expired</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div id="admin-requests-list" style="display: grid; gap: 1rem;">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
     <div id="reconciliation-view" class="view">
       <div class="card">
         <div class="card-header">

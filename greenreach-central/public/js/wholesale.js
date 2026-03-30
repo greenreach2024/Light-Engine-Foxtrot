@@ -486,7 +486,7 @@
     },
 
     navigateTo(view) {
-      if ((view === 'checkout' || view === 'orders' || view === 'account') && !this.currentBuyer) {
+      if ((view === 'checkout' || view === 'orders' || view === 'requests' || view === 'account') && !this.currentBuyer) {
         this.showToast('Please sign in to access buyer-only tools', 'info');
         this.showAuthModal('sign-in');
         return;
@@ -507,6 +507,7 @@
         if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
       }
       if (view === 'orders') this.loadOrders();
+      if (view === 'requests') this.loadProductRequests();
       if (view === 'account') this.loadAccountSettings();
     },
 
@@ -750,7 +751,7 @@
       return {
         sku_id: item.sku_id,
         product_name: item.product_name,
-        size: item.size || '1.5 lbs',
+        size: item.size || 'Bulk Case',
         unit: item.unit,
         price_per_unit: bestPrice,
         total_qty_available: totalQty,
@@ -812,7 +813,7 @@
             <div class="sku-meta">
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Size:</span>
-                <span>${escapeHtml(sku.size || '1.5 lbs')}</span>
+                <span>${escapeHtml(sku.size || 'N/A')}</span>
               </div>
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Unit:</span>
@@ -824,7 +825,7 @@
               </div>
               ${Number(sku.base_wholesale_price || 0) > 0 ? `
               <div class="sku-meta-row">
-                <span class="sku-meta-label">List Price:</span>
+                <span class="sku-meta-label">Base:</span>
                 <span>$${Number(sku.base_wholesale_price).toFixed(2)}</span>
               </div>` : ''}
               ${Number(sku.buyer_discount_rate || 0) > 0 ? `
@@ -2177,9 +2178,74 @@
     },
 
     renderProductRequests() {
-      // This would be called when viewing the "My Requests" tab
-      // For now, we'll add a view later
-      console.log('Product requests:', this.productRequests);
+      const container = document.getElementById('requests-list');
+      if (!container) return;
+
+      if (!this.currentBuyer) {
+        container.innerHTML = '<div class="order-empty"><div class="order-empty-icon">Locked</div><p>Please sign in to view your product requests.</p></div>';
+        return;
+      }
+
+      if (!this.productRequests || !this.productRequests.length) {
+        container.innerHTML = '<div class="order-empty"><div class="order-empty-icon">No Requests</div><p>No product requests yet. Use the "Request a Product" button in the catalog to submit one.</p></div>';
+        return;
+      }
+
+      const statusColors = {
+        open: 'pending',
+        matched: 'confirmed',
+        fulfilled: 'completed',
+        expired: 'cancelled',
+        cancelled: 'cancelled'
+      };
+
+      container.innerHTML = this.productRequests.map(req => {
+        const statusClass = statusColors[req.status] || 'pending';
+        const neededBy = req.needed_by_date
+          ? new Date(req.needed_by_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'No date specified';
+        const created = new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const certs = req.certifications_required && req.certifications_required.length
+          ? req.certifications_required.map(c => '<span class="cert-tag">' + escapeHtml(c) + '</span>').join(' ')
+          : '';
+        const maxPrice = req.max_price_per_unit ? '$' + Number(req.max_price_per_unit).toFixed(2) + '/' + escapeHtml(req.unit || 'unit') : '';
+
+        return '<div class="order-card">'
+          + '<div class="order-header">'
+          + '  <div class="order-id">' + escapeHtml(req.product_name) + '</div>'
+          + '  <div class="order-status ' + statusClass + '">' + escapeHtml(req.status) + '</div>'
+          + '</div>'
+          + '<div class="order-meta">'
+          + '  <div class="order-meta-item"><div class="order-meta-label">Quantity</div><div class="order-meta-value">' + escapeHtml(String(req.quantity)) + ' ' + escapeHtml(req.unit || 'units') + '</div></div>'
+          + '  <div class="order-meta-item"><div class="order-meta-label">Needed By</div><div class="order-meta-value">' + neededBy + '</div></div>'
+          + '  <div class="order-meta-item"><div class="order-meta-label">Submitted</div><div class="order-meta-value">' + created + '</div></div>'
+          + (maxPrice ? '  <div class="order-meta-item"><div class="order-meta-label">Max Price</div><div class="order-meta-value">' + maxPrice + '</div></div>' : '')
+          + '</div>'
+          + (req.description ? '<div style="padding: 0 1.25rem 1rem; color: var(--text-secondary); font-size: 0.9rem;">' + escapeHtml(req.description) + '</div>' : '')
+          + (certs ? '<div style="padding: 0 1.25rem 1rem;">' + certs + '</div>' : '')
+          + (req.status === 'open' ? '<div style="padding: 0 1.25rem 1.25rem;"><button class="btn btn-secondary" onclick="WholesaleApp.cancelProductRequest(' + req.id + ')" style="font-size: 0.8rem;">Cancel Request</button></div>' : '')
+          + '</div>';
+      }).join('');
+    },
+
+    async cancelProductRequest(requestId) {
+      if (!confirm('Cancel this product request?')) return;
+      try {
+        const { response, json } = await this.apiFetch('/api/wholesale/product-requests/' + requestId + '/cancel', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        if (response.ok) {
+          this.showToast('Request cancelled', 'success');
+          this.loadProductRequests();
+        } else {
+          this.showToast(json?.error || 'Failed to cancel request', 'error');
+        }
+      } catch (err) {
+        console.error('Cancel request failed:', err);
+        this.showToast('Failed to cancel request', 'error');
+      }
     },
 
     // === BATCH PAYMENTS ===
@@ -2309,6 +2375,8 @@
       }
     }
   };
+
+  window.WholesaleApp = app;
 
   document.addEventListener('DOMContentLoaded', () => {
     app.init();

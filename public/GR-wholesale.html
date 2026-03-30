@@ -1920,6 +1920,7 @@
     <button class="nav-tab active" data-view="catalog">Browse Catalog</button>
     <button class="nav-tab" data-view="checkout">Checkout</button>
     <button class="nav-tab" data-view="orders">My Orders</button>
+    <button class="nav-tab" data-view="requests">My Requests</button>
     <button class="nav-tab" data-view="account">Account</button>
   </nav>
 
@@ -2217,6 +2218,22 @@
       </div>
       <div id="orders-list" class="orders-list">
         <!-- Order cards populated by JS -->
+      </div>
+    </div>
+
+    <!-- Product Requests View -->
+    <div id="requests-view" class="view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <h1 style="margin: 0;">My Requests</h1>
+          <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0;">Track your product requests and farm responses</p>
+        </div>
+        <button class="btn btn-primary" onclick="WholesaleApp.openProductRequestModal()">
+          Request a Product
+        </button>
+      </div>
+      <div id="requests-list" class="orders-list">
+        <!-- Request cards populated by JS -->
       </div>
     </div>
 

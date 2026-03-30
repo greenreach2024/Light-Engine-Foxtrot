@@ -55,8 +55,6 @@ import { getBatchFarmSquareCredentials } from '../services/squareCredentials.js'
 import { processSquarePayments, refundPayment } from '../services/squarePaymentService.js';
 import { ingestPaymentRevenue, ingestFarmPayables, ingestFarmPayout } from '../services/revenue-accounting-connector.js';
 import emailService from '../services/email-service.js';
-import { sendBuyerWelcomeEmail } from '../services/email.js';
-import { pushSocialNotification } from '../services/scott-social-push.js';
 import { farmStore } from '../lib/farm-data-store.js';
 import { assembleInvoice, renderInvoiceHTML } from '../lib/wholesale/invoice-generator.js';
 
@@ -301,19 +299,18 @@ function inferPriceUnit(name, category, fallbackUnit) {
 
   if (family === 'cherry_tomatoes' || family === 'weight_crops') {
     const normalizedFallback = String(fallbackUnit || '').toLowerCase();
-    if (['lb', 'oz', 'g', 'kg'].includes(normalizedFallback)) {
+    if (['oz', 'g', 'kg'].includes(normalizedFallback)) {
       return normalizedFallback;
     }
-    return 'lb';
+    return 'oz';
   }
 
-  // Respect the fallback unit when it is a recognized weight/quantity unit.
-  // Farm inventory stores prices per-lb; only override when the source
-  // explicitly declares a smaller unit like oz, g, or kg.
+  // Default: use 'oz' for weight-like fallbacks since all pricing is per-oz
   const normFB = String(fallbackUnit || '').toLowerCase();
-  const knownUnits = ['lb', 'oz', 'g', 'kg', 'pint', 'unit', 'each', 'bunch', 'head', 'dozen'];
-  if (knownUnits.includes(normFB)) return normFB;
-  return 'lb';
+  if (['oz', 'g', 'kg'].includes(normFB)) return normFB;
+  if (normFB === 'pint') return 'pint';
+  if (normFB === 'unit' || normFB === 'each') return normFB;
+  return 'oz';
 }
 
 function mean(values) {
@@ -1539,24 +1536,12 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
     });
     const token = issueBuyerToken(buyer.id);
 
-    // Send polished welcome email (non-blocking)
-    sendBuyerWelcomeEmail({
-      email: buyer.email,
-      businessName: buyer.businessName || buyer.business_name,
-      contactName: buyer.contactName || buyer.contact_name,
-      buyerType: buyer.buyerType || buyer.buyer_type
-    }).catch(err => console.warn('[Email] Buyer welcome email failed:', err.message));
-    // Push social notification via SCOTT (non-blocking)
-    pushSocialNotification({
-      platform: 'linkedin',
-      sourceType: 'wholesale',
-      sourceContext: {
-        event: 'new_buyer',
-        businessName: buyer.businessName || buyer.business_name,
-        buyerType: buyer.buyerType || buyer.buyer_type,
-      },
-      customInstructions: 'Announce a new wholesale buyer joining the GreenReach marketplace. Keep it professional and welcoming. Do not reveal the buyer name — just celebrate growth.',
-    }).catch(err => console.warn('[SCOTT] New buyer social push failed:', err.message));
+    // Send welcome email (non-blocking)
+    emailService.sendEmail({
+      to: buyer.email,
+      subject: 'Welcome to GreenReach Wholesale',
+      text: `Hi ${buyer.contactName || buyer.businessName},\n\nYour wholesale buyer account has been created.\n\nYou can now browse the catalog and place orders.\n\n— GreenReach Farms`
+    }).catch(err => console.warn('[Email] Welcome email failed:', err.message));
 
     return res.json({
       status: 'ok',
@@ -2439,6 +2424,213 @@ router.post('/oauth/square/refresh', (req, res) => {
 
 router.delete('/oauth/square/disconnect/:farmId', (req, res) => {
   return res.json({ status: 'ok', data: { disconnected: true, farm_id: req.params.farmId } });
+});
+
+// --- Product Requests (buyer requests for products not in catalog) ---
+
+router.post('/product-requests/create', requireBuyerPortalAuth, async (req, res) => {
+  try {
+    const buyer = req.wholesaleBuyer;
+    const {
+      product_name,
+      quantity,
+      unit,
+      needed_by_date,
+      description,
+      max_price_per_unit,
+      certifications_required
+    } = req.body;
+
+    if (!product_name || !quantity || !unit || !needed_by_date) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Product name, quantity, unit, and needed by date are required'
+      });
+    }
+
+    const requestResult = await query(`
+      INSERT INTO wholesale_product_requests
+      (buyer_id, product_name, quantity, unit, needed_by_date, description, max_price_per_unit, certifications_required, status, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', NOW(), NOW())
+      RETURNING id
+    `, [
+      buyer.id,
+      String(product_name).slice(0, 255),
+      Number(quantity),
+      String(unit).slice(0, 50),
+      needed_by_date,
+      description ? String(description).slice(0, 2000) : null,
+      max_price_per_unit ? Number(max_price_per_unit) : null,
+      JSON.stringify(certifications_required || [])
+    ]);
+
+    const requestId = requestResult.rows[0].id;
+
+    // Get all active farms with admin email for notification
+    let notifiedCount = 0;
+    try {
+      const farmsResult = await query(`
+        SELECT f.farm_id, f.name, u.email
+        FROM farms f
+        LEFT JOIN users u ON u.farm_id = f.farm_id AND u.role = 'admin' AND u.is_active = true
+        WHERE f.status IN ('active', 'online')
+        ORDER BY f.name
+      `);
+
+      const certText = (certifications_required && certifications_required.length > 0)
+        ? certifications_required.join(', ')
+        : 'None specified';
+
+      const priceText = max_price_per_unit
+        ? `Maximum price: $${max_price_per_unit} per ${unit}`
+        : 'No price limit specified';
+
+      for (const farm of farmsResult.rows) {
+        if (!farm.email) continue;
+        try {
+          emailService.sendEmail({
+            to: farm.email,
+            subject: `Product Request: ${product_name} - ${buyer.business_name || buyer.businessName || 'Wholesale Buyer'}`,
+            html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+              <div style="background:#2d5016;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;">
+                <h2 style="margin:0;">New Product Request</h2>
+              </div>
+              <div style="padding:20px;border:1px solid #e0e0e0;">
+                <p>Hello ${farm.name},</p>
+                <p><strong>${buyer.business_name || buyer.businessName || 'A wholesale buyer'}</strong> is looking for a product not in the current catalog.</p>
+                <div style="background:#f0f7ed;padding:15px;margin:15px 0;border-left:4px solid #2d5016;border-radius:4px;">
+                  <p style="margin:5px 0;"><strong>Product:</strong> ${product_name}</p>
+                  <p style="margin:5px 0;"><strong>Quantity:</strong> ${quantity} ${unit}</p>
+                  <p style="margin:5px 0;"><strong>Needed By:</strong> ${needed_by_date}</p>
+                  <p style="margin:5px 0;"><strong>Price:</strong> ${priceText}</p>
+                  <p style="margin:5px 0;"><strong>Certifications:</strong> ${certText}</p>
+                  ${description ? `<p style="margin:5px 0;"><strong>Notes:</strong> ${description}</p>` : ''}
+                </div>
+                <p>If you can fulfill this request, reply to <a href="mailto:${buyer.email}">${buyer.email}</a> with availability, pricing, and delivery timeline.</p>
+              </div>
+              <div style="text-align:center;padding:15px;color:#666;font-size:0.85rem;">
+                <p>Request #${requestId} via GreenReach Wholesale</p>
+              </div>
+            </div>`,
+            text: `New Product Request from ${buyer.business_name || buyer.businessName || 'Wholesale Buyer'}\n\nProduct: ${product_name}\nQuantity: ${quantity} ${unit}\nNeeded By: ${needed_by_date}\n${priceText}\nCertifications: ${certText}\n${description ? 'Notes: ' + description : ''}\n\nReply to ${buyer.email} if you can fulfill this request.\n\nRequest #${requestId}`
+          });
+          notifiedCount++;
+        } catch (emailErr) {
+          console.warn(`[Product Request] Failed to email ${farm.name}:`, emailErr.message);
+        }
+      }
+    } catch (farmErr) {
+      console.warn('[Product Request] Farm notification query failed:', farmErr.message);
+    }
+
+    console.log(`[Product Request] Created #${requestId} by buyer ${buyer.id}, notified ${notifiedCount} farms`);
+
+    return res.json({
+      ok: true,
+      request_id: requestId,
+      matched_farms: notifiedCount,
+      message: `Request submitted! ${notifiedCount} farm${notifiedCount !== 1 ? 's' : ''} notified.`
+    });
+
+  } catch (error) {
+    console.error('[Product Request] Create error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to create product request' });
+  }
+});
+
+router.get('/product-requests/buyer/:buyerId', requireBuyerPortalAuth, async (req, res) => {
+  try {
+    const buyerId = req.wholesaleBuyer.id;
+
+    const result = await query(`
+      SELECT id, product_name, quantity, unit, needed_by_date, description,
+             max_price_per_unit, certifications_required, status, farm_responses,
+             created_at, updated_at
+      FROM wholesale_product_requests
+      WHERE buyer_id = $1
+      ORDER BY created_at DESC
+    `, [buyerId]);
+
+    return res.json({ ok: true, requests: result.rows });
+  } catch (error) {
+    console.error('[Product Request] List error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to fetch product requests' });
+  }
+});
+
+router.get('/product-requests', adminAuthMiddleware, async (req, res) => {
+  try {
+    const statusFilter = req.query.status;
+    const validStatuses = ['open', 'matched', 'fulfilled', 'expired', 'cancelled'];
+    let sql = `
+      SELECT pr.*, wb.business_name, wb.contact_name, wb.email AS buyer_email
+      FROM wholesale_product_requests pr
+      LEFT JOIN wholesale_buyers wb ON wb.id = pr.buyer_id`;
+    const params = [];
+    if (statusFilter && validStatuses.includes(statusFilter)) {
+      sql += ' WHERE pr.status = $1';
+      params.push(statusFilter);
+    }
+    sql += ' ORDER BY pr.created_at DESC LIMIT 200';
+    const result = await query(sql, params);
+
+    return res.json({ ok: true, requests: result.rows });
+  } catch (error) {
+    console.error('[Product Request] Admin list error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to fetch product requests' });
+  }
+});
+
+router.patch('/product-requests/:requestId/cancel', ...requireBuyerPortalAuth, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const buyerId = req.buyer?.id;
+    if (!buyerId) return res.status(401).json({ ok: false, message: 'Not authenticated' });
+
+    const result = await query(`
+      UPDATE wholesale_product_requests
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE id = $1 AND buyer_id = $2 AND status = 'open'
+      RETURNING id, status
+    `, [requestId, buyerId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, message: 'Request not found or cannot be cancelled' });
+    }
+
+    return res.json({ ok: true, request: result.rows[0] });
+  } catch (error) {
+    console.error('[Product Request] Buyer cancel error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to cancel request' });
+  }
+});
+
+router.patch('/product-requests/:requestId/status', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status } = req.body;
+    const validStatuses = ['open', 'matched', 'fulfilled', 'expired', 'cancelled'];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ ok: false, message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const result = await query(`
+      UPDATE wholesale_product_requests
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, status
+    `, [status, requestId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, message: 'Product request not found' });
+    }
+
+    return res.json({ ok: true, request: result.rows[0] });
+  } catch (error) {
+    console.error('[Product Request] Status update error:', error);
+    return res.status(500).json({ ok: false, message: 'Failed to update request status' });
+  }
 });
 
 // --- Network admin (DB optional) ---

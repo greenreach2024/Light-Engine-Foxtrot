@@ -129,7 +129,111 @@
         case 'compliance':
           this.loadComplianceView();
           break;
+        case 'product-requests':
+          this.loadProductRequests();
+          break;
       }
+    },
+
+    async loadProductRequests() {
+      const container = document.getElementById('admin-requests-list');
+      if (!container) return;
+      container.innerHTML = '<p style="color: var(--text-secondary);">Loading requests...</p>';
+
+      try {
+        const headers = this.getAuthHeaders();
+        const filterEl = document.getElementById('admin-request-status-filter');
+        const statusFilter = filterEl ? filterEl.value : '';
+        const url = '/api/wholesale/product-requests' + (statusFilter ? '?status=' + statusFilter : '');
+        const res = await fetch(url, { headers });
+        const json = await res.json();
+
+        if (!json.ok || !json.requests || !json.requests.length) {
+          container.innerHTML = '<p style="color: var(--text-secondary);">No product requests found.</p>';
+          return;
+        }
+
+        const statusColors = {
+          open: '#fef3c7',
+          matched: '#dbeafe',
+          fulfilled: '#d1fae5',
+          expired: '#f3f4f6',
+          cancelled: '#fee2e2'
+        };
+        const statusTextColors = {
+          open: '#92400e',
+          matched: '#1e40af',
+          fulfilled: '#065f46',
+          expired: '#6b7280',
+          cancelled: '#991b1b'
+        };
+
+        container.innerHTML = json.requests.map(req => {
+          const bg = statusColors[req.status] || '#f3f4f6';
+          const fg = statusTextColors[req.status] || '#374151';
+          const neededBy = req.needed_by_date
+            ? new Date(req.needed_by_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '--';
+          const created = new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const buyerName = this.escHtml(req.business_name || req.contact_name || ('Buyer #' + req.buyer_id));
+          const SQ = "'";
+
+          let card = '<div style="background: var(--card-bg, #fff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 1.25rem;">'
+            + '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">'
+            + '  <strong style="font-size: 1.05rem;">' + this.escHtml(req.product_name) + '</strong>'
+            + '  <span style="background:' + bg + '; color:' + fg + '; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 600;">' + this.escHtml(req.status) + '</span>'
+            + '</div>'
+            + '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: var(--text-secondary, #6b7280);">'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Buyer</div>' + buyerName + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Quantity</div>' + this.escHtml(String(req.quantity)) + ' ' + this.escHtml(req.unit || 'units') + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Needed By</div>' + neededBy + '</div>'
+            + '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Submitted</div>' + created + '</div>';
+          if (req.max_price_per_unit) {
+            card += '  <div><div style="font-weight:600; color: var(--text-primary, #111);">Max Price</div>$' + Number(req.max_price_per_unit).toFixed(2) + '/' + this.escHtml(req.unit || 'unit') + '</div>';
+          }
+          card += '</div>';
+          if (req.description) {
+            card += '<p style="margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--text-secondary, #6b7280);">' + this.escHtml(req.description) + '</p>';
+          }
+          if (req.status === 'open') {
+            card += '<div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'matched' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #dbeafe; color: #1e40af; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Matched</button>'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'fulfilled' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #d1fae5; color: #065f46; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Fulfilled</button>'
+              + '<button onclick="admin.updateRequestStatus(' + req.id + ', ' + SQ + 'expired' + SQ + ')" style="padding: 0.4rem 0.8rem; background: #f3f4f6; color: #6b7280; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">Mark Expired</button>'
+              + '</div>';
+          }
+          card += '</div>';
+          return card;
+        }).join('');
+      } catch (err) {
+        console.error('[Wholesale Admin] Failed to load product requests:', err);
+        container.innerHTML = '<p style="color: #dc2626;">Failed to load product requests.</p>';
+      }
+    },
+
+    async updateRequestStatus(requestId, status) {
+      try {
+        const headers = this.getAuthHeaders();
+        const res = await fetch('/api/wholesale/product-requests/' + requestId + '/status', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status })
+        });
+        const json = await res.json();
+        if (json.ok) {
+          this.loadProductRequests();
+        } else {
+          alert(json.message || 'Failed to update status');
+        }
+      } catch (err) {
+        console.error('[Wholesale Admin] Status update error:', err);
+        alert('Failed to update request status');
+      }
+    },
+
+    escHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     },
 
     async loadNetwork() {
