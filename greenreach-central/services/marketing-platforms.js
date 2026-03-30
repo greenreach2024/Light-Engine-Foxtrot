@@ -343,3 +343,89 @@ export async function getPlatformStatus() {
 
   return status;
 }
+
+/**
+ * Fetch account details from a platform's API using stored credentials.
+ * Returns name, username, URL, and other public-facing profile info.
+ * @param {string} platform - twitter, linkedin, instagram, facebook
+ * @returns {Promise<{ok: boolean, platform: string, account?: object, error?: string}>}
+ */
+export async function getPlatformAccountInfo(platform) {
+  const { checkPlatformCredentials } = await import('./marketing-settings.js');
+  const credCheck = await checkPlatformCredentials(platform);
+  if (!credCheck.configured) {
+    return { ok: false, platform, error: 'Credentials not configured.' };
+  }
+
+  try {
+    if (platform === 'facebook') {
+      const creds = await getSettings(['facebook_page_access_token', 'facebook_page_id']);
+      const pageId = creds.facebook_page_id;
+      const token = creds.facebook_page_access_token;
+      const fields = 'name,username,link,category,fan_count,followers_count,about,single_line_address,picture';
+      const url = `https://graph.facebook.com/v18.0/${pageId}?fields=${fields}&access_token=${token}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Facebook API ${resp.status}: ${errText}`);
+      }
+      const data = await resp.json();
+      return {
+        ok: true,
+        platform,
+        account: {
+          page_id: pageId,
+          name: data.name || null,
+          username: data.username || null,
+          url: data.link || (data.username ? `https://www.facebook.com/${data.username}` : null),
+          category: data.category || null,
+          followers: data.followers_count || data.fan_count || null,
+          about: data.about || null,
+          address: data.single_line_address || null,
+          picture_url: data.picture?.data?.url || null,
+        },
+      };
+    }
+
+    if (platform === 'instagram') {
+      const creds = await getSettings(['instagram_access_token', 'instagram_business_account']);
+      const accountId = creds.instagram_business_account;
+      const token = creds.instagram_access_token;
+      const fields = 'name,username,biography,followers_count,media_count,profile_picture_url,website';
+      const url = `https://graph.facebook.com/v18.0/${accountId}?fields=${fields}&access_token=${token}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Instagram API ${resp.status}: ${errText}`);
+      }
+      const data = await resp.json();
+      return {
+        ok: true,
+        platform,
+        account: {
+          account_id: accountId,
+          name: data.name || null,
+          username: data.username || null,
+          url: data.username ? `https://www.instagram.com/${data.username}` : null,
+          biography: data.biography || null,
+          followers: data.followers_count || null,
+          media_count: data.media_count || null,
+          picture_url: data.profile_picture_url || null,
+          website: data.website || null,
+        },
+      };
+    }
+
+    if (platform === 'twitter') {
+      return { ok: true, platform, account: { note: 'Twitter/X account info requires OAuth 1.0a user context. Credentials are configured and active.' } };
+    }
+
+    if (platform === 'linkedin') {
+      return { ok: true, platform, account: { note: 'LinkedIn profile info requires OAuth 2.0 user context. Credentials are configured and active.' } };
+    }
+
+    return { ok: false, platform, error: `Unknown platform: ${platform}` };
+  } catch (err) {
+    return { ok: false, platform, error: err.message };
+  }
+}

@@ -33,7 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 import { evaluateAutoApprove, tryAutoApprove, loadAllRules } from '../services/marketing-rules-engine.js';
-import { publishToPlatform, getPlatformStatus } from '../services/marketing-platforms.js';
+import { publishToPlatform, getPlatformStatus, getPlatformAccountInfo } from '../services/marketing-platforms.js';
 import { listSkills } from '../services/marketing-skills.js';
 import { getSetting, getSettings, setSetting, deleteSetting, checkPlatformCredentials } from '../services/marketing-settings.js';
 
@@ -1024,7 +1024,26 @@ const SCOTT_TOOL_CATALOG = {
         return { ok: false, platform: params.platform, error: 'Credentials not configured. Cannot test connection.', configured: false };
       }
       const status = await getPlatformStatus(params.platform);
-      return { ok: true, platform: params.platform, configured: true, source: credCheck.source, status };
+      const accountInfo = await getPlatformAccountInfo(params.platform);
+      return {
+        ok: true,
+        platform: params.platform,
+        configured: true,
+        source: credCheck.source,
+        status,
+        account: accountInfo.ok ? accountInfo.account : null,
+      };
+    },
+  },
+
+  get_platform_account_info: {
+    description: 'Retrieve the account name, username, URL, category, follower count, and other profile details for a connected social media platform. Use this to identify which account Scott is posting to.',
+    parameters: {
+      platform: { type: 'string', description: 'Platform to retrieve account info for', enum: ['twitter', 'linkedin', 'instagram', 'facebook'] },
+    },
+    required: ['platform'],
+    execute: async (params) => {
+      return await getPlatformAccountInfo(params.platform);
     },
   },
 
