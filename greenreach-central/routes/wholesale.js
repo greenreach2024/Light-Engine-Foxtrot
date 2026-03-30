@@ -759,6 +759,140 @@ function requireWholesaleDbForCriticalPaths(req, res, next) {
 
 const requireBuyerPortalAuth = [requireWholesaleDbForCriticalPaths, requireBuyerAuth];
 
+// Temporary diagnostic endpoint -- remove after debugging buyer persistence
+router.get('/diag/buyer-db', async (req, res) => {
+  const results = {};
+  try {
+    results.dbAvailable = isDatabaseAvailable();
+    if (!results.dbAvailable) return res.json(results);
+
+    const tableCheck = await query("SELECT to_regclass('public.wholesale_buyers')");
+    results.tableExists = !!tableCheck.rows[0].to_regclass;
+
+    const cols = await query(
+      "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'wholesale_buyers' ORDER BY ordinal_position"
+    );
+    results.columns = cols.rows;
+
+    const count = await query("SELECT COUNT(*) as cnt FROM wholesale_buyers");
+    results.rowCount = parseInt(count.rows[0].cnt || '0');
+
+    // Show existing rows (just id + email for debugging)
+    const rows = await query("SELECT id, email, status, created_at FROM wholesale_buyers ORDER BY created_at DESC LIMIT 10");
+    results.recentRows = rows.rows;
+
+    const testId = 'diag-test-' + Date.now();
+    try {
+      await query(
+        "INSERT INTO wholesale_buyers (id, business_name, contact_name, email, buyer_type, location, password_hash, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW(), NOW())",
+        [testId, 'Diag Test', 'Test', 'diag-' + Date.now() + '@test.local', 'restaurant', JSON.stringify(null), 'fakehash', 'active']
+      );
+      results.testInsert = 'OK';
+      await query("DELETE FROM wholesale_buyers WHERE id = $1", [testId]);
+      results.testDelete = 'OK';
+    } catch (insertErr) {
+      results.testInsert = 'FAILED: ' + insertErr.message;
+    }
+
+    res.json(results);
+  } catch (err) {
+    results.error = err.message;
+    res.json(results);
+  }
+});
+
+// Temporary schema fix endpoint -- remove after debugging
+router.post('/diag/fix-schema', async (req, res) => {
+  const results = {};
+  try {
+    // Check current id column type
+    const colCheck = await query(
+      "SELECT data_type FROM information_schema.columns WHERE table_name = 'wholesale_buyers' AND column_name = 'id'"
+    );
+    results.currentIdType = colCheck.rows[0]?.data_type || 'NOT FOUND';
+
+    if (results.currentIdType === 'integer') {
+      // Find and drop FK constraints referencing wholesale_buyers.id
+      const fks = await query(
+        "SELECT tc.constraint_name, tc.table_name FROM information_schema.table_constraints tc " +
+        "JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name " +
+        "JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name " +
+        "WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'wholesale_buyers' AND ccu.column_name = 'id'"
+      );
+      results.foreignKeys = fks.rows;
+
+      for (const fk of fks.rows) {
+        await query('ALTER TABLE ' + fk.table_name + ' DROP CONSTRAINT ' + fk.constraint_name);
+        results['dropped_' + fk.constraint_name] = 'OK';
+      }
+
+      // Drop default/sequence if present
+      try { await query("ALTER TABLE wholesale_buyers ALTER COLUMN id DROP DEFAULT"); results.dropDefault = 'OK'; } catch (e) { results.dropDefault = e.message; }
+
+      // Convert wholesale_buyers.id
+      await query("ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text");
+      results.alterBuyersId = 'OK';
+
+      // Convert buyer_id columns in related tables
+      const relatedTables = ['password_reset_tokens', 'wholesale_orders', 'wholesale_payments'];
+      for (const tbl of relatedTables) {
+        try {
+          const check = await query(
+            "SELECT data_type FROM information_schema.columns WHERE table_name = $1 AND column_name = 'buyer_id'", [tbl]
+          );
+          if (check.rows.length > 0 && check.rows[0].data_type === 'integer') {
+            await query('ALTER TABLE ' + tbl + ' ALTER COLUMN buyer_id TYPE VARCHAR(255) USING buyer_id::text');
+            results['alter_' + tbl] = 'OK - converted buyer_id';
+          } else if (check.rows.length > 0) {
+            results['alter_' + tbl] = 'SKIPPED - already ' + check.rows[0].data_type;
+          } else {
+            results['alter_' + tbl] = 'SKIPPED - no buyer_id column';
+          }
+        } catch (e) {
+          results['alter_' + tbl] = 'FAILED: ' + e.message;
+        }
+      }
+
+      // Re-add FK constraints
+      for (const fk of fks.rows) {
+        try {
+          await query('ALTER TABLE ' + fk.table_name + ' ADD CONSTRAINT ' + fk.constraint_name +
+            ' FOREIGN KEY (buyer_id) REFERENCES wholesale_buyers(id)');
+          results['readd_' + fk.constraint_name] = 'OK';
+        } catch (e) {
+          results['readd_' + fk.constraint_name] = 'FAILED: ' + e.message;
+        }
+      }
+
+      // Verify
+      const verify = await query(
+        "SELECT data_type FROM information_schema.columns WHERE table_name = 'wholesale_buyers' AND column_name = 'id'"
+      );
+      results.newIdType = verify.rows[0]?.data_type || 'UNKNOWN';
+    } else {
+      results.alterResult = 'SKIPPED - id is already ' + results.currentIdType;
+    }
+
+    // Test insert after fix
+    const testId = 'fix-test-' + Date.now();
+    try {
+      await query(
+        "INSERT INTO wholesale_buyers (id, business_name, contact_name, email, buyer_type, location, password_hash, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW(), NOW())",
+        [testId, 'Fix Test', 'Test', 'fix-' + Date.now() + '@test.local', 'restaurant', JSON.stringify(null), 'fakehash', 'active']
+      );
+      results.testInsertAfterFix = 'OK';
+      await query("DELETE FROM wholesale_buyers WHERE id = $1", [testId]);
+    } catch (insertErr) {
+      results.testInsertAfterFix = 'FAILED: ' + insertErr.message;
+    }
+
+    res.json(results);
+  } catch (err) {
+    results.error = err.message;
+    res.json(results);
+  }
+});
+
 /**
  * GET /api/wholesale/payment/config
  * Return public Square credentials for the frontend payment form.
@@ -1551,7 +1685,8 @@ router.post('/buyers/register', registerLimiter, requireWholesaleDbForCriticalPa
     if (error?.code === 'EMAIL_EXISTS') {
       return res.status(409).json({ status: 'error', message: 'Email already registered' });
     }
-    return next(error);
+    console.error('[WholesaleRegister] Registration error:', error.message, error.stack);
+    return res.status(500).json({ status: 'error', message: error.message || 'Registration failed' });
   }
 });
 
