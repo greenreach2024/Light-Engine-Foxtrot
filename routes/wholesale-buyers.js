@@ -8,11 +8,20 @@ import { sendEmail } from '../lib/email-service.js';
 
 const router = express.Router();
 
-// Rate limiter for authentication endpoints (5 attempts per 15 minutes)
+// Rate limiter for login (10 attempts per 15 minutes)
 const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
-  message: 'Too many authentication attempts, please try again later.',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Too many login attempts, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Separate rate limiter for password reset (5 attempts per 15 minutes)
+const resetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Too many password reset attempts, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -175,7 +184,7 @@ router.post('/buyers/login', authRateLimiter, async (req, res) => {
 });
 
 // POST /api/wholesale/buyers/password-reset-request - Request password reset
-router.post('/buyers/password-reset-request', authRateLimiter, async (req, res) => {
+router.post('/buyers/password-reset-request', resetRateLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
 
@@ -247,7 +256,7 @@ router.post('/buyers/password-reset-request', authRateLimiter, async (req, res) 
 });
 
 // POST /api/wholesale/buyers/password-reset - Complete password reset
-router.post('/buyers/password-reset', authRateLimiter, async (req, res) => {
+router.post('/buyers/password-reset', resetRateLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body || {};
 
@@ -433,7 +442,7 @@ router.post('/buyers/change-password', requireBuyerAuth, async (req, res) => {
 });
 
 // POST /api/wholesale/buyers/forgot-password - Initiate password reset
-router.post('/buyers/forgot-password', authRateLimiter, async (req, res) => {
+router.post('/buyers/forgot-password', resetRateLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
 
@@ -579,7 +588,7 @@ router.get('/buyers/reset-password/:token', async (req, res) => {
 });
 
 // POST /api/wholesale/buyers/reset-password - Complete password reset
-router.post('/buyers/reset-password', authRateLimiter, async (req, res) => {
+router.post('/buyers/reset-password', resetRateLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body || {};
 
