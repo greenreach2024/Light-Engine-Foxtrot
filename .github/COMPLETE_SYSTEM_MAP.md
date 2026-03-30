@@ -727,7 +727,21 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 #### GR-central-admin.html -- F.A.Y.E. Admin Dashboard
 - **Auth**: localStorage.admin_token required
-- **Navigation**: Sidebar (Overview, Farms, Users, Analytics, AI Rules, Network)
+- **Sidebar**: Dynamically rendered by `central-admin.js` -> `renderContextualSidebar()`, context-aware (platform/farm/room level)
+- **Sidebar (platform level)**:
+  - Overview: Dashboard, LE Fleet Monitoring, Anomalies, Alerts
+  - Wholesale: Admin Dashboard, Pricing & Products, Delivery Services
+  - Procurement: Catalog Management, Supplier Management, Revenue
+  - Analytics: AI Insights, Market Intelligence, Energy, Harvest Forecast
+  - Grant Intelligence: Grant Summary, Grant Users
+  - Finance: Network Accounting
+  - Marketing: Marketing Dashboard, S.C.O.T.T.
+  - Network: Network Dashboard, Grower Network
+  - AI Governance: F.A.Y.E. Core (/faye-core.html), AI Rules, AI Reference Sites, AI Agent Monitor
+  - Management: All Farms, Users, Recipes
+  - Field Tools: Edge Setup Guide (/landing-downloads.html)
+- **Sidebar (farm level)**: Farm Overview (Summary, Rooms, Devices), Operations (Inventory, Recipes, Environmental), Performance (Energy, Alerts)
+- **NOTE**: Research/G.W.E.N. are NOT in Central sidebar. They are LE-only features.
 - **Global Search**: #globalSearch (filters farms, devices, trays)
 - **Key Buttons**: Sync Stats, Export Report, Configure Farm, View Logs, Export Farm Data, Change Password, Logout
 - **Farm Info Edit**: owner, contact, phone, email, website, address fields (toggle editable)
@@ -749,7 +763,16 @@ Central excludes: .git, .github, .vscode, node_modules, logs, *.md, public/video
 
 #### LE-farm-admin.html -- E.V.I.E. Farm Dashboard
 - **Auth**: localStorage.token or sessionStorage.token
-- **Navigation**: Farm Summary (green), Farm Admin (purple), Inventory (yellow)
+- **Sidebar** (static HTML, sections listed in order):
+  - Farm Operations: Setup/Update (/LE-dashboard.html), Activity Hub (/views/tray-inventory.html), Farm Summary (/views/farm-summary.html), Inventory (/views/farm-inventory.html), Planting Scheduler (/views/planting-scheduler.html), Tray Setup (/views/tray-setup.html), Nutrient Management (/views/nutrient-management.html), Heat Map (/views/room-heatmap.html), Crop Weight Analytics (/views/crop-weight-analytics.html)
+  - Enterprise ERP: Procurement (/views/procurement-portal.html)
+  - Sales: Farm Sales Terminal (/farm-sales-pos.html)
+  - Administration: Settings, IoT Manager, Room Mapper, Network, Sustainability, Maintenance, Traceability
+  - Support: Help & Docs, Contact Support
+  - **Research**: Research Workspace (/views/research-workspace.html), Research Overview (/research-subscription.html)
+  - Intelligence: E.V.I.E. Core (/evie-core.html)
+- **NOTE**: Research Workspace and G.W.E.N. are LE features. G.W.E.N. is embedded inside Research Workspace (not a separate sidebar link). The Research sidebar section belongs ONLY in LE-farm-admin, NOT in GR-central-admin.
+- **Linking**: All sidebar items use `data-url` to load pages in an `<iframe id="admin-iframe">`. Research Workspace loads `/views/research-workspace.html` which contains G.W.E.N. chat, study management, datasets, ELN, compliance, grants, and all research tabs.
 - **Sections**:
   - Traceability: search lot codes, view lot details
   - Inventory: seeds, packaging, nutrients, equipment, supplies (CRUD + restock)
