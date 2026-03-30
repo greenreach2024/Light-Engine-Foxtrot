@@ -1355,13 +1355,6 @@ function renderContextualSidebar() {
                     ]
                 },
                 {
-                    title: 'Research',
-                    items: [
-                        { label: 'G.W.E.N.', view: 'gwen-core', external: '/gwen-core.html' },
-                        { label: 'Research Workspace', view: 'research-workspace', external: '/views/research-workspace.html' }
-                    ]
-                },
-                {
                     title: 'Field Tools',
                     items: [
                         { label: 'Edge Setup Guide', view: 'edge-setup', external: '/landing-downloads.html' }
