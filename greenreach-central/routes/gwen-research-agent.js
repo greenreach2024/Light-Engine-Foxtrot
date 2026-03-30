@@ -1043,6 +1043,387 @@ const GWEN_TOOL_CATALOG = {
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
+
+  // ========================================
+  // GRANT PROGRAM DISCOVERY & MATCHING
+  // (Bridges grant-wizard program database
+  //  into the research agent workflow)
+  // ========================================
+
+  search_grant_programs: {
+    description: 'Search the database of Canadian grant and funding programs. Filter by intake status, funding type, or keyword. Returns programs with deadlines, funding amounts, and eligibility details.',
+    parameters: {
+      search: { type: 'string', description: 'Keyword search across program name, description, agency, objectives, and priority areas' },
+      status: { type: 'string', description: 'Filter by intake status: open, upcoming, continuous, closed' },
+      funding_type: { type: 'string', description: 'Filter by funding type (e.g., grant, loan, tax_credit)' },
+      limit: { type: 'number', description: 'Max results to return (default 20)' },
+    },
+    required: [],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let where = ['active = TRUE'];
+        const p = [];
+        let idx = 1;
+        if (params.status) { where.push(`intake_status = $${idx++}`); p.push(params.status); }
+        if (params.funding_type) { where.push(`funding_type = $${idx++}`); p.push(params.funding_type); }
+        if (params.search) {
+          const terms = params.search.split(/\s+/).filter(Boolean);
+          const termClauses = terms.map(term => {
+            const clause = `(program_name ILIKE $${idx} OR description ILIKE $${idx} OR administering_agency ILIKE $${idx} OR objectives ILIKE $${idx} OR priority_areas::text ILIKE $${idx})`;
+            p.push(`%${term}%`);
+            idx++;
+            return clause;
+          });
+          where.push(`(${termClauses.join(' OR ')})`);
+        }
+        const lim = Math.min(params.limit || 20, 50);
+        p.push(lim);
+        const result = await query(`
+          SELECT id, program_code, program_name, administering_agency, source_url,
+                 intake_status, intake_deadline, description, funding_type,
+                 min_funding, max_funding, cost_share_ratio, priority_areas, equity_enhanced
+          FROM grant_programs WHERE ${where.join(' AND ')}
+          ORDER BY CASE intake_status WHEN 'open' THEN 1 WHEN 'upcoming' THEN 2 WHEN 'continuous' THEN 3 ELSE 4 END,
+                   intake_deadline ASC NULLS LAST
+          LIMIT $${idx}
+        `, p);
+        return { ok: true, programs: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_grant_program_details: {
+    description: 'Get full details of a specific grant program including eligibility rules, required documents, question map, application method, and priority lexicon.',
+    parameters: {
+      program_id: { type: 'number', description: 'Grant program ID' },
+    },
+    required: ['program_id'],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query('SELECT * FROM grant_programs WHERE id = $1 AND active = TRUE', [params.program_id]);
+        if (!result.rows.length) return { ok: false, error: 'Program not found or inactive' };
+        return { ok: true, program: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  check_program_eligibility: {
+    description: 'Check eligibility for a specific grant program by answering screening questions. Provide organization details and the tool checks against the program stored eligibility rules.',
+    parameters: {
+      program_id: { type: 'number', description: 'Grant program ID to check eligibility for' },
+      province: { type: 'string', description: 'Province/territory of the organization' },
+      organization_type: { type: 'string', description: 'Type: farm, corporation, cooperative, non-profit, indigenous, university, college' },
+      employee_count: { type: 'number', description: 'Number of employees' },
+      sector: { type: 'string', description: 'Business sector (e.g., agriculture, technology, food_processing)' },
+      annual_revenue: { type: 'number', description: 'Annual gross revenue' },
+    },
+    required: ['program_id'],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(
+          'SELECT program_name, eligibility_rules, eligibility_summary, equity_enhanced, equity_details FROM grant_programs WHERE id = $1',
+          [params.program_id]
+        );
+        if (!result.rows.length) return { ok: false, error: 'Program not found' };
+        const prog = result.rows[0];
+        const rules = prog.eligibility_rules || {};
+        const answers = {
+          province: params.province, organizationType: params.organization_type,
+          employeeCount: params.employee_count, sector: params.sector, annualRevenue: params.annual_revenue,
+        };
+        const checks = [];
+        let eligible = true;
+        let maybeEligible = false;
+        for (const [field, rule] of Object.entries(rules)) {
+          const answer = answers[field];
+          if (answer === undefined || answer === null) {
+            checks.push({ field, status: 'unknown', message: rule.question || `Please provide: ${field}` });
+            maybeEligible = true;
+            continue;
+          }
+          let passed = true;
+          if (rule.type === 'includes' && Array.isArray(rule.values)) passed = rule.values.includes(answer);
+          else if (rule.type === 'min') passed = Number(answer) >= rule.value;
+          else if (rule.type === 'max') passed = Number(answer) <= rule.value;
+          else if (rule.type === 'equals') passed = answer === rule.value;
+          else if (rule.type === 'province_list') passed = rule.provinces.includes(answer);
+          if (!passed) {
+            eligible = false;
+            checks.push({ field, status: 'ineligible', message: rule.failMessage || `Does not meet: ${field}` });
+          } else {
+            checks.push({ field, status: 'eligible', message: rule.passMessage || `Meets: ${field}` });
+          }
+        }
+        return {
+          ok: true, program_name: prog.program_name,
+          eligible: eligible && !maybeEligible, maybe_eligible: maybeEligible,
+          checks, equity_enhanced: prog.equity_enhanced,
+          equity_details: prog.equity_details, summary: prog.eligibility_summary,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  match_programs_to_project: {
+    description: 'Automatically score and rank all active grant programs against a research project or farm operation. Uses goal alignment, budget fit, province, intake status, and equity enhancement to find the best funding matches.',
+    parameters: {
+      project_goals: { type: 'array', description: 'Array of goal tags: establish_vertical_farm, expand_operation, equipment_purchase, export_market, workforce_training, innovation_rd, risk_management, clean_tech, community_food, value_added' },
+      budget_range: { type: 'string', description: 'Budget range: under_25k, 25k_100k, 100k_500k, 500k_1m, over_1m' },
+      province: { type: 'string', description: 'Province/territory' },
+      description: { type: 'string', description: 'Free-text project description for keyword matching' },
+      top_n: { type: 'number', description: 'Return only the top N matches (default 10)' },
+    },
+    required: ['project_goals'],
+    execute: async (params) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(`
+          SELECT id, program_code, program_name, administering_agency, description,
+                 funding_type, min_funding, max_funding, cost_share_ratio,
+                 intake_status, intake_deadline, priority_areas, eligibility_rules,
+                 equity_enhanced, source_url, objectives
+          FROM grant_programs WHERE active = TRUE ORDER BY intake_status, program_name
+        `);
+        const goalKeywordMap = {
+          establish_vertical_farm: ['vertical farm', 'controlled environment', 'innovation', 'technology', 'greenhouse', 'indoor'],
+          expand_operation: ['expansion', 'scale', 'growth', 'capacity', 'production'],
+          equipment_purchase: ['equipment', 'machinery', 'capital', 'technology', 'automation'],
+          export_market: ['export', 'trade', 'international', 'market access', 'market development'],
+          workforce_training: ['training', 'workforce', 'hiring', 'employment', 'labour', 'skills', 'youth'],
+          innovation_rd: ['innovation', 'research', 'development', 'r&d', 'technology', 'novel', 'pilot'],
+          risk_management: ['risk', 'insurance', 'business risk', 'agri-stability', 'agri-insurance'],
+          clean_tech: ['clean tech', 'sustainability', 'environment', 'renewable', 'energy efficiency', 'climate', 'emission'],
+          community_food: ['food security', 'community', 'local food', 'food access', 'food sovereignty'],
+          value_added: ['processing', 'value-added', 'value added', 'product development', 'packaging'],
+        };
+        const budgetRanges = {
+          under_25k: [0, 25000], '25k_100k': [25000, 100000], '100k_500k': [100000, 500000],
+          '500k_1m': [500000, 1000000], over_1m: [1000000, Infinity],
+        };
+        const descKw = params.description ? params.description.toLowerCase().split(/\s+/).filter(w => w.length > 3) : [];
+        const scored = result.rows.map(prog => {
+          let score = 0;
+          const reasons = [];
+          const priorities = (prog.priority_areas || []).map(pa => pa.toLowerCase());
+          const desc = (prog.description || '').toLowerCase();
+          const obj = (prog.objectives || '').toLowerCase();
+          for (const goal of (params.project_goals || [])) {
+            const keywords = goalKeywordMap[goal] || [];
+            for (const kw of keywords) {
+              if (priorities.some(pa => pa.includes(kw)) || desc.includes(kw) || obj.includes(kw)) {
+                score += 15; reasons.push(`Matches "${goal.replace(/_/g, ' ')}" goal`); break;
+              }
+            }
+          }
+          if (params.budget_range && prog.max_funding) {
+            const [lo] = budgetRanges[params.budget_range] || [0, Infinity];
+            if (parseFloat(prog.max_funding) >= lo) { score += 10; reasons.push(`Budget fits (up to $${parseFloat(prog.max_funding).toLocaleString()})`); }
+          }
+          if (prog.intake_status === 'open') { score += 20; reasons.push('Currently accepting applications'); }
+          else if (prog.intake_status === 'continuous') { score += 15; reasons.push('Continuous intake'); }
+          else if (prog.intake_status === 'upcoming') { score += 5; reasons.push('Opening soon'); }
+          if (params.province && prog.eligibility_rules?.province) {
+            const pr = prog.eligibility_rules.province;
+            if (pr.type === 'province_list' && pr.provinces?.includes(params.province)) { score += 10; reasons.push(`Available in ${params.province}`); }
+          }
+          for (const kw of descKw) {
+            if (desc.includes(kw) || priorities.some(pa => pa.includes(kw))) { score += 5; reasons.push(`Keyword: "${kw}"`); break; }
+          }
+          if (prog.equity_enhanced) { score += 3; reasons.push('Enhanced cost-share available'); }
+          return {
+            id: prog.id, program_code: prog.program_code, program_name: prog.program_name,
+            administering_agency: prog.administering_agency, funding_type: prog.funding_type,
+            min_funding: prog.min_funding, max_funding: prog.max_funding,
+            intake_status: prog.intake_status, intake_deadline: prog.intake_deadline,
+            source_url: prog.source_url, equity_enhanced: prog.equity_enhanced,
+            matchScore: score, matchReasons: [...new Set(reasons)].slice(0, 5),
+            matchPercentage: Math.min(100, Math.round((score / 80) * 100)),
+          };
+        });
+        scored.sort((a, b) => b.matchScore - a.matchScore);
+        const topN = Math.min(params.top_n || 10, 25);
+        return { ok: true, matches: scored.slice(0, topN), total_programs: scored.length, strong_matches: scored.filter(p => p.matchScore >= 30).length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  search_competitors: {
+    description: 'Search SEC EDGAR for public companies related to a research area or business sector. Returns company details, SIC codes, and filing information for competitive landscape analysis in grant applications.',
+    parameters: {
+      search_query: { type: 'string', description: 'Company name, ticker, or industry keyword to search' },
+      project_description: { type: 'string', description: 'Optional project description for relevance scoring' },
+    },
+    required: ['search_query'],
+    execute: async (params) => {
+      try {
+        const axios = (await import('axios')).default;
+        const ua = 'GreenReach Research Agent research@greenreachgreens.com';
+        const tickerRes = await axios.get('https://www.sec.gov/files/company_tickers.json', {
+          timeout: 10000, headers: { 'User-Agent': ua, Accept: 'application/json' },
+        });
+        const companies = Object.values(tickerRes.data).map(c => ({ cik: String(c.cik_str), ticker: c.ticker, name: c.title }));
+        const qLower = params.search_query.toLowerCase().trim();
+        const qWords = qLower.split(/\s+/).filter(w => w.length > 1);
+        const matched = companies.map(c => {
+          const nl = c.name.toLowerCase();
+          let score = 0;
+          if (c.ticker.toLowerCase() === qLower) score += 20;
+          if (nl === qLower) score += 15;
+          if (nl.startsWith(qLower)) score += 12;
+          if (nl.includes(qLower)) score += 8;
+          qWords.forEach(w => { if (nl.includes(w)) score += 3; });
+          return score > 0 ? { ...c, _score: score } : null;
+        }).filter(Boolean).sort((a, b) => b._score - a._score).slice(0, 10);
+        const enriched = [];
+        for (let i = 0; i < matched.length; i++) {
+          const co = matched[i];
+          if (i < 3) {
+            try {
+              const cikPad = co.cik.padStart(10, '0');
+              const d = (await axios.get(`https://data.sec.gov/submissions/CIK${cikPad}.json`, {
+                timeout: 8000, headers: { 'User-Agent': ua, Accept: 'application/json' },
+              })).data;
+              enriched.push({
+                cik: co.cik, name: d.name || co.name, ticker: d.tickers?.[0] || co.ticker,
+                sicCode: d.sic || '', sicDescription: d.sicDescription || '',
+                stateOfIncorporation: d.stateOfIncorporation || '', category: d.category || '',
+                website: d.website || '', exchanges: d.exchanges || [],
+              });
+              await new Promise(r => setTimeout(r, 120));
+            } catch { enriched.push({ cik: co.cik, name: co.name, ticker: co.ticker }); }
+          } else {
+            enriched.push({ cik: co.cik, name: co.name, ticker: co.ticker });
+          }
+        }
+        return { ok: true, results: enriched, count: enriched.length, source: 'SEC EDGAR' };
+      } catch (err) { return { ok: false, error: 'Competitor search failed: ' + err.message }; }
+    },
+  },
+
+  analyze_competitor_overlap: {
+    description: 'Analyze competitive overlap between a research project and known companies. Identifies conflict areas, differentiation opportunities, and suggests narrative refinements for grant applications.',
+    parameters: {
+      project_description: { type: 'string', description: 'Project description text' },
+      project_title: { type: 'string', description: 'Project title' },
+      competitors: { type: 'array', description: 'Array of competitor objects: [{name, sicDescription, industry, notes}]' },
+    },
+    required: ['project_description', 'competitors'],
+    execute: async (params) => {
+      const stopWords = new Set(['with', 'from', 'that', 'this', 'have', 'will', 'been', 'were', 'they', 'than', 'what', 'when', 'your', 'into', 'also', 'each', 'more', 'some', 'very', 'most', 'only']);
+      const extractKw = (text) => (text || '').toLowerCase().split(/[\s,;.!?()]+/).filter(w => w.length > 3 && !stopWords.has(w));
+      const projKw = extractKw(params.project_description);
+      const titleKw = extractKw(params.project_title || '');
+      const allProjKw = [...new Set([...projKw, ...titleKw])];
+      const allCompKw = new Set();
+      const analysis = { competitors: [], conflictFlags: [], differentiationTips: [], uniqueStrengths: [], overlappingTerms: [] };
+      for (const comp of (params.competitors || [])) {
+        const compText = [comp.name, comp.sicDescription || '', comp.industry || '', comp.notes || ''].join(' ');
+        const compKw = extractKw(compText);
+        compKw.forEach(k => allCompKw.add(k));
+        const overlap = allProjKw.filter(pk => compKw.some(ck => ck.includes(pk) || pk.includes(ck)));
+        const overlapScore = allProjKw.length > 0 ? Math.round((overlap.length / allProjKw.length) * 100) : 0;
+        analysis.competitors.push({ name: comp.name, overlapScore, overlappingTerms: overlap });
+        if (overlapScore > 40) analysis.conflictFlags.push(`High overlap (${overlapScore}%) with ${comp.name}. Reviewers may question differentiation.`);
+        else if (overlapScore > 20) analysis.conflictFlags.push(`Moderate overlap (${overlapScore}%) with ${comp.name}. Clarify differentiation.`);
+      }
+      analysis.uniqueStrengths = allProjKw.filter(pk => ![...allCompKw].some(ck => ck.includes(pk) || pk.includes(ck)));
+      analysis.overlappingTerms = allProjKw.filter(pk => [...allCompKw].some(ck => ck.includes(pk) || pk.includes(ck)));
+      if (analysis.overlappingTerms.length > 0) {
+        analysis.differentiationTips.push(`Terms like "${analysis.overlappingTerms.slice(0, 5).join('", "')}" also appear in competitor profiles. Add specifics that distinguish your approach.`);
+      }
+      if (analysis.uniqueStrengths.length > 0) {
+        analysis.differentiationTips.push(`Lean into unique elements: "${analysis.uniqueStrengths.slice(0, 6).join('", "')}". These strengthen your case.`);
+      }
+      analysis.differentiationTips.push('Quantify impact with specific metrics (production volume, emission reductions, jobs) that no competitor can claim.');
+      analysis.differentiationTips.push('Frame your project as filling a gap that existing companies have not addressed -- geographic, demographic, or technological.');
+      return { ok: true, analysis };
+    },
+  },
+
+  draft_grant_narrative: {
+    description: 'Generate polished grant narrative text from rough notes. Applies Canadian grant-writing best practices: storytelling, measurable outcomes, funder alignment, evidence-based claims, active voice. Collects context so the LLM can produce reviewer-ready prose.',
+    parameters: {
+      question: { type: 'string', description: 'The grant question or section to draft (e.g., "Project Description", "Need Statement", "Impact")' },
+      notes: { type: 'string', description: 'Rough notes, bullet points, or informal text from the researcher' },
+      program_context: { type: 'string', description: 'Program name and priority terminology to mirror' },
+      organization_context: { type: 'string', description: 'Brief organization description (name, type, province, size)' },
+      project_context: { type: 'string', description: 'Project title and brief description' },
+    },
+    required: ['question', 'notes'],
+    execute: async (params) => {
+      return {
+        ok: true,
+        drafting_input: {
+          question: params.question, notes_length: params.notes.length,
+          program_context: params.program_context || null,
+          organization: params.organization_context || null,
+          project: params.project_context || null,
+        },
+        best_practices: [
+          'Tell a compelling story -- every paragraph advances the community need and plan',
+          'Open each paragraph with a clear topic sentence for fast reviewer navigation',
+          'Use confident future-tense ("will" not "might") and terms like "ground-breaking" where appropriate',
+          'Include specific, measurable outcomes with metrics reviewers can show their board',
+          'Provide research context: "While X has been achieved, this project will advance the field by doing Y"',
+          'Connect budget items to narrative claims -- every dollar supports the story',
+          'Write for generalist reviewers with enough depth for experts',
+          'Mirror the program terminology and stated priorities exactly',
+          'Cite credible industry statistics with named sources',
+          'Never use abbreviations without spelling out the full term first',
+          'Maintain the researcher authentic voice while elevating prose quality',
+        ],
+        note: 'I will now draft polished grant narrative text from these notes, applying all best practices.',
+      };
+    },
+  },
+
+  generate_grant_export_pack: {
+    description: 'Gather all data needed for a grant application export package: study details, budgets with line items, milestones, approval chains, and publications. Formats into a cross-checked submission-ready package.',
+    parameters: {
+      study_id: { type: 'number', description: 'Study ID associated with the grant application' },
+      grant_id: { type: 'number', description: 'Grant application ID if one exists' },
+      include_budget: { type: 'boolean', description: 'Include budget cross-check (default true)' },
+      include_milestones: { type: 'boolean', description: 'Include milestone summary (default true)' },
+    },
+    required: ['study_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const study = await query('SELECT * FROM studies WHERE id = $1 AND farm_id = $2', [params.study_id, ctx.farmId]);
+        if (!study.rows.length) return { ok: false, error: 'Study not found' };
+        const data = { study: study.rows[0] };
+        if (params.grant_id) {
+          const grant = await query('SELECT * FROM grant_applications WHERE id = $1', [params.grant_id]).catch(() => ({ rows: [] }));
+          data.grant_application = grant.rows[0] || null;
+        }
+        if (params.include_budget !== false) {
+          const budgets = await query('SELECT * FROM grant_budgets WHERE study_id = $1', [params.study_id]).catch(() => ({ rows: [] }));
+          data.budgets = budgets.rows;
+          if (budgets.rows.length) {
+            const items = await query('SELECT * FROM budget_line_items WHERE budget_id = $1', [budgets.rows[0].id]).catch(() => ({ rows: [] }));
+            data.budget_line_items = items.rows;
+          }
+        }
+        if (params.include_milestones !== false) {
+          const ms = await query('SELECT * FROM trial_milestones WHERE study_id = $1 ORDER BY target_date', [params.study_id]);
+          data.milestones = ms.rows;
+        }
+        const [approvals, pubs] = await Promise.all([
+          query('SELECT * FROM approval_chains WHERE study_id = $1 AND farm_id = $2', [params.study_id, ctx.farmId]).catch(() => ({ rows: [] })),
+          query('SELECT * FROM publications WHERE farm_id = $1 ORDER BY created_at DESC LIMIT 10', [ctx.farmId]).catch(() => ({ rows: [] })),
+        ]);
+        data.approvals = approvals.rows;
+        data.publications = pubs.rows;
+        return {
+          ok: true, ...data,
+          note: 'Export data gathered. I will now format this into a complete grant application package with cross-checks and checklists.',
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
 };
 
 // -- Build Tool Definitions for LLM ------------------------------------
