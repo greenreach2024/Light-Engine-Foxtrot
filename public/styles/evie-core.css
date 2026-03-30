@@ -392,7 +392,7 @@
 .evie-intel-panel {
   position: fixed;
   top: 0; right: 0;
-  width: 100vw;
+  width: min(480px, 100vw);
   height: 100vh;
   background: rgba(18, 29, 46, 0.88);
   border-left: 1px solid rgba(16, 185, 129, 0.1);

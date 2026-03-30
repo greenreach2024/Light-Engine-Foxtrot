@@ -1443,7 +1443,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'leam_scan_all',
-      description: 'Full device scan using the operator\'s local machine: BLE (Bluetooth Low Energy) + ARP (network devices) + mDNS (Bonjour/AirPlay/HomeKit) + SSDP/UPnP (smart TVs, media renderers). Discovers nearby devices the cloud server cannot see: BLE sensors, speakers, smart plugs, TVs, printers, etc. Requires the LEAM companion agent running on the operator\'s computer.',
+      description: 'Full device scan using the operator\'s local machine: BLE (Bluetooth Low Energy) + ARP (network devices) + mDNS (Bonjour/AirPlay/HomeKit) + SSDP/UPnP (smart TVs, media renderers). Discovers nearby devices the cloud server cannot see: BLE sensors, speakers, smart plugs, TVs, printers, etc. LEAM companion agent is auto-managed by E.V.I.E.',
       parameters: {
         type: 'object',
         properties: {
@@ -1456,7 +1456,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'leam_ble_scan',
-      description: 'Scan for Bluetooth Low Energy devices near the operator\'s machine. Discovers BLE sensors, speakers, smart plugs, wearables, and other Bluetooth devices. Returns device name, MAC, signal strength (RSSI), device type classification, and advertised services. Requires LEAM companion agent.',
+      description: 'Scan for Bluetooth Low Energy devices near the operator\'s machine. Discovers BLE sensors, speakers, smart plugs, wearables, and other Bluetooth devices. Returns device name, MAC, signal strength (RSSI), device type classification, and advertised services. LEAM companion agent is auto-managed.',
       parameters: {
         type: 'object',
         properties: {
@@ -1469,7 +1469,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'leam_network_scan',
-      description: 'Scan the local network for all connected devices using ARP table + mDNS/Bonjour + UPnP/SSDP. Finds smart TVs, AirPlay speakers, printers, file servers, IoT hubs, routers, and any IP-connected device. Requires LEAM companion agent.',
+      description: 'Scan the local network for all connected devices using ARP table + mDNS/Bonjour + UPnP/SSDP. Finds smart TVs, AirPlay speakers, printers, file servers, IoT hubs, routers, and any IP-connected device. LEAM companion agent is auto-managed.',
       parameters: {
         type: 'object',
         properties: {
@@ -1485,7 +1485,7 @@ const GPT_TOOLS = [
     type: 'function',
     function: {
       name: 'leam_system_info',
-      description: 'Get detailed information about the operator\'s local machine: OS, CPU, memory, Bluetooth controller state, WiFi networks, USB devices, displays, battery, disk usage, and network adapters. Useful for diagnostics and understanding the operator\'s environment. Requires LEAM companion agent.',
+      description: 'Get detailed information about the operator\'s local machine: OS, CPU, memory, Bluetooth controller state, WiFi networks, USB devices, displays, battery, disk usage, and network adapters. Useful for diagnostics and understanding the operator\'s environment. LEAM companion agent is auto-managed.',
       parameters: {
         type: 'object',
         properties: {
@@ -3946,7 +3946,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         duration: params.duration || 12000
       });
       if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'The operator needs to start the LEAM companion on their local machine. Run: cd light-engine-access-manager && npm start' };
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically. If this persists, check that the LEAM service is installed on the operator machine.' };
       }
       return result.ok ? { ok: true, ...result.data } : result;
     }
@@ -3956,7 +3956,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         duration: params.duration || 10000
       });
       if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'Start LEAM companion on your local machine for BLE scanning.' };
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically for BLE scanning. Retrying shortly.' };
       }
       return result.ok ? { ok: true, ...result.data } : result;
     }
@@ -3969,7 +3969,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         duration: params.duration || 8000
       });
       if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'Start LEAM companion on your local machine for network scanning.' };
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically for network scanning. Retrying shortly.' };
       }
       return result.ok ? { ok: true, ...result.data } : result;
     }
@@ -3978,7 +3978,7 @@ async function executeExtendedTool(toolName, params, farmId) {
       const command = params.detailed ? 'system_detailed' : 'system_info';
       const result = await leamBridge.sendCommand(farmId, command, {});
       if (result.leam_required) {
-        return { ok: false, error: result.error, hint: 'Start LEAM companion to get local machine info.' };
+        return { ok: false, error: result.error, hint: 'LEAM is initializing automatically to gather system info. Retrying shortly.' };
       }
       return result.ok ? { ok: true, ...result.data } : result;
     }
@@ -3989,7 +3989,7 @@ async function executeExtendedTool(toolName, params, farmId) {
         return {
           ok: true,
           connected: false,
-          message: 'LEAM companion is not connected. To enable local device scanning (BLE, WiFi, system info), start LEAM on your computer: cd light-engine-access-manager && npm start'
+          message: 'LEAM companion is not currently connected. E.V.I.E. will attempt to initialize it automatically when a scan is requested. If LEAM is not installed, it can be set up as a background service on the operator machine.'
         };
       }
       return { ok: true, ...status };

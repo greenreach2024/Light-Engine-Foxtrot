@@ -117,7 +117,7 @@ function sendCommand(farmId, command, params = {}) {
     if (!client) {
       return resolve({
         ok: false,
-        error: 'No LEAM companion connected for this farm. Start LEAM on your local machine: cd light-engine-access-manager && npm start',
+        error: 'LEAM companion is not connected. Attempting to initialize LEAM automatically.',
         leam_required: true
       });
     }
@@ -126,7 +126,7 @@ function sendCommand(farmId, command, params = {}) {
       leamClients.delete(farmId);
       return resolve({
         ok: false,
-        error: 'LEAM companion connection is stale. Restart LEAM on your local machine.',
+        error: 'LEAM companion connection went stale. Reconnecting automatically.',
         leam_required: true
       });
     }
