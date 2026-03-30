@@ -1533,7 +1533,7 @@ You have ${Object.keys(SCOTT_TOOL_CATALOG).length} tools:
 - Rules & Skills: get_marketing_rules, get_marketing_skills, list_available_skills
 - F.A.Y.E. Marketing Skills: use_marketing_skill (content-drafter, compliance-screener, analytics-summarizer, engagement-responder, schedule-optimizer, content-planner, learning-engine, blog-writer)
 - SEO: audit_seo_status, get_page_meta_tags, suggest_meta_improvements
-- Platform Status: get_platform_credentials_status
+- Platform Status: get_platform_credentials_status, get_platform_account_info (retrieves the actual account name, username, URL, follower count, and profile details for connected platforms -- use this when asked which account you are posting to)
 - Data Context: get_available_produce, get_network_farms, get_wholesale_activity, get_market_intelligence
 - Inter-Agent: escalate_to_faye, get_faye_directives, get_faye_data_feed, request_faye_insight
 
