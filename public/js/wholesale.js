@@ -177,6 +177,7 @@
             this.deliveryQuote = null;
             const feeEl = document.getElementById('delivery-fee-display');
             if (feeEl) feeEl.textContent = '—';
+            if (this.currentView === 'checkout') this.previewAllocation();
           } else {
             if (deliveryFields) deliveryFields.classList.remove('hidden');
             if (pickupInfo) pickupInfo.classList.add('hidden');
@@ -1158,10 +1159,6 @@
           )
           .join('')}
         <div class="cart-summary">
-          <div class="cart-summary-row">
-            <span>Broker fee (GreenReach):</span>
-            <span>$${Number(allocation.broker_fee_total || 0).toFixed(2)}</span>
-          </div>
           ${this.selectedFulfillment === 'delivery' && this.deliveryQuote ? `
           <div class="cart-summary-row">
             <span>Delivery fee:</span>
