@@ -11947,7 +11947,7 @@ function filterAiActivity(filter) {
 // S.C.O.T.T. Marketing Agent -- Chat Functions
 // ======================================================================
 
-let scottConversationId = null;
+let scottConversationId = localStorage.getItem('scott_conversation_id') || null;
 let scottLoading = false;
 
 /**
@@ -11977,6 +11977,25 @@ async function initScottChat() {
         badge.textContent = 'Offline';
         badge.style.background = 'rgba(239,68,68,0.15)';
         badge.style.color = '#ef4444';
+    }
+
+    // Restore previous conversation if one exists in localStorage
+    if (scottConversationId) {
+        try {
+            const histRes = await authenticatedFetch(`${API_BASE}/api/admin/scott/history/${encodeURIComponent(scottConversationId)}`);
+            if (histRes.ok) {
+                const histData = await histRes.json();
+                if (histData.ok && histData.messages && histData.messages.length > 0) {
+                    const welcome = document.getElementById('scott-welcome');
+                    if (welcome) welcome.style.display = 'none';
+                    for (const msg of histData.messages) {
+                        if (msg.role === 'user' || msg.role === 'assistant') {
+                            appendScottMessage(msg.role, msg.content);
+                        }
+                    }
+                }
+            }
+        } catch { /* history restore is non-fatal */ }
     }
 }
 
@@ -12023,6 +12042,7 @@ async function sendScottMessage() {
 
         if (data.ok) {
             scottConversationId = data.conversation_id;
+            localStorage.setItem('scott_conversation_id', scottConversationId);
             appendScottMessage('assistant', data.reply, data.tool_calls);
         } else {
             appendScottMessage('assistant', `Error: ${data.error || 'Unknown error'}`);
@@ -12091,6 +12111,22 @@ function formatScottResponse(text) {
         .replace(/\n(\d+)\. /g, '<br>$1. ')
         .replace(/\n/g, '<br>');
     return '<p style="margin:0;">' + html + '</p>';
+}
+
+/**
+ * Start a new Scott conversation -- clears history and resets state.
+ */
+function scottNewChat() {
+    scottConversationId = null;
+    localStorage.removeItem('scott_conversation_id');
+    const container = document.getElementById('scott-messages');
+    const welcome = document.getElementById('scott-welcome');
+    // Remove all messages but keep the welcome panel
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (welcome) {
+        welcome.style.display = '';
+        container.appendChild(welcome);
+    }
 }
 
 /**

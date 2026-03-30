@@ -86,7 +86,7 @@ async function getConversation(convId, adminId) {
         `SELECT messages FROM admin_assistant_conversations
          WHERE admin_id = $1 AND conversation_id = $2
          AND updated_at > NOW() - INTERVAL '24 hours'`,
-        [adminId, convId]
+        [adminId, `scott-${convId}`]
       );
       if (result.rows.length > 0) {
         const messages = result.rows[0].messages || [];
@@ -1856,6 +1856,29 @@ router.get('/state', async (req, res) => {
     res.json({ ok: true, agent: 'scott', stats });
   } catch (err) {
     res.json({ ok: true, agent: 'scott', stats: { drafts: 0, approved: 0, published: 0, scheduled: 0 }, error: err.message });
+  }
+});
+
+// GET /history/:conversationId -- Fetch conversation messages for chat restore
+router.get('/history/:conversationId', async (req, res) => {
+  const adminId = String(req.admin?.id || 'unknown');
+  const convId = req.params.conversationId;
+  if (!convId || typeof convId !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Invalid conversation ID' });
+  }
+  try {
+    const conv = await getConversation(convId, adminId);
+    if (!conv || !conv.messages || conv.messages.length === 0) {
+      return res.json({ ok: true, messages: [], conversation_id: convId });
+    }
+    const messages = conv.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+    return res.json({ ok: true, messages, conversation_id: convId });
+  } catch (err) {
+    console.error('[Scott] History fetch error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to load conversation history' });
   }
 });
 
