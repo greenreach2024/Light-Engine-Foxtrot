@@ -178,7 +178,8 @@
     /* Hide the default standalone buttons when toolbar is present */
     '#farm-toolbar ~ #le-help-toggle,' +
     'body.farm-toolbar-active #le-help-toggle { display: none !important; }' +
-    'body.farm-toolbar-active .evie-ambient { display: none !important; }';
+    'body.farm-toolbar-active .evie-ambient { display: none !important; }' +
+    'body.farm-toolbar-active #voiceFab { display: none !important; }';
 
   // ── Insert into DOM ──────────────────────────────────────────
 
@@ -329,6 +330,12 @@
   }
 
   micBtn.addEventListener('click', function () {
+    // Prefer page-level voice command modal (LE-farm-admin) if available
+    if (typeof window.openVoiceModal === 'function') {
+      window.openVoiceModal();
+      return;
+    }
+    // Fallback: direct speech recognition to E.V.I.E.
     if (isListening) {
       stopListening();
     } else {
