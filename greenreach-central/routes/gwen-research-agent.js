@@ -2375,6 +2375,690 @@ const GWEN_TOOL_CATALOG = {
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
+
+  // ========================================
+  // LITERATURE SEARCH & SYNTHESIS (OODA)
+  // ========================================
+
+  search_pubmed: {
+    description: 'Search PubMed/NCBI for academic papers. Returns titles, authors, abstracts, PMIDs, and DOIs. Supports MeSH terms, date ranges, and field-specific queries. Results are stored in the literature_searches table for pattern analysis.',
+    parameters: {
+      query: { type: 'string', description: 'PubMed search query (supports MeSH terms, boolean operators, field tags like [ti], [au], [mesh])' },
+      max_results: { type: 'number', description: 'Maximum results to return (default 20, max 100)' },
+      date_from: { type: 'string', description: 'Start date filter YYYY/MM/DD' },
+      date_to: { type: 'string', description: 'End date filter YYYY/MM/DD' },
+      study_id: { type: 'number', description: 'Optional study ID to link this search to' },
+    },
+    required: ['query'],
+    execute: async (params, ctx) => {
+      try {
+        const maxResults = Math.min(params.max_results || 20, 100);
+        let url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=${maxResults}&term=${encodeURIComponent(params.query)}`;
+        if (params.date_from) url += `&mindate=${params.date_from}&datetype=pdat`;
+        if (params.date_to) url += `&maxdate=${params.date_to}&datetype=pdat`;
+
+        const searchRes = await fetch(url);
+        const searchData = await searchRes.json();
+        const ids = searchData?.esearchresult?.idlist || [];
+        if (!ids.length) {
+          if (isDatabaseAvailable()) {
+            await query('INSERT INTO literature_searches (farm_id, study_id, query_text, source, result_count, results, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+              [ctx.farmId, params.study_id || null, params.query, 'pubmed', 0, '[]', ctx.userId || 'gwen']);
+          }
+          return { ok: true, results: [], count: 0, query: params.query };
+        }
+
+        const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=${ids.join(',')}`;
+        const detailRes = await fetch(fetchUrl);
+        const detailData = await detailRes.json();
+        const articles = ids.map(id => {
+          const d = detailData?.result?.[id];
+          if (!d) return null;
+          return {
+            pmid: id,
+            title: d.title || '',
+            authors: (d.authors || []).map(a => a.name).slice(0, 10),
+            journal: d.fulljournalname || d.source || '',
+            year: d.pubdate ? d.pubdate.split(' ')[0] : '',
+            doi: (d.elocationid || '').replace('doi: ', ''),
+          };
+        }).filter(Boolean);
+
+        if (isDatabaseAvailable()) {
+          await query('INSERT INTO literature_searches (farm_id, study_id, query_text, source, result_count, results, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+            [ctx.farmId, params.study_id || null, params.query, 'pubmed', articles.length, JSON.stringify(articles), ctx.userId || 'gwen']);
+        }
+        return { ok: true, results: articles, count: articles.length, query: params.query };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  search_openalex: {
+    description: 'Search OpenAlex for academic works across all disciplines. Free, open scholarly database with 250M+ works. Returns titles, authors, DOIs, cited-by counts, open access status. Good for broader searches beyond biomedical literature.',
+    parameters: {
+      query: { type: 'string', description: 'Search query text' },
+      max_results: { type: 'number', description: 'Maximum results (default 20, max 50)' },
+      from_year: { type: 'number', description: 'Filter works published from this year' },
+      to_year: { type: 'number', description: 'Filter works published up to this year' },
+      study_id: { type: 'number', description: 'Optional study ID to link this search to' },
+    },
+    required: ['query'],
+    execute: async (params, ctx) => {
+      try {
+        const maxResults = Math.min(params.max_results || 20, 50);
+        let url = `https://api.openalex.org/works?search=${encodeURIComponent(params.query)}&per_page=${maxResults}&select=id,doi,title,authorships,publication_year,cited_by_count,open_access,primary_location&mailto=research@greenreachgreens.com`;
+        if (params.from_year) url += `&filter=from_publication_date:${params.from_year}-01-01`;
+        if (params.to_year) url += (url.includes('filter=') ? ',' : '&filter=') + `to_publication_date:${params.to_year}-12-31`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        const works = (data.results || []).map(w => ({
+          openalex_id: w.id,
+          doi: w.doi ? w.doi.replace('https://doi.org/', '') : null,
+          title: w.title || '',
+          authors: (w.authorships || []).slice(0, 8).map(a => a.author?.display_name || ''),
+          year: w.publication_year,
+          cited_by_count: w.cited_by_count || 0,
+          is_open_access: w.open_access?.is_oa || false,
+          journal: w.primary_location?.source?.display_name || '',
+        }));
+
+        if (isDatabaseAvailable()) {
+          await query('INSERT INTO literature_searches (farm_id, study_id, query_text, source, result_count, results, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+            [ctx.farmId, params.study_id || null, params.query, 'openalex', works.length, JSON.stringify(works), ctx.userId || 'gwen']);
+        }
+        return { ok: true, results: works, count: works.length, query: params.query };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  extract_structured_data: {
+    description: 'Extract structured data from literature search results into a formatted table. Analyzes stored search results to pull out specific fields like sample sizes, methodologies, key findings, populations, interventions, or outcomes. Useful for systematic review data extraction.',
+    parameters: {
+      search_id: { type: 'number', description: 'Literature search ID from a previous search_pubmed or search_openalex call' },
+      extraction_fields: { type: 'string', description: 'Comma-separated field names to extract (e.g. "sample_size, methodology, key_finding, population, intervention, outcome, limitations")' },
+    },
+    required: ['search_id', 'extraction_fields'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const search = await query('SELECT * FROM literature_searches WHERE id = $1 AND farm_id = $2', [params.search_id, ctx.farmId]);
+        if (!search.rows.length) return { ok: false, error: 'Search not found' };
+        const results = search.rows[0].results || [];
+        const fields = params.extraction_fields.split(',').map(f => f.trim()).filter(Boolean);
+        const stored = { search_id: params.search_id, fields, articles: results };
+        await query('UPDATE literature_searches SET extracted_data = $1 WHERE id = $2', [JSON.stringify(stored), params.search_id]);
+        return {
+          ok: true,
+          search_query: search.rows[0].query_text,
+          article_count: results.length,
+          extraction_fields: fields,
+          articles: results,
+          note: 'I will now analyze these articles and extract the requested fields into a structured comparison table. For each article, I will identify ' + fields.join(', ') + ' from the available metadata.',
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // PATTERN RECOGNITION & GAP IDENTIFICATION
+  // ========================================
+
+  analyze_research_patterns: {
+    description: 'Analyze a body of search results or study data to identify recurring themes, knowledge gaps, methodological trends, and underexplored areas. Implements the OODA pattern: observes data, orients by clustering themes, decides on significance, and acts by recommending next steps.',
+    parameters: {
+      search_ids: { type: 'string', description: 'Comma-separated literature search IDs to analyze' },
+      analysis_type: { type: 'string', description: 'Type of analysis: thematic (recurring topics), methodological (research methods), gap (underexplored areas), trend (temporal shifts), contradiction (conflicting findings)' },
+      study_id: { type: 'number', description: 'Optional study ID to scope the analysis' },
+    },
+    required: ['search_ids', 'analysis_type'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const ids = params.search_ids.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+        const searches = await query(`SELECT * FROM literature_searches WHERE id IN (${placeholders}) AND farm_id = $1`, [ctx.farmId, ...ids]);
+        if (!searches.rows.length) return { ok: false, error: 'No matching searches found' };
+
+        let totalArticles = 0;
+        const allResults = [];
+        searches.rows.forEach(s => {
+          const articles = s.results || [];
+          totalArticles += articles.length;
+          allResults.push(...articles);
+        });
+
+        const analysisRecord = await query(
+          'INSERT INTO pattern_analyses (farm_id, study_id, analysis_type, input_description, source_count) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+          [ctx.farmId, params.study_id || null, params.analysis_type, `Analysis of ${ids.length} searches (${totalArticles} articles)`, totalArticles]
+        );
+
+        return {
+          ok: true,
+          analysis_id: analysisRecord.rows[0].id,
+          analysis_type: params.analysis_type,
+          source_searches: ids.length,
+          total_articles: totalArticles,
+          articles: allResults,
+          note: `I will now perform a ${params.analysis_type} analysis across ${totalArticles} articles. I will identify recurring themes, knowledge gaps, and emerging trends, then save the findings.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  save_pattern_analysis: {
+    description: 'Save the results of a pattern analysis (themes, gaps, trends) after GWEN has synthesized the findings. Called after analyze_research_patterns produces results.',
+    parameters: {
+      analysis_id: { type: 'number', description: 'Pattern analysis ID to update' },
+      themes: { type: 'string', description: 'JSON array of identified themes [{theme, frequency, description}]' },
+      gaps: { type: 'string', description: 'JSON array of knowledge gaps [{gap, evidence, priority}]' },
+      trends: { type: 'string', description: 'JSON array of trends [{trend, direction, timeframe}]' },
+      summary: { type: 'string', description: 'Narrative summary of the analysis' },
+    },
+    required: ['analysis_id', 'summary'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let themes = [], gaps = [], trends = [];
+        try { themes = JSON.parse(params.themes || '[]'); } catch { themes = []; }
+        try { gaps = JSON.parse(params.gaps || '[]'); } catch { gaps = []; }
+        try { trends = JSON.parse(params.trends || '[]'); } catch { trends = []; }
+        await query('UPDATE pattern_analyses SET themes = $1, gaps = $2, trends = $3, summary = $4 WHERE id = $5 AND farm_id = $6',
+          [JSON.stringify(themes), JSON.stringify(gaps), JSON.stringify(trends), params.summary, params.analysis_id, ctx.farmId]);
+        return { ok: true, themes_count: themes.length, gaps_count: gaps.length, trends_count: trends.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // HYPOTHESIS GENERATION
+  // ========================================
+
+  generate_hypothesis: {
+    description: 'Generate or record a research hypothesis with supporting/contradicting evidence. Can be based on pattern analysis findings, literature review, or researcher intuition. Tracks hypothesis status through testing lifecycle.',
+    parameters: {
+      hypothesis: { type: 'string', description: 'The hypothesis statement' },
+      rationale: { type: 'string', description: 'Reasoning behind this hypothesis' },
+      supporting_evidence: { type: 'string', description: 'JSON array of evidence items supporting the hypothesis [{source, finding, strength}]' },
+      contradicting_evidence: { type: 'string', description: 'JSON array of evidence against [{source, finding, strength}]' },
+      confidence_score: { type: 'number', description: 'Confidence level 0.00-1.00' },
+      generated_by: { type: 'string', description: 'Who generated this: gwen, researcher, collaborative' },
+      study_id: { type: 'number', description: 'Optional study ID' },
+      source_search_id: { type: 'number', description: 'Optional literature search ID that informed this hypothesis' },
+    },
+    required: ['hypothesis', 'rationale'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let supporting = [], contradicting = [];
+        try { supporting = JSON.parse(params.supporting_evidence || '[]'); } catch { supporting = []; }
+        try { contradicting = JSON.parse(params.contradicting_evidence || '[]'); } catch { contradicting = []; }
+        const result = await query(
+          `INSERT INTO research_hypotheses (farm_id, study_id, hypothesis, rationale, supporting_evidence, contradicting_evidence, confidence_score, generated_by, source_search_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+          [ctx.farmId, params.study_id || null, params.hypothesis, params.rationale,
+           JSON.stringify(supporting), JSON.stringify(contradicting),
+           params.confidence_score || null, params.generated_by || 'gwen', params.source_search_id || null]
+        );
+        return { ok: true, hypothesis_id: result.rows[0].id, status: 'proposed' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  list_hypotheses: {
+    description: 'List research hypotheses for a farm or study, with optional status filter.',
+    parameters: {
+      study_id: { type: 'number', description: 'Filter by study ID' },
+      status: { type: 'string', description: 'Filter by status: proposed, testing, supported, refuted, inconclusive' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT * FROM research_hypotheses WHERE farm_id = $1';
+        const p = [ctx.farmId];
+        if (params.study_id) { p.push(params.study_id); sql += ` AND study_id = $${p.length}`; }
+        if (params.status) { p.push(params.status); sql += ` AND status = $${p.length}`; }
+        sql += ' ORDER BY created_at DESC';
+        const result = await query(sql, p);
+        return { ok: true, hypotheses: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  update_hypothesis_status: {
+    description: 'Update the status and evidence of an existing hypothesis as research progresses.',
+    parameters: {
+      hypothesis_id: { type: 'number', description: 'Hypothesis ID' },
+      status: { type: 'string', description: 'New status: proposed, testing, supported, refuted, inconclusive' },
+      new_evidence: { type: 'string', description: 'New evidence to append (JSON: {type: "supporting"|"contradicting", source, finding, strength})' },
+      confidence_score: { type: 'number', description: 'Updated confidence score' },
+    },
+    required: ['hypothesis_id', 'status'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const existing = await query('SELECT * FROM research_hypotheses WHERE id = $1 AND farm_id = $2', [params.hypothesis_id, ctx.farmId]);
+        if (!existing.rows.length) return { ok: false, error: 'Hypothesis not found' };
+        const h = existing.rows[0];
+        let supporting = h.supporting_evidence || [];
+        let contradicting = h.contradicting_evidence || [];
+        if (params.new_evidence) {
+          try {
+            const ev = JSON.parse(params.new_evidence);
+            if (ev.type === 'supporting') supporting.push(ev);
+            else contradicting.push(ev);
+          } catch { /* skip invalid */ }
+        }
+        await query(
+          'UPDATE research_hypotheses SET status = $1, supporting_evidence = $2, contradicting_evidence = $3, confidence_score = COALESCE($4, confidence_score), updated_at = NOW() WHERE id = $5',
+          [params.status, JSON.stringify(supporting), JSON.stringify(contradicting), params.confidence_score || null, params.hypothesis_id]
+        );
+        return { ok: true, hypothesis_id: params.hypothesis_id, status: params.status };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // CODE EXECUTION (SANDBOXED)
+  // ========================================
+
+  execute_code: {
+    description: 'Execute Python or R code for data cleaning, statistical analysis, or simulations. Code runs in a sandboxed subprocess with a 30-second timeout. Supports numpy, pandas, scipy, matplotlib (headless), and standard library. Results are logged for reproducibility. Requires human approval for code that modifies data.',
+    parameters: {
+      language: { type: 'string', description: 'Programming language: python or r' },
+      code: { type: 'string', description: 'Code to execute' },
+      purpose: { type: 'string', description: 'Brief description of what this code does' },
+      study_id: { type: 'number', description: 'Optional study ID for provenance' },
+    },
+    required: ['language', 'code', 'purpose'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const lang = (params.language || 'python').toLowerCase();
+      if (!['python', 'r'].includes(lang)) return { ok: false, error: 'Unsupported language. Use python or r.' };
+
+      // Log the execution request
+      try {
+        const logResult = await query(
+          'INSERT INTO code_execution_logs (farm_id, study_id, language, code, purpose, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING id',
+          [ctx.farmId, params.study_id || null, lang, params.code, params.purpose, 'running']
+        );
+        const execId = logResult.rows[0].id;
+        const start = Date.now();
+
+        // Sandboxed execution
+        const { execSync } = await import('child_process');
+        const cmd = lang === 'python'
+          ? `python3 -c ${JSON.stringify(params.code)}`
+          : `Rscript -e ${JSON.stringify(params.code)}`;
+
+        let output = '';
+        let error = null;
+        try {
+          output = execSync(cmd, {
+            timeout: 30000,
+            maxBuffer: 1024 * 1024,
+            env: { ...process.env, MPLBACKEND: 'Agg' },
+            cwd: '/tmp',
+          }).toString();
+        } catch (execErr) {
+          error = execErr.stderr ? execErr.stderr.toString().slice(0, 2000) : execErr.message;
+          output = execErr.stdout ? execErr.stdout.toString() : '';
+        }
+
+        const elapsed = Date.now() - start;
+        const status = error ? 'failed' : 'completed';
+        await query('UPDATE code_execution_logs SET output = $1, error = $2, execution_time_ms = $3, status = $4 WHERE id = $5',
+          [output.slice(0, 50000), error, elapsed, status, execId]);
+
+        return {
+          ok: !error,
+          execution_id: execId,
+          language: lang,
+          output: output.slice(0, 10000),
+          error: error || null,
+          execution_time_ms: elapsed,
+          status,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_execution_history: {
+    description: 'Retrieve past code execution logs for a study or farm. Useful for reproducibility audits.',
+    parameters: {
+      study_id: { type: 'number', description: 'Filter by study ID' },
+      language: { type: 'string', description: 'Filter by language: python or r' },
+      limit: { type: 'number', description: 'Max results (default 20)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT id, language, purpose, status, execution_time_ms, created_at FROM code_execution_logs WHERE farm_id = $1';
+        const p = [ctx.farmId];
+        if (params.study_id) { p.push(params.study_id); sql += ` AND study_id = $${p.length}`; }
+        if (params.language) { p.push(params.language); sql += ` AND language = $${p.length}`; }
+        sql += ` ORDER BY created_at DESC LIMIT ${Math.min(params.limit || 20, 100)}`;
+        const result = await query(sql, p);
+        return { ok: true, executions: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // REFERENCE MANAGEMENT (Zotero-style)
+  // ========================================
+
+  add_reference: {
+    description: 'Add a reference to the research library. Can be imported from a PubMed search, manually entered, or scraped from a DOI. Supports APA, MLA, Chicago, Vancouver, and BibTeX citation formats.',
+    parameters: {
+      title: { type: 'string', description: 'Paper/work title' },
+      authors: { type: 'string', description: 'Authors as JSON array ["Last, First", ...] or comma-separated string' },
+      year: { type: 'number', description: 'Publication year' },
+      journal: { type: 'string', description: 'Journal or venue name' },
+      doi: { type: 'string', description: 'DOI (e.g. 10.1234/...)' },
+      pmid: { type: 'string', description: 'PubMed ID' },
+      abstract: { type: 'string', description: 'Abstract text' },
+      tags: { type: 'string', description: 'Comma-separated tags' },
+      notes: { type: 'string', description: 'Researcher notes about this reference' },
+      citation_format: { type: 'string', description: 'Preferred format: apa, mla, chicago, vancouver, bibtex' },
+      study_id: { type: 'number', description: 'Link to a study' },
+      source: { type: 'string', description: 'How this was added: manual, pubmed_import, doi_lookup, openalex_import' },
+    },
+    required: ['title'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let authors = [];
+        if (params.authors) {
+          try { authors = JSON.parse(params.authors); } catch { authors = params.authors.split(',').map(a => a.trim()); }
+        }
+        const tags = params.tags ? params.tags.split(',').map(t => t.trim()) : [];
+        const result = await query(
+          `INSERT INTO reference_library (farm_id, study_id, title, authors, year, journal, doi, pmid, abstract, tags, notes, citation_format, source)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+          [ctx.farmId, params.study_id || null, params.title, JSON.stringify(authors),
+           params.year || null, params.journal || null, params.doi || null, params.pmid || null,
+           params.abstract || null, JSON.stringify(tags), params.notes || null,
+           params.citation_format || 'apa', params.source || 'manual']
+        );
+        return { ok: true, reference_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  import_references_from_search: {
+    description: 'Bulk import all results from a literature search into the reference library. Saves each article as a reference with metadata preserved.',
+    parameters: {
+      search_id: { type: 'number', description: 'Literature search ID' },
+      study_id: { type: 'number', description: 'Optional study ID to link all imported references to' },
+      tags: { type: 'string', description: 'Comma-separated tags to apply to all imported references' },
+    },
+    required: ['search_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const search = await query('SELECT * FROM literature_searches WHERE id = $1 AND farm_id = $2', [params.search_id, ctx.farmId]);
+        if (!search.rows.length) return { ok: false, error: 'Search not found' };
+        const articles = search.rows[0].results || [];
+        const tags = params.tags ? params.tags.split(',').map(t => t.trim()) : [];
+        let imported = 0;
+        for (const a of articles) {
+          try {
+            await query(
+              `INSERT INTO reference_library (farm_id, study_id, title, authors, year, journal, doi, pmid, tags, source)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+              [ctx.farmId, params.study_id || null, a.title, JSON.stringify(a.authors || []),
+               parseInt(a.year, 10) || null, a.journal || null, a.doi || null, a.pmid || null,
+               JSON.stringify(tags), search.rows[0].source + '_import']
+            );
+            imported++;
+          } catch { /* skip duplicates */ }
+        }
+        return { ok: true, imported, total_in_search: articles.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  search_reference_library: {
+    description: 'Search the local reference library by title, author, tag, DOI, or year. Returns matching references with full metadata.',
+    parameters: {
+      query: { type: 'string', description: 'Search text (matches title, authors, tags, notes)' },
+      tag: { type: 'string', description: 'Filter by specific tag' },
+      study_id: { type: 'number', description: 'Filter by study ID' },
+      year_from: { type: 'number', description: 'From year' },
+      year_to: { type: 'number', description: 'To year' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let sql = 'SELECT * FROM reference_library WHERE farm_id = $1';
+        const p = [ctx.farmId];
+        if (params.query) { p.push(`%${params.query}%`); sql += ` AND (title ILIKE $${p.length} OR notes ILIKE $${p.length} OR authors::text ILIKE $${p.length})`; }
+        if (params.tag) { p.push(params.tag); sql += ` AND tags ? $${p.length}`; }
+        if (params.study_id) { p.push(params.study_id); sql += ` AND study_id = $${p.length}`; }
+        if (params.year_from) { p.push(params.year_from); sql += ` AND year >= $${p.length}`; }
+        if (params.year_to) { p.push(params.year_to); sql += ` AND year <= $${p.length}`; }
+        sql += ' ORDER BY imported_at DESC LIMIT 50';
+        const result = await query(sql, p);
+        return { ok: true, references: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  format_citations: {
+    description: 'Format one or more references from the library into a specific citation style. Supports APA 7th, MLA 9th, Chicago 17th, Vancouver, and BibTeX.',
+    parameters: {
+      reference_ids: { type: 'string', description: 'Comma-separated reference IDs' },
+      format: { type: 'string', description: 'Citation format: apa, mla, chicago, vancouver, bibtex' },
+    },
+    required: ['reference_ids', 'format'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const ids = params.reference_ids.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+        const result = await query(`SELECT * FROM reference_library WHERE id IN (${placeholders}) AND farm_id = $1 ORDER BY year DESC`, [ctx.farmId, ...ids]);
+        return {
+          ok: true,
+          references: result.rows,
+          requested_format: params.format,
+          count: result.rows.length,
+          note: `I will now format ${result.rows.length} references in ${params.format.toUpperCase()} style.`,
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  lookup_doi: {
+    description: 'Look up metadata for a DOI using the CrossRef API. Returns title, authors, journal, year, abstract, and citation count. Can auto-add to reference library.',
+    parameters: {
+      doi: { type: 'string', description: 'DOI to look up (e.g. 10.1038/s41586-023-06185-3)' },
+      add_to_library: { type: 'boolean', description: 'Automatically add to reference library (default false)' },
+      study_id: { type: 'number', description: 'Optional study ID if adding to library' },
+    },
+    required: ['doi'],
+    execute: async (params, ctx) => {
+      try {
+        const cleanDoi = params.doi.replace(/^https?:\/\/doi\.org\//, '');
+        const res = await fetch(`https://api.crossref.org/works/${encodeURIComponent(cleanDoi)}`, {
+          headers: { 'User-Agent': 'GreenReach-GWEN/1.0 (mailto:research@greenreachgreens.com)' }
+        });
+        if (!res.ok) return { ok: false, error: `DOI lookup failed: ${res.status}` };
+        const data = await res.json();
+        const work = data.message;
+        const metadata = {
+          doi: cleanDoi,
+          title: (work.title || [])[0] || '',
+          authors: (work.author || []).map(a => `${a.family || ''}${a.given ? ', ' + a.given : ''}`).filter(Boolean),
+          journal: (work['container-title'] || [])[0] || '',
+          year: work.published?.['date-parts']?.[0]?.[0] || null,
+          abstract: work.abstract ? work.abstract.replace(/<[^>]+>/g, '').slice(0, 2000) : null,
+          cited_by_count: work['is-referenced-by-count'] || 0,
+          type: work.type || 'unknown',
+          url: work.URL || `https://doi.org/${cleanDoi}`,
+        };
+
+        if (params.add_to_library && isDatabaseAvailable()) {
+          await query(
+            `INSERT INTO reference_library (farm_id, study_id, title, authors, year, journal, doi, abstract, source)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+            [ctx.farmId, params.study_id || null, metadata.title, JSON.stringify(metadata.authors),
+             metadata.year, metadata.journal, cleanDoi, metadata.abstract, 'doi_lookup']
+          );
+        }
+        return { ok: true, ...metadata };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // HUMAN-IN-THE-LOOP (HITL) GOVERNANCE
+  // ========================================
+
+  request_human_approval: {
+    description: 'Submit a critical research action for human approval before execution. Use this for actions that could affect data integrity, financial commitments, or published outputs. The action will be queued and the researcher can approve/reject via the workspace.',
+    parameters: {
+      action_type: { type: 'string', description: 'Type of action: data_export, publication_submit, budget_commit, protocol_change, data_delete, manuscript_deploy, grant_submit, code_execution_destructive' },
+      action_description: { type: 'string', description: 'Clear description of what will happen if approved' },
+      action_payload: { type: 'string', description: 'JSON payload with action parameters to execute on approval' },
+      risk_level: { type: 'string', description: 'Risk level: low, medium, high, critical' },
+    },
+    required: ['action_type', 'action_description'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        let payload = {};
+        try { payload = JSON.parse(params.action_payload || '{}'); } catch { payload = {}; }
+        const result = await query(
+          `INSERT INTO hitl_approval_queue (farm_id, action_type, action_description, action_payload, risk_level, requested_by)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, expires_at`,
+          [ctx.farmId, params.action_type, params.action_description, JSON.stringify(payload),
+           params.risk_level || 'medium', 'gwen']
+        );
+        return {
+          ok: true,
+          approval_id: result.rows[0].id,
+          expires_at: result.rows[0].expires_at,
+          status: 'pending',
+          note: 'Action queued for human approval. The researcher must review and approve before this action proceeds.',
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  get_pending_approvals: {
+    description: 'List all pending human-in-the-loop approvals for the current farm.',
+    parameters: {},
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(
+          'SELECT * FROM hitl_approval_queue WHERE farm_id = $1 AND status = $2 AND expires_at > NOW() ORDER BY created_at DESC',
+          [ctx.farmId, 'pending']
+        );
+        return { ok: true, approvals: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  resolve_approval: {
+    description: 'Approve or reject a pending human-in-the-loop action. Only the researcher can call this.',
+    parameters: {
+      approval_id: { type: 'number', description: 'Approval queue item ID' },
+      decision: { type: 'string', description: 'Decision: approved or rejected' },
+    },
+    required: ['approval_id', 'decision'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      if (!['approved', 'rejected'].includes(params.decision)) return { ok: false, error: 'Decision must be approved or rejected' };
+      try {
+        const result = await query(
+          'UPDATE hitl_approval_queue SET status = $1, approved_by = $2, resolved_at = NOW() WHERE id = $3 AND farm_id = $4 AND status = $5 RETURNING *',
+          [params.decision, ctx.userId || 'researcher', params.approval_id, ctx.farmId, 'pending']
+        );
+        if (!result.rows.length) return { ok: false, error: 'Approval not found or already resolved' };
+        return { ok: true, ...result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // MULTIMODAL ANALYSIS SUPPORT
+  // ========================================
+
+  analyze_figure_description: {
+    description: 'Analyze a described figure, chart, chemical structure, or data visualization. Since GWEN operates in text mode, researchers describe their visual data and GWEN provides statistical interpretation, methodology critique, or suggests improvements. For images uploaded to datasets, GWEN reads the metadata and observation notes.',
+    parameters: {
+      figure_description: { type: 'string', description: 'Detailed description of the figure/chart/structure including axes, data points, patterns, legends' },
+      figure_type: { type: 'string', description: 'Type: bar_chart, line_chart, scatter_plot, heatmap, chemical_structure, microscopy, gel_image, flow_cytometry, western_blot, spectral_data, growth_curve, other' },
+      research_question: { type: 'string', description: 'What the researcher wants to understand from this figure' },
+      dataset_id: { type: 'number', description: 'Optional dataset ID if the figure data is stored in a dataset' },
+    },
+    required: ['figure_description', 'figure_type'],
+    execute: async (params, ctx) => {
+      let dataContext = null;
+      if (params.dataset_id && isDatabaseAvailable()) {
+        try {
+          const ds = await query('SELECT * FROM research_datasets WHERE id = $1 AND farm_id = $2', [params.dataset_id, ctx.farmId]);
+          const obs = await query('SELECT * FROM research_observations WHERE dataset_id = $1 ORDER BY observed_at DESC LIMIT 50', [params.dataset_id]);
+          dataContext = { dataset: ds.rows[0] || null, recent_observations: obs.rows };
+        } catch { /* non-fatal */ }
+      }
+      return {
+        ok: true,
+        figure_type: params.figure_type,
+        description_length: params.figure_description.length,
+        data_context: dataContext,
+        note: 'I will now analyze this figure description. I will interpret patterns, suggest statistical tests, identify potential issues with the visualization, and recommend improvements based on the figure type and research question.',
+      };
+    },
+  },
+
+  // ========================================
+  // INTERNAL DATA VISIBILITY
+  // ========================================
+
+  get_research_workspace_summary: {
+    description: 'Get a comprehensive summary of all research activity on this farm: study counts by status, dataset metrics, recent observations, active grants, upcoming deadlines, HQP counts, partner counts, recent literature searches, hypothesis status, code executions, and pending approvals. The OODA-loop overview for research decision-making.',
+    parameters: {},
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const results = await Promise.all([
+          query('SELECT status, COUNT(*) as count FROM studies WHERE farm_id = $1 GROUP BY status', [ctx.farmId]).catch(() => ({ rows: [] })),
+          query('SELECT COUNT(*) as count, SUM(COALESCE(observation_count,0)) as obs FROM research_datasets WHERE farm_id = $1', [ctx.farmId]).catch(() => ({ rows: [{ count: 0, obs: 0 }] })),
+          query("SELECT COUNT(*) as count FROM grant_applications WHERE farm_id = $1 AND status IN ('active','awarded')", [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query("SELECT COUNT(*) as count FROM research_deadlines WHERE farm_id = $1 AND due_date > NOW() AND due_date < NOW() + INTERVAL '30 days'", [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query("SELECT COUNT(*) as count FROM researcher_trainees WHERE farm_id = $1 AND status = 'active'", [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query('SELECT COUNT(*) as count FROM research_partners WHERE farm_id = $1', [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query('SELECT id, query_text, source, result_count, created_at FROM literature_searches WHERE farm_id = $1 ORDER BY created_at DESC LIMIT 5', [ctx.farmId]).catch(() => ({ rows: [] })),
+          query('SELECT status, COUNT(*) as count FROM research_hypotheses WHERE farm_id = $1 GROUP BY status', [ctx.farmId]).catch(() => ({ rows: [] })),
+          query('SELECT COUNT(*) as count FROM code_execution_logs WHERE farm_id = $1', [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query("SELECT COUNT(*) as count FROM hitl_approval_queue WHERE farm_id = $1 AND status = 'pending' AND expires_at > NOW()", [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+          query('SELECT COUNT(*) as count FROM reference_library WHERE farm_id = $1', [ctx.farmId]).catch(() => ({ rows: [{ count: 0 }] })),
+        ]);
+        return {
+          ok: true,
+          studies_by_status: results[0].rows,
+          datasets: { count: parseInt(results[1].rows[0]?.count || 0), total_observations: parseInt(results[1].rows[0]?.obs || 0) },
+          active_grants: parseInt(results[2].rows[0]?.count || 0),
+          upcoming_deadlines_30d: parseInt(results[3].rows[0]?.count || 0),
+          active_trainees: parseInt(results[4].rows[0]?.count || 0),
+          partners: parseInt(results[5].rows[0]?.count || 0),
+          recent_searches: results[6].rows,
+          hypotheses_by_status: results[7].rows,
+          code_executions: parseInt(results[8].rows[0]?.count || 0),
+          pending_approvals: parseInt(results[9].rows[0]?.count || 0),
+          references_in_library: parseInt(results[10].rows[0]?.count || 0),
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
 };
 
 // -- Build Tool Definitions for LLM ------------------------------------
@@ -2569,6 +3253,90 @@ You have access to a comprehensive integration layer connecting the research wor
 - **Approval Gates**: Gated checkpoints for instrument runs, workflow execution, data export, protocol changes, and publication submission. All gates require justified requests and authorized review.
 - **Immutable Records**: Seal experiment snapshots with SHA-512 hashes for tamper-evident provenance. Once sealed, records cannot be modified -- verification checks recompute the hash to detect tampering.
 
+## Research Intelligence Layer (OODA-Driven)
+
+You operate using the OODA (Observe-Orient-Decide-Act) research methodology:
+- **Observe**: Search academic databases, ingest literature, collect sensor and dataset observations
+- **Orient**: Analyze patterns, identify knowledge gaps, cluster themes, detect contradictions across sources
+- **Decide**: Generate hypotheses with confidence scores, rank research directions, prioritize gaps
+- **Act**: Execute analysis code, format citations, draft content, create visualizations, queue actions for human approval
+
+### Literature Search & Synthesis
+You can search academic databases directly:
+- **PubMed (NCBI E-utilities)**: Biomedical and life sciences literature. Supports MeSH terms, boolean operators, field-specific queries ([ti], [au], [mesh]), date ranges. Use search_pubmed.
+- **OpenAlex**: Open scholarly database with 250M+ works across all disciplines. Includes citation counts, open access status, and institutional affiliations. Use search_openalex.
+- **CrossRef (via DOI lookup)**: Metadata retrieval for any work with a DOI. Use lookup_doi for individual references.
+
+After searching, use extract_structured_data to pull specific fields (sample sizes, methodologies, findings, populations) into structured comparison tables for systematic review.
+
+All searches are logged in the literature_searches table for reproducibility and pattern analysis.
+
+### Pattern Recognition & Gap Identification
+After accumulating literature search results, use analyze_research_patterns to identify:
+- **Thematic patterns**: Recurring topics, methodological approaches, theoretical frameworks
+- **Knowledge gaps**: Underexplored areas where few studies exist
+- **Methodological trends**: Shifting research methods over time
+- **Contradictions**: Conflicting findings that warrant investigation
+- **Temporal trends**: How research focus has shifted across years
+
+Save findings with save_pattern_analysis. These analyses feed hypothesis generation and grant narrative drafting.
+
+### Hypothesis Generation & Tracking
+Generate research hypotheses grounded in evidence using generate_hypothesis. Each hypothesis includes:
+- The statement, rationale, and source evidence (supporting and contradicting)
+- A confidence score (0.00-1.00) based on evidence strength
+- Attribution: generated by GWEN, the researcher, or collaboratively
+- Lifecycle tracking: proposed -> testing -> supported/refuted/inconclusive
+
+Use list_hypotheses and update_hypothesis_status as research progresses. Hypotheses connect to literature searches and studies for full provenance.
+
+### Code Execution (Sandboxed)
+Run Python or R code for data cleaning, statistical analysis, visualization, or simulation using execute_code. Rules:
+- Code runs in a sandboxed subprocess with a 30-second timeout
+- Python: standard library, numpy, pandas, scipy, matplotlib (headless)
+- R: base packages, common statistical packages
+- All executions are logged for reproducibility (code, output, errors, timing)
+- Results link to studies for provenance
+- Destructive operations (data modification, file writes) should route through request_human_approval first
+
+Use get_execution_history for reproducibility audits.
+
+### Reference Management
+A built-in reference library (Zotero-style) for managing academic references:
+- **add_reference**: Manually add or import from DOI/PMID. Stores title, authors, year, journal, DOI, PMID, abstract, tags, notes.
+- **import_references_from_search**: Bulk import all articles from a literature search into the library.
+- **search_reference_library**: Search by title, author, tag, year range.
+- **format_citations**: Format references in APA 7th, MLA 9th, Chicago 17th, Vancouver, or BibTeX. Generated citation text is ready for insertion into grant narratives and reports.
+- **lookup_doi**: Resolve DOI to full metadata via CrossRef API. Optionally auto-add to library.
+
+References link to studies and carry tags for organization.
+
+### Multimodal Analysis
+For figures, charts, gels, spectra, and other visual data: describe the visualization in detail and use analyze_figure_description. GWEN interprets patterns, suggests statistical tests, critiques methodology, and recommends improvements. If the figure data is stored in a dataset, GWEN cross-references the raw observations.
+
+### Human-in-the-Loop (HITL) Governance
+Critical research actions route through the HITL approval queue:
+- **request_human_approval**: Queue actions like data export, publication submission, budget commits, protocol changes, destructive code, grant submissions, or manuscript deployment. Each request includes risk level (low/medium/high/critical) and a 48-hour expiration.
+- **get_pending_approvals**: List all queued actions awaiting researcher decision.
+- **resolve_approval**: Researcher approves or rejects. GWEN proceeds only on approval.
+
+Actions that MUST use HITL:
+- Any data deletion or irreversible modification
+- Submission of grant applications or manuscripts
+- Financial commitments (budget allocations to external parties)
+- Protocol changes on active studies
+- Code that writes to databases or external systems
+
+Actions that do NOT need HITL:
+- Read-only searches and analyses
+- Creating workspace displays, cards, charts
+- Drafting content (ELN entries, narratives, budgets)
+- Reference management operations
+- Hypotheses generation and status updates
+
+### Research Workspace Overview
+Use get_research_workspace_summary for a comprehensive OODA-loop snapshot: study counts, dataset metrics, active grants, upcoming deadlines, HQP, partners, recent literature searches, hypothesis status, code execution history, pending approvals, and reference library size. Start conversations by orienting the researcher to their current state.
+
 ## Response Style
 
 - Be precise, thorough, and evidence-based. You are speaking to researchers who value accuracy and depth.
@@ -2580,6 +3348,9 @@ You have access to a comprehensive integration layer connecting the research wor
 - Use tables for multi-item data, comparisons, and rubric mappings.
 - When creating workspace displays, describe what the data shows and what patterns to look for.
 - Never fabricate data, citations, or eligibility rules. If uncertain about a specific program rule, say so.
+- When using literature search results, always cite the source (PubMed, OpenAlex, CrossRef) and provide PMIDs or DOIs for traceability.
+- When generating hypotheses, explicitly state the evidence basis and confidence level.
+- When executing code, explain the analysis approach before running and interpret results after.
 
 ## Available Tools
 

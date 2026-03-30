@@ -3100,6 +3100,119 @@ async function runMigrations(client) {
     logger.warn('Migration 047 warning:', err.message);
   }
 
+  // ─── Migration 048: GWEN Advanced Research Intelligence ───
+  // Literature search results, hypotheses, pattern analyses, code execution logs,
+  // reference library, and HITL approval queue for critical research actions.
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS literature_searches (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        query_text TEXT NOT NULL,
+        source VARCHAR(50) NOT NULL DEFAULT 'pubmed',
+        filters JSONB DEFAULT '{}',
+        result_count INTEGER DEFAULT 0,
+        results JSONB DEFAULT '[]',
+        extracted_data JSONB DEFAULT '{}',
+        created_by VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_literature_searches_farm ON literature_searches(farm_id);
+
+      CREATE TABLE IF NOT EXISTS research_hypotheses (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        hypothesis TEXT NOT NULL,
+        rationale TEXT,
+        supporting_evidence JSONB DEFAULT '[]',
+        contradicting_evidence JSONB DEFAULT '[]',
+        confidence_score NUMERIC(3,2),
+        status VARCHAR(30) DEFAULT 'proposed' CHECK (status IN ('proposed','testing','supported','refuted','inconclusive')),
+        generated_by VARCHAR(30) DEFAULT 'gwen' CHECK (generated_by IN ('gwen','researcher','collaborative')),
+        source_search_id INTEGER REFERENCES literature_searches(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_research_hypotheses_farm ON research_hypotheses(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_research_hypotheses_study ON research_hypotheses(study_id);
+
+      CREATE TABLE IF NOT EXISTS pattern_analyses (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        analysis_type VARCHAR(50) NOT NULL DEFAULT 'thematic',
+        input_description TEXT,
+        source_count INTEGER DEFAULT 0,
+        themes JSONB DEFAULT '[]',
+        gaps JSONB DEFAULT '[]',
+        trends JSONB DEFAULT '[]',
+        summary TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_pattern_analyses_farm ON pattern_analyses(farm_id);
+
+      CREATE TABLE IF NOT EXISTS code_execution_logs (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        language VARCHAR(20) NOT NULL DEFAULT 'python' CHECK (language IN ('python','r')),
+        code TEXT NOT NULL,
+        purpose TEXT,
+        output TEXT,
+        error TEXT,
+        execution_time_ms INTEGER,
+        status VARCHAR(20) DEFAULT 'queued' CHECK (status IN ('queued','running','completed','failed','timeout')),
+        approved_by VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_code_execution_logs_farm ON code_execution_logs(farm_id);
+
+      CREATE TABLE IF NOT EXISTS reference_library (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        title VARCHAR(1000) NOT NULL,
+        authors JSONB DEFAULT '[]',
+        year INTEGER,
+        journal VARCHAR(500),
+        doi VARCHAR(255),
+        pmid VARCHAR(20),
+        abstract TEXT,
+        tags JSONB DEFAULT '[]',
+        notes TEXT,
+        citation_format VARCHAR(20) DEFAULT 'apa' CHECK (citation_format IN ('apa','mla','chicago','vancouver','bibtex')),
+        formatted_citation TEXT,
+        source VARCHAR(50) DEFAULT 'manual',
+        imported_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_reference_library_farm ON reference_library(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_reference_library_doi ON reference_library(doi);
+      CREATE INDEX IF NOT EXISTS idx_reference_library_study ON reference_library(study_id);
+
+      CREATE TABLE IF NOT EXISTS hitl_approval_queue (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL REFERENCES farms(farm_id) ON DELETE CASCADE,
+        action_type VARCHAR(50) NOT NULL,
+        action_description TEXT NOT NULL,
+        action_payload JSONB DEFAULT '{}',
+        risk_level VARCHAR(20) DEFAULT 'medium' CHECK (risk_level IN ('low','medium','high','critical')),
+        requested_by VARCHAR(255) NOT NULL DEFAULT 'gwen',
+        approved_by VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','expired')),
+        expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '48 hours'),
+        resolved_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_hitl_approval_queue_farm ON hitl_approval_queue(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_hitl_approval_queue_status ON hitl_approval_queue(status);
+    `);
+    logger.info('GWEN advanced research intelligence tables ready (migration 048)');
+  } catch (err) {
+    logger.warn('Migration 048 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 
