@@ -301,18 +301,19 @@ function inferPriceUnit(name, category, fallbackUnit) {
 
   if (family === 'cherry_tomatoes' || family === 'weight_crops') {
     const normalizedFallback = String(fallbackUnit || '').toLowerCase();
-    if (['oz', 'g', 'kg'].includes(normalizedFallback)) {
+    if (['lb', 'oz', 'g', 'kg'].includes(normalizedFallback)) {
       return normalizedFallback;
     }
-    return 'oz';
+    return 'lb';
   }
 
-  // Default: use 'oz' for weight-like fallbacks since all pricing is per-oz
+  // Respect the fallback unit when it is a recognized weight/quantity unit.
+  // Farm inventory stores prices per-lb; only override when the source
+  // explicitly declares a smaller unit like oz, g, or kg.
   const normFB = String(fallbackUnit || '').toLowerCase();
-  if (['oz', 'g', 'kg'].includes(normFB)) return normFB;
-  if (normFB === 'pint') return 'pint';
-  if (normFB === 'unit' || normFB === 'each') return normFB;
-  return 'oz';
+  const knownUnits = ['lb', 'oz', 'g', 'kg', 'pint', 'unit', 'each', 'bunch', 'head', 'dozen'];
+  if (knownUnits.includes(normFB)) return normFB;
+  return 'lb';
 }
 
 function mean(values) {

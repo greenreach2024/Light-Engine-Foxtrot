@@ -750,7 +750,7 @@
       return {
         sku_id: item.sku_id,
         product_name: item.product_name,
-        size: item.size || 'Bulk Case',
+        size: item.size || '1.5 lbs',
         unit: item.unit,
         price_per_unit: bestPrice,
         total_qty_available: totalQty,
@@ -812,7 +812,7 @@
             <div class="sku-meta">
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Size:</span>
-                <span>${escapeHtml(sku.size || 'N/A')}</span>
+                <span>${escapeHtml(sku.size || '1.5 lbs')}</span>
               </div>
               <div class="sku-meta-row">
                 <span class="sku-meta-label">Unit:</span>
@@ -824,7 +824,7 @@
               </div>
               ${Number(sku.base_wholesale_price || 0) > 0 ? `
               <div class="sku-meta-row">
-                <span class="sku-meta-label">Base:</span>
+                <span class="sku-meta-label">List Price:</span>
                 <span>$${Number(sku.base_wholesale_price).toFixed(2)}</span>
               </div>` : ''}
               ${Number(sku.buyer_discount_rate || 0) > 0 ? `

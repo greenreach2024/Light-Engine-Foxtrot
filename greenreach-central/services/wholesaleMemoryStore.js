@@ -109,6 +109,9 @@ export function sanitizeBuyer(buyer) {
 async function persistBuyer(buyer) {
   if (!isDatabaseAvailable()) return;
   const now = new Date().toISOString();
+  const params = [buyer.id, buyer.businessName, buyer.contactName, buyer.email,
+       buyer.buyerType, JSON.stringify(buyer.location || null), buyer.passwordHash,
+       buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now];
   try {
     await query(
       `INSERT INTO wholesale_buyers
@@ -124,14 +127,40 @@ async function persistBuyer(buyer) {
            status = EXCLUDED.status,
            phone = EXCLUDED.phone,
            updated_at = EXCLUDED.updated_at`,
-      [buyer.id, buyer.businessName, buyer.contactName, buyer.email,
-       buyer.buyerType, JSON.stringify(buyer.location || null), buyer.passwordHash,
-       buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now]
+      params
     );
   } catch (err) {
-    // Log all persist errors — schema mismatches, type errors, etc.
-    console.warn('[BuyerPersist] Error:', err.message);
-    throw err;
+    // If columns are missing, attempt to add them and retry once
+    if (err.message && err.message.includes('does not exist')) {
+      console.warn('[BuyerPersist] Schema mismatch, attempting column repair:', err.message);
+      try {
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
+        await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+        await query(
+          `INSERT INTO wholesale_buyers
+            (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO UPDATE
+           SET business_name = EXCLUDED.business_name,
+               contact_name = EXCLUDED.contact_name,
+               email = EXCLUDED.email,
+               buyer_type = EXCLUDED.buyer_type,
+               location = EXCLUDED.location,
+               password_hash = EXCLUDED.password_hash,
+               status = EXCLUDED.status,
+               phone = EXCLUDED.phone,
+               updated_at = EXCLUDED.updated_at`,
+          params
+        );
+        console.log('[BuyerPersist] Column repair succeeded, buyer persisted');
+        return;
+      } catch (retryErr) {
+        console.warn('[BuyerPersist] Column repair failed:', retryErr.message);
+      }
+    } else {
+      console.warn('[BuyerPersist] Error:', err.message);
+    }
+    // Non-fatal: buyer exists in memory, DB persist is best-effort
   }
 }
 

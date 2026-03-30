@@ -8,10 +8,19 @@
       "name": "Green Valley Organic Farm",
       "location": "Kingston, ON",
       "latitude": 44.2312,
-      "longitude": -76.4860,
-      "certifications": ["GAP", "organic"],
-      "practices": ["pesticide_free", "sustainable"],
-      "attributes": ["woman_owned", "family_farm"]
+      "longitude": -76.486,
+      "certifications": [
+        "GAP",
+        "organic"
+      ],
+      "practices": [
+        "pesticide_free",
+        "sustainable"
+      ],
+      "attributes": [
+        "woman_owned",
+        "family_farm"
+      ]
     },
     {
       "farm_id": "GR-00002",
@@ -19,9 +28,17 @@
       "location": "Napanee, ON",
       "latitude": 44.2486,
       "longitude": -76.9514,
-      "certifications": ["food_safety", "greenhouse"],
-      "practices": ["hydroponic", "year_round"],
-      "attributes": ["veteran_owned"]
+      "certifications": [
+        "food_safety",
+        "greenhouse"
+      ],
+      "practices": [
+        "hydroponic",
+        "year_round"
+      ],
+      "attributes": [
+        "veteran_owned"
+      ]
     },
     {
       "farm_id": "GR-00003",
@@ -29,9 +46,17 @@
       "location": "Sydenham, ON",
       "latitude": 44.4431,
       "longitude": -76.5819,
-      "certifications": ["GAP"],
-      "practices": ["local", "non_gmo"],
-      "attributes": ["family_farm", "sustainable"]
+      "certifications": [
+        "GAP"
+      ],
+      "practices": [
+        "local",
+        "non_gmo"
+      ],
+      "attributes": [
+        "family_farm",
+        "sustainable"
+      ]
     },
     {
       "farm_id": "GR-00004",
@@ -39,19 +64,36 @@
       "location": "Gananoque, ON",
       "latitude": 44.3284,
       "longitude": -76.1619,
-      "certifications": ["organic", "food_safety"],
-      "practices": ["pesticide_free", "local"],
-      "attributes": ["minority_owned"]
+      "certifications": [
+        "organic",
+        "food_safety"
+      ],
+      "practices": [
+        "pesticide_free",
+        "local"
+      ],
+      "attributes": [
+        "minority_owned"
+      ]
     },
     {
       "farm_id": "GR-00005",
       "name": "Loyalist Herb Gardens",
       "location": "Odessa, ON",
       "latitude": 44.2167,
-      "longitude": -76.7000,
-      "certifications": ["organic", "GAP"],
-      "practices": ["pesticide_free", "year_round"],
-      "attributes": ["woman_owned", "sustainable"]
+      "longitude": -76.7,
+      "certifications": [
+        "organic",
+        "GAP"
+      ],
+      "practices": [
+        "pesticide_free",
+        "year_round"
+      ],
+      "attributes": [
+        "woman_owned",
+        "sustainable"
+      ]
     }
   ],
   "items": [
@@ -77,7 +119,8 @@
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "lettuce-butterhead",
@@ -101,7 +144,8 @@
           "harvest_date": "2025-12-18",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "kale-lacinato",
@@ -113,11 +157,12 @@
           "farm_id": "GR-00001",
           "farm_name": "Green Valley Organic Farm",
           "quantity_available": 300,
-          "price_per_unit": 3.50,
+          "price_per_unit": 3.5,
           "harvest_date": "2025-12-18",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "spinach-baby",
@@ -137,11 +182,12 @@
           "farm_id": "GR-00004",
           "farm_name": "Pacific Greens Co-op",
           "quantity_available": 400,
-          "price_per_unit": 4.50,
+          "price_per_unit": 4.5,
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "arugula",
@@ -165,7 +211,8 @@
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "basil-sweet",
@@ -177,7 +224,7 @@
           "farm_id": "GR-00005",
           "farm_name": "Heritage Herb Gardens",
           "quantity_available": 150,
-          "price_per_unit": 12.50,
+          "price_per_unit": 12.5,
           "harvest_date": "2025-12-19",
           "organic": true
         },
@@ -189,7 +236,8 @@
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "cilantro",
@@ -201,11 +249,12 @@
           "farm_id": "GR-00005",
           "farm_name": "Heritage Herb Gardens",
           "quantity_available": 120,
-          "price_per_unit": 8.50,
+          "price_per_unit": 8.5,
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "parsley-curly",
@@ -229,7 +278,8 @@
           "harvest_date": "2025-12-18",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "mint-spearmint",
@@ -245,7 +295,8 @@
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "dill",
@@ -257,11 +308,12 @@
           "farm_id": "GR-00005",
           "farm_name": "Heritage Herb Gardens",
           "quantity_available": 75,
-          "price_per_unit": 10.50,
+          "price_per_unit": 10.5,
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "microgreens-sunflower",
@@ -273,11 +325,12 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 40,
-          "price_per_unit": 24.00,
+          "price_per_unit": 24.0,
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "microgreens-pea",
@@ -289,7 +342,7 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 35,
-          "price_per_unit": 22.00,
+          "price_per_unit": 22.0,
           "harvest_date": "2025-12-19",
           "organic": false
         },
@@ -297,11 +350,12 @@
           "farm_id": "GR-00004",
           "farm_name": "Pacific Greens Co-op",
           "quantity_available": 25,
-          "price_per_unit": 23.50,
+          "price_per_unit": 23.5,
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "microgreens-radish",
@@ -313,11 +367,12 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 30,
-          "price_per_unit": 26.00,
+          "price_per_unit": 26.0,
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "tomatoes-cherry",
@@ -341,7 +396,8 @@
           "harvest_date": "2025-12-18",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "cucumbers-english",
@@ -357,7 +413,8 @@
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "peppers-bell-red",
@@ -369,7 +426,7 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 400,
-          "price_per_unit": 5.50,
+          "price_per_unit": 5.5,
           "harvest_date": "2025-12-19",
           "organic": false
         },
@@ -381,7 +438,8 @@
           "harvest_date": "2025-12-18",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "peppers-bell-yellow",
@@ -393,11 +451,12 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 350,
-          "price_per_unit": 5.50,
+          "price_per_unit": 5.5,
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "swiss-chard",
@@ -421,7 +480,8 @@
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "bok-choy",
@@ -445,7 +505,8 @@
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "lettuce-red-leaf",
@@ -469,7 +530,8 @@
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "lettuce-green-leaf",
@@ -493,7 +555,8 @@
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "collard-greens",
@@ -509,7 +572,8 @@
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "mustard-greens",
@@ -521,11 +585,12 @@
           "farm_id": "GR-00004",
           "farm_name": "Pacific Greens Co-op",
           "quantity_available": 160,
-          "price_per_unit": 3.50,
+          "price_per_unit": 3.5,
           "harvest_date": "2025-12-19",
           "organic": true
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     },
     {
       "sku_id": "watercress",
@@ -537,11 +602,12 @@
           "farm_id": "GR-00002",
           "farm_name": "Sunrise Hydroponic Gardens",
           "quantity_available": 120,
-          "price_per_unit": 8.50,
+          "price_per_unit": 8.5,
           "harvest_date": "2025-12-19",
           "organic": false
         }
-      ]
+      ],
+      "size": "1.5 lbs"
     }
   ]
 }
