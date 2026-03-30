@@ -1154,6 +1154,13 @@
         <div class="checkout-section">
           <h2>Delivery Details</h2>
           <form id="checkout-form">
+            <div class="form-group">
+              <label for="fulfillment-method">Fulfillment Method</label>
+              <select id="fulfillment-method" onchange="app.toggleFulfillmentFields()">
+                <option value="pickup">Pickup from Farm</option>
+                <option value="delivery">Delivery</option>
+              </select>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="buyer-name">Business Name</label>

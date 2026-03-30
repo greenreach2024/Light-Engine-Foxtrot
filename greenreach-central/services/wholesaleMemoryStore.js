@@ -78,7 +78,14 @@ export async function createBuyer({ businessName, contactName, email, password, 
 
 export async function authenticateBuyer({ email, password }) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  const buyer = buyersByEmail.get(normalizedEmail);
+  let buyer = buyersByEmail.get(normalizedEmail);
+  // Fall back to DB if not in memory
+  if (!buyer && isDatabaseAvailable()) {
+    const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
+    if (result.rows.length > 0) {
+      buyer = hydrateRowIntoMaps(result.rows[0]);
+    }
+  }
   if (!buyer) return null;
   const ok = await bcrypt.compare(String(password || ''), buyer.passwordHash);
   if (!ok) return null;
@@ -258,7 +265,14 @@ export async function updateBuyer(buyerId, updates) {
 
 export async function resetBuyerPassword(email, newPasswordHash) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  const buyer = buyersByEmail.get(normalizedEmail);
+  let buyer = buyersByEmail.get(normalizedEmail);
+  // Fall back to DB if not in memory (e.g. after restart with partial hydration)
+  if (!buyer && isDatabaseAvailable()) {
+    const result = await query('SELECT * FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
+    if (result.rows.length > 0) {
+      buyer = hydrateRowIntoMaps(result.rows[0]);
+    }
+  }
   if (!buyer) return null;
   buyer.passwordHash = newPasswordHash;
   await persistBuyer(buyer);
@@ -699,7 +713,14 @@ export function getBuyerByEmail(email) {
 }
 
 export async function updateBuyerPassword(buyerId, newPassword) {
-  const buyer = buyersById.get(buyerId);
+  let buyer = buyersById.get(buyerId);
+  // Fall back to DB if not in memory
+  if (!buyer && isDatabaseAvailable()) {
+    const result = await query('SELECT * FROM wholesale_buyers WHERE id = $1 LIMIT 1', [buyerId]);
+    if (result.rows.length > 0) {
+      buyer = hydrateRowIntoMaps(result.rows[0]);
+    }
+  }
   if (!buyer) return null;
   buyer.passwordHash = await bcrypt.hash(String(newPassword || ''), 10);
   await persistBuyer(buyer);
