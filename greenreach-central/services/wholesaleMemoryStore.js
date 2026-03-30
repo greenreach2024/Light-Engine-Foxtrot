@@ -47,6 +47,23 @@ export async function createBuyer({ businessName, contactName, email, password, 
     throw err;
   }
 
+  // Also check DB for existing email (Maps may be empty after restart)
+  if (isDatabaseAvailable()) {
+    try {
+      const existing = await query('SELECT id FROM wholesale_buyers WHERE LOWER(email) = $1 LIMIT 1', [normalizedEmail]);
+      if (existing.rows.length > 0) {
+        const fullRow = await query('SELECT * FROM wholesale_buyers WHERE id = $1', [existing.rows[0].id]);
+        if (fullRow.rows.length > 0) hydrateRowIntoMaps(fullRow.rows[0]);
+        const err = new Error('Email already registered');
+        err.code = 'EMAIL_EXISTS';
+        throw err;
+      }
+    } catch (dbErr) {
+      if (dbErr.code === 'EMAIL_EXISTS') throw dbErr;
+      console.warn('[BuyerPersist] DB email check failed (non-fatal):', dbErr.message);
+    }
+  }
+
   const buyerId = `buyer-${randomUUID()}`;
   const passwordHash = await bcrypt.hash(String(password || ''), 10);
 
@@ -68,10 +85,18 @@ export async function createBuyer({ businessName, contactName, email, password, 
     createdAt: new Date().toISOString()
   };
 
+  // Persist to DB FIRST — registration must fail if DB write fails
+  try {
+    await persistBuyer(buyer);
+  } catch (persistErr) {
+    console.error('[BuyerPersist] Registration failed — DB persist error:', persistErr.message);
+    throw new Error('Registration failed: unable to save account. Please try again.');
+  }
+
+  // Only add to in-memory Maps after confirmed DB persist
   buyersByEmail.set(normalizedEmail, buyer);
   buyersById.set(buyerId, buyer);
-
-  await persistBuyer(buyer);
+  console.log('[BuyerPersist] Buyer registered and persisted:', normalizedEmail, buyerId);
 
   return sanitizeBuyer(buyer);
 }
@@ -114,14 +139,16 @@ export function sanitizeBuyer(buyer) {
 // ── Buyer persistence (DB) ───────────────────────────────────────────
 
 async function persistBuyer(buyer) {
-  if (!isDatabaseAvailable()) return;
+  if (!isDatabaseAvailable()) {
+    console.warn('[BuyerPersist] Database not available, buyer only in memory:', buyer.email);
+    return;
+  }
   const now = new Date().toISOString();
   const params = [buyer.id, buyer.businessName, buyer.contactName, buyer.email,
        buyer.buyerType, JSON.stringify(buyer.location || null), buyer.passwordHash,
        buyer.status || 'active', buyer.phone || null, buyer.createdAt || now, now];
-  try {
-    await query(
-      `INSERT INTO wholesale_buyers
+
+  const upsertSql = `INSERT INTO wholesale_buyers
         (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
        ON CONFLICT (id) DO UPDATE
@@ -133,17 +160,20 @@ async function persistBuyer(buyer) {
            password_hash = EXCLUDED.password_hash,
            status = EXCLUDED.status,
            phone = EXCLUDED.phone,
-           updated_at = EXCLUDED.updated_at`,
-      params
-    );
+           updated_at = EXCLUDED.updated_at`;
+
+  try {
+    await query(upsertSql, params);
+    console.log('[BuyerPersist] Persisted buyer to DB:', buyer.email, buyer.id);
   } catch (err) {
-    // Schema repair: fix missing columns or wrong column types, then retry
     const msg = err.message || '';
+    console.error('[BuyerPersist] INSERT failed for', buyer.email, ':', msg);
+
+    // Schema repair: fix missing columns or wrong column types, then retry
     const needsRepair = msg.includes('does not exist') || msg.includes('invalid input syntax for type integer');
     if (needsRepair) {
-      console.warn('[BuyerPersist] Schema mismatch, attempting repair:', msg);
+      console.warn('[BuyerPersist] Attempting schema repair...');
       try {
-        // Fix id column type if still INTEGER (legacy migration)
         const colCheck = await query(
           `SELECT data_type FROM information_schema.columns WHERE table_name = 'wholesale_buyers' AND column_name = 'id'`
         );
@@ -151,50 +181,49 @@ async function persistBuyer(buyer) {
           await query(`ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text`);
           console.log('[BuyerPersist] Converted id column from INTEGER to VARCHAR(255)');
         }
-        // Add missing columns
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
-        // Retry the insert
-        await query(
-          `INSERT INTO wholesale_buyers
-            (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
-           ON CONFLICT (id) DO UPDATE
-           SET business_name = EXCLUDED.business_name,
-               contact_name = EXCLUDED.contact_name,
-               email = EXCLUDED.email,
-               buyer_type = EXCLUDED.buyer_type,
-               location = EXCLUDED.location,
-               password_hash = EXCLUDED.password_hash,
-               status = EXCLUDED.status,
-               phone = EXCLUDED.phone,
-               updated_at = EXCLUDED.updated_at`,
-          params
-        );
-        console.log('[BuyerPersist] Schema repair succeeded, buyer persisted');
+        await query(upsertSql, params);
+        console.log('[BuyerPersist] Schema repair succeeded, buyer persisted:', buyer.email);
         return;
       } catch (retryErr) {
-        console.warn('[BuyerPersist] Schema repair failed:', retryErr.message);
+        console.error('[BuyerPersist] Schema repair failed:', retryErr.message);
       }
-    } else {
-      console.warn('[BuyerPersist] Error:', msg);
     }
-    // Non-fatal: buyer exists in memory, DB persist is best-effort
+
+    // THROW the error — caller must know the persist failed
+    throw new Error(`Failed to persist buyer ${buyer.email} to database: ${msg}`);
+  }
+
+  // Verify the write actually landed
+  try {
+    const verify = await query('SELECT id FROM wholesale_buyers WHERE id = $1', [buyer.id]);
+    if (!verify.rows.length) {
+      console.error('[BuyerPersist] VERIFY FAILED: buyer not found in DB after INSERT:', buyer.email, buyer.id);
+      throw new Error(`Buyer ${buyer.email} written but not found on verify read`);
+    }
+  } catch (verifyErr) {
+    if (verifyErr.message.includes('not found')) throw verifyErr;
+    console.warn('[BuyerPersist] Verify query failed (non-fatal):', verifyErr.message);
   }
 }
 
 export async function loadBuyersFromDb() {
-  if (!isDatabaseAvailable()) return;
+  if (!isDatabaseAvailable()) {
+    console.warn('[BuyerPersist] loadBuyersFromDb skipped: database not available');
+    return;
+  }
   try {
     const result = await query('SELECT * FROM wholesale_buyers ORDER BY created_at ASC');
     for (const row of result.rows) {
       hydrateRowIntoMaps(row);
     }
     console.log(`[BuyerPersist] Loaded ${result.rows.length} buyers from DB`);
-  } catch (err) {
-    if (!String(err?.message || '').includes('relation')) {
-      console.warn('[BuyerPersist] Load failed:', err.message);
+    if (result.rows.length === 0) {
+      console.warn('[BuyerPersist] WARNING: wholesale_buyers table is empty');
     }
+  } catch (err) {
+    console.error('[BuyerPersist] loadBuyersFromDb FAILED:', err.message);
   }
 }
 
