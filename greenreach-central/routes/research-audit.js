@@ -50,18 +50,79 @@ router.get('/research/audit', async (req, res) => {
     const { study_id, entity_type, action, user_id, limit = 20, offset = 0 } = req.query;
     const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
     const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
-    const params = [farmId];
-    let where = 'WHERE a.farm_id = $1';
-    if (study_id) { params.push(study_id); where += ` AND a.study_id = $${params.length}`; }
-    if (entity_type) { params.push(entity_type); where += ` AND a.entity_type = $${params.length}`; }
-    if (action) { params.push(action); where += ` AND a.action = $${params.length}`; }
-    if (user_id) { params.push(user_id); where += ` AND a.user_id = $${params.length}`; }
+    const columnsResult = await query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'audit_log'
+    `);
+    const columns = new Set(columnsResult.rows.map(r => r.column_name));
+
+    const hasFarmId = columns.has('farm_id');
+    const hasStudyId = columns.has('study_id');
+    const hasUserId = columns.has('user_id');
+    const hasAction = columns.has('action');
+    const hasEventType = columns.has('event_type');
+    const hasActor = columns.has('actor');
+
+    const params = [];
+    const whereParts = [];
+
+    if (hasFarmId) {
+      params.push(farmId);
+      whereParts.push(`a.farm_id = $${params.length}`);
+    }
+    if (hasStudyId && study_id) {
+      params.push(study_id);
+      whereParts.push(`a.study_id = $${params.length}`);
+    }
+    if (entity_type) {
+      params.push(entity_type);
+      whereParts.push(`a.entity_type = $${params.length}`);
+    }
+    if (action) {
+      if (hasAction && hasEventType) {
+        params.push(action);
+        whereParts.push(`COALESCE(a.action, a.event_type) = $${params.length}`);
+      } else if (hasAction) {
+        params.push(action);
+        whereParts.push(`a.action = $${params.length}`);
+      } else if (hasEventType) {
+        params.push(action);
+        whereParts.push(`a.event_type = $${params.length}`);
+      }
+    }
+    if (hasUserId && user_id) {
+      params.push(user_id);
+      whereParts.push(`a.user_id = $${params.length}`);
+    }
+
+    const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
     params.push(safeLimit, safeOffset);
+    const actionExpr = hasAction && hasEventType
+      ? 'COALESCE(a.action, a.event_type)'
+      : hasAction
+        ? 'a.action'
+        : hasEventType
+          ? 'a.event_type'
+          : "'audit_event'";
+
+    const userExpr = hasActor ? 'COALESCE(u.email, a.actor)' : 'u.email';
+    const userJoinExpr = hasUserId ? 'a.user_id::text = u.id::text' : '1=0';
 
     const result = await query(`
-      SELECT a.*, u.email as user_email
+      SELECT a.id,
+        ${hasFarmId ? 'a.farm_id,' : 'NULL::varchar as farm_id,'}
+        ${hasStudyId ? 'a.study_id,' : 'NULL::integer as study_id,'}
+        ${hasUserId ? 'a.user_id,' : 'NULL::integer as user_id,'}
+        ${actionExpr} as action,
+        a.entity_type,
+        a.entity_id,
+        a.details,
+        a.created_at,
+        ${userExpr} as user_email
       FROM audit_log a
-      LEFT JOIN farm_users u ON a.user_id = u.id
+      LEFT JOIN farm_users u ON ${userJoinExpr}
       ${where}
       ORDER BY a.created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}

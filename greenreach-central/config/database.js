@@ -3651,6 +3651,112 @@ async function runMigrations(client) {
   }
   logger.info('Research Phase 2/3 tables verified individually (migration 053)');
 
+  // --- Migration 054: Research recipes lifecycle tables + audit_log compatibility ---
+  // Recipes endpoints require these tables and constraints. Older environments may be missing them.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recipe_versions (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(64) NOT NULL,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        recipe_name VARCHAR(255) NOT NULL,
+        version_number INTEGER NOT NULL,
+        status VARCHAR(50) DEFAULT 'draft',
+        parameters JSONB DEFAULT '{}',
+        created_by VARCHAR(300),
+        promoted_from INTEGER REFERENCES recipe_versions(id) ON DELETE SET NULL,
+        release_notes TEXT,
+        rationale TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_deployments (
+        id SERIAL PRIMARY KEY,
+        recipe_version_id INTEGER REFERENCES recipe_versions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        room_id VARCHAR(255),
+        zone_id VARCHAR(255),
+        deployed_at TIMESTAMPTZ DEFAULT NOW(),
+        deployed_by VARCHAR(300),
+        operator_acknowledged BOOLEAN DEFAULT FALSE,
+        acknowledged_at TIMESTAMPTZ,
+        rollback_reason TEXT,
+        rolled_back_at TIMESTAMPTZ,
+        status VARCHAR(50) DEFAULT 'active'
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_comparisons (
+        id SERIAL PRIMARY KEY,
+        study_id INTEGER REFERENCES studies(id) ON DELETE SET NULL,
+        control_recipe_id INTEGER REFERENCES recipe_versions(id) ON DELETE SET NULL,
+        beta_recipe_id INTEGER REFERENCES recipe_versions(id) ON DELETE CASCADE,
+        farm_id VARCHAR(64) NOT NULL,
+        metric_name VARCHAR(255) NOT NULL,
+        control_value NUMERIC,
+        beta_value NUMERIC,
+        delta NUMERIC,
+        unit VARCHAR(100),
+        measured_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_eligibility_rules (
+        id SERIAL PRIMARY KEY,
+        recipe_version_id INTEGER REFERENCES recipe_versions(id) ON DELETE CASCADE,
+        rule_type VARCHAR(100) NOT NULL,
+        rule_value JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_operator_acks (
+        id SERIAL PRIMARY KEY,
+        deployment_id INTEGER REFERENCES recipe_deployments(id) ON DELETE CASCADE,
+        operator_user_id VARCHAR(300),
+        acknowledged_at TIMESTAMPTZ DEFAULT NOW(),
+        notes TEXT
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_recipe_versions_unique_name_version
+        ON recipe_versions (farm_id, recipe_name, version_number);
+      CREATE INDEX IF NOT EXISTS idx_recipe_versions_farm_status
+        ON recipe_versions (farm_id, status);
+      CREATE INDEX IF NOT EXISTS idx_recipe_deployments_recipe
+        ON recipe_deployments (recipe_version_id);
+      CREATE INDEX IF NOT EXISTS idx_recipe_comparisons_beta
+        ON recipe_comparisons (beta_recipe_id);
+      CREATE INDEX IF NOT EXISTS idx_recipe_eligibility_recipe
+        ON recipe_eligibility_rules (recipe_version_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_recipe_operator_acks_unique
+        ON recipe_operator_acks (deployment_id, operator_user_id);
+
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS farm_id VARCHAR(64);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS study_id INTEGER;
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_id INTEGER;
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS action VARCHAR(100);
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address TEXT;
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'audit_log'
+            AND column_name = 'event_type'
+        ) THEN
+          EXECUTE 'UPDATE audit_log SET action = event_type WHERE action IS NULL AND event_type IS NOT NULL';
+        END IF;
+      END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_audit_log_farm_created ON audit_log(farm_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+    `);
+    logger.info('Research recipes and audit compatibility ensured (migration 054)');
+  } catch (err) {
+    logger.warn('Migration 054 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 

@@ -289,12 +289,55 @@
       .container { padding: 1rem; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .card-grid { grid-template-columns: 1fr; }
+      header { flex-direction: column; gap: 0.5rem; }
     }
+
+    .network-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .network-card h4 {
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .benchmark-bar {
+      height: 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .benchmark-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+    }
+
+    .network-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
   </style>
 </head>
 <body>
   <header>
     <h1>Research Workspace</h1>
+    <nav class="header-nav">
+      <a href="/views/farm-summary.html">Farm Dashboard</a>
+      <a href="/LE-farm-admin.html">Farm Admin</a>
+      <a href="/gwen-core.html">G.W.E.N.</a>
+      <a href="/views/farm-inventory.html">Inventory</a>
+    </nav>
   </header>
 
   <div class="container">
@@ -363,11 +406,16 @@
       <!-- Actions -->
       <div class="actions-bar">
         <button class="btn btn-primary" onclick="createStudy()">New Study</button>
+        <button class="btn btn-secondary" onclick="createDataset()">New Dataset</button>
         <button class="btn btn-secondary" onclick="createNotebook()">New Notebook</button>
+        <button class="btn btn-secondary" onclick="addCollaborator()">Add Collaborator</button>
+        <button class="btn btn-secondary" onclick="createTrainee()">Add HQP/Trainee</button>
+        <button class="btn btn-secondary" onclick="createPartner()">Add Partner</button>
         <button class="btn btn-secondary" onclick="exportData()">Export Data</button>
         <button class="btn btn-secondary" onclick="showCalibrations()">Calibrations</button>
         <button class="btn btn-secondary" onclick="createRecipe()">New Recipe</button>
         <button class="btn btn-secondary" onclick="createTask()">New Task</button>
+        <button class="btn btn-secondary" onclick="openGwenAgent()">Open Gwen Agent</button>
       </div>
 
       <!-- Tabs -->
@@ -390,6 +438,7 @@
         <div class="tab" data-tab="publications">Publications</div>
         <div class="tab" data-tab="equipment">Equipment</div>
         <div class="tab" data-tab="lineage">Lineage</div>
+        <div class="tab" data-tab="network-research">Network Research</div>
       </div>
 
       <!-- Studies Tab -->
@@ -455,6 +504,7 @@
       <!-- Security Tab -->
       <div class="tab-content" id="tab-security">
         <div id="security-list"></div>
+      </div>
 
       <!-- Reports Tab -->
       <div class="tab-content" id="tab-reports">
@@ -480,20 +530,49 @@
       <div class="tab-content" id="tab-lineage">
         <div id="lineage-list"></div>
       </div>
+
+      <!-- Network Research Tab -->
+      <div class="tab-content" id="tab-network-research">
+        <div id="network-research-list"></div>
+      </div>
       </div>
     </div>
   </div>
 
   <script>
     const API_BASE = window.location.origin;
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const farmId = localStorage.getItem('farm_id') || localStorage.getItem('farmId') || sessionStorage.getItem('farm_id');
-    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    if (farmId) headers['X-Farm-ID'] = farmId;
+    let farmId = null;
+
+    function getAuthContext() {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      farmId = sessionStorage.getItem('farm_id')
+        || sessionStorage.getItem('farmId')
+        || localStorage.getItem('farm_id')
+        || localStorage.getItem('farmId');
+      return { token, farmId };
+    }
+
+    function buildHeaders() {
+      const { token, farmId } = getAuthContext();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (farmId) headers['X-Farm-ID'] = farmId;
+      return headers;
+    }
 
     async function apiFetch(path, opts = {}) {
-      const res = await fetch(`${API_BASE}${path}`, { headers, ...opts });
-      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      const merged = { ...opts, headers: { ...buildHeaders(), ...(opts.headers || {}) } };
+      const res = await fetch(`${API_BASE}${path}`, merged);
+      if (!res.ok) {
+        let bodyText = '';
+        try {
+          const body = await res.json();
+          bodyText = body.error || body.message || '';
+        } catch (_) {
+          // No JSON body.
+        }
+        throw new Error(`API ${res.status}: ${bodyText || res.statusText}`);
+      }
       return res.json();
     }
 
@@ -519,9 +598,19 @@
       return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
+    function promptRequired(label, valueLabel) {
+      const value = prompt(label);
+      if (!value || !value.trim()) {
+        alert(`${valueLabel} is required.`);
+        return null;
+      }
+      return value.trim();
+    }
+
     // ── Load dashboard ──
     async function loadDashboard() {
       try {
+        const { farmId: currentFarmId } = getAuthContext();
         const [studies, datasets, notebooks, alerts, grants, trainees, partners] = await Promise.all([
           apiFetch('/api/research/studies').catch(() => ({ studies: [] })),
           apiFetch('/api/research/datasets').catch(() => ({ datasets: [] })),
@@ -601,7 +690,7 @@
       el.innerHTML = `<table>
         <thead><tr><th>Name</th><th>Status</th><th>Observations</th><th>Created</th></tr></thead>
         <tbody>${datasets.map(d => `<tr>
-          <td>${d.dataset_name}</td>
+          <td>${d.name || d.dataset_name || '--'}</td>
           <td>${statusBadge(d.status)}</td>
           <td>${d.observation_count || 0}</td>
           <td>${formatDate(d.created_at)}</td>
@@ -633,7 +722,7 @@
 
     // ── Actions ──
     async function createStudy() {
-      const title = prompt('Study title:');
+      const title = promptRequired('Study title:', 'Study title');
       if (!title) return;
       try {
         await apiFetch('/api/research/studies', {
@@ -641,11 +730,30 @@
           body: JSON.stringify({ title, status: 'draft', objectives: '' })
         });
         loadDashboard();
-      } catch (err) { alert('Failed to create study: ' + err.message); }
+      } catch (err) {
+        alert('Failed to create study: ' + err.message);
+      }
+    }
+
+    async function createDataset() {
+      const studyId = promptRequired('Study ID for this dataset:', 'Study ID');
+      if (!studyId) return;
+      const name = promptRequired('Dataset name:', 'Dataset name');
+      if (!name) return;
+      const description = prompt('Description (optional):') || '';
+      try {
+        await apiFetch('/api/research/datasets', {
+          method: 'POST',
+          body: JSON.stringify({ study_id: studyId, name, description })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert('Failed to create dataset: ' + err.message);
+      }
     }
 
     async function createNotebook() {
-      const title = prompt('Notebook title:');
+      const title = promptRequired('Notebook title:', 'Notebook title');
       if (!title) return;
       const studyId = prompt('Study ID (leave blank for standalone):');
       try {
@@ -675,22 +783,21 @@
     }
 
     async function createRecipe() {
-      const title = prompt('Recipe title:');
-      if (!title) return;
-      const version = prompt('Version number (e.g. 1.0):') || '1.0';
+      const recipeName = promptRequired('Recipe name:', 'Recipe name');
+      if (!recipeName) return;
       try {
         await apiFetch('/api/research/recipes', {
           method: 'POST',
-          body: JSON.stringify({ title, version_number: version, parameters: {} })
+          body: JSON.stringify({ recipe_name: recipeName, parameters: {} })
         });
         loadRecipes();
       } catch (err) { alert('Failed to create recipe: ' + err.message); }
     }
 
     async function createTask() {
-      const studyId = prompt('Study ID:');
+      const studyId = promptRequired('Study ID:', 'Study ID');
       if (!studyId) return;
-      const title = prompt('Task title:');
+      const title = promptRequired('Task title:', 'Task title');
       if (!title) return;
       const assignee = prompt('Assignee email (optional):');
       try {
@@ -700,6 +807,70 @@
         });
         loadTasks();
       } catch (err) { alert('Failed to create task: ' + err.message); }
+    }
+
+    async function createTrainee() {
+      const name = promptRequired('Trainee name:', 'Trainee name');
+      if (!name) return;
+      const traineeType = promptRequired('Trainee type (undergraduate, masters, phd, postdoc, research_associate, technician, visiting_scholar, co_op, intern):', 'Trainee type');
+      if (!traineeType) return;
+      const studyId = prompt('Study ID (optional):');
+      const institution = prompt('Institution (optional):');
+      try {
+        await apiFetch('/api/research/trainees', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            trainee_type: traineeType,
+            study_id: studyId || null,
+            institution: institution || null
+          })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert('Failed to create trainee: ' + err.message);
+      }
+    }
+
+    async function createPartner() {
+      const name = promptRequired('Partner institution name:', 'Partner institution name');
+      if (!name) return;
+      const partnerType = promptRequired('Partner type (university, college, research_institute, government, industry, hospital, ngo, international):', 'Partner type');
+      if (!partnerType) return;
+      const country = prompt('Country (optional, defaults to Canada):') || 'Canada';
+      try {
+        await apiFetch('/api/research/partners', {
+          method: 'POST',
+          body: JSON.stringify({ name, partner_type: partnerType, country })
+        });
+        loadDashboard();
+      } catch (err) {
+        alert('Failed to create partner: ' + err.message);
+      }
+    }
+
+    async function addCollaborator() {
+      const studyId = promptRequired('Study ID:', 'Study ID');
+      if (!studyId) return;
+      const email = promptRequired('Collaborator email:', 'Collaborator email');
+      if (!email) return;
+      const role = promptRequired('Collaborator role (viewer, contributor, reviewer, coordinator):', 'Collaborator role');
+      if (!role) return;
+      try {
+        await apiFetch(`/api/research/studies/${studyId}/collaborators`, {
+          method: 'POST',
+          body: JSON.stringify({ email, role })
+        });
+        const el = document.getElementById('collaborators-list');
+        if (el) el.dataset.loaded = '';
+        loadDashboard();
+      } catch (err) {
+        alert('Failed to add collaborator: ' + err.message);
+      }
+    }
+
+    function openGwenAgent() {
+      window.location.href = '/gwen-core.html';
     }
 
     async function loadRecipes() {
@@ -1043,7 +1214,75 @@
         el.dataset.loaded = 'true';
       } catch (err) { el.innerHTML = `<div class="alert-banner">Error: ${err.message}</div>`; }
     });
-    if (!token) {
+
+    // ── Network Research tab lazy-load ──
+    document.querySelector('[data-tab="network-research"]').addEventListener('click', async () => {
+      const el = document.getElementById('network-research-list');
+      if (el.dataset.loaded) return;
+      el.innerHTML = '<p style="color:var(--text-secondary);padding:1rem;">Loading cross-farm data...</p>';
+      try {
+        const [analytics, trends] = await Promise.all([
+          apiFetch('/api/network/comparative-analytics').catch(() => ({ analytics: [] })),
+          apiFetch('/api/network/trends').catch(() => ({ trends: [] }))
+        ]);
+
+        let html = '<h3 class="section-title">Cross-Farm Environmental Comparison</h3>';
+        html += '<p style="color:var(--text-secondary);margin-bottom:1rem;">Environmental data, growth rates, and quality metrics from participating network farms.</p>';
+
+        const farms = analytics.analytics || analytics.farms || [];
+        if (farms.length) {
+          html += '<div class="network-grid">';
+          for (const farm of farms) {
+            const name = farm.farm_name || farm.name || ('Farm ' + (farm.farm_id || '?'));
+            const yield_val = farm.avg_yield || farm.yield_rate || 0;
+            const grow_days = farm.avg_grow_days || farm.grow_days || '--';
+            const loss = farm.avg_loss_rate || farm.loss_rate || 0;
+            const temp = farm.avg_temp || farm.temperature || '--';
+            const humidity = farm.avg_humidity || farm.humidity || '--';
+            const bar_pct = Math.min(100, (yield_val / 5) * 100);
+
+            html += `<div class="network-card">
+              <h4>${name}</h4>
+              <table style="font-size:0.8125rem;">
+                <tr><td style="color:var(--text-secondary)">Avg Yield</td><td>${typeof yield_val === 'number' ? yield_val.toFixed(2) + ' kg' : yield_val}</td></tr>
+                <tr><td style="color:var(--text-secondary)">Grow Days</td><td>${grow_days}</td></tr>
+                <tr><td style="color:var(--text-secondary)">Loss Rate</td><td>${typeof loss === 'number' ? (loss * 100).toFixed(1) + '%' : loss}</td></tr>
+                <tr><td style="color:var(--text-secondary)">Temp</td><td>${temp}${typeof temp === 'number' ? ' C' : ''}</td></tr>
+                <tr><td style="color:var(--text-secondary)">Humidity</td><td>${humidity}${typeof humidity === 'number' ? '%' : ''}</td></tr>
+              </table>
+              <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-secondary);">Yield benchmark</div>
+              <div class="benchmark-bar"><div class="benchmark-bar-fill" style="width:${bar_pct}%"></div></div>
+            </div>`;
+          }
+          html += '</div>';
+        } else {
+          html += '<div class="empty-state"><h3>No network farm data available</h3><p>Cross-farm environmental and growth data will appear here when shared by other farms in the network.</p></div>';
+        }
+
+        // Trends section
+        const trendData = trends.trends || trends.data || [];
+        if (trendData.length) {
+          html += '<h3 class="section-title" style="margin-top:2rem;">Network Trends</h3>';
+          html += '<table><thead><tr><th>Metric</th><th>Period</th><th>Average</th><th>Min</th><th>Max</th></tr></thead><tbody>';
+          for (const t of trendData) {
+            html += `<tr>
+              <td>${t.metric || t.data_type || '--'}</td>
+              <td>${t.period || t.date || '--'}</td>
+              <td>${t.average != null ? Number(t.average).toFixed(2) : '--'}</td>
+              <td>${t.min != null ? Number(t.min).toFixed(2) : '--'}</td>
+              <td>${t.max != null ? Number(t.max).toFixed(2) : '--'}</td>
+            </tr>`;
+          }
+          html += '</tbody></table>';
+        }
+
+        el.innerHTML = html;
+        el.dataset.loaded = 'true';
+      } catch (err) { el.innerHTML = `<div class="alert-banner">Error loading network data: ${err.message}</div>`; }
+    });
+
+    const auth = getAuthContext();
+    if (!auth.token) {
       document.getElementById('loading').innerHTML =
         '<div class="alert-banner">Not authenticated. <a href="/farm-admin-login.html" style="color:var(--accent);">Log in</a> to access the Research Workspace.</div>';
     } else {

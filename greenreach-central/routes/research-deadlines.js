@@ -27,6 +27,15 @@ const checkDb = (req, res, next) => {
 
 router.use(checkDb);
 
+async function safeQuery(sql, params, label) {
+  try {
+    return await query(sql, params);
+  } catch (err) {
+    console.warn(`[ResearchDeadlines] ${label} skipped:`, err.message);
+    return { rows: [] };
+  }
+}
+
 // Urgency classification: critical (<=7d), high (<=14d), medium (<=30d), low (<=60d), upcoming (<=90d)
 function classifyUrgency(daysRemaining) {
   if (daysRemaining <= 0) return 'overdue';
@@ -47,51 +56,51 @@ router.get('/research/deadlines/upcoming', async (req, res) => {
     const daysAhead = Math.min(parseInt(req.query.days_ahead, 10) || 90, 365);
 
     const [grantMilestones, grantReports, ethics, trainMilestones, agreements, tasks, trialMilestones, biosafety, audits] = await Promise.all([
-      query(`SELECT gm.id, 'grant_milestone' as type, gm.title as description, gm.due_date, gm.status,
+      safeQuery(`SELECT gm.id, 'grant_milestone' as type, gm.title as description, gm.due_date, gm.status,
         ga.title as parent_title, ga.id as parent_id
         FROM grant_milestones gm JOIN grant_applications ga ON gm.grant_id = ga.id
         WHERE ga.farm_id = $1 AND gm.status != 'completed' AND gm.due_date <= NOW() + make_interval(days => $2)
-        ORDER BY gm.due_date ASC`, [farmId, daysAhead]),
-      query(`SELECT gr.id, 'grant_report' as type, gr.report_type as description, gr.due_date, gr.status,
+        ORDER BY gm.due_date ASC`, [farmId, daysAhead], 'grant_milestones'),
+      safeQuery(`SELECT gr.id, 'grant_report' as type, gr.report_type as description, gr.due_date, gr.status,
         ga.title as parent_title, ga.id as parent_id
         FROM grant_reports gr JOIN grant_applications ga ON gr.grant_id = ga.id
         WHERE ga.farm_id = $1 AND gr.status IN ('pending', 'draft') AND gr.due_date <= NOW() + make_interval(days => $2)
-        ORDER BY gr.due_date ASC`, [farmId, daysAhead]),
-      query(`SELECT ea.id, 'ethics_expiry' as type, ea.protocol_title as description, ea.expiry_date as due_date, ea.status,
+        ORDER BY gr.due_date ASC`, [farmId, daysAhead], 'grant_reports'),
+      safeQuery(`SELECT ea.id, 'ethics_expiry' as type, ea.protocol_title as description, ea.expiry_date as due_date, ea.status,
         ea.protocol_title as parent_title, ea.id as parent_id
         FROM ethics_applications ea
         WHERE ea.farm_id = $1 AND ea.status = 'approved' AND ea.expiry_date <= NOW() + make_interval(days => $2)
-        ORDER BY ea.expiry_date ASC`, [farmId, daysAhead]),
-      query(`SELECT tm.id, 'trainee_milestone' as type, tm.title as description, tm.due_date, tm.status,
+        ORDER BY ea.expiry_date ASC`, [farmId, daysAhead], 'ethics_applications'),
+      safeQuery(`SELECT tm.id, 'trainee_milestone' as type, tm.title as description, tm.due_date, tm.status,
         tr.name as parent_title, tr.id as parent_id
         FROM trainee_milestones tm JOIN trainee_records tr ON tm.trainee_id = tr.id
         WHERE tr.farm_id = $1 AND tm.status != 'completed' AND tm.due_date <= NOW() + make_interval(days => $2)
-        ORDER BY tm.due_date ASC`, [farmId, daysAhead]),
-      query(`SELECT dsa.id, 'agreement_expiry' as type, dsa.title as description, dsa.end_date as due_date, dsa.status,
+        ORDER BY tm.due_date ASC`, [farmId, daysAhead], 'trainee_milestones'),
+      safeQuery(`SELECT dsa.id, 'agreement_expiry' as type, dsa.title as description, dsa.end_date as due_date, dsa.status,
         pi.name as parent_title, pi.id as parent_id
         FROM data_sharing_agreements dsa JOIN partner_institutions pi ON dsa.partner_id = pi.id
         WHERE pi.farm_id = $1 AND dsa.status = 'active' AND dsa.end_date <= NOW() + make_interval(days => $2)
-        ORDER BY dsa.end_date ASC`, [farmId, daysAhead]),
-      query(`SELECT wt.id, 'task' as type, wt.title as description, wt.due_date, wt.status,
+        ORDER BY dsa.end_date ASC`, [farmId, daysAhead], 'data_sharing_agreements'),
+      safeQuery(`SELECT wt.id, 'task' as type, wt.title as description, wt.due_date, wt.status,
         s.title as parent_title, s.id as parent_id
         FROM workspace_tasks wt JOIN studies s ON wt.study_id = s.id
         WHERE s.farm_id = $1 AND wt.status NOT IN ('completed', 'cancelled') AND wt.due_date <= NOW() + make_interval(days => $2)
-        ORDER BY wt.due_date ASC`, [farmId, daysAhead]),
-      query(`SELECT tm.id, 'trial_milestone' as type, tm.title as description, tm.planned_date as due_date, tm.status,
+        ORDER BY wt.due_date ASC`, [farmId, daysAhead], 'workspace_tasks'),
+      safeQuery(`SELECT tm.id, 'trial_milestone' as type, tm.milestone_type as description, tm.planned_date as due_date, tm.status,
         s.title as parent_title, s.id as parent_id
         FROM trial_milestones tm JOIN studies s ON tm.study_id = s.id
         WHERE s.farm_id = $1 AND tm.status != 'completed' AND tm.planned_date <= NOW() + make_interval(days => $2)
-        ORDER BY tm.planned_date ASC`, [farmId, daysAhead]),
-      query(`SELECT bp.id, 'biosafety_expiry' as type, bp.protocol_title as description, bp.expiry_date as due_date, bp.status,
+        ORDER BY tm.planned_date ASC`, [farmId, daysAhead], 'trial_milestones'),
+      safeQuery(`SELECT bp.id, 'biosafety_expiry' as type, bp.protocol_title as description, bp.expiry_date as due_date, bp.status,
         bp.protocol_title as parent_title, bp.id as parent_id
         FROM biosafety_protocols bp
         WHERE bp.farm_id = $1 AND bp.status = 'active' AND bp.expiry_date <= NOW() + make_interval(days => $2)
-        ORDER BY bp.expiry_date ASC`, [farmId, daysAhead]),
-      query(`SELECT sa.id, 'audit_due' as type, 'Security audit' as description, sa.next_audit_date as due_date, 'pending' as status,
+        ORDER BY bp.expiry_date ASC`, [farmId, daysAhead], 'biosafety_protocols'),
+      safeQuery(`SELECT sa.id, 'audit_due' as type, 'Security audit' as description, sa.next_audit_date as due_date, 'pending' as status,
         sa.audit_type as parent_title, sa.id as parent_id
         FROM security_audits sa
         WHERE sa.farm_id = $1 AND sa.next_audit_date <= NOW() + make_interval(days => $2)
-        ORDER BY sa.next_audit_date ASC`, [farmId, daysAhead])
+        ORDER BY sa.next_audit_date ASC`, [farmId, daysAhead], 'security_audits')
     ]);
 
     const allDeadlines = [

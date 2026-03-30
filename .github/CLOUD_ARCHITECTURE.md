@@ -139,6 +139,13 @@ The monorepo contains two independently deployed applications:
 - **Central Admin UI**: `greenreach-central/public/central-admin.js` (farm detail, devices table)
 - **Deployed via**: `eb deploy` from `greenreach-central/`
 
+### Research Ownership Boundary (Authoritative)
+
+- Farm-facing research UX (G.W.E.N. UI, Research Workspace UI) is a Light Engine feature and must resolve on LE.
+- GreenReach Central owns research data services, governance, and admin/reporting APIs.
+- Central may host `/api/research/*` for multi-tenant data/control, but should not be the direct user-facing host for farm research UI pages.
+- If farm users request `/views/research-workspace.html` or `/gwen-core.html` on Central, Central should redirect to LE.
+
 **Import Boundary Rule (Critical)**:
 - Central deploy bundle does NOT include `../server/` from repo root.
 - `greenreach-central/server.js` must only import files inside `greenreach-central/`.

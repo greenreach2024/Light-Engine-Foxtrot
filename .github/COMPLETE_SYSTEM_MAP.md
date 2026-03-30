@@ -1713,6 +1713,11 @@ EnvStore
 - Repaired Research Workspace UI workflow API paths (`/dmp`, `/deadlines/upcoming`, `/deadlines/alerts`) to match backend routes.
 - Re-synchronized `public/views/research-workspace.html` and `greenreach-central/public/views/research-workspace.html` to keep LE/Central page behavior consistent.
 
+**Architecture Clarification (Mar 30, 2026)**
+- G.W.E.N. and farm-facing Research Workspace are Light Engine features.
+- GreenReach Central is the admin/hub system and should keep research APIs + admin intelligence, not farm-facing research UI hosting.
+- Central requests to `/views/research-workspace.html` and `/gwen-core.html` should redirect to LE.
+
 ---
 
 ## 9. Authentication Architecture

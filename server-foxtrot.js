@@ -13343,8 +13343,8 @@ app.use('/api/wholesale/substitution', wholesaleSLAPoliciesRouter);
 app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
 
 /**
- * GreenReach Central: Network API Routes
- * Provides farm network data for GreenReach Central Admin dashboard
+ * Network API Proxy -- forwards /api/network/* to Central (PostgreSQL-backed)
+ * Central's network-growers.js provides real cross-farm data:
  * - GET /api/network/dashboard: Network-wide dashboard statistics
  * - GET /api/network/farms/list: List all farms in network
  * - GET /api/network/farms/:farmId: Get detailed farm information
@@ -13352,7 +13352,59 @@ app.use('/api/wholesale/buyer/preferences', wholesaleSLAPoliciesRouter);
  * - GET /api/network/trends: Network-wide trends
  * - GET /api/network/alerts: Network alerts and notifications
  */
-app.use('/api/network', networkRouter);
+app.use('/api/network', proxyCorsMiddleware, createProxyMiddleware({
+  target: process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com',
+  router: () => {
+    const t = process.env.GREENREACH_CENTRAL_URL || process.env.CENTRAL_URL || 'https://greenreachgreens.com';
+    return t.startsWith('http') ? t : 'https://' + t;
+  },
+  changeOrigin: true,
+  xfwd: true,
+  logLevel: 'warn',
+  timeout: 15000,
+  proxyTimeout: 15000,
+  agent: keepAliveHttpsAgent,
+  pathRewrite: (path) => (path.startsWith('/api/network') ? path : `/api/network${path}`),
+  onProxyReq(proxyReq, req) {
+    const outgoingPath = req.url.startsWith('/api/network') ? req.url : `/api/network${req.url}`;
+    console.log(`[-> network] ${req.method} ${req.originalUrl} -> central${outgoingPath}`);
+    if (req.headers['authorization']) {
+      proxyReq.setHeader('Authorization', req.headers['authorization']);
+    }
+    if (req.headers['x-farm-id']) {
+      proxyReq.setHeader('X-Farm-ID', req.headers['x-farm-id']);
+    }
+  },
+  onProxyRes(proxyRes, req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+      proxyRes.headers['access-control-allow-origin'] = origin;
+      const existingVary = proxyRes.headers['vary'];
+      if (existingVary) {
+        const varyParts = String(existingVary).split(/,\s*/);
+        if (!varyParts.includes('Origin')) {
+          proxyRes.headers['vary'] = `${existingVary}, Origin`;
+        }
+      } else {
+        proxyRes.headers['vary'] = 'Origin';
+      }
+    } else {
+      proxyRes.headers['access-control-allow-origin'] = '*';
+    }
+    const requestedHeaders = req.headers?.['access-control-request-headers'];
+    if (requestedHeaders && typeof requestedHeaders === 'string') {
+      proxyRes.headers['access-control-allow-headers'] = requestedHeaders;
+    } else if (!proxyRes.headers['access-control-allow-headers']) {
+      proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, X-Requested-With, X-Farm-ID';
+    }
+    proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PATCH,DELETE,OPTIONS';
+  },
+  onError(err, req, res) {
+    console.warn('[proxy:/api/network] error:', err?.message || err);
+    res.statusCode = 502;
+    res.end(JSON.stringify({ error: 'proxy_error', target: 'central-network', detail: String(err) }));
+  }
+}));
 
 /**
  * Wholesale Network Routes (Edge Farm)
@@ -23041,6 +23093,7 @@ if (!isControllerDisabled) {
         '/farm-sales/',
         '/accounting/',
         '/research/',      // Research platform - proxied to Central
+        '/network/',       // Network data - proxied to Central
         '/api/accounting/',
         '/wholesale/',
         '/market-intelligence',
