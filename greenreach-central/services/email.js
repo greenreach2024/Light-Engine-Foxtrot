@@ -16,6 +16,15 @@
 
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
+import nodemailer from 'nodemailer';
+
+// SMTP fallback config (WorkMail) — used when SES sandbox blocks recipients
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
 
 import { sendBuyerWelcomeEmail as _sendBuyerWelcomeEmail, sendBuyerMonthlyStatement as _sendBuyerMonthlyStatement, sendProducerMonthlyStatement as _sendProducerMonthlyStatement } from './email-new-templates.js';
 
@@ -36,47 +45,90 @@ function getSesClient() {
   }
 }
 
+let _smtpTransport = null;
+function getSmtpTransport() {
+  if (_smtpTransport) return _smtpTransport;
+  if (!SMTP_ENABLED) return null;
+  try {
+    _smtpTransport = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS }
+    });
+    console.log('[Email] SMTP transport ready (WorkMail fallback)');
+    return _smtpTransport;
+  } catch (err) {
+    console.error('[Email] Failed to create SMTP transport:', err.message);
+    return null;
+  }
+}
+
+async function sendViaSmtp({ to, subject, html, text }) {
+  const transport = getSmtpTransport();
+  if (!transport) return { sent: false, error: 'SMTP not configured' };
+  try {
+    const result = await transport.sendMail({
+      from: `GreenReach <${SES_FROM}>`,
+      to,
+      subject,
+      html: html || undefined,
+      text: text || undefined
+    });
+    console.log(`[Email] SMTP sent to ${to}: ${subject} (id: ${result.messageId})`);
+    return { sent: true, messageId: result.messageId, via: 'smtp' };
+  } catch (err) {
+    console.error(`[Email] SMTP failed to ${to}:`, err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
 /**
  * Send a raw email via SES.
  * Returns { sent: true } on success, { sent: false, error } on failure.
  * Never throws — all errors are caught and returned.
  */
 async function sendEmail({ to, subject, html, text }) {
-  if (!SES_ENABLED) {
-    console.log(`[Email] Disabled — skipping email to ${to}`);
+  if (!SES_ENABLED && !SMTP_ENABLED) {
+    console.log(`[Email] Disabled -- skipping email to ${to}`);
     return { sent: false, error: 'Email sending is disabled' };
   }
 
-  const client = getSesClient();
-  if (!client) {
-    return { sent: false, error: 'SES client unavailable' };
+  // Try SES first
+  if (SES_ENABLED) {
+    const client = getSesClient();
+    if (client) {
+      try {
+        const params = {
+          Source: `GreenReach <${SES_FROM}>`,
+          Destination: { ToAddresses: [to] },
+          Message: {
+            Subject: { Data: subject, Charset: 'UTF-8' },
+            Body: {},
+          },
+        };
+        if (html) params.Message.Body.Html = { Data: html, Charset: 'UTF-8' };
+        if (text) params.Message.Body.Text = { Data: text, Charset: 'UTF-8' };
+
+        const command = new SendEmailCommand(params);
+        const result = await client.send(command);
+        console.log(`[Email] SES sent to ${to}: ${subject} (MessageId: ${result.MessageId})`);
+        return { sent: true, messageId: result.MessageId, via: 'ses' };
+      } catch (err) {
+        const isSandbox = err.message && (err.message.includes('not verified') || err.message.includes('MessageRejected'));
+        if (isSandbox && SMTP_ENABLED) {
+          console.log(`[Email] SES sandbox blocked ${to}, falling back to SMTP`);
+        } else {
+          console.error(`[Email] SES failed to ${to}:`, err.message);
+          if (!SMTP_ENABLED) return { sent: false, error: err.message };
+          console.log(`[Email] Falling back to SMTP for ${to}`);
+        }
+      }
+    }
   }
 
-  try {
-    const params = {
-      Source: `GreenReach <${SES_FROM}>`,
-      Destination: { ToAddresses: [to] },
-      Message: {
-        Subject: { Data: subject, Charset: 'UTF-8' },
-        Body: {},
-      },
-    };
-
-    if (html) {
-      params.Message.Body.Html = { Data: html, Charset: 'UTF-8' };
-    }
-    if (text) {
-      params.Message.Body.Text = { Data: text, Charset: 'UTF-8' };
-    }
-
-    const command = new SendEmailCommand(params);
-    const result = await client.send(command);
-    console.log(`[Email] Sent to ${to}: ${subject} (MessageId: ${result.MessageId})`);
-    return { sent: true, messageId: result.MessageId };
-  } catch (err) {
-    console.error(`[Email] Failed to send to ${to}:`, err.message);
-    return { sent: false, error: err.message };
-  }
+  // SMTP fallback (WorkMail)
+  return sendViaSmtp({ to, subject, html, text });
 }
 
 // ═══════════════════════════════════════════════════════════════
