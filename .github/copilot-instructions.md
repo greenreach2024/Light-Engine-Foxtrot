@@ -23,6 +23,18 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 7. **NO cross-origin redirects between LE and Central.** LE has no custom domain (only the raw EB CNAME). Never redirect UI page requests from one server to the other -- it breaks iframes, CSP, and HTTPS. Both servers serve the same static UI files directly.
 8. **NEVER use the raw EB URL in code.** The `light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com` hostname is for deployment only. Do not hardcode it in redirects, links, fetch calls, or any runtime code.
 
+### Recent Fixes (Mar 30, 2026)
+
+17. **Research Integration Layer**
+    - Migration 029: 17 new tables (researcher_orcid_profiles, dataset_dois, osf_projects, research_protocol_versions, instrument_registry, instrument_sessions, instrument_telemetry, workflow_definitions, workflow_runs, globus_transfers, mlflow_experiments, mlflow_runs, research_roles, approval_gates, immutable_run_records, cfd_pipeline_jobs, jupyter_sessions)
+    - New route file: `greenreach-central/routes/research-integrations.js` -- REST endpoints for ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD, MLflow, JupyterHub
+    - GWEN: 19 new tools (74 total) -- ORCID linkage/lookup, DataCite DOI metadata, OSF project management, protocol versioning, instrument registration/telemetry/run requests, workflow creation/submission/status, Globus transfers, governance roles/approvals/immutable records, CFD pipeline jobs/templates
+    - GWEN system prompt: added Research Integration Layer section covering Identity/Provenance, Project Coordination, Instrument Abstraction (SiLA 2, OPC UA, SCPI), Workflow Engine, CFD Pipeline, Data Transfer, Governance
+    - Workspace HTML: 7 new Integrations tabs (Instruments, Workflows, Protocols, Provenance, Governance, CFD Pipeline, Transfers) with lazy-loading data handlers
+    - server.js: mounted researchIntegrationsRouter behind researchAuthGuard
+    - database.js: added 17 tables to auto-creation init function
+    - Deployed both Central and LE
+
 ### Recent Fixes (Mar 29, 2026)
 
 14. **E.V.I.E. LLM Fallback (Anthropic)**
