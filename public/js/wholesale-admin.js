@@ -1908,8 +1908,8 @@
       if (!confirm('Deactivate this buyer account? They will lose API access immediately.')) return;
       const headers = this.getAuthHeaders();
       try {
-        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}`, {
-          method: 'DELETE', headers
+        const res = await fetch(`/api/admin/wholesale/buyers/${encodeURIComponent(buyerId)}/deactivate`, {
+          method: 'POST', headers
         });
         const json = await res.json().catch(() => ({}));
         if (json.status === 'ok') {

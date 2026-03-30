@@ -529,9 +529,9 @@
       document.getElementById('account-contact-name').value = b?.contactName || '';
       document.getElementById('account-email').value = b?.email || '';
       document.getElementById('account-phone').value = b?.phone || '';
-      document.getElementById('account-address').value = b?.location?.street || '';
+      document.getElementById('account-address').value = b?.location?.address1 || b?.location?.street || '';
       document.getElementById('account-city').value = b?.location?.city || '';
-      document.getElementById('account-province').value = b?.location?.province || '';
+      document.getElementById('account-province').value = b?.location?.state || b?.location?.province || '';
       document.getElementById('account-postal').value = b?.location?.postalCode || '';
       document.getElementById('account-buyer-type').value = b?.buyerType || 'restaurant';
     },
