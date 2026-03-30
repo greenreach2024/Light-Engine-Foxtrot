@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import { sendEmail } from '../lib/email-service.js';
+import { adminAuthMiddleware } from '../server/middleware/admin-auth.js';
 
 const router = express.Router();
 
@@ -18,6 +19,11 @@ const pool = new pg.Pool({
   connectionTimeoutMillis: 2000,
 });
 
+// Apply admin auth to all admin wholesale routes
+
+// Apply admin auth to all admin wholesale routes
+router.use(adminAuthMiddleware);
+
 // GET /api/admin/wholesale/buyers - List all wholesale buyers
 router.get('/buyers', async (req, res) => {
   try {
@@ -25,7 +31,7 @@ router.get('/buyers', async (req, res) => {
     
     const offset = (parseInt(page) - 1) * parseInt(limit);
     
-    let query = 'SELECT id, business_name, contact_name, email, buyer_type, location, created_at FROM wholesale_buyers WHERE 1=1';
+    let query = 'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, created_at FROM wholesale_buyers WHERE 1=1';
     const params = [];
     let paramIndex = 1;
 
@@ -38,6 +44,11 @@ router.get('/buyers', async (req, res) => {
       query += ` AND (business_name ILIKE $${paramIndex} OR contact_name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       paramIndex++;
+    }
+
+    if (status) {
+      query += ` AND status = $${paramIndex++}`;
+      params.push(status);
     }
 
     // Count total
@@ -74,7 +85,7 @@ router.get('/buyers/:id', async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      'SELECT id, business_name, contact_name, email, buyer_type, location, created_at FROM wholesale_buyers WHERE id = $1',
+      'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, created_at FROM wholesale_buyers WHERE id = $1',
       [id]
     );
 
@@ -135,7 +146,7 @@ router.put('/buyers/:id', async (req, res) => {
     params.push(id);
 
     const result = await pool.query(
-      `UPDATE wholesale_buyers SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, business_name, contact_name, email, buyer_type, location, created_at`,
+      `UPDATE wholesale_buyers SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING id, business_name, contact_name, email, buyer_type, location, status, phone, created_at`,
       params
     );
 
@@ -286,27 +297,25 @@ router.delete('/buyers/:id', async (req, res) => {
 });
 
 // POST /api/admin/wholesale/buyers/:id/deactivate - Deactivate buyer account
-// Compatibility endpoint for admin UI; deactivation currently performs full removal.
 router.post('/buyers/:id/deactivate', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const checkResult = await pool.query(
-      'SELECT email FROM wholesale_buyers WHERE id = $1',
+    const result = await pool.query(
+      "UPDATE wholesale_buyers SET status = 'deactivated', updated_at = NOW() WHERE id = $1 RETURNING id, email, business_name, status",
       [id]
     );
 
-    if (checkResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ status: 'error', message: 'Buyer not found' });
     }
 
-    await pool.query('DELETE FROM wholesale_buyers WHERE id = $1', [id]);
-
-    console.log(`[Admin] Deactivated buyer ID ${id} (${checkResult.rows[0].email})`);
+    console.log(`[Admin] Deactivated buyer ID ${id} (${result.rows[0].email})`);
 
     return res.json({
       status: 'ok',
-      message: 'Buyer account deactivated'
+      message: 'Buyer account deactivated',
+      data: { buyer: result.rows[0] }
     });
   } catch (error) {
     console.error('Admin deactivate buyer error:', error);
@@ -315,12 +324,30 @@ router.post('/buyers/:id/deactivate', async (req, res) => {
 });
 
 // POST /api/admin/wholesale/buyers/:id/reactivate - Reactivate buyer account
-// Deactivation removes the account, so reactivation is not supported.
 router.post('/buyers/:id/reactivate', async (req, res) => {
-  return res.status(400).json({
-    status: 'error',
-    message: 'Reactivation is not supported. Create a new buyer account instead.'
-  });
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      "UPDATE wholesale_buyers SET status = 'active', updated_at = NOW() WHERE id = $1 RETURNING id, email, business_name, status",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Buyer not found' });
+    }
+
+    console.log(`[Admin] Reactivated buyer ID ${id} (${result.rows[0].email})`);
+
+    return res.json({
+      status: 'ok',
+      message: 'Buyer account reactivated',
+      data: { buyer: result.rows[0] }
+    });
+  } catch (error) {
+    console.error('Admin reactivate buyer error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to reactivate buyer' });
+  }
 });
 
 // GET /api/admin/wholesale/buyers/search - Search buyers by email, name, or business
@@ -333,7 +360,7 @@ router.get('/buyers/search', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, business_name, contact_name, email, buyer_type, created_at 
+      `SELECT id, business_name, contact_name, email, buyer_type, status, phone, created_at 
        FROM wholesale_buyers 
        WHERE business_name ILIKE $1 OR contact_name ILIKE $1 OR email ILIKE $1
        ORDER BY created_at DESC

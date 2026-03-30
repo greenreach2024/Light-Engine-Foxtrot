@@ -91,7 +91,7 @@ router.post('/buyers/register', authRateLimiter, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO wholesale_buyers (business_name, contact_name, email, password_hash, buyer_type, location, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       RETURNING id, business_name, contact_name, email, buyer_type, location, created_at`,
+       RETURNING id, business_name, contact_name, email, buyer_type, location, status, phone, created_at`,
       [businessName, contactName, email.toLowerCase(), passwordHash, buyerType, JSON.stringify(location || {})]
     );
 
@@ -144,7 +144,7 @@ router.post('/buyers/login', authRateLimiter, async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, business_name, contact_name, email, buyer_type, location, password_hash FROM wholesale_buyers WHERE email = $1',
+      'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, password_hash FROM wholesale_buyers WHERE email = $1',
       [email.toLowerCase()]
     );
 
@@ -316,7 +316,7 @@ router.post('/buyers/password-reset', authRateLimiter, async (req, res) => {
 router.get('/buyers/me', requireBuyerAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, business_name, contact_name, email, buyer_type, location, created_at FROM wholesale_buyers WHERE id = $1',
+      'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, created_at FROM wholesale_buyers WHERE id = $1',
       [req.buyerId]
     );
 
@@ -363,8 +363,10 @@ router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
     const location = {
       ...currentLocation,
       street: address ?? currentLocation.street,
+      address1: address ?? currentLocation.address1 ?? currentLocation.street,
       city: city ?? currentLocation.city,
       province: province ?? currentLocation.province,
+      state: province ?? currentLocation.state ?? currentLocation.province,
       postalCode: postalCode ?? currentLocation.postalCode,
       country: country ?? currentLocation.country,
       phone: phone ?? currentLocation.phone
@@ -376,10 +378,11 @@ router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
              contact_name = $2,
              email = $3,
              buyer_type = $4,
-             location = $5
-       WHERE id = $6
-       RETURNING id, business_name, contact_name, email, buyer_type, location, created_at`,
-      [businessName, contactName, email.toLowerCase(), buyerType || 'restaurant', JSON.stringify(location), req.buyerId]
+             location = $5,
+             phone = $6
+       WHERE id = $7
+       RETURNING id, business_name, contact_name, email, buyer_type, location, status, phone, created_at`,
+      [businessName, contactName, email.toLowerCase(), buyerType || 'restaurant', JSON.stringify(location), phone || null, req.buyerId]
     );
 
     const buyer = update.rows[0];
