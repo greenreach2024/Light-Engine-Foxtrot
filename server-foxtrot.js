@@ -238,6 +238,7 @@ import farmSquareSetupRouter from './routes/farm-square-setup.js';
 import farmStripeSetupRouter from './routes/farm-stripe-setup.js';
 import mdnsDiscoveryRouter from './routes/mdns-discovery.js';
 import emailRouter from './server/routes/email-routes.js';
+import { sendEmail as sendEmailViaSES } from './lib/email-service.js';
 import adminFarmManagementRouter from './routes/admin-farm-management.js';
 import qualityControlRouter from './routes/quality-control.js';
 import aiVisionRouter from './routes/ai-vision.js';
@@ -18911,7 +18912,7 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
   }
   
   const token = authHeader.substring(7);
-  const { email, name, role, password, farmId } = req.body;
+  const { email, name, role, password, farmId, sendEmail: shouldSendEmail, farmName, personalMessage } = req.body;
   
   if (!email || !name || !role || !password || !farmId) {
     return res.status(400).json({
@@ -18954,9 +18955,71 @@ app.post('/api/users/create', asyncHandler(async (req, res) => {
       [farmId, email, name, role, passwordHash]
     );
     
+    // Send invitation email if requested
+    let emailSent = false;
+    if (shouldSendEmail) {
+      try {
+        const firstName = (name || '').split(/\s+/)[0] || 'there';
+        const roleLabel = (role || 'operator').charAt(0).toUpperCase() + (role || 'operator').slice(1);
+        const invLoginUrl = 'https://greenreachgreens.com/farm-admin-login.html';
+        const invDashUrl = 'https://greenreachgreens.com/farm-admin.html';
+        const msgBlock = personalMessage
+          ? `<p style="color:#4a5568;font-size:14px;line-height:1.6;margin:0 0 24px;padding:16px;background:#f8fafc;border-left:3px solid #10b981;border-radius:4px;font-style:italic;">"${personalMessage}"</p>`
+          : '';
+        const msgText = personalMessage ? `\nMessage from admin: "${personalMessage}"\n` : '';
+
+        const invSubject = `You've been invited to ${farmName || 'a Light Engine farm'}`;
+        const invHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+<tr><td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px;text-align:center;">
+<h1 style="color:white;margin:0;font-size:24px;font-weight:700;">You're Invited</h1>
+<p style="color:#94a3b8;margin:8px 0 0;font-size:14px;">Join ${farmName || 'a Light Engine farm'} on Light Engine</p>
+</td></tr>
+<tr><td style="padding:32px 40px;">
+<p style="color:#1a202c;font-size:16px;line-height:1.6;margin:0 0 20px;">Hi ${firstName},</p>
+<p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 24px;">You have been added as a <strong>${roleLabel}</strong> on <strong>${farmName || 'Light Engine'}</strong>. Use the credentials below to log in:</p>
+${msgBlock}
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;margin:0 0 24px;">
+<tr><td style="padding:20px 24px;">
+<p style="color:#166534;font-weight:700;font-size:15px;margin:0 0 16px;">Your Login Credentials</p>
+<table width="100%" cellspacing="0" cellpadding="0">
+<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;width:140px;">Farm ID</td>
+<td style="padding:8px 0;color:#1a202c;font-size:16px;font-weight:700;font-family:monospace;">${farmId}</td></tr>
+<tr><td style="padding:8px 0;border-top:1px solid #d1fae5;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;">Email</td>
+<td style="padding:8px 0;border-top:1px solid #d1fae5;color:#1a202c;font-size:15px;font-weight:600;">${email}</td></tr>
+<tr><td style="padding:8px 0;border-top:1px solid #d1fae5;color:#6b7280;font-size:13px;font-weight:500;text-transform:uppercase;">Temp Password</td>
+<td style="padding:8px 0;border-top:1px solid #d1fae5;color:#1a202c;font-size:16px;font-weight:700;font-family:monospace;">${password}</td></tr>
+</table></td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 24px;">
+<a href="${invDashUrl}" style="display:inline-block;background:#10b981;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Go to Farm Dashboard</a>
+</td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;margin:0 0 16px;">
+<tr><td style="padding:14px 16px;">
+<p style="color:#92400e;font-weight:700;font-size:13px;margin:0 0 4px;">Save This Email</p>
+<p style="color:#78350f;font-size:13px;line-height:1.5;margin:0;">Keep this email for your records. Please change your password after first login.</p>
+</td></tr></table>
+</td></tr>
+<tr><td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+<p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">GreenReach -- The foundation for smarter farms</p>
+<p style="color:#94a3b8;font-size:12px;margin:0;"><a href="https://greenreachgreens.com" style="color:#64748b;text-decoration:none;">greenreachgreens.com</a></p>
+</td></tr></table></td></tr></table></body></html>`;
+
+        const invText = `You're Invited to ${farmName || 'Light Engine'}!\n\nHi ${firstName},\n\nYou have been added as a ${roleLabel} on ${farmName || 'Light Engine'}.\n${msgText}\nYOUR LOGIN CREDENTIALS\n----------------------------------------------\nFarm ID:        ${farmId}\nEmail:          ${email}\nTemp Password:  ${password}\n\nGETTING STARTED\n----------------------------------------------\n1. Open: ${invDashUrl}\n2. Enter your Farm ID and Temporary Password\n3. Change your password after first login\n\nLogin page: ${invLoginUrl}\n\nIMPORTANT: Save this email and change your password after first login.\n\n--\nGreenReach -- The foundation for smarter farms\ngreenreachgreens.com`;
+
+        const result = await sendEmailViaSES({ to: email, subject: invSubject, html: invHtml, text: invText, from: 'GreenReach <info@greenreachgreens.com>' });
+        emailSent = result.sent;
+        console.log(`[/api/users/create] Invite email to ${email}: ${result.sent ? 'sent' : 'failed -- ' + (result.error || 'unknown')}`);
+      } catch (emailErr) {
+        console.error(`[/api/users/create] Invite email error for ${email}:`, emailErr.message);
+      }
+    }
+
     res.json({
       status: 'success',
       message: 'User created successfully',
+      emailSent,
       user: { email, name, role }
     });
     
