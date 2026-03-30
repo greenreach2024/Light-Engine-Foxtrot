@@ -1340,7 +1340,7 @@ function renderContextualSidebar() {
                 {
                     title: 'AI Governance',
                     items: [
-                        { label: 'F.A.Y.E. Core', view: 'faye-core', external: '/faye-core.html' },
+                        { label: 'F.A.Y.E. Core', view: 'faye-core', iframe: '/faye-core.html' },
                         { label: 'AI Rules', view: 'ai-rules' },
                         { label: 'AI Reference Sites', view: 'ai-reference' },
                         { label: 'AI Agent Monitor', view: 'ai-monitoring' }
@@ -1464,7 +1464,13 @@ function renderContextualSidebar() {
         <div class="nav-section">
             <div class="nav-section-title">${section.title}</div>
             ${section.items.map(item => {
-                if (item.external) {
+                if (item.iframe) {
+                    return `
+                        <div class="nav-item" onclick="navigateIframe('${item.view}', '${item.iframe}', this)" style="cursor: pointer;">
+                            <span>${item.label}</span>
+                        </div>
+                    `;
+                } else if (item.external) {
                     return `
                         <a href="${item.external}" class="nav-item" style="text-decoration: none; color: inherit; display: block;">
                             <span>${item.label}</span>
@@ -5592,11 +5598,53 @@ async function navigate(view, element) {
             document.getElementById('accounting-view').style.display = 'block';
             await loadCentralAccounting();
             break;
+
+        case 'faye-core':
+            loadIframeView('/faye-core.html');
+            break;
             
         default:
             console.log(`Navigate to: ${view} (not implemented)`);
             document.getElementById('overview-view').style.display = 'block';
     }
+}
+
+/**
+ * Load a page into the central admin iframe panel
+ */
+function loadIframeView(url) {
+    document.querySelectorAll('.view').forEach(v => { v.style.display = 'none'; });
+    const container = document.getElementById('iframe-view');
+    const iframe = document.getElementById('central-admin-iframe');
+    if (!container || !iframe) return;
+    try {
+        const parsed = new URL(url, window.location.origin);
+        parsed.searchParams.set('embedded', '1');
+        iframe.src = parsed.pathname + parsed.search;
+    } catch {
+        iframe.src = url;
+    }
+    container.style.display = 'block';
+    iframe.onload = () => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+            // Hide topbar nav inside iframe -- the parent sidebar provides navigation
+            const topbar = doc.querySelector('.faye-topbar, .evie-topbar, .page-topbar, header.topbar');
+            if (topbar) topbar.style.display = 'none';
+            // Hide any "back to admin" links
+            doc.querySelectorAll('a[href*="GR-central-admin"], a[href*="LE-farm-admin"]').forEach(a => { a.style.display = 'none'; });
+        } catch { /* cross-origin or security restriction -- ignore */ }
+    };
+}
+
+/**
+ * Navigate to an iframe view from sidebar nav click
+ */
+function navigateIframe(view, url, element) {
+    document.querySelectorAll('.nav-item').forEach(item => { item.classList.remove('active'); });
+    if (element) element.classList.add('active');
+    loadIframeView(url);
 }
 
 /**
