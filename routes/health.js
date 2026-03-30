@@ -925,4 +925,138 @@ router.post('/devices/:deviceId/check', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/health/vitality
+ * Comprehensive farm vitality dashboard endpoint.
+ * Aggregates environment, crop readiness, nutrient health, and operations
+ * into a unified vitality score consumed by farm-vitality.html.
+ */
+router.get('/vitality', async (req, res) => {
+  try {
+    const envData = await loadEnvData();
+    const scoreData = calculateFarmHealthScore(envData);
+    const now = Date.now();
+
+    // --- Environment component (from health scorer) ---
+    const envScore = scoreData.ok ? scoreData.farm_score : 0;
+    const envUpdatedAt = envData?.zones?.[0]?.sensors?.tempC?.updatedAt;
+    const envAgeMin = envUpdatedAt
+      ? Math.round((now - new Date(envUpdatedAt).getTime()) / 60000)
+      : null;
+
+    function freshnessStatus(ageMin) {
+      if (ageMin === null) return 'no_data';
+      if (ageMin <= 15) return 'fresh';
+      if (ageMin <= 60) return 'acceptable';
+      return 'stale';
+    }
+
+    function overallStatus(score) {
+      if (score >= 85) return 'excellent';
+      if (score >= 70) return 'good';
+      if (score >= 50) return 'fair';
+      if (score >= 30) return 'degraded';
+      return 'critical';
+    }
+
+    // --- Crop Readiness component ---
+    let cropScore = 0;
+    let cropAgeMin = null;
+    try {
+      const regPath = join(__dirname, '..', 'public', 'data', 'crop-registry.json');
+      const regRaw = readFileSync(regPath, 'utf8');
+      const registry = JSON.parse(regRaw);
+      const crops = Array.isArray(registry) ? registry : registry.crops || [];
+      if (crops.length > 0) {
+        const activeCrops = crops.filter(c => c.status === 'active' || c.active);
+        cropScore = activeCrops.length > 0
+          ? Math.min(100, Math.round((activeCrops.length / Math.max(crops.length, 1)) * 80 + 20))
+          : 40;
+        const stat = await fs.stat(regPath);
+        cropAgeMin = Math.round((now - stat.mtimeMs) / 60000);
+      }
+    } catch (err) {
+      console.warn('[Vitality] Crop registry not available:', err.message);
+    }
+
+    // --- Nutrient Health component ---
+    let nutrientScore = 0;
+    let nutrientAgeMin = null;
+    try {
+      const nutPath = join(__dirname, '..', 'data', 'nutrients-inventory.db');
+      const stat = await fs.stat(nutPath);
+      nutrientAgeMin = Math.round((now - stat.mtimeMs) / 60000);
+      nutrientScore = nutrientAgeMin <= 1440 ? 75 : 50;
+    } catch {
+      try {
+        const ntPath = join(__dirname, '..', 'data', 'nutrient-targets.db');
+        const stat = await fs.stat(ntPath);
+        nutrientAgeMin = Math.round((now - stat.mtimeMs) / 60000);
+        nutrientScore = 60;
+      } catch {
+        nutrientScore = 0;
+      }
+    }
+
+    // --- Operations component (devices/system) ---
+    let opsScore = 0;
+    let opsAgeMin = null;
+    try {
+      const dhPath = join(__dirname, '..', 'data', 'device-health.db');
+      const stat = await fs.stat(dhPath);
+      opsAgeMin = Math.round((now - stat.mtimeMs) / 60000);
+      opsScore = opsAgeMin <= 60 ? 85 : (opsAgeMin <= 1440 ? 65 : 40);
+    } catch {
+      opsScore = envScore > 0 ? 70 : 0;
+    }
+
+    // --- Overall weighted score ---
+    const weights = { environment: 0.40, crop_readiness: 0.20, nutrient_health: 0.20, operations: 0.20 };
+    const overallScore = Math.round(
+      envScore * weights.environment +
+      cropScore * weights.crop_readiness +
+      nutrientScore * weights.nutrient_health +
+      opsScore * weights.operations
+    );
+
+    res.json({
+      ok: true,
+      timestamp: new Date().toISOString(),
+      overall_score: overallScore,
+      overall_status: overallStatus(overallScore),
+      components: {
+        environment: {
+          score: envScore,
+          status: overallStatus(envScore),
+          data_freshness: { status: freshnessStatus(envAgeMin), age_minutes: envAgeMin, stale: envAgeMin !== null && envAgeMin > 60 },
+          zones: scoreData.zones || []
+        },
+        crop_readiness: {
+          score: cropScore,
+          status: overallStatus(cropScore),
+          data_freshness: { status: freshnessStatus(cropAgeMin), age_minutes: cropAgeMin, stale: cropAgeMin !== null && cropAgeMin > 1440 }
+        },
+        nutrient_health: {
+          score: nutrientScore,
+          status: overallStatus(nutrientScore),
+          data_freshness: { status: freshnessStatus(nutrientAgeMin), age_minutes: nutrientAgeMin, stale: nutrientAgeMin !== null && nutrientAgeMin > 1440 }
+        },
+        operations: {
+          score: opsScore,
+          status: overallStatus(opsScore),
+          data_freshness: { status: freshnessStatus(opsAgeMin), age_minutes: opsAgeMin, stale: opsAgeMin !== null && opsAgeMin > 60 }
+        }
+      },
+      data_freshness: {
+        environment: { status: freshnessStatus(envAgeMin), age_minutes: envAgeMin },
+        nutrients: { status: freshnessStatus(nutrientAgeMin), age_minutes: nutrientAgeMin },
+        inventory: { status: freshnessStatus(cropAgeMin), age_minutes: cropAgeMin }
+      }
+    });
+  } catch (error) {
+    console.error('[Vitality] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 export default router;
