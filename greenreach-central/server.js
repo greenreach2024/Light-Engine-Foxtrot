@@ -691,31 +691,7 @@ const _htmlDirs = [
   path.join(__dirname, '..', 'public')
 ];
 
-let LE_PUBLIC_BASE_URL = (process.env.LE_PUBLIC_URL
-  || process.env.FARM_EDGE_URL
-  || 'https://light-engine-foxtrot-prod-v2.eba-ukiyyqf9.us-east-1.elasticbeanstalk.com')
-  .replace(/\/$/, '');
-
-if (LE_PUBLIC_BASE_URL.startsWith('http://')) {
-  LE_PUBLIC_BASE_URL = LE_PUBLIC_BASE_URL.replace(/^http:\/\//, 'https://');
-}
-
-const LE_RESEARCH_UI_PATHS = new Set([
-  '/views/research-workspace.html',
-  '/gwen-core.html',
-  '/styles/gwen-core.css'
-]);
-
 app.use((req, res, next) => {
-  if (LE_RESEARCH_UI_PATHS.has(req.path)) {
-    const target = `${LE_PUBLIC_BASE_URL}${req.path}`;
-    if (req.query && Object.keys(req.query).length > 0) {
-      const qs = new URLSearchParams(req.query).toString();
-      return res.redirect(302, `${target}?${qs}`);
-    }
-    return res.redirect(302, target);
-  }
-
   // Only intercept .html requests (skip API routes, data files, JS/CSS/images)
   const reqPath = req.path;
   if (!reqPath.endsWith('.html')) return next();
