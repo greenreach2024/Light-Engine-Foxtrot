@@ -130,12 +130,24 @@ async function persistBuyer(buyer) {
       params
     );
   } catch (err) {
-    // If columns are missing, attempt to add them and retry once
-    if (err.message && err.message.includes('does not exist')) {
-      console.warn('[BuyerPersist] Schema mismatch, attempting column repair:', err.message);
+    // Schema repair: fix missing columns or wrong column types, then retry
+    const msg = err.message || '';
+    const needsRepair = msg.includes('does not exist') || msg.includes('invalid input syntax for type integer');
+    if (needsRepair) {
+      console.warn('[BuyerPersist] Schema mismatch, attempting repair:', msg);
       try {
+        // Fix id column type if still INTEGER (legacy migration)
+        const colCheck = await query(
+          `SELECT data_type FROM information_schema.columns WHERE table_name = 'wholesale_buyers' AND column_name = 'id'`
+        );
+        if (colCheck.rows.length > 0 && colCheck.rows[0].data_type === 'integer') {
+          await query(`ALTER TABLE wholesale_buyers ALTER COLUMN id TYPE VARCHAR(255) USING id::text`);
+          console.log('[BuyerPersist] Converted id column from INTEGER to VARCHAR(255)');
+        }
+        // Add missing columns
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`);
         await query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+        // Retry the insert
         await query(
           `INSERT INTO wholesale_buyers
             (id, business_name, contact_name, email, buyer_type, location, password_hash, status, phone, created_at, updated_at)
@@ -152,13 +164,13 @@ async function persistBuyer(buyer) {
                updated_at = EXCLUDED.updated_at`,
           params
         );
-        console.log('[BuyerPersist] Column repair succeeded, buyer persisted');
+        console.log('[BuyerPersist] Schema repair succeeded, buyer persisted');
         return;
       } catch (retryErr) {
-        console.warn('[BuyerPersist] Column repair failed:', retryErr.message);
+        console.warn('[BuyerPersist] Schema repair failed:', retryErr.message);
       }
     } else {
-      console.warn('[BuyerPersist] Error:', err.message);
+      console.warn('[BuyerPersist] Error:', msg);
     }
     // Non-fatal: buyer exists in memory, DB persist is best-effort
   }
