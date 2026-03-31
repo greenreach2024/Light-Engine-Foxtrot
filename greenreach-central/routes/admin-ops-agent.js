@@ -1909,13 +1909,13 @@ export const ADMIN_TOOL_CATALOG = {
 
         // 2. Action type distribution (detect new/unusual action types in last 48h vs baseline)
         const recentActions = await dbQuery(
-          `SELECT action_type, COUNT(*) AS cnt
+          `SELECT tool_name AS action_type, COUNT(*) AS cnt
            FROM faye_decision_log
            WHERE created_at > NOW() - INTERVAL '48 hours'
-           GROUP BY action_type ORDER BY cnt DESC`
+           GROUP BY tool_name ORDER BY cnt DESC`
         );
         const baselineActions = await dbQuery(
-          `SELECT DISTINCT action_type
+          `SELECT DISTINCT tool_name AS action_type
            FROM faye_decision_log
            WHERE created_at > NOW() - ($1 || ' days')::interval
              AND created_at < NOW() - INTERVAL '48 hours'`,
@@ -2151,10 +2151,10 @@ export const ADMIN_TOOL_CATALOG = {
              WHERE last_seen_at < NOW() - INTERVAL '2 hours'`
           ),
           dbQuery(
-            `SELECT action_type, COUNT(*) AS cnt
+            `SELECT tool_name AS action_type, COUNT(*) AS cnt
              FROM faye_decision_log
              WHERE created_at > NOW() - ($1 || ' hours')::interval
-             GROUP BY action_type ORDER BY cnt DESC LIMIT 10`,
+             GROUP BY tool_name ORDER BY cnt DESC LIMIT 10`,
             [hours]
           )
         ]);

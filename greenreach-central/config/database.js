@@ -3657,6 +3657,24 @@ async function runMigrations(client) {
     logger.warn('Migration 051 warning:', err.message);
   }
 
+  // --- Migration 052: Add missing columns to farm_heartbeats for security behavior analysis ---
+  try {
+    await client.query(`
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS farm_name VARCHAR(255);
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS cpu_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS memory_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS disk_percent FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS uptime_seconds FLOAT;
+      ALTER TABLE farm_heartbeats ADD COLUMN IF NOT EXISTS node_version VARCHAR(50);
+      CREATE INDEX IF NOT EXISTS idx_heartbeats_last_seen ON farm_heartbeats(last_seen_at DESC);
+    `);
+    await client.query(`UPDATE farm_heartbeats SET last_seen_at = timestamp WHERE last_seen_at IS NULL`);
+    logger.info('farm_heartbeats columns added (migration 052)');
+  } catch (err) {
+    logger.warn('Migration 052 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 
