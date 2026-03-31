@@ -586,8 +586,8 @@ body {
       <span class="section-tag">Continuous Monitoring</span>
       <h2 class="section-title">Living Awareness Across Every Room</h2>
       <p class="section-desc">
-        E.V.I.E. watches every sensor, every room, every moment.
-        Temperature, humidity, CO2, EC, pH -- tracked continuously and surfaced
+        E.V.I.E. watches every sensor, every zone, every moment.
+        Temperature and humidity -- tracked continuously across the grow room and surfaced
         only when something demands your attention.
       </p>
     </div>
@@ -596,7 +596,7 @@ body {
     <div class="demo-panel">
       <div class="demo-panel-header">
         <div class="demo-panel-title">
-          <span>&#9679;</span> Multi-Room Sensor Feed -- 24 Hour Window
+          <span>&#9679;</span> Multi-Sensor Feed -- 24 Hour Window
         </div>
         <span class="demo-panel-tag tag-green">LIVE SENSORS</span>
       </div>
@@ -610,7 +610,7 @@ body {
     <div class="demo-panel">
       <div class="demo-panel-header">
         <div class="demo-panel-title">
-          <span>&#9679;</span> Current Conditions -- All Rooms
+          <span>&#9679;</span> Current Conditions -- All Zones
         </div>
         <span class="demo-panel-tag tag-cyan">REAL-TIME</span>
       </div>
@@ -641,8 +641,8 @@ body {
       <h2 class="section-title">Growers Set the Vision. E.V.I.E. Executes.</h2>
       <p class="section-desc">
         Define target conditions once. E.V.I.E. continuously monitors the gap between
-        actual and ideal, adjusts light recipes, triggers nutrient dosing, and reallocates
-        devices -- all without lifting a finger.
+        actual and ideal, adjusts lighting schedules, reallocates devices, and flags
+        environmental drift before it becomes a problem.
       </p>
     </div>
 
@@ -650,7 +650,7 @@ body {
     <div class="demo-panel">
       <div class="demo-panel-header">
         <div class="demo-panel-title">
-          <span>&#9679;</span> Target Range Enforcement -- Propagation Room
+          <span>&#9679;</span> Target Range Enforcement -- Main Grow Room
         </div>
         <span class="demo-panel-tag tag-green">AUTO-CONTROL</span>
       </div>
@@ -662,7 +662,7 @@ body {
     <div class="demo-panel">
       <div class="demo-panel-header">
         <div class="demo-panel-title">
-          <span>&#9679;</span> Light Recipe -- PPFD Profile Over 24 Hours
+          <span>&#9679;</span> Light Schedule -- ZipGrow Photoperiod Over 24 Hours
         </div>
         <span class="demo-panel-tag tag-cyan">LIGHT SCHEDULE</span>
       </div>
@@ -744,12 +744,12 @@ body {
   <div class="scene" id="scene-zones" data-scene="zones">
     <div class="section-header">
       <span class="section-tag">Multi-Zone Environments</span>
-      <h2 class="section-title">One Room. Infinite Growing Worlds.</h2>
+      <h2 class="section-title">One Room. Two Zones. Independent Monitoring.</h2>
       <p class="section-desc">
-        A single grow room can host four entirely distinct microclimates.
-        Microgreens thrive at 24C with short days. Lettuce heads want 18C and sixteen hours of light.
-        Basil demands warmth and airflow. Arugula prefers cooler nights.
-        E.V.I.E. manages them all -- simultaneously, independently, intelligently.
+        The Main Grow Room runs 78 ZipGrow towers across two sensor zones.
+        Zone 1 and Zone 2 each have dedicated SwitchBot WoIOSensors tracking temperature
+        and humidity independently. E.V.I.E. monitors both simultaneously, detects
+        environmental drift between them, and flags divergence before it impacts the crop.
       </p>
     </div>
 
@@ -757,7 +757,7 @@ body {
     <div class="demo-panel">
       <div class="demo-panel-header">
         <div class="demo-panel-title">
-          <span>&#9679;</span> Room A -- Zone Layout Map
+          <span>&#9679;</span> Main Grow Room -- Zone Layout
         </div>
         <span class="demo-panel-tag tag-green">ZONE MAP</span>
       </div>
@@ -822,24 +822,24 @@ body {
       </div>
       <div class="cap-card">
         <span class="cap-card-icon" style="color: #f59e0b;">&#9733;</span>
-        <div class="cap-card-title">G.W.E.N. -- Research Intelligence</div>
-        <div class="cap-card-desc">Receives live sensor data from E.V.I.E., generates hypotheses, identifies growth patterns in historical data, and returns actionable research insights.</div>
+        <div class="cap-card-title">G.W.E.N. -- Grants, Workplans, Evidence &amp; Navigation</div>
+        <div class="cap-card-desc">Research intelligence with 103 tools. Manages studies, drafts grant narratives, maintains electronic lab notebooks, generates hypotheses from sensor data, and navigates the full research lifecycle.</div>
         <div class="cap-card-tools">
-          <span class="cap-tool-tag">get_sensor_data</span>
-          <span class="cap-tool-tag">get_farm_layout_context</span>
+          <span class="cap-tool-tag">get_study_list</span>
           <span class="cap-tool-tag">generate_hypothesis</span>
-          <span class="cap-tool-tag">get_dataset_summary</span>
+          <span class="cap-tool-tag">search_grant_programs</span>
+          <span class="cap-tool-tag">draft_eln_entry</span>
         </div>
       </div>
       <div class="cap-card">
         <span class="cap-card-icon" style="color: var(--evie-violet);">&#9674;</span>
-        <div class="cap-card-title">F.A.Y.E. -- Admin Intelligence</div>
-        <div class="cap-card-desc">Reviews high-impact decisions before execution. Issues directives for pricing, fulfillment, and compliance. Acts as the authorization layer for the farm.</div>
+        <div class="cap-card-title">F.A.Y.E. -- Farm Autonomy &amp; Yield Engine</div>
+        <div class="cap-card-desc">Governed operations intelligence with 99 tools. Security audits, revenue analysis, order management, farm diagnostics, anomaly detection, and progressive automation with human oversight.</div>
         <div class="cap-card-tools">
-          <span class="cap-tool-tag">get_faye_directives</span>
-          <span class="cap-tool-tag">request_faye_review</span>
-          <span class="cap-tool-tag">request_human_approval</span>
-          <span class="cap-tool-tag">get_pending_approvals</span>
+          <span class="cap-tool-tag">get_admin_alerts</span>
+          <span class="cap-tool-tag">run_security_audit</span>
+          <span class="cap-tool-tag">analyze_revenue_trend</span>
+          <span class="cap-tool-tag">diagnose_le_health</span>
         </div>
       </div>
     </div>
@@ -1134,10 +1134,10 @@ body {
 
     var pts = 48; // 30-min intervals over 24h
     var rooms = [
-      { label: 'Propagation',   color: '#10b981', base: 24.5, amp: 1.5, phase: 0 },
-      { label: 'Veg Room A',    color: '#06b6d4', base: 21.0, amp: 2.0, phase: 0.8 },
-      { label: 'Finishing',     color: '#8b5cf6', base: 18.5, amp: 1.2, phase: 1.6 },
-      { label: 'Microgreens',   color: '#f59e0b', base: 22.0, amp: 1.8, phase: 2.4 }
+      { label: 'Sen 1 (Zone 1)',  color: '#10b981', base: 21.2, amp: 1.4, phase: 0 },
+      { label: 'Sen 2 (Zone 2)',  color: '#06b6d4', base: 20.8, amp: 1.6, phase: 0.5 },
+      { label: 'Sen 3 (Zone 2)',  color: '#8b5cf6', base: 21.0, amp: 1.3, phase: 1.2 },
+      { label: 'Sen 4 (Zone 1)',  color: '#f59e0b', base: 21.5, amp: 1.5, phase: 1.8 }
     ];
 
     // Generate data
@@ -1217,14 +1217,12 @@ body {
 
   function renderConditionsCards() {
     var rooms = [
-      { label: 'Propagation',  temp: '24.3C',  humidity: '72%',  co2: '820ppm', trend: 'up', status: 'optimal' },
-      { label: 'Veg Room A',   temp: '20.8C',  humidity: '68%',  co2: '760ppm', trend: 'flat', status: 'optimal' },
-      { label: 'Finishing',    temp: '18.4C',  humidity: '65%',  co2: '840ppm', trend: 'down', status: 'warn' },
-      { label: 'Microgreens',  temp: '22.1C',  humidity: '74%',  co2: '790ppm', trend: 'up', status: 'optimal' },
-      { label: 'Nutrient EC',  temp: '1.8mS',  humidity: '--',   co2: '--',     trend: 'up', status: 'optimal' },
-      { label: 'pH Main',      temp: '6.2',    humidity: '--',   co2: '--',     trend: 'warn', status: 'warn' }
+      { label: 'Zone 1 Temp',     temp: '21.4C',  humidity: '--', co2: '--', trend: 'up', status: 'optimal' },
+      { label: 'Zone 1 Humidity', temp: '62%',    humidity: '--', co2: '--', trend: 'flat', status: 'optimal' },
+      { label: 'Zone 2 Temp',     temp: '20.9C',  humidity: '--', co2: '--', trend: 'flat', status: 'optimal' },
+      { label: 'Zone 2 Humidity', temp: '58%',    humidity: '--', co2: '--', trend: 'down', status: 'warn' }
     ];
-    var colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#f59e0b'];
+    var colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b'];
     var html = rooms.map(function (r, i) {
       return '<div class="data-card-mini">' +
         '<span class="data-card-mini-value" style="color:' + colors[i] + ';">' + r.temp + '</span>' +
@@ -1239,9 +1237,9 @@ body {
 
   function renderAlerts() {
     var items = [
-      { title: 'pH Drift Detected -- Finishing Room', detail: 'pH reading 5.9 -- 0.3 below lower target threshold. Recommend buffer adjustment within 30 minutes.', severity: 'warn', domain: 'Nutrient', ago: '4m ago' },
-      { title: 'Harvest Due -- Bay 12, Bibb Lettuce', detail: 'Day 22. Projected head weight 185g. Delivery window tomorrow 06:00. Recommended action: harvest today.', severity: 'optimal', domain: 'Harvest', ago: '8m ago' },
-      { title: 'SwitchBot H7 -- No Reading', detail: 'Zone B sensor offline 12 minutes. Last value 21.4C. Adjacent zone sensors within normal range.', severity: 'alert', domain: 'Sensor', ago: '12m ago' }
+      { title: 'Humidity Drift -- Zone 2', detail: 'Humidity reading 58% -- below target of 65%. Trending down over last 2 hours. Sen 2 and Sen 3 both confirming. Zone 1 sensors within normal range.', severity: 'warn', domain: 'Environment', ago: '4m ago' },
+      { title: 'Harvest Due -- Tower 12, Bibb Butterhead', detail: 'Day 22. Projected head weight 185g. Delivery window tomorrow 06:00. Recommended action: harvest today.', severity: 'optimal', domain: 'Harvest', ago: '8m ago' },
+      { title: 'Sen 3 -- Battery Low', detail: 'SwitchBot WoIOSensor in Zone 2 reporting 60% battery. Schedule replacement within 30 days.', severity: 'alert', domain: 'Sensor', ago: '12m ago' }
     ];
     var html = items.map(function (a) {
       var borderColor = a.severity === 'alert' ? '#f43f5e' : a.severity === 'warn' ? '#f59e0b' : '#10b981';
@@ -1260,12 +1258,8 @@ body {
   // ================================================================
   function renderTargetRanges() {
     var params = [
-      { label: 'Temperature',  current: 24.3, target: 24.0, min: 22, max: 28, unit: 'C',   color: '#10b981' },
-      { label: 'Humidity',     current: 72,   target: 70,   min: 55, max: 85, unit: '%',   color: '#06b6d4' },
-      { label: 'CO2',          current: 820,  target: 800,  min: 400, max: 1200, unit: 'ppm', color: '#8b5cf6' },
-      { label: 'VPD',          current: 0.9,  target: 1.0,  min: 0.4, max: 1.8, unit: 'kPa', color: '#f59e0b' },
-      { label: 'EC Nutrient',  current: 1.8,  target: 1.8,  min: 0.5, max: 3.0, unit: 'mS', color: '#10b981' },
-      { label: 'pH',           current: 5.9,  target: 6.2,  min: 5.0, max: 7.5, unit: '',  color: '#f43f5e' }
+      { label: 'Temperature',  current: 21.2, target: 21.0, min: 15, max: 28, unit: 'C',   color: '#10b981' },
+      { label: 'Humidity',     current: 60,   target: 65,   min: 40, max: 85, unit: '%',   color: '#06b6d4' }
     ];
     var html = params.map(function (p) {
       var pct = ((p.current - p.min) / (p.max - p.min)) * 100;
@@ -1300,10 +1294,8 @@ body {
 
     // Multi-zone PPFD schedule
     var schedules = [
-      { label: 'Propagation',  color: '#10b981', on: 6, off: 22, peak: 180 },
-      { label: 'Veg Room A',   color: '#06b6d4', on: 5, off: 21, peak: 280 },
-      { label: 'Finishing',    color: '#8b5cf6', on: 7, off: 23, peak: 350 },
-      { label: 'Microgreens',  color: '#f59e0b', on: 4, off: 20, peak: 150 }
+      { label: 'Zone 1 (16h)',  color: '#10b981', on: 5, off: 21, peak: 350 },
+      { label: 'Zone 2 (18h)',  color: '#06b6d4', on: 4, off: 22, peak: 350 }
     ];
 
     ctx.fillStyle = '#060c16';
@@ -1358,11 +1350,11 @@ body {
 
   function renderDeviceStatus() {
     var devices = [
-      { name: 'SwitchBot Hub 2 -- Zone A',   type: 'Hub',      protocol: 'BLE',     status: 'online',  room: 'Veg Room A' },
-      { name: 'SwitchBot Temp/Hum -- Bay 3', type: 'Sensor',   protocol: 'BLE',     status: 'online',  room: 'Finishing' },
-      { name: 'SwitchBot Meter Pro -- B12',  type: 'Sensor',   protocol: 'BLE',     status: 'online',  room: 'Microgreens' },
-      { name: 'SwitchBot H7 -- Zone B',      type: 'Sensor',   protocol: 'BLE',     status: 'offline', room: 'Propagation' },
-      { name: 'LED Driver Array 1',           type: 'Light',    protocol: 'RS-485',  status: 'online',  room: 'Veg Room A' }
+      { name: 'Hub Mini 7E',    type: 'Hub',        protocol: 'WiFi / Cloud API', status: 'online',  room: 'Main Grow Room' },
+      { name: 'Sen 1 (Zone 1)', type: 'WoIOSensor', protocol: 'BLE to Hub',       status: 'online',  room: 'Zone 1' },
+      { name: 'Sen 2 (Zone 2)', type: 'WoIOSensor', protocol: 'BLE to Hub',       status: 'online',  room: 'Zone 2' },
+      { name: 'Sen 3 (Zone 2)', type: 'WoIOSensor', protocol: 'BLE to Hub',       status: 'online',  room: 'Zone 2' },
+      { name: 'Sen 4 (Zone 1)', type: 'WoIOSensor', protocol: 'BLE to Hub',       status: 'online',  room: 'Zone 1' }
     ];
     var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' +
       devices.map(function (d) {
@@ -1383,12 +1375,10 @@ body {
   // ================================================================
   function renderPlantingsTable() {
     var plantings = [
-      { crop: 'Bibb Butterhead',  room: 'Veg Room A',  tray: 'Bay 12', stage: 'Finishing', day: 22, harvest: 2 },
-      { crop: 'Baby Arugula',     room: 'Microgreens', tray: 'Bay 04', stage: 'Germination', day: 5, harvest: 7 },
-      { crop: 'Sweet Basil',      room: 'Veg Room A',  tray: 'Bay 08', stage: 'Vegetative', day: 14, harvest: 10 },
-      { crop: 'Kale "Winterbor"', room: 'Finishing',   tray: 'Bay 16', stage: 'Finishing', day: 28, harvest: 1 },
-      { crop: 'Bright Lights Chard', room: 'Veg Room A', tray: 'Bay 06', stage: 'Vegetative', day: 11, harvest: 12 },
-      { crop: 'Sunflower Shoots', room: 'Propagation', tray: 'Rack 2', stage: 'Germination', day: 3, harvest: 8 }
+      { crop: 'Bibb Butterhead',  room: 'Main Grow Room', tray: 'Tower 12', stage: 'Finishing', day: 22, harvest: 2 },
+      { crop: 'Baby Arugula',     room: 'Main Grow Room', tray: 'Tower 4',  stage: 'Germination', day: 5, harvest: 7 },
+      { crop: 'Bibb Butterhead',  room: 'Main Grow Room', tray: 'Tower 24', stage: 'Vegetative', day: 14, harvest: 10 },
+      { crop: 'Baby Arugula',     room: 'Main Grow Room', tray: 'Tower 40', stage: 'Vegetative', day: 11, harvest: 5 }
     ];
     var html = '<thead><tr>' +
       '<th>Crop</th><th>Room</th><th>Tray</th><th>Stage</th><th>Day</th><th>Harvest In</th>' +
@@ -1420,14 +1410,12 @@ body {
     var pad = { top: 30, right: 24, bottom: 56, left: 60 };
 
     var days  = ['Apr 1', 'Apr 2', 'Apr 3', 'Apr 4', 'Apr 5', 'Apr 6', 'Apr 7', 'Apr 8', 'Apr 9', 'Apr 10', 'Apr 11', 'Apr 12', 'Apr 13', 'Apr 14'];
-    var crops = ['Bibb', 'Arugula', 'Kale', 'Basil'];
+    var crops = ['Butterhead', 'Arugula'];
     var data  = [
-      [1.8, 0, 1.2, 0, 0, 2.1, 0, 0, 1.5, 0, 0, 1.9, 0, 0.8],
-      [0, 0, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 1.3, 0],
-      [1.2, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 1.1],
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0]
+      [1.8, 0, 1.2, 0, 0, 2.1, 0, 0.8, 1.5, 0, 0, 1.9, 0, 0.8],
+      [0, 0.6, 0, 0.4, 0.8, 0, 0.5, 1.1, 0, 0.7, 0, 0, 1.3, 0]
     ];
-    var colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b'];
+    var colors = ['#10b981', '#06b6d4'];
 
     var chartW = w - pad.left - pad.right;
     var chartH = h - pad.top - pad.bottom;
@@ -1500,9 +1488,9 @@ body {
 
   function renderOrders() {
     var orders = [
-      { id: 'WO-2026-0401-A', items: '2x Bibb Butterhead (1.8kg), 1x Arugula (0.4kg)', customer: 'Harvest Table Restaurant', total: '$47.20', status: 'Pending Fulfillment', urgent: true },
-      { id: 'WO-2026-0402-B', items: '4x Kale Winterbor (2.0kg), 2x Basil bundles', customer: 'The Local Market Co.', total: '$88.50', status: 'Confirmed', urgent: false },
-      { id: 'WO-2026-0403-C', items: '6x Microgreen trays (assorted)', customer: 'Oakside Bistro', total: '$72.00', status: 'Processing', urgent: false }
+      { id: 'WO-2026-0401', items: '8oz Bibb Butterhead, 4oz Baby Arugula', customer: 'Wholesale Buyer', total: '$24.50', status: 'Pending Fulfillment', urgent: true },
+      { id: 'WO-2026-0402', items: '16oz Bibb Butterhead', customer: 'Wholesale Buyer', total: '$18.00', status: 'Confirmed', urgent: false },
+      { id: 'WO-2026-0403', items: '8oz Baby Arugula, 8oz Bibb Butterhead', customer: 'Wholesale Buyer', total: '$31.20', status: 'Processing', urgent: false }
     ];
     var html = orders.map(function (o) {
       var borderColor = o.urgent ? '#f59e0b' : '#06b6d4';
@@ -1538,10 +1526,8 @@ body {
     ctx.fillRect(0, 0, w, h);
 
     var zones = [
-      { label: 'Zone A',   crop: 'Microgreens',    color: '#10b981', x: 0.05, y: 0.08, w: 0.42, h: 0.40 },
-      { label: 'Zone B',   crop: 'Veg Lettuce',    color: '#06b6d4', x: 0.53, y: 0.08, w: 0.42, h: 0.40 },
-      { label: 'Zone C',   crop: 'Sweet Basil',    color: '#8b5cf6', x: 0.05, y: 0.54, w: 0.42, h: 0.40 },
-      { label: 'Zone D',   crop: 'Finishing Kale', color: '#f59e0b', x: 0.53, y: 0.54, w: 0.42, h: 0.40 }
+      { label: 'Zone 1',   crop: 'Towers 1-39 -- Sen 1 + Sen 4',  color: '#10b981', x: 0.05, y: 0.08, w: 0.42, h: 0.84 },
+      { label: 'Zone 2',   crop: 'Towers 40-78 -- Sen 2 + Sen 3', color: '#06b6d4', x: 0.53, y: 0.08, w: 0.42, h: 0.84 }
     ];
 
     zones.forEach(function (z) {
@@ -1583,19 +1569,15 @@ body {
     ctx.fillStyle = '#64748b';
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('ROOM A -- The Notable Sprout', w / 2, h - 6);
+    ctx.fillText('MAIN GROW ROOM -- The Notable Sprout', w / 2, h - 6);
   }
 
   function renderZoneCards() {
     var zones = [
-      { cls: 'zone-a', label: 'Zone A -- Microgreens', crop: 'Sunflower + Arugula + Radish',
-        metrics: [{ l: 'Temp Target', v: '22.5C' }, { l: 'Humidity', v: '74%' }, { l: 'Light Period', v: '16h / day' }, { l: 'PPFD', v: '120 umol' }] },
-      { cls: 'zone-b', label: 'Zone B -- Veg Lettuce', crop: 'Bibb Butterhead + Oakleaf',
-        metrics: [{ l: 'Temp Target', v: '20.0C' }, { l: 'Humidity', v: '68%' }, { l: 'Light Period', v: '18h / day' }, { l: 'PPFD', v: '260 umol' }] },
-      { cls: 'zone-c', label: 'Zone C -- Sweet Basil', crop: 'Genovese + Lemon Basil',
-        metrics: [{ l: 'Temp Target', v: '24.0C' }, { l: 'Humidity', v: '70%' }, { l: 'Light Period', v: '14h / day' }, { l: 'PPFD', v: '320 umol' }] },
-      { cls: 'zone-d', label: 'Zone D -- Finishing', crop: 'Kale Winterbor + Chard',
-        metrics: [{ l: 'Temp Target', v: '18.5C' }, { l: 'Humidity', v: '65%' }, { l: 'Light Period', v: '16h / day' }, { l: 'PPFD', v: '350 umol' }] }
+      { cls: 'zone-a', label: 'Zone 1 -- Towers 1-39', crop: 'Bibb Butterhead + Baby Arugula',
+        metrics: [{ l: 'Temp Target', v: '21.0C' }, { l: 'Humidity', v: '65%' }, { l: 'Light Period', v: '16h / day' }, { l: 'PPFD', v: '520 umol' }] },
+      { cls: 'zone-b', label: 'Zone 2 -- Towers 40-78', crop: 'Baby Arugula + Bibb Butterhead',
+        metrics: [{ l: 'Temp Target', v: '21.0C' }, { l: 'Humidity', v: '65%' }, { l: 'Light Period', v: '18h / day' }, { l: 'PPFD', v: '520 umol' }] }
     ];
     var html = zones.map(function (z) {
       return '<div class="zone-card ' + z.cls + '">' +
@@ -1616,23 +1598,23 @@ body {
     var messages = [
       {
         avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
-        body: 'Anomaly detected in <span class="collab-highlight">Finishing Room</span>. Humidity climbing -- <span class="collab-highlight">81% and rising</span>. Target is 65%. Dehumidifier duty cycle already at maximum. Requesting F.A.Y.E. authorization to reduce temp setpoint from 18.5C to 17.0C as secondary humidity correction.'
+        body: 'Anomaly detected in <span class="collab-highlight">Main Grow Room -- Zone 2</span>. Humidity climbing -- <span class="collab-highlight">72% and rising</span>. Sen 2 and Sen 3 both confirming. Target is 65%. Requesting F.A.Y.E. authorization to adjust ventilation schedule as humidity correction.'
       },
       {
         avatar: 'FAYE', cls: 'avatar-faye', name: 'F.A.Y.E.', nameCls: 'name-faye',
-        body: 'Directive issued. <span class="collab-highlight">Approved: reduce setpoint to 17.0C for up to 4 hours.</span> Monitor yield impact on Kale Winterbor -- Day 28 crop is in final swell phase. Log decision for compliance audit. Alert me if temp drops below 16.5C.'
+        body: 'Directive issued. <span class="collab-highlight">Approved: adjust ventilation for up to 4 hours.</span> Monitor impact on Bibb Butterhead in Zone 2 towers -- Day 22 crop approaching harvest. Log decision for audit trail. Alert me if humidity does not respond within 90 minutes.'
       },
       {
         avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
-        body: 'Setpoint updated. Cooling engaged. Initiating G.W.E.N. research query -- sending <span class="collab-highlight">72 hours of humidity + growth data</span> for Finishing Room. Requesting pattern analysis: is humidity spiking correlated with watering cycle timing?'
+        body: 'Ventilation adjusted. Initiating G.W.E.N. research query -- sending <span class="collab-highlight">72 hours of humidity data from Sen 2 and Sen 3</span> for Zone 2 analysis. Requesting pattern analysis: is humidity spiking correlated with lighting cycle timing?'
       },
       {
         avatar: 'GWEN', cls: 'avatar-gwen', name: 'G.W.E.N.', nameCls: 'name-gwen',
-        body: 'Analysis complete. <span class="collab-highlight">Strong correlation confirmed (r=0.84, p&lt;0.01)</span> -- humidity spikes occur 90-120 minutes after each irrigation cycle. Recommend shifting irrigation to pre-lights-off window to allow passive evaporation before the high-light period. Publishing finding to ELN.'
+        body: 'Analysis complete. <span class="collab-highlight">Correlation found (r=0.78)</span> -- humidity rises 60-90 minutes into each light cycle as canopy transpiration peaks. Recommend staggering Zone 2 light-on time 30 minutes after Zone 1 to spread transpiration load. Publishing finding to ELN.'
       },
       {
         avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
-        body: 'Irrigation schedule updated. New timing: <span class="collab-highlight">21:30 daily</span> (30 minutes before lights-off). Alerting grower. F.A.Y.E. notified. G.W.E.N. finding linked to crop record. Monitoring resumed.'
+        body: 'Light schedule stagger applied. Zone 2 on-time shifted to <span class="collab-highlight">05:30</span> (30 minutes after Zone 1). F.A.Y.E. notified. G.W.E.N. finding linked to study record. Monitoring resumed.'
       }
     ];
 
@@ -1670,14 +1652,14 @@ body {
         title: 'Environmental Control',
         icon: '&#9679;',
         color: 'var(--evie-cyan)',
-        desc: 'Live sensor readings, alert triage, target range enforcement, nutrient dosing, and light scheduling.',
+        desc: 'Live sensor readings, alert triage, target range enforcement, nutrient target management, and light scheduling.',
         tools: ['get_environment_readings', 'update_target_ranges', 'set_light_schedule', 'get_alerts', 'dismiss_alert', 'get_nutrient_status', 'update_nutrient_targets', 'get_dosing_history']
       },
       {
         title: 'Device Management',
         icon: '&#9679;',
         color: 'var(--evie-violet)',
-        desc: 'SwitchBot hubs, LED drivers, sensor registration, calibration status, and RS-485 bus mapping.',
+        desc: 'SwitchBot sensors and hubs, device registration, calibration tracking, and protocol scanning.',
         tools: ['get_device_status', 'auto_assign_devices', 'register_device', 'scan_devices', 'scan_bus_channels', 'get_bus_mappings', 'save_bus_mapping', 'get_calibration_status', 'get_equipment_status']
       },
       {
