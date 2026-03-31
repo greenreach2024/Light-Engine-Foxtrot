@@ -1,8 +1,8 @@
 # GreenReach Platform -- Complete System Map
 
-**Version**: 1.7.0
-**Date**: March 29, 2026
-**Last Updated**: March 29, 2026 -- v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. Previous: v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
+**Version**: 1.8.0
+**Date**: March 30, 2026
+**Last Updated**: March 30, 2026 -- v1.8.0: Research Integration Layer (17 tables, research-integrations.js, GWEN 19 new tools), GWEN Core sidebar/auth/DB fixes, agent-caused Central outage recovered (config-only restart broke npm install), CLOUD_ARCHITECTURE.md updated with env var safety rules. Previous: v1.7.0: E.V.I.E. LLM fallback (Anthropic), F.A.Y.E. auto-recovery, heartbeat false-alert fix, farm settings DB persistence, custom product image upload bugfix (field name mismatch), LE pinned to 1 instance. v1.6.0: Security hardening (9 patches, C2-C5 remediated), custom product CRUD, auth fallback, UI fixes (POS, inventory edit/delete, EVIE overlap). v1.4.0: Wholesale remediation, Square connection cleanup, POS auto-login fix, FAYE/EVIE document access
 **Authority**: This document is the canonical system map for the entire GreenReach platform. All agents MUST consult this before making changes to ensure full awareness of cross-system impacts.
 **Purpose**: Prevent agent-caused regressions by providing complete visibility into every page, route, data field, button, data flow, and dependency across the platform.
 

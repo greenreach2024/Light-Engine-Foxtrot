@@ -25,6 +25,14 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 
 ### Recent Fixes (Mar 30, 2026)
 
+18. **Incident: Agent-caused Central outage (recovered)**
+    - A previous agent used `aws elasticbeanstalk update-environment` to set env vars (FAYE_WEBHOOK_URL, AWS_REGION, SES_ENABLED, SES_FROM_EMAIL, SES_REGION) on Central. This triggered a config-only restart that skipped the prebuild `npm install` hook, crashing the server with `ERR_MODULE_NOT_FOUND: Cannot find package 'express'`.
+    - Central was down ~20 minutes (00:43-01:03 UTC, Mar 31). LE was unaffected.
+    - Agent also created a redundant `greenreach-central/utils/email.js` (duplicate of existing `services/email-service.js`) and added a duplicate buyer POST endpoint to `admin-wholesale.js`.
+    - Fix: reverted all uncommitted changes, removed `utils/email.js`, redeployed Central. Health restored to Green.
+    - **LESSON**: NEVER use `aws elasticbeanstalk update-environment` or `eb setenv` to set env vars without immediately following with a full `eb deploy`. Config-only restarts skip `.platform/hooks/prebuild/01_npm_install.sh`, leaving `node_modules/` empty. Always deploy code alongside env var changes.
+    - **LESSON**: `services/email-service.js` is the ONLY email utility. It already handles SES with lazy init and graceful fallback. Do not create parallel email utilities.
+
 17. **Research Integration Layer**
     - Migration 029: 17 new tables (researcher_orcid_profiles, dataset_dois, osf_projects, research_protocol_versions, instrument_registry, instrument_sessions, instrument_telemetry, workflow_definitions, workflow_runs, globus_transfers, mlflow_experiments, mlflow_runs, research_roles, approval_gates, immutable_run_records, cfd_pipeline_jobs, jupyter_sessions)
     - New route file: `greenreach-central/routes/research-integrations.js` -- REST endpoints for ORCID, DataCite, OSF, protocols.io, instruments, workflows, Globus, governance, CFD, MLflow, JupyterHub

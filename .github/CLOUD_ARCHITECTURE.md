@@ -1,7 +1,7 @@
 # Cloud Architecture Reference
 
-**Version**: 1.3.0
-**Date**: March 29, 2026
+**Version**: 1.4.0
+**Date**: March 30, 2026
 **Authority**: This document is the canonical source of truth for system architecture. All agents MUST read this before modifying any infrastructure, deployment, data flow, or sensor-related code.
 
 ---
@@ -60,6 +60,26 @@ The v3 environment answers on the v2 CNAME due to a previous `eb swap`. This mea
 | **Entry Point** | `npm start` (via Procfile) -> `greenreach-central/server.js` |
 | **Deploy From** | `greenreach-central/` subdirectory |
 | **Deploy Command** | `cd greenreach-central && eb deploy greenreach-central-prod-v4` |
+
+### CRITICAL: Environment Variable Updates
+
+**NEVER use `aws elasticbeanstalk update-environment` or `eb setenv` without an immediate `eb deploy` afterward.**
+
+Env var changes via the AWS API or `eb setenv` trigger a **configuration-only restart**. This restarts the Node.js process but does NOT re-run `.platform/hooks/prebuild/01_npm_install.sh`. Since `.ebignore` excludes `node_modules/`, a config restart leaves the app with no installed packages, causing an immediate crash (`ERR_MODULE_NOT_FOUND`).
+
+**Safe pattern for env var changes:**
+```bash
+# Option 1: Deploy with env vars bundled (preferred)
+cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged
+
+# Option 2: If you must set env vars separately, always follow with a deploy
+eb setenv KEY=value -e greenreach-central-prod-v4
+eb deploy greenreach-central-prod-v4 --staged   # REQUIRED -- triggers npm install
+```
+
+This same rule applies to `light-engine-foxtrot-prod-v3`. Both environments rely on prebuild hooks for `npm install`.
+
+**Incident reference**: Mar 30, 2026 -- a config-only env var update crashed Central for ~20 minutes.
 
 ---
 
