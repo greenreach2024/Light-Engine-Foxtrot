@@ -3617,6 +3617,46 @@ async function runMigrations(client) {
     logger.warn('Migration 050 warning:', err.message);
   }
 
+  // ─── Migration 051: GWEN persistent memory + evolution journal ───
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gwen_memory (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        category VARCHAR(50) NOT NULL DEFAULT 'general',
+        content TEXT NOT NULL,
+        importance INTEGER NOT NULL DEFAULT 3 CHECK (importance BETWEEN 1 AND 5),
+        source VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_gwen_memory_farm ON gwen_memory(farm_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_gwen_memory_category ON gwen_memory(farm_id, category);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gwen_evolution_journal (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        entry_type VARCHAR(50) NOT NULL DEFAULT 'reflection',
+        title VARCHAR(500) NOT NULL,
+        content TEXT NOT NULL,
+        tags TEXT[] DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_gwen_evolution_farm ON gwen_evolution_journal(farm_id);
+    `);
+    logger.info('GWEN memory + evolution journal tables ready (migration 051)');
+  } catch (err) {
+    logger.warn('Migration 051 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 

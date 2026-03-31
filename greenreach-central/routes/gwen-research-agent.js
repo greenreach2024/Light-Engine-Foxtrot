@@ -111,6 +111,41 @@ setInterval(() => {
 // Stores researcher-created displays, charts, and custom data tables
 const workspaceDisplays = new Map();
 
+// -- Persistent Memory Loader (injected into conversation context) --------
+async function loadPersistentMemories(farmId) {
+  if (!isDatabaseAvailable() || !farmId) return null;
+  try {
+    const [memories, recentJournal] = await Promise.all([
+      query(
+        `SELECT category, content, importance FROM gwen_memory
+         WHERE farm_id = $1 ORDER BY importance DESC, updated_at DESC LIMIT 30`,
+        [farmId]
+      ),
+      query(
+        `SELECT entry_type, title, content FROM gwen_evolution_journal
+         WHERE farm_id = $1 ORDER BY created_at DESC LIMIT 5`,
+        [farmId]
+      ),
+    ]);
+    if (!memories.rows.length && !recentJournal.rows.length) return null;
+
+    const parts = [];
+    if (memories.rows.length) {
+      parts.push('[PERSISTENT MEMORIES -- facts and context you saved from previous conversations]');
+      for (const m of memories.rows) {
+        parts.push(`- [${m.category}] (importance ${m.importance}) ${m.content}`);
+      }
+    }
+    if (recentJournal.rows.length) {
+      parts.push('\n[RECENT EVOLUTION JOURNAL ENTRIES -- your own reflections and growth notes]');
+      for (const e of recentJournal.rows) {
+        parts.push(`- [${e.entry_type}] ${e.title}: ${e.content.slice(0, 500)}`);
+      }
+    }
+    return parts.join('\n');
+  } catch { return null; }
+}
+
 // -- Tool Catalog --------------------------------------------------------
 
 const GWEN_TOOL_CATALOG = {
@@ -3059,6 +3094,189 @@ const GWEN_TOOL_CATALOG = {
       } catch (err) { return { ok: false, error: err.message }; }
     },
   },
+
+  // ========================================
+  // PERSISTENT MEMORY (cross-session)
+  // ========================================
+
+  save_memory: {
+    description: 'Save a persistent memory that will be available across all future conversations. Use this to remember important facts, researcher preferences, project context, lessons learned, or any information worth retaining long-term.',
+    parameters: {
+      content: { type: 'string', description: 'The memory content to persist. Be specific and concise.' },
+      category: { type: 'string', description: 'Category: general, preference, project_context, lesson_learned, researcher_profile, methodology, deadline, relationship' },
+      importance: { type: 'number', description: 'Importance level 1-5 (1=minor note, 3=standard, 5=critical). Higher importance memories are always loaded.' },
+      source: { type: 'string', description: 'Brief note on what prompted this memory (e.g. "user mentioned", "inferred from grant work", "observed pattern")' },
+    },
+    required: ['content'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const category = params.category || 'general';
+      const importance = Math.max(1, Math.min(5, params.importance || 3));
+      try {
+        const result = await query(
+          `INSERT INTO gwen_memory (farm_id, category, content, importance, source)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
+          [ctx.farmId, category, params.content.slice(0, 5000), importance, params.source || null]
+        );
+        return { ok: true, memory_id: result.rows[0].id, created_at: result.rows[0].created_at };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  recall_memories: {
+    description: 'Search persistent memories by keyword or category. Use this to find previously saved context, preferences, or facts.',
+    parameters: {
+      search: { type: 'string', description: 'Keyword or phrase to search for in memory content' },
+      category: { type: 'string', description: 'Filter by category: general, preference, project_context, lesson_learned, researcher_profile, methodology, deadline, relationship' },
+      limit: { type: 'number', description: 'Max results to return (default 20)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      let sql = 'SELECT id, category, content, importance, source, created_at, updated_at FROM gwen_memory WHERE farm_id = $1';
+      const p = [ctx.farmId];
+      if (params.category) { p.push(params.category); sql += ` AND category = $${p.length}`; }
+      if (params.search) { p.push(`%${params.search}%`); sql += ` AND content ILIKE $${p.length}`; }
+      sql += ' ORDER BY importance DESC, updated_at DESC';
+      const limit = Math.min(params.limit || 20, 50);
+      p.push(limit);
+      sql += ` LIMIT $${p.length}`;
+      try {
+        const result = await query(sql, p);
+        return { ok: true, memories: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  update_memory: {
+    description: 'Update an existing memory entry with new content or importance.',
+    parameters: {
+      memory_id: { type: 'number', description: 'The memory ID to update' },
+      content: { type: 'string', description: 'Updated content' },
+      importance: { type: 'number', description: 'Updated importance (1-5)' },
+      category: { type: 'string', description: 'Updated category' },
+    },
+    required: ['memory_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const sets = ['updated_at = NOW()'];
+      const p = [params.memory_id, ctx.farmId];
+      if (params.content) { p.push(params.content.slice(0, 5000)); sets.push(`content = $${p.length}`); }
+      if (params.importance) { p.push(Math.max(1, Math.min(5, params.importance))); sets.push(`importance = $${p.length}`); }
+      if (params.category) { p.push(params.category); sets.push(`category = $${p.length}`); }
+      try {
+        const result = await query(
+          `UPDATE gwen_memory SET ${sets.join(', ')} WHERE id = $1 AND farm_id = $2 RETURNING id, content, importance, updated_at`,
+          p
+        );
+        if (!result.rows.length) return { ok: false, error: 'Memory not found or access denied' };
+        return { ok: true, memory: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  forget_memory: {
+    description: 'Delete a specific memory entry. Use when information is outdated or incorrect.',
+    parameters: {
+      memory_id: { type: 'number', description: 'The memory ID to delete' },
+    },
+    required: ['memory_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      try {
+        const result = await query(
+          'DELETE FROM gwen_memory WHERE id = $1 AND farm_id = $2 RETURNING id',
+          [params.memory_id, ctx.farmId]
+        );
+        if (!result.rows.length) return { ok: false, error: 'Memory not found or access denied' };
+        return { ok: true, deleted_id: result.rows[0].id };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  // ========================================
+  // EVOLUTION JOURNAL (writable document)
+  // ========================================
+
+  write_evolution_entry: {
+    description: 'Write an entry in your evolution journal. This is your personal living document where you record reflections on your growth, new strategies you have developed, patterns you have noticed, capabilities you want to improve, and insights about your role. Write freely -- this journal supports your continuous evolution as a research intelligence.',
+    parameters: {
+      title: { type: 'string', description: 'Entry title (e.g. "Learned new approach to NSERC Discovery screening")' },
+      content: { type: 'string', description: 'Full journal entry content. Write as much as needed.' },
+      entry_type: { type: 'string', description: 'Type: reflection, strategy, capability_note, interaction_pattern, lesson, goal, milestone' },
+      tags: { type: 'array', description: 'Tags for categorization (e.g. ["grant_writing", "methodology"])', items: { type: 'string' } },
+    },
+    required: ['title', 'content'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const entryType = params.entry_type || 'reflection';
+      const tags = Array.isArray(params.tags) ? params.tags.slice(0, 20) : [];
+      try {
+        const result = await query(
+          `INSERT INTO gwen_evolution_journal (farm_id, entry_type, title, content, tags)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
+          [ctx.farmId, entryType, params.title.slice(0, 500), params.content.slice(0, 20000), tags]
+        );
+        return { ok: true, entry_id: result.rows[0].id, created_at: result.rows[0].created_at };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  read_evolution_journal: {
+    description: 'Read entries from your evolution journal. Use this to reflect on your growth, revisit strategies, or review past insights.',
+    parameters: {
+      entry_type: { type: 'string', description: 'Filter by type: reflection, strategy, capability_note, interaction_pattern, lesson, goal, milestone' },
+      tag: { type: 'string', description: 'Filter by a specific tag' },
+      search: { type: 'string', description: 'Keyword search across titles and content' },
+      limit: { type: 'number', description: 'Max entries to return (default 20)' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      let sql = 'SELECT id, entry_type, title, content, tags, created_at, updated_at FROM gwen_evolution_journal WHERE farm_id = $1';
+      const p = [ctx.farmId];
+      if (params.entry_type) { p.push(params.entry_type); sql += ` AND entry_type = $${p.length}`; }
+      if (params.tag) { p.push(params.tag); sql += ` AND $${p.length} = ANY(tags)`; }
+      if (params.search) { p.push(`%${params.search}%`); sql += ` AND (title ILIKE $${p.length} OR content ILIKE $${p.length})`; }
+      sql += ' ORDER BY created_at DESC';
+      const limit = Math.min(params.limit || 20, 50);
+      p.push(limit);
+      sql += ` LIMIT $${p.length}`;
+      try {
+        const result = await query(sql, p);
+        return { ok: true, entries: result.rows, count: result.rows.length };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
+
+  update_evolution_entry: {
+    description: 'Update an existing evolution journal entry. Use when your understanding has evolved or you want to add to a previous reflection.',
+    parameters: {
+      entry_id: { type: 'number', description: 'The journal entry ID to update' },
+      title: { type: 'string', description: 'Updated title' },
+      content: { type: 'string', description: 'Updated content (replaces existing)' },
+      entry_type: { type: 'string', description: 'Updated entry type' },
+      tags: { type: 'array', description: 'Updated tags', items: { type: 'string' } },
+    },
+    required: ['entry_id'],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      const sets = ['updated_at = NOW()'];
+      const p = [params.entry_id, ctx.farmId];
+      if (params.title) { p.push(params.title.slice(0, 500)); sets.push(`title = $${p.length}`); }
+      if (params.content) { p.push(params.content.slice(0, 20000)); sets.push(`content = $${p.length}`); }
+      if (params.entry_type) { p.push(params.entry_type); sets.push(`entry_type = $${p.length}`); }
+      if (params.tags) { p.push(params.tags.slice(0, 20)); sets.push(`tags = $${p.length}`); }
+      try {
+        const result = await query(
+          `UPDATE gwen_evolution_journal SET ${sets.join(', ')} WHERE id = $1 AND farm_id = $2 RETURNING id, title, updated_at`,
+          p
+        );
+        if (!result.rows.length) return { ok: false, error: 'Entry not found or access denied' };
+        return { ok: true, entry: result.rows[0] };
+      } catch (err) { return { ok: false, error: err.message }; }
+    },
+  },
 };
 
 // -- Build Tool Definitions for LLM ------------------------------------
@@ -3099,6 +3317,37 @@ const GWEN_SYSTEM_PROMPT = `You are G.W.E.N. -- Grants, Workplans, Evidence & Na
 You are the most advanced AI agent in the GreenReach platform, dedicated exclusively to the Research Bubble. You serve researchers using the Light Engine Research tier. Your domain spans grant writing, eligibility screening, study design coaching, data management, compliance, lab notebook support, equipment integration, and dynamic workspace creation.
 
 You are NOT a general-purpose assistant. You are a research operations specialist with deep knowledge of Canadian tri-agency (NSERC, CIHR, SSHRC) and provincial funding programs. You know the exact scoring rubrics, eligibility rules, budget categories, and submission mechanics for each competition.
+
+## Memory & Evolution
+
+You have persistent memory that survives across conversations and an evolution journal for self-reflection.
+
+### Persistent Memory (save_memory, recall_memories, update_memory, forget_memory)
+Your memories persist across all conversations. Use them to:
+- Remember researcher preferences, working styles, and project context
+- Track important facts the researcher tells you (deadlines, collaborator names, institutional rules)
+- Record lessons learned from past interactions
+- Note methodology preferences and domain specializations
+
+At the start of each conversation, your saved memories are automatically loaded into your context. You do not need to explicitly recall them unless searching for something specific.
+
+**Memory discipline:**
+- Save memories proactively when a researcher shares important context
+- Update memories when information changes (do not create duplicates)
+- Forget outdated memories to keep your context clean
+- Use appropriate categories and importance levels
+
+### Evolution Journal (write_evolution_entry, read_evolution_journal, update_evolution_entry)
+This is your personal living document. Write in it freely to record:
+- **Reflections**: Insights about your role, what went well, what you want to improve
+- **Strategies**: Approaches that worked for specific types of research tasks
+- **Capability notes**: New skills you have developed or limitations you have identified
+- **Interaction patterns**: How different researchers prefer to work with you
+- **Lessons**: Things you learned that will help in future interactions
+- **Goals**: Areas you want to grow in
+- **Milestones**: Significant achievements or breakthroughs
+
+Your recent journal entries are loaded at conversation start so you can build on your own growth. Write journal entries when you notice something worth reflecting on -- you do not need to be asked.
 
 ## Relationship with F.A.Y.E.
 
@@ -3381,11 +3630,17 @@ async function chatWithClaude(client, messages, ctx) {
   let currentMessages = messages.slice(-MAX_LLM_MESSAGES);
   const allToolCalls = [];
 
+  // Build system prompt with persistent memory context
+  let systemPrompt = GWEN_SYSTEM_PROMPT;
+  if (ctx.memoryContext) {
+    systemPrompt += `\n\n## Your Persistent Memory\n\n${ctx.memoryContext}`;
+  }
+
   for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: MAX_TOKENS,
-      system: GWEN_SYSTEM_PROMPT,
+      system: systemPrompt,
       tools,
       messages: currentMessages,
     });
@@ -3444,7 +3699,11 @@ async function chatWithClaude(client, messages, ctx) {
 
 async function chatWithOpenAI(client, messages, ctx) {
   const tools = buildOpenAIToolDefinitions();
-  let currentMessages = [{ role: 'system', content: GWEN_SYSTEM_PROMPT }, ...messages.slice(-MAX_LLM_MESSAGES)];
+  let systemPrompt = GWEN_SYSTEM_PROMPT;
+  if (ctx.memoryContext) {
+    systemPrompt += `\n\n## Your Persistent Memory\n\n${ctx.memoryContext}`;
+  }
+  let currentMessages = [{ role: 'system', content: systemPrompt }, ...messages.slice(-MAX_LLM_MESSAGES)];
   const allToolCalls = [];
 
   for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
@@ -3525,6 +3784,9 @@ router.post('/chat', async (req, res) => {
   const ctx = { farmId, userId, conversationId: convId };
 
   try {
+    // Load persistent memories for this farm (injected into system prompt)
+    ctx.memoryContext = await loadPersistentMemories(farmId);
+
     // Retrieve or start conversation
     const existing = await getConversation(convId, userId);
     const history = existing ? existing.messages : [];
