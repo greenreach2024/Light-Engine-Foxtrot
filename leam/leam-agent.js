@@ -22,6 +22,8 @@
 import WebSocket from 'ws';
 import { execSync, exec } from 'child_process';
 import os from 'os';
+
+process.title = 'GreenReach-LEAM';
 import dgram from 'dgram';
 import { createRequire } from 'module';
 

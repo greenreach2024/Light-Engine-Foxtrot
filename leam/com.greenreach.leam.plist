@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/node</string>
+        <string>/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/leam/GreenReach-LEAM</string>
         <string>/Volumes/CodeVault/Projects/Light-Engine-Foxtrot/leam/leam-agent.js</string>
     </array>
 
