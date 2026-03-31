@@ -25,12 +25,21 @@ The farm runs entirely on AWS Elastic Beanstalk. The Light Engine EB instance IS
 
 ### Recent Fixes (Mar 30, 2026)
 
-18. **Incident: Agent-caused Central outage (recovered)**
+20. **GWEN tool schema fix**
+    - File: `greenreach-central/routes/gwen-research-agent.js`
+    - OpenAI rejects tool definitions where array parameters lack a required `items` sub-schema. 6 tool parameters were missing `items`: `create_custom_display.data`, `create_research_table.columns`, `generate_chart.data_sources`, `generate_chart.annotations`, `match_programs_to_project.project_goals`, `analyze_competitive_overlap.competitors`.
+    - Added typed `items` definitions to all 6. GWEN functional again.
+
+19. **Incident #2: REPEAT agent-caused Central outage via config-only update**
+    - SAME ROOT CAUSE as incident #18 below. Another agent ran a configuration-only update on Central at 00:42 UTC Mar 31, causing 100% 5xx errors (Degraded then Severe). Recovered by proper `eb deploy` at 01:03.
+    - This is the SECOND time an agent has crashed Central this way. Protective rules added below.
+
+18. **Incident #1: Agent-caused Central outage (recovered)**
     - A previous agent used `aws elasticbeanstalk update-environment` to set env vars (FAYE_WEBHOOK_URL, AWS_REGION, SES_ENABLED, SES_FROM_EMAIL, SES_REGION) on Central. This triggered a config-only restart that skipped the prebuild `npm install` hook, crashing the server with `ERR_MODULE_NOT_FOUND: Cannot find package 'express'`.
     - Central was down ~20 minutes (00:43-01:03 UTC, Mar 31). LE was unaffected.
     - Agent also created a redundant `greenreach-central/utils/email.js` (duplicate of existing `services/email-service.js`) and added a duplicate buyer POST endpoint to `admin-wholesale.js`.
     - Fix: reverted all uncommitted changes, removed `utils/email.js`, redeployed Central. Health restored to Green.
-    - **LESSON**: NEVER use `aws elasticbeanstalk update-environment` or `eb setenv` to set env vars without immediately following with a full `eb deploy`. Config-only restarts skip `.platform/hooks/prebuild/01_npm_install.sh`, leaving `node_modules/` empty. Always deploy code alongside env var changes.
+    - **LESSON**: NEVER use `aws elasticbeanstalk update-environment` or `eb setenv`. Period. These commands are BANNED. See "BANNED COMMANDS" section below. Config-only restarts skip `.platform/hooks/prebuild/01_npm_install.sh`, leaving `node_modules/` empty. To set env vars, add them to `.ebextensions/` and do a full `eb deploy`.
     - **LESSON**: `services/email-service.js` is the ONLY email utility. It already handles SES with lazy init and graceful fallback. Do not create parallel email utilities.
 
 17. **Research Integration Layer**
@@ -252,6 +261,34 @@ Agents touching dashboard, weather, or devices must preserve these behaviors:
 - DO NOT modify sync-service.js authentication without verifying both auth systems (Farm API key vs GREENREACH_API_KEY)
 - DO NOT assume `foxtrot.greenreachgreens.com` resolves (it does not)
 
+### BANNED COMMANDS (HARD BLOCK -- TWO OUTAGES CAUSED)
+
+The following commands are ABSOLUTELY FORBIDDEN. They have caused TWO production outages (incidents #18 and #19). Any agent that runs these will crash the production environment.
+
+```
+# BANNED -- config-only restarts skip npm install and crash the server:
+aws elasticbeanstalk update-environment --environment-name ... --option-settings ...
+eb setenv KEY=VALUE
+aws elasticbeanstalk update-environment --environment-name ... --environment-variables ...
+```
+
+**Why they break things:** EB config-only updates trigger a platform restart that skips `.platform/hooks/prebuild/01_npm_install.sh`. The Node process starts with an empty `node_modules/` and immediately crashes with `ERR_MODULE_NOT_FOUND: Cannot find package 'express'`. Recovery requires a full `eb deploy`.
+
+**Safe alternatives:**
+- To set env vars: Add them to `.ebextensions/` config files and do a full `eb deploy`
+- To check env vars: `eb printenv` (read-only, safe)
+- To deploy code + config together: `eb deploy` (always safe -- runs full hook chain)
+
+**Additional infrastructure rules:**
+- NEVER run `aws elasticbeanstalk` CLI commands (use `eb` CLI only)
+- NEVER modify EB environment configuration outside of `eb deploy`
+- NEVER create duplicate utility files (check `services/` first)
+- NEVER add new npm dependencies without verifying they install on EB
+- NEVER run destructive DB commands (DROP TABLE, TRUNCATE, DELETE without WHERE)
+- The ONLY safe deployment commands are:
+  - Central: `cd greenreach-central && eb deploy greenreach-central-prod-v4 --staged`
+  - LE: `cd /Volumes/CodeVault/Projects/Light-Engine-Foxtrot && eb deploy light-engine-foxtrot-prod-v3 --staged`
+
 ## 💾 Workspace Location (REQUIRED)
 
 **All coding projects live on the external CodeVault drive:**
@@ -317,20 +354,31 @@ Agents MUST receive **"APPROVED FOR DEPLOYMENT"** message from user before execu
 - `scp` commands to production server
 - `ssh` commands that modify production files
 - `pm2 restart` or server restart commands
-- AWS deployment commands (Elastic Beanstalk, S3, etc.)
+- `eb deploy` (the ONLY permitted deploy command)
+
+**ABSOLUTELY FORBIDDEN (even with user approval):**
+- `aws elasticbeanstalk update-environment` (ANY flags -- this has caused TWO outages)
+- `eb setenv` (triggers config-only restart, crashes server)
+- `aws elasticbeanstalk update-environment --option-settings` (same failure)
+- ANY `aws elasticbeanstalk` CLI command other than read-only queries
+- ANY command that modifies EB environment configuration without a full code deploy
+
+These commands crash the server by triggering a platform restart that skips `npm install`. See incidents #18 and #19 above.
 
 **Deployment Workflow:**
 1. Investigate and propose solution (with line-by-line changes)
 2. Get Review Agent validation
 3. **STOP and wait for user approval**
 4. User responds: "APPROVED FOR DEPLOYMENT"
-5. Only then execute deployment commands
+5. Only then execute `eb deploy` (the ONLY safe deployment command)
 
 **NEVER:**
 - Deploy and test iteratively in production
 - Make "one more quick fix" without re-approval
 - Assume user wants deployment because proposal was approved
 - Deploy to production while debugging
+- Use `aws elasticbeanstalk` CLI to change env vars, config, or settings
+- Use `eb setenv` to set environment variables (use `.ebextensions/` + `eb deploy` instead)
 
 **Violation = Immediate termination of agent session.**
 
