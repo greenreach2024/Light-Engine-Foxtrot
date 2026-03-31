@@ -1217,7 +1217,8 @@ router.get('/briefing', async (req, res) => {
       trialBalanceResult,
       orderResult,
       networkResult,
-      aiCostResult
+      aiCostResult,
+      agentEngagementResult
     ] = await Promise.all([
       executeAdminTool('get_system_health', {}),
       executeAdminTool('get_farm_heartbeats', { stale_only: true }),
@@ -1225,7 +1226,8 @@ router.get('/briefing', async (req, res) => {
       executeAdminTool('get_trial_balance', {}),
       executeAdminTool('get_order_dashboard', { limit: 5 }),
       executeAdminTool('get_network_overview', {}),
-      executeAdminTool('get_ai_usage_costs', { days: 1 })
+      executeAdminTool('get_ai_usage_costs', { days: 1 }),
+      executeAdminTool('get_agent_engagement_report', { days: 14, ask_limit: 5 })
     ]);
 
     const briefingData = {
@@ -1235,7 +1237,8 @@ router.get('/briefing', async (req, res) => {
       trial_balance: trialBalanceResult,
       orders: orderResult,
       network: networkResult,
-      ai_costs_today: aiCostResult
+      ai_costs_today: aiCostResult,
+      agent_engagement: agentEngagementResult
     };
 
     // Have Claude synthesize into a briefing

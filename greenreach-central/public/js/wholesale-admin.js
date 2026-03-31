@@ -547,11 +547,11 @@
         // Load wholesale orders from admin endpoint
         const ordersRes = await fetch('/api/admin/wholesale/orders', { headers });
         const ordersData = await ordersRes.json();
-        this.orders = ordersData.orders || [];
+        this.orders = ordersData.data?.orders || ordersData.orders || [];
 
         const paymentsRes = await fetch('/api/wholesale/webhooks/payments', { headers });
         const paymentsData = await paymentsRes.json();
-        this.payments = paymentsData.data?.payments || [];
+        this.payments = paymentsData.data?.payments || paymentsData.payments || [];
 
         const totalGMV = this.payments
           .filter((p) => p.status === 'completed')
@@ -751,7 +751,7 @@
         const data = await response.json();
 
         if (data.status === 'ok') {
-          this.payments = data.data.payments || [];
+          this.payments = data.data?.payments || data.payments || [];
           this.renderPaymentsTable();
           this.renderPayoutSummary();
         } else {
@@ -825,15 +825,16 @@
 
     async loadOrders() {
       try {
-        const response = await fetch('/api/wholesale/admin/orders');
+        const headers = this.getAuthHeaders();
+        const response = await fetch('/api/admin/wholesale/orders', { headers });
         if (!response.ok) {
           document.getElementById('orders-list').innerHTML =
-            '<div class="empty-state">Order history endpoint not yet implemented. Orders are currently stored in-memory.</div>';
+            '<div class="empty-state">Failed to load orders. Check admin authentication.</div>';
           return;
         }
         
         const data = await response.json();
-        const orders = data.orders || [];
+        const orders = data.data?.orders || data.orders || [];
         
         if (orders.length === 0) {
           document.getElementById('orders-list').innerHTML =
@@ -1092,9 +1093,10 @@
 
     async openPaymentModal(orderId) {
       try {
-        const response = await fetch('/api/wholesale/admin/orders');
+        const headers = this.getAuthHeaders();
+        const response = await fetch('/api/admin/wholesale/orders', { headers });
         const data = await response.json();
-        const order = (data.orders || []).find(o => o.master_order_id === orderId);
+        const order = (data.data?.orders || data.orders || []).find(o => o.master_order_id === orderId);
         
         if (!order) {
           this.showToast('Order not found', 'error');
@@ -1140,9 +1142,10 @@
       }
       
       try {
-        const response = await fetch('/api/wholesale/admin/orders');
+        const headers = this.getAuthHeaders();
+        const response = await fetch('/api/admin/wholesale/orders', { headers });
         const data = await response.json();
-        const order = (data.orders || []).find(o => o.master_order_id === orderId);
+        const order = (data.data?.orders || data.orders || []).find(o => o.master_order_id === orderId);
         
         if (!order) {
           this.showToast('Order not found', 'error');
@@ -1189,7 +1192,7 @@
       }
       
       try {
-        const response = await fetch(`/api/wholesale/admin/orders/${encodeURIComponent(orderId)}/payment`, {
+        const response = await fetch(`/api/admin/wholesale/orders/${encodeURIComponent(orderId)}/payment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1572,9 +1575,9 @@
         this.showToast('Generating compliance export...', 'info');
 
         // Fetch orders
-        const ordersRes = await fetch('/api/wholesale/admin/orders');
+        const ordersRes = await fetch('/api/admin/wholesale/orders', { headers: this.getAuthHeaders() });
         const ordersData = await ordersRes.json();
-        let orders = ordersData.orders || [];
+        let orders = ordersData.data?.orders || ordersData.orders || [];
 
         // Filter by date range
         orders = orders.filter((o) => {

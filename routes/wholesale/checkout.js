@@ -489,7 +489,7 @@ router.post('/execute', async (req, res) => {
           resolvedBuyerId,
           'completed',
           allocation.master_order.total,
-          JSON.stringify({ cart, allocation: { sub_orders: allocation.sub_orders.map(s => ({ farm_id: s.farm_id, farm_name: s.farm_name, line_items: s.line_items, subtotal: s.subtotal, total: s.total })) }, payments: paymentResults.map(p => ({ payment_id: p.payment_id, farm_id: p.farm_id, amount: p.amount })), totals: allocation.master_order })
+          JSON.stringify(masterOrder)
         ]
       );
     } catch (pgErr) {

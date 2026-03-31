@@ -146,6 +146,87 @@ async function loadPersistentMemories(farmId) {
   } catch { return null; }
 }
 
+function normalizeFarmLayoutPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return {
+      rooms: [],
+      zones: [],
+      groups: [],
+      trays: [],
+    };
+  }
+
+  const roomList = Array.isArray(payload.rooms)
+    ? payload.rooms
+    : Array.isArray(payload.room_list)
+      ? payload.room_list
+      : [];
+
+  const zoneList = Array.isArray(payload.zones)
+    ? payload.zones
+    : Array.isArray(payload.zone_list)
+      ? payload.zone_list
+      : [];
+
+  const groupList = Array.isArray(payload.groups)
+    ? payload.groups
+    : Array.isArray(payload.group_list)
+      ? payload.group_list
+      : [];
+
+  return {
+    rooms: roomList,
+    zones: zoneList,
+    groups: groupList,
+    trays: [],
+  };
+}
+
+function extractTraysFromZones(zones = []) {
+  const trays = [];
+  for (const zone of zones) {
+    const zoneId = zone?.zone || zone?.id || zone?.zone_id || null;
+    const roomId = zone?.room || zone?.roomId || zone?.room_id || null;
+    const candidates = [];
+    if (Array.isArray(zone?.trays)) candidates.push(...zone.trays);
+    if (Array.isArray(zone?.positions)) candidates.push(...zone.positions);
+    for (const tray of candidates) {
+      trays.push({
+        tray_id: tray?.id || tray?.tray_id || tray?.position || null,
+        tray_name: tray?.name || tray?.label || null,
+        room_id: roomId,
+        zone_id: zoneId,
+        crop: tray?.crop || tray?.crop_name || null,
+        planted_date: tray?.planted_date || tray?.seed_date || null,
+        raw: tray,
+      });
+    }
+  }
+  return trays;
+}
+
+function normalizeDevicePayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.devices)) return payload.devices;
+  return [];
+}
+
+function normalizeDeviceEntry(device = {}) {
+  const telemetry = (device && typeof device.telemetry === 'object' && device.telemetry) ? device.telemetry : null;
+  return {
+    device_id: device.deviceId || device.id || device.device_id || null,
+    name: device.name || device.label || null,
+    type: device.type || device.category || null,
+    protocol: device.protocol || device.vendor || device.brand || null,
+    room_id: device.room || device.roomId || device.room_id || null,
+    zone_id: device.zone || device.zoneId || device.zone_id || null,
+    status: device.status || (telemetry ? 'online' : null),
+    last_seen: device.lastSeen || device.last_seen || telemetry?.lastUpdate || null,
+    telemetry,
+    raw: device,
+  };
+}
+
 // -- Tool Catalog --------------------------------------------------------
 
 const GWEN_TOOL_CATALOG = {
@@ -3056,6 +3137,180 @@ const GWEN_TOOL_CATALOG = {
   // ========================================
   // INTERNAL DATA VISIBILITY
   // ========================================
+
+  get_local_device_registry: {
+    description: 'List registered local farm devices (sensors, hubs, controllers) for the current farm. Returns protocol, device IDs, status, and optional room/zone mapping context.',
+    parameters: {
+      include_layout_context: { type: 'boolean', description: 'When true, include lightweight room/zone summary to help interpret device placement' },
+      include_raw: { type: 'boolean', description: 'When true, include raw source payloads used to build the response' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      if (!ctx.farmId) return { ok: false, error: 'farm_id required in request context' };
+
+      try {
+        const rowsResult = await query(
+          `SELECT DISTINCT ON (data_type) data_type, data_value, updated_at
+           FROM farm_data
+           WHERE farm_id = $1 AND data_type IN ('devices', 'room_map', 'rooms')
+           ORDER BY data_type, updated_at DESC`,
+          [ctx.farmId]
+        );
+
+        const byType = new Map(rowsResult.rows.map((r) => [String(r.data_type), r]));
+        const devicesPayload = byType.get('devices')?.data_value || null;
+        const roomMapPayload = byType.get('room_map')?.data_value || null;
+        const roomsPayload = byType.get('rooms')?.data_value || null;
+
+        const devices = normalizeDevicePayload(devicesPayload).map(normalizeDeviceEntry);
+
+        const summaryByType = {};
+        const summaryByProtocol = {};
+        for (const d of devices) {
+          const typeKey = String(d.type || 'unknown').toLowerCase();
+          const protocolKey = String(d.protocol || 'unknown').toLowerCase();
+          summaryByType[typeKey] = (summaryByType[typeKey] || 0) + 1;
+          summaryByProtocol[protocolKey] = (summaryByProtocol[protocolKey] || 0) + 1;
+        }
+
+        const response = {
+          ok: true,
+          farm_id: ctx.farmId,
+          summary: {
+            device_count: devices.length,
+            by_type: summaryByType,
+            by_protocol: summaryByProtocol,
+          },
+          devices,
+          sources: {
+            devices_updated_at: byType.get('devices')?.updated_at || null,
+            room_map_updated_at: byType.get('room_map')?.updated_at || null,
+            rooms_updated_at: byType.get('rooms')?.updated_at || null,
+          },
+          note: 'Read-only visibility from registered farm device data. No user registration is required for GWEN to read this context.',
+        };
+
+        if (params.include_layout_context === true) {
+          const roomMapNorm = normalizeFarmLayoutPayload(roomMapPayload);
+          const roomsNorm = normalizeFarmLayoutPayload(roomsPayload);
+          const zones = roomMapNorm.zones.length ? roomMapNorm.zones : roomsNorm.zones;
+          const rooms = roomsNorm.rooms;
+          response.layout_context = {
+            room_count: Array.isArray(rooms) ? rooms.length : 0,
+            zone_count: Array.isArray(zones) ? zones.length : 0,
+            rooms,
+            zones,
+          };
+        }
+
+        if (params.include_raw === true) {
+          response.raw = {
+            devices: devicesPayload,
+            room_map: roomMapPayload,
+            rooms: roomsPayload,
+          };
+        }
+
+        return response;
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+  },
+
+  get_farm_layout_context: {
+    description: 'Get normalized farm topology for research context: rooms, zones, groups, and trays. Reads the latest farm-scoped room map and related records so GWEN can reason about local physical layout.',
+    parameters: {
+      include_raw: { type: 'boolean', description: 'When true, include raw source payloads used to build the normalized response' },
+    },
+    required: [],
+    execute: async (params, ctx) => {
+      if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+      if (!ctx.farmId) return { ok: false, error: 'farm_id required in request context' };
+
+      try {
+        const rowsResult = await query(
+          `SELECT DISTINCT ON (data_type) data_type, data_value, updated_at
+           FROM farm_data
+           WHERE farm_id = $1 AND data_type IN ('rooms', 'room_map', 'groups')
+           ORDER BY data_type, updated_at DESC`,
+          [ctx.farmId]
+        );
+
+        const byType = new Map(rowsResult.rows.map((r) => [String(r.data_type), r]));
+        const roomsPayload = byType.get('rooms')?.data_value || null;
+        const roomMapPayload = byType.get('room_map')?.data_value || null;
+        const groupsPayload = byType.get('groups')?.data_value || null;
+
+        const roomsNorm = normalizeFarmLayoutPayload(roomsPayload);
+        const roomMapNorm = normalizeFarmLayoutPayload(roomMapPayload);
+        const groupsNorm = normalizeFarmLayoutPayload(groupsPayload);
+
+        const rooms = roomsNorm.rooms;
+        const zones = roomMapNorm.zones.length ? roomMapNorm.zones : roomsNorm.zones;
+
+        let groups = groupsNorm.groups;
+        if (!groups.length) {
+          groups = roomMapNorm.groups.length ? roomMapNorm.groups : roomsNorm.groups;
+        }
+
+        if (!groups.length && Array.isArray(zones)) {
+          const derived = [];
+          for (const z of zones) {
+            const zg = Array.isArray(z?.groups) ? z.groups : [];
+            for (const g of zg) {
+              derived.push({
+                id: g?.id || g?.group_id || null,
+                name: g?.name || g?.group_name || null,
+                zone_id: z?.zone || z?.id || z?.zone_id || null,
+                room_id: z?.room || z?.roomId || z?.room_id || null,
+                trays: g?.trays || null,
+                raw: g,
+              });
+            }
+          }
+          groups = derived;
+        }
+
+        const trays = extractTraysFromZones(zones);
+
+        const response = {
+          ok: true,
+          farm_id: ctx.farmId,
+          summary: {
+            room_count: Array.isArray(rooms) ? rooms.length : 0,
+            zone_count: Array.isArray(zones) ? zones.length : 0,
+            group_count: Array.isArray(groups) ? groups.length : 0,
+            tray_count: trays.length,
+          },
+          layout: {
+            rooms,
+            zones,
+            groups,
+            trays,
+          },
+          sources: {
+            rooms_updated_at: byType.get('rooms')?.updated_at || null,
+            room_map_updated_at: byType.get('room_map')?.updated_at || null,
+            groups_updated_at: byType.get('groups')?.updated_at || null,
+          },
+        };
+
+        if (params.include_raw === true) {
+          response.raw = {
+            rooms: roomsPayload,
+            room_map: roomMapPayload,
+            groups: groupsPayload,
+          };
+        }
+
+        return response;
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+  },
 
   get_research_workspace_summary: {
     description: 'Get a comprehensive summary of all research activity on this farm: study counts by status, dataset metrics, recent observations, active grants, upcoming deadlines, HQP counts, partner counts, recent literature searches, hypothesis status, code executions, and pending approvals. The OODA-loop overview for research decision-making.',

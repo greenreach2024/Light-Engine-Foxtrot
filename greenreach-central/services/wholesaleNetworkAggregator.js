@@ -5,6 +5,7 @@
 import { listNetworkFarms } from './networkFarmsStore.js';
 import { generatePredictedInventoryEnhanced } from './harvest-prediction-engine.js';
 import logger from '../utils/logger.js';
+import { listAllOrders } from './wholesaleMemoryStore.js';
 
 // In-memory cache for aggregated inventory (refreshed by wholesaleNetworkSync)
 let inventoryCache = {
@@ -361,8 +362,57 @@ export async function buildAggregateCatalog() {
     }
   }
 
+  // Apply pending-payment reservation holds so catalog availability reflects standing orders.
+  const skusWithPendingHolds = await (async () => {
+    try {
+      const orders = await listAllOrders({ page: 1, limit: 50000 });
+      const holdByFarmSku = new Map();
+
+      for (const order of (orders || [])) {
+        if (String(order?.status || '') !== 'pending_payment') continue;
+        for (const sub of (order?.farm_sub_orders || [])) {
+          const farmId = String(sub?.farm_id || '').trim();
+          if (!farmId) continue;
+          for (const item of (sub?.items || [])) {
+            const skuId = String(item?.sku_id || '').trim();
+            const qty = Number(item?.quantity || 0);
+            if (!skuId || qty <= 0) continue;
+            const key = `${farmId}::${skuId}`;
+            holdByFarmSku.set(key, (holdByFarmSku.get(key) || 0) + qty);
+          }
+        }
+      }
+
+      return (inventoryCache.skus || []).map((sku) => {
+        const farms = (sku.farms || []).map((farm) => {
+          const key = `${String(farm.farm_id || '').trim()}::${String(sku.sku_id || '').trim()}`;
+          const holdQty = Number(holdByFarmSku.get(key) || 0);
+          const baseQty = Number(farm.qty_available ?? farm.quantity_available ?? 0);
+          const adjustedQty = Math.max(0, baseQty - holdQty);
+          return {
+            ...farm,
+            qty_available: adjustedQty,
+            quantity_available: adjustedQty,
+            qty_reserved: Number(farm.qty_reserved || 0) + holdQty
+          };
+        });
+
+        const totalQty = farms.reduce((sum, f) => sum + Number(f.qty_available || 0), 0);
+        return {
+          ...sku,
+          farms,
+          total_qty_available: totalQty,
+          qty_available: totalQty
+        };
+      });
+    } catch (err) {
+      logger.warn(`[NetworkAgg] Pending-hold adjustment skipped: ${err.message}`);
+      return inventoryCache.skus || [];
+    }
+  })();
+
   return {
-    skus: inventoryCache.skus,
+    skus: skusWithPendingHolds,
     predicted: predictedInventory,
     farms: inventoryCache.farms.map(f => ({
       farm_id: f.farm_id,

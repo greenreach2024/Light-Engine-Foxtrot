@@ -17,34 +17,25 @@ function fetchWithFarmAuth(url, options = {}) {
   return fetch(url, { ...options, headers });
 }
 
-// Global: silence common console.log noise in production unless explicitly enabled
+// Production hardening: silence browser console telemetry unless explicitly enabled.
 (function() {
   try {
-    const origLog = console.log.bind(console);
-    console.log = function(...args) {
-      const enabled = localStorage.getItem('gr.debug') === 'true' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (enabled) origLog(...args);
-    };
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const debugEnabled = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || isLocal;
+    window.GR_DEBUG = debugEnabled;
+    if (!debugEnabled && typeof console !== 'undefined') {
+      const noop = function() {};
+      console.log = noop;
+      console.debug = noop;
+      console.info = noop;
+      console.warn = noop;
+    }
   } catch (e) {
-    // ignore
+    window.GR_DEBUG = false;
   }
 })();
 
-// Silence console.debug in production unless enabled
-(function() {
-  try {
-    const origDebug = console.debug.bind(console);
-    console.debug = function(...args) {
-      const enabled = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (enabled) origDebug(...args);
-    };
-  } catch (e) {
-    // ignore
-  }
-})();
-
-// Global debug flag and helper (use localStorage.setItem('gr.debug','true') to enable)
-window.GR_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('gr.debug') === 'true') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// Global debug helper (use localStorage.setItem('gr.debug','true') to enable)
 window.grLog = function(...args) { if (window.GR_DEBUG && console && typeof console.debug === 'function') console.debug(...args); };
 
 // Billing management helper
@@ -5872,7 +5863,7 @@ function minutesToHHMM(mins) {
 // Global lights status UI initializer stub
 function initLightsStatusUI() {
   // TODO: Replace with real lights status UI initialization if needed
-  console.warn('[Stub] initLightsStatusUI called');
+  grLog('[Stub] initLightsStatusUI called');
 }
 // Spectral rendering constants
 // DRIVER_CHANNEL_KEYS = 4 physical LED driver channels (the only real channels)
@@ -8530,7 +8521,7 @@ class FarmWizard {
       `;
       
     } catch (error) {
-      console.error('Weather loading error:', error);
+      grLog('Weather loading error:', error?.message || error);
       weatherContent.innerHTML = `
         <div style="color: #EF4444; font-size: 14px;">
            Unable to load weather data
@@ -11653,8 +11644,8 @@ class RoomWizard {
             resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Equipment database has invalid structure.</div>`;
           }
         })
-        .catch(err => {
-          console.error('[ERROR] Failed to load equipment database:', err);
+        }).catch(err => {
+          grLog('[IoT] Failed to persist devices to server:', err?.message || err);
           resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Failed to load equipment database: ${err.message}</div>`;
         });
       return;
@@ -19418,7 +19409,7 @@ function wireGlobalEvents() {
     const s = getEditorSchedule();
     const { errors, onTotal, offTotal, overlapTrim } = validateSchedule(s.mode, s.cycles);
     if (!onTotalEl || !offTotalEl || !deltaEl || !warningEl || !previewBar) {
-      console.warn('[Schedules] Skipping math UI update – elements missing');
+      grLog('[Schedules] Skipping math UI update - elements missing');
       return;
     }
     onTotalEl.textContent = `${(onTotal/60).toFixed(1)} h`;
@@ -19968,7 +19959,7 @@ class FreshLightWizard {
       }
       
       if (!rooms.length) {
-        console.warn('[FreshLightWizard] No rooms found! STATE.rooms length:', STATE.rooms?.length);
+        grLog('[FreshLightWizard] No rooms found. STATE.rooms length:', STATE.rooms?.length);
         roomSelect.innerHTML = '<option value="">No rooms found. Create rooms in Grow Rooms panel first.</option>';
         this.data.room = '';
         this.updateNavigation();
@@ -23315,7 +23306,7 @@ function renderMappingReview() {
 // Load groups for assignment step
 async function loadGroupsForBusMapping() {
   try {
-    const res = await fetch(`${API_BASE}/api/groups`);
+    const res = await fetchWithFarmAuth('/api/groups', { cache: 'no-store' });
     if (!res.ok) return;
     
     const groups = await res.json();
@@ -23334,7 +23325,7 @@ async function loadGroupsForBusMapping() {
       select.value = busMappingState.existingMapping.selectedGroup;
     }
   } catch (err) {
-    console.warn('Failed to load groups:', err);
+    grLog('Failed to load groups:', err?.message || err);
   }
 }
 
@@ -23342,7 +23333,7 @@ async function loadGroupsForBusMapping() {
 document.addEventListener('DOMContentLoaded', () => {
   // Reload groups when rooms change (rooms may affect group assignments)
   document.addEventListener('rooms-updated', () => {
-    console.log('[BusMapping] Rooms updated, refreshing groups dropdown');
+    grLog('[BusMapping] Rooms updated, refreshing groups dropdown');
     if (document.getElementById('groupSelect')) {
       loadGroupsForBusMapping();
     }
@@ -23350,7 +23341,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Reload mappings when lights change (will be dispatched by Light Setup in Tier 1.5)
   document.addEventListener('lights-updated', () => {
-    console.log('[BusMapping] Lights updated, refreshing bus mappings');
+    grLog('[BusMapping] Lights updated, refreshing bus mappings');
     const busPanel = document.querySelector('[data-panel="bus-mapping"]');
     if (busPanel && busPanel.classList.contains('is-active')) {
       loadGroupsForBusMapping();

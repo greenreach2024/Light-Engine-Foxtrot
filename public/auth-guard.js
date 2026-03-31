@@ -6,6 +6,17 @@
 (function() {
   'use strict';
 
+  // Production hardening: suppress client-side console telemetry unless explicitly enabled.
+  const __grLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const __grDebugEnabled = __grLocalHost || localStorage.getItem('gr.debug') === 'true';
+  if (!__grDebugEnabled && typeof console !== 'undefined') {
+    const noop = function() {};
+    console.log = noop;
+    console.debug = noop;
+    console.info = noop;
+    console.warn = noop;
+  }
+
   // Public pages that don't require authentication
   const PUBLIC_PAGES = [
     '/',
@@ -197,12 +208,18 @@
   window.fetch = function(url, options = {}) {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
-    // Resolve relative URLs against API_BASE when set and non-empty
+    // Resolve relative URLs against API_BASE only when it is same-origin.
+    // This prevents accidental cross-origin fetches when API_BASE points at Central.
     let resolvedUrl = url;
     if (typeof url === 'string' && url.startsWith('/') && window.API_BASE) {
-      // API_BASE is the origin (e.g., 'https://notable-sprout.greenreachgreens.com')
-      // For same-origin calls, API_BASE === location.origin, so prepending is safe
-      resolvedUrl = window.API_BASE + url;
+      try {
+        const base = new URL(window.API_BASE, window.location.origin);
+        if (base.origin === window.location.origin) {
+          resolvedUrl = base.origin + url;
+        }
+      } catch (_) {
+        // Keep original relative URL on malformed API_BASE
+      }
     }
 
     // Inject JWT for ALL authenticated requests — /api/, /data/, and /env endpoints.

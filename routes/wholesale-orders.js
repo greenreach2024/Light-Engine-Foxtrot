@@ -906,6 +906,23 @@ router.get('/', async (req, res) => {
       if (!mergedById.has(key)) mergedById.set(key, order);
     }
 
+    // PostgreSQL fallback: orders created by Central checkout are in PG, not NeDB
+    try {
+      const pgResult = await query(
+        'SELECT order_data FROM wholesale_orders WHERE buyer_id = $1 ORDER BY created_at DESC LIMIT 200',
+        [normalizedBuyerId]
+      );
+      for (const row of pgResult.rows) {
+        const pgOrder = row.order_data;
+        if (!pgOrder) continue;
+        const key = String(pgOrder.master_order_id || '');
+        if (key && !mergedById.has(key)) mergedById.set(key, pgOrder);
+      }
+    } catch (pgErr) {
+      // PostgreSQL may not be available on LE — non-fatal
+      console.warn('[Wholesale Orders] PostgreSQL fallback failed:', pgErr.message);
+    }
+
     const parsedOrders = await Promise.all(
       Array.from(mergedById.values()).map(async (order) => {
         const masterOrderId = order.master_order_id || order.id;

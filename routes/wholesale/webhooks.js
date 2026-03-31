@@ -12,6 +12,9 @@ import {
   savePaymentRecord,
   listPaymentRecords
 } from '../../lib/wholesale/payment-store.js';
+import orderStoreModule, { updateOrderStatus, listSubOrders } from '../../lib/wholesale/order-store.js';
+import notificationService from '../../services/wholesale-notification-service.js';
+import { query } from '../../lib/database.js';
 
 const router = express.Router();
 
@@ -116,6 +119,46 @@ router.post('/square', async (req, res) => {
 });
 
 /**
+ * Look up the wholesale order associated with a Square payment ID.
+ * Checks NeDB (LE-created orders) then PostgreSQL (Central-created orders).
+ */
+async function findOrderByPaymentId(paymentId) {
+  if (!paymentId) return null;
+
+  // Search NeDB orders (LE checkout path)
+  try {
+    const order = await orderStoreModule.ordersDB.findOne({ 'payments.payment_id': paymentId });
+    if (order) return order;
+  } catch (err) {
+    console.warn('[Webhook] NeDB order lookup failed:', err.message);
+  }
+
+  // Search PostgreSQL wholesale_orders (Central checkout path)
+  try {
+    const result = await query(
+      `SELECT master_order_id, buyer_id, status, order_data, created_at
+       FROM wholesale_orders
+       WHERE order_data::text LIKE '%' || $1 || '%'
+       LIMIT 1`,
+      [paymentId]
+    );
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return row.order_data || {
+        master_order_id: row.master_order_id,
+        buyer_id: row.buyer_id,
+        status: row.status,
+        created_at: row.created_at
+      };
+    }
+  } catch (err) {
+    console.warn('[Webhook] PostgreSQL order lookup failed:', err.message);
+  }
+
+  return null;
+}
+
+/**
  * Process payment webhook events
  */
 async function processPaymentEvent(event, payload) {
@@ -188,14 +231,82 @@ async function processPaymentEvent(event, payload) {
   // Handle status-specific actions
   if (status === 'completed' && previousStatus !== 'completed') {
     console.log(`[Webhook] Payment completed: ${paymentId}`);
-    // TODO: Trigger order fulfillment workflow
-    // TODO: Update MasterOrder status
-    // TODO: Notify buyer of successful payment
+    try {
+      const order = await findOrderByPaymentId(paymentId);
+      if (order) {
+        const orderId = order.master_order_id;
+
+        // Update NeDB order status
+        await updateOrderStatus(orderId, 'completed').catch(err =>
+          console.warn(`[Webhook] NeDB order update failed:`, err.message)
+        );
+
+        // Update PostgreSQL order status
+        await query(
+          `UPDATE wholesale_orders SET status = 'completed', updated_at = NOW() WHERE master_order_id = $1`,
+          [orderId]
+        ).catch(err =>
+          console.warn(`[Webhook] PostgreSQL order update failed:`, err.message)
+        );
+
+        console.log(`[Webhook] Order ${orderId} marked completed`);
+
+        // Notify buyer of successful payment
+        const buyerEmail = order.buyer_account?.email || order.buyer_email || '';
+        if (buyerEmail) {
+          await notificationService.notifyBuyerOrderPlaced({
+            id: orderId,
+            buyer_email: buyerEmail,
+            buyer_name: order.buyer_account?.contactName || order.buyer_account?.businessName || '',
+            total_amount: order.grand_total || order.totals?.total || 0,
+            payment_id: paymentId,
+            verification_deadline: order.verification_deadline || new Date(Date.now() + 24 * 3600000).toISOString()
+          }).catch(err => console.warn(`[Webhook] Buyer notification failed:`, err.message));
+        }
+      } else {
+        console.warn(`[Webhook] No order found for completed payment ${paymentId}`);
+      }
+    } catch (err) {
+      console.error(`[Webhook] Error handling payment.completed:`, err.message);
+    }
   } else if (status === 'failed') {
     console.log(`[Webhook] Payment failed: ${paymentId}`);
-    // TODO: Release reservations
-    // TODO: Notify buyer of payment failure
-    // TODO: Update MasterOrder status to 'payment_failed'
+    try {
+      const order = await findOrderByPaymentId(paymentId);
+      if (order) {
+        const orderId = order.master_order_id;
+
+        // Update NeDB order status
+        await updateOrderStatus(orderId, 'payment_failed').catch(err =>
+          console.warn(`[Webhook] NeDB order update (failed):`, err.message)
+        );
+
+        // Update PostgreSQL order status
+        await query(
+          `UPDATE wholesale_orders SET status = 'payment_failed', updated_at = NOW() WHERE master_order_id = $1`,
+          [orderId]
+        ).catch(err =>
+          console.warn(`[Webhook] PostgreSQL order update (failed):`, err.message)
+        );
+
+        console.log(`[Webhook] Order ${orderId} marked payment_failed`);
+
+        // Notify buyer of payment failure
+        const buyerEmail = order.buyer_account?.email || order.buyer_email || '';
+        if (buyerEmail) {
+          await notificationService.notifyBuyerOrderCancelled({
+            id: orderId,
+            buyer_email: buyerEmail,
+            buyer_name: order.buyer_account?.contactName || order.buyer_account?.businessName || '',
+            total_amount: order.grand_total || order.totals?.total || 0
+          }, 0).catch(err => console.warn(`[Webhook] Buyer failure notification failed:`, err.message));
+        }
+      } else {
+        console.warn(`[Webhook] No order found for failed payment ${paymentId}`);
+      }
+    } catch (err) {
+      console.error(`[Webhook] Error handling payment.failed:`, err.message);
+    }
   }
 
   return {

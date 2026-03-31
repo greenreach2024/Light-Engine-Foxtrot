@@ -17,14 +17,18 @@ import { query, isDatabaseAvailable } from '../config/database.js';
 import emailService from '../services/email-service.js';
 import logger from '../utils/logger.js';
 import { trackPattern, storeInsight } from '../services/faye-learning.js';
+import { executeAdminTool } from '../routes/admin-ops-agent.js';
 
 const TAG = '[F.A.Y.E. Intelligence]';
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const BRIEFING_HOUR = 7; // 7 AM daily email briefing
+const WEEKLY_DIGEST_DAY = Number(process.env.FAYE_WEEKLY_DIGEST_DAY || 1); // 0=Sun, 1=Mon
+const WEEKLY_DIGEST_HOUR = Number(process.env.FAYE_WEEKLY_DIGEST_HOUR || 8); // 8 AM local server time
 
 let checkInterval = null;
 let briefingTimeout = null;
 let lastBriefingDate = null;
+let lastWeeklyDigestKey = null;
 
 // ── Alert Creation ──────────────────────────────────────────────────
 
@@ -405,6 +409,135 @@ async function sendDailyBriefing() {
   }
 }
 
+function getWeeklyDigestKey(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diffToMonday = (day + 6) % 7;
+  d.setDate(d.getDate() - diffToMonday);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatTopAsks(topAsks = []) {
+  if (!topAsks.length) return 'No dominant ask clusters detected this week.';
+  return topAsks
+    .slice(0, 5)
+    .map((a, idx) => `${idx + 1}. ${a.topic} (${a.ask_count})`)
+    .join('\n');
+}
+
+async function sendWeeklyDigest() {
+  const now = new Date();
+  const key = getWeeklyDigestKey(now);
+  if (lastWeeklyDigestKey === key) return;
+  if (now.getDay() !== WEEKLY_DIGEST_DAY || now.getHours() !== WEEKLY_DIGEST_HOUR) return;
+
+  if (!isDatabaseAvailable()) return;
+
+  try {
+    const briefingTo = process.env.ADMIN_BRIEFING_EMAIL || process.env.ADMIN_EMAIL;
+    if (!briefingTo) {
+      logger.info(`${TAG} No ADMIN_BRIEFING_EMAIL set, skipping weekly digest.`);
+      return;
+    }
+
+    const report = await executeAdminTool('get_agent_engagement_report', { days: 7, ask_limit: 5 });
+    if (!report?.ok) {
+      logger.warn(`${TAG} Weekly digest report unavailable: ${report?.error || 'unknown'}`);
+      return;
+    }
+
+    const evie = report.agents?.evie || {};
+    const gwen = report.agents?.gwen || {};
+    const combined = report.combined || {};
+    const evieUsage = evie.usage || {};
+    const gwenUsage = gwen.usage || {};
+    const evieAsks = evie.ask_analysis?.top_asks || [];
+    const gwenAsks = gwen.ask_analysis?.top_asks || [];
+    const friction = combined.friction_signals || {};
+    const recommendations = (combined.top_recommendations || []).slice(0, 5);
+
+    const subjectDate = key;
+    const text = [
+      `F.A.Y.E. Weekly Engagement Digest — Week of ${subjectDate}`,
+      `════════════════════════════════════════════════════`,
+      '',
+      'E.V.I.E. Usage (7d)',
+      `- AI calls: ${evieUsage.ai_calls || 0}`,
+      `- Tokens: ${evieUsage.total_tokens || 0}`,
+      `- Cost: $${Number(evieUsage.estimated_cost || 0).toFixed(4)}`,
+      `- Conversations: ${evieUsage.conversation_count || 0}`,
+      '',
+      'G.W.E.N. Usage (7d)',
+      `- AI calls: ${gwenUsage.ai_calls || 0}`,
+      `- Tokens: ${gwenUsage.total_tokens || 0}`,
+      `- Cost: $${Number(gwenUsage.estimated_cost || 0).toFixed(4)}`,
+      `- Conversations: ${gwenUsage.conversation_count || 0}`,
+      '',
+      'Top EVIE Asks',
+      formatTopAsks(evieAsks),
+      '',
+      'Top GWEN Asks',
+      formatTopAsks(gwenAsks),
+      '',
+      'Friction Signals',
+      `- Access: ${friction.access || 0}`,
+      `- Failures: ${friction.failure || 0}`,
+      `- Data gaps: ${friction.data_gap || 0}`,
+      '',
+      'Recommended Improvements',
+      recommendations.length
+        ? recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')
+        : '1. No priority recommendations this week.',
+      '',
+      '— F.A.Y.E. (Farm Autonomy & Yield Engine)'
+    ].join('\n');
+
+    const asksHtml = (asks) => (asks.length
+      ? `<ol>${asks.slice(0, 5).map(a => `<li>${a.topic} (${a.ask_count})</li>`).join('')}</ol>`
+      : '<p>No dominant ask clusters detected this week.</p>');
+
+    const recHtml = recommendations.length
+      ? `<ol>${recommendations.map(r => `<li>${r}</li>`).join('')}</ol>`
+      : '<ol><li>No priority recommendations this week.</li></ol>';
+
+    const html = `<div style="font-family:sans-serif;max-width:760px">
+      <h2 style="color:#0f766e">F.A.Y.E. Weekly Engagement Digest — Week of ${subjectDate}</h2>
+      <table style="border-collapse:collapse;width:100%;margin-bottom:14px">
+        <tr><th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Agent</th><th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Calls</th><th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Tokens</th><th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Cost</th><th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Conversations</th></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee">E.V.I.E.</td><td style="padding:8px;border-bottom:1px solid #eee">${evieUsage.ai_calls || 0}</td><td style="padding:8px;border-bottom:1px solid #eee">${evieUsage.total_tokens || 0}</td><td style="padding:8px;border-bottom:1px solid #eee">$${Number(evieUsage.estimated_cost || 0).toFixed(4)}</td><td style="padding:8px;border-bottom:1px solid #eee">${evieUsage.conversation_count || 0}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee">G.W.E.N.</td><td style="padding:8px;border-bottom:1px solid #eee">${gwenUsage.ai_calls || 0}</td><td style="padding:8px;border-bottom:1px solid #eee">${gwenUsage.total_tokens || 0}</td><td style="padding:8px;border-bottom:1px solid #eee">$${Number(gwenUsage.estimated_cost || 0).toFixed(4)}</td><td style="padding:8px;border-bottom:1px solid #eee">${gwenUsage.conversation_count || 0}</td></tr>
+      </table>
+      <h3 style="margin:10px 0 6px">Top EVIE Asks</h3>
+      ${asksHtml(evieAsks)}
+      <h3 style="margin:10px 0 6px">Top GWEN Asks</h3>
+      ${asksHtml(gwenAsks)}
+      <h3 style="margin:10px 0 6px">Friction Signals</h3>
+      <ul>
+        <li>Access: ${friction.access || 0}</li>
+        <li>Failures: ${friction.failure || 0}</li>
+        <li>Data gaps: ${friction.data_gap || 0}</li>
+      </ul>
+      <h3 style="margin:10px 0 6px">Recommended Improvements</h3>
+      ${recHtml}
+      <hr style="border:none;border-top:1px solid #ddd;margin:20px 0">
+      <p style="font-size:12px;color:#666">Automated by F.A.Y.E. weekly digest scheduler.</p>
+    </div>`;
+
+    await emailService.sendEmail({
+      to: briefingTo,
+      subject: `Weekly Engagement Digest — ${subjectDate}`,
+      text,
+      html
+    });
+
+    lastWeeklyDigestKey = key;
+    logger.info(`${TAG} Weekly digest sent to ${briefingTo} for week ${key}`);
+  } catch (err) {
+    logger.error(`${TAG} Weekly digest email error:`, err.message);
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════
 // Service Lifecycle
 // ══════════════════════════════════════════════════════════════════
@@ -426,6 +559,9 @@ export function startFayeIntelligence() {
     if (hour === BRIEFING_HOUR) {
       sendDailyBriefing().catch(e => logger.error(`${TAG} Briefing error:`, e));
     }
+
+    // Check if it's weekly digest time
+    sendWeeklyDigest().catch(e => logger.error(`${TAG} Weekly digest error:`, e));
   }, CHECK_INTERVAL_MS);
 
   // Schedule first briefing
@@ -437,6 +573,11 @@ export function startFayeIntelligence() {
   briefingTimeout = setTimeout(() => {
     sendDailyBriefing().catch(e => logger.error(`${TAG} Briefing error:`, e));
   }, msUntilBriefing);
+
+  // Warm-start weekly digest check shortly after boot.
+  setTimeout(() => {
+    sendWeeklyDigest().catch(e => logger.error(`${TAG} Weekly digest error:`, e));
+  }, 90_000);
 
   logger.info(`${TAG} Next briefing at ${nextBriefing.toISOString()}`);
 }

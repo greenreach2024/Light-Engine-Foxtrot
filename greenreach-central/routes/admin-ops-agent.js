@@ -56,6 +56,138 @@ function checkMarketRateLimit() {
   return true;
 }
 
+// ── Agent Engagement Analytics Helpers ───────────────────────────
+
+const ASK_TOPICS = [
+  {
+    id: 'environment_climate',
+    label: 'Environment and climate control',
+    keywords: ['temp', 'temperature', 'humidity', 'vpd', 'dehumid', 'airflow', 'fan', 'climate', 'co2', 'dli', 'ppfd', 'spectrum', 'recipe'],
+    recommendation: 'Expand guided environment diagnostics and one-click remediation actions in EVIE tools.'
+  },
+  {
+    id: 'crop_planning',
+    label: 'Crop planning and scheduling',
+    keywords: ['crop', 'harvest', 'planting', 'schedule', 'yield', 'succession', 'bench', 'zone', 'group'],
+    recommendation: 'Add planning presets and compare scenarios directly in EVIE responses.'
+  },
+  {
+    id: 'pricing_inventory',
+    label: 'Pricing, inventory, and orders',
+    keywords: ['price', 'pricing', 'inventory', 'order', 'wholesale', 'buyer', 'margin', 'cost', 'revenue'],
+    recommendation: 'Expose faster pricing and inventory adjustment actions with validation guardrails.'
+  },
+  {
+    id: 'devices_setup',
+    label: 'Devices and onboarding',
+    keywords: ['device', 'sensor', 'switchbot', 'pair', 'bluetooth', 'ble', 'onboard', 'setup', 'connect'],
+    recommendation: 'Improve device onboarding flows with clearer status and permission hints.'
+  },
+  {
+    id: 'research_grants',
+    label: 'Research and grants',
+    keywords: ['study', 'dataset', 'observation', 'grant', 'ethics', 'publication', 'protocol', 'hypothesis', 'analysis'],
+    recommendation: 'Increase GWEN workspace automation for grant drafting, data extraction, and protocol linkage.'
+  },
+  {
+    id: 'security_access',
+    label: 'Security and access control',
+    keywords: ['permission', 'access', 'forbidden', 'unauthorized', 'role', 'token', 'login', 'auth', 'security'],
+    recommendation: 'Tighten role mapping visibility and add proactive permission diagnostics in both agents.'
+  }
+];
+
+const FRICTION_PATTERNS = {
+  access: /access denied|permission denied|forbidden|unauthorized|401|403|permission|role/i,
+  failure: /error|failed|failure|exception|not working|won't|cannot|can't|broken|timeout/i,
+  data_gap: /missing|not found|no data|stale|empty|unavailable/i
+};
+
+function normalizeText(v) {
+  return String(v || '').trim().toLowerCase();
+}
+
+function classifyAsk(text) {
+  const msg = normalizeText(text);
+  if (!msg) return null;
+
+  let best = null;
+  for (const topic of ASK_TOPICS) {
+    let score = 0;
+    for (const kw of topic.keywords) {
+      if (msg.includes(kw)) score += 1;
+    }
+    if (!best || score > best.score) best = { topic, score };
+  }
+
+  return best && best.score > 0 ? best.topic : null;
+}
+
+function analyzeAskMessages(rows, topN = 5) {
+  const topicCounts = new Map();
+  const sampleByTopic = new Map();
+  const friction = { access: 0, failure: 0, data_gap: 0, total_flagged: 0 };
+
+  for (const row of rows || []) {
+    const content = String(row.content || '').trim();
+    if (!content) continue;
+    const normalized = normalizeText(content);
+    const topic = classifyAsk(normalized);
+
+    if (topic) {
+      topicCounts.set(topic.id, (topicCounts.get(topic.id) || 0) + 1);
+      if (!sampleByTopic.has(topic.id)) sampleByTopic.set(topic.id, content.slice(0, 220));
+    }
+
+    let flagged = false;
+    if (FRICTION_PATTERNS.access.test(normalized)) { friction.access += 1; flagged = true; }
+    if (FRICTION_PATTERNS.failure.test(normalized)) { friction.failure += 1; flagged = true; }
+    if (FRICTION_PATTERNS.data_gap.test(normalized)) { friction.data_gap += 1; flagged = true; }
+    if (flagged) friction.total_flagged += 1;
+  }
+
+  const top_asks = [...topicCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([id, count]) => {
+      const topic = ASK_TOPICS.find(t => t.id === id);
+      return {
+        topic_id: id,
+        topic: topic?.label || id,
+        ask_count: count,
+        example: sampleByTopic.get(id) || null,
+        suggested_improvement: topic?.recommendation || null
+      };
+    });
+
+  return { top_asks, friction };
+}
+
+function summarizeRecommendations(evieAnalysis, gwenAnalysis) {
+  const recommendations = [];
+  const seen = new Set();
+  const addRec = (text) => {
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    recommendations.push(text);
+  };
+
+  for (const item of (evieAnalysis?.top_asks || []).slice(0, 3)) addRec(item.suggested_improvement);
+  for (const item of (gwenAnalysis?.top_asks || []).slice(0, 3)) addRec(item.suggested_improvement);
+
+  const accessSignals = (evieAnalysis?.friction?.access || 0) + (gwenAnalysis?.friction?.access || 0);
+  if (accessSignals >= 3) {
+    addRec('Run a role-permission audit for EVIE and GWEN access paths, then expose a quick access-diagnostics tool to admins.');
+  }
+
+  const failureSignals = (evieAnalysis?.friction?.failure || 0) + (gwenAnalysis?.friction?.failure || 0);
+  if (failureSignals >= 5) {
+    addRec('Prioritize reliability fixes for top failing workflows and add structured fallback responses that include next best action.');
+  }
+
+  return recommendations.slice(0, 8);
+}
+
 // Helper: push the current active watchlist to a connected LEAM client
 // Uses the Express app reference stored by the router middleware
 let _expressApp = null;
@@ -778,6 +910,186 @@ export const ADMIN_TOOL_CATALOG = {
           tokens: Number(usage.rows[0]?.total_tokens || 0),
           cost: Number(Number(usage.rows[0]?.total_cost || 0).toFixed(4)),
           feedback: feedback.rows
+        };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'get_agent_engagement_report': {
+    description: 'Generate a cross-agent engagement report for E.V.I.E. and G.W.E.N. including usage, top asks, friction signals, and recommended tool/access improvements for F.A.Y.E.',
+    category: 'read',
+    required: [],
+    optional: ['days', 'farm_id', 'ask_limit'],
+    handler: async (params) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+
+        const days = Math.max(1, Math.min(90, parseInt(params.days, 10) || 14));
+        const askLimit = Math.max(3, Math.min(10, parseInt(params.ask_limit, 10) || 5));
+        const farmId = params.farm_id ? String(params.farm_id) : null;
+
+        const evieUsageSql = farmId
+          ? `SELECT
+               COUNT(*) AS call_count,
+               SUM(COALESCE(total_tokens, 0)) AS total_tokens,
+               SUM(COALESCE(estimated_cost, 0)) AS total_cost,
+               COUNT(DISTINCT farm_id) AS farm_count
+             FROM ai_usage
+             WHERE endpoint = 'assistant-chat'
+               AND created_at >= NOW() - make_interval(days => $1::int)
+               AND farm_id = $2`
+          : `SELECT
+               COUNT(*) AS call_count,
+               SUM(COALESCE(total_tokens, 0)) AS total_tokens,
+               SUM(COALESCE(estimated_cost, 0)) AS total_cost,
+               COUNT(DISTINCT farm_id) AS farm_count
+             FROM ai_usage
+             WHERE endpoint = 'assistant-chat'
+               AND created_at >= NOW() - make_interval(days => $1::int)`;
+
+        const evieUsageParams = farmId ? [days, farmId] : [days];
+        const evieUsageResult = await dbQuery(evieUsageSql, evieUsageParams);
+
+        const gwenUsageResult = await dbQuery(
+          `SELECT
+             COUNT(*) AS call_count,
+             SUM(COALESCE(total_tokens, 0)) AS total_tokens,
+             SUM(COALESCE(estimated_cost, 0)) AS total_cost,
+             COUNT(DISTINCT user_id) AS user_count
+           FROM ai_usage
+           WHERE endpoint = 'gwen_chat'
+             AND created_at >= NOW() - make_interval(days => $1::int)`,
+          [days]
+        );
+
+        const evieConversationsResult = farmId
+          ? await dbQuery(
+            `SELECT COUNT(*) AS cnt
+             FROM conversation_history
+             WHERE updated_at >= NOW() - make_interval(days => $1::int)
+               AND farm_id = $2`,
+            [days, farmId]
+          )
+          : await dbQuery(
+            `SELECT COUNT(*) AS cnt
+             FROM conversation_history
+             WHERE updated_at >= NOW() - make_interval(days => $1::int)`,
+            [days]
+          );
+
+        const gwenConversationsResult = await dbQuery(
+          `SELECT COUNT(*) AS cnt
+           FROM admin_assistant_conversations
+           WHERE conversation_id LIKE 'gwen-%'
+             AND updated_at >= NOW() - make_interval(days => $1::int)`,
+          [days]
+        );
+
+        const evieAsksResult = farmId
+          ? await dbQuery(
+            `SELECT ch.farm_id, ch.conversation_id, ch.updated_at, m->>'content' AS content
+             FROM conversation_history ch
+             CROSS JOIN LATERAL jsonb_array_elements(ch.messages) AS m
+             WHERE ch.updated_at >= NOW() - make_interval(days => $1::int)
+               AND ch.farm_id = $2
+               AND m->>'role' = 'user'
+               AND COALESCE(m->>'content', '') <> ''
+             ORDER BY ch.updated_at DESC
+             LIMIT 5000`,
+            [days, farmId]
+          )
+          : await dbQuery(
+            `SELECT ch.farm_id, ch.conversation_id, ch.updated_at, m->>'content' AS content
+             FROM conversation_history ch
+             CROSS JOIN LATERAL jsonb_array_elements(ch.messages) AS m
+             WHERE ch.updated_at >= NOW() - make_interval(days => $1::int)
+               AND m->>'role' = 'user'
+               AND COALESCE(m->>'content', '') <> ''
+             ORDER BY ch.updated_at DESC
+             LIMIT 5000`,
+            [days]
+          );
+
+        const gwenAsksResult = await dbQuery(
+          `SELECT c.admin_id, c.conversation_id, c.updated_at, m->>'content' AS content
+           FROM admin_assistant_conversations c
+           CROSS JOIN LATERAL jsonb_array_elements(c.messages) AS m
+           WHERE c.conversation_id LIKE 'gwen-%'
+             AND c.updated_at >= NOW() - make_interval(days => $1::int)
+             AND m->>'role' = 'user'
+             AND COALESCE(m->>'content', '') <> ''
+           ORDER BY c.updated_at DESC
+           LIMIT 5000`,
+          [days]
+        );
+
+        const evieToolsResult = farmId
+          ? await dbQuery(
+            `SELECT t.key AS tool, SUM((t.value)::int) AS count
+             FROM engagement_metrics em,
+                  LATERAL jsonb_each_text(COALESCE(em.tools_used, '{}'::jsonb)) AS t(key, value)
+             WHERE em.period_start >= CURRENT_DATE - $1::int
+               AND em.farm_id = $2
+             GROUP BY t.key
+             ORDER BY count DESC
+             LIMIT 10`,
+            [days, farmId]
+          )
+          : await dbQuery(
+            `SELECT t.key AS tool, SUM((t.value)::int) AS count
+             FROM engagement_metrics em,
+                  LATERAL jsonb_each_text(COALESCE(em.tools_used, '{}'::jsonb)) AS t(key, value)
+             WHERE em.period_start >= CURRENT_DATE - $1::int
+             GROUP BY t.key
+             ORDER BY count DESC
+             LIMIT 10`,
+            [days]
+          );
+
+        const evieAnalysis = analyzeAskMessages(evieAsksResult.rows || [], askLimit);
+        const gwenAnalysis = analyzeAskMessages(gwenAsksResult.rows || [], askLimit);
+        const recommendations = summarizeRecommendations(evieAnalysis, gwenAnalysis);
+
+        const evieUsage = evieUsageResult.rows[0] || {};
+        const gwenUsage = gwenUsageResult.rows[0] || {};
+
+        return {
+          ok: true,
+          period_days: days,
+          farm_filter: farmId,
+          generated_at: new Date().toISOString(),
+          agents: {
+            evie: {
+              usage: {
+                ai_calls: Number(evieUsage.call_count || 0),
+                total_tokens: Number(evieUsage.total_tokens || 0),
+                estimated_cost: Number(Number(evieUsage.total_cost || 0).toFixed(4)),
+                active_farm_count: Number(evieUsage.farm_count || 0),
+                conversation_count: Number(evieConversationsResult.rows[0]?.cnt || 0)
+              },
+              top_tools: (evieToolsResult.rows || []).map(r => ({ tool: r.tool, count: Number(r.count || 0) })),
+              ask_analysis: evieAnalysis
+            },
+            gwen: {
+              usage: {
+                ai_calls: Number(gwenUsage.call_count || 0),
+                total_tokens: Number(gwenUsage.total_tokens || 0),
+                estimated_cost: Number(Number(gwenUsage.total_cost || 0).toFixed(4)),
+                active_user_count: Number(gwenUsage.user_count || 0),
+                conversation_count: Number(gwenConversationsResult.rows[0]?.cnt || 0)
+              },
+              ask_analysis: gwenAnalysis
+            }
+          },
+          combined: {
+            top_recommendations: recommendations,
+            friction_signals: {
+              access: (evieAnalysis.friction.access || 0) + (gwenAnalysis.friction.access || 0),
+              failure: (evieAnalysis.friction.failure || 0) + (gwenAnalysis.friction.failure || 0),
+              data_gap: (evieAnalysis.friction.data_gap || 0) + (gwenAnalysis.friction.data_gap || 0),
+              total_flagged: (evieAnalysis.friction.total_flagged || 0) + (gwenAnalysis.friction.total_flagged || 0)
+            }
+          }
         };
       } catch (err) { return { ok: false, error: err.message }; }
     }

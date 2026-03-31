@@ -3,6 +3,25 @@
  * Enterprise-grade farm management and monitoring system
  */
 
+// Production hardening: suppress browser console telemetry unless explicitly enabled.
+(function() {
+    try {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const debugEnabled = isLocal || localStorage.getItem('gr.debug') === 'true';
+        if (!debugEnabled && typeof console !== 'undefined') {
+            const noop = function() {};
+            const originalError = typeof console.error === 'function' ? console.error.bind(console) : noop;
+            console.log = noop;
+            console.debug = noop;
+            console.info = noop;
+            console.warn = noop;
+            console.error = function() {
+                originalError('[client] error');
+            };
+        }
+    } catch (_) {}
+})();
+
 // =============================================================================
 // DEBUG TRACKING SYSTEM
 // Tracks all user navigation, clicks, API calls, and errors

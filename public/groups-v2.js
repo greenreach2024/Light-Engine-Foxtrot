@@ -6205,21 +6205,21 @@ function populateGroupsV2LoadGroupDropdown() {
   const selectedZone = zoneSelect ? zoneSelect.value : '';
   
   // Get groups from window.STATE.groups
-  console.log('[Groups V2] Load dropdown - Checking window.STATE:', window.STATE ? 'exists' : 'undefined');
+  grLog('[Groups V2] Load dropdown - Checking window.STATE:', window.STATE ? 'exists' : 'undefined');
   const groups = (window.STATE && Array.isArray(window.STATE.groups)) ? window.STATE.groups : [];
-  console.log('[Groups V2] Load dropdown - STATE.groups:', groups.length, 'total groups');
+  grLog('[Groups V2] Load dropdown - STATE.groups:', groups.length, 'total groups');
   if (groups.length > 0) {
-    console.log('[Groups V2] Load dropdown - First group:', groups[0]);
-    console.log('[Groups V2] Load dropdown - All groups:', groups.map(g => `${g.name} (${g.id})`));
+    grLog('[Groups V2] Load dropdown - First group:', groups[0]);
+    grLog('[Groups V2] Load dropdown - All groups:', groups.map(g => `${g.name} (${g.id})`));
   } else {
-    // Not necessarily an error in empty setups — mark as warning and capture state for debug
-    console.warn('[Groups V2] Load dropdown - ⚠️ NO GROUPS IN STATE!');
+    // Not necessarily an error in empty setups.
+    grLog('[Groups V2] Load dropdown - no groups in state');
     grLog('[Groups V2] window.STATE:', window.STATE);
     grLog('[Groups V2] window.STATE.groups:', window.STATE?.groups);
   }
   
   // Filter groups by selected room and zone
-  console.log(`[Groups V2] Load dropdown - Filtering by room="${selectedRoom}", zone="${selectedZone}"`);
+  grLog(`[Groups V2] Load dropdown - Filtering by room="${selectedRoom}", zone="${selectedZone}"`);
   let filteredGroups = groups.filter(group => {
     const groupRoom = group.roomId || group.room || group.roomName || '';
     const groupZone = group.zone || '';
@@ -6231,7 +6231,7 @@ function populateGroupsV2LoadGroupDropdown() {
     
     const matches = roomMatches && zoneMatches;
     if (!matches) {
-      console.log(`[Groups V2] Filtered out: ${group.name} (room: ${groupRoom}, zone: ${groupZone})`);
+      grLog(`[Groups V2] Filtered out: ${group.name} (room: ${groupRoom}, zone: ${groupZone})`);
     }
     
     return matches;

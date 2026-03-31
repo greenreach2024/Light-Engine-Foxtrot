@@ -424,4 +424,100 @@ router.post('/buyers/reset-password', async (req, res) => {
   }
 });
 
+// GET /api/admin/wholesale/orders - List all wholesale orders (from PostgreSQL)
+router.get('/orders', async (req, res) => {
+  try {
+    const { page = 1, limit = 50, includeArchived } = req.query;
+    const result = await pool.query(
+      'SELECT order_data FROM wholesale_orders ORDER BY created_at DESC'
+    );
+    const orders = result.rows
+      .map(row => row.order_data)
+      .filter(Boolean);
+
+    const total = orders.length;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const paged = orders.slice(offset, offset + parseInt(limit));
+
+    return res.json({
+      status: 'ok',
+      data: {
+        orders: paged,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[Admin Wholesale] Error fetching orders:', error.message);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Failed to fetch orders',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/admin/wholesale/dashboard - Wholesale dashboard summary
+router.get('/dashboard', async (req, res) => {
+  try {
+    let buyersCount = 0;
+    try {
+      const buyersResult = await pool.query('SELECT COUNT(*) as count FROM wholesale_buyers');
+      buyersCount = parseInt(buyersResult.rows[0]?.count || 0);
+    } catch (_) {}
+
+    const ordersResult = await pool.query('SELECT order_data FROM wholesale_orders ORDER BY created_at DESC');
+    const orders = ordersResult.rows.map(row => row.order_data).filter(Boolean);
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, order) => sum + Number(order.grand_total || 0), 0);
+    const activeFarms = new Set(
+      orders.flatMap((order) => (order.farm_sub_orders || []).map((sub) => sub.farm_id))
+    ).size;
+
+    return res.json({
+      status: 'ok',
+      data: {
+        totalBuyers: buyersCount,
+        totalOrders,
+        totalRevenue,
+        activeFarms
+      }
+    });
+  } catch (error) {
+    console.error('[Admin Wholesale] Error fetching dashboard:', error.message);
+    return res.status(500).json({
+      status: 'error',
+      error: 'Failed to fetch dashboard data',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/admin/wholesale/audit-log - Wholesale audit log
+router.get('/audit-log', async (req, res) => {
+  try {
+    const { orderId } = req.query;
+    if (!orderId) {
+      return res.status(400).json({ status: 'error', message: 'orderId query param required' });
+    }
+    // Attempt to read audit log from PostgreSQL
+    try {
+      const result = await pool.query(
+        'SELECT * FROM wholesale_audit_log WHERE order_id = $1 ORDER BY created_at DESC',
+        [orderId]
+      );
+      return res.json({ status: 'ok', data: { events: result.rows } });
+    } catch (_) {
+      return res.json({ status: 'ok', data: { events: [] } });
+    }
+  } catch (error) {
+    console.error('[Admin Wholesale] Error fetching audit log:', error.message);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 export default router;

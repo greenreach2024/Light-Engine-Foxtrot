@@ -504,6 +504,8 @@
       });
 
       if (view === 'checkout') {
+        this.initializeSquare();
+        setTimeout(() => this.initializeSquare(), 500);
         this.previewAllocation();
         if (this.selectedFulfillment === 'delivery') this.refreshDeliveryQuote();
       }
@@ -1194,10 +1196,12 @@
 
       try {
         // Tokenize the card via Square SDK (skipped if Square not loaded)
+        let paymentProvider = 'manual';
         let paymentSource = { type: 'manual' };
         if (this.squarePayments && this.squareCard) {
           const token = await this.createPaymentToken();
           paymentSource = { source_id: token };
+          paymentProvider = 'square';
         }
 
         const sourcing = this.getSourcingSelection();
@@ -1222,7 +1226,7 @@
             recurrence: this.getRecurrence(),
             cart: this.cart.map((item) => ({ sku_id: item.sku_id, quantity: item.quantity })),
             allocation_strategy: 'cheapest',
-            payment_provider: 'square',
+            payment_provider: paymentProvider,
             payment_source: paymentSource,
             po_number: document.getElementById('po-number')?.value?.trim() || '',
             fulfillment_method: this.selectedFulfillment,
@@ -2031,35 +2035,120 @@
      */
     squarePayments: null,
     squareCard: null,
+    squareCardAttached: false,
+    squareAttachRecoveryInProgress: false,
 
     async initializeSquare() {
       if (!window.Square) {
         console.warn('Square SDK not loaded');
-        return;
+        return false;
       }
+
       try {
-        // Fetch Square credentials from server
-        const cfgRes = await fetch('/api/wholesale/payment/config');
-        const cfgJson = await cfgRes.json();
-        const appId = cfgJson?.data?.appId;
-        const locationId = cfgJson?.data?.locationId;
+        if (!this.squarePayments || !this.squareCard) {
+          // Fetch Square credentials from server
+          const cfgRes = await fetch('/api/wholesale/payment/config');
+          const cfgJson = await cfgRes.json();
+          const appId = cfgJson?.data?.appId;
+          const locationId = cfgJson?.data?.locationId;
 
-        if (!appId || !locationId) {
-          console.warn('Square credentials not configured on server');
-          return;
+          if (!appId || !locationId) {
+            console.warn('Square credentials not configured on server');
+            return false;
+          }
+
+          this.squarePayments = window.Square.payments(appId, locationId);
+          this.squareCard = await this.squarePayments.card();
+          this.squareCardAttached = false;
         }
 
-        this.squarePayments = window.Square.payments(appId, locationId);
-        this.squareCard = await this.squarePayments.card();
-
-        const cardElementContainer = document.getElementById('card-element');
-        if (cardElementContainer) {
-          await this.squareCard.attach('#card-element');
-        }
+        return await this.ensureSquareCardAttached({ showError: false });
       } catch (err) {
         console.error('Square init error:', err);
+        this.squarePayments = null;
+        this.squareCard = null;
+        this.squareCardAttached = false;
         const displayError = document.getElementById('card-errors');
         if (displayError) displayError.textContent = 'Payment form could not load. Please refresh.';
+        return false;
+      }
+    },
+
+    async ensureSquareCardAttached({ showError = true } = {}) {
+      if (!this.squareCard) return false;
+
+      const checkoutView = document.getElementById('checkout-view');
+      const cardElementContainer = document.getElementById('card-element');
+      const checkoutIsActive = checkoutView?.classList?.contains('active');
+
+      // Do not attach while checkout is hidden; retry after navigation.
+      if (!checkoutIsActive || !cardElementContainer) {
+        return false;
+      }
+
+      if (this.squareCardAttached) return true;
+
+      try {
+        await this.squareCard.attach('#card-element');
+        this.squareCardAttached = true;
+        const displayError = document.getElementById('card-errors');
+        if (displayError) displayError.textContent = '';
+        return true;
+      } catch (err) {
+        const errName = String(err?.name || '');
+        const errMessage = String(err?.message || '');
+        if (errName === 'PaymentMethodAlreadyAttachedError' || errMessage.includes('already been attached')) {
+          this.squareCardAttached = true;
+          const displayError = document.getElementById('card-errors');
+          if (displayError) displayError.textContent = '';
+          return true;
+        }
+
+        // Recover from transient Card instance errors by rebuilding once.
+        if (!this.squareAttachRecoveryInProgress) {
+          this.squareAttachRecoveryInProgress = true;
+          try {
+            const recovered = await this.rebuildSquareCard();
+            if (recovered) return true;
+          } finally {
+            this.squareAttachRecoveryInProgress = false;
+          }
+        }
+
+        console.error('Square attach error:', err);
+        this.squareCardAttached = false;
+        const displayError = document.getElementById('card-errors');
+        if (showError && displayError) {
+          displayError.textContent = 'Payment form could not load. Please refresh.';
+        }
+        return false;
+      }
+    },
+
+    async rebuildSquareCard() {
+      if (!this.squarePayments) return false;
+
+      try {
+        if (this.squareCard?.destroy) {
+          await this.squareCard.destroy();
+        }
+      } catch (_) {
+        // Ignore destroy failures for invalid/intermediate SDK states.
+      }
+
+      this.squareCard = null;
+      this.squareCardAttached = false;
+
+      try {
+        this.squareCard = await this.squarePayments.card();
+        await this.squareCard.attach('#card-element');
+        this.squareCardAttached = true;
+        const displayError = document.getElementById('card-errors');
+        if (displayError) displayError.textContent = '';
+        return true;
+      } catch (err) {
+        console.error('Square rebuild error:', err);
+        return false;
       }
     },
 
@@ -2069,6 +2158,11 @@
     async createPaymentToken() {
       if (!this.squarePayments || !this.squareCard) {
         throw new Error('Square payments not initialized');
+      }
+
+      const attached = await this.ensureSquareCardAttached();
+      if (!attached) {
+        throw new Error('Payment form is still loading. Please wait and try again.');
       }
 
       const result = await this.squareCard.tokenize();
@@ -2383,9 +2477,7 @@
     if (checkoutNavBtn) {
       checkoutNavBtn.addEventListener('click', () => {
         setTimeout(() => {
-          if (!app.squarePayments) {
-            app.initializeSquare();
-          }
+          app.initializeSquare();
         }, 100);
       });
     }

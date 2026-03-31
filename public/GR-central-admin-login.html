@@ -249,23 +249,9 @@
         // Check if already logged in
         const existingToken = localStorage.getItem('admin_token');
         const forceLogin = window.location.search.includes('forceLogin=true');
-        console.log('========================================');
-        console.log('[LOGIN PAGE] Checking for existing token');
-        console.log('[LOGIN PAGE] Current hostname:', window.location.hostname);
-        console.log('[LOGIN PAGE] Current URL:', window.location.href);
-        console.log('[LOGIN PAGE] API_BASE:', API_BASE);
-        console.log('[LOGIN PAGE] Existing token:', existingToken ? existingToken.substring(0, 30) + '...' : 'NONE');
-        console.log('[LOGIN PAGE] LocalStorage keys:', Object.keys(localStorage));
-        console.log('========================================');
-        
+
         if (existingToken && !forceLogin) {
-            console.log('[LOGIN PAGE] Token exists - will redirect in 5 seconds...');
-            alert(`EXISTING TOKEN FOUND!\n\nHostname: ${window.location.hostname}\nURL: ${window.location.href}\nAPI_BASE: ${API_BASE}\nToken length: ${existingToken.length}\n\nWaiting 5 seconds - check console!\n\nClick OK to see console.`);
-            setTimeout(() => {
-                const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
-                console.log('[LOGIN PAGE] Redirecting to:', redirectUrl);
-                window.location.href = redirectUrl;
-            }, 5000);
+            window.location.href = `${API_BASE}/GR-central-admin.html`;
         }
 
         // Demo mode detection (S3 static hosting or demo domain)
@@ -279,9 +265,6 @@
             .then(res => res.json())
             .then(env => {
                 demoAuthEnabled = !!env.demoAuthEnabled;
-                if (isDemoMode && demoAuthEnabled) {
-                    console.log('🎭 Demo mode detected - demo auth enabled');
-                }
             })
             .catch(() => {
                 demoAuthEnabled = false;
@@ -345,33 +328,16 @@
 
                 if (response.ok && data.success) {
                     // Store token
-                    console.log('========================================');
-                    console.log('[Login] STORING TOKEN');
-                    console.log('[Login] Current hostname:', window.location.hostname);
-                    console.log('[Login] Current URL:', window.location.href);
-                    console.log('[Login] API_BASE:', API_BASE);
-                    console.log('[Login] Token to store:', data.token.substring(0, 30) + '...');
-                    console.log('[Login] Token length:', data.token.length);
-                    console.log('========================================');
-                    
                     localStorage.setItem('admin_token', data.token);
                     localStorage.setItem('admin_email', data.admin.email);
                     localStorage.setItem('admin_name', data.admin.name);
                     localStorage.setItem('admin_role', data.admin.role || 'admin');
-                    
-                    // Verify storage
-                    const storedToken = localStorage.getItem('admin_token');
-                    console.log('[Login] VERIFICATION: Token stored?', !!storedToken);
-                    console.log('[Login] VERIFICATION: Stored token matches?', storedToken === data.token);
-                    console.log('[Login] VERIFICATION: LocalStorage keys:', Object.keys(localStorage));
-                    
+
                     showAlert('Login successful! Redirecting in 3 seconds...', 'success');
                     
                     // Wait 3 seconds before redirect to ensure storage completes
                     setTimeout(() => {
-                        const redirectUrl = `${API_BASE}/GR-central-admin.html?debug=true`;
-                        console.log('[Login] Redirecting to:', redirectUrl);
-                        window.location.href = redirectUrl;
+                        window.location.href = `${API_BASE}/GR-central-admin.html`;
                     }, 3000);
                 } else {
                     // Handle specific error cases
@@ -391,7 +357,6 @@
                     loginButton.innerHTML = 'Login to Admin Portal';
                 }
             } catch (error) {
-                console.error('Login error:', error);
                 showAlert('Network error. Please check your connection and try again.', 'error');
                 loginButton.disabled = false;
                 loginButton.innerHTML = 'Login to Admin Portal';

@@ -44,6 +44,7 @@ import {
   addMarketEvent,
   allocateCartFromNetwork,
   buildAggregateCatalog,
+  refreshNetworkInventory,
   generateNetworkRecommendations,
   getBuyerLocationFromBuyer,
   getNetworkTrends,
@@ -1970,6 +1971,15 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
     if (!buyer_account?.email) throw new ValidationError('buyer_account.email is required');
     if (!delivery_date) throw new ValidationError('delivery_date is required');
     const isPickup = String(fulfillment_method || '').toLowerCase() === 'pickup';
+    const normalizedPaymentProvider = String(payment_provider || 'manual').toLowerCase();
+    const squareSourceId = req.body?.payment_source?.source_id || req.body?.payment_source?.sourceId || null;
+    if (normalizedPaymentProvider === 'square' && !squareSourceId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Payment authorization is required. Please enter card details and try again.'
+      });
+    }
+
     if (!isPickup && (!normalizedDeliveryAddress?.street || !normalizedDeliveryAddress?.city || !normalizedDeliveryAddress?.zip)) {
       throw new ValidationError('delivery_address street/city/zip are required');
     }
@@ -2036,7 +2046,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
               ...sub,
               buyer_email: buyer_account.email
             })),
-            paymentSource: req.body.payment_source || { source_id: 'CARD_ON_FILE' },
+            paymentSource: { source_id: squareSourceId },
             commissionRate
           });
           
@@ -2084,33 +2094,61 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
       const byId = new Map(farms.map((f) => [String(f.farm_id), f]));
       const farmApiKeys = loadFarmApiKeys();
 
-      // Resolve auth credentials: prefer stored farm credentials, fall back to farm-api-keys.json
-      const resolveAuth = (farmObj, farmId) => {
-        if (farmObj?.api_key) return { farmId: farmObj.auth_farm_id || farmId, apiKey: farmObj.api_key };
-        if (farmObj?.auth_farm_id && farmApiKeys[farmObj.auth_farm_id]?.api_key) {
-          return { farmId: farmObj.auth_farm_id, apiKey: farmApiKeys[farmObj.auth_farm_id].api_key };
+      const resolveAuthCandidates = (farmObj, farmId) => {
+        const idCandidates = Array.from(new Set([
+          String(farmObj?.auth_farm_id || '').trim(),
+          String(farmId || '').trim(),
+          String(process.env.FARM_ID || '').trim()
+        ].filter(Boolean)));
+
+        const keyCandidates = Array.from(new Set([
+          String(farmObj?.api_key || '').trim(),
+          String(farmObj?.auth_farm_id ? farmApiKeys[farmObj.auth_farm_id]?.api_key || '' : '').trim(),
+          String(farmApiKeys[farmId]?.api_key || '').trim(),
+          String(process.env.WHOLESALE_FARM_API_KEY || '').trim(),
+          String(process.env.GREENREACH_API_KEY || '').trim()
+        ].filter(Boolean)));
+
+        const candidates = [];
+        for (const id of idCandidates.length ? idCandidates : [String(farmId || '').trim()]) {
+          for (const key of keyCandidates) {
+            candidates.push({ farmId: id, apiKey: key });
+          }
         }
-        if (farmApiKeys[farmId]?.api_key) return { farmId, apiKey: farmApiKeys[farmId].api_key };
-        const envKey = process.env.WHOLESALE_FARM_API_KEY;
-        if (envKey) return { farmId, apiKey: envKey };
-        const entry = Object.entries(farmApiKeys).find(([, v]) => v?.status === 'active' && v?.api_key);
-        if (entry) return { farmId: entry[0], apiKey: entry[1].api_key };
-        return { farmId, apiKey: null };
+
+        if (candidates.length === 0) {
+          candidates.push({ farmId: String(farmId || '').trim(), apiKey: null });
+        }
+
+        return candidates.slice(0, 8);
       };
 
       const farmCallWithTimeout = async (farmBaseUrl, urlPath, body, farmId, farmObj, timeoutMs = 8000) => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const auth = resolveAuth(farmObj, farmId);
-          const headers = { 'Content-Type': 'application/json' };
-          if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
-          if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
-          const resp = await fetch(new URL(urlPath, farmBaseUrl).toString(), {
-            method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal
-          });
-          const json = await resp.json().catch(() => null);
-          return { ok: resp.ok && json?.ok !== false, status: resp.status, json };
+          const candidates = resolveAuthCandidates(farmObj, farmId);
+          let lastResult = { ok: false, status: 401, json: { error: 'No auth candidates available' } };
+
+          for (const auth of candidates) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (auth.farmId) headers['X-Farm-ID'] = auth.farmId;
+            if (auth.apiKey) headers['X-API-Key'] = auth.apiKey;
+
+            const resp = await fetch(new URL(urlPath, farmBaseUrl).toString(), {
+              method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal
+            });
+            const json = await resp.json().catch(() => null);
+            const result = { ok: resp.ok && json?.ok !== false, status: resp.status, json };
+            if (result.ok) return result;
+
+            lastResult = result;
+            if (resp.status !== 401 && resp.status !== 403) {
+              return result;
+            }
+          }
+
+          return lastResult;
         } finally {
           clearTimeout(timer);
         }
@@ -2132,7 +2170,15 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
 
       for (const sub of order.farm_sub_orders || []) {
         const farm = byId.get(String(sub.farm_id));
-        const farmUrl = farm?.api_url || farm?.url;
+        let farmUrl = farm?.api_url || farm?.url;
+        // If farm registry points back to Central, route reservation calls to the configured LE endpoint.
+        try {
+          const host = new URL(String(farmUrl || '')).hostname;
+          if (host && host.includes('greenreachgreens.com') && process.env.FARM_EDGE_URL) {
+            farmUrl = process.env.FARM_EDGE_URL;
+          }
+        } catch (_) { /* non-fatal URL parse */ }
+        if (!farmUrl && process.env.FARM_EDGE_URL) farmUrl = process.env.FARM_EDGE_URL;
         if (!farmUrl) continue;
 
         try {
@@ -2146,7 +2192,11 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             console.log(`[Checkout] Reserved inventory at farm ${sub.farm_id}`);
           } else {
             console.warn(`[Checkout] Reservation rejected by farm ${sub.farm_id}:`, reserveResult.json?.error || reserveResult.status);
-            reservationError = `Farm ${sub.farm_id} rejected reservation: ${reserveResult.json?.error || 'HTTP ' + reserveResult.status}`;
+            const insufficientItems = Array.isArray(reserveResult.json?.insufficient_items) ? reserveResult.json.insufficient_items : [];
+            const insufficientDetail = insufficientItems.length > 0
+              ? ` [${insufficientItems.map((it) => `${it.sku_id}: requested ${it.requested}, available ${it.available}`).join('; ')}]`
+              : '';
+            reservationError = `Farm ${sub.farm_id} rejected reservation: ${reserveResult.json?.error || 'HTTP ' + reserveResult.status}${insufficientDetail}`;
             break;
           }
         } catch (err) {
@@ -2213,7 +2263,10 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         });
       }
 
-      // Phase 2: If payment succeeded, confirm (convert reservations to permanent deductions)
+      // Phase 2: Handle reservation lifecycle by payment outcome
+      // - completed: confirm reservations into deductions
+      // - failed: release reservations
+      // - pending: keep reservations active so inventory reflects standing pending orders
       if (paymentSuccess) {
         for (const reserved of reservedFarms) {
           try {
@@ -2226,7 +2279,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             console.warn(`[Checkout] Confirm failed for farm ${reserved.farm_id} (reservation still held):`, confirmErr.message);
           }
         }
-      } else {
+      } else if (payment.status === 'failed') {
         for (const reserved of reservedFarms) {
           try {
             await farmCallWithRetry(reserved.farmUrl, '/api/wholesale/inventory/release', {
@@ -2237,6 +2290,8 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
             console.error(`[Checkout] Release failed for farm ${reserved.farm_id}:`, releaseErr.message);
           }
         }
+      } else {
+        console.log(`[Checkout] Keeping ${reservedFarms.length} reservations active for pending payment on order ${order.master_order_id}`);
       }
 
       // Reflect payment outcome in order status
@@ -2298,12 +2353,25 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
         console.warn('[Wholesale] Delivery ledger persistence failed:', err.message);
       });
 
+      // Refresh network inventory cache immediately so wholesale catalog/UI reflects
+      // reservation/confirmation changes without waiting for stale-cache timeout.
+      refreshNetworkInventory().catch((err) => {
+        console.warn('[Wholesale] Network inventory refresh after checkout failed:', err.message);
+      });
+
       // Phase 3 (async/best-effort): Notify farms + send confirmation email
       (async () => {
         try {
           for (const sub of order.farm_sub_orders || []) {
             const farm = byId.get(String(sub.farm_id));
-            const farmUrl = farm?.api_url || farm?.url;
+            let farmUrl = farm?.api_url || farm?.url;
+            try {
+              const host = new URL(String(farmUrl || '')).hostname;
+              if (host && host.includes('greenreachgreens.com') && process.env.FARM_EDGE_URL) {
+                farmUrl = process.env.FARM_EDGE_URL;
+              }
+            } catch (_) { /* non-fatal URL parse */ }
+            if (!farmUrl && process.env.FARM_EDGE_URL) farmUrl = process.env.FARM_EDGE_URL;
             if (!farmUrl) continue;
             try {
               await farmCallWithTimeout(farmUrl, '/api/wholesale/order-events', {
@@ -2312,6 +2380,7 @@ router.post('/checkout/execute', checkoutLimiter, requireWholesaleDbForCriticalP
                 farm_id: sub.farm_id,
                 delivery_date: order.delivery_date,
                 created_at: order.created_at,
+                payment_status: payment.status,
                 items: (sub.items || []).map((it) => ({
                   sku_id: it.sku_id, product_name: it.product_name, quantity: it.quantity, unit: it.unit
                 }))

@@ -30,7 +30,7 @@
       if (enabled) console.debug(...args);
     }
     window.grLog = window.grLog || grLog;
-    console.debug('[index.html] Set window.API_BASE to:', window.API_BASE);
+    grLog('[index.html] Set window.API_BASE to:', window.API_BASE);
     
     // DEBUG: Version tracking
     const PAGE_VERSION = {
@@ -39,8 +39,8 @@
       userAgent: navigator.userAgent,
       url: window.location.href
     };
-    console.debug('🔍 PAGE LOAD DEBUG:', PAGE_VERSION);
-    console.debug('🔍 Cache headers:', document.lastModified);
+    grLog('[index.html] Page load debug:', PAGE_VERSION);
+    grLog('[index.html] Cache headers:', document.lastModified);
     window.__PAGE_VERSION__ = PAGE_VERSION;
   </script>
   <script src="/js/light-engine-help.js" defer></script>
@@ -149,12 +149,12 @@
       try {
         localStorage.setItem('__test__', '1');
         localStorage.removeItem('__test__');
-        console.log('✅ localStorage available (normal browsing mode)');
+        grLog('localStorage available (normal browsing mode)');
       } catch (e) {
         // localStorage is blocked - show warning
         document.getElementById('privateModeWarning').style.display = 'block';
-        console.warn('⚠️ localStorage blocked - private browsing mode detected');
-        console.log('💡 Authentication will work via sessionStorage (this tab only)');
+        grLog('localStorage blocked - private browsing mode detected');
+        grLog('Authentication will work via sessionStorage (this tab only)');
       }
     })();
   </script>
@@ -2669,7 +2669,7 @@
         return;
       }
       
-      console.log('[Dashboard] ✅ Token found:', token.substring(0, 20) + '...');
+      grLog('[Dashboard] Token found; running setup status check');
       
       try {
         const response = await fetch('/api/setup-wizard/status', {
@@ -2677,20 +2677,19 @@
         });
         
         if (!response.ok) {
-          console.warn('[Dashboard] ⚠️ Setup status check failed (HTTP ' + response.status + ')');
-          console.log('[Dashboard] Token may be invalid or expired - consider re-logging in');
+          grLog('[Dashboard] Setup status check failed (HTTP ' + response.status + ')');
           return; // Don't redirect on error, let normal auth flow handle it
         }
         
         const data = await response.json();
         
         if (data.success && !data.setupCompleted) {
-          console.log('[Dashboard] Setup not completed, continuing to dashboard');
+          grLog('[Dashboard] Setup not completed, continuing to dashboard');
         } else {
-          console.log('[Dashboard] Setup complete, loading dashboard');
+          grLog('[Dashboard] Setup complete, loading dashboard');
         }
       } catch (error) {
-        console.error('[Dashboard] Setup check error:', error);
+        grLog('[Dashboard] Setup check error:', error?.message || error);
         // Don't redirect on network errors
       }
     }

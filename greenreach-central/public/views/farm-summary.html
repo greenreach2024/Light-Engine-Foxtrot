@@ -2783,7 +2783,7 @@
         `;
         
       } catch (error) {
-        console.error('Weather loading error:', error);
+        grLog('Weather loading error:', error?.message || error);
         const weatherDiv = document.getElementById('weatherDisplay');
         if (weatherDiv) weatherDiv.style.display = 'none';
       }
@@ -3209,8 +3209,6 @@
           
           // Aggregate sensor readings from IoT devices in this zone
           if (zoneSensorDevices.length > 0) {
-            console.log(`[Farm Summary] Found ${zoneSensorDevices.length} sensor(s) in ${zone.name}:`, 
-              zoneSensorDevices.map(d => ({id: d.id, name: d.name, temp: d.telemetry?.temperature, humidity: d.telemetry?.humidity})));
             
             let tempSum = 0, humiditySum = 0, tempCount = 0, humidityCount = 0;
             
@@ -3235,10 +3233,8 @@
               vpd = calculateVPD(temp, humidity);
             }
             
-            if (temp != null || humidity != null) {
-              console.log(`[Farm Summary] ${zone.name} aggregated: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
-            } else {
-              console.log(`[Farm Summary] IoT devices in ${zone.name} have no readings, trying envData...`);
+            if (temp == null && humidity == null) {
+              grLog(`[Farm Summary] IoT devices in ${zone.name} have no readings, trying envData...`);
             }
           }
 
@@ -3262,7 +3258,7 @@
               zone.rhSetpoint = zoneSensors.rh?.setpoint;
               
               if (temp != null || humidity != null || vpd != null) {
-                console.log(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
+                grLog(`[Farm Summary] ${zone.name} using envData from ${envZone.id}: temp=${temp?.toFixed(1)}°C, humidity=${humidity?.toFixed(0)}%, vpd=${vpd?.toFixed(2)}kPa`);
               }
             }
           }
@@ -3285,19 +3281,14 @@
           
           // Build group cards with harvest countdown
           let groupsHtml = '';
-          console.log(`[Zone ${zone.name}] Found ${zoneGroups.length} group(s)`);
           if (zoneGroups.length > 0) {
             for (const group of zoneGroups) {
-              console.log(`[Zone ${zone.name}] Processing group:`, group.id || group.name, {
-                planId: group.planId,
-                plan: group.plan,
-                hasAnchor: !!group.planConfig?.anchor,
-                hasSeedDate: !!(group.planConfig?.anchor?.seedDate || group.planConfig?.seedDate || group.seedDate || group.planSeedDate)
-              });
               // Use robust plan lookup (supports id/name/key variations)
               const planLookupKey = group.planId || group.plan || group.planKey || group.planConfig?.planId || group.planConfig?.preview?.planId;
               const plan = findPlanById(plans, planLookupKey);
-              console.log(`[Zone ${zone.name}] Plan lookup: key="${planLookupKey}" → found=${!!plan}, crop=${plan?.crop}`);
+              if (!plan && planLookupKey) {
+                grLog(`[Zone ${zone.name}] Plan lookup miss for key="${planLookupKey}"`);
+              }
               const planLabel = plan?.crop
                 || plan?.name
                 || group.planConfig?.preview?.planName
@@ -3961,13 +3952,10 @@
           `;
         }
 
-        console.log('[Zone Summaries] Rendering', zones.length, 'zone cards');
         container.innerHTML = html;
-        console.log('[Zone Summaries] Zone summaries rendered successfully');
         
         // Render AI Harvest Predictions for all groups (P3)
         if (window.harvestPredictions && typeof window.harvestPredictions.renderBadge === 'function') {
-          console.log('[Zone Summaries] Rendering AI harvest predictions for groups...');
           let predictionCount = 0;
           zones.forEach(zone => {
             const zoneGroups = groups.filter(g => {
@@ -3989,12 +3977,11 @@
               }
             });
           });
-          console.log(`[Zone Summaries] Rendered ${predictionCount} AI prediction badges`);
+          grLog(`[Zone Summaries] Rendered ${predictionCount} AI prediction badges`);
         }
         
         // Render AI Succession Planning suggestions for all groups (P4)
         if (window.successionPlanner && typeof window.successionPlanner.render === 'function') {
-          console.log('[Zone Summaries] Rendering AI succession planning suggestions...');
           let suggestionCount = 0;
           zones.forEach(zone => {
             const zoneGroups = groups.filter(g => {
@@ -4015,7 +4002,7 @@
               }
             });
           });
-          console.log(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
+          grLog(`[Zone Summaries] Rendered ${suggestionCount} AI succession suggestions`);
         }
 
         // ── Phase 4 Ticket 4.4: Central Planting Suggestions ───────────────
@@ -7715,7 +7702,7 @@
             const data = await resp.json();
             groups = data.groups || [];
           }
-        } catch (e) { console.warn('Failed to load groups:', e); }
+        } catch (e) { grLog('Failed to load groups:', e?.message || e); }
 
         const group = groups.find(g => g.id === groupId);
         const harvestCycle = group?.planConfig?.harvestCycle;
@@ -7921,7 +7908,7 @@
             groups = data.groups || [];
           }
         } catch (e) {
-          console.warn('Failed to load groups:', e);
+          grLog('Failed to load groups:', e?.message || e);
         }
         
         // Find next available number for this crop in this zone

@@ -19,6 +19,12 @@ import {
 } from '../lib/input-validation.js';
 import * as reservationStore from '../lib/wholesale/reservation-store.js';
 
+let reservationCleanupStarted = false;
+if (!reservationCleanupStarted) {
+  reservationStore.startReservationCleanup();
+  reservationCleanupStarted = true;
+}
+
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -347,7 +353,10 @@ router.get('/inventory', async (req, res) => {
         for (const row of dbResult.rows) {
           const cropName = row.product_name || 'Unknown';
           const qtyLbs = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
-          const skuId = `SKU-${cropName.toUpperCase().replace(/\s+/g, '-')}-MANUAL`;
+          const skuId = String(row.product_id || cropName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+          const reservedQty = Number(reservedBySku.get(skuId) || 0);
+          const deductedQty = Number(deductedBySku.get(skuId) || 0);
+          const actualAvailable = Math.max(0, qtyLbs - reservedQty - deductedQty);
           const pricePerUnit = Number(row.wholesale_price || row.retail_price || 0);
           lots.push({
             lot_id: `LOT-MANUAL-${row.product_id}`,
@@ -355,9 +364,9 @@ router.get('/inventory', async (req, res) => {
             label_text: `${cropName} (manual entry)`,
             sku_id: skuId,
             sku_name: `${cropName}, ${qtyLbs} lb`,
-            qty_available: qtyLbs,
-            qty_reserved: 0,
-            qty_deducted: 0,
+            qty_available: actualAvailable,
+            qty_reserved: reservedQty,
+            qty_deducted: deductedQty,
             unit: 'lb',
             pack_size: 1,
             price_per_unit: pricePerUnit,
@@ -567,27 +576,105 @@ router.post('/inventory/reserve', wholesaleAuthMiddleware, express.json({ limit:
     const farmInfo = readFarmInfo();
     const inventoryLots = buildLotsFromFarmData(groups, farmInfo, new Date(), reservedBySku, deductedBySku);
 
+    // Include manual inventory entries from farm_inventory DB in reservation checks
+    const db = req.app.locals.db;
+    if (db) {
+      try {
+        const dbResult = await db.query(
+          `SELECT product_id, product_name, quantity_available, manual_quantity_lbs,
+                  wholesale_price, retail_price, category
+           FROM farm_inventory
+           WHERE farm_id = $1
+             AND COALESCE(quantity_available, manual_quantity_lbs, 0) > 0
+           ORDER BY product_name`,
+          [farmInfo.farmId]
+        );
+
+        for (const row of dbResult.rows) {
+          const cropName = row.product_name || 'Unknown';
+          const qtyLbs = Number(row.quantity_available ?? row.manual_quantity_lbs ?? 0);
+          const skuId = String(row.product_id || cropName).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+          const reservedQty = Number(reservedBySku.get(skuId) || 0);
+          const deductedQty = Number(deductedBySku.get(skuId) || 0);
+          const actualAvailable = Math.max(0, qtyLbs - reservedQty - deductedQty);
+          const pricePerUnit = Number(row.wholesale_price || row.retail_price || 0);
+
+          inventoryLots.push({
+            lot_id: `LOT-MANUAL-${row.product_id}`,
+            qr_payload: `GRTRACE|${farmInfo.farmId}|LOT-MANUAL-${row.product_id}|${skuId}|${new Date().toISOString()}`,
+            label_text: `${cropName} (manual entry)`,
+            sku_id: skuId,
+            sku_name: `${cropName}, ${qtyLbs} lb`,
+            qty_available: actualAvailable,
+            qty_reserved: reservedQty,
+            qty_deducted: deductedQty,
+            unit: 'lb',
+            pack_size: 1,
+            price_per_unit: pricePerUnit,
+            harvest_date_start: new Date().toISOString(),
+            harvest_date_end: new Date().toISOString(),
+            quality_flags: ['local', 'vertical_farm', 'manual_entry'],
+            location: row.category || 'Manual',
+            crop_type: cropName,
+            days_to_harvest: 0
+          });
+        }
+      } catch (dbErr) {
+        console.warn('[Wholesale Sync] Could not query farm_inventory for reservation validation:', dbErr.message);
+      }
+    }
+
+    const normalizeSkuKey = (value) => String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const aliasesForLot = (lot) => {
+      const aliases = new Set();
+      const rawSku = String(lot?.sku_id || '').trim();
+      const cropType = String(lot?.crop_type || '').trim();
+
+      if (rawSku) aliases.add(rawSku);
+      if (cropType) aliases.add(cropType);
+
+      const legacy = rawSku.match(/^SKU-(.+)-5LB$/i);
+      if (legacy?.[1]) {
+        aliases.add(legacy[1].replace(/_/g, '-'));
+      }
+
+      return Array.from(aliases).map(normalizeSkuKey).filter(Boolean);
+    };
+
     const inventoryBySku = new Map();
     for (const lot of inventoryLots) {
-      const current = inventoryBySku.get(lot.sku_id) || 0;
-      inventoryBySku.set(lot.sku_id, current + Number(lot.qty_available || 0));
+      const qty = Number(lot.qty_available || 0);
+      for (const alias of aliasesForLot(lot)) {
+        const current = inventoryBySku.get(alias) || 0;
+        inventoryBySku.set(alias, current + qty);
+      }
     }
 
     const requestedBySku = new Map();
     for (const item of items) {
       if (!item.sku_id || !item.quantity) continue;
-      const current = requestedBySku.get(item.sku_id) || 0;
-      requestedBySku.set(item.sku_id, current + Number(item.quantity || 0));
+      const key = normalizeSkuKey(item.sku_id);
+      const current = requestedBySku.get(key) || 0;
+      requestedBySku.set(key, current + Number(item.quantity || 0));
     }
 
     const insufficientItems = [];
     for (const [skuId, requestedQty] of requestedBySku.entries()) {
+      const hasLocalSku = inventoryBySku.has(skuId);
       const availableNow = inventoryBySku.get(skuId) || 0;
       const alreadyReserved = reservedBySku.get(skuId) || 0;
       const alreadyDeducted = deductedBySku.get(skuId) || 0;
       const totalInventory = availableNow + alreadyReserved + alreadyDeducted;
 
       if (requestedQty > availableNow) {
+        if (!hasLocalSku && availableNow === 0) {
+          console.warn(`[Wholesale Sync] SKU ${skuId} missing from local inventory map; allowing reservation pass-through for order ${order_id}`);
+          continue;
+        }
         insufficientItems.push({
           sku_id: skuId,
           requested: requestedQty,

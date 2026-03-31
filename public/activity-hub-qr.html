@@ -271,12 +271,6 @@
     let farmName = (_sess && _sess.farmName) || localStorage.getItem('farmName') || localStorage.getItem('farm_name') || sessionStorage.getItem('farm_name');
     let token = (_sess && _sess.token) || localStorage.getItem('deviceToken') || localStorage.getItem('token') || localStorage.getItem('auth_token') || sessionStorage.getItem('token');
 
-    console.log('[ActivityHub QR] Credentials loaded:', { 
-      farmId: farmId ? `${farmId.substring(0, 15)}...` : 'null', 
-      farmName: farmName || 'null',
-      hasToken: !!token 
-    });
-
     // Auto-fetch credentials from server if localStorage is empty
     async function ensureCredentials() {
       if (farmId && token) return true;
@@ -291,12 +285,11 @@
             localStorage.setItem('farmId', farmId);
             localStorage.setItem('farmName', farmName);
             localStorage.setItem('deviceToken', token);
-            console.log('[ActivityHub QR] Auto-fetched credentials:', farmId);
             return true;
           }
         }
       } catch (e) {
-        console.error('[ActivityHub QR] Failed to fetch credentials:', e);
+        // Silent fail; page will render login-required state.
       }
       return false;
     }
@@ -328,26 +321,21 @@
       const host = window.location.host || '10.42.0.1:8091';
       const protocol = window.location.protocol || 'http:';
       const pairingUrl = `${protocol}//${host}/views/tray-inventory.html?pair=${encodeURIComponent(token)}|${encodeURIComponent(farmId)}|${encodeURIComponent(farmName || 'My Farm')}`;
-      
-      console.log('[ActivityHub QR] Generating pairing QR code...');
-      console.log('[ActivityHub QR] Pairing URL:', pairingUrl);
-      console.log('[ActivityHub QR] Token present:', token ? 'YES' : 'NO');
+      const safeDisplayUrl = `${protocol}//${host}/views/tray-inventory.html`;
       
       // Display pairing URL info
       urlDisplay.innerHTML = `
         <div style="margin-bottom: 1rem;">
-          <strong style="font-size: 1rem; color: #e2e8f0;">Pairing URL:</strong><br>
-          <code style="display: block; margin-top: 0.5rem; padding: 0.75rem; font-size: 0.95rem; font-weight: 600; color: #34d399; background: rgba(0, 0, 0, 0.4); border-radius: 6px; word-break: break-all; line-height: 1.5;">${pairingUrl}</code>
+          <strong style="font-size: 1rem; color: #e2e8f0;">Secure Pairing Endpoint:</strong><br>
+          <code style="display: block; margin-top: 0.5rem; padding: 0.75rem; font-size: 0.95rem; font-weight: 600; color: #34d399; background: rgba(0, 0, 0, 0.4); border-radius: 6px; word-break: break-all; line-height: 1.5;">${safeDisplayUrl}</code>
         </div>
         <div style="font-size: 1rem; color: #cbd5e1; font-weight: 500;">
-          Scan with iPad camera → Safari opens → Auto-pairs tablet
+          Scan with iPad camera to open and pair securely.
         </div>
       `;
 
       // Generate QR code using QRCode library
       try {
-        console.log('[ActivityHub QR] Checking QRCode library...', typeof QRCode);
-        
         if (typeof QRCode !== 'undefined') {
           new QRCode(qrContainer, {
             text: pairingUrl,
@@ -357,16 +345,12 @@
             colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.H
           });
-          console.log('[ActivityHub QR] QR code generated successfully via QRCode.js');
         } else {
-          console.warn('[ActivityHub QR] QRCode library not loaded, using fallback API');
           // Fallback to API-based QR code generation
           const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pairingUrl)}`;
           qrContainer.innerHTML = `<img src="${qrApiUrl}" alt="Activity Hub QR Code" style="width: 200px; height: 200px; border: 4px solid #10b981; border-radius: 8px;">`;
-          console.log('[ActivityHub QR] QR code generated via API fallback');
         }
       } catch (error) {
-        console.error('[ActivityHub] QR generation failed:', error);
         qrContainer.innerHTML = '<div style="color: #ef4444;">❌ Failed to generate QR code</div>';
         errorMessage.textContent = `Error generating QR code: ${error.message}`;
         errorMessage.style.display = 'block';
@@ -375,7 +359,6 @@
 
     // Function to regenerate QR code (useful if token refreshed)
     function regenerateQR() {
-      console.log('[ActivityHub] Regenerating QR code...');
       generateQRCode();
       
       // Show feedback
@@ -402,7 +385,7 @@
     setInterval(() => {
       const currentToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (currentToken !== token && currentToken) {
-        console.log('[ActivityHub] Token changed, regenerating QR...');
+        token = currentToken;
         generateQRCode();
       }
     }, 5000);
