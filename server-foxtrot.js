@@ -2238,7 +2238,21 @@ if (AUDIT_LOG_ENABLED) {
 // =====================================================
 // Viewers get read-only access. All non-GET/HEAD/OPTIONS requests from
 // viewer-role JWTs are blocked with 403 before reaching any route handler.
+// EXCEPTION: AI agent endpoints (E.V.I.E., F.A.Y.E., G.W.E.N.) and help
+// routes are whitelisted so viewers can engage with AI assistants and
+// learn what the platform can do with full access.
 // Login, public catalog, and unauthenticated routes are unaffected.
+const VIEWER_ALLOWED_PATHS = [
+  '/api/assistant/chat',
+  '/api/assistant/chat/stream',
+  '/api/assistant/upload-image',
+  '/api/admin/assistant/chat',
+  '/api/admin/assistant/chat/stream',
+  '/api/admin/assistant/memory',
+  '/api/research/gwen/chat',
+  '/api/gwen/chat',
+  '/api/grant-wizard',
+];
 app.use((req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
 
@@ -2249,6 +2263,11 @@ app.use((req, res, next) => {
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, JWT_SECRET_KEY);
     if (decoded.role === 'viewer') {
+      // Allow AI agent and help routes for viewers
+      const p = req.path;
+      if (VIEWER_ALLOWED_PATHS.some(allowed => p === allowed || p.startsWith(allowed + '/'))) {
+        return next();
+      }
       console.warn(`[RBAC] Viewer write-block: ${req.method} ${req.path} by ${decoded.email}`);
       return res.status(403).json({
         success: false,
@@ -2260,7 +2279,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-console.log('[Security] Viewer role write-block middleware enabled');
+console.log('[Security] Viewer role write-block middleware enabled (AI agents whitelisted)');
 
 app.use(buyerRouter);
 

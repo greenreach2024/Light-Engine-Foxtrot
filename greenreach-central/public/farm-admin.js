@@ -7371,7 +7371,7 @@ function enforceViewerMode() {
     const banner = document.createElement('div');
     banner.id = 'viewer-mode-banner';
     banner.style.cssText = 'background: #fef3cd; border-bottom: 2px solid #f0c36d; padding: 10px 20px; text-align: center; font-size: 14px; font-weight: 600; color: #856404; position: sticky; top: 0; z-index: 9999;';
-    banner.textContent = 'VIEW ONLY -- You have read-only access. Contact your farm admin to request edit permissions.';
+    banner.textContent = 'VIEW ONLY -- You have read-only access. E.V.I.E., G.W.E.N., F.A.Y.E., and Help are fully available. Contact your farm admin for edit permissions.';
     mainContent.prepend(banner);
 
     // Disable all buttons that perform write actions
@@ -7418,6 +7418,30 @@ function enforceViewerMode() {
         // Also disable form inputs that could be used for editing
         // But leave search/filter inputs alone
         grLog('[RBAC] Disabled', writeButtons.length, 'write controls for viewer role');
+
+        // Re-enable AI agent and help elements that may have been caught
+        const aiHelpSelectors = [
+            '#evie-conv-send',
+            '#evie-conv-input',
+            '.evie-conv-send',
+            '.evie-conv-input',
+            '.evie-presence-panel button',
+            '.evie-presence-panel input',
+            '[data-section="help"]',
+            '[data-url*="evie"]',
+            '[data-url*="gwen"]',
+            '[data-url*="research"]',
+            '#le-help-toggle',
+            '#le-help-popup',
+            '#le-help-popup button',
+        ];
+        document.querySelectorAll(aiHelpSelectors.join(', ')).forEach(el => {
+            el.disabled = false;
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+            el.title = '';
+        });
+        grLog('[RBAC] AI agent and help controls re-enabled for viewer');
     }, 1500); // Delay to allow dynamic content to render
 }
 
