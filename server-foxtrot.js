@@ -330,7 +330,7 @@ app.use(helmet({
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
-      frameSrc: ["'self'"], // Allow same-origin iframes for views
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com"], // Allow same-origin iframes for views
       upgradeInsecureRequests: null, // Disable upgrade-insecure-requests for HTTP-only deployments
     },
   },

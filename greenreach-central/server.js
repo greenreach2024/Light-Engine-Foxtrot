@@ -286,7 +286,7 @@ app.use(helmet({
       fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
-      frameSrc: ["'self'", "https://web.squarecdn.com", "https://connect.stripe.com"],  // Allow Square + Stripe iframes
+      frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com", "https://connect.stripe.com"],  // Allow Square + Stripe iframes
       upgradeInsecureRequests: null
     },
   },
