@@ -33,10 +33,11 @@ const API_KEY = process.env.GREENREACH_API_KEY || '';
 const FARM_ID = process.env.FARM_ID || '';
 const LOG_LEVEL = process.env.LEAM_LOG_LEVEL || 'info';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const HEARTBEAT_INTERVAL_MS = 30000;
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 60000;
+const NETWORK_MONITOR_INTERVAL_MS = 300000; // 5 minutes
 
 // ── Logging ────────────────────────────────────────────────────────────
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -431,12 +432,167 @@ async function handleSystemInfo(params) {
   return { ok: true, data: info };
 }
 
+// ── Network Watchlist Monitor ──────────────────────────────────────────
+
+let networkWatchlist = [];  // Managed by Central via WS
+let monitorTimer = null;
+
+/**
+ * Check active network connections against the watchlist.
+ * Uses lsof on macOS to see established connections, then DNS to resolve
+ * watchlist domains and compare against active connection IPs.
+ */
+async function checkNetworkWatchlist() {
+  if (networkWatchlist.length === 0) return { matches: [], checked: 0 };
+
+  const matches = [];
+
+  // 1. Resolve watchlist domains to IPs
+  const domainIpMap = new Map();
+  for (const entry of networkWatchlist) {
+    const domain = entry.domain || entry;
+    try {
+      const raw = execSync(`dig +short "${domain}" 2>/dev/null`, { timeout: 5000 }).toString().trim();
+      const ips = raw.split('\n').filter(l => /^[\d.]+$/.test(l.trim()));
+      if (ips.length > 0) domainIpMap.set(domain, ips);
+    } catch {}
+  }
+
+  // 2. Get active network connections
+  let connections = [];
+  try {
+    const raw = execSync(
+      'lsof -i -nP 2>/dev/null | grep -i established',
+      { timeout: 10000 }
+    ).toString();
+    for (const line of raw.split('\n')) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 9) {
+        const proc = parts[0];
+        const pid = parts[1];
+        const nameField = parts[8] || '';
+        // Format: host:port->remote:port
+        const arrow = nameField.split('->');
+        if (arrow.length === 2) {
+          const remote = arrow[1];
+          const remoteIp = remote.replace(/:\d+$/, '');
+          connections.push({ process: proc, pid, remote_ip: remoteIp, raw: nameField });
+        }
+      }
+    }
+  } catch {
+    log('debug', 'lsof check returned no established connections');
+  }
+
+  // 3. Also check DNS cache / recent lookups for domain names in connections
+  let dnsMatches = [];
+  try {
+    const raw = execSync(
+      'log show --predicate \'process == "mDNSResponder"\' --last 5m --style compact 2>/dev/null | tail -200',
+      { timeout: 10000 }
+    ).toString();
+    for (const entry of networkWatchlist) {
+      const domain = entry.domain || entry;
+      if (raw.toLowerCase().includes(domain.toLowerCase())) {
+        dnsMatches.push({ domain, source: 'dns_log' });
+      }
+    }
+  } catch {}
+
+  // 4. Match active connections to watchlist IPs
+  for (const [domain, ips] of domainIpMap) {
+    for (const conn of connections) {
+      if (ips.includes(conn.remote_ip)) {
+        matches.push({
+          domain,
+          remote_ip: conn.remote_ip,
+          process: conn.process,
+          pid: conn.pid,
+          raw_connection: conn.raw,
+          detection_method: 'active_connection',
+          detected_at: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  // 5. Add DNS log matches
+  for (const dm of dnsMatches) {
+    if (!matches.some(m => m.domain === dm.domain)) {
+      matches.push({
+        domain: dm.domain,
+        detection_method: 'dns_query_log',
+        detected_at: new Date().toISOString()
+      });
+    }
+  }
+
+  return {
+    matches,
+    checked: networkWatchlist.length,
+    resolved_domains: domainIpMap.size,
+    active_connections: connections.length,
+    timestamp: new Date().toISOString()
+  };
+}
+
+async function handleNetworkWatchlistCheck(params) {
+  log('info', 'Running network watchlist check');
+  const result = await checkNetworkWatchlist();
+  return { ok: true, data: result };
+}
+
+/**
+ * Periodic monitor -- runs in background and sends alerts to Central
+ * when watchlist domains are detected in active connections.
+ */
+function startNetworkMonitor() {
+  if (monitorTimer) return;
+  log('info', `Network monitor started (interval: ${NETWORK_MONITOR_INTERVAL_MS / 1000}s, watchlist: ${networkWatchlist.length} domains)`);
+
+  monitorTimer = setInterval(async () => {
+    if (networkWatchlist.length === 0) return;
+    try {
+      const result = await checkNetworkWatchlist();
+      if (result.matches.length > 0) {
+        log('warn', `Network monitor: ${result.matches.length} watchlist match(es) detected`);
+        // Send alert to Central
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'leam_network_alert',
+            farm_id: FARM_ID,
+            matches: result.matches,
+            summary: {
+              checked: result.checked,
+              active_connections: result.active_connections,
+              timestamp: result.timestamp
+            }
+          }));
+        }
+      } else {
+        log('debug', `Network monitor: clean -- ${result.checked} domains checked, ${result.active_connections} connections scanned`);
+      }
+    } catch (err) {
+      log('error', 'Network monitor check failed:', err.message);
+    }
+  }, NETWORK_MONITOR_INTERVAL_MS);
+}
+
+function stopNetworkMonitor() {
+  if (monitorTimer) {
+    clearInterval(monitorTimer);
+    monitorTimer = null;
+    log('info', 'Network monitor stopped');
+  }
+}
+
 // ── Command Dispatch ───────────────────────────────────────────────────
 
 const COMMAND_HANDLERS = {
   scan_all: handleScanAll,
   ble_scan: handleBleScan,
   network_scan: handleNetworkScan,
+  network_watchlist_check: handleNetworkWatchlistCheck,
   system_info: (params) => handleSystemInfo({ ...params, detailed: false }),
   system_detailed: (params) => handleSystemInfo({ ...params, detailed: true }),
 };
@@ -520,6 +676,23 @@ function connect() {
 
     if (data.type === 'leam_registered') {
       log('info', `Registration confirmed by Central (farm: ${data.farmId})`);
+      // Request current watchlist from Central
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'leam_request_watchlist', farm_id: FARM_ID }));
+      }
+      return;
+    }
+
+    if (data.type === 'leam_watchlist_update') {
+      networkWatchlist = (data.watchlist || []).map(entry =>
+        typeof entry === 'string' ? { domain: entry } : entry
+      );
+      log('info', `Network watchlist updated: ${networkWatchlist.length} domain(s)`);
+      if (networkWatchlist.length > 0) {
+        startNetworkMonitor();
+      } else {
+        stopNetworkMonitor();
+      }
       return;
     }
 
@@ -558,6 +731,7 @@ function cleanup() {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
   }
+  stopNetworkMonitor();
   ws = null;
 }
 

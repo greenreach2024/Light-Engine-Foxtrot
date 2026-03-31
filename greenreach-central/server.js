@@ -4948,13 +4948,66 @@ async function startServer() {
       }));
 
       // Handle incoming messages
-      ws.on('message', (message) => {
+      ws.on('message', async (message) => {
         try {
           const data = JSON.parse(message);
           logger.debug('WebSocket message received', { type: data.type });
 
           // LEAM companion agent messages (ble_scan, network_scan, etc.)
           if (data.type && data.type.startsWith('leam_')) {
+            // Network watchlist alert from LEAM monitor
+            if (data.type === 'leam_network_alert') {
+              const alertFarmId = ws.farmId || farmId;
+              logger.warn(`[LEAM] Network watchlist alert from farm ${alertFarmId}: ${data.matches?.length || 0} match(es)`);
+              // Store as admin alert for F.A.Y.E. security analysis
+              if (app.locals.databaseReady) {
+                try {
+                  for (const match of (data.matches || [])) {
+                    await query(
+                      `INSERT INTO admin_alerts (domain, severity, title, detail, source, metadata)
+                       VALUES ($1, $2, $3, $4, $5, $6)`,
+                      [
+                        'network_security',
+                        'high',
+                        `Watchlist domain detected: ${match.domain}`,
+                        match.process
+                          ? `Connection to ${match.domain} (${match.remote_ip}) by process ${match.process} (PID ${match.pid}). Method: ${match.detection_method}`
+                          : `DNS activity for ${match.domain} detected via ${match.detection_method}`,
+                        'leam_network_monitor',
+                        JSON.stringify({ ...match, farm_id: alertFarmId })
+                      ]
+                    );
+                  }
+                } catch (alertErr) {
+                  logger.warn(`[LEAM] Failed to store network alert: ${alertErr.message}`);
+                }
+              }
+              return;
+            }
+
+            // LEAM requesting its current watchlist
+            if (data.type === 'leam_request_watchlist') {
+              if (app.locals.databaseReady) {
+                try {
+                  const result = await query(
+                    `SELECT domain, reason, added_by, created_at FROM network_watchlist
+                     WHERE farm_id = $1 AND active = TRUE ORDER BY created_at DESC`,
+                    [ws.farmId || farmId]
+                  );
+                  ws.send(JSON.stringify({
+                    type: 'leam_watchlist_update',
+                    watchlist: result.rows.map(r => ({ domain: r.domain, reason: r.reason }))
+                  }));
+                } catch (wlErr) {
+                  logger.warn(`[LEAM] Failed to load watchlist: ${wlErr.message}`);
+                  ws.send(JSON.stringify({ type: 'leam_watchlist_update', watchlist: [] }));
+                }
+              } else {
+                ws.send(JSON.stringify({ type: 'leam_watchlist_update', watchlist: [] }));
+              }
+              return;
+            }
+
             leamBridge.processMessage(ws, ws.farmId || farmId, data);
             return;
           }

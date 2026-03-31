@@ -3675,6 +3675,26 @@ async function runMigrations(client) {
     logger.warn('Migration 052 warning:', err.message);
   }
 
+  // --- Migration 053: Network watchlist for LEAM monitoring ---
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS network_watchlist (
+        id SERIAL PRIMARY KEY,
+        farm_id VARCHAR(255) NOT NULL,
+        domain VARCHAR(255) NOT NULL,
+        reason TEXT,
+        added_by VARCHAR(100) DEFAULT 'admin',
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_network_watchlist_farm ON network_watchlist(farm_id, active);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_network_watchlist_unique ON network_watchlist(farm_id, domain) WHERE active = TRUE;
+    `);
+    logger.info('network_watchlist table ready (migration 053)');
+  } catch (err) {
+    logger.warn('Migration 053 warning:', err.message);
+  }
+
     logger.info('Database migrations completed');
 }
 

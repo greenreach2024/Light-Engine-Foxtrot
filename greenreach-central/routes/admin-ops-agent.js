@@ -56,6 +56,38 @@ function checkMarketRateLimit() {
   return true;
 }
 
+// Helper: push the current active watchlist to a connected LEAM client
+// Uses the Express app reference stored by the router middleware
+let _expressApp = null;
+router.use((req, _res, next) => {
+  if (!_expressApp) _expressApp = req.app;
+  next();
+});
+
+async function pushWatchlistToLeam(farmId) {
+  try {
+    const result = await dbQuery(
+      `SELECT domain, reason FROM network_watchlist WHERE farm_id = $1 AND active = TRUE`,
+      [farmId]
+    );
+    const app = _expressApp;
+    if (!app) return;
+    const wss = app.locals?.wss;
+    if (!wss) return;
+    for (const ws of wss.clients) {
+      if (ws.readyState === 1 && ws.farmId === farmId) {
+        ws.send(JSON.stringify({
+          type: 'leam_watchlist_update',
+          watchlist: result.rows.map(r => ({ domain: r.domain, reason: r.reason }))
+        }));
+        break;
+      }
+    }
+  } catch {
+    // Non-fatal -- LEAM will pick up on next reconnect
+  }
+}
+
 // ── Tool Catalog ──────────────────────────────────────────────
 
 export const ADMIN_TOOL_CATALOG = {
@@ -2448,6 +2480,78 @@ export const ADMIN_TOOL_CATALOG = {
     }
   },
 
+  // ── Network Watchlist Management (LEAM) ───────────────────────
+
+  'manage_network_watchlist': {
+    description: 'Add, remove, or list domains on the LEAM network watchlist. LEAM periodically checks local network connections against this list and alerts on matches. Use action=add to add a domain, action=remove to deactivate, action=list to view the current watchlist.',
+    category: 'write',
+    required: ['action'],
+    optional: ['domain', 'reason', 'farm_id'],
+    handler: async (params, context) => {
+      try {
+        if (!isDatabaseAvailable()) return { ok: false, error: 'Database unavailable' };
+        const action = (params.action || '').toLowerCase();
+        const farmId = params.farm_id || context?.farmId || 'FARM-MLTP9LVH-B0B85039';
+
+        if (action === 'list') {
+          const result = await dbQuery(
+            `SELECT domain, reason, added_by, active, created_at FROM network_watchlist
+             WHERE farm_id = $1 ORDER BY active DESC, created_at DESC`,
+            [farmId]
+          );
+          return { ok: true, watchlist: result.rows, count: result.rows.length };
+        }
+
+        if (action === 'add') {
+          if (!params.domain) return { ok: false, error: 'domain is required for action=add' };
+          const domain = params.domain.toLowerCase().trim();
+          await dbQuery(
+            `INSERT INTO network_watchlist (farm_id, domain, reason, added_by, active)
+             VALUES ($1, $2, $3, $4, TRUE)
+             ON CONFLICT (farm_id, domain) WHERE active = TRUE
+             DO UPDATE SET reason = EXCLUDED.reason, added_by = EXCLUDED.added_by`,
+            [farmId, domain, params.reason || 'Added via F.A.Y.E.', 'faye']
+          );
+          // Push updated watchlist to LEAM if connected
+          await pushWatchlistToLeam(farmId);
+          return { ok: true, action: 'added', domain, farm_id: farmId };
+        }
+
+        if (action === 'remove') {
+          if (!params.domain) return { ok: false, error: 'domain is required for action=remove' };
+          const domain = params.domain.toLowerCase().trim();
+          await dbQuery(
+            `UPDATE network_watchlist SET active = FALSE WHERE farm_id = $1 AND domain = $2 AND active = TRUE`,
+            [farmId, domain]
+          );
+          await pushWatchlistToLeam(farmId);
+          return { ok: true, action: 'removed', domain, farm_id: farmId };
+        }
+
+        return { ok: false, error: 'action must be one of: list, add, remove' };
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
+  'run_network_watchlist_check': {
+    description: 'Trigger an immediate network watchlist scan on the operator machine via the LEAM companion agent. Returns active connections matching any watchlisted domain. Requires LEAM to be connected.',
+    category: 'read',
+    required: [],
+    optional: ['farm_id'],
+    handler: async (params, context) => {
+      try {
+        const farmId = params.farm_id || context?.farmId || 'FARM-MLTP9LVH-B0B85039';
+        const leamBridge = context?.app?.locals?.leamBridge;
+        if (!leamBridge) return { ok: false, error: 'LEAM bridge not available' };
+        if (!leamBridge.isConnected(farmId)) {
+          return { ok: false, error: 'LEAM companion is not connected for this farm', leam_required: true };
+        }
+        const result = await leamBridge.sendCommand(farmId, 'network_watchlist_check', {});
+        return result;
+      } catch (err) { return { ok: false, error: err.message }; }
+    }
+  },
+
   // ── Feedback Recording ────────────────────────────────────────
 
   'record_recommendation_feedback': {
@@ -3950,7 +4054,7 @@ export function buildToolDefinitions() {
 
 // ── Execute a tool by name ──
 
-export async function executeAdminTool(toolName, params = {}) {
+export async function executeAdminTool(toolName, params = {}, context = {}) {
   const tool = ADMIN_TOOL_CATALOG[toolName];
   if (!tool) return { ok: false, error: `Unknown tool: ${toolName}` };
 
@@ -3958,7 +4062,7 @@ export async function executeAdminTool(toolName, params = {}) {
   if (missing.length) return { ok: false, error: `Missing required parameters: ${missing.join(', ')}` };
 
   const startTime = Date.now();
-  const result = await tool.handler(params);
+  const result = await tool.handler(params, context);
   result._duration_ms = Date.now() - startTime;
   return result;
 }
@@ -3982,7 +4086,7 @@ router.post('/tool-gateway', async (req, res) => {
     return res.status(400).json({ ok: false, error: `Missing required parameters: ${missing.join(', ')}` });
   }
 
-  const result = await executeAdminTool(tool, params);
+  const result = await executeAdminTool(tool, params, { app: req.app, farmId: req.farmId });
   return res.json({ ok: true, tool, result });
 });
 
