@@ -699,7 +699,7 @@
     var audioPlaying = false;
     var audioNodes = [];
     var voiceEnabled = false;
-    var voiceUtterance = null;
+    var voiceAudios = []; var currentVoiceAudio = null;
 
     var SCENES = [
       { name: 'Live Sensor Intelligence',
@@ -866,32 +866,32 @@
     }
 
     /* ================================================================
-       VOICE NARRATION (Web Speech API)
+       VOICE NARRATION (OpenAI TTS HD - pre-generated MP3)
        ================================================================ */
+    function preloadVoiceAudios() {
+      for (var i = 0; i < SCENES.length; i++) {
+        var audio = new Audio('/demo/scene-' + i + '.mp3');
+        audio.preload = 'auto';
+        audio.volume = 0.85;
+        voiceAudios[i] = audio;
+      }
+    }
+
     function speakScene(idx) {
       if (!voiceEnabled) return;
-      if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
-      var scene = SCENES[idx];
-      if (!scene.voice) return;
-
-      voiceUtterance = new SpeechSynthesisUtterance(scene.voice);
-      voiceUtterance.rate = 0.88;
-      voiceUtterance.pitch = 0.95;
-      voiceUtterance.volume = 0.8;
-      // Prefer a neutral English voice
-      var voices = window.speechSynthesis.getVoices();
-      for (var vi = 0; vi < voices.length; vi++) {
-        if (voices[vi].name.indexOf('Samantha') > -1 || voices[vi].name.indexOf('Alex') > -1 || voices[vi].name.indexOf('Daniel') > -1) {
-          voiceUtterance.voice = voices[vi];
-          break;
-        }
-      }
-      window.speechSynthesis.speak(voiceUtterance);
+      stopVoice();
+      if (!voiceAudios[idx]) return;
+      currentVoiceAudio = voiceAudios[idx];
+      currentVoiceAudio.currentTime = 0;
+      currentVoiceAudio.play().catch(function() {});
     }
 
     function stopVoice() {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (currentVoiceAudio) {
+        currentVoiceAudio.pause();
+        currentVoiceAudio.currentTime = 0;
+        currentVoiceAudio = null;
+      }
     }
 
     /* ================================================================
@@ -912,8 +912,9 @@
       tick();
       var orb = document.getElementById('gwenOrb');
       if (orb) orb.className = 'gwen-hero-orb gwen-orb-analyzing';
-      // Pre-load voices
-      if (window.speechSynthesis) window.speechSynthesis.getVoices();
+      preloadVoiceAudios();
+
+
     };
 
     window.gwenDemoClose = function() {
