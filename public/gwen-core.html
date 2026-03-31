@@ -230,11 +230,11 @@
   <!-- ============================================================ -->
   <!-- CINEMATIC DEMO OVERLAY                                        -->
   <!-- ============================================================ -->
-  <div id="gwenDemoOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:#030610;">
+  <div id="gwenDemoOverlay" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden;background:#030610;">
     <canvas id="gwenDemoCanvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
     <div id="gwenDemoSceneLabel" style="position:absolute;top:24px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:4px;text-transform:uppercase;color:rgba(245,158,11,0.6);opacity:0;transition:opacity 0.8s;pointer-events:none;"></div>
     <div id="gwenDemoSceneCounter" style="position:absolute;top:46px;left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:2px;color:rgba(148,163,184,0.3);pointer-events:none;"></div>
-    <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:510;">
+    <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:10000;">
       <button onclick="gwenDemoPrev()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#9664;</button>
       <div id="gwenDemoProgressWrap" style="width:200px;height:3px;background:rgba(245,158,11,0.1);border-radius:2px;overflow:hidden;">
         <div id="gwenDemoProgressBar" style="width:0%;height:100%;background:#f59e0b;border-radius:2px;transition:width 0.3s;"></div>
@@ -900,6 +900,10 @@
     window.launchGwenDemo = function() {
       var overlay = document.getElementById('gwenDemoOverlay');
       overlay.style.display = 'block';
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      var topbar = document.querySelector('.gwen-topbar');
+      if (topbar) topbar.style.visibility = 'hidden';
       canvas = document.getElementById('gwenDemoCanvas');
       ctx = canvas.getContext('2d');
       dpr = window.devicePixelRatio || 1;
@@ -919,6 +923,10 @@
     window.gwenDemoClose = function() {
       demoActive = false;
       document.getElementById('gwenDemoOverlay').style.display = 'none';
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      var topbar = document.querySelector('.gwen-topbar');
+      if (topbar) topbar.style.visibility = '';
       if (animFrame) cancelAnimationFrame(animFrame);
       animFrame = null;
       window.removeEventListener('resize', resize);

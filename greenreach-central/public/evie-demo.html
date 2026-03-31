@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E.V.I.E. -- Capability Demo</title>
+  <style>
+/* ================================================================
+   E.V.I.E. DEMO -- Cinematic Capability Showcase
+   ================================================================ */
+:root {
+  --evie-green:        #10b981;
+  --evie-green-bright: #34d399;
+  --evie-green-dim:    #059669;
+  --evie-green-glow:   rgba(16, 185, 129, 0.25);
+  --evie-cyan:         #06b6d4;
+  --evie-violet:       #8b5cf6;
+  --evie-amber:        #f59e0b;
+  --evie-rose:         #f43f5e;
+  --bg-deep:    #080f1a;
+  --bg-surface: #0c1422;
+  --bg-card:    #101e30;
+  --bg-elevated:#1a2d42;
+  --border:     #1a2d42;
+  --text-primary:   #e5e7eb;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* -- Starfield ---------------------------------------------------- */
+.starfield {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* -- Audio Control ----------------------------------------------- */
+.audio-control {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(12, 20, 34, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.audio-control:hover { border-color: var(--evie-green); }
+.audio-icon { font-size: 18px; color: var(--evie-green); }
+.audio-label { font-size: 12px; color: var(--text-secondary); letter-spacing: 0.5px; }
+
+/* -- Navigation -------------------------------------------------- */
+.demo-nav {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  gap: 2px;
+  background: rgba(12, 20, 34, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+.demo-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.3s;
+}
+.demo-nav-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+.demo-nav-btn.active { color: var(--evie-green); background: rgba(16, 185, 129, 0.1); }
+
+/* -- Content Wrapper --------------------------------------------- */
+.demo-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+
+/* -- Fade-in system ---------------------------------------------- */
+.scene { opacity: 0; transform: translateY(30px); transition: opacity 0.8s, transform 0.8s; }
+.scene.visible { opacity: 1; transform: translateY(0); }
+
+/* -- Title Scene ------------------------------------------------- */
+.title-scene {
+  text-align: center;
+  padding: 32px 0 32px;
+}
+.title-evie {
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 12px;
+  color: var(--evie-green);
+  text-shadow: 0 0 60px rgba(16, 185, 129, 0.3), 0 0 120px rgba(16, 185, 129, 0.1);
+  margin-bottom: 12px;
+}
+.title-sub {
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.title-full {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.title-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 48px;
+}
+.title-stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--evie-green);
+  font-variant-numeric: tabular-nums;
+}
+.title-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* -- Orb Animation ----------------------------------------------- */
+.demo-orb-container {
+  display: flex;
+  justify-content: center;
+  margin: 40px 0 20px;
+}
+.demo-orb {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.demo-orb-core {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, var(--evie-green-bright), var(--evie-green-dim));
+  border-radius: 50%;
+  box-shadow: 0 0 30px var(--evie-green-glow), 0 0 60px rgba(16, 185, 129, 0.12);
+}
+.demo-orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: demoOrbPulse 4s ease-in-out infinite;
+}
+.demo-orb-ring-1 { width: 72px;  height: 72px;  border: 1px solid rgba(16, 185, 129, 0.3); animation-delay: 0s; }
+.demo-orb-ring-2 { width: 110px; height: 110px; border: 1px solid rgba(6, 182, 212, 0.2);  animation-delay: 0.7s; }
+.demo-orb-ring-3 { width: 150px; height: 150px; border: 1px solid rgba(139, 92, 246, 0.15); animation-delay: 1.4s; }
+@keyframes demoOrbPulse {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50%       { opacity: 0.9; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* -- Section Headers --------------------------------------------- */
+.section-header {
+  text-align: center;
+  padding: 28px 0 24px;
+}
+.section-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--evie-green);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 4px 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.section-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* -- Demo Panels ------------------------------------------------- */
+.demo-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.demo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.demo-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.demo-panel-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.tag-green  { background: rgba(16, 185, 129, 0.12); color: var(--evie-green); }
+.tag-cyan   { background: rgba(6, 182, 212, 0.12);  color: var(--evie-cyan); }
+.tag-violet { background: rgba(139, 92, 246, 0.12); color: var(--evie-violet); }
+.tag-amber  { background: rgba(245, 158, 11, 0.12); color: var(--evie-amber); }
+.tag-rose   { background: rgba(244, 63, 94, 0.12);  color: var(--evie-rose); }
+
+.demo-panel-body {
+  padding: 20px;
+  position: relative;
+  min-height: 180px;
+}
+.demo-canvas {
+  width: 100%;
+  height: 300px;
+  display: block;
+  border-radius: 8px;
+}
+
+/* -- Capability Grid --------------------------------------------- */
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 0 20px;
+}
+.cap-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.4s;
+}
+.cap-card:hover {
+  border-color: var(--evie-green);
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.08);
+  transform: translateY(-2px);
+}
+.cap-card-icon  { font-size: 24px; margin-bottom: 12px; display: block; }
+.cap-card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.cap-card-desc  { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.cap-card-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+.cap-tool-tag {
+  font-size: 10px;
+  color: var(--evie-green);
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* -- Sensor / Data Cards ----------------------------------------- */
+.data-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.data-card-mini {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.data-card-mini-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: 4px;
+}
+.data-card-mini-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.data-card-mini-trend { font-size: 10px; margin-top: 6px; display: block; }
+.trend-up   { color: var(--evie-green); }
+.trend-down { color: var(--evie-rose); }
+.trend-flat { color: var(--text-muted); }
+.trend-warn { color: var(--evie-amber); }
+
+/* -- Tool Execution Bars ----------------------------------------- */
+.tool-exec-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+.tool-exec-bar.visible  { opacity: 1; transform: translateX(0); }
+.tool-exec-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--evie-green);
+  animation: toolPulse 1.5s ease-in-out infinite;
+}
+.tool-exec-bar.completed .tool-exec-dot { background: var(--evie-green-bright); animation: none; }
+.tool-exec-name  { font-size: 12px; color: var(--text-primary); font-weight: 500; flex: 1; }
+.tool-exec-time  { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@keyframes toolPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* -- Zone Grid --------------------------------------------------- */
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.zone-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+}
+.zone-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.zone-card.zone-a::before { background: var(--evie-green); }
+.zone-card.zone-b::before { background: var(--evie-cyan); }
+.zone-card.zone-c::before { background: var(--evie-violet); }
+.zone-card.zone-d::before { background: var(--evie-amber); }
+.zone-card-name  { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.zone-card-crop  { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+.zone-metric-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
+.zone-metric-lbl { color: var(--text-muted); }
+.zone-metric-val { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* -- Collaboration Flow ------------------------------------------ */
+.collab-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.collab-msg {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.collab-msg.visible { opacity: 1; transform: translateY(0); }
+.collab-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.avatar-evie { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--evie-green); }
+.avatar-gwen { background: rgba(245, 158, 11, 0.15);  border: 1px solid rgba(245, 158, 11, 0.3);  color: #f59e0b; }
+.avatar-faye { background: rgba(139, 92, 246, 0.15);  border: 1px solid rgba(139, 92, 246, 0.3);  color: var(--evie-violet); }
+.collab-bubble {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  flex: 1;
+  max-width: 520px;
+}
+.collab-bubble-name { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.name-evie { color: var(--evie-green); }
+.name-gwen { color: #f59e0b; }
+.name-faye { color: var(--evie-violet); }
+.collab-bubble p  { color: var(--text-secondary); margin-bottom: 0; }
+.collab-highlight { color: var(--text-primary); font-weight: 600; }
+
+/* -- Bar gauge for environment ----------------------------------- */
+.gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.gauge-label  { width: 100px; color: var(--text-secondary); flex-shrink: 0; }
+.gauge-bar    { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; position: relative; }
+.gauge-fill   { height: 100%; border-radius: 3px; transition: width 1.2s ease; }
+.gauge-value  { width: 60px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; }
+.gauge-target { font-size: 10px; color: var(--text-muted); }
+
+/* -- Status badge ------------------------------------------------- */
+.status-badge {
+  font-size: 10px; padding: 2px 8px;
+  border-radius: 4px; font-weight: 600;
+}
+.status-optimal { background: rgba(16, 185, 129, 0.15); color: var(--evie-green); }
+.status-warn    { background: rgba(245, 158, 11, 0.15);  color: var(--evie-amber); }
+.status-alert   { background: rgba(244, 63, 94, 0.15);   color: var(--evie-rose); }
+
+/* -- Order notification card ------------------------------------- */
+.order-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--evie-cyan);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.order-card-left  { flex: 1; }
+.order-card-id    { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.order-card-items { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.order-card-meta  { font-size: 11px; color: var(--text-secondary); }
+.order-card-right { text-align: right; }
+.order-total      { font-size: 20px; font-weight: 700; color: var(--evie-cyan); display: block; }
+.order-status-badge {
+  font-size: 10px; padding: 2px 8px;
+  border-radius: 4px; font-weight: 600;
+  background: rgba(6, 182, 212, 0.12); color: var(--evie-cyan);
+}
+
+/* -- CTA --------------------------------------------------------- */
+.demo-cta           { text-align: center; padding: 80px 0; }
+.demo-cta-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--evie-green), var(--evie-green-dim));
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 14px 40px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+.demo-cta-btn:hover { box-shadow: 0 0 40px rgba(16, 185, 129, 0.3); transform: translateY(-2px); }
+
+/* -- Planting table ---------------------------------------------- */
+.farm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.farm-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--evie-green);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.farm-table td {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(26, 45, 66, 0.5);
+}
+.farm-table tr:hover td { color: var(--text-primary); background: rgba(16, 185, 129, 0.03); }
+
+/* -- Responsive -------------------------------------------------- */
+@media (max-width: 768px) {
+  .title-evie { font-size: 48px; letter-spacing: 6px; }
+  .title-stats { gap: 24px; flex-wrap: wrap; }
+  .demo-nav { display: none; }
+  .cap-grid { grid-template-columns: 1fr; }
+}
+
+/* -- Scrollbar --------------------------------------------------- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<canvas class="starfield" id="starfield"></canvas>
+
+<!-- Audio Control -->
+<div class="audio-control" id="audioControl" onclick="toggleAudio()">
+  <span class="audio-icon" id="audioIcon">&#9835;</span>
+  <span class="audio-label" id="audioLabel">Play Soundtrack</span>
+</div>
+
+
+<div class="demo-content">
+
+  <!-- ============================================================ -->
+  <!-- SCENE 1: TITLE                                                -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-title" data-scene="title">
+    <div class="title-scene">
+      <div class="demo-orb-container">
+        <div class="demo-orb">
+          <div class="demo-orb-ring demo-orb-ring-1"></div>
+          <div class="demo-orb-ring demo-orb-ring-2"></div>
+          <div class="demo-orb-ring demo-orb-ring-3"></div>
+          <div class="demo-orb-core"></div>
+        </div>
+      </div>
+      <div class="title-evie">E.V.I.E.</div>
+      <div class="title-sub">Farm Intelligence Engine</div>
+      <div class="title-full">Environmental Vision &amp; Intelligence Engine</div>
+      <div class="title-stats">
+        <div>
+          <span class="title-stat-value" id="statToolCount">0</span>
+          <span class="title-stat-label">AI Tools</span>
+        </div>
+        <div>
+          <span class="title-stat-value" id="statCatCount">0</span>
+          <span class="title-stat-label">Domains</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 2: MONITORING                                           -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-monitor" data-scene="monitor">
+    <div class="section-header">
+      <span class="section-tag">Continuous Monitoring</span>
+      <h2 class="section-title">Living Awareness Across Every Room</h2>
+      <p class="section-desc">
+        E.V.I.E. watches every sensor, every room, every moment.
+        Temperature, humidity, CO2, EC, pH -- tracked continuously and surfaced
+        only when something demands your attention.
+      </p>
+    </div>
+
+    <!-- Multi-room sensor chart -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Multi-Room Sensor Feed -- 24 Hour Window
+        </div>
+        <span class="demo-panel-tag tag-green">LIVE SENSORS</span>
+      </div>
+      <div class="demo-panel-body">
+        <div id="toolExecMonitor" style="margin-bottom: 14px;"></div>
+        <canvas class="demo-canvas" id="sensorChartCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Current conditions data cards -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Current Conditions -- All Rooms
+        </div>
+        <span class="demo-panel-tag tag-cyan">REAL-TIME</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="data-cards-row" id="conditionsCardsContainer"></div>
+      </div>
+    </div>
+
+    <!-- Active alerts -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Intelligent Alert Triage
+        </div>
+        <span class="demo-panel-tag tag-amber">ALERTS</span>
+      </div>
+      <div class="demo-panel-body" id="alertsContainer">
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 3: AUTOMATION                                           -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-automate" data-scene="automate">
+    <div class="section-header">
+      <span class="section-tag">Environmental Automation</span>
+      <h2 class="section-title">Growers Set the Vision. E.V.I.E. Executes.</h2>
+      <p class="section-desc">
+        Define target conditions once. E.V.I.E. continuously monitors the gap between
+        actual and ideal, adjusts light recipes, triggers nutrient dosing, and reallocates
+        devices -- all without lifting a finger.
+      </p>
+    </div>
+
+    <!-- Environment target ranges -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Target Range Enforcement -- Propagation Room
+        </div>
+        <span class="demo-panel-tag tag-green">AUTO-CONTROL</span>
+      </div>
+      <div class="demo-panel-body" id="targetRangesContainer">
+      </div>
+    </div>
+
+    <!-- Light schedule canvas -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Light Recipe -- PPFD Profile Over 24 Hours
+        </div>
+        <span class="demo-panel-tag tag-cyan">LIGHT SCHEDULE</span>
+      </div>
+      <div class="demo-panel-body">
+        <div id="toolExecLight" style="margin-bottom: 14px;"></div>
+        <canvas class="demo-canvas" id="lightScheduleCanvas" style="height:240px;"></canvas>
+      </div>
+    </div>
+
+    <!-- Device automation -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Device Auto-Assignment &amp; Status
+        </div>
+        <span class="demo-panel-tag tag-violet">DEVICES</span>
+      </div>
+      <div class="demo-panel-body" id="deviceStatusContainer">
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 4: CROP INTELLIGENCE                                    -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-crops" data-scene="crops">
+    <div class="section-header">
+      <span class="section-tag">Crop Intelligence</span>
+      <h2 class="section-title">Every Planting. Every Stage. Every Decision.</h2>
+      <p class="section-desc">
+        From day-one seeding to harvest confirmation, E.V.I.E. tracks every tray,
+        monitors growth velocity, surfaces upcoming harvests, and connects
+        demand signals from incoming orders to available capacity.
+      </p>
+    </div>
+
+    <!-- Active plantings table -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Active Plantings -- All Trays
+        </div>
+        <span class="demo-panel-tag tag-green">CROP TRACKER</span>
+      </div>
+      <div class="demo-panel-body">
+        <table class="farm-table" id="plantingsTable"></table>
+      </div>
+    </div>
+
+    <!-- Yield forecast chart -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> 14-Day Harvest Forecast
+        </div>
+        <span class="demo-panel-tag tag-cyan">YIELD FORECAST</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="yieldForecastCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Order notifications -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Incoming Orders -- Demand Signal
+        </div>
+        <span class="demo-panel-tag tag-amber">ORDERS</span>
+      </div>
+      <div class="demo-panel-body" id="ordersContainer">
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 5: MULTI-ZONE ENVIRONMENTS                              -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-zones" data-scene="zones">
+    <div class="section-header">
+      <span class="section-tag">Multi-Zone Environments</span>
+      <h2 class="section-title">One Room. Infinite Growing Worlds.</h2>
+      <p class="section-desc">
+        A single grow room can host four entirely distinct microclimates.
+        Microgreens thrive at 24C with short days. Lettuce heads want 18C and sixteen hours of light.
+        Basil demands warmth and airflow. Arugula prefers cooler nights.
+        E.V.I.E. manages them all -- simultaneously, independently, intelligently.
+      </p>
+    </div>
+
+    <!-- Zone canvas layout -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Room A -- Zone Layout Map
+        </div>
+        <span class="demo-panel-tag tag-green">ZONE MAP</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas id="zoneMapCanvas" style="width:100%;height:220px;border-radius:8px;display:block;"></canvas>
+      </div>
+    </div>
+
+    <!-- Zone cards -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Active Zone Profiles
+        </div>
+        <span class="demo-panel-tag tag-cyan">ZONE CONTROL</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="zone-grid" id="zoneCardsContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 6: COLLABORATION                                        -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-collab" data-scene="collab">
+    <div class="section-header">
+      <span class="section-tag">Agent Collaboration</span>
+      <h2 class="section-title">E.V.I.E. + G.W.E.N. + F.A.Y.E. -- The Full Intelligence Stack</h2>
+      <p class="section-desc">
+        E.V.I.E. detects anomalies, adjusts conditions, and keeps the farm alive.
+        When a pattern needs deep research, she calls on G.W.E.N.
+        When an action needs authorization, F.A.Y.E. reviews and approves.
+        Three intelligences. One seamless farm operation.
+      </p>
+    </div>
+
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9679;</span> Live Agent Exchange -- Humidity Anomaly Response
+        </div>
+        <span class="demo-panel-tag tag-violet">MULTI-AGENT</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="collab-flow" id="collabFlowContainer"></div>
+      </div>
+    </div>
+
+    <!-- Collaboration capabilities -->
+    <div class="cap-grid">
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--evie-green);">&#9679;</span>
+        <div class="cap-card-title">E.V.I.E. -- Farm Operations</div>
+        <div class="cap-card-desc">Continuous sensor monitoring, environmental control, crop lifecycle tracking, device automation, alert triage, and harvest scheduling.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">get_environment_readings</span>
+          <span class="cap-tool-tag">update_target_ranges</span>
+          <span class="cap-tool-tag">set_light_schedule</span>
+          <span class="cap-tool-tag">auto_assign_devices</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: #f59e0b;">&#9733;</span>
+        <div class="cap-card-title">G.W.E.N. -- Research Intelligence</div>
+        <div class="cap-card-desc">Receives live sensor data from E.V.I.E., generates hypotheses, identifies growth patterns in historical data, and returns actionable research insights.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">get_sensor_data</span>
+          <span class="cap-tool-tag">get_farm_layout_context</span>
+          <span class="cap-tool-tag">generate_hypothesis</span>
+          <span class="cap-tool-tag">get_dataset_summary</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--evie-violet);">&#9674;</span>
+        <div class="cap-card-title">F.A.Y.E. -- Admin Intelligence</div>
+        <div class="cap-card-desc">Reviews high-impact decisions before execution. Issues directives for pricing, fulfillment, and compliance. Acts as the authorization layer for the farm.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">get_faye_directives</span>
+          <span class="cap-tool-tag">request_faye_review</span>
+          <span class="cap-tool-tag">request_human_approval</span>
+          <span class="cap-tool-tag">get_pending_approvals</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 7: ALL TOOLS                                            -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-tools" data-scene="tools">
+    <div class="section-header">
+      <span class="section-tag">Full Tool Inventory</span>
+      <h2 class="section-title">59 Farm Intelligence Tools</h2>
+      <p class="section-desc">
+        Every capability available to E.V.I.E., organized by domain.
+        From environmental sensing to harvest forecasting. From device registration to cost analysis.
+      </p>
+    </div>
+    <div class="cap-grid" id="allToolsGrid"></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT                                                     -->
+<!-- ============================================================ -->
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================
+  // AUDIO -- Organic ambient soundtrack (Web Audio API synthesized)
+  // ================================================================
+  var audioCtx = null;
+  var audioPlaying = false;
+  var audioNodes = [];
+
+  function createAudioContext() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function playOrganicAmbient() {
+    if (!audioCtx) createAudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    var master = audioCtx.createGain();
+    master.gain.value = 0;
+    master.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 3);
+    master.connect(audioCtx.destination);
+
+    // Reverb convolver (simple feedback delay for depth)
+    var delay = audioCtx.createDelay(2.0);
+    delay.delayTime.value = 0.38;
+    var delayFeedback = audioCtx.createGain();
+    delayFeedback.gain.value = 0.35;
+    var delayGain = audioCtx.createGain();
+    delayGain.gain.value = 0.18;
+    delay.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    delay.connect(delayGain);
+    delayGain.connect(master);
+    audioNodes.push(delay, delayFeedback, delayGain);
+
+    // Foundation drones -- slightly higher / more organic than GWEN
+    function createDrone(freq, vol) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      var lfo = audioCtx.createOscillator();
+      var lfoGain = audioCtx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.06 + Math.random() * 0.05;
+      lfoGain.gain.value = vol * 0.25;
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+      lfo.start();
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+      audioNodes.push(osc, lfo, gain, lfoGain);
+    }
+
+    // E minor-ish tonality -- roots at E / B / G
+    createDrone(82.41,  0.3);   // E2
+    createDrone(123.47, 0.18);  // B2
+    createDrone(164.81, 0.12);  // E3
+    createDrone(196,    0.07);  // G3
+
+    // Shimmering organic pad
+    function createPad(freq, vol) {
+      var osc1 = audioCtx.createOscillator();
+      var osc2 = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+      osc1.frequency.value = freq;
+      osc2.frequency.value = freq * 1.002;
+      gain.gain.value = vol;
+      var filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 900;
+      filter.Q.value = 0.5;
+      var fLfo = audioCtx.createOscillator();
+      var fLfoGain = audioCtx.createGain();
+      fLfo.type = 'sine';
+      fLfo.frequency.value = 0.04;
+      fLfoGain.gain.value = 180;
+      fLfo.connect(fLfoGain);
+      fLfoGain.connect(filter.frequency);
+      fLfo.start();
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+      osc1.start();
+      osc2.start();
+      audioNodes.push(osc1, osc2, fLfo, gain, fLfoGain, filter);
+    }
+
+    createPad(246.94, 0.035); // B3
+    createPad(329.63, 0.025); // E4
+    createPad(392,    0.018); // G4
+
+    // Crystal chimes -- higher / brighter than GWEN
+    var chimeNotes = [329.63, 392, 493.88, 587.33, 659.25, 784, 987.77, 1174.66];
+    function scheduleChime() {
+      if (!audioPlaying) return;
+      var freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4.5);
+      osc.connect(gain);
+      gain.connect(delay);
+      gain.connect(master);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 4.5);
+      setTimeout(scheduleChime, 1800 + Math.random() * 3500);
+    }
+    setTimeout(scheduleChime, 1200);
+
+    audioNodes.push(master);
+  }
+
+  function stopAudio() {
+    audioNodes.forEach(function (node) {
+      try { if (node.stop) node.stop(); } catch (e) {}
+      try { if (node.disconnect) node.disconnect(); } catch (e) {}
+    });
+    audioNodes = [];
+  }
+
+  window.toggleAudio = function () {
+    if (audioPlaying) {
+      stopAudio();
+      audioPlaying = false;
+      document.getElementById('audioIcon').innerHTML = '&#9835;';
+      document.getElementById('audioLabel').textContent = 'Play Soundtrack';
+    } else {
+      playOrganicAmbient();
+      audioPlaying = true;
+      document.getElementById('audioIcon').innerHTML = '&#9724;';
+      document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+    }
+  };
+
+  // ================================================================
+  // STARFIELD -- green-tinted organic
+  // ================================================================
+  function initStarfield() {
+    var canvas = document.getElementById('starfield');
+    var ctx = canvas.getContext('2d');
+    var w, h, stars = [];
+
+    function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+
+    function createStars(count) {
+      stars = [];
+      for (var i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.2 + 0.2,
+          a: Math.random() * 0.4 + 0.05,
+          speed: Math.random() * 0.018 + 0.004,
+          phase: Math.random() * Math.PI * 2,
+          hue: Math.random() < 0.6 ? 'green' : Math.random() < 0.5 ? 'cyan' : 'white'
+        });
+      }
+    }
+
+    function draw(t) {
+      ctx.clearRect(0, 0, w, h);
+      stars.forEach(function (s) {
+        var flicker = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        var color;
+        if      (s.hue === 'green') color = 'rgba(16, 185, 129, ';
+        else if (s.hue === 'cyan')  color = 'rgba(6, 182, 212, ';
+        else                         color = 'rgba(180, 200, 220, ';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = color + (s.a * flicker) + ')';
+        ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    createStars(220);
+    window.addEventListener('resize', function () { resize(); createStars(220); });
+    requestAnimationFrame(draw);
+  }
+
+  // ================================================================
+  // SCROLL OBSERVER
+  // ================================================================
+  function initScrollObserver() {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          var scene = entry.target.dataset.scene;
+          if (scene) {
+            document.querySelectorAll('.demo-nav-btn').forEach(function (btn) {
+              btn.classList.toggle('active',
+                btn.textContent.trim().toLowerCase().slice(0, 4) === scene.slice(0, 4));
+            });
+          }
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.scene').forEach(function (el) { observer.observe(el); });
+  }
+
+  window.scrollToScene = function (scene) {
+    var el = document.getElementById('scene-' + scene);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // ================================================================
+  // COUNTER ANIMATION
+  // ================================================================
+  function animateCounter(el, target, duration) {
+    var start = performance.now();
+    function update(now) {
+      var progress = Math.min((now - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  }
+
+  // ================================================================
+  // TOOL EXECUTION ANIMATION
+  // ================================================================
+  function showToolExec(containerId, tools, baseDelay) {
+    baseDelay = baseDelay || 0;
+    var parent = document.getElementById(containerId);
+    if (!parent) return;
+    parent.innerHTML = '';
+    tools.forEach(function (tool, i) {
+      var bar = document.createElement('div');
+      bar.className = 'tool-exec-bar';
+      bar.innerHTML =
+        '<div class="tool-exec-dot"></div>' +
+        '<span class="tool-exec-name">' + tool.name + '</span>' +
+        '<span class="tool-exec-time">' + tool.time + '</span>';
+      parent.appendChild(bar);
+      setTimeout(function () { bar.classList.add('visible'); }, baseDelay + i * 500);
+      setTimeout(function () { bar.classList.add('completed'); }, baseDelay + i * 500 + 900);
+    });
+  }
+
+  // ================================================================
+  // SCENE 2: MONITORING
+  // ================================================================
+  function renderSensorChart() {
+    var canvas = document.getElementById('sensorChartCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 36, right: 24, bottom: 44, left: 56 };
+
+    var pts = 48; // 30-min intervals over 24h
+    var rooms = [
+      { label: 'Propagation',   color: '#10b981', base: 24.5, amp: 1.5, phase: 0 },
+      { label: 'Veg Room A',    color: '#06b6d4', base: 21.0, amp: 2.0, phase: 0.8 },
+      { label: 'Finishing',     color: '#8b5cf6', base: 18.5, amp: 1.2, phase: 1.6 },
+      { label: 'Microgreens',   color: '#f59e0b', base: 22.0, amp: 1.8, phase: 2.4 }
+    ];
+
+    // Generate data
+    rooms.forEach(function (r) {
+      r.data = [];
+      for (var i = 0; i < pts; i++) {
+        var t = i / pts;
+        var v = r.base + r.amp * Math.sin(t * Math.PI * 3 + r.phase) + (Math.random() - 0.5) * 0.5;
+        r.data.push(v);
+      }
+    });
+
+    var minY = 15, maxY = 28;
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+
+    // Background
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var yi = 0; yi <= 6; yi++) {
+      var gy = pad.top + chartH * yi / 6;
+      ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
+    }
+    for (var xi = 0; xi <= 6; xi++) {
+      var gx = pad.left + chartW * xi / 6;
+      ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + chartH); ctx.stroke();
+    }
+
+    // Draw each room's temperature
+    rooms.forEach(function (r) {
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = r.color;
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      r.data.forEach(function (v, i) {
+        var x = pad.left + (i / (pts - 1)) * chartW;
+        var y = pad.top + chartH - ((v - minY) / (maxY - minY)) * chartH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
+
+    // X-axis time labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    for (var xi2 = 0; xi2 <= 6; xi2++) {
+      var x2 = pad.left + chartW * xi2 / 6;
+      var hr = Math.round(24 * xi2 / 6);
+      ctx.fillText(String(hr).padStart(2, '0') + ':00', x2, h - pad.bottom + 16);
+    }
+
+    // Y-axis temp labels
+    ctx.textAlign = 'right';
+    for (var yi2 = 0; yi2 <= 4; yi2++) {
+      var yv = maxY - (maxY - minY) * yi2 / 4;
+      var yp = pad.top + chartH * yi2 / 4;
+      ctx.fillText(yv.toFixed(0) + 'C', pad.left - 8, yp + 3);
+    }
+
+    // Legend
+    var lx = pad.left + 6;
+    rooms.forEach(function (r, i) {
+      ctx.fillStyle = r.color;
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillRect(lx + i * 140, pad.top - 22, 12, 3);
+      ctx.fillText(r.label, lx + i * 140 + 16, pad.top - 18);
+    });
+  }
+
+  function renderConditionsCards() {
+    var rooms = [
+      { label: 'Propagation',  temp: '24.3C',  humidity: '72%',  co2: '820ppm', trend: 'up', status: 'optimal' },
+      { label: 'Veg Room A',   temp: '20.8C',  humidity: '68%',  co2: '760ppm', trend: 'flat', status: 'optimal' },
+      { label: 'Finishing',    temp: '18.4C',  humidity: '65%',  co2: '840ppm', trend: 'down', status: 'warn' },
+      { label: 'Microgreens',  temp: '22.1C',  humidity: '74%',  co2: '790ppm', trend: 'up', status: 'optimal' },
+      { label: 'Nutrient EC',  temp: '1.8mS',  humidity: '--',   co2: '--',     trend: 'up', status: 'optimal' },
+      { label: 'pH Main',      temp: '6.2',    humidity: '--',   co2: '--',     trend: 'warn', status: 'warn' }
+    ];
+    var colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#f59e0b'];
+    var html = rooms.map(function (r, i) {
+      return '<div class="data-card-mini">' +
+        '<span class="data-card-mini-value" style="color:' + colors[i] + ';">' + r.temp + '</span>' +
+        '<span class="data-card-mini-label">' + r.label + '</span>' +
+        '<span class="data-card-mini-trend trend-' + r.trend + '">' +
+        (r.trend === 'up' ? '&#9650; ' : r.trend === 'down' ? '&#9660; ' : r.trend === 'warn' ? '&#9651; ' : '') +
+        '<span class="status-badge status-' + r.status + '">' + r.status.toUpperCase() + '</span>' +
+        '</span></div>';
+    }).join('');
+    document.getElementById('conditionsCardsContainer').innerHTML = html;
+  }
+
+  function renderAlerts() {
+    var items = [
+      { title: 'pH Drift Detected -- Finishing Room', detail: 'pH reading 5.9 -- 0.3 below lower target threshold. Recommend buffer adjustment within 30 minutes.', severity: 'warn', domain: 'Nutrient', ago: '4m ago' },
+      { title: 'Harvest Due -- Bay 12, Bibb Lettuce', detail: 'Day 22. Projected head weight 185g. Delivery window tomorrow 06:00. Recommended action: harvest today.', severity: 'optimal', domain: 'Harvest', ago: '8m ago' },
+      { title: 'SwitchBot H7 -- No Reading', detail: 'Zone B sensor offline 12 minutes. Last value 21.4C. Adjacent zone sensors within normal range.', severity: 'alert', domain: 'Sensor', ago: '12m ago' }
+    ];
+    var html = items.map(function (a) {
+      var borderColor = a.severity === 'alert' ? '#f43f5e' : a.severity === 'warn' ? '#f59e0b' : '#10b981';
+      return '<div style="background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ' + borderColor + ';border-radius:8px;padding:14px 16px;margin-bottom:10px;">' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + a.title + '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">' + a.detail + '</div>' +
+        '<div style="display:flex;gap:12px;font-size:10px;color:var(--text-muted);">' +
+        '<span>' + a.domain + '</span><span>' + a.ago + '</span>' +
+        '</div></div>';
+    }).join('');
+    document.getElementById('alertsContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 3: AUTOMATION
+  // ================================================================
+  function renderTargetRanges() {
+    var params = [
+      { label: 'Temperature',  current: 24.3, target: 24.0, min: 22, max: 28, unit: 'C',   color: '#10b981' },
+      { label: 'Humidity',     current: 72,   target: 70,   min: 55, max: 85, unit: '%',   color: '#06b6d4' },
+      { label: 'CO2',          current: 820,  target: 800,  min: 400, max: 1200, unit: 'ppm', color: '#8b5cf6' },
+      { label: 'VPD',          current: 0.9,  target: 1.0,  min: 0.4, max: 1.8, unit: 'kPa', color: '#f59e0b' },
+      { label: 'EC Nutrient',  current: 1.8,  target: 1.8,  min: 0.5, max: 3.0, unit: 'mS', color: '#10b981' },
+      { label: 'pH',           current: 5.9,  target: 6.2,  min: 5.0, max: 7.5, unit: '',  color: '#f43f5e' }
+    ];
+    var html = params.map(function (p) {
+      var pct = ((p.current - p.min) / (p.max - p.min)) * 100;
+      var targetPct = ((p.target - p.min) / (p.max - p.min)) * 100;
+      var drift = Math.abs(p.current - p.target).toFixed(1);
+      var status = drift < 0.5 || (p.unit === 'ppm' && drift < 50) ? 'optimal' : 'warn';
+      return '<div class="gauge-row">' +
+        '<span class="gauge-label">' + p.label + '</span>' +
+        '<div class="gauge-bar">' +
+        '<div class="gauge-fill" style="width:' + pct + '%;background:' + p.color + ';"></div>' +
+        '<div style="position:absolute;top:-3px;left:' + targetPct + '%;width:2px;height:12px;background:#fff;opacity:0.5;border-radius:1px;"></div>' +
+        '</div>' +
+        '<span class="gauge-value">' + p.current + p.unit + '</span>' +
+        '<span class="gauge-target">target ' + p.target + p.unit + '</span>' +
+        '<span class="status-badge status-' + status + '" style="margin-left:6px;">' + status.toUpperCase() + '</span>' +
+        '</div>';
+    }).join('');
+    document.getElementById('targetRangesContainer').innerHTML = html;
+  }
+
+  function renderLightSchedule() {
+    var canvas = document.getElementById('lightScheduleCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width  = canvas.offsetWidth  * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 20, right: 24, bottom: 36, left: 56 };
+
+    // Multi-zone PPFD schedule
+    var schedules = [
+      { label: 'Propagation',  color: '#10b981', on: 6, off: 22, peak: 180 },
+      { label: 'Veg Room A',   color: '#06b6d4', on: 5, off: 21, peak: 280 },
+      { label: 'Finishing',    color: '#8b5cf6', on: 7, off: 23, peak: 350 },
+      { label: 'Microgreens',  color: '#f59e0b', on: 4, off: 20, peak: 150 }
+    ];
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+
+    // Grid
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var i = 0; i <= 4; i++) {
+      var gy = pad.top + chartH * i / 4;
+      ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
+    }
+
+    schedules.forEach(function (s) {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      for (var hr = 0; hr <= 24; hr++) {
+        var x = pad.left + (hr / 24) * chartW;
+        var active = (hr >= s.on && hr < s.off);
+        var ppfd = active ? s.peak * Math.sin(Math.PI * (hr - s.on) / (s.off - s.on)) : 0;
+        var y = pad.top + chartH - (ppfd / 400) * chartH;
+        if (hr === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
+
+    // X labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    for (var hr2 = 0; hr2 <= 24; hr2 += 4) {
+      ctx.fillText(String(hr2).padStart(2, '0') + ':00', pad.left + (hr2 / 24) * chartW, h - pad.bottom + 16);
+    }
+    // Y labels
+    ctx.textAlign = 'right';
+    for (var yi = 0; yi <= 4; yi++) {
+      var val = 400 - 100 * yi;
+      ctx.fillText(val, pad.left - 8, pad.top + chartH * yi / 4 + 3);
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillText('PPFD (umol/m2/s)', pad.left + chartW / 2, h - 4);
+  }
+
+  function renderDeviceStatus() {
+    var devices = [
+      { name: 'SwitchBot Hub 2 -- Zone A',   type: 'Hub',      protocol: 'BLE',     status: 'online',  room: 'Veg Room A' },
+      { name: 'SwitchBot Temp/Hum -- Bay 3', type: 'Sensor',   protocol: 'BLE',     status: 'online',  room: 'Finishing' },
+      { name: 'SwitchBot Meter Pro -- B12',  type: 'Sensor',   protocol: 'BLE',     status: 'online',  room: 'Microgreens' },
+      { name: 'SwitchBot H7 -- Zone B',      type: 'Sensor',   protocol: 'BLE',     status: 'offline', room: 'Propagation' },
+      { name: 'LED Driver Array 1',           type: 'Light',    protocol: 'RS-485',  status: 'online',  room: 'Veg Room A' }
+    ];
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' +
+      devices.map(function (d) {
+        var sc = d.status === 'online' ? '#10b981' : '#f43f5e';
+        return '<div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text-primary);">' + d.name + '</span>' +
+          '<span style="width:7px;height:7px;border-radius:50%;background:' + sc + ';"></span>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);">' + d.type + ' &middot; ' + d.protocol + ' &middot; ' + d.room + '</div>' +
+          '</div>';
+      }).join('') + '</div>';
+    document.getElementById('deviceStatusContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 4: CROP INTELLIGENCE
+  // ================================================================
+  function renderPlantingsTable() {
+    var plantings = [
+      { crop: 'Bibb Butterhead',  room: 'Veg Room A',  tray: 'Bay 12', stage: 'Finishing', day: 22, harvest: 2 },
+      { crop: 'Baby Arugula',     room: 'Microgreens', tray: 'Bay 04', stage: 'Germination', day: 5, harvest: 7 },
+      { crop: 'Sweet Basil',      room: 'Veg Room A',  tray: 'Bay 08', stage: 'Vegetative', day: 14, harvest: 10 },
+      { crop: 'Kale "Winterbor"', room: 'Finishing',   tray: 'Bay 16', stage: 'Finishing', day: 28, harvest: 1 },
+      { crop: 'Bright Lights Chard', room: 'Veg Room A', tray: 'Bay 06', stage: 'Vegetative', day: 11, harvest: 12 },
+      { crop: 'Sunflower Shoots', room: 'Propagation', tray: 'Rack 2', stage: 'Germination', day: 3, harvest: 8 }
+    ];
+    var html = '<thead><tr>' +
+      '<th>Crop</th><th>Room</th><th>Tray</th><th>Stage</th><th>Day</th><th>Harvest In</th>' +
+      '</tr></thead><tbody>' +
+      plantings.map(function (p) {
+        var urgency = p.harvest <= 2 ? 'color:var(--evie-rose);font-weight:700;' : p.harvest <= 5 ? 'color:var(--evie-amber);' : 'color:var(--text-secondary);';
+        return '<tr>' +
+          '<td style="color:var(--text-primary);font-weight:500;">' + p.crop + '</td>' +
+          '<td>' + p.room + '</td>' +
+          '<td>' + p.tray + '</td>' +
+          '<td>' + p.stage + '</td>' +
+          '<td>' + p.day + '</td>' +
+          '<td style="' + urgency + '">' + p.harvest + ' days</td>' +
+          '</tr>';
+      }).join('') + '</tbody>';
+    document.getElementById('plantingsTable').innerHTML = html;
+  }
+
+  function renderYieldForecast() {
+    var canvas = document.getElementById('yieldForecastCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width  = canvas.offsetWidth  * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+    var pad = { top: 30, right: 24, bottom: 56, left: 60 };
+
+    var days  = ['Apr 1', 'Apr 2', 'Apr 3', 'Apr 4', 'Apr 5', 'Apr 6', 'Apr 7', 'Apr 8', 'Apr 9', 'Apr 10', 'Apr 11', 'Apr 12', 'Apr 13', 'Apr 14'];
+    var crops = ['Bibb', 'Arugula', 'Kale', 'Basil'];
+    var data  = [
+      [1.8, 0, 1.2, 0, 0, 2.1, 0, 0, 1.5, 0, 0, 1.9, 0, 0.8],
+      [0, 0, 0, 0, 0, 0, 0, 1.1, 0, 0, 0, 0, 1.3, 0],
+      [1.2, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 1.1],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0]
+    ];
+    var colors = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b'];
+
+    var chartW = w - pad.left - pad.right;
+    var chartH = h - pad.top - pad.bottom;
+    var maxVal = 2.5;
+    var barW   = chartW / days.length * 0.65;
+    var groupStep = chartW / days.length;
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#0f1e2f';
+    ctx.lineWidth = 0.5;
+    for (var yi = 0; yi <= 5; yi++) {
+      var gy = pad.top + chartH * yi / 5;
+      ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText((maxVal - maxVal * yi / 5).toFixed(1), pad.left - 6, gy + 3);
+    }
+
+    // Stacked bars
+    days.forEach(function (day, di) {
+      var xCenter = pad.left + di * groupStep + groupStep / 2;
+      var yBase   = pad.top + chartH;
+      crops.forEach(function (crop, ci) {
+        var val = data[ci][di];
+        if (val === 0) return;
+        var bh  = (val / maxVal) * chartH;
+        var gradient = ctx.createLinearGradient(0, yBase - bh, 0, yBase);
+        gradient.addColorStop(0, colors[ci]);
+        gradient.addColorStop(1, colors[ci] + '44');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(xCenter - barW / 2, yBase - bh, barW, bh);
+        yBase -= bh;
+      });
+
+      // Day label
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.save();
+      ctx.translate(xCenter, h - pad.bottom + 14);
+      ctx.rotate(-0.35);
+      ctx.fillText(day, 0, 0);
+      ctx.restore();
+    });
+
+    // Legend
+    crops.forEach(function (c, i) {
+      ctx.fillStyle = colors[i];
+      ctx.fillRect(pad.left + i * 90, 8, 10, 10);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(c, pad.left + i * 90 + 14, 18);
+    });
+
+    // Y-axis label
+    ctx.save();
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.translate(14, pad.top + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Yield (kg)', 0, 0);
+    ctx.restore();
+  }
+
+  function renderOrders() {
+    var orders = [
+      { id: 'WO-2026-0401-A', items: '2x Bibb Butterhead (1.8kg), 1x Arugula (0.4kg)', customer: 'Harvest Table Restaurant', total: '$47.20', status: 'Pending Fulfillment', urgent: true },
+      { id: 'WO-2026-0402-B', items: '4x Kale Winterbor (2.0kg), 2x Basil bundles', customer: 'The Local Market Co.', total: '$88.50', status: 'Confirmed', urgent: false },
+      { id: 'WO-2026-0403-C', items: '6x Microgreen trays (assorted)', customer: 'Oakside Bistro', total: '$72.00', status: 'Processing', urgent: false }
+    ];
+    var html = orders.map(function (o) {
+      var borderColor = o.urgent ? '#f59e0b' : '#06b6d4';
+      return '<div class="order-card" style="border-left-color:' + borderColor + ';">' +
+        '<div class="order-card-left">' +
+        '<div class="order-card-id">' + o.id + '</div>' +
+        '<div class="order-card-items">' + o.items + '</div>' +
+        '<div class="order-card-meta">' + o.customer + '</div>' +
+        '</div>' +
+        '<div class="order-card-right">' +
+        '<span class="order-total">' + o.total + '</span>' +
+        '<span class="order-status-badge" style="' + (o.urgent ? 'background:rgba(245,158,11,0.12);color:#f59e0b;' : '') + '">' + o.status + '</span>' +
+        '</div></div>';
+    }).join('');
+    document.getElementById('ordersContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 5: MULTI-ZONE
+  // ================================================================
+  function renderZoneMap() {
+    var canvas = document.getElementById('zoneMapCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width  = canvas.offsetWidth  * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    var w = canvas.offsetWidth;
+    var h = canvas.offsetHeight;
+
+    ctx.fillStyle = '#060c16';
+    ctx.fillRect(0, 0, w, h);
+
+    var zones = [
+      { label: 'Zone A',   crop: 'Microgreens',    color: '#10b981', x: 0.05, y: 0.08, w: 0.42, h: 0.40 },
+      { label: 'Zone B',   crop: 'Veg Lettuce',    color: '#06b6d4', x: 0.53, y: 0.08, w: 0.42, h: 0.40 },
+      { label: 'Zone C',   crop: 'Sweet Basil',    color: '#8b5cf6', x: 0.05, y: 0.54, w: 0.42, h: 0.40 },
+      { label: 'Zone D',   crop: 'Finishing Kale', color: '#f59e0b', x: 0.53, y: 0.54, w: 0.42, h: 0.40 }
+    ];
+
+    zones.forEach(function (z) {
+      var x = z.x * w, y = z.y * h, zw = z.w * w, zh = z.h * h;
+      // Fill with subtle tint
+      ctx.fillStyle = z.color + '12';
+      ctx.beginPath();
+      ctx.roundRect(x, y, zw, zh, 8);
+      ctx.fill();
+      // Border
+      ctx.strokeStyle = z.color + '60';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, zw, zh, 8);
+      ctx.stroke();
+      // Top accent line
+      ctx.strokeStyle = z.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, y);
+      ctx.lineTo(x + zw - 8, y);
+      ctx.stroke();
+      // Label
+      ctx.fillStyle = z.color;
+      ctx.font = '700 13px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(z.label, x + 14, y + 24);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText(z.crop, x + 14, y + 40);
+    });
+
+    // Room border
+    ctx.strokeStyle = '#1a2d42';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(2, 2, w - 4, h - 4);
+
+    // Room label
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('ROOM A -- The Notable Sprout', w / 2, h - 6);
+  }
+
+  function renderZoneCards() {
+    var zones = [
+      { cls: 'zone-a', label: 'Zone A -- Microgreens', crop: 'Sunflower + Arugula + Radish',
+        metrics: [{ l: 'Temp Target', v: '22.5C' }, { l: 'Humidity', v: '74%' }, { l: 'Light Period', v: '16h / day' }, { l: 'PPFD', v: '120 umol' }] },
+      { cls: 'zone-b', label: 'Zone B -- Veg Lettuce', crop: 'Bibb Butterhead + Oakleaf',
+        metrics: [{ l: 'Temp Target', v: '20.0C' }, { l: 'Humidity', v: '68%' }, { l: 'Light Period', v: '18h / day' }, { l: 'PPFD', v: '260 umol' }] },
+      { cls: 'zone-c', label: 'Zone C -- Sweet Basil', crop: 'Genovese + Lemon Basil',
+        metrics: [{ l: 'Temp Target', v: '24.0C' }, { l: 'Humidity', v: '70%' }, { l: 'Light Period', v: '14h / day' }, { l: 'PPFD', v: '320 umol' }] },
+      { cls: 'zone-d', label: 'Zone D -- Finishing', crop: 'Kale Winterbor + Chard',
+        metrics: [{ l: 'Temp Target', v: '18.5C' }, { l: 'Humidity', v: '65%' }, { l: 'Light Period', v: '16h / day' }, { l: 'PPFD', v: '350 umol' }] }
+    ];
+    var html = zones.map(function (z) {
+      return '<div class="zone-card ' + z.cls + '">' +
+        '<div class="zone-card-name">' + z.label + '</div>' +
+        '<div class="zone-card-crop">' + z.crop + '</div>' +
+        z.metrics.map(function (m) {
+          return '<div class="zone-metric-row"><span class="zone-metric-lbl">' + m.l + '</span><span class="zone-metric-val">' + m.v + '</span></div>';
+        }).join('') +
+        '</div>';
+    }).join('');
+    document.getElementById('zoneCardsContainer').innerHTML = html;
+  }
+
+  // ================================================================
+  // SCENE 6: COLLABORATION
+  // ================================================================
+  function renderCollabFlow() {
+    var messages = [
+      {
+        avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
+        body: 'Anomaly detected in <span class="collab-highlight">Finishing Room</span>. Humidity climbing -- <span class="collab-highlight">81% and rising</span>. Target is 65%. Dehumidifier duty cycle already at maximum. Requesting F.A.Y.E. authorization to reduce temp setpoint from 18.5C to 17.0C as secondary humidity correction.'
+      },
+      {
+        avatar: 'FAYE', cls: 'avatar-faye', name: 'F.A.Y.E.', nameCls: 'name-faye',
+        body: 'Directive issued. <span class="collab-highlight">Approved: reduce setpoint to 17.0C for up to 4 hours.</span> Monitor yield impact on Kale Winterbor -- Day 28 crop is in final swell phase. Log decision for compliance audit. Alert me if temp drops below 16.5C.'
+      },
+      {
+        avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
+        body: 'Setpoint updated. Cooling engaged. Initiating G.W.E.N. research query -- sending <span class="collab-highlight">72 hours of humidity + growth data</span> for Finishing Room. Requesting pattern analysis: is humidity spiking correlated with watering cycle timing?'
+      },
+      {
+        avatar: 'GWEN', cls: 'avatar-gwen', name: 'G.W.E.N.', nameCls: 'name-gwen',
+        body: 'Analysis complete. <span class="collab-highlight">Strong correlation confirmed (r=0.84, p&lt;0.01)</span> -- humidity spikes occur 90-120 minutes after each irrigation cycle. Recommend shifting irrigation to pre-lights-off window to allow passive evaporation before the high-light period. Publishing finding to ELN.'
+      },
+      {
+        avatar: 'EVIE', cls: 'avatar-evie', name: 'E.V.I.E.', nameCls: 'name-evie',
+        body: 'Irrigation schedule updated. New timing: <span class="collab-highlight">21:30 daily</span> (30 minutes before lights-off). Alerting grower. F.A.Y.E. notified. G.W.E.N. finding linked to crop record. Monitoring resumed.'
+      }
+    ];
+
+    var container = document.getElementById('collabFlowContainer');
+    container.innerHTML = '';
+
+    messages.forEach(function (m, i) {
+      var div = document.createElement('div');
+      div.className = 'collab-msg';
+      div.innerHTML =
+        '<div class="collab-avatar ' + m.cls + '">' + m.avatar.slice(0, 2) + '</div>' +
+        '<div class="collab-bubble">' +
+        '<div class="collab-bubble-name ' + m.nameCls + '">' + m.name + '</div>' +
+        '<p>' + m.body + '</p>' +
+        '</div>';
+      container.appendChild(div);
+
+      setTimeout(function () { div.classList.add('visible'); }, i * 900);
+    });
+  }
+
+  // ================================================================
+  // SCENE 7: ALL TOOLS
+  // ================================================================
+  function renderAllTools() {
+    var categories = [
+      {
+        title: 'Farm Operations',
+        icon: '&#9679;',
+        color: 'var(--evie-green)',
+        desc: 'System health, daily priorities, room status, AI-generated insights, and full audit trail.',
+        tools: ['get_system_health', 'get_daily_todo', 'get_room_status', 'get_farm_insights', 'get_ai_recommendations', 'get_audit_log', 'get_workspace_tasks']
+      },
+      {
+        title: 'Environmental Control',
+        icon: '&#9679;',
+        color: 'var(--evie-cyan)',
+        desc: 'Live sensor readings, alert triage, target range enforcement, nutrient dosing, and light scheduling.',
+        tools: ['get_environment_readings', 'update_target_ranges', 'set_light_schedule', 'get_alerts', 'dismiss_alert', 'get_nutrient_status', 'update_nutrient_targets', 'get_dosing_history']
+      },
+      {
+        title: 'Device Management',
+        icon: '&#9679;',
+        color: 'var(--evie-violet)',
+        desc: 'SwitchBot hubs, LED drivers, sensor registration, calibration status, and RS-485 bus mapping.',
+        tools: ['get_device_status', 'auto_assign_devices', 'register_device', 'scan_devices', 'scan_bus_channels', 'get_bus_mappings', 'save_bus_mapping', 'get_calibration_status', 'get_equipment_status']
+      },
+      {
+        title: 'Crop Lifecycle',
+        icon: '&#9679;',
+        color: 'var(--evie-green)',
+        desc: 'Planting assignments, harvest scheduling, capacity planning, crop profiles, and benchmark seeding.',
+        tools: ['get_planting_assignments', 'create_planting_assignment', 'get_scheduled_harvests', 'mark_harvest_complete', 'get_harvest_log', 'get_capacity', 'get_crop_info', 'seed_benchmarks']
+      },
+      {
+        title: 'Inventory & Orders',
+        icon: '&#9679;',
+        color: 'var(--evie-amber)',
+        desc: 'Stock levels, manual adjustments, order fulfillment, status tracking, and dynamic crop pricing.',
+        tools: ['get_inventory_summary', 'add_inventory_item', 'update_manual_inventory', 'get_orders', 'update_order_status', 'get_pricing_decisions', 'update_crop_price']
+      },
+      {
+        title: 'Intelligence & Forecasting',
+        icon: '&#9679;',
+        color: 'var(--evie-cyan)',
+        desc: 'Yield prediction, cost analysis, batch chain tracing, data quality scoring, and grow recipe versioning.',
+        tools: ['get_yield_forecast', 'get_cost_analysis', 'get_data_lineage', 'get_data_quality_summary', 'get_batch_chain', 'get_recipe_versions']
+      },
+      {
+        title: 'Research Support',
+        icon: '&#9679;',
+        color: 'var(--evie-violet)',
+        desc: 'Study management, ELN entries, observations, dataset summaries, timelines, and budgets.',
+        tools: ['get_my_studies', 'get_study_timeline', 'record_observation', 'get_dataset_summary', 'get_eln_entries', 'get_study_budget', 'get_research_dashboard']
+      },
+      {
+        title: 'Grants & Compliance',
+        icon: '&#9679;',
+        color: 'var(--evie-amber)',
+        desc: 'Grant dashboard, ethics approvals, HQP tracking, partner network, security overview, and publication pipeline.',
+        tools: ['get_grant_dashboard', 'get_ethics_status', 'get_hqp_summary', 'get_partner_network', 'get_security_overview', 'get_deadline_summary', 'get_publication_pipeline']
+      }
+    ];
+
+    var totalTools = categories.reduce(function (sum, c) { return sum + c.tools.length; }, 0);
+    animateCounter(document.getElementById('statToolCount'), 59, 2000);
+    animateCounter(document.getElementById('statCatCount'), categories.length, 1500);
+
+    document.getElementById('allToolsGrid').innerHTML = categories.map(function (cat) {
+      return '<div class="cap-card">' +
+        '<span class="cap-card-icon" style="color:' + cat.color + ';">' + cat.icon + '</span>' +
+        '<div class="cap-card-title">' + cat.title +
+        ' <span style="color:var(--text-muted);font-size:11px;font-weight:400;">(' + cat.tools.length + ')</span></div>' +
+        '<div style="font-size:12px;color:#94a3b8;line-height:1.55;margin:6px 0 10px;">' + cat.desc + '</div>' +
+        '<div class="cap-card-tools">' +
+        cat.tools.map(function (t) { return '<span class="cap-tool-tag">' + t + '</span>'; }).join('') +
+        '</div></div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // INIT
+  // ================================================================
+  window.addEventListener('DOMContentLoaded', function () {
+    initStarfield();
+    initScrollObserver();
+    renderAllTools();
+
+    // Auto-start audio on first interaction (browser policy)
+    var audioStarted = false;
+    function tryStartAudio() {
+      if (audioStarted) return;
+      audioStarted = true;
+      playOrganicAmbient();
+      audioPlaying = true;
+      document.getElementById('audioIcon').innerHTML = '&#9724;';
+      document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+    }
+    ['click', 'scroll', 'touchstart', 'keydown'].forEach(function (ev) {
+      window.addEventListener(ev, tryStartAudio, { once: false, passive: true });
+    });
+
+    // Continuous slow auto-scroll with pause/resume on user interaction
+    var autoScrollActive = false;
+    var autoScrollRafId = null;
+    var autoScrollSpeed = 0.6; // px per frame (~36px/sec at 60fps)
+    var autoScrollStartDelay = 4000; // ms before scroll begins
+
+    function autoScrollTick() {
+      if (!autoScrollActive) return;
+      var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (window.scrollY >= maxScroll - 2) {
+        autoScrollActive = false;
+        return;
+      }
+      window.scrollBy(0, autoScrollSpeed);
+      autoScrollRafId = requestAnimationFrame(autoScrollTick);
+    }
+
+    function startAutoScroll() {
+      if (autoScrollActive) return;
+      autoScrollActive = true;
+      autoScrollRafId = requestAnimationFrame(autoScrollTick);
+    }
+
+    function stopAutoScroll() {
+      autoScrollActive = false;
+      if (autoScrollRafId) { cancelAnimationFrame(autoScrollRafId); autoScrollRafId = null; }
+    }
+
+    // Start after initial delay
+    var autoScrollInitTimer = setTimeout(startAutoScroll, autoScrollStartDelay);
+
+    // Pause on user scroll/touch; resume 4s after they stop
+    var resumeTimer = null;
+    function onUserScroll() {
+      stopAutoScroll();
+      clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(startAutoScroll, 4000);
+    }
+    window.addEventListener('wheel', onUserScroll, { passive: true });
+    window.addEventListener('touchmove', onUserScroll, { passive: true });
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') onUserScroll();
+    });
+
+    // Render visualizations once sections are in view for best performance
+    // (canvas elements need offsetWidth to be > 0)
+    var rendered = {};
+    var observer2 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var scene = entry.target.dataset.scene;
+        if (rendered[scene]) return;
+        rendered[scene] = true;
+        if (scene === 'monitor') {
+          showToolExec('toolExecMonitor', [
+            { name: 'get_environment_readings', time: '118ms' },
+            { name: 'get_alerts',               time: '44ms' },
+            { name: 'get_room_status',           time: '61ms' }
+          ]);
+          setTimeout(renderSensorChart, 200);
+          setTimeout(renderConditionsCards, 400);
+          setTimeout(renderAlerts, 600);
+        }
+        if (scene === 'automate') {
+          renderTargetRanges();
+          showToolExec('toolExecLight', [
+            { name: 'get_environment_readings', time: '95ms' },
+            { name: 'update_target_ranges',     time: '72ms' },
+            { name: 'set_light_schedule',       time: '88ms' }
+          ], 200);
+          setTimeout(renderLightSchedule, 400);
+          setTimeout(renderDeviceStatus, 200);
+        }
+        if (scene === 'crops') {
+          renderPlantingsTable();
+          setTimeout(renderYieldForecast, 200);
+          setTimeout(renderOrders, 100);
+        }
+        if (scene === 'zones') {
+          setTimeout(renderZoneMap, 200);
+          renderZoneCards();
+        }
+        if (scene === 'collab') {
+          renderCollabFlow();
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.scene[data-scene]').forEach(function (el) { observer2.observe(el); });
+
+    // Handle resize
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (rendered['monitor'])  renderSensorChart();
+        if (rendered['automate']) { renderLightSchedule(); }
+        if (rendered['crops'])    renderYieldForecast();
+        if (rendered['zones'])    renderZoneMap();
+      }, 250);
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
