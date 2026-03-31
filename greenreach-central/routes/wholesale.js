@@ -764,7 +764,7 @@ const requireBuyerPortalAuth = [requireWholesaleDbForCriticalPaths, requireBuyer
  * Return public Square credentials for the frontend payment form.
  */
 router.get('/payment/config', (req, res) => {
-  const appId = process.env.SQUARE_APP_ID || '';
+  const appId = process.env.SQUARE_APPLICATION_ID || process.env.SQUARE_APP_ID || '';
   const locationId = process.env.SQUARE_LOCATION_ID || '';
   const environment = process.env.SQUARE_ENVIRONMENT || 'sandbox';
   res.json({ status: 'ok', data: { appId, locationId, environment } });
