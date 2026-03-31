@@ -67,9 +67,11 @@ function getSmtpTransport() {
 async function sendViaSmtp({ to, subject, html, text }) {
   const transport = getSmtpTransport();
   if (!transport) return { sent: false, error: 'SMTP not configured' };
+  // WorkMail requires From address to match the authenticated sender (SMTP_USER)
+  const smtpFrom = SMTP_USER || SES_FROM;
   try {
     const result = await transport.sendMail({
-      from: `GreenReach <${SES_FROM}>`,
+      from: `GreenReach <${smtpFrom}>`,
       to,
       subject,
       html: html || undefined,

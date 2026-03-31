@@ -8235,14 +8235,19 @@ async function handleAddUser(event) {
                 name,
                 role,
                 password,
-                farmId: currentSession.farmId
+                farmId: currentSession.farmId,
+                sendEmail: true,
+                farmName: currentSession.farmName || 'Light Engine Farm'
             })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            messageEl.textContent = 'User created successfully. They can now log in with the provided credentials.';
+            const emailNote = data.emailSent
+                ? 'An invitation email has been sent to the user.'
+                : 'User created but the invitation email could not be sent. Please share the credentials manually.';
+            messageEl.textContent = `User created successfully. ${emailNote}`;
             messageEl.style.display = 'block';
             messageEl.style.background = '#efe';
             messageEl.style.color = '#3a3';
