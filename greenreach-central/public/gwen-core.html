@@ -241,7 +241,7 @@
       </div>
       <button onclick="gwenDemoNext()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#9654;</button>
       <button onclick="gwenDemoToggleAudio()" id="gwenDemoAudioBtn" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#94a3b8;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;backdrop-filter:blur(8px);">&#9835;</button>
-      <button onclick="gwenDemoToggleVoice()" id="gwenDemoVoiceBtn" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#94a3b8;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:13px;backdrop-filter:blur(8px);">&#128483;</button>
+      <button onclick="gwenDemoToggleVoice()" id="gwenDemoVoiceBtn" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:13px;backdrop-filter:blur(8px);">&#128483;</button>
       <button onclick="gwenDemoClose()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(251,113,133,0.3);color:#fb7185;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#10005;</button>
     </div>
   </div>
@@ -655,7 +655,7 @@
       // X-axis labels (show a subset if too many)
       ctx.fillStyle = '#94a3b8';
       ctx.textAlign = 'center';
-      ctx.font = '9px monospace';
+      ctx.font = '11px monospace';
       var labelStep = Math.ceil(labels.length / 8);
       labels.forEach(function(l, i) {
         if (i % labelStep === 0) {
@@ -698,12 +698,12 @@
     var audioCtx = null;
     var audioPlaying = false;
     var audioNodes = [];
-    var voiceEnabled = false;
+    var voiceEnabled = true;
     var voiceAudios = []; var currentVoiceAudio = null;
 
     var SCENES = [
       { name: 'Live Sensor Intelligence',
-        duration: 26000,
+        duration: 20000,
         narrative: [
           { text: 'GWEN connects directly to your local sensor array.', at: 0.02, dur: 0.18 },
           { text: 'Temperature. Humidity. CO2. EC. pH. Light intensity.', at: 0.16, dur: 0.18 },
@@ -715,7 +715,7 @@
         voice: 'GWEN connects directly to your local sensor array. Temperature, humidity, CO2, EC, pH, light intensity. Every reading mapped in real time across your growing environment. She does not just display data. She understands it. Anomalies detected. Patterns identified. Correlations surfaced.'
       },
       { name: 'Equipment Mapping & Environmental Control',
-        duration: 28000,
+        duration: 20000,
         narrative: [
           { text: 'Map every piece of equipment in your grow room.', at: 0.02, dur: 0.16 },
           { text: 'Grow lights. HVAC units. Circulation fans. Dehumidifiers. CO2 injectors.', at: 0.14, dur: 0.18 },
@@ -727,7 +727,7 @@
         voice: 'Map every piece of equipment in your grow room. Grow lights, HVAC units, circulation fans, dehumidifiers. GWEN models each thermal signature and environmental footprint. Manipulate controls in simulation before committing to change. Validate outcomes before a single watt is spent.'
       },
       { name: 'Humidity, Gases & Nutrient Dynamics',
-        duration: 26000,
+        duration: 17000,
         narrative: [
           { text: 'Humidity migration modeled from transpiration to extraction.', at: 0.02, dur: 0.16 },
           { text: 'CO2 distribution mapped against plant canopy location and airflow.', at: 0.14, dur: 0.18 },
@@ -739,7 +739,7 @@
         voice: 'Humidity migration modeled from transpiration to extraction. CO2 distribution mapped against plant canopy and airflow. Nutrient dynamics tracked from reservoir to root zone. Build hypothetical models. Test parameters before you grow.'
       },
       { name: 'Building Envelope & Construction Materials',
-        duration: 28000,
+        duration: 18000,
         narrative: [
           { text: 'Your growing environment begins at the walls.', at: 0.02, dur: 0.14 },
           { text: 'Insulation R-values. Vapor barriers. Thermal bridging. Glazing coefficients.', at: 0.13, dur: 0.18 },
@@ -751,7 +751,7 @@
         voice: 'Your growing environment begins at the walls. Insulation R-values, vapor barriers, thermal bridging. GWEN calculates how construction materials shape your interior climate. Upgrade scenarios evaluated. Structural decisions informed by environmental simulation.'
       },
       { name: 'Research Engine & Sensor Discovery',
-        duration: 30000,
+        duration: 26000,
         narrative: [
           { text: 'GWEN carries over 100 research tools.', at: 0.02, dur: 0.12 },
           { text: 'Design studies. Draft ELN entries. Generate hypotheses. Execute analysis code.', at: 0.11, dur: 0.16 },
@@ -764,7 +764,7 @@
         voice: 'GWEN carries over one hundred research tools. Design studies. Draft electronic lab notebook entries. Generate hypotheses. Execute analysis code. Search PubMed and OpenAlex. Register new instruments. GWEN discovers sensor capabilities and incorporates them. Introduce new technology. She learns what it measures and how to use it. Research. Hypothesize. Test. Validate. Iterate.'
       },
       { name: 'Collaborative Research Network',
-        duration: 30000,
+        duration: 25000,
         narrative: [
           { text: 'Share validated models with other farms across the network.', at: 0.02, dur: 0.14 },
           { text: 'Test environmental models against unique regional variables.', at: 0.13, dur: 0.14 },
@@ -777,7 +777,7 @@
         voice: 'Share validated models with other farms across the network. Test against unique regional variables. Different climates, different crops, different challenges. Collaborate with your local team or connect with a global research community. Deploy new nutrient strategies, environmental models, and lighting configurations. Peer-reviewed. Reproducible. Transparent.'
       },
       { name: 'Global Food Security',
-        duration: 32000,
+        duration: 25000,
         narrative: [
           { text: 'Food security is a global problem.', at: 0.02, dur: 0.10 },
           { text: 'It demands global collaboration.', at: 0.10, dur: 0.10 },
@@ -854,7 +854,7 @@
       if (!scene.narrative) return;
 
       ctx.textAlign = 'center';
-      ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.font = '18px -apple-system, BlinkMacSystemFont, sans-serif';
 
       for (var i = 0; i < scene.narrative.length; i++) {
         if (narrativeAlpha[i] > 0.01) {
@@ -907,14 +907,13 @@
       window.addEventListener('resize', resize);
       demoActive = true;
       currentScene = 0;
+      preloadVoiceAudios();
       initStars();
       startScene(0);
       tick();
       var orb = document.getElementById('gwenOrb');
       if (orb) orb.className = 'gwen-hero-orb gwen-orb-analyzing';
-      preloadVoiceAudios();
-
-
+      voiceEnabled = true;
     };
 
     window.gwenDemoClose = function() {
@@ -1020,7 +1019,7 @@
 
       /* Persistent scene title on canvas */
       ctx.textAlign = "center";
-      ctx.font = "600 13px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.font = "600 16px -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.fillStyle = "rgba(245,158,11,0.45)";
       ctx.fillText(SCENES[currentScene].name.toUpperCase(), w / 2, 36);
       ctx.textAlign = "left";
@@ -1115,7 +1114,7 @@
       }
       ctx.stroke();
       ctx.fillStyle = 'rgba(245,158,11,0.3)';
-      ctx.font = '9px monospace';
+      ctx.font = '11px monospace';
       ctx.fillText('v(y)', 80, channelTop + channelH * 0.48);
 
       // Grid lines
@@ -1165,13 +1164,13 @@
       ctx.fillStyle = grad;
       ctx.fillRect(gradX, channelTop, 8, channelH);
       ctx.fillStyle = 'rgba(148,163,184,0.5)';
-      ctx.font = '8px monospace';
+      ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('N conc', gradX + 4, channelTop - 8);
       ctx.textAlign = 'left';
 
       // Live sensor feed indicators (new for narrative)
-      var sensorFeedY = channelBot + 40;
+      var sensorFeedY = channelBot + 50;
       var sensors = [
         { label: 'TEMP', value: (22.1 + Math.sin(elapsed * 0.001) * 0.3).toFixed(1) + ' C', color: '#f59e0b' },
         { label: 'RH', value: (67.8 + Math.sin(elapsed * 0.0013) * 1.2).toFixed(0) + '%', color: '#38bdf8' },
@@ -1180,7 +1179,7 @@
         { label: 'pH', value: (6.12 + Math.sin(elapsed * 0.0009) * 0.04).toFixed(2), color: '#fb7185' },
         { label: 'PAR', value: (620 + Math.sin(elapsed * 0.0007) * 20).toFixed(0) + ' umol', color: '#fbbf24' }
       ];
-      var sensorSpacing = Math.min(w / (sensors.length + 1), 160);
+      var sensorSpacing = Math.min(w / (sensors.length + 1), 200);
       var sensorStartX = (w - sensorSpacing * (sensors.length - 1)) / 2;
       for (var si = 0; si < sensors.length; si++) {
         var sx = sensorStartX + si * sensorSpacing;
@@ -1200,12 +1199,12 @@
         ctx.stroke();
         // Label
         ctx.fillStyle = 'rgba(148,163,184,0.5)';
-        ctx.font = '8px monospace';
+        ctx.font = '11px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(sensors[si].label, sx, sensorFeedY - 14);
+        ctx.fillText(sensors[si].label, sx, sensorFeedY - 18);
         ctx.fillStyle = sensors[si].color;
-        ctx.font = '10px monospace';
-        ctx.fillText(sensors[si].value, sx, sensorFeedY + 18);
+        ctx.font = '13px monospace';
+        ctx.fillText(sensors[si].value, sx, sensorFeedY + 22);
       }
       ctx.textAlign = 'left';
 
@@ -1338,7 +1337,7 @@
           ctx.lineWidth = 2; ctx.stroke();
           ctx.fillStyle = 'rgba(56,189,248,0.15)'; ctx.fill();
           ctx.fillStyle = 'rgba(56,189,248,0.8)';
-          ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+          ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
           ctx.fillText('*', ex, ey + 4);
         } else if (src.type === 'fan') {
           var angle = elapsed * 0.005;
@@ -1355,10 +1354,10 @@
 
       // Labels
       ctx.fillStyle = 'rgba(148,163,184,0.4)';
-      ctx.font = '10px monospace';
+      ctx.font = '12px monospace';
       ctx.fillText('GROW ROOM -- TOP VIEW', ROOM_X, ROOM_Y - 8);
       ctx.fillStyle = 'rgba(100,116,139,0.3)';
-      ctx.font = '8px monospace'; ctx.textAlign = 'center';
+      ctx.font = '11px monospace'; ctx.textAlign = 'center';
       ctx.fillText('NORTH WALL', ROOM_X + ROOM_W / 2, ROOM_Y - 2);
       ctx.fillText('SOUTH WALL', ROOM_X + ROOM_W / 2, ROOM_Y + ROOM_H + 12);
       ctx.textAlign = 'left';
@@ -1568,7 +1567,7 @@
         }
       }
 
-      ctx.fillStyle = 'rgba(148,163,184,0.4)'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(148,163,184,0.4)'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
       ctx.fillText('HUMIDITY MIGRATION -- TOP VIEW', rx, ry - 8);
 
       drawDataBox(w * 0.02, h * 0.78, [
@@ -1722,7 +1721,7 @@
       }
 
       // Labels
-      ctx.fillStyle = 'rgba(245,158,11,0.4)'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(245,158,11,0.4)'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
       ctx.fillText('EXTERIOR', wallX / 2, wallTop - 16);
       ctx.fillStyle = 'rgba(56,189,248,0.4)';
       ctx.fillText('INTERIOR', interiorX + (w - interiorX) / 2, wallTop - 16);
@@ -1732,7 +1731,7 @@
       ctx.fillStyle = '#f59e0b';
       ctx.font = 'bold 48px -apple-system, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('R-' + rValue.toFixed(0), wallX + wallW / 2, h * 0.06);
-      ctx.font = '10px monospace';
+      ctx.font = '12px monospace';
       ctx.fillStyle = 'rgba(148,163,184,0.5)';
       ctx.fillText('INSULATION VALUE', wallX + wallW / 2, h * 0.06 + 18);
       ctx.textAlign = 'left';
@@ -1750,7 +1749,7 @@
         var targetY = chartY + chartH2 * (1 - (insideTarget - 18) / 20);
         ctx.beginPath(); ctx.moveTo(chartX, targetY); ctx.lineTo(chartX + chartW, targetY); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(16,185,129,0.3)'; ctx.font = '8px monospace';
+        ctx.fillStyle = 'rgba(16,185,129,0.3)'; ctx.font = '11px monospace';
         ctx.fillText('Target: 23 C', chartX + 4, targetY - 4);
 
         ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; ctx.beginPath();
@@ -1765,7 +1764,7 @@
           if (xi === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
         }
         ctx.stroke();
-        ctx.fillStyle = 'rgba(148,163,184,0.3)'; ctx.font = '9px monospace';
+        ctx.fillStyle = 'rgba(148,163,184,0.3)'; ctx.font = '11px monospace';
         ctx.fillText('INTERIOR TEMP STABILITY  (24hr)', chartX, chartY - 4);
       }
 
@@ -1974,7 +1973,7 @@
 
         // Discovery label
         ctx.fillStyle = 'rgba(245,158,11,0.4)';
-        ctx.font = '9px monospace'; ctx.textAlign = 'center';
+        ctx.font = '11px monospace'; ctx.textAlign = 'center';
         ctx.fillText('NEW SENSOR DISCOVERED', w * 0.5, discY - 20);
 
         // Scanning line
@@ -1996,7 +1995,7 @@
           ctx.beginPath(); ctx.arc(sxPos, discY + 8, 3, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(16,185,129,0.7)'; ctx.fill();
           ctx.fillStyle = 'rgba(148,163,184,0.6)';
-          ctx.font = '8px monospace';
+          ctx.font = '11px monospace';
           ctx.fillText(sensorTypes[si], sxPos, discY + 26);
 
           // Connection line to GWEN
@@ -2176,7 +2175,7 @@
 
         // Farm name
         ctx.fillStyle = node.primary ? 'rgba(245,158,11,0.8)' : 'rgba(148,163,184,0.6)';
-        ctx.font = (node.primary ? 'bold ' : '') + '9px monospace';
+        ctx.font = (node.primary ? 'bold ' : '') + '11px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(node.name, nx, ny + node.size + 14);
 
@@ -2399,7 +2398,7 @@
 
         // Name
         ctx.fillStyle = 'rgba(148,163,184,' + (nodeAlpha * 0.6) + ')';
-        ctx.font = '8px monospace'; ctx.textAlign = 'center';
+        ctx.font = '11px monospace'; ctx.textAlign = 'center';
         ctx.fillText(node.name, nx, ny + 22);
       }
 
@@ -2429,7 +2428,7 @@
         ctx.font = 'bold 32px -apple-system, sans-serif';
         ctx.fillText(counters[ci].value.toString(), cx, counterY);
         ctx.fillStyle = 'rgba(148,163,184,0.4)';
-        ctx.font = '9px monospace';
+        ctx.font = '11px monospace';
         ctx.fillText(counters[ci].label, cx, counterY + 18);
       }
 
@@ -2479,15 +2478,15 @@
         ctx.fillRect(x, y + i, lw, 1);
       }
       ctx.fillStyle = 'rgba(148,163,184,0.4)';
-      ctx.font = '8px monospace'; ctx.textAlign = 'left';
+      ctx.font = '12px monospace'; ctx.textAlign = 'left';
       ctx.fillText('38 C', x + lw + 4, y + 8);
       ctx.fillText('25 C', x + lw + 4, y + height * 0.5);
       ctx.fillText('12 C', x + lw + 4, y + height - 2);
     }
 
     function drawDataBox(x, y, items) {
-      var boxW = 180;
-      var lineH = 18;
+      var boxW = 220;
+      var lineH = 22;
       var boxH = items.length * lineH + 16;
       ctx.fillStyle = 'rgba(4,8,16,0.75)';
       ctx.fillRect(x, y, boxW, boxH);
@@ -2498,10 +2497,10 @@
         var item = items[i];
         var iy = y + 12 + i * lineH;
         ctx.fillStyle = 'rgba(148,163,184,0.5)';
-        ctx.font = '9px monospace'; ctx.textAlign = 'left';
+        ctx.font = '11px monospace'; ctx.textAlign = 'left';
         ctx.fillText(item.label, x + 10, iy);
         ctx.fillStyle = item.color;
-        ctx.font = '10px monospace'; ctx.textAlign = 'right';
+        ctx.font = '12px monospace'; ctx.textAlign = 'right';
         ctx.fillText(item.value, x + boxW - 10, iy);
       }
       ctx.textAlign = 'left';
