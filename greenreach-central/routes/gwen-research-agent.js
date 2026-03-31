@@ -811,7 +811,7 @@ const GWEN_TOOL_CATALOG = {
       title: { type: 'string', description: 'Display title' },
       data_source: { type: 'string', description: 'Source: sensor_data, observations, dataset, custom_query' },
       config: { type: 'object', description: 'Display configuration (axes, colors, filters, etc.)' },
-      data: { type: 'array', description: 'Data array for the display' },
+      data: { type: 'array', items: { type: 'object' }, description: 'Data array for the display' },
     },
     required: ['display_type', 'title'],
     execute: async (params, ctx) => {
@@ -838,7 +838,7 @@ const GWEN_TOOL_CATALOG = {
     description: 'Create a custom data table in the research workspace for storing unique researcher data. The table is scoped to the research bubble and inherits farm tenant isolation.',
     parameters: {
       table_name: { type: 'string', description: 'Name for the custom table (will be prefixed with research_custom_)' },
-      columns: { type: 'array', description: 'Array of column definitions: [{name, type, description}]' },
+      columns: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, type: { type: 'string' }, description: { type: 'string' } } }, description: 'Array of column definitions: [{name, type, description}]' },
       description: { type: 'string', description: 'Purpose of this table' },
     },
     required: ['table_name', 'columns'],
@@ -1069,11 +1069,11 @@ const GWEN_TOOL_CATALOG = {
     parameters: {
       chart_type: { type: 'string', description: 'Chart type', enum: ['line', 'scatter', 'bar', 'box', 'heatmap', 'multi_axis'] },
       title: { type: 'string', description: 'Chart title' },
-      data_sources: { type: 'array', description: 'Array of { variable_key, label, color } objects defining data series' },
+      data_sources: { type: 'array', items: { type: 'object', properties: { variable_key: { type: 'string' }, label: { type: 'string' }, color: { type: 'string' } } }, description: 'Array of { variable_key, label, color } objects defining data series' },
       x_label: { type: 'string', description: 'X-axis label' },
       y_label: { type: 'string', description: 'Y-axis label' },
       time_range_hours: { type: 'number', description: 'Time window in hours for time-series data (default 168)' },
-      annotations: { type: 'array', description: 'Array of { x, y, text } annotation markers' },
+      annotations: { type: 'array', items: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, text: { type: 'string' } } }, description: 'Array of { x, y, text } annotation markers' },
       study_id: { type: 'number', description: 'Link chart to a study for the workspace library' },
     },
     required: ['chart_type', 'title'],
@@ -2121,7 +2121,7 @@ const GWEN_TOOL_CATALOG = {
   match_programs_to_project: {
     description: 'Automatically score and rank all active grant programs against a research project or farm operation. Uses goal alignment, budget fit, province, intake status, and equity enhancement to find the best funding matches.',
     parameters: {
-      project_goals: { type: 'array', description: 'Array of goal tags: establish_vertical_farm, expand_operation, equipment_purchase, export_market, workforce_training, innovation_rd, risk_management, clean_tech, community_food, value_added' },
+      project_goals: { type: 'array', items: { type: 'string' }, description: 'Array of goal tags: establish_vertical_farm, expand_operation, equipment_purchase, export_market, workforce_training, innovation_rd, risk_management, clean_tech, community_food, value_added' },
       budget_range: { type: 'string', description: 'Budget range: under_25k, 25k_100k, 100k_500k, 500k_1m, over_1m' },
       province: { type: 'string', description: 'Province/territory' },
       description: { type: 'string', description: 'Free-text project description for keyword matching' },
@@ -2259,7 +2259,7 @@ const GWEN_TOOL_CATALOG = {
     parameters: {
       project_description: { type: 'string', description: 'Project description text' },
       project_title: { type: 'string', description: 'Project title' },
-      competitors: { type: 'array', description: 'Array of competitor objects: [{name, sicDescription, industry, notes}]' },
+      competitors: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, sicDescription: { type: 'string' }, industry: { type: 'string' }, notes: { type: 'string' } } }, description: 'Array of competitor objects: [{name, sicDescription, industry, notes}]' },
     },
     required: ['project_description', 'competitors'],
     execute: async (params) => {
