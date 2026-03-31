@@ -18,6 +18,7 @@ import {
   handleValidationErrors
 } from '../lib/input-validation.js';
 import * as reservationStore from '../lib/wholesale/reservation-store.js';
+import { query as dbQuery } from '../lib/database.js';
 
 let reservationCleanupStarted = false;
 if (!reservationCleanupStarted) {
@@ -449,17 +450,65 @@ router.post('/order-events', wholesaleAuthMiddleware, express.json({ limit: '256
 
 /**
  * GET /api/wholesale/order-events
- * Read the rolling order event log (for troubleshooting/visibility).
+ * Read orders from PostgreSQL (primary) and the rolling event log file (fallback).
  */
 router.get('/order-events', async (_req, res) => {
+  const eventMap = new Map();
+
+  // 1. Try the legacy JSON file
   try {
     const eventsFile = path.join(PUBLIC_DIR, 'data', 'wholesale-order-events.json');
     const raw = fs.readFileSync(eventsFile, 'utf8');
     const parsed = JSON.parse(raw);
-    return res.json({ ok: true, ...parsed });
+    for (const ev of (parsed.events || [])) {
+      if (ev.order_id) eventMap.set(ev.order_id, ev);
+    }
   } catch {
-    return res.json({ ok: true, events: [] });
+    // file may not exist — fine
   }
+
+  // 2. Query PostgreSQL wholesale_orders
+  try {
+    const result = await dbQuery(
+      'SELECT master_order_id, status, order_data, created_at FROM wholesale_orders ORDER BY created_at DESC LIMIT 200'
+    );
+    for (const row of (result.rows || [])) {
+      const od = row.order_data || {};
+      const orderId = row.master_order_id || od.master_order_id;
+      if (!orderId) continue;
+
+      // Flatten items from all farm sub-orders
+      const items = [];
+      for (const sub of (od.farm_sub_orders || [])) {
+        for (const item of (sub.items || [])) {
+          items.push({
+            product_name: item.product_name || item.sku_id || 'Unknown',
+            sku_id: item.sku_id || '',
+            quantity: item.quantity || 0,
+            price_per_unit: item.price_per_unit || item.unit_price || 0
+          });
+        }
+      }
+
+      const event = {
+        order_id: orderId,
+        timestamp: od.created_at || row.created_at,
+        status: od.status || row.status || 'pending_payment',
+        total_amount: od.grand_total || 0,
+        items,
+        buyer_email: od.buyer_account?.email || null,
+        delivery_date: od.delivery_date || null,
+        type: 'order_placed'
+      };
+
+      // PG is authoritative — overwrite file-based events
+      eventMap.set(orderId, event);
+    }
+  } catch (err) {
+    console.error('[Wholesale Sync] PG order-events query failed:', err.message);
+  }
+
+  return res.json({ ok: true, events: Array.from(eventMap.values()) });
 });
 
 /**
