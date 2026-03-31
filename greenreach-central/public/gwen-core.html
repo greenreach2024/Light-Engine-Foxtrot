@@ -859,7 +859,7 @@
       for (var i = 0; i < scene.narrative.length; i++) {
         if (narrativeAlpha[i] > 0.01) {
           ctx.fillStyle = 'rgba(203,213,225,' + (narrativeAlpha[i] * 0.85) + ')';
-          ctx.fillText(scene.narrative[i].text, w / 2, h - 70);
+          ctx.fillText(scene.narrative[i].text, w / 2, h - 150);
         }
       }
       ctx.textAlign = 'left';
@@ -967,7 +967,7 @@
       narrativeAlpha = [];
       var lbl = document.getElementById('gwenDemoSceneLabel');
       lbl.textContent = SCENES[idx].name;
-      lbl.style.opacity = '1';
+      lbl.style.opacity = '0';
       setTimeout(function() { lbl.style.opacity = '0'; }, 3500);
 
       // Scene counter
@@ -1017,6 +1017,13 @@
       else if (currentScene === 6) drawGlobalScene(t, elapsed);
 
       drawNarrative();
+
+      /* Persistent scene title on canvas */
+      ctx.textAlign = "center";
+      ctx.font = "600 13px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillStyle = "rgba(245,158,11,0.45)";
+      ctx.fillText(SCENES[currentScene].name.toUpperCase(), w / 2, 36);
+      ctx.textAlign = "left";
 
       animFrame = requestAnimationFrame(tick);
     }
