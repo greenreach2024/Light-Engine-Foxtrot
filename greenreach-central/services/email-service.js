@@ -1,13 +1,24 @@
 /**
  * Email Service — GreenReach Central
- * Tries AWS SES (IAM role on EB), falls back to console log in dev.
+ * Tries AWS SES (IAM role on EB), falls back to SMTP (WorkMail),
+ * then to console log in dev.
  */
+
+import nodemailer from 'nodemailer';
 
 const FROM_EMAIL = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@greenreachgreens.com';
 const FROM_NAME = process.env.FROM_NAME || 'GreenReach Farms';
 
+// SMTP fallback config (WorkMail) — used when SES sandbox blocks recipients
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_ENABLED = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
 let sesClient = null;
 let sesReady = false;
+let _smtpTransport = null;
 
 // Lazy-init SES client on first use
 async function getSES() {
@@ -34,14 +45,32 @@ async function getSES() {
   }
 }
 
+function getSmtpTransport() {
+  if (_smtpTransport) return _smtpTransport;
+  if (!SMTP_ENABLED) return null;
+  try {
+    _smtpTransport = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS }
+    });
+    console.log('[email] SMTP transport ready (WorkMail fallback)');
+    return _smtpTransport;
+  } catch (err) {
+    console.error('[email] Failed to create SMTP transport:', err.message);
+    return null;
+  }
+}
+
 class EmailService {
   /**
    * Send an email. Returns { success, messageId }.
-   * In dev/test without SES, logs to console instead.
+   * Tries SES first, falls back to SMTP (WorkMail), then stub in dev.
    */
   async sendEmail({ to, subject, text, html, from, cc, bcc }) {
     const fromAddress = from || `${FROM_NAME} <${FROM_EMAIL}>`;
-    console.log(`[email] → ${to} | ${subject}`);
+    console.log(`[email] -> ${to} | ${subject}`);
 
     const client = await getSES();
     if (client) {
@@ -66,16 +95,42 @@ class EmailService {
 
         const result = await client.send(cmd);
         const messageId = result.MessageId || result.$metadata?.requestId || `ses-${Date.now()}`;
-        console.log(`[email] ✅ Sent via SES: ${messageId}`);
-        return { success: true, messageId };
+        console.log(`[email] Sent via SES: ${messageId}`);
+        return { success: true, messageId, via: 'ses' };
       } catch (sesErr) {
-        console.error('[email] ❌ SES send failed:', sesErr.message);
-        // Fall through to stub
+        console.error('[email] SES send failed:', sesErr.message);
+        const isSandbox = sesErr.message && (sesErr.message.includes('not verified') || sesErr.message.includes('MessageRejected'));
+        if (isSandbox && SMTP_ENABLED) {
+          console.log(`[email] SES sandbox blocked ${to}, falling back to SMTP`);
+        } else if (SMTP_ENABLED) {
+          console.log(`[email] Falling back to SMTP for ${to}`);
+        }
+        // Fall through to SMTP or stub
       }
     }
 
-    // Stub fallback (dev / SES unavailable)
-    console.log(`[email] STUB — would send to ${to}: ${subject}`);
+    // SMTP fallback (WorkMail)
+    if (SMTP_ENABLED) {
+      const transport = getSmtpTransport();
+      if (transport) {
+        try {
+          const smtpFrom = `${FROM_NAME} <${SMTP_USER || FROM_EMAIL}>`;
+          const mailOpts = { from: smtpFrom, to, subject };
+          if (html) mailOpts.html = html;
+          if (text) mailOpts.text = text;
+          if (cc) mailOpts.cc = cc;
+          if (bcc) mailOpts.bcc = bcc;
+          const result = await transport.sendMail(mailOpts);
+          console.log(`[email] SMTP sent to ${to}: ${subject} (id: ${result.messageId})`);
+          return { success: true, messageId: result.messageId, via: 'smtp' };
+        } catch (smtpErr) {
+          console.error(`[email] SMTP failed to ${to}:`, smtpErr.message);
+        }
+      }
+    }
+
+    // Stub fallback (dev / both SES and SMTP unavailable)
+    console.log(`[email] STUB -- would send to ${to}: ${subject}`);
     if (text) console.log(`[email] Body preview: ${text.substring(0, 200)}`);
     return { success: true, messageId: `stub-${Date.now()}`, stub: true };
   }
