@@ -266,6 +266,11 @@ async function initDashboard() {
     // Setup navigation
     setupNavigation();
     
+    // Enforce viewer role restrictions (read-only UI)
+    if (currentSession && currentSession.role === 'viewer') {
+        enforceViewerMode();
+    }
+    
     // Load farm data
     await loadFarmData();
     
@@ -1134,22 +1139,7 @@ async function refreshData() {
     await loadDashboardData();
 }
 
-/**
- * Logout
- */
-function logout() {
-    grLog(' Returning to home...');
-    console.log(' DEBUG - Logout called from:', window.location.href);
-    console.log(' DEBUG - Redirecting to: /LE-dashboard.html');
-    console.log(' DEBUG - Current page version:', window.__PAGE_VERSION__);
-    
-    // Clear any stored session data
-    localStorage.removeItem(STORAGE_KEY_SESSION);
-    
-    // Redirect to updated dashboard with new UI
-    console.log(' DEBUG - Executing redirect now...');
-    window.location.href = '/LE-dashboard.html';
-}
+
 
 /**
  * Session management
@@ -1240,6 +1230,7 @@ function formatTime(timestamp) {
 let pricingData = [];
 let isPerGram = false; // false = per lb (default), true = per 100g
 const LB_TO_100G = 0.22046; // 1 lb = 453.592g, so 100g/453.592g = 0.22046
+const DEFAULT_SKU_FACTOR = 0.75;
 
 // Pricing version - increment this when defaultPricing changes to force localStorage clear
 const PRICING_VERSION = '2026-03-27-v10';
@@ -1396,7 +1387,7 @@ async function loadCropsFromDatabase() {
                         ws3Discount: c.ws3Discount ?? 35,
                         isTaxable: c.isTaxable || false,
                         floor_price: c.floor_price ?? 0,
-                        sku_factor: c.sku_factor ?? 0.75
+                        sku_factor: DEFAULT_SKU_FACTOR
                     }));
                     // Cache to localStorage
                     pricingData.forEach(item => {
@@ -1427,11 +1418,18 @@ async function loadCropsFromDatabase() {
 
             pricingData = crops.map(crop => {
                 const saved = localStorage.getItem(`pricing_${crop}`);
-                if (saved) return JSON.parse(saved);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    parsed.sku_factor = DEFAULT_SKU_FACTOR;
+                    return parsed;
+                }
                 const defaults = defaultPricing[crop] || { retail: 16.77, ws1: 15, ws2: 25, ws3: 35 };
-                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: 0.75 };
+                return { crop, retail: defaults.retail, ws1Discount: defaults.ws1, ws2Discount: defaults.ws2, ws3Discount: defaults.ws3, isTaxable: false, floor_price: 0, sku_factor: DEFAULT_SKU_FACTOR };
             });
         }
+
+        // Enforce global SKU policy: always 0.75 for every crop row.
+        pricingData = pricingData.map(item => ({ ...item, sku_factor: DEFAULT_SKU_FACTOR }));
 
         renderPricingTable();
     } catch (error) {
@@ -1494,7 +1492,7 @@ function calculateWholesalePrice(retail, discountPercent) {
  * where floor = max(costFloor, manualFloor)
  */
 function calculateFormulaWholesalePrice(retail, floorPrice, skuFactor) {
-    const factor = Math.min(0.75, Math.max(0.5, Number(skuFactor || 0.75)));
+    const factor = DEFAULT_SKU_FACTOR;
     const floor = Number(floorPrice || 0);
     const computed = retail * factor;
     return Math.max(floor, computed);
@@ -1559,14 +1557,16 @@ function renderPricingTable() {
                     <input 
                         type="number" 
                         class="pricing-input" 
-                        value="${(item.sku_factor || 0.75).toFixed(2)}" 
+                        value="${DEFAULT_SKU_FACTOR.toFixed(2)}" 
                         step="0.01" 
-                        min="0.50" 
+                        min="0.75" 
                         max="0.75"
                         data-index="${index}"
                         data-field="sku_factor"
-                        onchange="updatePricing(${index}, 'sku_factor', this.value)"
-                        style="width: 60px;"
+                        readonly
+                        disabled
+                        title="SKU factor is fixed at 0.75 for all crops"
+                        style="width: 60px; opacity: 0.8; cursor: not-allowed;"
                     >
                 </td>
                 <td class="calculated-price" style="font-weight: 600; color: var(--accent-green, #22c55e);">$${formulaWS.toFixed(2)}</td>
@@ -1601,12 +1601,13 @@ function updatePricing(index, field, value) {
             const cropUnit = getCropUnit(pricingData[index].crop);
             pricingData[index].retail = (cropUnit === 'weight' && isPerGram) ? convertPrice(numValue, false) : numValue;
         } else if (field === 'sku_factor') {
-            // Clamp SKU factor to valid range 0.50-0.75
-            pricingData[index].sku_factor = Math.min(0.75, Math.max(0.5, numValue));
+            pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
         } else {
             pricingData[index][field] = numValue;
         }
     }
+
+    pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
     
     renderPricingTable();
 }
@@ -1618,6 +1619,7 @@ async function savePricing() {
     try {
         // Save to localStorage
         pricingData.forEach(item => {
+            item.sku_factor = DEFAULT_SKU_FACTOR;
             localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
         });
         
@@ -1633,7 +1635,7 @@ async function savePricing() {
                 ws3Discount: item.ws3Discount,
                 isTaxable: item.isTaxable || false,
                 floor_price: item.floor_price || 0,
-                sku_factor: item.sku_factor || 0.75
+                sku_factor: DEFAULT_SKU_FACTOR
             }));
             
             const response = await fetch(`${API_BASE}/api/crop-pricing`, {
@@ -1660,7 +1662,7 @@ async function savePricing() {
                             body: JSON.stringify({
                                 crop: item.crop,
                                 floor_price: item.floor_price || 0,
-                                sku_factor: item.sku_factor || 0.75,
+                                sku_factor: DEFAULT_SKU_FACTOR,
                                 use_formula: true,
                                 tier: 'demand-based',
                                 reasoning: 'Updated via LE farm admin pricing table'
@@ -2570,17 +2572,19 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
     const isWeight = comparisonUnit === 'weight';
 
     const averageSourcePriceUSD = Number(marketData.avgPriceUSD || 0);
+    const isLiveDb = marketData._dataSource === 'database';
+    const isCanadianSource = marketData.country === 'Canada';
     const convertToCad = marketData.country !== 'Canada' && marketData._dataSource !== 'database';
     const exchangeMultiplier = convertToCad ? currentExchangeRate : 1;
 
     if (!isWeight) {
-        const isLiveDb = marketData._dataSource === 'database';
         const marketAverageCAD = isLiveDb
             ? Number(marketData.avgPriceCAD || 0)
             : averageSourcePriceUSD * exchangeMultiplier;
 
-        const sourceAverageUSD = isLiveDb
-            ? marketAverageCAD / (currentExchangeRate || 1)
+        const sourceCurrency = (isLiveDb || isCanadianSource) ? 'CAD' : 'USD';
+        const sourceAverage = isLiveDb
+            ? marketAverageCAD
             : averageSourcePriceUSD;
 
         const priceRangeCAD = isLiveDb
@@ -2591,7 +2595,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
             comparisonUnit,
             comparisonUnitLabel: comparisonUnit === 'pint' ? '/pint' : '/each',
             marketAverageCAD,
-            sourceAverageUSD,
+            sourceAverage,
+            sourceCurrency,
+            sourceUnitLabel: comparisonUnit === 'pint' ? '/pint' : '/each',
             priceRangeCAD,
             pricePerLbCAD: null,
             pricePer100gCAD: null,
@@ -2615,6 +2621,10 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
 
     const pricePerLbCAD = pricePerOzCAD * 16;
     const pricePer100gCAD = pricePerLbCAD * LB_TO_100G;
+    const sourceAverage = (isLiveDb || isCanadianSource)
+        ? pricePerLbCAD
+        : pricePerOzUSD * 16;
+    const sourceCurrency = (isLiveDb || isCanadianSource) ? 'CAD' : 'USD';
 
     const priceRangeCAD = (marketData.country !== 'Canada' && marketData._dataSource !== 'database')
         ? (marketData.priceRange || [0, 0]).map(p => (p / avgWeightOz) * 16 * exchangeMultiplier)
@@ -2624,7 +2634,9 @@ function normalizeMarketPriceForCrop(cropName, marketData) {
         comparisonUnit,
         comparisonUnitLabel: '/lb',
         marketAverageCAD: pricePerLbCAD,
-        sourceAverageUSD: pricePerOzUSD,
+        sourceAverage,
+        sourceCurrency,
+        sourceUnitLabel: '/lb',
         priceRangeCAD,
         pricePerLbCAD,
         pricePer100gCAD,
@@ -2728,7 +2740,9 @@ function generateRecommendations() {
             comparisonUnitLabel: normalizedMarket.comparisonUnitLabel,
             pricePerLbCAD: normalizedMarket.pricePerLbCAD,
             pricePer100gCAD: normalizedMarket.pricePer100gCAD,
-            sourcePriceUSD: normalizedMarket.sourceAverageUSD,
+            sourcePrice: normalizedMarket.sourceAverage,
+            sourceCurrency: normalizedMarket.sourceCurrency || 'USD',
+            sourceUnitLabel: normalizedMarket.sourceUnitLabel || normalizedMarket.comparisonUnitLabel,
             priceRange: normalizedMarket.priceRangeCAD,
             exchangeRate: currentExchangeRate,
             sourceCountry: marketData.country || 'Canada',
@@ -2823,11 +2837,11 @@ function displayRecommendations(recommendations) {
                         `}
                     </div>
                     <div>
-                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : 'Source (USD)'}</div>
+                        <div class="price-label">${rec.dataSource === 'database' ? 'Data Points' : `Source (${rec.sourceCurrency || 'USD'})`}</div>
                         <div style="font-size: 16px; font-weight: 600; color: var(--text-muted);">
                             ${rec.dataSource === 'database'
                                 ? `${rec.observationCount || '—'} obs`
-                                : `$${rec.sourcePriceUSD.toFixed(2)}${unitLabel}`}
+                                : `$${Number(rec.sourcePrice || 0).toFixed(2)}${rec.sourceUnitLabel || unitLabel}`}
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             ${rec.dataSource === 'database' ? `${(rec.retailers || []).length} retailers` : rec.sourceCountry}
@@ -2922,8 +2936,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
     if (index !== -1) {
         const previousPrice = pricingData[index].retail;
         pricingData[index].retail = recommendedPrice;
-        // Ensure formula fields have defaults when AI sets retail
-        if (!pricingData[index].sku_factor) pricingData[index].sku_factor = 0.75;
+        pricingData[index].sku_factor = DEFAULT_SKU_FACTOR;
         if (!pricingData[index].floor_price) pricingData[index].floor_price = 0;
         renderPricingTable();
         
@@ -2987,7 +3000,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
             ws3Discount: 0,
             isTaxable: false,
             floor_price: 0,
-            sku_factor: 0.75
+            sku_factor: DEFAULT_SKU_FACTOR
         };
         pricingData.push(newRow);
         index = pricingData.length - 1;
@@ -3011,6 +3024,7 @@ async function applyRecommendedPrice(cropName, recommendedPrice, btnEl) {
 async function savePricingQuiet() {
     try {
         pricingData.forEach(item => {
+            item.sku_factor = DEFAULT_SKU_FACTOR;
             localStorage.setItem(`pricing_${item.crop}`, JSON.stringify(item));
         });
         const crops = pricingData.map(item => ({
@@ -3023,7 +3037,7 @@ async function savePricingQuiet() {
             ws3Discount: item.ws3Discount,
             isTaxable: item.isTaxable || false,
             floor_price: item.floor_price || 0,
-            sku_factor: item.sku_factor || 0.75
+            sku_factor: DEFAULT_SKU_FACTOR
         }));
         await fetch(`${API_BASE}/api/crop-pricing`, {
             method: 'PUT',
@@ -7327,8 +7341,11 @@ async function loadUsers() {
         }
 
         // Store for filtering
-        // Ensure every user has an id (API may not return one)
-        users.forEach((u, i) => { if (u.id == null) u.id = i + 1; });
+        // Ensure every user has a numeric id (API may not return one or may return as string)
+        users.forEach((u, i) => {
+            if (u.id == null) u.id = i + 1;
+            u.id = Number(u.id);
+        });
         window.allUsers = users;
         
         renderUsersTable(users);
@@ -7343,6 +7360,82 @@ async function loadUsers() {
 /**
  * Render users table
  */
+/**
+ * Enforce viewer role: show banner, disable all write controls
+ */
+function enforceViewerMode() {
+    console.log('[RBAC] Viewer mode active -- disabling write controls');
+
+    // Inject view-only banner at the top of the main content area
+    const mainContent = document.querySelector('.main-content') || document.querySelector('main') || document.body;
+    const banner = document.createElement('div');
+    banner.id = 'viewer-mode-banner';
+    banner.style.cssText = 'background: #fef3cd; border-bottom: 2px solid #f0c36d; padding: 10px 20px; text-align: center; font-size: 14px; font-weight: 600; color: #856404; position: sticky; top: 0; z-index: 9999;';
+    banner.textContent = 'VIEW ONLY -- You have read-only access. Contact your farm admin to request edit permissions.';
+    mainContent.prepend(banner);
+
+    // Disable all buttons that perform write actions
+    setTimeout(() => {
+        // Target action buttons by common patterns
+        const writeSelectors = [
+            'button[onclick*="openAddUser"]',
+            'button[onclick*="saveUser"]',
+            'button[onclick*="deleteUser"]',
+            'button[onclick*="openEditUser"]',
+            'button[onclick*="inviteUser"]',
+            'button[onclick*="sendInvite"]',
+            'button[onclick*="saveSetting"]',
+            'button[onclick*="saveRoom"]',
+            'button[onclick*="addRoom"]',
+            'button[onclick*="deleteRoom"]',
+            'button[onclick*="saveZone"]',
+            'button[onclick*="addZone"]',
+            'button[onclick*="deleteZone"]',
+            'button[onclick*="saveSchedule"]',
+            'button[onclick*="saveRecipe"]',
+            'button[onclick*="harvest"]',
+            'button[onclick*="addCrop"]',
+            'button[onclick*="save"]',
+            'button[onclick*="delete"]',
+            'button[onclick*="remove"]',
+            'button[onclick*="create"]',
+            'button[onclick*="update"]',
+            'button[data-action="save"]',
+            'button[data-action="delete"]',
+            'button[data-action="create"]',
+            '.btn-danger',
+            '.btn-primary[type="submit"]',
+            'input[type="submit"]'
+        ];
+        const writeButtons = document.querySelectorAll(writeSelectors.join(', '));
+        writeButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            btn.title = 'View-only access';
+        });
+
+        // Also disable form inputs that could be used for editing
+        // But leave search/filter inputs alone
+        grLog('[RBAC] Disabled', writeButtons.length, 'write controls for viewer role');
+    }, 1500); // Delay to allow dynamic content to render
+}
+
+/**
+ * Re-apply viewer restrictions after dynamic content loads
+ */
+function reapplyViewerRestrictions() {
+    if (currentSession && currentSession.role === 'viewer') {
+        // Disable edit buttons in dynamically rendered content
+        document.querySelectorAll('button[onclick*="openEditUser"], button[onclick*="delete"], button[onclick*="save"], button[onclick*="create"], button[onclick*="add"], button[onclick*="invite"]').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            btn.title = 'View-only access';
+        });
+    }
+}
+
 function renderUsersTable(users) {
     const tbody = document.querySelector('#users-table tbody');
     
@@ -7383,7 +7476,7 @@ function renderUsersTable(users) {
                 </td>
                 <td style="color: var(--text-secondary);">${timeSince}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;">Edit</button>
+                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;" ${currentSession && currentSession.role === 'viewer' ? 'disabled style="opacity:0.4;pointer-events:none;padding:6px 12px;font-size:13px;" title="View-only access"' : 'style="padding: 6px 12px; font-size: 13px;"'}>Edit</button>
                 </td>
             </tr>
         `;

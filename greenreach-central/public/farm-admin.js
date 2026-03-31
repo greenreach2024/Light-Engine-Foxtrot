@@ -266,6 +266,11 @@ async function initDashboard() {
     // Setup navigation
     setupNavigation();
     
+    // Enforce viewer role restrictions (read-only UI)
+    if (currentSession && currentSession.role === 'viewer') {
+        enforceViewerMode();
+    }
+    
     // Load farm data
     await loadFarmData();
     
@@ -7355,6 +7360,82 @@ async function loadUsers() {
 /**
  * Render users table
  */
+/**
+ * Enforce viewer role: show banner, disable all write controls
+ */
+function enforceViewerMode() {
+    console.log('[RBAC] Viewer mode active -- disabling write controls');
+
+    // Inject view-only banner at the top of the main content area
+    const mainContent = document.querySelector('.main-content') || document.querySelector('main') || document.body;
+    const banner = document.createElement('div');
+    banner.id = 'viewer-mode-banner';
+    banner.style.cssText = 'background: #fef3cd; border-bottom: 2px solid #f0c36d; padding: 10px 20px; text-align: center; font-size: 14px; font-weight: 600; color: #856404; position: sticky; top: 0; z-index: 9999;';
+    banner.textContent = 'VIEW ONLY -- You have read-only access. Contact your farm admin to request edit permissions.';
+    mainContent.prepend(banner);
+
+    // Disable all buttons that perform write actions
+    setTimeout(() => {
+        // Target action buttons by common patterns
+        const writeSelectors = [
+            'button[onclick*="openAddUser"]',
+            'button[onclick*="saveUser"]',
+            'button[onclick*="deleteUser"]',
+            'button[onclick*="openEditUser"]',
+            'button[onclick*="inviteUser"]',
+            'button[onclick*="sendInvite"]',
+            'button[onclick*="saveSetting"]',
+            'button[onclick*="saveRoom"]',
+            'button[onclick*="addRoom"]',
+            'button[onclick*="deleteRoom"]',
+            'button[onclick*="saveZone"]',
+            'button[onclick*="addZone"]',
+            'button[onclick*="deleteZone"]',
+            'button[onclick*="saveSchedule"]',
+            'button[onclick*="saveRecipe"]',
+            'button[onclick*="harvest"]',
+            'button[onclick*="addCrop"]',
+            'button[onclick*="save"]',
+            'button[onclick*="delete"]',
+            'button[onclick*="remove"]',
+            'button[onclick*="create"]',
+            'button[onclick*="update"]',
+            'button[data-action="save"]',
+            'button[data-action="delete"]',
+            'button[data-action="create"]',
+            '.btn-danger',
+            '.btn-primary[type="submit"]',
+            'input[type="submit"]'
+        ];
+        const writeButtons = document.querySelectorAll(writeSelectors.join(', '));
+        writeButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            btn.title = 'View-only access';
+        });
+
+        // Also disable form inputs that could be used for editing
+        // But leave search/filter inputs alone
+        grLog('[RBAC] Disabled', writeButtons.length, 'write controls for viewer role');
+    }, 1500); // Delay to allow dynamic content to render
+}
+
+/**
+ * Re-apply viewer restrictions after dynamic content loads
+ */
+function reapplyViewerRestrictions() {
+    if (currentSession && currentSession.role === 'viewer') {
+        // Disable edit buttons in dynamically rendered content
+        document.querySelectorAll('button[onclick*="openEditUser"], button[onclick*="delete"], button[onclick*="save"], button[onclick*="create"], button[onclick*="add"], button[onclick*="invite"]').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.pointerEvents = 'none';
+            btn.title = 'View-only access';
+        });
+    }
+}
+
 function renderUsersTable(users) {
     const tbody = document.querySelector('#users-table tbody');
     
@@ -7395,7 +7476,7 @@ function renderUsersTable(users) {
                 </td>
                 <td style="color: var(--text-secondary);">${timeSince}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;">Edit</button>
+                    <button class="btn btn-sm" onclick="openEditUserModal(${user.id})" style="padding: 6px 12px; font-size: 13px;" ${currentSession && currentSession.role === 'viewer' ? 'disabled style="opacity:0.4;pointer-events:none;padding:6px 12px;font-size:13px;" title="View-only access"' : 'style="padding: 6px 12px; font-size: 13px;"'}>Edit</button>
                 </td>
             </tr>
         `;

@@ -324,10 +324,10 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://web.squarecdn.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"], // Note: unsafe-inline/eval needed for dynamic UI
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, etc.)
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"], // Note: unsafe-inline needed for inline styles
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://web.squarecdn.com"], // Note: unsafe-inline needed for inline styles
       imgSrc: ["'self'", "data:", "http:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"], // Allow WebSocket connections
-      fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net", "https://cash-f.squarecdn.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'", "https://web.squarecdn.com", "https://pci-connect.squareup.com"], // Allow same-origin iframes for views
@@ -2232,6 +2232,35 @@ if (AUDIT_LOG_ENABLED) {
   }));
   console.log('[Security] ✅ Audit logging applied to sensitive endpoints');
 }
+
+// =====================================================
+// Viewer Role Write-Block Middleware
+// =====================================================
+// Viewers get read-only access. All non-GET/HEAD/OPTIONS requests from
+// viewer-role JWTs are blocked with 403 before reaching any route handler.
+// Login, public catalog, and unauthenticated routes are unaffected.
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return next();
+
+  try {
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, JWT_SECRET_KEY);
+    if (decoded.role === 'viewer') {
+      console.warn(`[RBAC] Viewer write-block: ${req.method} ${req.path} by ${decoded.email}`);
+      return res.status(403).json({
+        success: false,
+        error: 'View-only access. Write operations require operator or admin role.'
+      });
+    }
+  } catch {
+    // Not a valid farm JWT -- let route-level auth handle it
+  }
+  next();
+});
+console.log('[Security] Viewer role write-block middleware enabled');
 
 app.use(buyerRouter);
 
