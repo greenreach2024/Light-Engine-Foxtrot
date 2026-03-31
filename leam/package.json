@@ -1,0 +1,16 @@
+{
+  "name": "greenreach-leam",
+  "version": "1.0.0",
+  "description": "LEAM -- Local Environment Agent Module. Companion agent for GreenReach that runs on the operator machine, providing BLE scanning, network discovery, and system info to E.V.I.E. via WebSocket.",
+  "type": "module",
+  "main": "leam-agent.js",
+  "scripts": {
+    "start": "node leam-agent.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "optionalDependencies": {
+    "@abandonware/noble": "^1.9.2-25"
+  }
+}

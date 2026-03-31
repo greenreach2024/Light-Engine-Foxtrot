@@ -4900,9 +4900,9 @@ async function startServer() {
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
-    // Setup WebSocket server for real-time updates
-    const wss = new WebSocketServer({ port: WS_PORT });
-    logger.info(`WebSocket server running on port ${WS_PORT}`);
+    // Setup WebSocket server attached to the HTTP server (shares port 8080 via upgrade)
+    const wss = new WebSocketServer({ server });
+    logger.info(`WebSocket server attached to HTTP server on port ${PORT}`);
 
     wss.on('connection', (ws, req) => {
       // Authenticate WebSocket connection via query param or header
