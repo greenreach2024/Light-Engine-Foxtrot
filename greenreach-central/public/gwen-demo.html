@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G.W.E.N. -- Capability Demo</title>
+  <style>
+/* ================================================================
+   G.W.E.N. DEMO -- Cinematic Capability Showcase
+   ================================================================ */
+:root {
+  --gwen-amber: #f59e0b;
+  --gwen-amber-bright: #fbbf24;
+  --gwen-amber-dim: #d97706;
+  --gwen-amber-glow: rgba(245, 158, 11, 0.25);
+  --gwen-teal: #14b8a6;
+  --gwen-sky: #38bdf8;
+  --gwen-rose: #fb7185;
+  --gwen-emerald: #10b981;
+  --gwen-violet: #a78bfa;
+  --bg-deep: #040810;
+  --bg-surface: #0a1120;
+  --bg-card: #0f172a;
+  --bg-elevated: #1e293b;
+  --border: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* -- Starfield Background ----------------------------------------- */
+.starfield {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* -- Audio Control ------------------------------------------------ */
+.audio-control {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.audio-control:hover { border-color: var(--gwen-amber); }
+.audio-icon { font-size: 18px; color: var(--gwen-amber); }
+.audio-label { font-size: 12px; color: var(--text-secondary); letter-spacing: 0.5px; }
+
+/* -- Navigation --------------------------------------------------- */
+.demo-nav {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.demo-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.3s;
+}
+
+.demo-nav-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+.demo-nav-btn.active { color: var(--gwen-amber); background: rgba(245, 158, 11, 0.12); }
+
+/* -- Content Wrapper ---------------------------------------------- */
+.demo-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 80px 24px 60px;
+}
+
+/* -- Fade-in system ----------------------------------------------- */
+.scene { opacity: 0; transform: translateY(30px); transition: opacity 0.8s, transform 0.8s; }
+.scene.visible { opacity: 1; transform: translateY(0); }
+
+/* -- Title Scene -------------------------------------------------- */
+.title-scene {
+  text-align: center;
+  padding: 100px 0 60px;
+}
+
+.title-gwen {
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 12px;
+  color: var(--gwen-amber);
+  text-shadow: 0 0 60px rgba(245, 158, 11, 0.3), 0 0 120px rgba(245, 158, 11, 0.1);
+  margin-bottom: 12px;
+}
+
+.title-sub {
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.title-full {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.title-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 48px;
+}
+
+.title-stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--gwen-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.title-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* -- Orb Animation ------------------------------------------------ */
+.demo-orb-container {
+  display: flex;
+  justify-content: center;
+  margin: 40px 0 20px;
+}
+
+.demo-orb {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.demo-orb-core {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, var(--gwen-amber-bright), var(--gwen-amber-dim));
+  border-radius: 50%;
+  box-shadow: 0 0 30px var(--gwen-amber-glow), 0 0 60px rgba(245, 158, 11, 0.15);
+}
+
+.demo-orb-ring {
+  position: absolute;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: demoOrbPulse 4s ease-in-out infinite;
+}
+
+.demo-orb-ring-1 { width: 72px; height: 72px; animation-delay: 0s; }
+.demo-orb-ring-2 { width: 110px; height: 110px; animation-delay: 0.6s; }
+.demo-orb-ring-3 { width: 150px; height: 150px; animation-delay: 1.2s; }
+
+@keyframes demoOrbPulse {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* -- Section Headers ---------------------------------------------- */
+.section-header {
+  text-align: center;
+  padding: 60px 0 40px;
+}
+
+.section-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gwen-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 4px 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.section-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* -- Capability Grid ---------------------------------------------- */
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 0 40px;
+}
+
+.cap-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.4s;
+  cursor: default;
+}
+
+.cap-card:hover {
+  border-color: var(--gwen-amber);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.08);
+  transform: translateY(-2px);
+}
+
+.cap-card-icon {
+  font-size: 24px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.cap-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.cap-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.cap-card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.cap-tool-tag {
+  font-size: 10px;
+  color: var(--gwen-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* -- Live Demo Panels --------------------------------------------- */
+.demo-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.demo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.demo-panel-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.tag-viz { background: rgba(245, 158, 11, 0.12); color: var(--gwen-amber); }
+.tag-analysis { background: rgba(56, 189, 248, 0.12); color: var(--gwen-sky); }
+.tag-sim { background: rgba(167, 139, 250, 0.12); color: var(--gwen-violet); }
+.tag-data { background: rgba(20, 184, 166, 0.12); color: var(--gwen-teal); }
+
+.demo-panel-body {
+  padding: 20px;
+  position: relative;
+  min-height: 200px;
+}
+
+/* -- Canvas Charts ------------------------------------------------ */
+.demo-canvas {
+  width: 100%;
+  height: 320px;
+  display: block;
+  border-radius: 8px;
+}
+
+/* -- Heatmap Grid ------------------------------------------------- */
+.heatmap-grid {
+  display: grid;
+  gap: 3px;
+  max-width: 100%;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  transition: transform 0.2s;
+  position: relative;
+}
+
+.heatmap-cell:hover { transform: scale(1.3); z-index: 2; }
+
+.heatmap-label-row {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.heatmap-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  flex: 1;
+}
+
+/* -- Data Cards --------------------------------------------------- */
+.data-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.data-card-mini {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.data-card-mini-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.data-card-mini-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.data-card-mini-trend {
+  font-size: 10px;
+  margin-top: 6px;
+  display: block;
+}
+
+.trend-up { color: var(--gwen-emerald); }
+.trend-down { color: var(--gwen-rose); }
+.trend-flat { color: var(--text-muted); }
+
+/* -- Formula Render ----------------------------------------------- */
+.formula-display {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.formula-text {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 20px;
+  color: var(--gwen-amber);
+  letter-spacing: 1px;
+}
+
+.formula-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* -- Simulation Viz ----------------------------------------------- */
+.sim-container {
+  position: relative;
+  height: 260px;
+  background: var(--bg-surface);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sim-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.sim-overlay {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.sim-metric {
+  background: rgba(4, 8, 16, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  backdrop-filter: blur(4px);
+}
+
+.sim-metric-val { color: var(--gwen-amber); font-weight: 600; }
+.sim-metric-lbl { color: var(--text-muted); margin-left: 4px; }
+
+/* -- Research Table ----------------------------------------------- */
+.research-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.research-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--gwen-amber);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
+.research-table td {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+}
+
+.research-table tr:hover td { color: var(--text-primary); background: rgba(245, 158, 11, 0.03); }
+
+.status-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.status-active { background: rgba(16, 185, 129, 0.15); color: var(--gwen-emerald); }
+.status-review { background: rgba(245, 158, 11, 0.15); color: var(--gwen-amber); }
+.status-pending { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); }
+
+/* -- Tool Execution Animation ------------------------------------- */
+.tool-exec-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+.tool-exec-bar.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tool-exec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gwen-amber);
+  animation: toolPulse 1.5s ease-in-out infinite;
+}
+
+.tool-exec-bar.completed .tool-exec-dot {
+  background: var(--gwen-emerald);
+  animation: none;
+}
+
+.tool-exec-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  flex: 1;
+}
+
+.tool-exec-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes toolPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* -- CTA ---------------------------------------------------------- */
+.demo-cta {
+  text-align: center;
+  padding: 80px 0;
+}
+
+.demo-cta-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--gwen-amber), var(--gwen-amber-dim));
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 14px 40px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.demo-cta-btn:hover {
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.3);
+  transform: translateY(-2px);
+}
+
+/* -- Responsive --------------------------------------------------- */
+@media (max-width: 768px) {
+  .title-gwen { font-size: 48px; letter-spacing: 6px; }
+  .title-stats { gap: 24px; flex-wrap: wrap; }
+  .demo-nav { display: none; }
+  .cap-grid { grid-template-columns: 1fr; }
+}
+
+/* -- Scrollbar ---------------------------------------------------- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<canvas class="starfield" id="starfield"></canvas>
+
+<!-- Audio Control -->
+<div class="audio-control" id="audioControl" onclick="toggleAudio()">
+  <span class="audio-icon" id="audioIcon">&#9835;</span>
+  <span class="audio-label" id="audioLabel">Play Soundtrack</span>
+</div>
+
+<!-- Navigation -->
+<nav class="demo-nav" id="demoNav">
+  <button class="demo-nav-btn active" onclick="scrollToScene('title')">Overview</button>
+  <button class="demo-nav-btn" onclick="scrollToScene('viz')">Visualization</button>
+  <button class="demo-nav-btn" onclick="scrollToScene('analysis')">Analysis</button>
+  <button class="demo-nav-btn" onclick="scrollToScene('sim')">Simulation</button>
+  <button class="demo-nav-btn" onclick="scrollToScene('integrations')">Integrations</button>
+  <button class="demo-nav-btn" onclick="scrollToScene('tools')">All Tools</button>
+</nav>
+
+<div class="demo-content">
+
+  <!-- ============================================================ -->
+  <!-- SCENE 1: TITLE                                                -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-title" data-scene="title">
+    <div class="title-scene">
+      <div class="demo-orb-container">
+        <div class="demo-orb">
+          <div class="demo-orb-ring demo-orb-ring-1"></div>
+          <div class="demo-orb-ring demo-orb-ring-2"></div>
+          <div class="demo-orb-ring demo-orb-ring-3"></div>
+          <div class="demo-orb-core"></div>
+        </div>
+      </div>
+      <div class="title-gwen">G.W.E.N.</div>
+      <div class="title-sub">Research Intelligence Agent</div>
+      <div class="title-full">Grants, Workplans, Evidence &amp; Navigation</div>
+      <div class="title-stats">
+        <div>
+          <span class="title-stat-value" id="statToolCount">0</span>
+          <span class="title-stat-label">AI Tools</span>
+        </div>
+        <div>
+          <span class="title-stat-value" id="statCatCount">0</span>
+          <span class="title-stat-label">Categories</span>
+        </div>
+        <div>
+          <span class="title-stat-value">GPT-4o</span>
+          <span class="title-stat-label">Primary Model</span>
+        </div>
+        <div>
+          <span class="title-stat-value">Claude</span>
+          <span class="title-stat-label">Fallback Model</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 2: VISUALIZATION ENGINE                                 -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-viz" data-scene="viz">
+    <div class="section-header">
+      <span class="section-tag">Visualization Engine</span>
+      <h2 class="section-title">Real-Time Scientific Visualization</h2>
+      <p class="section-desc">
+        GWEN renders charts, heatmaps, data cards, and tables directly in the research workspace.
+        Plotly.js for scientific charts. Canvas for real-time data. Three.js for 3D simulation.
+      </p>
+    </div>
+
+    <!-- Heatmap Demo -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Growth Chamber Environmental Heatmap
+        </div>
+        <span class="demo-panel-tag tag-viz">HEATMAP</span>
+      </div>
+      <div class="demo-panel-body">
+        <div id="toolExecHeatmap" style="margin-bottom: 12px;"></div>
+        <div id="heatmapContainer"></div>
+      </div>
+    </div>
+
+    <!-- Line Chart Demo -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Sensor Data Time Series -- 48 Hour Window
+        </div>
+        <span class="demo-panel-tag tag-viz">LINE CHART</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="lineChartCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Data Cards -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Live Data Cards -- Research Metrics
+        </div>
+        <span class="demo-panel-tag tag-data">DATA CARDS</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="data-cards-row" id="dataCardsContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 3: ANALYSIS                                             -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-analysis" data-scene="analysis">
+    <div class="section-header">
+      <span class="section-tag">Analysis Engine</span>
+      <h2 class="section-title">Computational Research Tools</h2>
+      <p class="section-desc">
+        Execute Python and R code. Generate hypotheses. Analyze patterns in observational data.
+        Render scientific formulas and manage citations.
+      </p>
+    </div>
+
+    <!-- Formula Rendering -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Scientific Formula Rendering
+        </div>
+        <span class="demo-panel-tag tag-analysis">FORMULAS</span>
+      </div>
+      <div class="demo-panel-body" id="formulaContainer"></div>
+    </div>
+
+    <!-- Research Table -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Grant Eligibility Matrix
+        </div>
+        <span class="demo-panel-tag tag-analysis">RESEARCH TABLE</span>
+      </div>
+      <div class="demo-panel-body">
+        <table class="research-table" id="researchTable"></table>
+      </div>
+    </div>
+
+    <!-- Bar Chart -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Yield Comparison -- Controlled Environment Agriculture
+        </div>
+        <span class="demo-panel-tag tag-analysis">BAR CHART</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="barChartCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 4: SIMULATION                                           -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-sim" data-scene="sim">
+    <div class="section-header">
+      <span class="section-tag">Simulation Engine</span>
+      <h2 class="section-title">Fluid Dynamics &amp; CFD Pipeline</h2>
+      <p class="section-desc">
+        Configure flow simulations for NFT, DWC, and aeroponics systems.
+        Reynolds number calculation, nutrient distribution modeling, and 3D visualization.
+        Full CFD pipeline: FreeCAD geometry, Gmsh meshing, OpenFOAM solving, ParaView visualization.
+      </p>
+    </div>
+
+    <!-- Flow Simulation -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> NFT Channel Flow Simulation
+        </div>
+        <span class="demo-panel-tag tag-sim">FLOW SIM</span>
+      </div>
+      <div class="demo-panel-body">
+        <div class="sim-container">
+          <canvas class="sim-canvas" id="flowSimCanvas"></canvas>
+          <div class="sim-overlay">
+            <div class="sim-metric">
+              <span class="sim-metric-val">Re: 1,847</span>
+              <span class="sim-metric-lbl">Reynolds</span>
+            </div>
+            <div class="sim-metric">
+              <span class="sim-metric-val">Laminar</span>
+              <span class="sim-metric-lbl">Flow Regime</span>
+            </div>
+            <div class="sim-metric">
+              <span class="sim-metric-val">22.4 C</span>
+              <span class="sim-metric-lbl">Temp</span>
+            </div>
+            <div class="sim-metric">
+              <span class="sim-metric-val">1.2 L/min</span>
+              <span class="sim-metric-lbl">Flow Rate</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scatter Plot -->
+    <div class="demo-panel">
+      <div class="demo-panel-header">
+        <div class="demo-panel-title">
+          <span>&#9670;</span> Nutrient Concentration vs Growth Rate Correlation
+        </div>
+        <span class="demo-panel-tag tag-sim">SCATTER PLOT</span>
+      </div>
+      <div class="demo-panel-body">
+        <canvas class="demo-canvas" id="scatterCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 5: INTEGRATIONS                                         -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-integrations" data-scene="integrations">
+    <div class="section-header">
+      <span class="section-tag">Research Integrations</span>
+      <h2 class="section-title">Connected Research Ecosystem</h2>
+      <p class="section-desc">
+        ORCID identity linking. DataCite DOI minting. OSF project management. protocols.io versioning.
+        Instrument abstraction (SiLA 2, OPC UA, SCPI). Workflow orchestration. Globus data transfer.
+        Governance gates and immutable audit records.
+      </p>
+    </div>
+
+    <div class="cap-grid">
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-amber);">&#9670;</span>
+        <div class="cap-card-title">Identity &amp; Provenance</div>
+        <div class="cap-card-desc">Link ORCID profiles. Mint DOIs via DataCite. Coordinate OSF projects. Full researcher identity chain from experiment to publication.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">link_orcid</span>
+          <span class="cap-tool-tag">lookup_orcid</span>
+          <span class="cap-tool-tag">prepare_doi_metadata</span>
+          <span class="cap-tool-tag">create_osf_project</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-teal);">&#9670;</span>
+        <div class="cap-card-title">Instrument Abstraction</div>
+        <div class="cap-card-desc">Register instruments across SiLA 2, OPC UA, SCPI protocols. Track telemetry. Request automated runs. Full calibration logging.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">register_instrument</span>
+          <span class="cap-tool-tag">list_instruments</span>
+          <span class="cap-tool-tag">request_instrument_run</span>
+          <span class="cap-tool-tag">get_instrument_telemetry</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-violet);">&#9670;</span>
+        <div class="cap-card-title">Workflow Engine</div>
+        <div class="cap-card-desc">Define multi-step research workflows with YAML. Submit runs with parameter overrides. Track status across computational pipelines.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">create_workflow</span>
+          <span class="cap-tool-tag">submit_workflow_run</span>
+          <span class="cap-tool-tag">get_workflow_status</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-sky);">&#9670;</span>
+        <div class="cap-card-title">CFD Pipeline</div>
+        <div class="cap-card-desc">Submit computational fluid dynamics jobs. Pre-built templates for microfluidic channels, airflow enclosures, NFT channels, and bioreactors.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">create_cfd_pipeline_job</span>
+          <span class="cap-tool-tag">get_cfd_templates</span>
+          <span class="cap-tool-tag">configure_flow_simulation</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-emerald);">&#9670;</span>
+        <div class="cap-card-title">Governance &amp; Compliance</div>
+        <div class="cap-card-desc">Assign research roles (PI, Co-PI, postdoc). Multi-gate approval workflows. Immutable run records for audit compliance and regulatory review.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">assign_research_role</span>
+          <span class="cap-tool-tag">request_approval</span>
+          <span class="cap-tool-tag">seal_run_record</span>
+        </div>
+      </div>
+      <div class="cap-card">
+        <span class="cap-card-icon" style="color: var(--gwen-rose);">&#9670;</span>
+        <div class="cap-card-title">Data Transfer</div>
+        <div class="cap-card-desc">Initiate large-scale data transfers via Globus. Track transfer status. Manage endpoints for cross-institutional research data movement.</div>
+        <div class="cap-card-tools">
+          <span class="cap-tool-tag">initiate_data_transfer</span>
+          <span class="cap-tool-tag">get_workflow_status</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCENE 6: ALL TOOLS                                            -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-tools" data-scene="tools">
+    <div class="section-header">
+      <span class="section-tag">Full Tool Inventory</span>
+      <h2 class="section-title">74+ Research Intelligence Tools</h2>
+      <p class="section-desc">
+        Every tool available to GWEN, organized by domain.
+        From grant writing to fluid dynamics. From PubMed searches to immutable audit records.
+      </p>
+    </div>
+
+    <div class="cap-grid" id="allToolsGrid"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- CTA                                                           -->
+  <!-- ============================================================ -->
+  <div class="scene" id="scene-cta">
+    <div class="demo-cta">
+      <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; letter-spacing: 1px;">Ready to see GWEN in action?</p>
+      <a href="/gwen-core.html" class="demo-cta-btn">Launch G.W.E.N.</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT                                                      -->
+<!-- ============================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  // ================================================================
+  // AUDIO -- Epic ambient soundtrack (Web Audio API synthesized)
+  // ================================================================
+  let audioCtx = null;
+  let audioPlaying = false;
+  let audioNodes = [];
+
+  function createAudioContext() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function playEpicAmbient() {
+    if (!audioCtx) createAudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Master volume
+    const master = audioCtx.createGain();
+    master.gain.value = 0;
+    master.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime + 3);
+    master.connect(audioCtx.destination);
+
+    // Deep bass drone (cinematic foundation)
+    function createDrone(freq, vol) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      // Slow LFO on volume for breathing effect
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.08 + Math.random() * 0.04;
+      lfoGain.gain.value = vol * 0.3;
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+      lfo.start();
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+      audioNodes.push(osc, lfo, gain, lfoGain);
+    }
+
+    // Foundation layers -- low rumble + fifth intervals
+    createDrone(55, 0.35);     // A1 -- deep foundation
+    createDrone(82.41, 0.2);   // E2 -- perfect fifth
+    createDrone(110, 0.15);    // A2 -- octave
+    createDrone(146.83, 0.08); // D3 -- fourth
+
+    // Shimmering high pad (strings feel)
+    function createPad(freq, vol) {
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc1.type = 'sawtooth';
+      osc2.type = 'sawtooth';
+      osc1.frequency.value = freq;
+      osc2.frequency.value = freq * 1.003; // gentle detune for width
+      gain.gain.value = vol;
+      // Gentle filter
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 800;
+      filter.Q.value = 0.7;
+      // Filter LFO
+      const fLfo = audioCtx.createOscillator();
+      const fLfoGain = audioCtx.createGain();
+      fLfo.type = 'sine';
+      fLfo.frequency.value = 0.05;
+      fLfoGain.gain.value = 200;
+      fLfo.connect(fLfoGain);
+      fLfoGain.connect(filter.frequency);
+      fLfo.start();
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+      osc1.start();
+      osc2.start();
+      audioNodes.push(osc1, osc2, fLfo, gain, fLfoGain, filter);
+    }
+
+    createPad(220, 0.04);   // A3
+    createPad(329.63, 0.03); // E4
+    createPad(440, 0.02);   // A4
+
+    // Ethereal bell chimes (random arpeggiated notes)
+    const chimeNotes = [440, 523.25, 659.25, 783.99, 880, 1046.5, 1318.5];
+    function scheduleChime() {
+      if (!audioPlaying) return;
+      const freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 4);
+      setTimeout(scheduleChime, 2000 + Math.random() * 4000);
+    }
+    setTimeout(scheduleChime, 1500);
+
+    audioNodes.push(master);
+  }
+
+  function stopAudio() {
+    audioNodes.forEach(function(node) {
+      try { if (node.stop) node.stop(); } catch(e) {}
+      try { if (node.disconnect) node.disconnect(); } catch(e) {}
+    });
+    audioNodes = [];
+  }
+
+  window.toggleAudio = function() {
+    if (audioPlaying) {
+      stopAudio();
+      audioPlaying = false;
+      document.getElementById('audioIcon').innerHTML = '&#9835;';
+      document.getElementById('audioLabel').textContent = 'Play Soundtrack';
+    } else {
+      playEpicAmbient();
+      audioPlaying = true;
+      document.getElementById('audioIcon').innerHTML = '&#9724;';
+      document.getElementById('audioLabel').textContent = 'Stop Soundtrack';
+    }
+  };
+
+  // ================================================================
+  // STARFIELD
+  // ================================================================
+  function initStarfield() {
+    const canvas = document.getElementById('starfield');
+    const ctx = canvas.getContext('2d');
+    let w, h, stars = [];
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+
+    function createStars(count) {
+      stars = [];
+      for (let i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.2 + 0.2,
+          a: Math.random() * 0.5 + 0.1,
+          speed: Math.random() * 0.02 + 0.005,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+
+    function draw(t) {
+      ctx.clearRect(0, 0, w, h);
+      stars.forEach(function(s) {
+        const flicker = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245, 158, 11, ' + (s.a * flicker) + ')';
+        ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    createStars(200);
+    window.addEventListener('resize', function() { resize(); createStars(200); });
+    requestAnimationFrame(draw);
+  }
+
+  // ================================================================
+  // SCROLL ANIMATIONS
+  // ================================================================
+  function initScrollObserver() {
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          // Update nav
+          const scene = entry.target.dataset.scene;
+          if (scene) {
+            document.querySelectorAll('.demo-nav-btn').forEach(function(btn) {
+              btn.classList.toggle('active', btn.textContent.trim().toLowerCase().includes(scene.replace('-', ' ').substring(0, 4)));
+            });
+          }
+        }
+      });
+    }, { threshold: 0.15 });
+
+    document.querySelectorAll('.scene').forEach(function(el) { observer.observe(el); });
+  }
+
+  window.scrollToScene = function(scene) {
+    const el = document.getElementById('scene-' + scene);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // ================================================================
+  // COUNTER ANIMATION
+  // ================================================================
+  function animateCounter(el, target, duration) {
+    const start = performance.now();
+    function update(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  }
+
+  // ================================================================
+  // HEATMAP
+  // ================================================================
+  function renderHeatmap() {
+    const container = document.getElementById('heatmapContainer');
+    const rows = 12; // hours
+    const cols = 24;  // positions
+    const data = [];
+
+    // Generate realistic temperature gradient data
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const base = 22 + Math.sin(c / cols * Math.PI) * 3;
+        const timeVar = Math.sin(r / rows * Math.PI * 2) * 1.5;
+        const noise = (Math.random() - 0.5) * 1.2;
+        data.push(base + timeVar + noise);
+      }
+    }
+
+    const min = Math.min.apply(null, data);
+    const max = Math.max.apply(null, data);
+
+    // Color scale: deep blue -> teal -> amber -> hot
+    function heatColor(val) {
+      const t = (val - min) / (max - min);
+      if (t < 0.25) {
+        const s = t / 0.25;
+        return 'rgb(' + Math.round(10 + s * 10) + ',' + Math.round(30 + s * 80) + ',' + Math.round(80 + s * 80) + ')';
+      } else if (t < 0.5) {
+        const s = (t - 0.25) / 0.25;
+        return 'rgb(' + Math.round(20 + s * 30) + ',' + Math.round(110 + s * 74) + ',' + Math.round(160 - s * 60) + ')';
+      } else if (t < 0.75) {
+        const s = (t - 0.5) / 0.25;
+        return 'rgb(' + Math.round(50 + s * 195) + ',' + Math.round(184 - s * 26) + ',' + Math.round(100 - s * 89) + ')';
+      } else {
+        const s = (t - 0.75) / 0.25;
+        return 'rgb(' + Math.round(245) + ',' + Math.round(158 - s * 100) + ',' + Math.round(11 + s * 20) + ')';
+      }
+    }
+
+    // Labels row
+    let html = '<div style="display: flex; align-items: flex-end; gap: 4px; margin-bottom: 8px;">';
+    html += '<div style="width: 48px;"></div>';
+    for (let c = 0; c < cols; c += 4) {
+      html += '<div style="flex: 4; font-size: 9px; color: var(--text-muted); text-align: center;">Pos ' + (c + 1) + '</div>';
+    }
+    html += '</div>';
+
+    for (let r = 0; r < rows; r++) {
+      html += '<div style="display: flex; align-items: center; gap: 2px;">';
+      html += '<div style="width: 48px; font-size: 9px; color: var(--text-muted); text-align: right; padding-right: 6px;">' + String(r * 2).padStart(2, '0') + ':00</div>';
+      for (let c = 0; c < cols; c++) {
+        const val = data[r * cols + c];
+        const color = heatColor(val);
+        html += '<div class="heatmap-cell" style="flex: 1; height: 18px; background: ' + color + ';" title="' + val.toFixed(1) + ' C"></div>';
+      }
+      html += '</div>';
+    }
+
+    // Legend
+    html += '<div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; justify-content: center;">';
+    html += '<span style="font-size: 10px; color: var(--text-muted);">' + min.toFixed(1) + ' C</span>';
+    html += '<div style="width: 200px; height: 10px; border-radius: 5px; background: linear-gradient(to right, rgb(10,30,80), rgb(20,110,160), rgb(50,184,100), rgb(245,158,11), rgb(245,58,31));"></div>';
+    html += '<span style="font-size: 10px; color: var(--text-muted);">' + max.toFixed(1) + ' C</span>';
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Tool execution animation
+    showToolExec('heatmapContainer', [
+      { name: 'get_sensor_data', time: '142ms' },
+      { name: 'create_custom_display', time: '89ms' }
+    ]);
+  }
+
+  // ================================================================
+  // LINE CHART
+  // ================================================================
+  function renderLineChart() {
+    const canvas = document.getElementById('lineChartCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    const pad = { top: 30, right: 20, bottom: 40, left: 60 };
+
+    // Generate 48 hours of data (every 30 min = 96 points)
+    const points = 96;
+    const tempData = [];
+    const humData = [];
+    const co2Data = [];
+
+    for (let i = 0; i < points; i++) {
+      const t = i / points;
+      tempData.push(22.5 + Math.sin(t * Math.PI * 4) * 2.5 + (Math.random() - 0.5) * 0.8);
+      humData.push(65 + Math.sin(t * Math.PI * 4 + 1) * 8 + (Math.random() - 0.5) * 3);
+      co2Data.push(800 + Math.sin(t * Math.PI * 4 + 2) * 200 + (Math.random() - 0.5) * 50);
+    }
+
+    // Background
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 0.5;
+    for (let yi = 0; yi <= 5; yi++) {
+      const y = pad.top + (h - pad.top - pad.bottom) * yi / 5;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+    }
+
+    // Draw series
+    function drawLine(data, min, max, color, label, yOffset) {
+      const chartW = w - pad.left - pad.right;
+      const chartH = h - pad.top - pad.bottom;
+      const step = chartW / (data.length - 1);
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      data.forEach(function(v, i) {
+        const x = pad.left + i * step;
+        const y = pad.top + chartH - ((v - min) / (max - min)) * chartH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Label
+      ctx.fillStyle = color;
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.fillText(label, pad.left + 4, pad.top + yOffset);
+    }
+
+    drawLine(tempData, 18, 28, '#f59e0b', 'Temperature (C)', 14);
+    drawLine(humData, 45, 85, '#14b8a6', 'Humidity (%)', 28);
+    drawLine(co2Data, 500, 1200, '#a78bfa', 'CO2 (ppm) [scaled]', 42);
+
+    // X-axis labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < points; i += 12) {
+      const x = pad.left + (w - pad.left - pad.right) * i / (points - 1);
+      const hr = (i / 2) % 24;
+      ctx.fillText(String(Math.floor(hr)).padStart(2, '0') + ':00', x, h - pad.bottom + 16);
+    }
+
+    // Y-axis
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#64748b';
+    for (let yi = 0; yi <= 5; yi++) {
+      const y = pad.top + (h - pad.top - pad.bottom) * yi / 5;
+      const val = 28 - (28 - 18) * yi / 5;
+      ctx.fillText(val.toFixed(0), pad.left - 8, y + 3);
+    }
+  }
+
+  // ================================================================
+  // DATA CARDS
+  // ================================================================
+  function renderDataCards() {
+    const cards = [
+      { label: 'Avg Temperature', value: '23.2 C', trend: '+0.3 C', dir: 'up' },
+      { label: 'Avg Humidity', value: '67.4%', trend: '-1.2%', dir: 'down' },
+      { label: 'CO2 Level', value: '842 ppm', trend: 'stable', dir: 'flat' },
+      { label: 'Light PPFD', value: '385', trend: '+12', dir: 'up' },
+      { label: 'EC Conductivity', value: '1.8 mS', trend: '+0.1', dir: 'up' },
+      { label: 'pH Level', value: '6.1', trend: '-0.05', dir: 'down' },
+      { label: 'Water Temp', value: '21.8 C', trend: 'stable', dir: 'flat' },
+      { label: 'Growth Rate', value: '2.4 mm/d', trend: '+0.2', dir: 'up' }
+    ];
+
+    const colors = ['#f59e0b', '#14b8a6', '#a78bfa', '#38bdf8', '#10b981', '#fb7185', '#14b8a6', '#f59e0b'];
+
+    document.getElementById('dataCardsContainer').innerHTML = cards.map(function(c, i) {
+      return '<div class="data-card-mini">' +
+        '<span class="data-card-mini-value" style="color: ' + colors[i] + ';">' + c.value + '</span>' +
+        '<span class="data-card-mini-label">' + c.label + '</span>' +
+        '<span class="data-card-mini-trend trend-' + c.dir + '">' +
+        (c.dir === 'up' ? '&#9650; ' : c.dir === 'down' ? '&#9660; ' : '') + c.trend +
+        '</span></div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // FORMULAS
+  // ================================================================
+  function renderFormulas() {
+    const formulas = [
+      { text: 'Re = (rho * v * D) / mu', label: 'Reynolds Number -- Flow regime classification' },
+      { text: 'DLI = PPFD * photoperiod * 0.0036', label: 'Daily Light Integral -- Photosynthetic optimization' },
+      { text: 'Y = Ymax * (1 - e^(-k*t))', label: 'Asymptotic Growth Model -- Yield prediction' },
+      { text: 'EC_target = EC_base + sum(nutrient_i * concentration_i)', label: 'Nutrient Solution Conductivity -- Fertigation control' }
+    ];
+
+    document.getElementById('formulaContainer').innerHTML = formulas.map(function(f) {
+      return '<div class="formula-display"><div class="formula-text">' + f.text + '</div><div class="formula-label">' + f.label + '</div></div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // RESEARCH TABLE
+  // ================================================================
+  function renderResearchTable() {
+    const programs = [
+      { name: 'NSERC Alliance', agency: 'NSERC', max: '$500K', deadline: '2026-06-15', match: 92, status: 'active' },
+      { name: 'CIHR Project Grant', agency: 'CIHR', max: '$100K/yr', deadline: '2026-09-01', match: 78, status: 'active' },
+      { name: 'ORF-RE', agency: 'Ontario', max: '$5M', deadline: '2026-04-30', match: 85, status: 'review' },
+      { name: 'CFI Innovation Fund', agency: 'CFI', max: '$8M', deadline: '2026-10-01', match: 71, status: 'active' },
+      { name: 'Genome Canada', agency: 'Genome', max: '$2M', deadline: '2026-05-15', match: 64, status: 'pending' },
+      { name: 'SSHRC Insight', agency: 'SSHRC', max: '$400K', deadline: '2026-07-01', match: 56, status: 'pending' }
+    ];
+
+    const statusMap = { active: 'status-active', review: 'status-review', pending: 'status-pending' };
+
+    document.getElementById('researchTable').innerHTML =
+      '<thead><tr><th>Program</th><th>Agency</th><th>Max Award</th><th>Deadline</th><th>Match Score</th><th>Status</th></tr></thead>' +
+      '<tbody>' + programs.map(function(p) {
+        const barColor = p.match > 80 ? 'var(--gwen-emerald)' : p.match > 65 ? 'var(--gwen-amber)' : 'var(--gwen-rose)';
+        return '<tr>' +
+          '<td style="color: var(--text-primary); font-weight: 500;">' + p.name + '</td>' +
+          '<td>' + p.agency + '</td>' +
+          '<td>' + p.max + '</td>' +
+          '<td>' + p.deadline + '</td>' +
+          '<td><div style="display: flex; align-items: center; gap: 8px;"><div style="width: 60px; height: 4px; background: var(--bg-elevated); border-radius: 2px;"><div style="width: ' + p.match + '%; height: 100%; background: ' + barColor + '; border-radius: 2px;"></div></div><span style="font-variant-numeric: tabular-nums;">' + p.match + '%</span></div></td>' +
+          '<td><span class="status-badge ' + statusMap[p.status] + '">' + p.status.toUpperCase() + '</span></td>' +
+          '</tr>';
+      }).join('') + '</tbody>';
+  }
+
+  // ================================================================
+  // BAR CHART
+  // ================================================================
+  function renderBarChart() {
+    const canvas = document.getElementById('barChartCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    const pad = { top: 30, right: 20, bottom: 60, left: 60 };
+
+    const categories = ['Microgreens', 'Lettuce', 'Basil', 'Kale', 'Arugula', 'Cilantro', 'Spinach', 'Swiss Chard'];
+    const hydro = [4.2, 3.8, 2.9, 3.1, 2.6, 1.9, 3.3, 2.8];
+    const soil = [2.1, 2.5, 1.8, 2.3, 1.7, 1.2, 2.1, 1.9];
+
+    const maxVal = 5;
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+    const groupW = chartW / categories.length;
+    const barW = groupW * 0.3;
+
+    // Background
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 0.5;
+    for (let yi = 0; yi <= 5; yi++) {
+      const y = pad.top + chartH * yi / 5;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText((5 - yi).toFixed(0), pad.left - 8, y + 3);
+    }
+
+    // Bars
+    categories.forEach(function(cat, i) {
+      const x = pad.left + i * groupW + groupW / 2;
+
+      // Hydro bar
+      const hBarH = (hydro[i] / maxVal) * chartH;
+      const hGrad = ctx.createLinearGradient(0, pad.top + chartH - hBarH, 0, pad.top + chartH);
+      hGrad.addColorStop(0, '#f59e0b');
+      hGrad.addColorStop(1, '#92400e');
+      ctx.fillStyle = hGrad;
+      ctx.fillRect(x - barW - 1, pad.top + chartH - hBarH, barW, hBarH);
+
+      // Soil bar
+      const sBarH = (soil[i] / maxVal) * chartH;
+      const sGrad = ctx.createLinearGradient(0, pad.top + chartH - sBarH, 0, pad.top + chartH);
+      sGrad.addColorStop(0, '#14b8a6');
+      sGrad.addColorStop(1, '#064e3b');
+      ctx.fillStyle = sGrad;
+      ctx.fillRect(x + 1, pad.top + chartH - sBarH, barW, sBarH);
+
+      // Label
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.save();
+      ctx.translate(x, pad.top + chartH + 14);
+      ctx.rotate(-0.4);
+      ctx.fillText(cat, 0, 0);
+      ctx.restore();
+    });
+
+    // Legend
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(w - pad.right - 160, pad.top + 4, 10, 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Hydroponic (kg/m2)', w - pad.right - 144, pad.top + 13);
+
+    ctx.fillStyle = '#14b8a6';
+    ctx.fillRect(w - pad.right - 160, pad.top + 22, 10, 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Soil-based (kg/m2)', w - pad.right - 144, pad.top + 31);
+
+    // Y-axis label
+    ctx.save();
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.translate(14, pad.top + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Yield (kg/m2/cycle)', 0, 0);
+    ctx.restore();
+  }
+
+  // ================================================================
+  // FLOW SIMULATION (animated particle system)
+  // ================================================================
+  function renderFlowSim() {
+    const canvas = document.getElementById('flowSimCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+
+    const particles = [];
+    const particleCount = 150;
+
+    // Channel walls
+    const wallTop = h * 0.25;
+    const wallBot = h * 0.75;
+    const channelH = wallBot - wallTop;
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: wallTop + Math.random() * channelH,
+        speed: 0.5 + Math.random() * 2,
+        size: 1 + Math.random() * 2,
+        hue: Math.random()
+      });
+    }
+
+    function drawFrame() {
+      // Background
+      ctx.fillStyle = '#060a14';
+      ctx.fillRect(0, 0, w, h);
+
+      // Channel walls
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, wallTop);
+      ctx.lineTo(w, wallTop);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, wallBot);
+      ctx.lineTo(w, wallBot);
+      ctx.stroke();
+
+      // Wall labels
+      ctx.fillStyle = '#334155';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('CHANNEL WALL', 8, wallTop - 6);
+      ctx.fillText('CHANNEL WALL', 8, wallBot + 14);
+
+      // Velocity profile (parabolic)
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let y = wallTop; y <= wallBot; y += 2) {
+        const relY = (y - wallTop) / channelH;
+        const vel = 4 * relY * (1 - relY); // parabolic
+        const x = 40 + vel * 40;
+        if (y === wallTop) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.4)';
+      ctx.font = '8px monospace';
+      ctx.fillText('v(y)', 60, wallTop + channelH / 2 - 4);
+
+      // Particles
+      particles.forEach(function(p) {
+        // Parabolic velocity profile
+        const relY = (p.y - wallTop) / channelH;
+        const velFactor = 4 * relY * (1 - relY);
+        p.x += p.speed * velFactor * 1.5;
+
+        // Wrap
+        if (p.x > w + 5) {
+          p.x = -5;
+          p.y = wallTop + Math.random() * channelH;
+        }
+
+        // Color by velocity -- slow=teal, fast=amber
+        const t = velFactor;
+        const r = Math.round(20 + t * 225);
+        const g = Math.round(184 - t * 26);
+        const b = Math.round(166 - t * 155);
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.4 + t * 0.5) + ')';
+        ctx.fill();
+      });
+
+      // Nutrient concentration gradient (color band on right)
+      const gradX = w - 30;
+      const grad = ctx.createLinearGradient(0, wallTop, 0, wallBot);
+      grad.addColorStop(0, 'rgba(245, 158, 11, 0.6)');
+      grad.addColorStop(0.5, 'rgba(20, 184, 166, 0.6)');
+      grad.addColorStop(1, 'rgba(245, 158, 11, 0.6)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(gradX, wallTop, 8, channelH);
+      ctx.fillStyle = '#64748b';
+      ctx.font = '7px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('N', gradX + 4, wallTop - 4);
+
+      requestAnimationFrame(drawFrame);
+    }
+
+    requestAnimationFrame(drawFrame);
+  }
+
+  // ================================================================
+  // SCATTER PLOT
+  // ================================================================
+  function renderScatterPlot() {
+    const canvas = document.getElementById('scatterCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    const pad = { top: 30, right: 20, bottom: 50, left: 60 };
+
+    // Generate correlated data with noise
+    const n = 80;
+    const points = [];
+    for (let i = 0; i < n; i++) {
+      const x = 0.5 + Math.random() * 3.5;
+      const y = 0.8 * x + 0.5 + (Math.random() - 0.5) * 1.2;
+      points.push({ x: x, y: Math.max(0, y), group: Math.random() > 0.3 ? 'A' : 'B' });
+    }
+
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+
+    // Background
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + chartH * i / 4;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+      const x = pad.left + chartW * i / 4;
+      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + chartH); ctx.stroke();
+    }
+
+    // Trend line
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    const x1 = pad.left;
+    const y1 = pad.top + chartH - ((0.8 * 0 + 0.5) / 4.5) * chartH;
+    const x2 = w - pad.right;
+    const y2 = pad.top + chartH - ((0.8 * 4.5 + 0.5) / 4.5) * chartH;
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Points
+    points.forEach(function(p) {
+      const px = pad.left + (p.x / 4.5) * chartW;
+      const py = pad.top + chartH - (p.y / 4.5) * chartH;
+      const color = p.group === 'A' ? '#f59e0b' : '#14b8a6';
+
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color + '80';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Axes labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nutrient Concentration (mS/cm)', pad.left + chartW / 2, h - 8);
+    ctx.save();
+    ctx.translate(14, pad.top + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Growth Rate (mm/day)', 0, 0);
+    ctx.restore();
+
+    // R-squared
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.6)';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('R2 = 0.73  |  p < 0.001', w - pad.right - 4, pad.top + 14);
+
+    // Legend
+    ctx.fillStyle = '#f59e0b80';
+    ctx.beginPath(); ctx.arc(w - pad.right - 120, pad.top + 32, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'left';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText('Treatment A', w - pad.right - 112, pad.top + 35);
+
+    ctx.fillStyle = '#14b8a680';
+    ctx.beginPath(); ctx.arc(w - pad.right - 120, pad.top + 48, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Treatment B', w - pad.right - 112, pad.top + 51);
+  }
+
+  // ================================================================
+  // TOOL EXECUTION ANIMATION
+  // ================================================================
+  function showToolExec(containerId, tools) {
+    const parent = document.getElementById('toolExecHeatmap');
+    if (!parent) return;
+    tools.forEach(function(tool, i) {
+      const bar = document.createElement('div');
+      bar.className = 'tool-exec-bar';
+      bar.innerHTML = '<div class="tool-exec-dot"></div>' +
+        '<span class="tool-exec-name">' + tool.name + '</span>' +
+        '<span class="tool-exec-time">' + tool.time + '</span>';
+      parent.appendChild(bar);
+      setTimeout(function() { bar.classList.add('visible'); }, i * 400);
+      setTimeout(function() { bar.classList.add('completed'); }, i * 400 + 800);
+    });
+  }
+
+  // ================================================================
+  // ALL TOOLS GRID
+  // ================================================================
+  function renderAllTools() {
+    const categories = [
+      {
+        title: 'Study & Data Management',
+        icon: '&#9670;',
+        color: 'var(--gwen-amber)',
+        tools: ['get_study_list', 'get_study_details', 'get_dataset_summary', 'query_observations', 'record_observation', 'get_eln_entries', 'draft_eln_entry', 'export_study_package', 'generate_report', 'create_research_table']
+      },
+      {
+        title: 'Visualization & Display',
+        icon: '&#9670;',
+        color: 'var(--gwen-amber-bright)',
+        tools: ['create_custom_display', 'create_research_chart', 'create_data_card', 'update_data_card_value', 'get_data_cards', 'get_data_card_history', 'render_formula', 'analyze_figure_description']
+      },
+      {
+        title: 'Grant Intelligence',
+        icon: '&#9733;',
+        color: 'var(--gwen-teal)',
+        tools: ['screen_funding_eligibility', 'map_competition_rubric', 'score_proposal_against_rubric', 'draft_research_budget', 'validate_budget_eligibility', 'search_grant_programs', 'get_grant_program_details', 'check_program_eligibility', 'match_programs_to_project', 'draft_grant_narrative', 'generate_grant_export_pack', 'get_grant_programs_database']
+      },
+      {
+        title: 'Writing & Narrative',
+        icon: '&#9674;',
+        color: 'var(--gwen-sky)',
+        tools: ['build_narrative_cv', 'rewrite_for_clarity', 'score_writing_style', 'generate_response_to_reviewers', 'generate_submission_checklist', 'analyze_resubmission_viability', 'draft_knowledge_mobilization_plan']
+      },
+      {
+        title: 'Compliance & Security',
+        icon: '&#9632;',
+        color: 'var(--gwen-rose)',
+        tools: ['run_security_due_diligence', 'generate_dmp', 'check_ai_compliance', 'assess_edi_integration', 'manage_institutional_approvals', 'calibrate_proposal_bias']
+      },
+      {
+        title: 'Simulation & Compute',
+        icon: '&#9651;',
+        color: 'var(--gwen-violet)',
+        tools: ['configure_flow_simulation', 'get_flow_simulations', 'create_cfd_pipeline_job', 'get_cfd_templates', 'execute_code', 'get_execution_history']
+      },
+      {
+        title: 'Sensor & Farm Data',
+        icon: '&#9679;',
+        color: 'var(--gwen-emerald)',
+        tools: ['get_sensor_data', 'get_network_sensor_data', 'get_local_device_registry', 'get_farm_layout_context', 'register_equipment', 'get_calibration_logs']
+      },
+      {
+        title: 'Research Integrations',
+        icon: '&#9670;',
+        color: 'var(--gwen-sky)',
+        tools: ['link_orcid', 'lookup_orcid', 'prepare_doi_metadata', 'create_osf_project', 'create_protocol_version', 'register_instrument', 'list_instruments', 'request_instrument_run', 'get_instrument_telemetry']
+      },
+      {
+        title: 'Workflow & Governance',
+        icon: '&#9670;',
+        color: 'var(--gwen-teal)',
+        tools: ['create_workflow', 'submit_workflow_run', 'get_workflow_status', 'initiate_data_transfer', 'assign_research_role', 'request_approval', 'review_pending_approvals', 'seal_run_record']
+      },
+      {
+        title: 'Literature & References',
+        icon: '&#9670;',
+        color: 'var(--gwen-amber)',
+        tools: ['search_pubmed', 'search_openalex', 'extract_structured_data', 'analyze_research_patterns', 'save_pattern_analysis', 'add_reference', 'import_references_from_search', 'search_reference_library', 'format_citations', 'lookup_doi']
+      },
+      {
+        title: 'Hypothesis & Analysis',
+        icon: '&#9670;',
+        color: 'var(--gwen-violet)',
+        tools: ['generate_hypothesis', 'list_hypotheses', 'update_hypothesis_status', 'review_study_design', 'search_competitors', 'analyze_competitor_overlap']
+      },
+      {
+        title: 'Memory & Evolution',
+        icon: '&#9670;',
+        color: 'var(--gwen-rose)',
+        tools: ['save_memory', 'recall_memories', 'update_memory', 'forget_memory', 'write_evolution_entry', 'read_evolution_journal', 'update_evolution_entry']
+      },
+      {
+        title: 'Agent Collaboration',
+        icon: '&#9670;',
+        color: 'var(--gwen-emerald)',
+        tools: ['request_faye_review', 'get_faye_security_assessment', 'get_faye_directives', 'reply_to_faye', 'request_human_approval', 'get_pending_approvals', 'resolve_approval', 'get_research_workspace_summary']
+      }
+    ];
+
+    const totalTools = categories.reduce(function(sum, c) { return sum + c.tools.length; }, 0);
+    animateCounter(document.getElementById('statToolCount'), totalTools, 2000);
+    animateCounter(document.getElementById('statCatCount'), categories.length, 1500);
+
+    document.getElementById('allToolsGrid').innerHTML = categories.map(function(cat) {
+      return '<div class="cap-card">' +
+        '<span class="cap-card-icon" style="color: ' + cat.color + ';">' + cat.icon + '</span>' +
+        '<div class="cap-card-title">' + cat.title + ' <span style="color: var(--text-muted); font-size: 11px; font-weight: 400;">(' + cat.tools.length + ')</span></div>' +
+        '<div class="cap-card-tools">' +
+        cat.tools.map(function(t) { return '<span class="cap-tool-tag">' + t + '</span>'; }).join('') +
+        '</div></div>';
+    }).join('');
+  }
+
+  // ================================================================
+  // INIT
+  // ================================================================
+  window.addEventListener('DOMContentLoaded', function() {
+    initStarfield();
+    initScrollObserver();
+    renderHeatmap();
+    renderLineChart();
+    renderDataCards();
+    renderFormulas();
+    renderResearchTable();
+    renderBarChart();
+    renderFlowSim();
+    renderScatterPlot();
+    renderAllTools();
+
+    // Handle resize for canvas charts
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        renderLineChart();
+        renderBarChart();
+        renderScatterPlot();
+      }, 250);
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>

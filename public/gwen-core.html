@@ -207,6 +207,7 @@
     <div class="gwen-workspace-header">
       <h2 class="gwen-workspace-title">Research Workspace</h2>
       <div class="gwen-workspace-controls">
+        <button class="gwen-ws-btn gwen-demo-launch" onclick="launchGwenDemo()" style="background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));border-color:rgba(245,158,11,0.3);color:#f59e0b;font-weight:600;">Launch Demo</button>
         <button class="gwen-ws-btn" onclick="clearWorkspace()">Clear Displays</button>
         <button class="gwen-ws-btn" onclick="refreshWorkspace()">Refresh</button>
       </div>
@@ -225,23 +226,25 @@
   </section>
 
   <!-- ============================================================ -->
-  <!-- CHAT INTERFACE                                                -->
-  <!-- ============================================================ -->
-  <section class="gwen-chat-bar" id="gwenChatBar">
-    <div class="gwen-chat-toggle" id="gwenChatToggle" onclick="toggleChat()">
-      <span class="gwen-chat-toggle-icon">&#9650;</span>
-      <span class="gwen-chat-toggle-label">Chat with G.W.E.N.</span>
-    </div>
-  </section>
 
-  <section class="gwen-chat-panel" id="gwenChatPanel">
-    <div class="gwen-chat-messages" id="gwenChatMessages">
-      <div class="gwen-chat-msg gwen-chat-msg-agent">
-        <div class="gwen-chat-msg-avatar">G</div>
-        <div class="gwen-chat-msg-body">
-          <p>Welcome to G.W.E.N. I am your research intelligence agent, specialized in grant writing, study design, data management, and compliance. How can I help with your research today?</p>
-        </div>
+  <!-- ============================================================ -->
+  <!-- CINEMATIC DEMO OVERLAY                                        -->
+  <!-- ============================================================ -->
+  <div id="gwenDemoOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:#030610;">
+    <canvas id="gwenDemoCanvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+    <div id="gwenDemoSceneLabel" style="position:absolute;top:24px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:4px;text-transform:uppercase;color:rgba(245,158,11,0.6);opacity:0;transition:opacity 0.8s;pointer-events:none;"></div>
+    <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:510;">
+      <button onclick="gwenDemoPrev()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#9664;</button>
+      <div id="gwenDemoProgressWrap" style="width:200px;height:3px;background:rgba(245,158,11,0.1);border-radius:2px;overflow:hidden;">
+        <div id="gwenDemoProgressBar" style="width:0%;height:100%;background:#f59e0b;border-radius:2px;transition:width 0.3s;"></div>
       </div>
+      <button onclick="gwenDemoNext()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#9654;</button>
+      <button onclick="gwenDemoToggleAudio()" id="gwenDemoAudioBtn" style="background:rgba(15,23,42,0.7);border:1px solid rgba(245,158,11,0.2);color:#94a3b8;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;backdrop-filter:blur(8px);">&#9835;</button>
+      <button onclick="gwenDemoClose()" style="background:rgba(15,23,42,0.7);border:1px solid rgba(251,113,133,0.3);color:#fb7185;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:14px;backdrop-filter:blur(8px);">&#10005;</button>
+    </div>
+  </div>
+
+
     </div>
     <div class="gwen-chat-input-row">
       <textarea class="gwen-chat-input" id="gwenChatInput" rows="2" placeholder="Ask about grants, study design, compliance, data management..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGwenMessage();}"></textarea>
@@ -673,6 +676,1259 @@
       orb.className = 'gwen-hero-orb';
       if (state) orb.classList.add('gwen-orb-' + state);
     }
+  })();
+  </script>
+
+
+  <!-- ============================================================ -->
+  <!-- G.W.E.N. CINEMATIC DEMO ENGINE                               -->
+  <!-- ============================================================ -->
+  <script>
+  (function() {
+    'use strict';
+
+    /* ================================================================
+       DEMO STATE
+       ================================================================ */
+    var demoActive = false;
+    var canvas, ctx, w, h, dpr;
+    var currentScene = 0;
+    var sceneStart = 0;
+    var animFrame = null;
+    var audioCtx = null;
+    var audioPlaying = false;
+    var audioNodes = [];
+
+    var SCENES = [
+      { name: 'NFT Channel Fluid Dynamics', duration: 20000 },
+      { name: 'Thermal Environment Dynamics', duration: 25000 },
+      { name: 'Humidity Migration & Equipment Impact', duration: 22000 },
+      { name: 'External Influence & R-Value Analysis', duration: 26000 }
+    ];
+
+    /* ================================================================
+       PARTICLE POOLS
+       ================================================================ */
+    var fluidParticles = [];
+    var thermalSources = [];
+    var thermalField = null;
+    var humidityParticles = [];
+    var airflowLines = [];
+    var equipmentZones = [];
+    var weatherParticles = [];
+    var stars = [];
+
+    /* ================================================================
+       LAUNCH / CLOSE
+       ================================================================ */
+    window.launchGwenDemo = function() {
+      var overlay = document.getElementById('gwenDemoOverlay');
+      overlay.style.display = 'block';
+      canvas = document.getElementById('gwenDemoCanvas');
+      ctx = canvas.getContext('2d');
+      dpr = window.devicePixelRatio || 1;
+      resize();
+      window.addEventListener('resize', resize);
+      demoActive = true;
+      currentScene = 0;
+      initStars();
+      startScene(0);
+      tick();
+      // Set orb to analyzing state
+      var orb = document.getElementById('gwenOrb');
+      if (orb) orb.className = 'gwen-hero-orb gwen-orb-analyzing';
+    };
+
+    window.gwenDemoClose = function() {
+      demoActive = false;
+      document.getElementById('gwenDemoOverlay').style.display = 'none';
+      if (animFrame) cancelAnimationFrame(animFrame);
+      animFrame = null;
+      window.removeEventListener('resize', resize);
+      stopAudio();
+      var orb = document.getElementById('gwenOrb');
+      if (orb) orb.className = 'gwen-hero-orb';
+    };
+
+    window.gwenDemoNext = function() {
+      currentScene = (currentScene + 1) % SCENES.length;
+      startScene(currentScene);
+    };
+
+    window.gwenDemoPrev = function() {
+      currentScene = (currentScene - 1 + SCENES.length) % SCENES.length;
+      startScene(currentScene);
+    };
+
+    function resize() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Rebuild thermal field on resize
+      if (currentScene === 1) initThermalField();
+    }
+
+    /* ================================================================
+       SCENE MANAGEMENT
+       ================================================================ */
+    function startScene(idx) {
+      sceneStart = performance.now();
+      var lbl = document.getElementById('gwenDemoSceneLabel');
+      lbl.textContent = SCENES[idx].name;
+      lbl.style.opacity = '1';
+      setTimeout(function() { lbl.style.opacity = '0'; }, 3000);
+
+      if (idx === 0) initFluidScene();
+      else if (idx === 1) initThermalScene();
+      else if (idx === 2) initHumidityScene();
+      else if (idx === 3) initRValueScene();
+    }
+
+    function tick() {
+      if (!demoActive) return;
+      var now = performance.now();
+      var elapsed = now - sceneStart;
+      var sceneDur = SCENES[currentScene].duration;
+
+      // Progress bar
+      var pct = Math.min(elapsed / sceneDur * 100, 100);
+      var bar = document.getElementById('gwenDemoProgressBar');
+      if (bar) bar.style.width = pct + '%';
+
+      // Auto-advance
+      if (elapsed >= sceneDur) {
+        currentScene = (currentScene + 1) % SCENES.length;
+        startScene(currentScene);
+        elapsed = 0;
+      }
+
+      // Clear
+      ctx.fillStyle = '#030610';
+      ctx.fillRect(0, 0, w, h);
+
+      // Starfield (always)
+      drawStars(now);
+
+      // Scene render
+      var t = elapsed / sceneDur; // 0..1 normalized
+      if (currentScene === 0) drawFluidScene(t, elapsed);
+      else if (currentScene === 1) drawThermalScene(t, elapsed);
+      else if (currentScene === 2) drawHumidityScene(t, elapsed);
+      else if (currentScene === 3) drawRValueScene(t, elapsed);
+
+      animFrame = requestAnimationFrame(tick);
+    }
+
+    /* ================================================================
+       STARFIELD BACKGROUND
+       ================================================================ */
+    function initStars() {
+      stars = [];
+      for (var i = 0; i < 120; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1 + 0.3,
+          a: Math.random() * 0.3 + 0.05,
+          phase: Math.random() * Math.PI * 2,
+          speed: Math.random() * 0.015 + 0.005
+        });
+      }
+    }
+
+    function drawStars(now) {
+      for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        var flicker = Math.sin(now * s.speed * 0.001 + s.phase) * 0.3 + 0.7;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245,158,11,' + (s.a * flicker) + ')';
+        ctx.fill();
+      }
+    }
+
+    /* ================================================================
+       SCENE 1: NFT CHANNEL FLUID DYNAMICS
+       ================================================================ */
+    function initFluidScene() {
+      fluidParticles = [];
+      var count = 300;
+      for (var i = 0; i < count; i++) {
+        fluidParticles.push({
+          x: Math.random() * w * 1.2 - w * 0.1,
+          y: 0, // set in channelY space
+          relY: Math.random(), // 0=top wall, 1=bottom wall
+          speed: 0.8 + Math.random() * 2.5,
+          size: 1 + Math.random() * 2.5,
+          nutrient: Math.random() // nutrient concentration
+        });
+      }
+    }
+
+    function drawFluidScene(t, elapsed) {
+      var channelTop = h * 0.28;
+      var channelBot = h * 0.72;
+      var channelH = channelBot - channelTop;
+      var fadeIn = Math.min(t * 8, 1);
+
+      ctx.globalAlpha = fadeIn;
+
+      // Channel walls -- glowing lines
+      ctx.strokeStyle = 'rgba(245,158,11,0.35)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = 'rgba(245,158,11,0.2)';
+      ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.moveTo(0, channelTop); ctx.lineTo(w, channelTop); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, channelBot); ctx.lineTo(w, channelBot); ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Wall texture -- subtle horizontal lines
+      ctx.strokeStyle = 'rgba(30,41,59,0.4)';
+      ctx.lineWidth = 0.5;
+      for (var wi = 0; wi < 8; wi++) {
+        var wy1 = channelTop - 20 - wi * 6;
+        var wy2 = channelBot + 20 + wi * 6;
+        ctx.beginPath(); ctx.moveTo(0, wy1); ctx.lineTo(w, wy1); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, wy2); ctx.lineTo(w, wy2); ctx.stroke();
+      }
+
+      // Velocity profile curve (left side)
+      ctx.strokeStyle = 'rgba(245,158,11,0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (var vy = 0; vy <= 1; vy += 0.02) {
+        var velFactor = 4 * vy * (1 - vy);
+        var px = 50 + velFactor * 60;
+        var py = channelTop + vy * channelH;
+        if (vy === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(245,158,11,0.3)';
+      ctx.font = '9px monospace';
+      ctx.fillText('v(y)', 80, channelTop + channelH * 0.48);
+
+      // Grid lines inside channel
+      ctx.strokeStyle = 'rgba(30,41,59,0.2)';
+      ctx.lineWidth = 0.3;
+      for (var gi = 1; gi < 8; gi++) {
+        var gy = channelTop + channelH * gi / 8;
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+
+      // Particles
+      for (var i = 0; i < fluidParticles.length; i++) {
+        var p = fluidParticles[i];
+        var velFactor = 4 * p.relY * (1 - p.relY);
+        p.x += p.speed * velFactor * 2.2;
+
+        if (p.x > w + 10) {
+          p.x = -10 - Math.random() * 100;
+          p.relY = Math.random();
+          p.nutrient = Math.random();
+        }
+
+        var py = channelTop + p.relY * channelH;
+
+        // Color by velocity AND nutrient concentration
+        var vt = velFactor;
+        var nt = p.nutrient;
+        var r = Math.round(20 + vt * 225);
+        var g = Math.round(184 - vt * 26 + nt * 40);
+        var b = Math.round(166 - vt * 155);
+        var alpha = 0.35 + vt * 0.55;
+
+        ctx.beginPath();
+        ctx.arc(p.x, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+        ctx.fill();
+
+        // Nutrient glow for high-concentration particles
+        if (nt > 0.7 && vt > 0.3) {
+          ctx.beginPath();
+          ctx.arc(p.x, py, p.size * 3, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(245,158,11,0.04)';
+          ctx.fill();
+        }
+      }
+
+      // Nutrient concentration gradient bar (right edge)
+      var gradX = w - 40;
+      var grad = ctx.createLinearGradient(0, channelTop, 0, channelBot);
+      grad.addColorStop(0, 'rgba(245,158,11,0.5)');
+      grad.addColorStop(0.35, 'rgba(20,184,166,0.5)');
+      grad.addColorStop(0.65, 'rgba(20,184,166,0.5)');
+      grad.addColorStop(1, 'rgba(245,158,11,0.5)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(gradX, channelTop, 8, channelH);
+      ctx.fillStyle = 'rgba(148,163,184,0.5)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('N conc', gradX + 4, channelTop - 8);
+      ctx.textAlign = 'left';
+
+      // Data overlay boxes
+      drawDataBox(w * 0.15, h * 0.08, [
+        { label: 'Reynolds Number', value: 'Re = 1,847', color: '#f59e0b' },
+        { label: 'Flow Regime', value: 'Laminar', color: '#14b8a6' }
+      ]);
+
+      drawDataBox(w * 0.65, h * 0.08, [
+        { label: 'Flow Rate', value: '1.2 L/min', color: '#f59e0b' },
+        { label: 'Solution Temp', value: '22.4 C', color: '#38bdf8' }
+      ]);
+
+      drawDataBox(w * 0.4, h * 0.82, [
+        { label: 'Channel Length', value: '2.4 m', color: '#a78bfa' },
+        { label: 'EC', value: '1.8 mS/cm', color: '#10b981' },
+        { label: 'pH', value: '6.1', color: '#fb7185' }
+      ]);
+
+      ctx.globalAlpha = 1;
+    }
+
+    /* ================================================================
+       SCENE 2: THERMAL ENVIRONMENT DYNAMICS
+       ================================================================ */
+    var ROOM_X, ROOM_Y, ROOM_W, ROOM_H;
+    var thermalCells = null;
+    var thermalCols, thermalRows;
+    var CELL_SIZE = 8;
+
+    function initThermalField() {
+      ROOM_X = w * 0.12;
+      ROOM_Y = h * 0.15;
+      ROOM_W = w * 0.76;
+      ROOM_H = h * 0.65;
+      thermalCols = Math.ceil(ROOM_W / CELL_SIZE);
+      thermalRows = Math.ceil(ROOM_H / CELL_SIZE);
+      thermalCells = new Float32Array(thermalCols * thermalRows);
+      // Start at ambient 20C
+      for (var i = 0; i < thermalCells.length; i++) thermalCells[i] = 20;
+    }
+
+    function initThermalScene() {
+      initThermalField();
+      thermalSources = [
+        // Grow lights (heat sources) -- top mounted
+        { x: 0.25, y: 0.2, radius: 0.18, temp: 38, type: 'light', on: false, onTime: 0.08 },
+        { x: 0.55, y: 0.2, radius: 0.18, temp: 38, type: 'light', on: false, onTime: 0.12 },
+        { x: 0.80, y: 0.2, radius: 0.16, temp: 36, type: 'light', on: false, onTime: 0.16 },
+        // HVAC vents (cooling)
+        { x: 0.1, y: 0.1, radius: 0.22, temp: 12, type: 'hvac', on: false, onTime: 0.35 },
+        { x: 0.9, y: 0.9, radius: 0.22, temp: 12, type: 'hvac', on: false, onTime: 0.40 },
+        // Exhaust fan (heat removal)
+        { x: 0.95, y: 0.05, radius: 0.12, temp: 18, type: 'fan', on: false, onTime: 0.55 }
+      ];
+    }
+
+    function drawThermalScene(t, elapsed) {
+      var fadeIn = Math.min(t * 6, 1);
+      ctx.globalAlpha = fadeIn;
+
+      // Activate sources based on timeline
+      for (var si = 0; si < thermalSources.length; si++) {
+        if (t >= thermalSources[si].onTime) thermalSources[si].on = true;
+      }
+
+      // Diffuse heat from sources into field
+      for (var si = 0; si < thermalSources.length; si++) {
+        var src = thermalSources[si];
+        if (!src.on) continue;
+        var cx = Math.floor(src.x * thermalCols);
+        var cy = Math.floor(src.y * thermalRows);
+        var rCells = Math.floor(src.radius * Math.min(thermalCols, thermalRows));
+        for (var dy = -rCells; dy <= rCells; dy++) {
+          for (var dx = -rCells; dx <= rCells; dx++) {
+            var nx = cx + dx;
+            var ny = cy + dy;
+            if (nx < 0 || nx >= thermalCols || ny < 0 || ny >= thermalRows) continue;
+            var dist = Math.sqrt(dx * dx + dy * dy) / rCells;
+            if (dist > 1) continue;
+            var influence = (1 - dist * dist) * 0.06;
+            var idx = ny * thermalCols + nx;
+            thermalCells[idx] += (src.temp - thermalCells[idx]) * influence;
+          }
+        }
+      }
+
+      // Thermal diffusion (simplified heat equation)
+      var next = new Float32Array(thermalCells.length);
+      var diff = 0.15;
+      for (var row = 0; row < thermalRows; row++) {
+        for (var col = 0; col < thermalCols; col++) {
+          var idx = row * thermalCols + col;
+          var val = thermalCells[idx];
+          var neighbors = 0;
+          var sum = 0;
+          if (col > 0) { sum += thermalCells[idx - 1]; neighbors++; }
+          if (col < thermalCols - 1) { sum += thermalCells[idx + 1]; neighbors++; }
+          if (row > 0) { sum += thermalCells[idx - thermalCols]; neighbors++; }
+          if (row < thermalRows - 1) { sum += thermalCells[idx + thermalCols]; neighbors++; }
+          next[idx] = val + diff * (sum / neighbors - val);
+        }
+      }
+      thermalCells = next;
+
+      // Draw room outline
+      ctx.strokeStyle = 'rgba(245,158,11,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(ROOM_X, ROOM_Y, ROOM_W, ROOM_H);
+
+      // Draw thermal field as heatmap
+      for (var row = 0; row < thermalRows; row++) {
+        for (var col = 0; col < thermalCols; col++) {
+          var temp = thermalCells[row * thermalCols + col];
+          var color = tempToColor(temp);
+          ctx.fillStyle = color;
+          ctx.fillRect(ROOM_X + col * CELL_SIZE, ROOM_Y + row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+      }
+
+      // Draw equipment icons on top
+      for (var si = 0; si < thermalSources.length; si++) {
+        var src = thermalSources[si];
+        if (!src.on) continue;
+        var ex = ROOM_X + src.x * ROOM_W;
+        var ey = ROOM_Y + src.y * ROOM_H;
+        var pulse = Math.sin(elapsed * 0.003) * 0.3 + 0.7;
+
+        if (src.type === 'light') {
+          // Grow light -- amber glow ring
+          ctx.beginPath();
+          ctx.arc(ex, ey, 16, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(245,158,11,' + (0.6 * pulse) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(ex, ey, 6, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(245,158,11,0.8)';
+          ctx.fill();
+          // Radiation rings
+          for (var ri = 1; ri <= 3; ri++) {
+            ctx.beginPath();
+            ctx.arc(ex, ey, 16 + ri * 12, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(245,158,11,' + (0.08 / ri) + ')';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        } else if (src.type === 'hvac') {
+          // HVAC -- blue cooling zone
+          ctx.beginPath();
+          ctx.arc(ex, ey, 14, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(56,189,248,' + (0.6 * pulse) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(56,189,248,0.15)';
+          ctx.fill();
+          // Snowflake-ish indicator
+          ctx.fillStyle = 'rgba(56,189,248,0.8)';
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('*', ex, ey + 4);
+        } else if (src.type === 'fan') {
+          // Fan -- rotating indicator
+          var angle = elapsed * 0.005;
+          ctx.save();
+          ctx.translate(ex, ey);
+          ctx.rotate(angle);
+          ctx.strokeStyle = 'rgba(167,139,250,0.6)';
+          ctx.lineWidth = 1.5;
+          for (var bi = 0; bi < 4; bi++) {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(10, 0);
+            ctx.stroke();
+            ctx.rotate(Math.PI / 2);
+          }
+          ctx.restore();
+        }
+        ctx.textAlign = 'left';
+      }
+
+      // Room labels
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.font = '10px monospace';
+      ctx.fillText('GROW ROOM -- TOP VIEW', ROOM_X, ROOM_Y - 8);
+
+      // Wall labels
+      ctx.fillStyle = 'rgba(100,116,139,0.3)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('NORTH WALL', ROOM_X + ROOM_W / 2, ROOM_Y - 2);
+      ctx.fillText('SOUTH WALL', ROOM_X + ROOM_W / 2, ROOM_Y + ROOM_H + 12);
+      ctx.textAlign = 'left';
+      ctx.save();
+      ctx.translate(ROOM_X - 4, ROOM_Y + ROOM_H / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText('WEST WALL', 0, 0);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(ROOM_X + ROOM_W + 14, ROOM_Y + ROOM_H / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText('EAST WALL', 0, 0);
+      ctx.restore();
+
+      // Temperature legend
+      drawTempLegend(ROOM_X + ROOM_W + 30, ROOM_Y, ROOM_H);
+
+      // Data overlay
+      var avgTemp = 0;
+      var minTemp = 100;
+      var maxTemp = -100;
+      for (var i = 0; i < thermalCells.length; i++) {
+        avgTemp += thermalCells[i];
+        if (thermalCells[i] < minTemp) minTemp = thermalCells[i];
+        if (thermalCells[i] > maxTemp) maxTemp = thermalCells[i];
+      }
+      avgTemp /= thermalCells.length;
+
+      drawDataBox(w * 0.02, h * 0.85, [
+        { label: 'Avg Temp', value: avgTemp.toFixed(1) + ' C', color: '#f59e0b' },
+        { label: 'Min / Max', value: minTemp.toFixed(1) + ' / ' + maxTemp.toFixed(1) + ' C', color: '#38bdf8' },
+        { label: 'Delta T', value: (maxTemp - minTemp).toFixed(1) + ' C', color: '#fb7185' }
+      ]);
+
+      // Equipment status
+      var activeCount = thermalSources.filter(function(s) { return s.on; }).length;
+      drawDataBox(w * 0.70, h * 0.85, [
+        { label: 'Equipment Active', value: activeCount + ' / ' + thermalSources.length, color: '#10b981' },
+        { label: 'Thermal Uniformity', value: (100 - (maxTemp - minTemp) * 3.5).toFixed(0) + '%', color: '#a78bfa' }
+      ]);
+
+      ctx.globalAlpha = 1;
+    }
+
+    /* ================================================================
+       SCENE 3: HUMIDITY MIGRATION & EQUIPMENT IMPACT
+       ================================================================ */
+    function initHumidityScene() {
+      humidityParticles = [];
+      airflowLines = [];
+      equipmentZones = [];
+
+      // Plant transpiration sources
+      var plantPositions = [];
+      for (var row = 0; row < 4; row++) {
+        for (var col = 0; col < 6; col++) {
+          plantPositions.push({
+            x: 0.15 + col * 0.12,
+            y: 0.25 + row * 0.15,
+            rate: 0.5 + Math.random() * 0.5
+          });
+        }
+      }
+
+      // Humidity particles (vapor)
+      for (var i = 0; i < 400; i++) {
+        var src = plantPositions[Math.floor(Math.random() * plantPositions.length)];
+        humidityParticles.push({
+          x: src.x + (Math.random() - 0.5) * 0.04,
+          y: src.y + (Math.random() - 0.5) * 0.04,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: -Math.random() * 0.2 - 0.05,
+          life: Math.random(),
+          maxLife: 0.6 + Math.random() * 0.4,
+          size: 1 + Math.random() * 3,
+          srcIdx: Math.floor(Math.random() * plantPositions.length)
+        });
+      }
+
+      // Circulation fans
+      equipmentZones = [
+        { x: 0.08, y: 0.5, type: 'circFan', angle: 0, strength: 0.4, on: false, onTime: 0.2 },
+        { x: 0.92, y: 0.5, type: 'circFan', angle: Math.PI, strength: 0.4, on: false, onTime: 0.25 },
+        { x: 0.5, y: 0.08, type: 'dehumidifier', radius: 0.15, strength: 0.6, on: false, onTime: 0.45 },
+        { x: 0.5, y: 0.92, type: 'humidifier', radius: 0.12, strength: 0.5, on: false, onTime: 0.55 }
+      ];
+
+      // Airflow streamlines
+      for (var i = 0; i < 60; i++) {
+        airflowLines.push({
+          x: Math.random(),
+          y: Math.random(),
+          age: Math.random() * 100,
+          speed: 0.001 + Math.random() * 0.002
+        });
+      }
+
+      // Store plant positions for reference
+      equipmentZones.plants = plantPositions;
+    }
+
+    function drawHumidityScene(t, elapsed) {
+      var fadeIn = Math.min(t * 6, 1);
+      ctx.globalAlpha = fadeIn;
+
+      var rx = w * 0.12;
+      var ry = h * 0.12;
+      var rw = w * 0.76;
+      var rh = h * 0.72;
+
+      // Activate equipment
+      for (var ei = 0; ei < equipmentZones.length; ei++) {
+        if (t >= equipmentZones[ei].onTime) equipmentZones[ei].on = true;
+      }
+
+      // Room outline
+      ctx.strokeStyle = 'rgba(56,189,248,0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+      // Room fill -- dark base
+      ctx.fillStyle = 'rgba(6,10,20,0.5)';
+      ctx.fillRect(rx, ry, rw, rh);
+
+      // Draw plants
+      var plants = equipmentZones.plants || [];
+      for (var pi = 0; pi < plants.length; pi++) {
+        var plant = plants[pi];
+        var px = rx + plant.x * rw;
+        var py = ry + plant.y * rh;
+        var pulse = Math.sin(elapsed * 0.002 + pi) * 0.2 + 0.8;
+
+        // Plant glow
+        ctx.beginPath();
+        ctx.arc(px, py, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(16,185,129,' + (0.15 * pulse) + ')';
+        ctx.fill();
+        // Plant dot
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(16,185,129,0.7)';
+        ctx.fill();
+        // Transpiration indicator
+        if (t > 0.05) {
+          ctx.beginPath();
+          ctx.arc(px, py, 12 + Math.sin(elapsed * 0.003 + pi * 0.5) * 4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(56,189,248,' + (0.08 * plant.rate) + ')';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      // Humidity particles
+      for (var i = 0; i < humidityParticles.length; i++) {
+        var p = humidityParticles[i];
+        // Apply airflow influence from active fans
+        var fx = 0, fy = 0;
+        for (var ei = 0; ei < equipmentZones.length; ei++) {
+          var eq = equipmentZones[ei];
+          if (!eq.on) continue;
+          if (eq.type === 'circFan') {
+            var dx = p.x - eq.x;
+            var dy = p.y - eq.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 0.4 && dist > 0.01) {
+              fx += Math.cos(eq.angle) * eq.strength * 0.01 / dist;
+              fy += Math.sin(eq.angle) * eq.strength * 0.005 / dist;
+            }
+          } else if (eq.type === 'dehumidifier') {
+            var dx = eq.x - p.x;
+            var dy = eq.y - p.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < eq.radius) {
+              p.life += 0.003; // faster decay near dehumidifier
+            }
+          }
+        }
+
+        p.vx += fx;
+        p.vy += fy;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.x += p.vx * 0.01;
+        p.y += p.vy * 0.01;
+        p.life += 0.003;
+
+        // Respawn
+        if (p.life >= p.maxLife || p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) {
+          var src = plants[p.srcIdx] || plants[0];
+          p.x = src.x + (Math.random() - 0.5) * 0.03;
+          p.y = src.y + (Math.random() - 0.5) * 0.03;
+          p.vx = (Math.random() - 0.5) * 0.3;
+          p.vy = -Math.random() * 0.2 - 0.05;
+          p.life = 0;
+        }
+
+        var alpha = (1 - p.life / p.maxLife) * 0.5;
+        var screenX = rx + p.x * rw;
+        var screenY = ry + p.y * rh;
+
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(56,189,248,' + alpha + ')';
+        ctx.fill();
+      }
+
+      // Airflow streamlines (when fans active)
+      var fansActive = equipmentZones.some(function(e) { return e.on && e.type === 'circFan'; });
+      if (fansActive) {
+        for (var i = 0; i < airflowLines.length; i++) {
+          var al = airflowLines[i];
+          al.age += 1;
+
+          // Simple flow field
+          var flowAngle = Math.sin(al.y * 4) * 0.5 + Math.cos(al.x * 3) * 0.3;
+          al.x += Math.cos(flowAngle) * al.speed;
+          al.y += Math.sin(flowAngle) * al.speed * 0.5;
+
+          if (al.x > 1 || al.x < 0 || al.y > 1 || al.y < 0) {
+            al.x = Math.random();
+            al.y = Math.random();
+            al.age = 0;
+          }
+
+          var sx = rx + al.x * rw;
+          var sy = ry + al.y * rh;
+          var alpha = Math.min(al.age / 30, 1) * 0.15;
+
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(167,139,250,' + alpha + ')';
+          ctx.fill();
+        }
+      }
+
+      // Equipment icons
+      for (var ei = 0; ei < equipmentZones.length; ei++) {
+        var eq = equipmentZones[ei];
+        if (!eq.on) continue;
+        var ex = rx + eq.x * rw;
+        var ey = ry + eq.y * rh;
+
+        if (eq.type === 'circFan') {
+          var angle = elapsed * 0.008;
+          ctx.save();
+          ctx.translate(ex, ey);
+          ctx.rotate(angle);
+          ctx.strokeStyle = 'rgba(167,139,250,0.6)';
+          ctx.lineWidth = 1.5;
+          for (var bi = 0; bi < 3; bi++) {
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(12, 0); ctx.stroke();
+            ctx.rotate(Math.PI * 2 / 3);
+          }
+          ctx.restore();
+          // Airflow direction indicator
+          ctx.strokeStyle = 'rgba(167,139,250,0.2)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex + Math.cos(eq.angle) * 60, ey + Math.sin(eq.angle) * 30);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (eq.type === 'dehumidifier') {
+          ctx.beginPath();
+          ctx.arc(ex, ey, 10, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(251,113,133,0.5)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          // Dry zone indicator
+          ctx.beginPath();
+          ctx.arc(ex, ey, eq.radius * Math.min(rw, rh), 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(251,113,133,0.08)';
+          ctx.lineWidth = 0.5;
+          ctx.setLineDash([2, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (eq.type === 'humidifier') {
+          ctx.beginPath();
+          ctx.arc(ex, ey, 10, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(56,189,248,0.5)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(56,189,248,0.15)';
+          ctx.fill();
+        }
+      }
+
+      // Labels
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('HUMIDITY MIGRATION -- TOP VIEW', rx, ry - 8);
+
+      // Data overlay
+      drawDataBox(w * 0.02, h * 0.88, [
+        { label: 'Avg RH', value: '68.2%', color: '#38bdf8' },
+        { label: 'VPD', value: '0.92 kPa', color: '#f59e0b' },
+        { label: 'Transpiration', value: '1.4 L/hr', color: '#10b981' }
+      ]);
+
+      var totalActive = equipmentZones.filter(function(e) { return e.on; }).length;
+      drawDataBox(w * 0.72, h * 0.88, [
+        { label: 'Active Equipment', value: totalActive + ' units', color: '#a78bfa' },
+        { label: 'Uniformity Index', value: (82 + t * 12).toFixed(0) + '%', color: '#10b981' }
+      ]);
+
+      ctx.globalAlpha = 1;
+    }
+
+    /* ================================================================
+       SCENE 4: EXTERNAL INFLUENCE & R-VALUE ANALYSIS
+       ================================================================ */
+    function initRValueScene() {
+      weatherParticles = [];
+      for (var i = 0; i < 120; i++) {
+        weatherParticles.push({
+          x: Math.random() * 0.3, // left zone
+          y: Math.random(),
+          vx: 0.5 + Math.random() * 1.5,
+          vy: (Math.random() - 0.5) * 0.3,
+          size: 1 + Math.random() * 2,
+          type: Math.random() > 0.5 ? 'heat' : 'wind'
+        });
+      }
+    }
+
+    function drawRValueScene(t, elapsed) {
+      var fadeIn = Math.min(t * 6, 1);
+      ctx.globalAlpha = fadeIn;
+
+      // Layout: cross-section view
+      // Left: outside | Wall | Right: interior
+      var wallX = w * 0.38;
+      var wallW = w * 0.08;
+      var wallTop = h * 0.1;
+      var wallBot = h * 0.85;
+      var wallH = wallBot - wallTop;
+
+      // R-value cycles from R-5 to R-40 based on time
+      var rValueCycle = t * 3; // multiple cycles
+      var rNorm = (Math.sin(rValueCycle * Math.PI * 2 - Math.PI / 2) + 1) / 2; // 0..1
+      var rValue = 5 + rNorm * 35; // R-5 to R-40
+      var wallThickness = wallW * (0.5 + rNorm * 0.5); // thicker wall = higher R
+
+      // Outside environment
+      var outsideTemp = 35; // hot day
+      var insideTarget = 23;
+      // With low R-value, inside temp drifts toward outside
+      var thermalPenetration = 1 / (rValue / 5); // higher R = less penetration
+      var insideActual = insideTarget + (outsideTemp - insideTarget) * thermalPenetration * 0.4;
+
+      // Draw outside zone
+      var outsideGrad = ctx.createLinearGradient(0, wallTop, wallX, wallTop);
+      outsideGrad.addColorStop(0, 'rgba(245,100,11,0.06)');
+      outsideGrad.addColorStop(1, 'rgba(245,158,11,0.02)');
+      ctx.fillStyle = outsideGrad;
+      ctx.fillRect(0, wallTop, wallX, wallH);
+
+      // Sun indicator
+      var sunX = w * 0.12;
+      var sunY = h * 0.2;
+      var sunPulse = Math.sin(elapsed * 0.002) * 0.2 + 0.8;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 28, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(245,158,11,' + (0.15 * sunPulse) + ')';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 14, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(245,158,11,' + (0.6 * sunPulse) + ')';
+      ctx.fill();
+      // Sun rays
+      for (var ri = 0; ri < 8; ri++) {
+        var rayAngle = ri * Math.PI / 4 + elapsed * 0.0003;
+        ctx.beginPath();
+        ctx.moveTo(sunX + Math.cos(rayAngle) * 18, sunY + Math.sin(rayAngle) * 18);
+        ctx.lineTo(sunX + Math.cos(rayAngle) * 36, sunY + Math.sin(rayAngle) * 36);
+        ctx.strokeStyle = 'rgba(245,158,11,' + (0.2 * sunPulse) + ')';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Weather particles (heat radiation hitting wall)
+      for (var i = 0; i < weatherParticles.length; i++) {
+        var p = weatherParticles[i];
+        p.x += p.vx * 0.003;
+        p.y += p.vy * 0.001;
+
+        if (p.x > 0.38) { // hit wall
+          p.x = Math.random() * 0.15;
+          p.y = 0.1 + Math.random() * 0.75;
+        }
+
+        var sx = p.x * w;
+        var sy = wallTop + p.y * wallH * 0.8;
+        var alpha = 0.3 + (p.x / 0.38) * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
+        if (p.type === 'heat') {
+          ctx.fillStyle = 'rgba(245,158,11,' + alpha * 0.5 + ')';
+        } else {
+          ctx.fillStyle = 'rgba(251,113,133,' + alpha * 0.3 + ')';
+        }
+        ctx.fill();
+      }
+
+      // Draw wall
+      var actualWallX = wallX - wallThickness / 2 + wallW / 2;
+      // Wall layers
+      var layerCount = Math.floor(2 + rNorm * 4); // 2-6 layers
+      var layerH = wallH;
+      var layerW = wallThickness / layerCount;
+      for (var li = 0; li < layerCount; li++) {
+        var lx = actualWallX + li * layerW;
+        var brightness = 15 + li * 5;
+        ctx.fillStyle = 'rgb(' + brightness + ',' + (brightness + 8) + ',' + (brightness + 20) + ')';
+        ctx.fillRect(lx, wallTop, layerW - 1, layerH);
+      }
+
+      // Wall outline
+      ctx.strokeStyle = 'rgba(245,158,11,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(actualWallX, wallTop, wallThickness, wallH);
+
+      // Temperature gradient through wall
+      var tempGrad = ctx.createLinearGradient(actualWallX, 0, actualWallX + wallThickness, 0);
+      tempGrad.addColorStop(0, 'rgba(245,100,11,' + (0.15 * (1 - rNorm * 0.7)) + ')');
+      tempGrad.addColorStop(1, 'rgba(56,189,248,' + (0.05 + rNorm * 0.1) + ')');
+      ctx.fillStyle = tempGrad;
+      ctx.fillRect(actualWallX, wallTop, wallThickness, wallH);
+
+      // Draw interior zone
+      var interiorX = wallX + wallW;
+      var interiorGrad = ctx.createLinearGradient(interiorX, wallTop, w, wallTop);
+      interiorGrad.addColorStop(0, 'rgba(56,189,248,' + (0.01 + rNorm * 0.03) + ')');
+      interiorGrad.addColorStop(1, 'rgba(16,185,129,0.03)');
+      ctx.fillStyle = interiorGrad;
+      ctx.fillRect(interiorX, wallTop, w - interiorX, wallH);
+
+      // Plant silhouettes inside
+      var plantY = wallBot - 40;
+      for (var pi = 0; pi < 5; pi++) {
+        var px = interiorX + 50 + pi * 80;
+        if (px > w - 100) break;
+        ctx.fillStyle = 'rgba(16,185,129,0.2)';
+        ctx.beginPath();
+        ctx.moveTo(px, plantY);
+        ctx.lineTo(px - 12, plantY - 20);
+        ctx.lineTo(px - 4, plantY - 18);
+        ctx.lineTo(px - 8, plantY - 35);
+        ctx.lineTo(px, plantY - 28);
+        ctx.lineTo(px + 8, plantY - 35);
+        ctx.lineTo(px + 4, plantY - 18);
+        ctx.lineTo(px + 12, plantY - 20);
+        ctx.closePath();
+        ctx.fill();
+        // Stem
+        ctx.strokeStyle = 'rgba(16,185,129,0.15)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, plantY);
+        ctx.lineTo(px, plantY + 12);
+        ctx.stroke();
+      }
+
+      // Thermal penetration arrows through wall
+      var arrowCount = 6;
+      for (var ai = 0; ai < arrowCount; ai++) {
+        var ay = wallTop + wallH * (ai + 0.5) / arrowCount;
+        var penetrationLength = (1 - rNorm * 0.85) * 80;
+        var arrowAlpha = (1 - rNorm * 0.7) * 0.3;
+
+        // Arrow from outside pushing through wall
+        ctx.strokeStyle = 'rgba(245,158,11,' + arrowAlpha + ')';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(wallX - 20, ay);
+        ctx.lineTo(actualWallX + wallThickness + penetrationLength, ay);
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(actualWallX + wallThickness + penetrationLength, ay);
+        ctx.lineTo(actualWallX + wallThickness + penetrationLength - 6, ay - 3);
+        ctx.lineTo(actualWallX + wallThickness + penetrationLength - 6, ay + 3);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(245,158,11,' + arrowAlpha + ')';
+        ctx.fill();
+      }
+
+      // Labels
+      ctx.fillStyle = 'rgba(245,158,11,0.4)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('EXTERIOR', wallX / 2, wallTop - 16);
+      ctx.fillStyle = 'rgba(56,189,248,0.4)';
+      ctx.fillText('INTERIOR', interiorX + (w - interiorX) / 2, wallTop - 16);
+      ctx.fillStyle = 'rgba(148,163,184,0.3)';
+      ctx.fillText('WALL SECTION', wallX + wallW / 2, wallTop - 4);
+      ctx.textAlign = 'left';
+
+      // R-value display -- big cinematic number
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 48px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('R-' + rValue.toFixed(0), wallX + wallW / 2, h * 0.06);
+      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(148,163,184,0.5)';
+      ctx.fillText('INSULATION VALUE', wallX + wallW / 2, h * 0.06 + 18);
+      ctx.textAlign = 'left';
+
+      // Temperature line chart at bottom -- showing stability
+      var chartX = w * 0.06;
+      var chartY = wallBot + 20;
+      var chartW = w * 0.88;
+      var chartH2 = h - chartY - 50;
+      if (chartH2 > 20) {
+        // Chart background
+        ctx.fillStyle = 'rgba(10,15,30,0.5)';
+        ctx.fillRect(chartX, chartY, chartW, chartH2);
+        ctx.strokeStyle = 'rgba(30,41,59,0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(chartX, chartY, chartW, chartH2);
+
+        // Target line
+        ctx.strokeStyle = 'rgba(16,185,129,0.3)';
+        ctx.setLineDash([4, 4]);
+        var targetY = chartY + chartH2 * (1 - (insideTarget - 18) / 20);
+        ctx.beginPath();
+        ctx.moveTo(chartX, targetY);
+        ctx.lineTo(chartX + chartW, targetY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(16,185,129,0.3)';
+        ctx.font = '8px monospace';
+        ctx.fillText('Target: 23 C', chartX + 4, targetY - 4);
+
+        // Actual interior temp line (variance depends on R-value)
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        var variance = (1 - rNorm) * 6; // low R = high variance
+        for (var xi = 0; xi <= 100; xi++) {
+          var tx = chartX + (xi / 100) * chartW;
+          var noise = Math.sin(xi * 0.15 + elapsed * 0.001) * variance +
+                      Math.sin(xi * 0.07 + elapsed * 0.0005) * variance * 0.5;
+          var tempVal = insideActual + noise;
+          var ty = chartY + chartH2 * (1 - (tempVal - 18) / 20);
+          ty = Math.max(chartY, Math.min(chartY + chartH2, ty));
+          if (xi === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(148,163,184,0.3)';
+        ctx.font = '9px monospace';
+        ctx.fillText('INTERIOR TEMP STABILITY  (24hr)', chartX, chartY - 4);
+      }
+
+      // Data overlays
+      drawDataBox(w * 0.02, h * 0.12, [
+        { label: 'Outside Temp', value: outsideTemp + ' C', color: '#fb7185' },
+        { label: 'Solar Load', value: '840 W/m2', color: '#f59e0b' },
+        { label: 'Wind', value: '12 km/h NW', color: '#a78bfa' }
+      ]);
+
+      drawDataBox(w * 0.78, h * 0.12, [
+        { label: 'Interior Temp', value: insideActual.toFixed(1) + ' C', color: '#38bdf8' },
+        { label: 'Energy Cost', value: (120 - rNorm * 80).toFixed(0) + ' kWh/d', color: '#f59e0b' },
+        { label: 'Temp Variance', value: ((1 - rNorm) * 6).toFixed(1) + ' C', color: rNorm > 0.5 ? '#10b981' : '#fb7185' }
+      ]);
+
+      ctx.globalAlpha = 1;
+    }
+
+    /* ================================================================
+       HELPERS
+       ================================================================ */
+    function tempToColor(temp) {
+      // 12C = deep blue, 20C = teal, 26C = amber, 38C = hot red
+      var t = (temp - 12) / 26; // normalize 12-38 to 0-1
+      t = Math.max(0, Math.min(1, t));
+      var r, g, b;
+      if (t < 0.25) {
+        var s = t / 0.25;
+        r = Math.round(8 + s * 10);
+        g = Math.round(20 + s * 80);
+        b = Math.round(80 + s * 70);
+      } else if (t < 0.45) {
+        var s = (t - 0.25) / 0.2;
+        r = Math.round(18 + s * 20);
+        g = Math.round(100 + s * 80);
+        b = Math.round(150 - s * 50);
+      } else if (t < 0.65) {
+        var s = (t - 0.45) / 0.2;
+        r = Math.round(38 + s * 200);
+        g = Math.round(180 - s * 20);
+        b = Math.round(100 - s * 80);
+      } else {
+        var s = (t - 0.65) / 0.35;
+        r = Math.round(238 + s * 17);
+        g = Math.round(160 - s * 110);
+        b = Math.round(20 + s * 10);
+      }
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+
+    function drawTempLegend(x, y, height) {
+      var lw = 12;
+      for (var i = 0; i < height; i++) {
+        var temp = 38 - (i / height) * 26; // 38 at top, 12 at bottom
+        ctx.fillStyle = tempToColor(temp);
+        ctx.fillRect(x, y + i, lw, 1);
+      }
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('38 C', x + lw + 4, y + 8);
+      ctx.fillText('25 C', x + lw + 4, y + height * 0.5);
+      ctx.fillText('12 C', x + lw + 4, y + height - 2);
+    }
+
+    function drawDataBox(x, y, items) {
+      var boxW = 180;
+      var lineH = 18;
+      var boxH = items.length * lineH + 16;
+
+      ctx.fillStyle = 'rgba(4,8,16,0.75)';
+      ctx.fillRect(x, y, boxW, boxH);
+      ctx.strokeStyle = 'rgba(30,41,59,0.5)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y, boxW, boxH);
+
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var iy = y + 12 + i * lineH;
+        ctx.fillStyle = 'rgba(148,163,184,0.5)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.label, x + 10, iy);
+        ctx.fillStyle = item.color;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(item.value, x + boxW - 10, iy);
+      }
+      ctx.textAlign = 'left';
+    }
+
+    /* ================================================================
+       AUDIO ENGINE -- Cinematic ambient soundtrack
+       ================================================================ */
+    window.gwenDemoToggleAudio = function() {
+      if (audioPlaying) {
+        stopAudio();
+        document.getElementById('gwenDemoAudioBtn').style.color = '#94a3b8';
+      } else {
+        startAudio();
+        document.getElementById('gwenDemoAudioBtn').style.color = '#f59e0b';
+      }
+    };
+
+    function startAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      audioPlaying = true;
+
+      var master = audioCtx.createGain();
+      master.gain.value = 0;
+      master.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 4);
+      master.connect(audioCtx.destination);
+      audioNodes.push(master);
+
+      // Deep foundation drone -- cinematic rumble
+      function drone(freq, vol) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        var lfo = audioCtx.createOscillator();
+        var lfoG = audioCtx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.06 + Math.random() * 0.04;
+        lfoG.gain.value = vol * 0.3;
+        lfo.connect(lfoG); lfoG.connect(gain.gain);
+        lfo.start(); osc.connect(gain); gain.connect(master); osc.start();
+        audioNodes.push(osc, lfo, gain, lfoG);
+      }
+
+      // Foundation -- A1, E2, A2 (power fifths)
+      drone(55, 0.35);
+      drone(82.41, 0.22);
+      drone(110, 0.14);
+
+      // Mid-range tension -- suspended fourth (D3, G3)
+      drone(146.83, 0.06);
+      drone(196, 0.04);
+
+      // High shimmer pad
+      function pad(freq, vol) {
+        var o1 = audioCtx.createOscillator();
+        var o2 = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        o1.type = 'sawtooth'; o2.type = 'sawtooth';
+        o1.frequency.value = freq;
+        o2.frequency.value = freq * 1.004;
+        g.gain.value = vol;
+        var f = audioCtx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 700; f.Q.value = 0.5;
+        var flfo = audioCtx.createOscillator();
+        var flfoG = audioCtx.createGain();
+        flfo.type = 'sine'; flfo.frequency.value = 0.04;
+        flfoG.gain.value = 250;
+        flfo.connect(flfoG); flfoG.connect(f.frequency); flfo.start();
+        o1.connect(f); o2.connect(f); f.connect(g); g.connect(master);
+        o1.start(); o2.start();
+        audioNodes.push(o1, o2, flfo, g, flfoG, f);
+      }
+
+      pad(220, 0.035);
+      pad(329.63, 0.025);
+
+      // Ethereal chimes -- random high notes
+      var chimeNotes = [440, 523.25, 659.25, 783.99, 880, 1046.5];
+      function scheduleChime() {
+        if (!audioPlaying) return;
+        var freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
+        var osc = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 5);
+        osc.connect(g); g.connect(master);
+        osc.start(); osc.stop(audioCtx.currentTime + 5);
+        setTimeout(scheduleChime, 2500 + Math.random() * 5000);
+      }
+      setTimeout(scheduleChime, 2000);
+
+      // Low brass swell every ~15s (Star Wars feel)
+      function scheduleBrassSwell() {
+        if (!audioPlaying) return;
+        var osc1 = audioCtx.createOscillator();
+        var osc2 = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+        osc1.frequency.value = 73.42; // D2
+        osc2.frequency.value = 110; // A2
+        var f = audioCtx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 300;
+        g.gain.setValueAtTime(0, audioCtx.currentTime);
+        g.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 3);
+        g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 8);
+        osc1.connect(f); osc2.connect(f); f.connect(g); g.connect(master);
+        osc1.start(); osc2.start();
+        osc1.stop(audioCtx.currentTime + 8);
+        osc2.stop(audioCtx.currentTime + 8);
+        setTimeout(scheduleBrassSwell, 12000 + Math.random() * 8000);
+      }
+      setTimeout(scheduleBrassSwell, 5000);
+    }
+
+    function stopAudio() {
+      audioPlaying = false;
+      for (var i = 0; i < audioNodes.length; i++) {
+        try { if (audioNodes[i].stop) audioNodes[i].stop(); } catch(e) {}
+        try { if (audioNodes[i].disconnect) audioNodes[i].disconnect(); } catch(e) {}
+      }
+      audioNodes = [];
+    }
+
   })();
   </script>
 

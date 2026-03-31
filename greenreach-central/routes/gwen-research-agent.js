@@ -365,10 +365,10 @@ const GWEN_TOOL_CATALOG = {
       try {
         const hours = Math.min(params.hours_back || 24, 168);
         const result = await query(
-          `SELECT data_type, data_value, created_at FROM farm_data
+          `SELECT data_type, data, updated_at FROM farm_data
            WHERE farm_id = $1 AND data_type IN ('telemetry', 'env_snapshot', 'sensor_reading')
-           AND created_at > NOW() - INTERVAL '${hours} hours'
-           ORDER BY created_at DESC LIMIT 500`, [ctx.farmId]);
+           AND updated_at > NOW() - make_interval(hours => $2)
+           ORDER BY updated_at DESC LIMIT 500`, [ctx.farmId, hours]);
         return { ok: true, readings: result.rows, count: result.rows.length, hours_back: hours };
       } catch (err) { return { ok: false, error: err.message }; }
     },
@@ -390,10 +390,10 @@ const GWEN_TOOL_CATALOG = {
            AND data_types::text LIKE '%sensor%'`, [ctx.farmId]).catch(() => ({ rows: [] }));
         const hours = Math.min(params.hours_back || 24, 168);
         const result = await query(
-          `SELECT data_type, data_value, created_at FROM farm_data
+          `SELECT data_type, data, updated_at FROM farm_data
            WHERE farm_id = $1 AND data_type IN ('telemetry', 'env_snapshot')
-           AND created_at > NOW() - INTERVAL '${hours} hours'
-           ORDER BY created_at DESC LIMIT 200`, [params.target_farm_id]);
+           AND updated_at > NOW() - make_interval(hours => $2)
+           ORDER BY updated_at DESC LIMIT 200`, [params.target_farm_id, hours]);
         return {
           ok: true, readings: result.rows, count: result.rows.length,
           has_agreement: agreement.rows.length > 0,
@@ -3151,7 +3151,7 @@ const GWEN_TOOL_CATALOG = {
 
       try {
         const rowsResult = await query(
-          `SELECT DISTINCT ON (data_type) data_type, data_value, updated_at
+          `SELECT DISTINCT ON (data_type) data_type, data, updated_at
            FROM farm_data
            WHERE farm_id = $1 AND data_type IN ('devices', 'room_map', 'rooms')
            ORDER BY data_type, updated_at DESC`,
@@ -3159,11 +3159,14 @@ const GWEN_TOOL_CATALOG = {
         );
 
         const byType = new Map(rowsResult.rows.map((r) => [String(r.data_type), r]));
-        const devicesPayload = byType.get('devices')?.data_value || null;
-        const roomMapPayload = byType.get('room_map')?.data_value || null;
-        const roomsPayload = byType.get('rooms')?.data_value || null;
+        const devicesPayload = byType.get('devices')?.data || null;
+        const roomMapPayload = byType.get('room_map')?.data || null;
+        const roomsPayload = byType.get('rooms')?.data || null;
 
-        const devices = normalizeDevicePayload(devicesPayload).map(normalizeDeviceEntry);
+        let devices = normalizeDevicePayload(devicesPayload).map(normalizeDeviceEntry);
+        if (!devices.length && roomMapPayload && Array.isArray(roomMapPayload.devices)) {
+          devices = roomMapPayload.devices.map(normalizeDeviceEntry);
+        }
 
         const summaryByType = {};
         const summaryByProtocol = {};
@@ -3231,7 +3234,7 @@ const GWEN_TOOL_CATALOG = {
 
       try {
         const rowsResult = await query(
-          `SELECT DISTINCT ON (data_type) data_type, data_value, updated_at
+          `SELECT DISTINCT ON (data_type) data_type, data, updated_at
            FROM farm_data
            WHERE farm_id = $1 AND data_type IN ('rooms', 'room_map', 'groups')
            ORDER BY data_type, updated_at DESC`,
@@ -3239,9 +3242,9 @@ const GWEN_TOOL_CATALOG = {
         );
 
         const byType = new Map(rowsResult.rows.map((r) => [String(r.data_type), r]));
-        const roomsPayload = byType.get('rooms')?.data_value || null;
-        const roomMapPayload = byType.get('room_map')?.data_value || null;
-        const groupsPayload = byType.get('groups')?.data_value || null;
+        const roomsPayload = byType.get('rooms')?.data || null;
+        const roomMapPayload = byType.get('room_map')?.data || null;
+        const groupsPayload = byType.get('groups')?.data || null;
 
         const roomsNorm = normalizeFarmLayoutPayload(roomsPayload);
         const roomMapNorm = normalizeFarmLayoutPayload(roomMapPayload);
