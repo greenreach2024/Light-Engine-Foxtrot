@@ -2494,8 +2494,8 @@
 
     function drawDataBox(x, y, items) {
       var boxW = 220;
-      var lineH = 22;
-      var boxH = items.length * lineH + 16;
+      var rowH = 26;
+      var boxH = items.length * rowH + 10;
       ctx.fillStyle = 'rgba(4,8,16,0.75)';
       ctx.fillRect(x, y, boxW, boxH);
       ctx.strokeStyle = 'rgba(30,41,59,0.5)';
@@ -2503,13 +2503,13 @@
       ctx.strokeRect(x, y, boxW, boxH);
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
-        var iy = y + 12 + i * lineH;
+        var iy = y + 10 + i * rowH;
         ctx.fillStyle = 'rgba(148,163,184,0.5)';
-        ctx.font = '11px monospace'; ctx.textAlign = 'left';
+        ctx.font = '9px monospace'; ctx.textAlign = 'left';
         ctx.fillText(item.label, x + 10, iy);
         ctx.fillStyle = item.color;
-        ctx.font = '12px monospace'; ctx.textAlign = 'right';
-        ctx.fillText(item.value, x + boxW - 10, iy);
+        ctx.font = '11px monospace'; ctx.textAlign = 'left';
+        ctx.fillText(item.value, x + 10, iy + 13);
       }
       ctx.textAlign = 'left';
     }
