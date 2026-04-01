@@ -620,14 +620,17 @@
 
     // ── Card on file ───────────────────────────────────────────────────
 
+    _accountSquareCard: null,
+
     async loadCardOnFile() {
+      const noneEl = document.getElementById('card-on-file-none');
+      const infoEl = document.getElementById('card-on-file-info');
+      const addEl = document.getElementById('card-on-file-add');
+
       try {
         const { response, json } = await this.apiFetch('/api/wholesale/buyers/me/card');
         if (response.ok && json?.status === 'ok') {
           const cards = json.data.cards || [];
-          const noneEl = document.getElementById('card-on-file-none');
-          const infoEl = document.getElementById('card-on-file-info');
-          const addEl = document.getElementById('card-on-file-add');
           if (cards.length > 0) {
             const c = cards[0];
             document.getElementById('card-brand').textContent = c.brand || 'Card';
@@ -636,36 +639,68 @@
             if (noneEl) noneEl.style.display = 'none';
             if (infoEl) infoEl.style.display = '';
             if (addEl) addEl.style.display = 'none';
-            // Enable subscription button since card exists
             const subBtn = document.getElementById('create-subscription-btn');
             if (subBtn) subBtn.style.display = '';
-          } else {
-            if (noneEl) noneEl.style.display = '';
-            if (infoEl) infoEl.style.display = 'none';
-            if (addEl) addEl.style.display = '';
+            return;
           }
         }
       } catch (error) {
         console.error('Load card on file error:', error);
       }
+
+      // No card on file -- show the add-card form
+      if (noneEl) noneEl.style.display = '';
+      if (infoEl) infoEl.style.display = 'none';
+      if (addEl) addEl.style.display = '';
+
+      // Render the Square card input inside #sq-card-container
+      this._initAccountCardForm();
+    },
+
+    async _initAccountCardForm() {
+      const container = document.getElementById('sq-card-container');
+      if (!container || this._accountSquareCard) return;
+
+      if (!window.Square) {
+        container.innerHTML = '<p style="color:var(--warm-text-muted,#888);">Payment form unavailable. Refresh to retry.</p>';
+        return;
+      }
+
+      try {
+        // Fetch Square credentials from server (same as checkout flow)
+        const cfgRes = await fetch('/api/wholesale/payment/config');
+        const cfgJson = await cfgRes.json();
+        const appId = cfgJson?.data?.appId;
+        const locationId = cfgJson?.data?.locationId;
+
+        if (!appId || !locationId) {
+          container.innerHTML = '<p style="color:var(--warm-text-muted,#888);">Square payments not configured for this farm.</p>';
+          return;
+        }
+
+        const payments = window.Square.payments(appId, locationId);
+        this._accountSquareCard = await payments.card();
+        await this._accountSquareCard.attach('#sq-card-container');
+      } catch (err) {
+        console.error('Account card form init error:', err);
+        container.innerHTML = '<p style="color:var(--warm-text-muted,#888);">Could not load card form. Refresh to retry.</p>';
+      }
     },
 
     async saveCardOnFile() {
       if (!this.currentBuyer) return this.showAuthModal('sign-in');
+      if (!this._accountSquareCard) {
+        this.showToast('Card form not ready. Please wait and try again.', 'error');
+        return;
+      }
+
       const btn = document.getElementById('save-card-btn');
       if (btn) btn.disabled = true;
 
       try {
-        if (!window.Square) {
-          this.showToast('Square payments not loaded', 'error');
-          return;
-        }
-        const payments = window.Square.payments(window.SQUARE_APP_ID, window.SQUARE_LOCATION_ID);
-        const card = await payments.card();
-        await card.attach('#sq-card-container');
-        const tokenResult = await card.tokenize();
+        const tokenResult = await this._accountSquareCard.tokenize();
         if (tokenResult.status !== 'OK') {
-          this.showToast('Card verification failed', 'error');
+          this.showToast('Card verification failed: ' + (tokenResult.errors?.[0]?.message || 'Please check your card details'), 'error');
           return;
         }
 
@@ -676,6 +711,9 @@
 
         if (response.ok && json?.status === 'ok') {
           this.showToast('Card saved on file', 'success');
+          // Destroy the form card instance and reload
+          try { this._accountSquareCard.destroy(); } catch (_) {}
+          this._accountSquareCard = null;
           this.loadCardOnFile();
         } else {
           this.showToast(json?.message || 'Failed to save card', 'error');
