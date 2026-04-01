@@ -3975,7 +3975,6 @@ function renderOrderCard(order) {
         </div>
     `;
 }
-}
 
 /**
  * Update order status
