@@ -159,21 +159,27 @@ router.get('/order-events', async (req, res) => {
     if (await isDatabaseAvailable()) {
       try {
         const result = await query(
-          `SELECT id, farm_id, status, buyer_email, delivery_date, total_amount, created_at, updated_at
+          `SELECT id, master_order_id, farm_id, status, buyer_email, delivery_date, total_amount, order_data, created_at, updated_at
            FROM wholesale_orders
            WHERE ($1::text IS NULL OR farm_id = $1)
            ORDER BY updated_at DESC LIMIT 50`,
           [farmId]
         );
-        events = result.rows.map(o => ({
-          order_id: o.id,
-          farm_id: o.farm_id,
-          event: o.status,
-          buyer: o.buyer_email,
-          deliveryDate: o.delivery_date,
-          amount: o.total_amount,
-          timestamp: o.updated_at || o.created_at,
-        }));
+        events = result.rows.map(o => {
+          const data = o.order_data || {};
+          const subOrder = (data.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+          return {
+            order_id: o.master_order_id || String(o.id),
+            farm_id: o.farm_id,
+            event: o.status,
+            buyer: o.buyer_email || data.buyer_account?.businessName || '',
+            deliveryDate: o.delivery_date || data.delivery_date,
+            amount: o.total_amount,
+            total_amount: o.total_amount,
+            items: subOrder.items || data.farm_sub_orders?.[0]?.items || [],
+            timestamp: o.updated_at || o.created_at,
+          };
+        });
       } catch {
         // wholesale_orders table may not exist
       }

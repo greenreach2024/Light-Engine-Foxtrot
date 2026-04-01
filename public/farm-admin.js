@@ -3749,6 +3749,7 @@ async function refreshWholesaleOrders() {
  * Render individual order card
  */
 function renderOrderCard(order) {
+    const oid = String(order.order_id || '');
     const statusConfig = {
         'pending': { label: 'Pending', color: '#f59e0b', icon: '' },
         'packed': { label: 'Packed', color: '#8b5cf6', icon: '' },
@@ -3762,7 +3763,7 @@ function renderOrderCard(order) {
     const total = order.total_amount || 0;
     
     return `
-        <div class="wholesale-order-card" data-order-id="${order.order_id}" style="
+        <div class="wholesale-order-card" data-order-id="${oid}" style="
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -3772,7 +3773,7 @@ function renderOrderCard(order) {
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                 <div>
                     <h3 style="color: var(--text-primary); margin-bottom: 0.25rem;">
-                        ${config.icon} Order #${order.order_id.slice(-8)}
+                        ${config.icon} Order #${oid.slice(-8) || oid}
                     </h3>
                     <p style="color: var(--text-muted); font-size: 0.9rem;">${orderDate}</p>
                 </div>
@@ -3808,7 +3809,7 @@ function renderOrderCard(order) {
             
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 ${order.status === 'pending' ? `
-                    <button class="btn-primary" onclick="updateOrderStatus('${order.order_id}', 'packed')" style="
+                    <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'packed')" style="
                         background: rgba(139, 92, 246, 0.2);
                         border: 1px solid #8b5cf6;
                         color: #c4b5fd;
@@ -3821,7 +3822,7 @@ function renderOrderCard(order) {
                     </button>
                 ` : ''}
                 ${order.status === 'packed' ? `
-                    <button class="btn-primary" onclick="updateOrderStatus('${order.order_id}', 'shipped')" style="
+                    <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'shipped')" style="
                         background: rgba(59, 130, 246, 0.2);
                         border: 1px solid #3b82f6;
                         color: #93c5fd;
@@ -3832,7 +3833,7 @@ function renderOrderCard(order) {
                     ">
                          Mark as Shipped
                     </button>
-                    <button class="btn-secondary" onclick="addTrackingNumber('${order.order_id}')" style="
+                    <button class="btn-secondary" onclick="addTrackingNumber('${oid}')" style="
                         background: rgba(107, 114, 128, 0.2);
                         border: 1px solid #6b7280;
                         color: #9ca3af;
@@ -3855,7 +3856,7 @@ function renderOrderCard(order) {
                          Tracking: ${order.tracking_number}
                     </div>
                 ` : ''}
-                <button class="btn-secondary" onclick="printPackingSlip('${order.order_id}')" style="
+                <button class="btn-secondary" onclick="printPackingSlip('${oid}')" style="
                     background: rgba(107, 114, 128, 0.2);
                     border: 1px solid #6b7280;
                     color: #9ca3af;
