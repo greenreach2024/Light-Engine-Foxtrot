@@ -3760,7 +3760,7 @@ function renderOrderCard(order) {
     const config = statusConfig[order.status] || statusConfig['pending'];
     const orderDate = new Date(order.timestamp).toLocaleString();
     const items = order.items || [];
-    const total = order.total_amount || 0;
+    const total = parseFloat(order.total_amount) || 0;
     
     return `
         <div class="wholesale-order-card" data-order-id="${oid}" style="
@@ -3797,7 +3797,7 @@ function renderOrderCard(order) {
                             ${item.product_name || item.sku_id}
                         </span>
                         <span style="color: var(--text-secondary);">
-                            ${item.quantity} × $${item.price_per_unit?.toFixed(2) || '0.00'}
+                            ${item.quantity} × $${parseFloat(item.price_per_unit || 0).toFixed(2) || '0.00'}
                         </span>
                     </div>
                 `).join('')}
