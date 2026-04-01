@@ -32,6 +32,7 @@ import {
   transitionFulfillmentStatus,
   promoteOrderStatus
 } from '../services/orderStateMachine.js';
+import emailService from '../services/email-service.js';
 
 const router = Router();
 
@@ -168,16 +169,34 @@ router.get('/order-events', async (req, res) => {
         events = result.rows.map(o => {
           const data = o.order_data || {};
           const subOrder = (data.farm_sub_orders || []).find(s => s.farm_id === farmId) || {};
+          const buyer = data.buyer_account || {};
+          const addr = data.delivery_address || {};
+          const fm = String(data.fulfillment_method || 'delivery').toLowerCase();
           return {
             order_id: o.master_order_id || String(o.id),
             farm_id: o.farm_id,
             event: o.status,
-            buyer: o.buyer_email || data.buyer_account?.businessName || '',
-            deliveryDate: o.delivery_date || data.delivery_date,
+            status: o.status,
+            buyer_name: buyer.businessName || buyer.business_name || buyer.contactName || buyer.contact_name || '',
+            buyer_email: o.buyer_email || buyer.email || '',
+            buyer_phone: buyer.phone || buyer.contactPhone || '',
+            buyer_city: addr.city || buyer.city || '',
+            buyer_state: addr.state || addr.province || buyer.state || '',
+            delivery_date: o.delivery_date || data.delivery_date || null,
+            delivery_address: addr.street
+              ? `${addr.street}, ${addr.city || ''} ${addr.state || addr.province || ''} ${addr.zip || addr.postal_code || ''}`.trim()
+              : '',
+            fulfillment_method: fm,
+            po_number: data.po_number || '',
             amount: o.total_amount,
             total_amount: o.total_amount,
             items: subOrder.items || data.farm_sub_orders?.[0]?.items || [],
             timestamp: o.updated_at || o.created_at,
+            created_at: o.created_at,
+            certifications_required: buyer.certifications_required || data.certifications_required || [],
+            gap_certified: buyer.gap_certified || data.gap_certified || false,
+            notes: data.notes || buyer.notes || '',
+            notifications: data.notifications || [],
           };
         });
       } catch {
@@ -425,11 +444,94 @@ router.post('/order-status', requireFarmApiKey, async (req, res) => {
 
       console.log(`Updated order ${order_id} status to ${status}`);
 
+      // Send buyer email notification on meaningful status transitions
+      let notification = null;
+      const notifyStatuses = ['confirmed', 'packed', 'shipped', 'delivered'];
+      const buyerEmail = order.buyer_email || order.order_data?.buyer_account?.email || '';
+      if (buyerEmail && notifyStatuses.includes(status)) {
+        try {
+          const buyerName = order.order_data?.buyer_account?.contactName
+                         || order.order_data?.buyer_account?.businessName
+                         || 'Valued Customer';
+          const statusLabels = {
+            confirmed: 'Confirmed',
+            packed: 'Packed and Ready',
+            shipped: 'Shipped',
+            delivered: 'Delivered'
+          };
+          const deliveryDate = order.delivery_date || order.order_data?.delivery_date || '';
+          const fulfillment = String(order.order_data?.fulfillment_method || 'delivery').toLowerCase();
+          const addr = order.order_data?.delivery_address || {};
+          const addrLine = addr.street
+            ? `${addr.street}, ${addr.city || ''} ${addr.state || ''} ${addr.zip || ''}`
+            : '';
+          const poNum = order.order_data?.po_number || '';
+
+          const subject = `Order ${order.master_order_id || order_id} - ${statusLabels[status] || status}`;
+          const textLines = [
+            `Hello ${buyerName},`,
+            '',
+            `Your order ${order.master_order_id || order_id} has been updated to: ${statusLabels[status] || status}.`,
+          ];
+          if (poNum) textLines.push(`PO Number: ${poNum}`);
+          if (deliveryDate) textLines.push(`Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} Date: ${new Date(deliveryDate).toLocaleDateString()}`);
+          if (addrLine && fulfillment !== 'pickup') textLines.push(`Delivery Address: ${addrLine}`);
+          textLines.push('');
+          if (status === 'packed') textLines.push('Your order has been packed and is ready for ' + (fulfillment === 'pickup' ? 'pickup.' : 'shipment.'));
+          if (status === 'shipped') textLines.push('Your order is on its way!');
+          if (status === 'delivered') textLines.push('Your order has been delivered. Thank you for your business!');
+          textLines.push('', 'If you have questions, reply to this email or contact us directly.', '', '-- GreenReach Wholesale');
+
+          const htmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2d5016;">Order Update: ${statusLabels[status] || status}</h2>
+              <p>Hello ${buyerName},</p>
+              <p>Your order <strong>${order.master_order_id || order_id}</strong> has been updated to: <strong>${statusLabels[status] || status}</strong>.</p>
+              ${poNum ? `<p><strong>PO Number:</strong> ${poNum}</p>` : ''}
+              ${deliveryDate ? `<p><strong>Scheduled ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>` : ''}
+              ${addrLine && fulfillment !== 'pickup' ? `<p><strong>Delivery Address:</strong> ${addrLine}</p>` : ''}
+              ${status === 'packed' ? `<p>Your order has been packed and is ready for ${fulfillment === 'pickup' ? 'pickup' : 'shipment'}.</p>` : ''}
+              ${status === 'shipped' ? '<p>Your order is on its way!</p>' : ''}
+              ${status === 'delivered' ? '<p>Your order has been delivered. Thank you for your business!</p>' : ''}
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;" />
+              <p style="color: #666; font-size: 0.9em;">If you have questions, reply to this email or contact us directly.</p>
+              <p style="color: #666; font-size: 0.9em;">-- GreenReach Wholesale</p>
+            </div>`;
+
+          await emailService.sendEmail({
+            to: buyerEmail,
+            subject,
+            text: textLines.join('\n'),
+            html: htmlBody,
+            farmId: farm_id || order.farm_id
+          });
+
+          notification = {
+            sent_to: buyerEmail,
+            sent_at: new Date().toISOString(),
+            status_notified: status,
+            subject
+          };
+          console.log(`[Buyer Notify] Email sent to ${buyerEmail} for order ${order_id} -> ${status}`);
+        } catch (emailErr) {
+          console.error(`[Buyer Notify] Failed to send email to ${buyerEmail}:`, emailErr.message);
+          notification = { sent_to: buyerEmail, error: emailErr.message, sent_at: new Date().toISOString() };
+        }
+      }
+
+      // Persist notification record on the order
+      if (notification) {
+        if (!order.notifications) order.notifications = [];
+        order.notifications.push(notification);
+        await saveOrder(order).catch(() => {});
+      }
+
       return res.json({
         status: 'ok',
         message: 'Order status updated',
         order_id: order.master_order_id,
-        new_status: order.fulfillment_status
+        new_status: order.fulfillment_status,
+        notification
       });
     } else {
       console.warn(`Order ${order_id} not found in Central registry`);

@@ -69,8 +69,9 @@ export function transitionOrderStatus(order, newStatus) {
  * @throws {Error} If the transition is invalid
  */
 export function transitionFulfillmentStatus(order, newStatus) {
-  // Normalize legacy single-L 'canceled' to 'cancelled'
-  const normalized = newStatus === 'canceled' ? 'cancelled' : newStatus;
+  // Normalize farm-facing statuses to fulfillment statuses
+  const FARM_TO_FULFILLMENT = { 'confirmed': 'processing', 'packed': 'fulfilled', 'canceled': 'cancelled' };
+  const normalized = FARM_TO_FULFILLMENT[newStatus] || newStatus;
   const current = order.fulfillment_status || 'pending';
   const currentNorm = current === 'canceled' ? 'cancelled' : current;
   const allowed = FULFILLMENT_TRANSITIONS[currentNorm];

@@ -3722,7 +3722,7 @@ async function refreshWholesaleOrders() {
             if (!orderMap.has(orderId)) {
                 orderMap.set(orderId, {
                     ...event,
-                    status: statusData[orderId] || 'pending',
+                    status: statusData[orderId] || event.status || event.event || 'pending',
                     tracking_number: trackingData[orderId] || null
                 });
             }
@@ -3751,17 +3751,46 @@ async function refreshWholesaleOrders() {
 function renderOrderCard(order) {
     const oid = String(order.order_id || '');
     const statusConfig = {
-        'pending': { label: 'Pending', color: '#f59e0b', icon: '' },
-        'packed': { label: 'Packed', color: '#8b5cf6', icon: '' },
-        'shipped': { label: 'Shipped', color: '#3b82f6', icon: '' },
-        'delivered': { label: 'Delivered', color: '#10b981', icon: '' }
+        'pending':   { label: 'Pending',   color: '#f59e0b' },
+        'confirmed': { label: 'Confirmed', color: '#06b6d4' },
+        'processing': { label: 'Confirmed', color: '#06b6d4' },
+        'packed':    { label: 'Packed',    color: '#8b5cf6' },
+        'shipped':   { label: 'Shipped',   color: '#3b82f6' },
+        'delivered': { label: 'Delivered', color: '#10b981' }
     };
-    
+
     const config = statusConfig[order.status] || statusConfig['pending'];
     const orderDate = new Date(order.timestamp).toLocaleString();
+    const createdDate = order.created_at ? new Date(order.created_at).toLocaleString() : orderDate;
     const items = order.items || [];
     const total = parseFloat(order.total_amount) || 0;
-    
+
+    // Buyer info
+    const buyerName = order.buyer_name || '';
+    const buyerEmail = order.buyer_email || '';
+    const buyerPhone = order.buyer_phone || '';
+    const buyerLocation = [order.buyer_city, order.buyer_state].filter(Boolean).join(', ');
+
+    // Fulfillment details
+    const fm = order.fulfillment_method || 'delivery';
+    const isPickup = fm === 'pickup';
+    const fmLabel = isPickup ? 'Pickup' : 'Delivery';
+    const deliveryDate = order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const deliveryAddr = order.delivery_address || '';
+    const poNumber = order.po_number || '';
+    const notes = order.notes || '';
+
+    // GAP / Certification
+    const gapCertified = order.gap_certified;
+    const certsRequired = order.certifications_required || [];
+
+    // Notifications
+    const notifications = order.notifications || [];
+
+    // Store order data globally for packing slip access
+    if (!window._wholesaleOrderCache) window._wholesaleOrderCache = {};
+    window._wholesaleOrderCache[oid] = order;
+
     return `
         <div class="wholesale-order-card" data-order-id="${oid}" style="
             background: var(--bg-card);
@@ -3770,45 +3799,120 @@ function renderOrderCard(order) {
             padding: 1.5rem;
             margin-bottom: 1rem;
         ">
+            <!-- HEADER -->
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                 <div>
                     <h3 style="color: var(--text-primary); margin-bottom: 0.25rem;">
-                        ${config.icon} Order #${oid.slice(-8) || oid}
+                        Order #${oid.slice(-8) || oid}
                     </h3>
-                    <p style="color: var(--text-muted); font-size: 0.9rem;">${orderDate}</p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">Placed: ${createdDate}</p>
+                    ${poNumber ? `<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 2px;">PO: ${poNumber}</p>` : ''}
                 </div>
                 <div style="
-                    background: ${config.color}33;
+                    background: ${config.color}22;
                     border: 1px solid ${config.color};
                     color: ${config.color};
                     padding: 0.5rem 1rem;
                     border-radius: 6px;
                     font-weight: 600;
+                    font-size: 0.9rem;
                 ">
                     ${config.label}
                 </div>
             </div>
-            
-            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
-                <h4 style="color: var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.9rem;">Order Items</h4>
+
+            <!-- BUYER INFO -->
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Buyer Details</h4>
+                ${buyerName ? `<div style="color: var(--text-primary); font-weight: 600; font-size: 1rem; margin-bottom: 4px;">${buyerName}</div>` : ''}
+                ${buyerEmail ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Email: ${buyerEmail}</div>` : ''}
+                ${buyerPhone ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Phone: ${buyerPhone}</div>` : ''}
+                ${buyerLocation ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Location: ${buyerLocation}</div>` : ''}
+                ${!buyerName && !buyerEmail ? '<div style="color: var(--text-muted); font-style: italic;">No buyer details available</div>' : ''}
+            </div>
+
+            <!-- FULFILLMENT DETAILS -->
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">${fmLabel} Details</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Method</span>
+                        <div style="color: var(--text-primary); font-weight: 600;">${fmLabel}</div>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Scheduled Date</span>
+                        <div style="color: var(--text-primary); font-weight: 600;">${deliveryDate || 'Not scheduled'}</div>
+                    </div>
+                    ${!isPickup && deliveryAddr ? `
+                    <div style="grid-column: 1 / -1;">
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Delivery Address</span>
+                        <div style="color: var(--text-primary);">${deliveryAddr}</div>
+                    </div>` : ''}
+                    ${isPickup ? `
+                    <div style="grid-column: 1 / -1;">
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">Pickup Location</span>
+                        <div style="color: var(--text-primary);">Farm / Warehouse (confirm with buyer)</div>
+                    </div>` : ''}
+                </div>
+                ${notes ? `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);"><span style="color: var(--text-muted); font-size: 0.8rem;">Notes:</span> <span style="color: var(--text-secondary);">${notes}</span></div>` : ''}
+            </div>
+
+            <!-- GAP / CERTIFICATIONS -->
+            ${gapCertified || certsRequired.length > 0 ? `
+            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                <h4 style="color: #10b981; margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Certifications / Compliance</h4>
+                ${gapCertified ? '<div style="color: var(--text-primary); margin-bottom: 4px;">[GAP Certified] Good Agricultural Practices verified</div>' : ''}
+                ${certsRequired.length > 0 ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">Required: ${certsRequired.join(', ')}</div>` : ''}
+            </div>` : ''}
+
+            <!-- ORDER ITEMS -->
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Order Items (${items.length})</h4>
                 ${items.map(item => `
                     <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
-                        <span style="color: var(--text-primary);">
-                            ${item.product_name || item.sku_id}
-                        </span>
+                        <div>
+                            <span style="color: var(--text-primary); font-weight: 500;">${item.product_name || item.sku_id || 'Unknown Item'}</span>
+                            ${item.lot_id ? `<span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 8px;">Lot: ${item.lot_id}</span>` : ''}
+                        </div>
                         <span style="color: var(--text-secondary);">
-                            ${item.quantity} × $${parseFloat(item.price_per_unit || 0).toFixed(2) || '0.00'}
+                            ${item.quantity} x $${parseFloat(item.price_per_unit || 0).toFixed(2)}
                         </span>
                     </div>
                 `).join('')}
-                <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; margin-top: 0.5rem; font-weight: 600;">
+                <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; margin-top: 0.25rem; font-weight: 600;">
                     <span style="color: var(--text-primary);">Total</span>
                     <span style="color: var(--accent-green);">$${total.toFixed(2)}</span>
                 </div>
             </div>
-            
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+
+            <!-- NOTIFICATION LOG -->
+            ${notifications.length > 0 ? `
+            <div style="background: var(--bg-secondary); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.75rem;">
+                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Notifications Sent</h4>
+                ${notifications.map(n => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;">
+                        <span style="color: var(--text-secondary);">${n.status_notified || 'status update'} -- ${n.sent_to || ''}</span>
+                        <span style="color: var(--text-muted);">${n.sent_at ? new Date(n.sent_at).toLocaleString() : ''}${n.error ? ' (failed)' : ''}</span>
+                    </div>
+                `).join('')}
+            </div>` : ''}
+
+            <!-- ACTIONS -->
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
                 ${order.status === 'pending' ? `
+                    <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'confirmed')" style="
+                        background: rgba(6, 182, 212, 0.2);
+                        border: 1px solid #06b6d4;
+                        color: #67e8f9;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">
+                        Accept Order
+                    </button>
+                ` : ''}
+                ${(order.status === 'confirmed' || order.status === 'processing') ? `
                     <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'packed')" style="
                         background: rgba(139, 92, 246, 0.2);
                         border: 1px solid #8b5cf6;
@@ -3818,7 +3922,7 @@ function renderOrderCard(order) {
                         cursor: pointer;
                         font-weight: 600;
                     ">
-                         Mark as Packed
+                        Mark as Packed
                     </button>
                 ` : ''}
                 ${order.status === 'packed' ? `
@@ -3831,7 +3935,7 @@ function renderOrderCard(order) {
                         cursor: pointer;
                         font-weight: 600;
                     ">
-                         Mark as Shipped
+                        Mark as Shipped
                     </button>
                     <button class="btn-secondary" onclick="addTrackingNumber('${oid}')" style="
                         background: rgba(107, 114, 128, 0.2);
@@ -3841,7 +3945,7 @@ function renderOrderCard(order) {
                         border-radius: 6px;
                         cursor: pointer;
                     ">
-                         Add Tracking #
+                        Add Tracking #
                     </button>
                 ` : ''}
                 ${order.tracking_number ? `
@@ -3852,8 +3956,9 @@ function renderOrderCard(order) {
                         padding: 0.5rem 1rem;
                         border-radius: 6px;
                         font-weight: 600;
+                        font-size: 0.9rem;
                     ">
-                         Tracking: ${order.tracking_number}
+                        Tracking: ${order.tracking_number}
                     </div>
                 ` : ''}
                 <button class="btn-secondary" onclick="printPackingSlip('${oid}')" style="
@@ -3864,34 +3969,44 @@ function renderOrderCard(order) {
                     border-radius: 6px;
                     cursor: pointer;
                 ">
-                    ️ Print Packing Slip
+                    Print Packing Slip
                 </button>
             </div>
         </div>
     `;
+}
 }
 
 /**
  * Update order status
  */
 async function updateOrderStatus(orderId, newStatus) {
-    console.log(` Updating order ${orderId} to status: ${newStatus}`);
-    
+    console.log(`Updating order ${orderId} to status: ${newStatus}`);
+
     try {
         // Load current statuses
         const statusData = await loadOrderStatuses();
         statusData[orderId] = newStatus;
-        
+
         // Save updated statuses
         await saveOrderStatuses(statusData);
-        
-        // Notify Central via callback endpoint
-        await notifyCentralOfStatusChange(orderId, newStatus);
-        
+
+        // Notify Central via callback endpoint (Central sends buyer email)
+        const result = await notifyCentralOfStatusChange(orderId, newStatus);
+
         // Refresh display
         await refreshWholesaleOrders();
-        
-        showToast(`Order marked as ${newStatus}`, 'success');
+
+        // Show notification result
+        if (result && result.notification && result.notification.sent_to) {
+            if (result.notification.error) {
+                showToast(`Order marked as ${newStatus}. Buyer email to ${result.notification.sent_to} failed.`, 'info');
+            } else {
+                showToast(`Order marked as ${newStatus}. Buyer notified at ${result.notification.sent_to}.`, 'success');
+            }
+        } else {
+            showToast(`Order marked as ${newStatus}`, 'success');
+        }
     } catch (error) {
         console.error('Failed to update order status:', error);
         showToast('Failed to update order status', 'error');
@@ -3941,50 +4056,145 @@ async function addTrackingNumber(orderId) {
  * Print packing slip for order
  */
 function printPackingSlip(orderId) {
-    console.log(`️ Printing packing slip for order ${orderId}`);
-    
-    // Find order data
-    const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
-    if (!orderCard) {
-        showToast('Order not found', 'error');
+    console.log(`Printing packing slip for order ${orderId}`);
+
+    // Retrieve enriched order data from cache
+    const order = (window._wholesaleOrderCache || {})[orderId];
+    if (!order) {
+        showToast('Order data not found. Please refresh orders first.', 'error');
         return;
     }
-    
-    // Open print view in new window
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
+
+    const items = order.items || [];
+    const total = parseFloat(order.total_amount) || 0;
+    const buyerName = order.buyer_name || 'N/A';
+    const buyerEmail = order.buyer_email || '';
+    const buyerPhone = order.buyer_phone || '';
+    const buyerLocation = [order.buyer_city, order.buyer_state].filter(Boolean).join(', ');
+    const fm = order.fulfillment_method || 'delivery';
+    const isPickup = fm === 'pickup';
+    const fmLabel = isPickup ? 'Pickup' : 'Delivery';
+    const deliveryDate = order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Not scheduled';
+    const deliveryAddr = order.delivery_address || '';
+    const poNumber = order.po_number || '';
+    const notes = order.notes || '';
+    const gapCertified = order.gap_certified;
+    const certsRequired = order.certifications_required || [];
+    const notifications = order.notifications || [];
+    const orderDate = order.created_at ? new Date(order.created_at).toLocaleString() : new Date(order.timestamp).toLocaleString();
+
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
             <title>Packing Slip - ${orderId}</title>
             <style>
-                body { font-family: Arial, sans-serif; padding: 2rem; }
-                h1 { border-bottom: 2px solid #000; padding-bottom: 0.5rem; }
-                .header { margin-bottom: 2rem; }
-                .items { margin: 2rem 0; }
-                .item { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #ccc; }
-                .footer { margin-top: 3rem; font-size: 0.9rem; color: #666; }
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: Arial, Helvetica, sans-serif; padding: 1.5rem; color: #222; font-size: 13px; }
+                h1 { font-size: 20px; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 12px; }
+                h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; color: #555; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin: 16px 0 8px; }
+                .row { display: flex; justify-content: space-between; padding: 3px 0; }
+                .row-label { color: #666; }
+                .row-value { font-weight: 600; }
+                .section { margin-bottom: 12px; }
+                table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+                th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #ddd; }
+                th { background: #f5f5f5; font-size: 12px; text-transform: uppercase; }
+                .total-row td { font-weight: 700; border-top: 2px solid #333; }
+                .cert-badge { display: inline-block; background: #e6f9f0; border: 1px solid #10b981; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+                .notif-row { font-size: 11px; color: #666; padding: 2px 0; }
+                .footer { margin-top: 24px; border-top: 1px solid #999; padding-top: 12px; }
+                .sig-line { border-bottom: 1px solid #999; width: 200px; display: inline-block; margin-left: 8px; }
+                @media print { body { padding: 0.5in; } }
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>Packing Slip</h1>
-                <p>Order ID: ${orderId}</p>
-                <p>Date: ${new Date().toLocaleDateString()}</p>
+            <h1>Packing Slip</h1>
+
+            <div class="section">
+                <div class="row">
+                    <span class="row-label">Order ID:</span>
+                    <span class="row-value">${orderId}</span>
+                </div>
+                <div class="row">
+                    <span class="row-label">Order Date:</span>
+                    <span class="row-value">${orderDate}</span>
+                </div>
+                <div class="row">
+                    <span class="row-label">Status:</span>
+                    <span class="row-value">${order.status || 'pending'}</span>
+                </div>
+                ${poNumber ? `<div class="row"><span class="row-label">PO Number:</span><span class="row-value">${poNumber}</span></div>` : ''}
             </div>
-            <div class="items">
-                ${orderCard.innerHTML}
+
+            <h2>Buyer Information</h2>
+            <div class="section">
+                <div class="row"><span class="row-label">Business / Name:</span><span class="row-value">${buyerName}</span></div>
+                ${buyerEmail ? `<div class="row"><span class="row-label">Email:</span><span class="row-value">${buyerEmail}</span></div>` : ''}
+                ${buyerPhone ? `<div class="row"><span class="row-label">Phone:</span><span class="row-value">${buyerPhone}</span></div>` : ''}
+                ${buyerLocation ? `<div class="row"><span class="row-label">Location:</span><span class="row-value">${buyerLocation}</span></div>` : ''}
             </div>
+
+            <h2>${fmLabel} Details</h2>
+            <div class="section">
+                <div class="row"><span class="row-label">Method:</span><span class="row-value">${fmLabel}</span></div>
+                <div class="row"><span class="row-label">Scheduled Date:</span><span class="row-value">${deliveryDate}</span></div>
+                ${!isPickup && deliveryAddr ? `<div class="row"><span class="row-label">Address:</span><span class="row-value">${deliveryAddr}</span></div>` : ''}
+                ${notes ? `<div class="row"><span class="row-label">Notes:</span><span class="row-value">${notes}</span></div>` : ''}
+            </div>
+
+            ${gapCertified || certsRequired.length > 0 ? `
+            <h2>Certifications / Compliance</h2>
+            <div class="section">
+                ${gapCertified ? '<div><span class="cert-badge">GAP Certified</span> Good Agricultural Practices verified</div>' : ''}
+                ${certsRequired.length > 0 ? `<div style="margin-top: 4px;">Required: ${certsRequired.join(', ')}</div>` : ''}
+            </div>` : ''}
+
+            <h2>Items</h2>
+            <table>
+                <thead>
+                    <tr><th>Product</th><th>Lot</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr>
+                </thead>
+                <tbody>
+                    ${items.map(item => {
+                        const qty = parseFloat(item.quantity) || 0;
+                        const price = parseFloat(item.price_per_unit) || 0;
+                        return `<tr>
+                            <td>${item.product_name || item.sku_id || 'N/A'}</td>
+                            <td>${item.lot_id || '-'}</td>
+                            <td>${qty}</td>
+                            <td>$${price.toFixed(2)}</td>
+                            <td>$${(qty * price).toFixed(2)}</td>
+                        </tr>`;
+                    }).join('')}
+                    <tr class="total-row"><td colspan="4">Total</td><td>$${total.toFixed(2)}</td></tr>
+                </tbody>
+            </table>
+
+            ${notifications.length > 0 ? `
+            <h2>Notification Log</h2>
+            <div class="section">
+                ${notifications.map(n => `
+                    <div class="notif-row">
+                        ${n.status_notified || 'update'} notification sent to ${n.sent_to || 'N/A'}
+                        at ${n.sent_at ? new Date(n.sent_at).toLocaleString() : 'unknown'}${n.error ? ' (FAILED: ' + n.error + ')' : ''}
+                    </div>
+                `).join('')}
+            </div>` : ''}
+
             <div class="footer">
-                <p>Packed by: _____________________</p>
-                <p>Date: _____________________</p>
+                <p>Packed by: <span class="sig-line"></span></p>
+                <p style="margin-top: 8px;">Pack Date: <span class="sig-line"></span></p>
+                <p style="margin-top: 8px;">Verified by: <span class="sig-line"></span></p>
             </div>
+
             <script>
                 window.onload = () => {
                     window.print();
-                    setTimeout(() => window.close(), 1000);
+                    setTimeout(() => window.close(), 1500);
                 };
-            </script>
+            <\/script>
         </body>
         </html>
     `);
@@ -4027,13 +4237,16 @@ async function notifyCentralOfStatusChange(orderId, newStatus) {
         });
         
         if (response.ok) {
-            console.log(` Notified Central of status change: ${orderId} → ${newStatus}`);
+            const result = await response.json().catch(() => ({}));
+            console.log(`Notified Central of status change: ${orderId} -> ${newStatus}`);
+            return result;
         } else {
-            console.warn(` Central notification failed (${response.status}), status saved locally`);
+            console.warn(`Central notification failed (${response.status}), status saved locally`);
+            return null;
         }
     } catch (error) {
         console.warn('[Status Callback] Failed to notify Central:', error.message);
-        // Non-blocking: status was already saved locally
+        return null;
     }
 }
 

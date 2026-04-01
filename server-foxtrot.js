@@ -8100,20 +8100,39 @@ app.get('/api/wholesale/order-events', async (req, res) => {
     // Get all sub-orders for this farm (no status filter = all orders)
     const subOrders = await orderStore.listFarmSubOrders(farmId);
 
-    const events = subOrders.map(sub => ({
-      order_id: sub.sub_order_id || sub._id || sub.id,
-      master_order_id: sub.wholesale_order_id || sub.master_order_id,
-      farm_id: sub.farm_id,
-      farm_name: sub.farm_name,
-      status: sub.status || 'pending',
-      timestamp: sub.created_at || sub.updated_at || new Date().toISOString(),
-      items: sub.items || [],
-      total_amount: sub.sub_total || 0,
-      buyer_name: sub.buyer_name || '',
-      buyer_email: sub.buyer_email || '',
-      delivery_address: sub.delivery_address || '',
-      verification_deadline: sub.verification_deadline || null
-    }));
+    const events = subOrders.map(sub => {
+      const data = sub.order_data || {};
+      const buyer = data.buyer_account || {};
+      const addr = data.delivery_address || {};
+      const addrStr = typeof sub.delivery_address === 'string' ? sub.delivery_address
+        : (addr.street ? `${addr.street}, ${addr.city || ''} ${addr.state || addr.province || ''} ${addr.zip || addr.postal_code || ''}`.trim() : '');
+      const fm = String(data.fulfillment_method || sub.fulfillment_method || 'delivery').toLowerCase();
+      return {
+        order_id: sub.sub_order_id || sub._id || sub.id,
+        master_order_id: sub.wholesale_order_id || sub.master_order_id,
+        farm_id: sub.farm_id,
+        farm_name: sub.farm_name,
+        status: sub.status || 'pending',
+        timestamp: sub.created_at || sub.updated_at || new Date().toISOString(),
+        created_at: sub.created_at || null,
+        items: sub.items || [],
+        total_amount: sub.sub_total || 0,
+        buyer_name: sub.buyer_name || buyer.businessName || buyer.business_name || buyer.contactName || '',
+        buyer_email: sub.buyer_email || buyer.email || '',
+        buyer_phone: buyer.phone || buyer.contactPhone || sub.buyer_phone || '',
+        buyer_city: addr.city || buyer.city || '',
+        buyer_state: addr.state || addr.province || buyer.state || '',
+        delivery_date: sub.delivery_date || data.delivery_date || null,
+        delivery_address: addrStr,
+        fulfillment_method: fm,
+        po_number: data.po_number || sub.po_number || '',
+        notes: data.notes || buyer.notes || sub.notes || '',
+        certifications_required: buyer.certifications_required || data.certifications_required || [],
+        gap_certified: buyer.gap_certified || data.gap_certified || false,
+        notifications: data.notifications || sub.notifications || [],
+        verification_deadline: sub.verification_deadline || null
+      };
+    });
 
     res.json({ success: true, events, total: events.length });
   } catch (error) {
