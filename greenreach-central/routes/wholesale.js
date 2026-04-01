@@ -2036,15 +2036,16 @@ router.get('/orders/:orderId/invoice', requireBuyerPortalAuth, async (req, res) 
     buyerProfile
   });
 
-  // Return print-ready HTML or enriched JSON
-  if (req.query.format === 'html') {
-    return res.type('html').send(renderInvoiceHTML(invoice));
+  // Return enriched JSON only when explicitly requested; default to print-ready HTML
+  if (req.query.format === 'json') {
+    return res.json({ status: 'ok', data: invoice });
   }
 
-  return res.json({
-    status: 'ok',
-    data: invoice
-  });
+  const html = renderInvoiceHTML(invoice);
+  const masterOrderId = order.master_order_id || orderId;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="invoice-${masterOrderId.substring(0, 12)}.html"`);
+  res.send(html);
 });
 
 
