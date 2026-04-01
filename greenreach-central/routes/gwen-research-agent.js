@@ -2028,6 +2028,752 @@ const GWEN_TOOL_CATALOG = {
 
 
   // ========================================
+  // EQUIPMENT THERMAL MODELING & ENVIRONMENTAL CONTROL
+  // ========================================
+
+  get_equipment_thermal_reference: {
+    description: 'Look up thermal performance data for common greenhouse equipment -- HPS, LED, CMH lights, heaters, chillers, dehumidifiers, fans, CO2 generators, heat mats. Returns heat output, efficiency curves, operating ranges, and typical placement guidelines.',
+    parameters: {
+      equipment_type: { type: 'string', description: 'Equipment type: hps_light, led_light, cmh_light, t5_fluorescent, gas_heater, electric_heater, heat_pump, chiller, dehumidifier, exhaust_fan, circulation_fan, evap_cooler, co2_generator, heat_mat, mini_split' },
+      wattage: { type: 'number', description: 'Equipment wattage for scaled calculations (optional, uses reference default if omitted)' },
+    },
+    required: ['equipment_type'],
+    execute: async (params) => {
+      const EQUIPMENT_DB = {
+        hps_light: {
+          name: 'High Pressure Sodium (HPS) Light',
+          category: 'lighting',
+          typical_wattage: [250, 400, 600, 1000],
+          heat_output_btu_per_watt: 3.41, // 100% of electrical input becomes heat
+          radiant_heat_fraction: 0.30, // 30% radiant, 70% convective
+          par_efficiency_umol_j: 1.7, // umol/J (PPF/W)
+          thermal_efficiency: 0.65, // 65% heat, 35% light (of which only some is PAR)
+          operating_temp_range_c: [5, 45],
+          surface_temp_c: [250, 400], // bulb surface
+          recommended_distance_m: { '400W': 0.45, '600W': 0.60, '1000W': 0.75 },
+          cooling_requirement: 'Requires active ventilation or air-cooled reflector. Each 1000W adds ~3412 BTU/hr.',
+          placement_notes: 'Mount horizontally for even coverage. Air-cooled hoods reduce radiant heat to canopy by 30-40%.',
+        },
+        led_light: {
+          name: 'LED Grow Light',
+          category: 'lighting',
+          typical_wattage: [100, 200, 400, 600, 800],
+          heat_output_btu_per_watt: 3.41,
+          radiant_heat_fraction: 0.10, // Much less radiant heat than HPS
+          par_efficiency_umol_j: 2.7, // Modern LEDs
+          thermal_efficiency: 0.40, // 40% heat, 60% light
+          operating_temp_range_c: [0, 40],
+          surface_temp_c: [45, 85], // heatsink
+          recommended_distance_m: { '200W': 0.30, '400W': 0.40, '600W': 0.50 },
+          cooling_requirement: 'Passive heatsink sufficient for <400W. Above 400W, consider active driver cooling.',
+          placement_notes: 'Can be closer to canopy than HPS due to lower radiant heat. Dimming reduces heat proportionally.',
+        },
+        cmh_light: {
+          name: 'Ceramic Metal Halide (CMH/LEC) Light',
+          category: 'lighting',
+          typical_wattage: [315, 630],
+          heat_output_btu_per_watt: 3.41,
+          radiant_heat_fraction: 0.25,
+          par_efficiency_umol_j: 1.9,
+          thermal_efficiency: 0.55,
+          operating_temp_range_c: [5, 45],
+          surface_temp_c: [200, 350],
+          recommended_distance_m: { '315W': 0.45, '630W': 0.60 },
+          cooling_requirement: 'Similar to HPS but slightly less total heat per PAR photon.',
+          placement_notes: 'Operates in vertical or horizontal position depending on fixture. UV output higher than HPS.',
+        },
+        t5_fluorescent: {
+          name: 'T5 Fluorescent Light',
+          category: 'lighting',
+          typical_wattage: [24, 54, 95],
+          heat_output_btu_per_watt: 3.41,
+          radiant_heat_fraction: 0.15,
+          par_efficiency_umol_j: 1.3,
+          thermal_efficiency: 0.60,
+          operating_temp_range_c: [5, 40],
+          surface_temp_c: [35, 55],
+          recommended_distance_m: { '54W_4tube': 0.15, '54W_8tube': 0.25 },
+          cooling_requirement: 'Minimal. Low heat output per fixture.',
+          placement_notes: 'Best for seedlings, clones, microgreens. Can be placed very close to canopy.',
+        },
+        gas_heater: {
+          name: 'Natural Gas / Propane Unit Heater',
+          category: 'heating',
+          typical_wattage: null, // rated in BTU
+          typical_btu_hr: [30000, 60000, 100000, 150000, 200000],
+          thermal_efficiency: 0.80, // 80% AFUE typical
+          heat_distribution: 'Forced air convective. Creates air currents.',
+          co2_byproduct: true,
+          co2_generation_rate: '1 lb CO2 per 22 cubic feet of natural gas burned',
+          moisture_byproduct: true,
+          operating_temp_range_c: [-20, 50],
+          safety_notes: 'Requires adequate ventilation for combustion. CO detector mandatory. Produces CO2 and water vapor as byproducts.',
+          placement_notes: 'Wall or ceiling mount. Keep away from plastic coverings. Thermostat placement critical for even heating.',
+        },
+        electric_heater: {
+          name: 'Electric Radiant / Convection Heater',
+          category: 'heating',
+          typical_wattage: [500, 1000, 1500, 2000, 5000],
+          heat_output_btu_per_watt: 3.41, // 100% efficient
+          thermal_efficiency: 1.0,
+          radiant_heat_fraction: 0.50, // depends on type
+          operating_temp_range_c: [-10, 50],
+          safety_notes: 'No combustion byproducts. Safe for sealed environments. Higher operating cost than gas.',
+          placement_notes: 'Radiant panels heat surfaces directly (good for root zones). Convection heaters heat air.',
+        },
+        heat_pump: {
+          name: 'Mini-Split / Heat Pump',
+          category: 'heating_cooling',
+          typical_wattage: [500, 1000, 2000, 3500],
+          cop_heating: 3.5, // coefficient of performance
+          cop_cooling: 4.0,
+          heating_btu_per_watt: 11.9, // 3.5 COP * 3.41
+          cooling_btu_per_watt: 13.6, // 4.0 COP * 3.41
+          operating_temp_range_c: [-15, 50], // outdoor unit
+          dehumidification: true,
+          dehumidification_rate_l_day: 'Approximately 1-3 L/day per 1000W in cooling mode',
+          placement_notes: 'Indoor unit above canopy height. Avoid direct airflow on plants. Outdoor unit needs clearance.',
+        },
+        mini_split: {
+          name: 'Mini-Split Air Conditioner',
+          category: 'heating_cooling',
+          typical_wattage: [500, 1000, 2000, 3500],
+          cop_heating: 3.5,
+          cop_cooling: 4.0,
+          heating_btu_per_watt: 11.9,
+          cooling_btu_per_watt: 13.6,
+          operating_temp_range_c: [-15, 50],
+          dehumidification: true,
+          dehumidification_rate_l_day: 'Approximately 1-3 L/day per 1000W in cooling mode',
+          placement_notes: 'Indoor unit above canopy height. Avoid direct airflow on plants.',
+        },
+        chiller: {
+          name: 'Water Chiller (reservoir cooling)',
+          category: 'cooling',
+          typical_wattage: [200, 500, 1000, 2000],
+          cop_cooling: 3.0,
+          cooling_capacity_btu_per_watt: 10.2,
+          target_water_temp_c: [15, 20],
+          reservoir_sizing: '1/10 HP per 10 gallons for 10F drop',
+          operating_temp_range_c: [5, 40],
+          placement_notes: 'Exhausts heat -- needs ventilated space. Size for reservoir volume and ambient temp.',
+        },
+        dehumidifier: {
+          name: 'Commercial Dehumidifier',
+          category: 'climate',
+          typical_wattage: [500, 1000, 2000, 3500],
+          removal_rate_l_day_per_kw: 8, // liters per day per kW
+          heat_output_btu_per_watt: 3.41, // Reheat adds heat
+          operating_temp_range_c: [5, 40],
+          optimal_rh_range: [45, 65],
+          placement_notes: 'Produces significant heat. Account for reheating effect in thermal calculations. Drain or pump condensate.',
+        },
+        exhaust_fan: {
+          name: 'Exhaust Fan',
+          category: 'ventilation',
+          typical_wattage: [50, 150, 400, 800],
+          cfm_per_watt: 15, // typical efficiency
+          typical_cfm: [200, 600, 1200, 2400],
+          air_changes_per_hour_rule: '1 CFM per 2 cubic feet for 30 ACH',
+          heat_removal_btu_per_cfm_per_f: 1.08, // BTU/hr removed per CFM per degree F difference
+          operating_temp_range_c: [-20, 60],
+          placement_notes: 'Mount high for heat removal, low for humidity removal. Pair with intake louvers for negative pressure.',
+        },
+        circulation_fan: {
+          name: 'Horizontal Air Flow (HAF) / Circulation Fan',
+          category: 'ventilation',
+          typical_wattage: [20, 50, 100, 200],
+          cfm_per_watt: 25,
+          typical_cfm: [500, 1500, 3000, 5000],
+          recommended_velocity_ms: [0.3, 1.0],
+          operating_temp_range_c: [-10, 60],
+          placement_notes: 'Place above canopy. Create circular airflow pattern. One fan per 50 sq ft minimum. Strengthens stems and reduces microclimates.',
+        },
+        evap_cooler: {
+          name: 'Evaporative Cooler (Swamp Cooler / Wet Wall)',
+          category: 'cooling',
+          typical_wattage: [100, 300, 750],
+          cooling_capacity_btu_per_watt: 12,
+          saturation_efficiency: 0.85,
+          water_consumption_l_per_hr_per_kw: 3,
+          humidity_increase: true,
+          operating_temp_range_c: [20, 50],
+          optimal_climate: 'Best in dry climates (< 50% RH). Ineffective in humid environments.',
+          placement_notes: 'Opposite wall from exhaust fan for cross-flow. Increases humidity significantly.',
+        },
+        co2_generator: {
+          name: 'CO2 Generator / Burner',
+          category: 'supplementation',
+          typical_wattage: null,
+          typical_btu_hr: [5000, 10000, 22000],
+          co2_output_ppm_per_hr: { '2000sqft_sealed': 200, '1000sqft_sealed': 400 },
+          heat_output: 'Substantial -- each burner adds 5,000-22,000 BTU/hr',
+          moisture_output: 'Significant -- produces water vapor as combustion byproduct',
+          operating_temp_range_c: [5, 45],
+          safety_notes: 'Never exceed 1500 ppm without monitoring. Depletes O2. Combustion risk.',
+          placement_notes: 'Hang above canopy. Use with controller (photocell + CO2 sensor). Only run during lights-on for photosynthesis.',
+        },
+        heat_mat: {
+          name: 'Seedling Heat Mat',
+          category: 'heating',
+          typical_wattage: [17, 45, 75, 107],
+          surface_temp_rise_c: 5.5, // raises 10F / 5.5C above ambient
+          target_root_zone_c: [22, 26],
+          w_per_sq_ft: 7.5,
+          operating_temp_range_c: [5, 35],
+          placement_notes: 'Place under trays. Use thermostat probe in media for accurate control. Remove once seedlings are established.',
+        },
+      };
+
+      const key = (params.equipment_type || '').toLowerCase().replace(/[\s-]+/g, '_');
+      const equip = EQUIPMENT_DB[key];
+      if (!equip) {
+        return { ok: false, error: `Equipment type "${params.equipment_type}" not found. Available: ${Object.keys(EQUIPMENT_DB).join(', ')}` };
+      }
+
+      // Scale heat output if wattage provided
+      let scaledData = null;
+      if (params.wattage && equip.heat_output_btu_per_watt) {
+        const btuHr = params.wattage * equip.heat_output_btu_per_watt;
+        const heatFraction = equip.thermal_efficiency || 0.5;
+        scaledData = {
+          input_wattage: params.wattage,
+          total_btu_hr: Math.round(btuHr * 100) / 100,
+          heat_to_space_btu_hr: Math.round(btuHr * heatFraction * 100) / 100,
+          heat_to_space_watts: Math.round(params.wattage * heatFraction),
+          light_output_watts: equip.par_efficiency_umol_j ? Math.round(params.wattage * (1 - heatFraction)) : null,
+        };
+      }
+
+      return { ok: true, ...equip, scaled_calculation: scaledData };
+    },
+  },
+
+  model_equipment_thermal_profile: {
+    description: 'Calculate the combined thermal load of all equipment in a grow space. Sums heat contributions from lights, heaters, dehumidifiers, and other equipment, then estimates equilibrium temperature and required cooling/heating capacity. Essential for HVAC sizing.',
+    parameters: {
+      room_length_m: { type: 'number', description: 'Room length in meters' },
+      room_width_m: { type: 'number', description: 'Room width in meters' },
+      room_height_m: { type: 'number', description: 'Room height in meters' },
+      insulation_r_value: { type: 'number', description: 'Wall R-value (US units, ft2-F-hr/BTU). Default: 13 (standard 2x4 fiberglass).' },
+      outdoor_temp_c: { type: 'number', description: 'Outdoor/ambient temperature in Celsius (default: 25)' },
+      target_temp_c: { type: 'number', description: 'Desired room temperature in Celsius (default: 24)' },
+      equipment_list: { type: 'string', description: 'JSON array of equipment: [{"type":"led_light","wattage":600,"count":4},{"type":"dehumidifier","wattage":1500,"count":1}]' },
+      ventilation_cfm: { type: 'number', description: 'Exhaust ventilation rate in CFM (0 if sealed room). Default: 0.' },
+      plant_count: { type: 'number', description: 'Number of plants (for transpiration cooling estimate). Default: 0.' },
+      plant_transpiration_ml_day: { type: 'number', description: 'Per-plant transpiration rate in mL/day. Default: 250.' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['room_length_m', 'room_width_m', 'room_height_m', 'equipment_list'],
+    execute: async (params, ctx) => {
+      let equipment;
+      try { equipment = JSON.parse(params.equipment_list); } catch { return { ok: false, error: 'Invalid JSON for equipment_list' }; }
+
+      const L = params.room_length_m;
+      const W = params.room_width_m;
+      const H = params.room_height_m;
+      const area_m2 = L * W;
+      const volume_m3 = area_m2 * H;
+      const volume_ft3 = volume_m3 * 35.315;
+      const surfaceArea_m2 = 2 * (L*W + L*H + W*H);
+      const surfaceArea_ft2 = surfaceArea_m2 * 10.764;
+      const rValue = params.insulation_r_value || 13;
+      const outdoorTempC = params.outdoor_temp_c ?? 25;
+      const targetTempC = params.target_temp_c || 24;
+      const ventCfm = params.ventilation_cfm || 0;
+
+      // Reference data for scaling
+      const HEAT_REFS = {
+        hps_light: { btu_per_w: 3.41, heat_fraction: 0.65 },
+        led_light: { btu_per_w: 3.41, heat_fraction: 0.40 },
+        cmh_light: { btu_per_w: 3.41, heat_fraction: 0.55 },
+        t5_fluorescent: { btu_per_w: 3.41, heat_fraction: 0.60 },
+        gas_heater: { btu_per_w: 0, direct_btu: true },
+        electric_heater: { btu_per_w: 3.41, heat_fraction: 1.0 },
+        heat_pump: { btu_per_w: 3.41, heat_fraction: 0 }, // net zero in conditioning mode
+        mini_split: { btu_per_w: 3.41, heat_fraction: 0 },
+        chiller: { btu_per_w: 3.41, heat_fraction: 0.1 }, // some waste heat
+        dehumidifier: { btu_per_w: 3.41, heat_fraction: 1.0 }, // all energy becomes heat
+        exhaust_fan: { btu_per_w: 3.41, heat_fraction: 0.05 },
+        circulation_fan: { btu_per_w: 3.41, heat_fraction: 1.0 },
+        evap_cooler: { btu_per_w: 3.41, heat_fraction: -2.0 }, // net cooling
+        co2_generator: { btu_per_w: 0, direct_btu: true },
+        heat_mat: { btu_per_w: 3.41, heat_fraction: 1.0 },
+      };
+
+      let totalHeatBtu = 0;
+      const breakdown = [];
+
+      for (const item of equipment) {
+        const ref = HEAT_REFS[item.type] || { btu_per_w: 3.41, heat_fraction: 0.5 };
+        const count = item.count || 1;
+        let btu;
+        if (ref.direct_btu) {
+          btu = (item.btu_hr || 0) * count;
+        } else {
+          const watts = (item.wattage || 0) * count;
+          btu = watts * ref.btu_per_w * (ref.heat_fraction || 0.5);
+        }
+        totalHeatBtu += btu;
+        breakdown.push({
+          type: item.type,
+          count,
+          wattage_each: item.wattage || null,
+          btu_hr_each: item.btu_hr || null,
+          total_heat_btu_hr: Math.round(btu),
+        });
+      }
+
+      // Envelope heat loss/gain: Q = U * A * deltaT
+      // U = 1/R in US units (BTU/hr/ft2/F), deltaT in F
+      const deltaTf = (targetTempC - outdoorTempC) * 1.8;
+      const envelopeBtu = (surfaceArea_ft2 / rValue) * deltaTf; // positive = heat loss
+      
+      // Ventilation heat transfer: Q = 1.08 * CFM * deltaT (F)
+      const ventBtu = ventCfm > 0 ? 1.08 * ventCfm * deltaTf : 0; // positive = heat loss
+
+      // Plant transpiration cooling (latent heat)
+      const plantCount = params.plant_count || 0;
+      const transpMlDay = params.plant_transpiration_ml_day || 250;
+      const transpLHr = (plantCount * transpMlDay) / (24 * 1000);
+      const transpBtu = transpLHr * 8100; // ~8100 BTU per liter evaporated
+
+      // Net heat balance
+      const netHeatBtu = totalHeatBtu - envelopeBtu - ventBtu - transpBtu;
+
+      // Estimate equilibrium temp if no HVAC
+      // Q = totalHeat = envelope_loss + vent_loss @ equilibrium
+      // totalHeat = (A/R + 1.08*CFM) * deltaTf_eq
+      const uaTotal = (surfaceArea_ft2 / rValue) + (ventCfm > 0 ? 1.08 * ventCfm : 0);
+      const equilibDeltaF = uaTotal > 0 ? (totalHeatBtu - transpBtu) / uaTotal : 0;
+      const equilibTempC = outdoorTempC + equilibDeltaF / 1.8;
+
+      // Required cooling/heating to reach target
+      const coolingNeeded = netHeatBtu > 0 ? netHeatBtu : 0;
+      const heatingNeeded = netHeatBtu < 0 ? Math.abs(netHeatBtu) : 0;
+
+      // Tons of cooling (1 ton = 12,000 BTU/hr)
+      const coolingTons = coolingNeeded / 12000;
+
+      // Air changes per hour from ventilation
+      const ach = ventCfm > 0 ? (ventCfm * 60) / volume_ft3 : 0;
+
+      // Watts per sq meter (lighting density)
+      const lightingWatts = equipment.filter(e => ['hps_light','led_light','cmh_light','t5_fluorescent'].includes(e.type))
+        .reduce((s, e) => s + (e.wattage || 0) * (e.count || 1), 0);
+      const wperm2 = lightingWatts / area_m2;
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_thermal_models (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            model_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_thermal_models (farm_id, study_id, model_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'thermal_profile', JSON.stringify(params),
+           JSON.stringify({ totalHeatBtu, envelopeBtu, ventBtu, transpBtu, netHeatBtu, equilibTempC })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        room: { length_m: L, width_m: W, height_m: H, area_m2, volume_m3, surface_area_m2: Math.round(surfaceArea_m2 * 10) / 10 },
+        insulation: { r_value: rValue, u_value_si: Math.round(1 / (rValue * 0.176) * 1000) / 1000 },
+        equipment_heat_breakdown: breakdown,
+        thermal_balance_btu_hr: {
+          equipment_heat_input: Math.round(totalHeatBtu),
+          envelope_heat_transfer: Math.round(envelopeBtu),
+          ventilation_heat_transfer: Math.round(ventBtu),
+          transpiration_cooling: Math.round(transpBtu),
+          net_heat_surplus: Math.round(netHeatBtu),
+        },
+        equilibrium_temp_no_hvac_c: Math.round(equilibTempC * 10) / 10,
+        target_temp_c: targetTempC,
+        required_cooling_btu_hr: Math.round(coolingNeeded),
+        required_cooling_tons: Math.round(coolingTons * 100) / 100,
+        required_heating_btu_hr: Math.round(heatingNeeded),
+        ventilation_ach: Math.round(ach * 10) / 10,
+        lighting_density_w_m2: Math.round(wperm2 * 10) / 10,
+        recommendation: coolingNeeded > 0
+          ? `Room requires ${Math.round(coolingTons * 100) / 100} tons (${Math.round(coolingNeeded)} BTU/hr) of cooling to maintain ${targetTempC}C. Without cooling, equilibrium temp is ${Math.round(equilibTempC * 10) / 10}C.`
+          : heatingNeeded > 0
+          ? `Room requires ${Math.round(heatingNeeded)} BTU/hr of heating to maintain ${targetTempC}C. Equilibrium temp without heating is ${Math.round(equilibTempC * 10) / 10}C.`
+          : `Room is thermally balanced at target ${targetTempC}C. No additional HVAC needed.`,
+      };
+    },
+  },
+
+  simulate_environment_scenario: {
+    description: 'Run a what-if environmental scenario: predict how room temperature, humidity, and CO2 evolve over a multi-hour period given equipment schedules, weather changes, and crop stage. Supports light cycle on/off transitions, heater thermostat behavior, and dehumidifier cycling.',
+    parameters: {
+      room_length_m: { type: 'number', description: 'Room length in meters' },
+      room_width_m: { type: 'number', description: 'Room width in meters' },
+      room_height_m: { type: 'number', description: 'Room height in meters' },
+      insulation_r_value: { type: 'number', description: 'Wall R-value (default: 13)' },
+      initial_temp_c: { type: 'number', description: 'Starting room temp in Celsius (default: 24)' },
+      initial_rh_percent: { type: 'number', description: 'Starting RH in percent (default: 60)' },
+      initial_co2_ppm: { type: 'number', description: 'Starting CO2 in ppm (default: 400)' },
+      outdoor_temp_schedule: { type: 'string', description: 'JSON array of outdoor temp steps: [{"hour":0,"temp_c":20},{"hour":12,"temp_c":30}]. Linear interpolation between. Default: constant 25C.' },
+      equipment_schedule: { type: 'string', description: 'JSON array of equipment events: [{"hour":0,"action":"on","type":"led_light","wattage":600,"count":4},{"hour":18,"action":"off","type":"led_light"}]. Supports on/off/setpoint.' },
+      plant_count: { type: 'number', description: 'Number of plants for transpiration and CO2 uptake modeling' },
+      crop: { type: 'string', description: 'Crop type for transpiration and photosynthesis rates (default: lettuce)' },
+      duration_hours: { type: 'number', description: 'Simulation hours (default: 24, max: 168)' },
+      ventilation_cfm: { type: 'number', description: 'Base exhaust rate in CFM (default: 0)' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['room_length_m', 'room_width_m', 'room_height_m'],
+    execute: async (params, ctx) => {
+      const L = params.room_length_m;
+      const W = params.room_width_m;
+      const H = params.room_height_m;
+      const volume_m3 = L * W * H;
+      const volume_ft3 = volume_m3 * 35.315;
+      const surfaceArea_ft2 = 2 * (L*W + L*H + W*H) * 10.764;
+      const rValue = params.insulation_r_value || 13;
+      const ventCfm = params.ventilation_cfm || 0;
+      const plantCount = params.plant_count || 0;
+      const duration = Math.min(params.duration_hours || 24, 168);
+      const stepHours = 0.25; // 15-minute resolution
+
+      let outdoorSchedule = [{ hour: 0, temp_c: 25 }];
+      if (params.outdoor_temp_schedule) {
+        try { outdoorSchedule = JSON.parse(params.outdoor_temp_schedule); } catch { return { ok: false, error: 'Invalid JSON for outdoor_temp_schedule' }; }
+      }
+
+      let equipSchedule = [];
+      if (params.equipment_schedule) {
+        try { equipSchedule = JSON.parse(params.equipment_schedule); } catch { return { ok: false, error: 'Invalid JSON for equipment_schedule' }; }
+      }
+
+      // Helper: interpolate outdoor temp
+      function getOutdoorTemp(hour) {
+        if (outdoorSchedule.length === 1) return outdoorSchedule[0].temp_c;
+        for (let i = outdoorSchedule.length - 1; i >= 0; i--) {
+          if (hour >= outdoorSchedule[i].hour) {
+            if (i === outdoorSchedule.length - 1) return outdoorSchedule[i].temp_c;
+            const next = outdoorSchedule[i + 1];
+            const frac = (hour - outdoorSchedule[i].hour) / (next.hour - outdoorSchedule[i].hour);
+            return outdoorSchedule[i].temp_c + frac * (next.temp_c - outdoorSchedule[i].temp_c);
+          }
+        }
+        return outdoorSchedule[0].temp_c;
+      }
+
+      // Heat reference
+      const HEAT_REFS = {
+        hps_light: { heat_frac: 0.65, co2_effect: 0 },
+        led_light: { heat_frac: 0.40, co2_effect: 0 },
+        cmh_light: { heat_frac: 0.55, co2_effect: 0 },
+        gas_heater: { heat_frac: 0.80, co2_effect: 50, direct_btu: true },
+        electric_heater: { heat_frac: 1.0, co2_effect: 0 },
+        dehumidifier: { heat_frac: 1.0, co2_effect: 0, rh_reduction_per_kw: 2 },
+        heat_mat: { heat_frac: 1.0, co2_effect: 0 },
+        co2_generator: { heat_frac: 0.9, co2_effect: 200, direct_btu: true },
+        evap_cooler: { heat_frac: -2.0, co2_effect: 0, rh_increase_per_kw: 5 },
+        exhaust_fan: { heat_frac: 0, co2_effect: 0 },
+        circulation_fan: { heat_frac: 1.0, co2_effect: 0 },
+        mini_split: { heat_frac: 0, co2_effect: 0 },
+        heat_pump: { heat_frac: 0, co2_effect: 0 },
+      };
+
+      // Track active equipment
+      const activeEquip = {};
+      // Pre-sort events by hour
+      const sortedEvents = [...equipSchedule].sort((a, b) => a.hour - b.hour);
+
+      // State
+      let temp = params.initial_temp_c ?? 24;
+      let rh = params.initial_rh_percent ?? 60;
+      let co2 = params.initial_co2_ppm ?? 400;
+      const timeSeries = [{ hour: 0, temp_c: temp, rh_percent: rh, co2_ppm: co2 }];
+
+      // Thermal mass of air: rho * V * cp = 1.2 kg/m3 * V * 1005 J/(kg*K)
+      const airThermalMassJ = 1.2 * volume_m3 * 1005; // Joules per degree C
+
+      // Crop transpiration and photosynthesis
+      const transpRateMlHr = plantCount * (250 / 24); // default 250ml/day
+      const photoCo2UptakePerPlantPerHr = 0.5; // ppm reduction per plant per hour when lights on
+
+      for (let t = stepHours; t <= duration; t += stepHours) {
+        // Process equipment events up to current time
+        for (const evt of sortedEvents) {
+          if (evt.hour > t) break;
+          if (evt.hour > t - stepHours && evt.hour <= t) {
+            const key = evt.type + '_' + (evt.id || 'default');
+            if (evt.action === 'off') {
+              delete activeEquip[key];
+            } else {
+              activeEquip[key] = { ...evt };
+            }
+          }
+        }
+
+        // Sum heat from active equipment
+        let equipHeatW = 0; // watts of heat
+        let rhDelta = 0;
+        let co2Delta = 0;
+        let lightsOn = false;
+
+        for (const [, eq] of Object.entries(activeEquip)) {
+          const ref = HEAT_REFS[eq.type] || { heat_frac: 0.5, co2_effect: 0 };
+          const count = eq.count || 1;
+          if (ref.direct_btu) {
+            equipHeatW += ((eq.btu_hr || 0) * ref.heat_frac * count) / 3.41;
+          } else {
+            equipHeatW += (eq.wattage || 0) * ref.heat_frac * count;
+          }
+          if (ref.co2_effect) co2Delta += ref.co2_effect * count * stepHours;
+          if (ref.rh_reduction_per_kw) rhDelta -= ref.rh_reduction_per_kw * ((eq.wattage || 0) * count / 1000) * stepHours;
+          if (ref.rh_increase_per_kw) rhDelta += ref.rh_increase_per_kw * ((eq.wattage || 0) * count / 1000) * stepHours;
+          if (['hps_light', 'led_light', 'cmh_light', 't5_fluorescent'].includes(eq.type)) lightsOn = true;
+        }
+
+        // Outdoor temp at this timestep
+        const outdoorT = getOutdoorTemp(t);
+
+        // Envelope heat transfer (W): U * A * deltaT (all SI)
+        // Convert R-value to SI: R_SI = R_US * 0.176
+        const rSI = rValue * 0.176;
+        const surfaceArea_m2 = surfaceArea_ft2 / 10.764;
+        const envelopeW = (surfaceArea_m2 / rSI) * (temp - outdoorT);
+
+        // Ventilation heat transfer (W): rho * V_dot * cp * deltaT
+        // CFM to m3/s: * 0.000472
+        const ventW = ventCfm > 0 ? 1.2 * (ventCfm * 0.000472) * 1005 * (temp - outdoorT) : 0;
+
+        // Transpiration cooling (W): latent heat
+        const transpW = (transpRateMlHr * stepHours / 1000) * 2260000 / (stepHours * 3600); // 2.26 MJ/kg
+
+        // Net heat (W)
+        const netHeatW = equipHeatW - envelopeW - ventW - transpW;
+
+        // Temperature change: dT = Q * dt / (thermal_mass)
+        const dtSeconds = stepHours * 3600;
+        const dT = (netHeatW * dtSeconds) / airThermalMassJ;
+        temp += dT;
+
+        // Humidity: transpiration adds moisture, ventilation exchanges
+        if (plantCount > 0) {
+          const moistureGPerStep = transpRateMlHr * stepHours; // mL = g water
+          // Saturation vapor density increases with temp
+          const satVaporDensity = 6.112 * Math.exp(17.67 * temp / (temp + 243.5)) * 2.1674 / (273.15 + temp); // g/m3
+          const currentVaporDensity = satVaporDensity * rh / 100;
+          const newVaporDensity = currentVaporDensity + moistureGPerStep / volume_m3;
+          rh = Math.min(99, (newVaporDensity / satVaporDensity) * 100);
+        }
+        rh += rhDelta;
+        rh = Math.max(10, Math.min(99, rh));
+
+        // CO2: plants absorb when lights on, exhaust dilutes toward ambient
+        if (lightsOn && plantCount > 0) {
+          co2 -= photoCo2UptakePerPlantPerHr * plantCount * stepHours;
+        } else if (plantCount > 0) {
+          co2 += 0.1 * plantCount * stepHours; // dark respiration
+        }
+        co2 += co2Delta;
+        // Ventilation dilutes toward outdoor (assume 400 ppm outdoor)
+        if (ventCfm > 0) {
+          const ach = (ventCfm * 60) / volume_ft3;
+          const dilutionFactor = Math.exp(-ach * stepHours);
+          co2 = 400 + (co2 - 400) * dilutionFactor;
+        }
+        co2 = Math.max(200, co2);
+
+        timeSeries.push({
+          hour: Math.round(t * 100) / 100,
+          temp_c: Math.round(temp * 10) / 10,
+          rh_percent: Math.round(rh * 10) / 10,
+          co2_ppm: Math.round(co2),
+        });
+      }
+
+      // Summary stats
+      const temps = timeSeries.map(p => p.temp_c);
+      const rhs = timeSeries.map(p => p.rh_percent);
+      const co2s = timeSeries.map(p => p.co2_ppm);
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_thermal_models (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            model_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_thermal_models (farm_id, study_id, model_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'scenario',
+           JSON.stringify(params),
+           JSON.stringify({ summary: { temp_range: [Math.min(...temps), Math.max(...temps)], rh_range: [Math.min(...rhs), Math.max(...rhs)] } })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        model: 'Lumped-parameter thermal + humidity + CO2 with equipment scheduling',
+        room: { length_m: L, width_m: W, height_m: H, volume_m3 },
+        duration_hours: duration,
+        time_series: timeSeries,
+        summary: {
+          temperature: { min_c: Math.min(...temps), max_c: Math.max(...temps), final_c: temps[temps.length - 1] },
+          humidity: { min_percent: Math.min(...rhs), max_percent: Math.max(...rhs), final_percent: rhs[rhs.length - 1] },
+          co2: { min_ppm: Math.min(...co2s), max_ppm: Math.max(...co2s), final_ppm: co2s[co2s.length - 1] },
+        },
+        note: 'Use create_research_chart with multiple y-axes to plot temp, RH, and CO2 together. Equipment events shown as vertical reference lines.',
+      };
+    },
+  },
+
+  predict_zone_climate: {
+    description: 'Predict the microclimate (temperature, humidity, airflow) at specific positions within a grow room, accounting for equipment placement and distance effects. Returns a spatial grid of climate conditions to identify hot spots, dead zones, and humidity pockets.',
+    parameters: {
+      room_length_m: { type: 'number', description: 'Room length in meters (x-axis)' },
+      room_width_m: { type: 'number', description: 'Room width in meters (y-axis)' },
+      room_height_m: { type: 'number', description: 'Room height in meters' },
+      ambient_temp_c: { type: 'number', description: 'Baseline room temperature in Celsius' },
+      ambient_rh_percent: { type: 'number', description: 'Baseline room RH in percent' },
+      equipment_positions: { type: 'string', description: 'JSON array of positioned equipment: [{"type":"led_light","wattage":600,"x":2,"y":1,"height_m":2.5},{"type":"circulation_fan","wattage":50,"x":4,"y":3,"height_m":2.0,"direction_deg":180}]' },
+      canopy_height_m: { type: 'number', description: 'Plant canopy height in meters (default: 0.5). Zone predictions are at this height.' },
+      grid_resolution: { type: 'number', description: 'Grid cells per meter (default: 4, max: 10)' },
+      study_id: { type: 'number', description: 'Link to a study' },
+    },
+    required: ['room_length_m', 'room_width_m', 'ambient_temp_c', 'equipment_positions'],
+    execute: async (params, ctx) => {
+      let equipment;
+      try { equipment = JSON.parse(params.equipment_positions); } catch { return { ok: false, error: 'Invalid JSON for equipment_positions' }; }
+
+      const L = params.room_length_m;
+      const W = params.room_width_m;
+      const H = params.room_height_m || 3;
+      const res = Math.min(params.grid_resolution || 4, 10);
+      const canopyH = params.canopy_height_m || 0.5;
+      const nx = Math.round(L * res);
+      const ny = Math.round(W * res);
+      if (nx < 2 || ny < 2 || nx > 100 || ny > 100) return { ok: false, error: 'Grid dimensions out of range (2-100)' };
+      const dx = L / nx;
+      const dy = W / ny;
+      const ambientT = params.ambient_temp_c;
+      const ambientRH = params.ambient_rh_percent ?? 60;
+
+      // Equipment influence parameters
+      const INFLUENCE = {
+        hps_light: { temp_rise_at_1m: 8, radius_m: 1.5, rh_delta: -3 },
+        led_light: { temp_rise_at_1m: 3, radius_m: 1.0, rh_delta: -1 },
+        cmh_light: { temp_rise_at_1m: 6, radius_m: 1.2, rh_delta: -2 },
+        t5_fluorescent: { temp_rise_at_1m: 1.5, radius_m: 0.5, rh_delta: -0.5 },
+        electric_heater: { temp_rise_at_1m: 10, radius_m: 2.0, rh_delta: -5 },
+        gas_heater: { temp_rise_at_1m: 12, radius_m: 2.5, rh_delta: -8 },
+        heat_mat: { temp_rise_at_1m: 3, radius_m: 0.3, rh_delta: 0 },
+        dehumidifier: { temp_rise_at_1m: 4, radius_m: 1.5, rh_delta: -8 },
+        evap_cooler: { temp_rise_at_1m: -5, radius_m: 3.0, rh_delta: 15 },
+        circulation_fan: { temp_rise_at_1m: 0, radius_m: 3.0, rh_delta: 0, airflow_ms: 2.0 },
+        exhaust_fan: { temp_rise_at_1m: -1, radius_m: 2.0, rh_delta: -2 },
+        co2_generator: { temp_rise_at_1m: 5, radius_m: 1.5, rh_delta: 3 },
+      };
+
+      // Build grids
+      const tempGrid = [];
+      const rhGrid = [];
+      const airflowGrid = [];
+
+      for (let j = 0; j < ny; j++) {
+        const tempRow = new Float64Array(nx).fill(ambientT);
+        const rhRow = new Float64Array(nx).fill(ambientRH);
+        const airRow = new Float64Array(nx).fill(0.1); // default still air
+        for (let i = 0; i < nx; i++) {
+          const px = (i + 0.5) * dx;
+          const py = (j + 0.5) * dy;
+
+          for (const eq of equipment) {
+            const inf = INFLUENCE[eq.type];
+            if (!inf) continue;
+            const eqX = eq.x || 0;
+            const eqY = eq.y || 0;
+            const eqH = eq.height_m || H;
+            // 3D distance from equipment to grid point at canopy height
+            const dist = Math.sqrt((px - eqX) ** 2 + (py - eqY) ** 2 + (canopyH - eqH) ** 2);
+            // Scale by wattage (reference is per 1000W for heating, per 100W for fans)
+            const wattScale = eq.wattage ? eq.wattage / 1000 : 1;
+
+            if (dist < inf.radius_m * 4) { // influence zone
+              // Inverse square falloff with radius normalization
+              const influence = Math.max(0, 1 / (1 + (dist / inf.radius_m) ** 2));
+              tempRow[i] += inf.temp_rise_at_1m * wattScale * influence;
+              rhRow[i] += inf.rh_delta * wattScale * influence;
+
+              if (inf.airflow_ms) {
+                // Directional airflow with cosine falloff
+                const airInfluence = inf.airflow_ms * (eq.wattage || 50) / 50 * influence;
+                airRow[i] = Math.max(airRow[i], airInfluence);
+              }
+            }
+          }
+
+          // Clamp values
+          rhRow[i] = Math.max(15, Math.min(99, rhRow[i]));
+        }
+
+        tempGrid.push(Array.from(tempRow).map(v => Math.round(v * 10) / 10));
+        rhGrid.push(Array.from(rhRow).map(v => Math.round(v * 10) / 10));
+        airflowGrid.push(Array.from(airRow).map(v => Math.round(v * 100) / 100));
+      }
+
+      // Find hot spots and cold spots
+      let maxT = -Infinity, minT = Infinity, maxRH = 0, minRH = 100;
+      let hotSpot = null, coldSpot = null, humidSpot = null, drySpot = null;
+      for (let j = 0; j < ny; j++) {
+        for (let i = 0; i < nx; i++) {
+          if (tempGrid[j][i] > maxT) { maxT = tempGrid[j][i]; hotSpot = { x: ((i+0.5)*dx).toFixed(1), y: ((j+0.5)*dy).toFixed(1) }; }
+          if (tempGrid[j][i] < minT) { minT = tempGrid[j][i]; coldSpot = { x: ((i+0.5)*dx).toFixed(1), y: ((j+0.5)*dy).toFixed(1) }; }
+          if (rhGrid[j][i] > maxRH) { maxRH = rhGrid[j][i]; humidSpot = { x: ((i+0.5)*dx).toFixed(1), y: ((j+0.5)*dy).toFixed(1) }; }
+          if (rhGrid[j][i] < minRH) { minRH = rhGrid[j][i]; drySpot = { x: ((i+0.5)*dx).toFixed(1), y: ((j+0.5)*dy).toFixed(1) }; }
+        }
+      }
+
+      if (isDatabaseAvailable()) {
+        await query(
+          `CREATE TABLE IF NOT EXISTS research_thermal_models (
+            id SERIAL PRIMARY KEY, farm_id TEXT NOT NULL, study_id INTEGER,
+            model_type TEXT NOT NULL, config JSONB, results JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`
+        ).catch(() => {});
+        await query(
+          'INSERT INTO research_thermal_models (farm_id, study_id, model_type, config, results) VALUES ($1,$2,$3,$4,$5)',
+          [ctx.farmId, params.study_id || null, 'zone_prediction',
+           JSON.stringify(params),
+           JSON.stringify({ temp_range: [minT, maxT], rh_range: [minRH, maxRH], grid: [ny, nx] })]
+        ).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        model: 'Inverse-square thermal influence with 3D distance from equipment to canopy plane',
+        room: { length_m: L, width_m: W, height_m: H },
+        canopy_height_m: canopyH,
+        grid: { nx, ny, cell_width_m: dx, cell_height_m: dy },
+        equipment_count: equipment.length,
+        temperature_grid_c: tempGrid,
+        humidity_grid_percent: rhGrid,
+        airflow_grid_ms: airflowGrid,
+        analysis: {
+          hot_spot: { temp_c: maxT, position_m: hotSpot },
+          cold_spot: { temp_c: minT, position_m: coldSpot },
+          humid_spot: { rh_percent: maxRH, position_m: humidSpot },
+          dry_spot: { rh_percent: minRH, position_m: drySpot },
+          temp_uniformity_delta_c: Math.round((maxT - minT) * 10) / 10,
+          rh_uniformity_delta_percent: Math.round((maxRH - minRH) * 10) / 10,
+        },
+        note: 'Use create_research_chart with chart_type "heatmap" to visualize temperature and humidity grids. Overlay equipment positions as markers.',
+      };
+    },
+  },
+
+
+  // ========================================
   // RESEARCH INTEGRATIONS -- ORCID, DataCite, OSF, protocols.io
   // ========================================
 
@@ -4562,6 +5308,21 @@ Michaelis-Menten kinetics engine for hydroponic nutrient management:
 - Source/sink placement (injectors, canopy, exhaust)
 - Ventilation airflow with configurable velocity and direction
 - Upwind finite-difference scheme for numerical stability
+### Equipment Thermal Modeling (get_equipment_thermal_reference, model_equipment_thermal_profile)
+Thermal engineering tools for greenhouse HVAC sizing and equipment layout:
+- Reference database: 15 equipment types (HPS, LED, CMH, heaters, chillers, dehumidifiers, fans, CO2 generators)
+- Heat output and efficiency data with wattage-scaled calculations
+- Combined thermal load analysis: equipment heat + envelope loss + ventilation + transpiration
+- Equilibrium temperature prediction and cooling/heating capacity requirements
+
+### Environmental What-If Scenarios (simulate_environment_scenario, predict_zone_climate)
+Multi-hour environmental simulation and spatial microclimate prediction:
+- Temperature, humidity, and CO2 time-series with equipment on/off scheduling
+- Outdoor weather schedules with linear interpolation
+- Plant transpiration and photosynthetic CO2 uptake modeling
+- Spatial zone prediction: hot spots, dead zones, humidity pockets at canopy level
+- Equipment placement optimization with 3D inverse-square thermal influence
+
 
 
 ## Equipment Integration
