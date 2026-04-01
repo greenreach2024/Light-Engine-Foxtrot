@@ -1367,6 +1367,7 @@
     },
 
     async placeOrder() {
+      if (this._placingOrder) return;
       if (this.cart.length === 0) {
         this.showToast('Cart is empty', 'error');
         return;
@@ -1384,6 +1385,7 @@
         return;
       }
 
+      this._placingOrder = true;
       this.showLoading('Processing your order...');
 
       try {
@@ -1443,6 +1445,8 @@
         this.hideLoading();
         console.error('Place order error:', error);
         this.showToast('Network error placing order', 'error');
+      } finally {
+        this._placingOrder = false;
       }
     },
 
@@ -1976,9 +1980,14 @@
         const headers = {};
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
         const response = await fetch('/api/market-intelligence/price-alerts?threshold=7', { headers });
+        if (!response.ok) {
+          // Silently handle auth/permission errors - price alerts are optional
+          priceContent.innerHTML = '<div class="loading-state">All monitored prices stable (no significant changes detected)</div>';
+          return;
+        }
         const result = await response.json();
         
-        if (!response.ok || !result.ok) {
+        if (!result.ok) {
           throw new Error('Failed to load market data');
         }
         
