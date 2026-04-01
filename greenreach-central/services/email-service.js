@@ -129,10 +129,15 @@ class EmailService {
       }
     }
 
-    // Stub fallback (dev / both SES and SMTP unavailable)
-    console.log(`[email] STUB -- would send to ${to}: ${subject}`);
-    if (text) console.log(`[email] Body preview: ${text.substring(0, 200)}`);
-    return { success: true, messageId: `stub-${Date.now()}`, stub: true };
+    // Stub fallback -- NO email sent (both SES and SMTP unavailable)
+    console.warn(`[EMAIL WARNING] NO TRANSPORT AVAILABLE -- email to ${to} was NOT sent: ${subject}`);
+    console.warn(`[EMAIL WARNING] Configure SES credentials or set SMTP_HOST/SMTP_USER/SMTP_PASS env vars`);
+    if (text) console.warn(`[email] Body preview: ${text.substring(0, 200)}`);
+    return { success: false, messageId: `stub-${Date.now()}`, stub: true, error: "No email transport configured" };
+
+
+
+
   }
 
   async sendOrderConfirmation(order, buyer) {

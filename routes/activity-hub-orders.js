@@ -1,10 +1,14 @@
 /**
  * Activity Hub Order Response Routes
  * Handles order verification, modification, and decline directly from Activity Hub
+ *
+ * FIXED: Replaced in-memory Maps with persistent NeDB order store
+ * so orders survive server restarts and farms can actually see them.
  */
 
 import express from 'express';
 import pool from '../config/database.js';
+import orderStore from '../lib/wholesale/order-store.js';
 import notificationService from '../services/wholesale-notification-service.js';
 import alternativeFarmService from '../services/alternative-farm-service.js';
 import { linkCustomerToTrace, updateTraceStatus } from './traceability.js';
@@ -13,72 +17,63 @@ const router = express.Router();
 
 /**
  * Log order action to audit trail
- * @param {string} orderId - Sub-order ID
- * @param {string} farmId - Farm ID performing the action
- * @param {string} action - Action type (accept, modify, decline, pick, pack)
- * @param {object} details - Additional action details
- * @param {string} performedBy - Name of farm worker who performed action
  */
 async function logOrderAction(orderId, farmId, action, details = {}, performedBy = null) {
   try {
-    const query = `
-      INSERT INTO wholesale_order_logs 
+    await pool.query(
+      `INSERT INTO wholesale_order_logs
         (sub_order_id, farm_id, action, details, performed_by, created_at)
-      VALUES ($1, $2, $3, $4, $5, NOW())
-      RETURNING id
-    `;
-    
-    const result = await pool.query(query, [
-      orderId,
-      farmId,
-      action,
-      JSON.stringify(details),
-      performedBy
-    ]);
-    
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id`,
+      [orderId, farmId, action, JSON.stringify(details), performedBy]
+    );
     console.log(`[OrderLog] ${action.toUpperCase()} - Order ${orderId} by Farm ${farmId} (${performedBy || 'Unknown'})`);
-    return result.rows[0].id;
   } catch (error) {
     console.error('[OrderLog] Failed to log action:', error.message);
-    // Don't throw - logging failure shouldn't break the order workflow
   }
 }
 
-// Mock database - Replace with actual database queries
-const orders = new Map();
-const subOrders = new Map();
+/**
+ * Helper: find a sub-order by its ID (checks sub_order_id, _id, and id fields)
+ */
+async function findSubOrder(orderId) {
+  let sub = await orderStore.getSubOrder(orderId);
+  if (sub) return sub;
+
+  const allSubs = await orderStore.subOrdersDB.find({});
+  return allSubs.find(s =>
+    String(s.id) === String(orderId) ||
+    String(s._id) === String(orderId) ||
+    String(s.sub_order_id) === String(orderId)
+  ) || null;
+}
 
 /**
  * GET /api/activity-hub/orders/pending
- * Get pending orders for a farm (already implemented in wholesale-orders.js but duplicated here for Activity Hub)
+ * Get pending orders for a farm
  */
 router.get('/pending', async (req, res) => {
   try {
     const farmId = req.headers['x-farm-id'] || req.query.farm_id;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
-    // TODO: Replace with actual database query
-    const pendingOrders = Array.from(subOrders.values()).filter(subOrder => 
-      subOrder.farm_id === farmId && 
-      subOrder.status === 'pending_verification'
-    );
-    
-    // Sort by urgency
+
+    const pendingOrders = await orderStore.listFarmSubOrders(farmId, 'pending_verification');
+
     pendingOrders.sort((a, b) => {
-      const deadlineA = new Date(a.verification_deadline);
-      const deadlineB = new Date(b.verification_deadline);
+      const deadlineA = new Date(a.verification_deadline || 0);
+      const deadlineB = new Date(b.verification_deadline || 0);
       return deadlineA - deadlineB;
     });
-    
+
     res.json({
       ok: true,
       orders: pendingOrders,
       count: pendingOrders.length
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error fetching pending orders:', error);
     res.status(500).json({ error: error.message });
@@ -93,28 +88,27 @@ router.get('/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     const farmId = req.headers['x-farm-id'] || req.query.farm_id;
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (farmId && subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Get parent order details
-    const mainOrder = orders.get(subOrder.wholesale_order_id);
-    
+
+    const masterOrderId = subOrder.wholesale_order_id || subOrder.master_order_id;
+    const mainOrder = masterOrderId ? await orderStore.getOrder(String(masterOrderId)) : null;
+
     res.json({
       ok: true,
       subOrder,
       mainOrder,
       hoursRemaining: Math.max(0, (new Date(subOrder.verification_deadline) - new Date()) / (1000 * 60 * 60))
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error fetching order:', error);
     res.status(500).json({ error: error.message });
@@ -129,77 +123,70 @@ router.post('/:orderId/accept', async (req, res) => {
   try {
     const { orderId } = req.params;
     const farmId = req.headers['x-farm-id'] || req.body.farm_id;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Check deadline
+
     const deadline = new Date(subOrder.verification_deadline);
     if (new Date() > deadline) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Verification deadline expired',
         deadline: deadline.toISOString()
       });
     }
-    
-    // Update status
-    subOrder.status = 'farm_accepted';
-    subOrder.verified_at = new Date().toISOString();
-    subOrder.response_action = 'accept';
-    
-    // Log action to audit trail
+
+    const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
+    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_accepted', {
+      verified_at: new Date().toISOString(),
+      response_action: 'accept'
+    });
+
+    const updatedSubOrder = await findSubOrder(orderId);
+
     await logOrderAction(
-      orderId,
-      farmId,
-      'accept',
+      orderId, farmId, 'accept',
       {
         total_amount: subOrder.sub_total,
-        item_count: subOrder.items.length,
+        item_count: (subOrder.items || []).length,
         deadline: subOrder.verification_deadline
       },
       req.body.performedBy || req.body.farmName || 'Activity Hub User'
     );
-    
-    // Check if all sub-orders for this order are now verified
-    const mainOrder = orders.get(subOrder.wholesale_order_id);
-    const allSubOrders = Array.from(subOrders.values()).filter(
-      so => so.wholesale_order_id === subOrder.wholesale_order_id
-    );
-    
-    const allVerified = allSubOrders.every(so => 
-      so.status === 'farm_accepted' || so.status === 'farm_modified'
-    );
-    
-    if (allVerified && mainOrder) {
-      mainOrder.status = 'farms_verified';
-      mainOrder.all_verified_at = new Date().toISOString();
-      
-      // TODO: Notify buyer that order is confirmed
-      console.log(`[Activity Hub] All farms verified order ${mainOrder.id}`);
+
+    const masterOrderId = subOrder.wholesale_order_id || subOrder.master_order_id;
+    let allVerified = false;
+    if (masterOrderId) {
+      const allSubs = await orderStore.listSubOrders(String(masterOrderId));
+      allVerified = allSubs.length > 0 && allSubs.every(so =>
+        so.status === 'farm_accepted' || so.status === 'farm_modified'
+      );
+      if (allVerified) {
+        await orderStore.updateOrderStatus(String(masterOrderId), 'farms_verified');
+        console.log(`[Activity Hub] All farms verified order ${masterOrderId}`);
+      }
     }
-    
+
     console.log(`[Activity Hub] Farm ${farmId} accepted order ${orderId}`);
-    
+
     res.json({
       ok: true,
       message: 'Order accepted successfully',
-      subOrder,
+      subOrder: updatedSubOrder || subOrder,
       allVerified,
       nextAction: 'start_picking'
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error accepting order:', error);
     res.status(500).json({ error: error.message });
@@ -214,45 +201,38 @@ router.post('/:orderId/modify', async (req, res) => {
   try {
     const { orderId } = req.params;
     const { farmId, modifications, reason } = req.body;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
+
     if (!modifications || !modifications.items) {
       return res.status(400).json({ error: 'modifications.items required' });
     }
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Check deadline
+
     const deadline = new Date(subOrder.verification_deadline);
     if (new Date() > deadline) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Verification deadline expired',
         deadline: deadline.toISOString()
       });
     }
-    
-    // Apply modifications
-    subOrder.status = 'farm_modified';
-    subOrder.verified_at = new Date().toISOString();
-    subOrder.response_action = 'modify';
-    subOrder.modification_reason = reason || 'Quantity adjustment';
-    subOrder.original_items = [...subOrder.items]; // Preserve original
-    
-    // Update items with modifications
+
+    const originalItems = JSON.parse(JSON.stringify(subOrder.items || []));
+    const updatedItems = [...(subOrder.items || [])];
+
     for (const mod of modifications.items) {
-      const item = subOrder.items.find(i => i.sku_id === mod.sku_id);
+      const item = updatedItems.find(i => i.sku_id === mod.sku_id);
       if (item) {
         item.original_quantity = item.quantity;
         item.quantity = mod.quantity;
@@ -260,50 +240,54 @@ router.post('/:orderId/modify', async (req, res) => {
         item.modified = true;
       }
     }
-    
-    // Recalculate sub_total
-    subOrder.sub_total = subOrder.items.reduce((sum, item) => sum + item.line_total, 0);
-    
-    // Log modification to audit trail
+
+    const newSubTotal = updatedItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
+
+    const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
+    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_modified', {
+      verified_at: new Date().toISOString(),
+      response_action: 'modify',
+      modification_reason: reason || 'Quantity adjustment',
+      original_items: originalItems,
+      items: updatedItems,
+      sub_total: newSubTotal
+    });
+
     await logOrderAction(
-      orderId,
-      farmId,
-      'modify',
+      orderId, farmId, 'modify',
       {
-        original_total: subOrder.original_items.reduce((sum, i) => sum + (i.price_per_unit * i.quantity), 0),
-        new_total: subOrder.sub_total,
+        original_total: originalItems.reduce((sum, i) => sum + (i.price_per_unit * i.quantity), 0),
+        new_total: newSubTotal,
         modifications: modifications.items,
         reason: reason || 'Quantity adjustment'
       },
       req.body.performedBy || req.body.farmName || 'Activity Hub User'
     );
-    
-    // Get parent order for notifications
-    const mainOrder = orders.get(subOrder.wholesale_order_id);
-    
-    // Update main order status
-    if (mainOrder) {
-      mainOrder.status = 'pending_buyer_review';
-      
-      // Notify buyer about modifications
-      const orderForNotification = {
-        id: mainOrder.id,
-        buyer_email: mainOrder.buyer_email
-      };
-      
-      await notificationService.notifyBuyerModifications(orderForNotification, [subOrder]);
+
+    const masterOrderId = subOrder.wholesale_order_id || subOrder.master_order_id;
+    if (masterOrderId) {
+      await orderStore.updateOrderStatus(String(masterOrderId), 'pending_buyer_review');
+      const mainOrder = await orderStore.getOrder(String(masterOrderId));
+      if (mainOrder) {
+        const orderForNotification = {
+          id: mainOrder.id || mainOrder.master_order_id,
+          buyer_email: mainOrder.buyer_email
+        };
+        await notificationService.notifyBuyerModifications(orderForNotification, [{ ...subOrder, items: updatedItems, sub_total: newSubTotal }]);
+      }
     }
-    
+
     console.log(`[Activity Hub] Farm ${farmId} modified order ${orderId}`);
-    
+    const updatedSubOrder = await findSubOrder(orderId);
+
     res.json({
       ok: true,
       message: 'Modifications submitted - awaiting buyer approval',
-      subOrder,
+      subOrder: updatedSubOrder || subOrder,
       requiresBuyerApproval: true,
       nextAction: 'wait_for_buyer'
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error modifying order:', error);
     res.status(500).json({ error: error.message });
@@ -318,84 +302,79 @@ router.post('/:orderId/decline', async (req, res) => {
   try {
     const { orderId } = req.params;
     const { farmId, reason } = req.body;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
+
     if (!reason) {
       return res.status(400).json({ error: 'reason required' });
     }
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Check deadline
+
     const deadline = new Date(subOrder.verification_deadline);
     if (new Date() > deadline) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Verification deadline expired',
         deadline: deadline.toISOString()
       });
     }
-    
-    // Update status
-    subOrder.status = 'farm_declined';
-    subOrder.declined_at = new Date().toISOString();
-    subOrder.decline_reason = reason;
-    subOrder.response_action = 'decline';
-    
-    // Log decline to audit trail
+
+    const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
+    await orderStore.updateSubOrderStatus(subOrderKey, 'farm_declined', {
+      declined_at: new Date().toISOString(),
+      decline_reason: reason,
+      response_action: 'decline'
+    });
+
     await logOrderAction(
-      orderId,
-      farmId,
-      'decline',
+      orderId, farmId, 'decline',
       {
         reason,
         total_amount: subOrder.sub_total,
-        item_count: subOrder.items.length
+        item_count: (subOrder.items || []).length
       },
       req.body.performedBy || req.body.farmName || 'Activity Hub User'
     );
-    
-    // Get parent order
-    const mainOrder = orders.get(subOrder.wholesale_order_id);
-    
-    if (mainOrder) {
-      mainOrder.status = 'seeking_alternatives';
-      
-      // Trigger alternative farm search (async)
-      console.log(`[Activity Hub] Searching for alternatives for declined order ${orderId}`);
-      
-      alternativeFarmService.findAlternatives(subOrder, mainOrder)
-        .then(result => {
-          if (result.success) {
-            console.log(`[Activity Hub] Notified ${result.alternatives_notified} alternative farms`);
-          } else if (result.refund_required) {
-            console.log(`[Activity Hub] No alternatives found - processing refund`);
-            alternativeFarmService.processPartialRefund(mainOrder, subOrder);
-          }
-        })
-        .catch(err => console.error('[Activity Hub] Alternative search failed:', err));
+
+    const masterOrderId = subOrder.wholesale_order_id || subOrder.master_order_id;
+    if (masterOrderId) {
+      await orderStore.updateOrderStatus(String(masterOrderId), 'seeking_alternatives');
+      const mainOrder = await orderStore.getOrder(String(masterOrderId));
+      if (mainOrder) {
+        console.log(`[Activity Hub] Searching for alternatives for declined order ${orderId}`);
+        alternativeFarmService.findAlternatives(subOrder, mainOrder)
+          .then(result => {
+            if (result.success) {
+              console.log(`[Activity Hub] Notified ${result.alternatives_notified} alternative farms`);
+            } else if (result.refund_required) {
+              console.log(`[Activity Hub] No alternatives found - processing refund`);
+              alternativeFarmService.processPartialRefund(mainOrder, subOrder);
+            }
+          })
+          .catch(err => console.error('[Activity Hub] Alternative search failed:', err));
+      }
     }
-    
+
     console.log(`[Activity Hub] Farm ${farmId} declined order ${orderId}: ${reason}`);
-    
+    const updatedSubOrder = await findSubOrder(orderId);
+
     res.json({
       ok: true,
       message: 'Order declined - searching for alternative farms',
-      subOrder,
+      subOrder: updatedSubOrder || subOrder,
       searchingAlternatives: true
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error declining order:', error);
     res.status(500).json({ error: error.message });
@@ -410,36 +389,32 @@ router.post('/:orderId/pick', async (req, res) => {
   try {
     const { orderId } = req.params;
     const { farmId, pickedBy } = req.body;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Must be accepted first
+
     if (subOrder.status !== 'farm_accepted') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Order must be accepted before picking',
         currentStatus: subOrder.status
       });
     }
-    
-    // Generate lot codes for each item (format: ZONE-CROP-YYMMDD-ORDER#)
+
     const now = new Date();
-    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
-    const orderSuffix = orderId.slice(-4); // Last 4 chars of order ID
-    
-    // Load groups for CCA harvest cycle tracking
+    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, '');
+    const orderSuffix = String(orderId).slice(-4);
+
     let groupsList = [];
     try {
       const groupsPath = new URL('../public/data/groups.json', import.meta.url).pathname;
@@ -449,15 +424,15 @@ router.post('/:orderId/pick', async (req, res) => {
         groupsList = gd.groups || [];
       }
     } catch (e) {
-      // Groups not available — non-fatal
+      // Groups not available -- non-fatal
     }
-    
-    for (const item of subOrder.items) {
+
+    const items = [...(subOrder.items || [])];
+    for (const item of items) {
       const cropName = item.product_name.toUpperCase().replace(/\s+/g, '');
       item.lot_code = `A1-${cropName}-${dateStr}-${orderSuffix}`;
-      item.harvest_date = now.toISOString().split('T')[0]; // YYYY-MM-DD
-      
-      // CCA: Track which harvest cut this product came from
+      item.harvest_date = now.toISOString().split('T')[0];
+
       const matchedGroup = groupsList.find(g => {
         const hc = g.planConfig?.harvestCycle;
         return hc && hc.strategy === 'cut_and_come_again' &&
@@ -472,36 +447,37 @@ router.post('/:orderId/pick', async (req, res) => {
         item.lot_code += `-C${hc.currentHarvest || 1}`;
       }
     }
-    
-    // Update status
-    subOrder.status = 'picking';
-    subOrder.pick_started_at = now.toISOString();
-    subOrder.picked_by = pickedBy || 'Farm Worker';
-    
-    // Log picking action to audit trail
+
+    const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
+    await orderStore.updateSubOrderStatus(subOrderKey, 'picking', {
+      pick_started_at: now.toISOString(),
+      picked_by: pickedBy || 'Farm Worker',
+      items
+    });
+
     await logOrderAction(
-      orderId,
-      farmId,
-      'pick',
+      orderId, farmId, 'pick',
       {
-        lot_codes: subOrder.items.map(i => ({ sku: i.sku_id, lot_code: i.lot_code })),
-        item_count: subOrder.items.length,
+        lot_codes: items.map(i => ({ sku: i.sku_id, lot_code: i.lot_code })),
+        item_count: items.length,
         picked_by: pickedBy || 'Farm Worker'
       },
       pickedBy || 'Activity Hub User'
     );
-    
+
     console.log(`[Activity Hub] Started picking order ${orderId}`, {
       farm: farmId,
-      items: subOrder.items.length,
-      lotCodes: subOrder.items.map(i => i.lot_code)
+      items: items.length,
+      lotCodes: items.map(i => i.lot_code)
     });
-    
+
+    const updatedSubOrder = await findSubOrder(orderId);
+
     res.json({
       ok: true,
       message: 'Picking started - lot codes generated',
-      subOrder,
-      lotCodes: subOrder.items.map(item => ({
+      subOrder: updatedSubOrder || subOrder,
+      lotCodes: items.map(item => ({
         sku_id: item.sku_id,
         product_name: item.product_name,
         lot_code: item.lot_code,
@@ -509,7 +485,7 @@ router.post('/:orderId/pick', async (req, res) => {
       })),
       nextAction: 'mark_as_packed'
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error starting pick:', error);
     res.status(500).json({ error: error.message });
@@ -524,101 +500,97 @@ router.post('/:orderId/pack', async (req, res) => {
   try {
     const { orderId } = req.params;
     const { farmId, packedBy } = req.body;
-    
+
     if (!farmId) {
       return res.status(400).json({ error: 'farm_id required' });
     }
-    
-    // TODO: Replace with actual database query
-    const subOrder = subOrders.get(orderId);
-    
+
+    const subOrder = await findSubOrder(orderId);
+
     if (!subOrder) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     if (subOrder.farm_id !== farmId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    
-    // Must be picking first
+
     if (subOrder.status !== 'picking') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Order must be in picking status',
         currentStatus: subOrder.status
       });
     }
-    
-    // Update status
-    subOrder.status = 'packed';
-    subOrder.packed_at = new Date().toISOString();
-    subOrder.packed_by = packedBy || subOrder.picked_by || 'Farm Worker';
-    
-    // Log packing action to audit trail
+
+    const packedByName = packedBy || subOrder.picked_by || 'Farm Worker';
+
+    const subOrderKey = subOrder.sub_order_id || String(subOrder.id);
+    await orderStore.updateSubOrderStatus(subOrderKey, 'packed', {
+      packed_at: new Date().toISOString(),
+      packed_by: packedByName
+    });
+
     await logOrderAction(
-      orderId,
-      farmId,
-      'pack',
+      orderId, farmId, 'pack',
       {
-        lot_codes: subOrder.items.map(i => i.lot_code),
-        item_count: subOrder.items.length,
-        packed_by: packedBy || subOrder.picked_by || 'Farm Worker'
+        lot_codes: (subOrder.items || []).map(i => i.lot_code),
+        item_count: (subOrder.items || []).length,
+        packed_by: packedByName
       },
-      packedBy || 'Activity Hub User'
+      packedByName
     );
-    
-    // Get parent order for label generation
-    const mainOrder = orders.get(subOrder.wholesale_order_id);
-    
-    // Auto-link traceability: one-step-forward customer data (SFCR compliant)
+
+    const masterOrderId = subOrder.wholesale_order_id || subOrder.master_order_id;
+    const mainOrder = masterOrderId ? await orderStore.getOrder(String(masterOrderId)) : null;
+
     try {
       const buyerName = mainOrder?.buyer_name || 'Unknown Buyer';
       const buyerAddr = mainOrder?.delivery_address || '';
-      for (const item of subOrder.items) {
+      for (const item of (subOrder.items || [])) {
         if (item.lot_code) {
           await linkCustomerToTrace(item.lot_code, {
             name: buyerName,
             address: buyerAddr,
-            order_id: subOrder.wholesale_order_id || orderId,
+            order_id: masterOrderId || orderId,
             quantity: item.quantity,
             unit: item.unit,
             date: new Date().toISOString()
           });
-          await updateTraceStatus(item.lot_code, 'packed', subOrder.packed_by, `Packed for order ${orderId}`);
+          await updateTraceStatus(item.lot_code, 'packed', packedByName, `Packed for order ${orderId}`);
         }
       }
     } catch (traceErr) {
       console.warn('[Activity Hub] Non-blocking trace linkage error:', traceErr.message);
     }
-    
-    // Generate packing label URL
-    const labelUrl = `/api/labels/packing?` + new URLSearchParams({
-      order_id: subOrder.id,
+
+    const labelParams = new URLSearchParams({
+      order_id: String(subOrder.id || orderId),
       buyer_name: mainOrder?.buyer_name || 'Buyer',
       buyer_address: mainOrder?.delivery_address || '',
-      farm_name: subOrder.farm_name,
+      farm_name: subOrder.farm_name || '',
       farm_id: farmId,
-      lot_codes: subOrder.items.map(i => i.lot_code).join(','),
-      items: JSON.stringify(subOrder.items.map(i => ({
+      lot_codes: (subOrder.items || []).map(i => i.lot_code).join(','),
+      items: JSON.stringify((subOrder.items || []).map(i => ({
         name: i.product_name,
         quantity: i.quantity,
         unit: i.unit
       })))
     });
-    
-    console.log(`[Activity Hub] Packed order ${orderId}`, {
-      farm: farmId,
-      labelUrl
-    });
-    
+    const labelUrl = `/api/labels/packing?` + labelParams.toString();
+
+    console.log(`[Activity Hub] Packed order ${orderId}`, { farm: farmId, labelUrl });
+
+    const updatedSubOrder = await findSubOrder(orderId);
+
     res.json({
       ok: true,
       message: 'Order packed - label ready to print',
-      subOrder,
+      subOrder: updatedSubOrder || subOrder,
       labelUrl,
-      printerConfigured: req.body.hasPrinter || false, // Client indicates if thermal printer is available
+      printerConfigured: req.body.hasPrinter || false,
       nextAction: 'mark_as_shipped'
     });
-    
+
   } catch (error) {
     console.error('[Activity Hub] Error packing order:', error);
     res.status(500).json({ error: error.message });

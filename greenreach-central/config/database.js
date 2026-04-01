@@ -647,7 +647,26 @@ async function runMigrations(client) {
     await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(12,2) DEFAULT 0;`);
   } catch (err) { logger.warn('wholesale_orders migration warning:', err.message); }
 
-  // Create payment_records table for persistent payment storage
+  // Create wholesale_order_logs table for audit trail
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wholesale_order_logs (
+        id SERIAL PRIMARY KEY,
+        sub_order_id VARCHAR(128),
+        farm_id VARCHAR(128),
+        action VARCHAR(50) NOT NULL,
+        details JSONB DEFAULT '{}',
+        performed_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wholesale_order_logs_sub ON wholesale_order_logs(sub_order_id);
+      CREATE INDEX IF NOT EXISTS idx_wholesale_order_logs_farm ON wholesale_order_logs(farm_id);
+      CREATE INDEX IF NOT EXISTS idx_wholesale_order_logs_created ON wholesale_order_logs(created_at);
+    `);
+  } catch (err) { logger.warn('wholesale_order_logs create warning:', err.message); }
+
+    // Create payment_records table for persistent payment storage
   try {
   await client.query(`
     CREATE TABLE IF NOT EXISTS payment_records (

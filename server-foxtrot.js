@@ -8080,6 +8080,127 @@ app.get('/api/sustainability/nutrient-usage', asyncHandler(async (req, res) => {
   }
 }));
 
+
+// ============================================================
+// Wholesale Farm-Admin Bridge Routes
+// These endpoints serve the farm admin UI (farm-admin.js)
+// ============================================================
+
+/**
+ * GET /api/wholesale/order-events
+ * Returns wholesale orders for the farm admin dashboard.
+ * Queries NeDB order store for sub-orders assigned to this farm.
+ */
+app.get('/api/wholesale/order-events', async (req, res) => {
+  try {
+    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+
+    // Get all sub-orders for this farm (no status filter = all orders)
+    const subOrders = await orderStore.listFarmSubOrders(farmId);
+
+    const events = subOrders.map(sub => ({
+      order_id: sub.sub_order_id || sub._id || sub.id,
+      master_order_id: sub.wholesale_order_id || sub.master_order_id,
+      farm_id: sub.farm_id,
+      farm_name: sub.farm_name,
+      status: sub.status || 'pending',
+      timestamp: sub.created_at || sub.updated_at || new Date().toISOString(),
+      items: sub.items || [],
+      total_amount: sub.sub_total || 0,
+      buyer_name: sub.buyer_name || '',
+      buyer_email: sub.buyer_email || '',
+      delivery_address: sub.delivery_address || '',
+      verification_deadline: sub.verification_deadline || null
+    }));
+
+    res.json({ success: true, events, total: events.length });
+  } catch (error) {
+    console.error('[wholesale] order-events error:', error.message);
+    res.json({ success: true, events: [], total: 0 });
+  }
+});
+
+/**
+ * GET /api/wholesale/order-statuses
+ * Returns order statuses from NeDB for farm admin overlay.
+ */
+app.get('/api/wholesale/order-statuses', async (req, res) => {
+  try {
+    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+    const subOrders = await orderStore.listFarmSubOrders(farmId);
+    const statuses = {};
+    for (const sub of subOrders) {
+      const key = sub.sub_order_id || sub._id || sub.id;
+      statuses[key] = sub.status || 'pending';
+    }
+    res.json({ statuses });
+  } catch (error) {
+    console.error('[wholesale] order-statuses GET error:', error.message);
+    res.json({ statuses: {} });
+  }
+});
+
+/**
+ * POST /api/wholesale/order-statuses
+ * Updates order status in NeDB from farm admin actions.
+ */
+app.post('/api/wholesale/order-statuses', express.json(), async (req, res) => {
+  try {
+    const statusUpdates = req.body || {};
+    for (const [orderId, status] of Object.entries(statusUpdates)) {
+      if (orderId && status) {
+        await orderStore.updateSubOrderStatus(orderId, status);
+      }
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[wholesale] order-statuses POST error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/wholesale/tracking-numbers
+ * Returns tracking numbers from NeDB sub-orders.
+ */
+app.get('/api/wholesale/tracking-numbers', async (req, res) => {
+  try {
+    const farmId = req.headers['x-farm-id'] || req.query.farm_id || 'LOCAL-FARM';
+    const subOrders = await orderStore.listFarmSubOrders(farmId);
+    const tracking = {};
+    for (const sub of subOrders) {
+      const key = sub.sub_order_id || sub._id || sub.id;
+      if (sub.tracking_number) {
+        tracking[key] = sub.tracking_number;
+      }
+    }
+    res.json({ tracking });
+  } catch (error) {
+    console.error('[wholesale] tracking-numbers GET error:', error.message);
+    res.json({ tracking: {} });
+  }
+});
+
+/**
+ * POST /api/wholesale/tracking-numbers
+ * Saves tracking numbers to NeDB sub-orders.
+ */
+app.post('/api/wholesale/tracking-numbers', express.json(), async (req, res) => {
+  try {
+    const trackingUpdates = req.body || {};
+    for (const [orderId, trackingNumber] of Object.entries(trackingUpdates)) {
+      if (orderId && trackingNumber) {
+        const sub = await orderStore.getSubOrder(orderId);
+        if (sub) await orderStore.updateSubOrderStatus(orderId, sub.status || "packed", { tracking_number: trackingNumber });
+      }
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[wholesale] tracking-numbers POST error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Unified health endpoint with controller diagnostics that never 502s
 app.get('/healthz', async (req, res) => {
   const started = Date.now();
