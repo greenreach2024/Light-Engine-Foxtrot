@@ -3756,6 +3756,8 @@ function renderOrderCard(order) {
         'processing': { label: 'Confirmed', color: '#06b6d4' },
         'packed':    { label: 'Packed',    color: '#8b5cf6' },
         'shipped':   { label: 'Shipped',   color: '#3b82f6' },
+        'pending_verification': { label: 'Awaiting Acceptance', color: '#f59e0b' },
+        'expired':   { label: 'Expired',   color: '#ef4444' },
         'delivered': { label: 'Delivered', color: '#10b981' }
     };
 
@@ -3764,6 +3766,23 @@ function renderOrderCard(order) {
     const createdDate = order.created_at ? new Date(order.created_at).toLocaleString() : orderDate;
     const items = order.items || [];
     const total = parseFloat(order.total_amount) || 0;
+
+    // 24-hour acceptance deadline
+    const isPending = order.status === 'pending' || order.status === 'pending_verification';
+    const deadline = order.verification_deadline ? new Date(order.verification_deadline) : null;
+    const now = new Date();
+    const deadlineExpired = deadline ? now > deadline : false;
+    let deadlineDisplay = '';
+    if (deadline && isPending) {
+        if (deadlineExpired) {
+            deadlineDisplay = 'EXPIRED';
+        } else {
+            const diffMs = deadline - now;
+            const hours = Math.floor(diffMs / 3600000);
+            const mins = Math.floor((diffMs % 3600000) / 60000);
+            deadlineDisplay = hours > 0 ? `${hours}h ${mins}m remaining` : `${mins}m remaining`;
+        }
+    }
 
     // Buyer info
     const buyerName = order.buyer_name || '';
@@ -3806,6 +3825,8 @@ function renderOrderCard(order) {
                         Order #${oid.slice(-8) || oid}
                     </h3>
                     <p style="color: var(--text-muted); font-size: 0.85rem;">Placed: ${createdDate}</p>
+                    ${isPending && deadlineDisplay ? `<p style="color: ${deadlineExpired ? '#ef4444' : '#f59e0b'}; font-size: 0.85rem; font-weight: 600; margin-top: 2px;">Accept by: ${deadlineExpired ? 'EXPIRED -- funds will be released' : deadlineDisplay}</p>` : ''}
+
                     ${poNumber ? `<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 2px;">PO: ${poNumber}</p>` : ''}
                 </div>
                 <div style="
@@ -3899,8 +3920,8 @@ function renderOrderCard(order) {
 
             <!-- ACTIONS -->
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
-                ${order.status === 'pending' ? `
-                    <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'confirmed')" style="
+                ${isPending && !deadlineExpired ? `
+                    <button class="btn-primary" onclick="acceptWholesaleOrder('${oid}')" style="
                         background: rgba(6, 182, 212, 0.2);
                         border: 1px solid #06b6d4;
                         color: #67e8f9;
@@ -3911,6 +3932,29 @@ function renderOrderCard(order) {
                     ">
                         Accept Order
                     </button>
+                    <button class="btn-secondary" onclick="declineWholesaleOrder('${oid}')" style="
+                        background: rgba(239, 68, 68, 0.15);
+                        border: 1px solid #ef4444;
+                        color: #fca5a5;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        cursor: pointer;
+                    ">
+                        Decline
+                    </button>
+                ` : ''}
+                ${isPending && deadlineExpired ? `
+                    <div style="
+                        background: rgba(239, 68, 68, 0.1);
+                        border: 1px solid #ef4444;
+                        color: #fca5a5;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-weight: 600;
+                        font-size: 0.9rem;
+                    ">
+                        Acceptance window expired -- funds released to buyer
+                    </div>
                 ` : ''}
                 ${(order.status === 'confirmed' || order.status === 'processing') ? `
                     <button class="btn-primary" onclick="updateOrderStatus('${oid}', 'packed')" style="
@@ -3974,6 +4018,32 @@ function renderOrderCard(order) {
             </div>
         </div>
     `;
+}
+
+/**
+ * Accept a wholesale order (with 24-hour deadline check)
+ */
+async function acceptWholesaleOrder(orderId) {
+    // Check deadline from cached order data
+    const order = (window._wholesaleOrderCache || {})[orderId];
+    if (order && order.verification_deadline) {
+        const deadline = new Date(order.verification_deadline);
+        if (new Date() > deadline) {
+            showToast('Cannot accept -- the 24-hour acceptance window has expired. Funds have been released to the buyer.', 'error');
+            await refreshWholesaleOrders();
+            return;
+        }
+    }
+    if (!confirm('Accept this order? The buyer will be charged and notified.')) return;
+    await updateOrderStatus(orderId, 'confirmed');
+}
+
+/**
+ * Decline a wholesale order
+ */
+async function declineWholesaleOrder(orderId) {
+    if (!confirm('Decline this order? The buyer will be refunded and notified.')) return;
+    await updateOrderStatus(orderId, 'rejected');
 }
 
 /**
@@ -4066,6 +4136,7 @@ function printPackingSlip(orderId) {
 
     const items = order.items || [];
     const total = parseFloat(order.total_amount) || 0;
+
     const buyerName = order.buyer_name || 'N/A';
     const buyerEmail = order.buyer_email || '';
     const buyerPhone = order.buyer_phone || '';
