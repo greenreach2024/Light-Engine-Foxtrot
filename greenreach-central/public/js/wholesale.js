@@ -62,6 +62,11 @@
         email: buyer.email,
         buyerType: buyer.buyerType || buyer.buyer_type,
         phone: buyer.phone || location.phone || buyer.contact_phone,
+        keyContact: buyer.keyContact || buyer.key_contact || null,
+        backupContact: buyer.backupContact || buyer.backup_contact || null,
+        backupPhone: buyer.backupPhone || buyer.backup_phone || null,
+        squareCustomerId: buyer.squareCustomerId || buyer.square_customer_id || null,
+        squareCardId: buyer.squareCardId || buyer.square_card_id || null,
         location,
         createdAt: buyer.createdAt || buyer.created_at
       };
@@ -576,7 +581,7 @@
           localStorage.setItem(STORAGE_BUYER, JSON.stringify(buyer));
           this.updateBuyerProfile();
           this.populateCheckoutForm();
-          this.showToast('Account updated', 'success');
+          this.showToast('Profile Updated Successfully', 'success', { prominent: true, detail: 'Your business information and contact details have been saved.', duration: 5000 });
         } else {
           this.showToast(json?.message || 'Failed to update account', 'error');
         }
@@ -710,7 +715,7 @@
         });
 
         if (response.ok && json?.status === 'ok') {
-          this.showToast('Card saved on file', 'success');
+          this.showToast('Payment Card Saved', 'success', { prominent: true, detail: 'Your card has been securely stored by Square for future orders.', duration: 5000 });
           // Destroy the form card instance and reload
           try { this._accountSquareCard.destroy(); } catch (_) {}
           this._accountSquareCard = null;
@@ -736,7 +741,7 @@
         });
 
         if (response.ok && json?.status === 'ok') {
-          this.showToast('Card removed', 'success');
+          this.showToast('Card Removed', 'success', { prominent: true, detail: 'Your saved payment card has been removed from file.', duration: 4000 });
           this.loadCardOnFile();
         } else {
           this.showToast(json?.message || 'Failed to remove card', 'error');
@@ -1749,12 +1754,32 @@
       document.getElementById('loading-overlay')?.remove();
     },
 
-    showToast(message, type = 'info') {
+    showToast(message, type = 'info', options = {}) {
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
-      toast.textContent = message;
+      if (options.prominent) {
+        toast.style.padding = '1.25rem 1.5rem';
+        toast.style.fontSize = '1.05rem';
+        toast.style.fontWeight = '600';
+        toast.style.borderLeftWidth = '6px';
+        toast.style.maxWidth = '480px';
+        if (options.detail) {
+          const detail = document.createElement('div');
+          detail.style.fontWeight = '400';
+          detail.style.fontSize = '0.875rem';
+          detail.style.marginTop = '0.5rem';
+          detail.style.opacity = '0.85';
+          detail.textContent = options.detail;
+          toast.textContent = message;
+          toast.appendChild(detail);
+        } else {
+          toast.textContent = message;
+        }
+      } else {
+        toast.textContent = message;
+      }
       document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      setTimeout(() => toast.remove(), options.duration || 3000);
     }
     ,
 

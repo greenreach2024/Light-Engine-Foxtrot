@@ -1731,7 +1731,8 @@ router.put('/buyers/me', requireBuyerPortalAuth, async (req, res, next) => {
     if (error?.code === 'EMAIL_EXISTS') {
       return res.status(409).json({ status: 'error', message: 'Email already registered' });
     }
-    return next(error);
+    console.error('[wholesale] PUT /buyers/me error:', error.message);
+    return res.status(500).json({ status: 'error', message: 'Failed to update account. Please try again.' });
   }
 });
 

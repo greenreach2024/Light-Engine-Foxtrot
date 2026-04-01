@@ -325,7 +325,7 @@ router.post('/buyers/password-reset', resetRateLimiter, async (req, res) => {
 router.get('/buyers/me', requireBuyerAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, created_at FROM wholesale_buyers WHERE id = $1',
+      'SELECT id, business_name, contact_name, email, buyer_type, location, status, phone, created_at, key_contact, backup_contact, backup_phone, square_customer_id, square_card_id FROM wholesale_buyers WHERE id = $1',
       [req.buyerId]
     );
 
@@ -346,7 +346,7 @@ router.get('/buyers/me', requireBuyerAuth, async (req, res) => {
 // PUT /api/wholesale/buyers/me - Update buyer profile
 router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
   try {
-    const { businessName, contactName, email, buyerType, phone, address, city, province, postalCode, country } = req.body || {};
+    const { businessName, contactName, email, buyerType, phone, address, city, province, postalCode, country, keyContact, backupContact, backupPhone } = req.body || {};
 
     if (!businessName || !contactName || !email) {
       return res.status(400).json({ status: 'error', message: 'Business name, contact name, and email are required' });
@@ -381,6 +381,13 @@ router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
       phone: phone ?? currentLocation.phone
     };
 
+    // Ensure contact columns exist (migration 030)
+    try {
+      await pool.query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS key_contact VARCHAR(255)`);
+      await pool.query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS backup_contact VARCHAR(255)`);
+      await pool.query(`ALTER TABLE wholesale_buyers ADD COLUMN IF NOT EXISTS backup_phone VARCHAR(50)`);
+    } catch (_) { /* columns may already exist */ }
+
     const update = await pool.query(
       `UPDATE wholesale_buyers
          SET business_name = $1,
@@ -388,10 +395,13 @@ router.put('/buyers/me', requireBuyerAuth, async (req, res) => {
              email = $3,
              buyer_type = $4,
              location = $5,
-             phone = $6
-       WHERE id = $7
-       RETURNING id, business_name, contact_name, email, buyer_type, location, status, phone, created_at`,
-      [businessName, contactName, email.toLowerCase(), buyerType || 'restaurant', JSON.stringify(location), phone || null, req.buyerId]
+             phone = $6,
+             key_contact = $7,
+             backup_contact = $8,
+             backup_phone = $9
+       WHERE id = $10
+       RETURNING id, business_name, contact_name, email, buyer_type, location, status, phone, created_at, key_contact, backup_contact, backup_phone`,
+      [businessName, contactName, email.toLowerCase(), buyerType || 'restaurant', JSON.stringify(location), phone || null, keyContact || null, backupContact || null, backupPhone || null, req.buyerId]
     );
 
     const buyer = update.rows[0];
