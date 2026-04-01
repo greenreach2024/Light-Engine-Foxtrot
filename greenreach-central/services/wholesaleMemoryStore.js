@@ -892,17 +892,23 @@ async function persistOrder(order) {
   const now = new Date().toISOString();
   const createdAt = order.created_at || now;
   const buyerEmail = order.buyer_account?.email || null;
+  const farmId = (order.farm_sub_orders || [])[0]?.farm_id || null;
+  const totalAmount = order.grand_total || 0;
+  const deliveryDate = order.delivery_date || null;
   await query(
     `INSERT INTO wholesale_orders
-      (master_order_id, buyer_id, buyer_email, status, order_data, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+      (master_order_id, buyer_id, buyer_email, farm_id, status, total_amount, delivery_date, order_data, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
      ON CONFLICT (master_order_id) DO UPDATE
      SET buyer_id = EXCLUDED.buyer_id,
          buyer_email = EXCLUDED.buyer_email,
+         farm_id = EXCLUDED.farm_id,
          status = EXCLUDED.status,
+         total_amount = EXCLUDED.total_amount,
+         delivery_date = EXCLUDED.delivery_date,
          order_data = EXCLUDED.order_data,
          updated_at = EXCLUDED.updated_at`,
-    [order.master_order_id, order.buyer_id, buyerEmail, order.status, JSON.stringify(order), createdAt, now]
+    [order.master_order_id, order.buyer_id, buyerEmail, farmId, order.status, totalAmount, deliveryDate, JSON.stringify(order), createdAt, now]
   );
 }
 

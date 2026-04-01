@@ -647,6 +647,23 @@ async function runMigrations(client) {
     await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC(12,2) DEFAULT 0;`);
   } catch (err) { logger.warn('wholesale_orders migration warning:', err.message); }
 
+  // Migration: add farm_id and delivery_date columns for farm fulfillment queries
+  try {
+    await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS farm_id VARCHAR(128);`);
+    await client.query(`ALTER TABLE wholesale_orders ADD COLUMN IF NOT EXISTS delivery_date DATE;`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_wholesale_orders_farm ON wholesale_orders(farm_id);`);
+  } catch (err) { logger.warn('wholesale_orders farm_id migration warning:', err.message); }
+
+  // Backfill farm_id from order_data for existing rows
+  try {
+    await client.query(`
+      UPDATE wholesale_orders
+      SET farm_id = order_data->'farm_sub_orders'->0->>'farm_id',
+          total_amount = COALESCE((order_data->>'grand_total')::numeric, 0)
+      WHERE farm_id IS NULL AND order_data IS NOT NULL;
+    `);
+  } catch (err) { logger.warn('wholesale_orders backfill warning:', err.message); }
+
   // Create wholesale_order_logs table for audit trail
   try {
     await client.query(`
